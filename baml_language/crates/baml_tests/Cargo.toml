@@ -49,6 +49,7 @@ borsh = { workspace = true }
 darwin-kperf = { workspace = true }
 darwin-kperf-events = { workspace = true }
 divan = { workspace = true }
+libc = { workspace = true }
 num-bigint = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

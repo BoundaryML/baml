@@ -13,7 +13,7 @@ import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { encodeRunArgs } from '@b/pkg-proto';
 import type { BamlJsValue } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Settings, Square } from 'lucide-react';
+import { KeyRound, PanelLeft, Play, Settings, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
@@ -49,6 +49,13 @@ import type {
   WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
+import { ArgsForm } from './ArgsForm';
+import {
+  defaultValueForSchema,
+  isPlainObject,
+  normalizeArgs,
+  typeLookupFrom,
+} from './args-form-model';
 import { ResultDisplay } from './ResultDisplay';
 import { ValueRenderer } from './ValueRenderer';
 import { CapturedValueCard } from './CapturedValueCard';
@@ -89,6 +96,12 @@ registerBuiltinResultRenderers();
 const LOGS_PANEL_DEFAULT_HEIGHT = 180;
 const LOGS_PANEL_MIN_HEIGHT = 40;
 const LOGS_PANEL_MAX_HEIGHT = 620;
+
+const IS_MAC =
+  typeof navigator !== 'undefined' && /Mac|iP/.test(navigator.platform);
+/** Shown on the Run button; the actual binding is the panel-scoped keydown
+ *  handler on the Tabs root. */
+const RUN_SHORTCUT_HINT = IS_MAC ? '⌘↵' : 'Ctrl+↵';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -745,6 +758,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [showInternalFunctions, setShowInternalFunctions] = useState(false);
   const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
+  // Args editor mode. 'form' renders the schema-driven ArgsForm when the
+  // selected function carries a param schema; 'raw' is the JSON input. With
+  // no schema (`FunctionInfo.params === undefined`) raw is the only mode.
+  const [argsMode, setArgsMode] = useState<'form' | 'raw'>('form');
   // Args the user typed for each function this session — restored (over the
   // `argsByFunction` seed) when they switch back to that function.
   const typedArgsByFnRef = useRef<Record<string, string>>({});
@@ -1500,21 +1517,30 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setPreviewLoading(false);
   }, [selectedFn]);
 
-  // Swap the args editor when the selected function changes: args the user
-  // typed for that function win, then its `argsByFunction` seed (exact or
-  // bare-name key, since selection may be namespaced), then the panel seed.
+  // The authoritative args string for a function at any moment: args the
+  // user typed for it this session win, then its `argsByFunction` seed
+  // (exact or bare-name key, since selection may be namespaced), then the
+  // panel seed. The swap effect writes this into argsJson on selection
+  // change; effects that must not read the (one-commit-stale on selection
+  // change) argsJson state read this instead.
+  const baseArgsFor = useCallback(
+    (fn: string) =>
+      typedArgsByFnRef.current[fn] ??
+      argsByFunction?.[fn] ??
+      argsByFunction?.[fn.split('.').pop() ?? ''] ??
+      initialArgsJson ??
+      '{}',
+    [argsByFunction, initialArgsJson],
+  );
+
+  // Swap the args editor when the selected function changes.
   const prevArgsFnRef = useRef(selectedFn);
   useEffect(() => {
     if (prevArgsFnRef.current === selectedFn) return;
     prevArgsFnRef.current = selectedFn;
     if (!selectedFn) return;
-    const seed =
-      argsByFunction?.[selectedFn] ??
-      argsByFunction?.[selectedFn.split('.').pop() ?? ''];
-    setArgsJson(
-      typedArgsByFnRef.current[selectedFn] ?? seed ?? initialArgsJson ?? '{}',
-    );
-  }, [selectedFn, argsByFunction, initialArgsJson]);
+    setArgsJson(baseArgsFor(selectedFn));
+  }, [selectedFn, baseArgsFor]);
 
   // Auto-refresh prompt/curl preview when args change while tab is active
   useEffect(() => {
@@ -1648,12 +1674,25 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     projectUpdateVersion,
   ]);
 
-  const onArgsJsonChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      setArgsJson(e.target.value);
-      if (selectedFn) typedArgsByFnRef.current[selectedFn] = e.target.value;
+  // Single write path for args edits (form and raw): the prompt/cURL preview
+  // and run-history snapshots read `argsJson`, and per-function memory reads
+  // `typedArgsByFnRef` — an edit that misses either silently desyncs them.
+  const updateArgsJson = useCallback(
+    (next: string) => {
+      setArgsJson(next);
+      if (selectedFn) typedArgsByFnRef.current[selectedFn] = next;
     },
     [selectedFn],
+  );
+
+  const onArgsJsonChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => updateArgsJson(e.target.value),
+    [updateArgsJson],
+  );
+
+  const onArgsFormChange = useCallback(
+    (next: Record<string, unknown>) => updateArgsJson(JSON.stringify(next)),
+    [updateArgsJson],
   );
 
   // ── Run function ───────────────────────────────────────────────────────
@@ -1999,6 +2038,108 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
+
+  // ── Args form wiring ─────────────────────────────────────────────────────
+  // `undefined` = no schema shipped (old engine / extraction miss) → raw-only.
+  const paramSchemas = selectedFnInfo?.params;
+  const projectTypes = currentUpdate?.types;
+  const typeLookup = useMemo(
+    () => typeLookupFrom(projectTypes),
+    [projectTypes],
+  );
+  // The form can only render args that parse to a plain JSON object; anything
+  // else (mid-edit raw JSON, array) falls back to the raw input with a notice
+  // instead of destroying the user's text.
+  const parsedArgs = useMemo<Record<string, unknown> | null>(() => {
+    try {
+      const parsed: unknown = JSON.parse(argsJson);
+      if (isPlainObject(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // fall through
+    }
+    return null;
+  }, [argsJson]);
+  const showArgsForm =
+    argsMode === 'form' && paramSchemas !== undefined && parsedArgs !== null;
+  const argsFormUnavailable =
+    argsMode === 'form' && paramSchemas !== undefined && parsedArgs === null;
+
+  // Seed empty args with schema defaults, once per function per session. This
+  // is what injects `$baml` class markers and required keys without the user
+  // touching every field. Skipped when the function already has typed args or
+  // a host seed. Deliberately does NOT read `argsJson`/`parsedArgs` — on the
+  // render where `selectedFn` changes those still reflect the previous
+  // function (the swap effect's setState lands next render), and reading them
+  // here used to clobber just-restored host seeds with machine defaults.
+  const seededFnsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!selectedFn || !paramSchemas || paramSchemas.length === 0) return;
+    if (seededFnsRef.current.has(selectedFn)) return;
+    if (typedArgsByFnRef.current[selectedFn] !== undefined) return;
+    try {
+      const base: unknown = JSON.parse(baseArgsFor(selectedFn));
+      if (!isPlainObject(base) || Object.keys(base).length > 0) {
+        return; // a host seed exists — never overwrite it
+      }
+    } catch {
+      return; // leave an unparseable host seed for the user to see and fix
+    }
+    seededFnsRef.current.add(selectedFn);
+    const seeded: Record<string, unknown> = {};
+    for (const param of paramSchemas) {
+      if (!param.hasDefault) {
+        seeded[param.name] = defaultValueForSchema(param.schema, typeLookup);
+      }
+    }
+    // Write through the shared setter so the seed also lands in
+    // typedArgsByFnRef — otherwise switching away and back restores '{}' and
+    // the seeded defaults/markers are lost.
+    updateArgsJson(JSON.stringify(seeded));
+  }, [selectedFn, paramSchemas, typeLookup, baseArgsFor, updateArgsJson]);
+
+  // Normalize wire markers once per function while form mode is active: bare
+  // enum strings (hand-edited raw JSON, host seeds, pre-marker session
+  // memory) and markerless class objects render as typed widgets but would
+  // encode untyped (string / mapValue) — no String→Enum coercion exists on
+  // the args path. Rewriting through the shared setter keeps argsJson
+  // matching what the widgets display. Reads the authoritative args via
+  // baseArgsFor, never argsJson state (stale on the selection-change
+  // commit). Raw mode re-arms it, so hand edits get re-normalized on the
+  // way back into form mode.
+  const normalizeStateRef = useRef<{ fn: string | null; done: boolean }>({
+    fn: null,
+    done: false,
+  });
+  useEffect(() => {
+    const state = normalizeStateRef.current;
+    if (argsMode === 'raw') {
+      state.done = false;
+      return;
+    }
+    if (!selectedFn || !paramSchemas) return;
+    if (state.fn === selectedFn && state.done) return;
+    normalizeStateRef.current = { fn: selectedFn, done: true };
+    let args: unknown;
+    try {
+      args = JSON.parse(baseArgsFor(selectedFn));
+    } catch {
+      return; // not form-renderable; the raw fallback shows it as-is
+    }
+    if (!isPlainObject(args)) return;
+    const normalized = normalizeArgs(args, paramSchemas, typeLookup);
+    if (normalized !== args) {
+      updateArgsJson(JSON.stringify(normalized));
+    }
+  }, [
+    argsMode,
+    selectedFn,
+    paramSchemas,
+    typeLookup,
+    baseArgsFor,
+    updateArgsJson,
+  ]);
   // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
   // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
   // them. expr functions just return a structured value (raw == parsed).
@@ -2289,6 +2430,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
         className="relative flex h-full min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden"
+        // Panel-scoped run shortcut: fires for focus anywhere inside the
+        // playground (form fields, raw input, graph) without stealing
+        // Cmd/Ctrl+Enter from the host's code editor.
+        onKeyDown={(e) => {
+          if (!((e.metaKey || e.ctrlKey) && e.key === 'Enter')) return;
+          // Same gates as the Run buttons: no runs from the collection or
+          // test-run views (where the run tab, history, and error strip are
+          // all hidden — a run started here would be invisible), and never
+          // over build errors. (onRunFunction can't check these itself —
+          // hasErrors is derived after its declaration.) Don't swallow the
+          // keystroke when nothing will run.
+          if (viewingCollection || viewingTestRun) return;
+          e.preventDefault();
+          if (!hasErrors) void onRunFunction();
+        }}
       >
         {/* ──── Combined top bar ──── */}
         <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
@@ -2369,17 +2525,33 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
             />
           )}
 
-          {selectedFn && !viewingCollection && !viewingTestRun && (
-            <Button
-              variant="success"
-              size="sm"
-              className="h-7 text-[11px] font-semibold"
-              disabled={hasErrors || isRunning || !selectedProject}
-              onClick={onRunFunction}
-            >
-              {isRunning ? 'Running...' : 'Run'}
-            </Button>
-          )}
+          {/* The primary Run button lives next to the args editor inside the
+              Run tab; other tabs keep a compact icon so re-running while
+              watching the graph/trace stays one click away. */}
+          {selectedFn &&
+            !viewingCollection &&
+            !viewingTestRun &&
+            activeTab !== 'run' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="success"
+                      size="icon-xs"
+                      className="h-7 w-7"
+                      aria-label="Run"
+                      disabled={hasErrors || isRunning || !selectedProject}
+                      onClick={onRunFunction}
+                    >
+                      <Play />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Run {selectedFn}() ({RUN_SHORTCUT_HINT})
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
 
           <TooltipProvider>
             <Tooltip>
@@ -2962,18 +3134,76 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 >
                   {/* Args */}
                   {/* `nokey`: keep React Flow's global key capture (Space,
-                      Backspace, ...) out of the args input */}
-                  <div className="nokey flex items-center border-b border-vsc-border shrink-0">
-                    <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
-                      args
-                    </span>
-                    <Input
-                      spellCheck={false}
-                      value={argsJson}
-                      onChange={onArgsJsonChange}
-                      className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
-                      placeholder='{"key": "value"}'
-                    />
+                      Backspace, ...) out of the args inputs */}
+                  <div className="nokey flex flex-col border-b border-vsc-border shrink-0">
+                    <div className="flex items-center min-h-7">
+                      <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
+                        args
+                      </span>
+                      {showArgsForm ? (
+                        <div className="flex-1" />
+                      ) : (
+                        <div className="flex-1 flex items-center min-w-0">
+                          <Input
+                            spellCheck={false}
+                            value={argsJson}
+                            onChange={onArgsJsonChange}
+                            className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
+                            placeholder='{"key": "value"}'
+                          />
+                          {argsFormUnavailable && (
+                            <span className="px-2 text-[10px] text-vsc-text-faint whitespace-nowrap">
+                              not a JSON object — form off
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {paramSchemas !== undefined && (
+                        <ToggleGroup
+                          size="sm"
+                          className="px-1.5 shrink-0"
+                          value={argsMode}
+                          options={[
+                            { value: 'form', label: 'form' },
+                            { value: 'raw', label: 'raw' },
+                          ]}
+                          onValueChange={setArgsMode}
+                        />
+                      )}
+                      <Button
+                        variant="success"
+                        size="xs"
+                        className="mx-1 my-0.5 shrink-0 text-[11px] font-semibold"
+                        aria-label={isRunning ? 'Running' : 'Run'}
+                        disabled={hasErrors || isRunning || !selectedProject}
+                        onClick={onRunFunction}
+                      >
+                        {isRunning ? (
+                          'Running...'
+                        ) : (
+                          <>
+                            Run
+                            <span className="font-normal opacity-70">
+                              {RUN_SHORTCUT_HINT}
+                            </span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {showArgsForm && paramSchemas && parsedArgs && (
+                      <div className="max-h-56 overflow-y-auto px-2 py-1.5 border-t border-vsc-border">
+                        {/* Key by function: the swap effect replaces argsJson
+                            externally on selection change; remounting resets
+                            widget drafts/collapse state with it. */}
+                        <ArgsForm
+                          key={selectedFn ?? ''}
+                          params={paramSchemas}
+                          types={projectTypes}
+                          value={parsedArgs}
+                          onChange={onArgsFormChange}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Live graph */}

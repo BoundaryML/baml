@@ -1,5 +1,5 @@
 // define_function.ts — runtime factories for BAML callables, the Node analog
-// of `define_function` in sdks/python/src/baml_core/__init__.py.
+// of `define_function` in sdks/python/src/baml_bridge/__init__.py.
 //
 // Generated SDK code emits, per BAML function:
 //   export const f = defineFunction("user.ns.f", "sync", ["a"]) as (a: A) => R;
@@ -17,7 +17,7 @@ import {
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
 import { encodeCallArgs, decodeCallResult } from './proto.js';
-import { baml_core } from './proto/baml_cffi.js';
+import { baml_bridge } from './proto/baml_cffi.js';
 import { lowerTypeToWireTy, type BamlType } from './wire_ty.js';
 
 export type Mode = 'sync' | 'async';
@@ -45,7 +45,7 @@ interface BuiltArgs {
     types?: unknown;
 }
 
-type WireTypeArg = [string, baml_core.cffi.v1.IBamlTy];
+type WireTypeArg = [string, baml_bridge.cffi.v1.IBamlTy];
 
 /**
  * Resolve the caller's `$types` option onto the callee's own generic params, in

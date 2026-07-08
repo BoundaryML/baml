@@ -251,7 +251,7 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> 
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image | string[]);
+        _5 = load_type((image | string)[]);
         _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
     }
 

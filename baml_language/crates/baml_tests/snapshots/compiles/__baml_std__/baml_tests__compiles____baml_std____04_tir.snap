@@ -96,6 +96,18 @@ function baml.compare(self: unknown, other: unknown) -> int throws never {
 --- <builtin>/baml/containers.baml ---
 class baml.Array {
 }
+function baml.Array.generate<E>(length: int, f: (int) -> T throws E) -> T[] throws E {
+  { : T[]
+    let out: T[] = [] : T[]
+    let i = 0 : 0 -> int
+    while i < length
+      { : void
+        out.push<T>(f(i)) : int
+        i Add= 1 : int
+      }
+    out : T[]
+  }
+}
 function baml.Array.for_each<E>(self: baml.Array<T>, fn: (T) -> void throws E) -> void throws E {
   { : void
     for x in self.slice(0, self.length())
@@ -2221,10 +2233,13 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
   }
 }
-function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws never {
+function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws baml.errors.ParseError {
   { : TFinal
     let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
-    __sap_parse_final<TFinal>(json, cache) : TFinal
+    catch (__sap_parse_final<TFinal>(json, cache) : TFinal) : TFinal
+      catch (_)
+        root.errors.LlmClient { message: message } =>
+          throw root.errors.ParseError { message: message } : never
   }
 }
 function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {

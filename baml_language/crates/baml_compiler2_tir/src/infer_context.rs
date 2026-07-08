@@ -428,6 +428,15 @@ pub enum TirTypeError {
     /// BEP-044: a generic parameter's bound (`<T extends X>`) resolved to a
     /// concrete non-interface type. Generic bounds must be interfaces.
     GenericBoundNotInterface { bound: Ty },
+    /// `Self` used in a method *body* type position (a `let`/cast annotation, a
+    /// match/`is` pattern type, or a `type_of<Self>()` turbofish). `Self` is
+    /// only supported in signatures for now; a body has no substitution for it,
+    /// so it is rejected here rather than silently resolving to a type variable
+    /// (interface default methods) or an unresolved name (class bodies).
+    SelfInBodyPosition {
+        /// Span of the offending `Self` reference.
+        span: TextRange,
+    },
 }
 
 impl TirTypeError {
@@ -439,6 +448,9 @@ impl TirTypeError {
     pub fn precise_span(&self) -> Option<TextRange> {
         match self {
             TirTypeError::UnresolvedType { span, .. } if *span != TextRange::default() => {
+                Some(*span)
+            }
+            TirTypeError::SelfInBodyPosition { span } if *span != TextRange::default() => {
                 Some(*span)
             }
             _ => None,
@@ -590,7 +602,7 @@ impl fmt::Display for TirTypeError {
             TirTypeError::ArrayFilledMutableLiteralAliasing => {
                 write!(
                     f,
-                    "`Array.filled` reuses the same mutable value in every slot; mutating one slot mutates all of them. Build independent slots with a `while` loop that pushes a fresh literal each iteration"
+                    "`Array.filled` reuses the same mutable value in every slot; mutating one slot mutates all of them. Use `Array.generate(length, f)` to build an independent value per slot (`f` is called once per index)"
                 )
             }
             TirTypeError::InvalidUnaryOp { op, operand } => {
@@ -652,6 +664,13 @@ impl fmt::Display for TirTypeError {
                         suggestions.join("`, `")
                     )
                 }
+            }
+            TirTypeError::SelfInBodyPosition { .. } => {
+                write!(
+                    f,
+                    "`Self` is only supported in a signature, not in a method body. \
+                     In a class method, name the enclosing type explicitly (e.g. `Box<T>`)."
+                )
             }
             TirTypeError::ArgumentCountMismatch { expected, got } => {
                 write!(f, "expected {expected} argument(s), got {got}")

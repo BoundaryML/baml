@@ -974,7 +974,8 @@ fn array_filled_with_variable_bound_mutable_value_does_not_warn() {
     // mutable value to a variable first (`let x = [0]; Array.filled(3, x)`) still
     // aliases every slot at runtime, but produces NO warning because the arg is a
     // `Path`, not a literal. This characterizes (does not endorse) that gap; the
-    // real fix is a future `Array.generate(n, || ...)` factory.
+    // real fix (Linear B-638) is the `Array.generate(length, f)` factory, which
+    // calls `f` once per index and so builds an independent value per slot.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",

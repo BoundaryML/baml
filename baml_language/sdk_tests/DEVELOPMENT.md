@@ -6,10 +6,10 @@ Codegen runs in each crate's `build.rs` via the full
 takes end-to-end. Toolchain install/native-build is kept OUT of
 build.rs for both targets and lives in a per-crate `setup.sh`
 (Unix) / `setup.ps1` (Windows): python_pydantic2's per-fixture
-`uv sync --reinstall-package baml_core` lives in
+`uv sync --reinstall-package baml_bridge` lives in
 [`crates/python_pydantic2/setup.sh`](./crates/python_pydantic2/setup.sh)
 (the `--reinstall-package` forces the maturin rebuild of
-baml_core's `.so` that a plain `uv sync` skips on incremental Rust
+baml_bridge's `.so` that a plain `uv sync` skips on incremental Rust
 edits), and typescript_node's per-fixture `pnpm install` + the
 prereq `pnpm build:debug` of bridge_nodejs's native `.node` addon
 live in
@@ -68,7 +68,7 @@ sdk_tests/
     |   |                                 # [build-dependencies] sdk_test_harness_setup
     |   |                                 # [dev-dependencies]   sdk_test_harness_runner
     |   |-- build.rs                      # one-liner -> sdk_test_harness_setup::python_pydantic2::run_all()
-    |   |-- setup.sh                      # per-fixture `uv sync --reinstall-package baml_core` (.so rebuild) (Unix)
+    |   |-- setup.sh                      # per-fixture `uv sync --reinstall-package baml_bridge` (.so rebuild) (Unix)
     |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
     |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::python_pydantic2::test_suite!()
     `-- typescript_node/
@@ -108,8 +108,8 @@ sdk_tests/
      via two platform-filtered (`cfg(unix)` / `cfg(windows)`)
      setup-script bindings; plain `cargo test` won't pass.
    - For python_pydantic2: the setup script runs `uv sync
-     --reinstall-package baml_core` inside each generated dir.
-     uv's editable install of `baml_core` (declared in
+     --reinstall-package baml_bridge` inside each generated dir.
+     uv's editable install of `baml_bridge` (declared in
      `[tool.uv.sources]`) triggers the maturin build of
      `bridge_python`. `--reinstall-package` is required because a
      plain `uv sync` is a no-op on incremental Rust edits -- uv

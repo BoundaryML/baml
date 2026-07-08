@@ -6,31 +6,40 @@ use sys_ops::SysOps;
 
 use crate::RuntimeError;
 
-const RETAINED_CFG_GENERATIONS: usize = 8;
+/// Prepared control-flow graphs pinned for playground runs, keyed by
+/// `(project generation, function name)`.
+///
+/// A run captures the project generation at launch and resolves its graph
+/// overlay against that generation later, possibly after several recompiles.
+/// Graphs are built lazily for the function a run actually executes (see
+/// [`BexProject::control_flow_graph_for_generation`]) instead of eagerly for
+/// every function on every compile — fully-inlined graphs grow with
+/// call-site fan-out, so eager per-compile snapshots dominated LSP memory.
+const RETAINED_RUN_CFGS: usize = 64;
 
 #[derive(Default)]
-struct RetainedCfgSnapshots {
-    order: VecDeque<u64>,
-    graphs_by_generation:
-        HashMap<u64, HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph>>,
+struct RunCfgCache {
+    order: VecDeque<(u64, String)>,
+    graphs: HashMap<
+        (u64, String),
+        std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>,
+    >,
 }
 
-impl RetainedCfgSnapshots {
+impl RunCfgCache {
     fn insert(
         &mut self,
         generation: u64,
-        graphs: HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph>,
+        function_name: &str,
+        graph: std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>,
     ) {
-        if self
-            .graphs_by_generation
-            .insert(generation, graphs)
-            .is_none()
-        {
-            self.order.push_back(generation);
+        let key = (generation, function_name.to_string());
+        if self.graphs.insert(key.clone(), graph).is_none() {
+            self.order.push_back(key);
         }
-        while self.order.len() > RETAINED_CFG_GENERATIONS {
+        while self.order.len() > RETAINED_RUN_CFGS {
             if let Some(evicted) = self.order.pop_front() {
-                self.graphs_by_generation.remove(&evicted);
+                self.graphs.remove(&evicted);
             }
         }
     }
@@ -39,10 +48,9 @@ impl RetainedCfgSnapshots {
         &self,
         generation: u64,
         function_name: &str,
-    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
-        self.graphs_by_generation
-            .get(&generation)
-            .and_then(|graphs| graphs.get(function_name))
+    ) -> Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>> {
+        self.graphs
+            .get(&(generation, function_name.to_string()))
             .cloned()
     }
 }
@@ -72,7 +80,7 @@ pub(crate) struct BexProject {
     /// The cancel token is cancelled and replaced on engine swap so in-flight tasks abort.
     /// The registry (a `Handle` to a live `testing.TestRegistry` on the heap) is cleared on engine swap.
     test_state: std::sync::Arc<std::sync::Mutex<TestState>>,
-    cfg_snapshots: std::sync::Mutex<RetainedCfgSnapshots>,
+    run_cfgs: std::sync::Mutex<RunCfgCache>,
 }
 
 impl BexProject {
@@ -94,12 +102,27 @@ impl BexProject {
             sys_ops,
             current_bex: std::sync::RwLock::new((false, None)),
             test_state: std::sync::Arc::new(std::sync::Mutex::new(TestState::new())),
-            cfg_snapshots: std::sync::Mutex::new(RetainedCfgSnapshots::default()),
+            run_cfgs: std::sync::Mutex::new(RunCfgCache::default()),
         }
     }
 
     /// Update all sources in the project (removes any sources that are not in the new sources)
     pub(crate) fn update_all_sources(
+        &self,
+        sources: &std::collections::HashMap<crate::fs::FsPath, String>,
+    ) {
+        self.apply_all_sources(sources);
+
+        // We don't care about the result here.
+        // If someone cares, they should get the diagnostics from the diagnostics_by_file method.
+        let _ = self.update_bex();
+    }
+
+    /// Apply a full source set to the database (removing sources not present)
+    /// WITHOUT rebuilding the engine. The engine is marked outdated; callers
+    /// schedule [`Self::update_bex`] separately (the LSP debounces it off the
+    /// keystroke path).
+    pub(crate) fn apply_all_sources(
         &self,
         sources: &std::collections::HashMap<crate::fs::FsPath, String>,
     ) {
@@ -114,14 +137,11 @@ impl BexProject {
             db.remove_file(&path);
         }
         drop(db);
-
-        // We don't care about the result here.
-        // If someone cares, they should get the diagnostics from the diagnostics_by_file method.
-        let _ = self.update_bex();
+        self.set_bex_outdated();
     }
 
-    /// Update some sources in the project (but doesn't remove any sources)
-    pub(crate) fn update_some_sources(
+    /// Like [`Self::apply_all_sources`], but never removes sources.
+    pub(crate) fn apply_some_sources(
         &self,
         sources: &std::collections::HashMap<crate::fs::FsPath, String>,
     ) {
@@ -130,8 +150,7 @@ impl BexProject {
             db.add_or_update_file(path.as_path(), source);
         }
         drop(db);
-
-        let _ = self.update_bex();
+        self.set_bex_outdated();
     }
 
     pub(crate) fn take(self) -> Result<std::sync::Arc<BexEngine>, RuntimeError> {
@@ -163,15 +182,47 @@ impl BexProject {
         self.test_state.lock().unwrap().generation
     }
 
+    /// Return the prepared control-flow graph for `function_name` as of the
+    /// given project generation.
+    ///
+    /// Graphs are built on demand and cached: a hit serves any generation
+    /// still cached; a miss can only be built while `generation` is still
+    /// current (the database has moved on otherwise). Playground run launches
+    /// call this immediately after capturing their generation, which pins the
+    /// graph for later overlay resolutions of that run.
     pub(crate) fn control_flow_graph_for_generation(
         &self,
         generation: u64,
         function_name: &str,
-    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
-        self.cfg_snapshots
+    ) -> Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>> {
+        if let Some(graph) = self
+            .run_cfgs
             .lock()
             .unwrap()
             .graph(generation, function_name)
+        {
+            return Some(graph);
+        }
+        if generation != self.current_generation() {
+            return None;
+        }
+        let graph = {
+            let db = self.db.lock().unwrap();
+            let graph = db.ast_control_flow_graph(function_name)?;
+            std::sync::Arc::new(
+                baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(
+                    &graph,
+                ),
+            )
+        };
+        let mut run_cfgs = self.run_cfgs.lock().unwrap();
+        // The generation may have moved while building; only cache a graph
+        // that really reflects the requested generation.
+        if generation != self.current_generation() {
+            return None;
+        }
+        run_cfgs.insert(generation, function_name, graph.clone());
+        Some(graph)
     }
 
     pub(crate) fn get_bex(&self) -> Result<std::sync::Arc<BexEngine>, RuntimeError> {
@@ -195,11 +246,7 @@ impl BexProject {
         current_bex.0 = false;
     }
 
-    fn set_current_bex(
-        &self,
-        bex: BexEngine,
-        cfg_snapshot: HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph>,
-    ) {
+    fn set_current_bex(&self, bex: BexEngine) {
         let mut current_bex = self.current_bex.write().unwrap();
         current_bex.1 = Some(std::sync::Arc::new(bex));
         current_bex.0 = true;
@@ -207,35 +254,11 @@ impl BexProject {
         let mut state = self.test_state.lock().unwrap();
         state.cancel.cancel();
         state.generation += 1;
-        let generation = state.generation;
         state.cancel = sys_types::CancellationToken::new();
         state.registry = None;
-        drop(state);
-        self.cfg_snapshots
-            .lock()
-            .unwrap()
-            .insert(generation, cfg_snapshot);
     }
 
-    fn capture_cfg_snapshot(
-        &self,
-    ) -> HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph> {
-        let db = self.db.lock().unwrap();
-        baml_project::list_functions_with_metadata(&db)
-            .into_iter()
-            .filter_map(|function| {
-                let graph = db.ast_control_flow_graph(&function.name)?;
-                Some((
-                    function.name,
-                    baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(
-                        &graph,
-                    ),
-                ))
-            })
-            .collect()
-    }
-
-    fn update_bex(&self) -> Result<(), RuntimeError> {
+    pub(crate) fn update_bex(&self) -> Result<(), RuntimeError> {
         self.set_bex_outdated();
 
         // Skip bytecode generation if there are any diagnostic errors.
@@ -269,8 +292,7 @@ impl BexProject {
                 return Err(RuntimeError::Engine(e));
             }
         };
-        let cfg_snapshot = self.capture_cfg_snapshot();
-        self.set_current_bex(runtime, cfg_snapshot);
+        self.set_current_bex(runtime);
         log::info!("update_bex: success");
         Ok(())
     }
@@ -281,23 +303,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn retained_cfg_snapshots_evict_oldest_generation() {
-        let mut snapshots = RetainedCfgSnapshots::default();
-        for generation in 1..=(RETAINED_CFG_GENERATIONS as u64 + 1) {
-            snapshots.insert(
+    fn run_cfg_cache_evicts_oldest_entries() {
+        let mut cache = RunCfgCache::default();
+        for generation in 1..=(RETAINED_RUN_CFGS as u64 + 1) {
+            cache.insert(
                 generation,
-                HashMap::from([(
-                    "Workflow".to_string(),
+                "Workflow",
+                std::sync::Arc::new(
                     baml_compiler2_visualization::control_flow::ControlFlowGraph::default(),
-                )]),
+                ),
             );
         }
 
-        assert!(snapshots.graph(1, "Workflow").is_none());
+        assert!(cache.graph(1, "Workflow").is_none());
         assert!(
-            snapshots
-                .graph(RETAINED_CFG_GENERATIONS as u64 + 1, "Workflow")
+            cache
+                .graph(RETAINED_RUN_CFGS as u64 + 1, "Workflow")
                 .is_some()
         );
+    }
+
+    #[test]
+    fn run_cfg_cache_reinsert_does_not_duplicate_order() {
+        let mut cache = RunCfgCache::default();
+        let graph = || {
+            std::sync::Arc::new(
+                baml_compiler2_visualization::control_flow::ControlFlowGraph::default(),
+            )
+        };
+        for _ in 0..(RETAINED_RUN_CFGS * 2) {
+            cache.insert(7, "Workflow", graph());
+        }
+        cache.insert(8, "Workflow", graph());
+        assert!(cache.graph(7, "Workflow").is_some());
+        assert!(cache.graph(8, "Workflow").is_some());
+        assert_eq!(cache.order.len(), 2);
     }
 }

@@ -67,6 +67,9 @@ function baml.flat_map(self: ?, f: (T) -> U[] throws E) -> U[]  [builtin]
 function baml.for_each(self: ?, fn: (T) -> void throws E) -> void  [expr] {
   { for x in self.slice(0, self.length()) { fn(x) } }
 }
+function baml.generate(length: int, f: (int) -> T throws E) -> T[]  [expr] {
+  { let out: T[] = []; let i = 0; while i Lt length { out.push(f(i)); i Add= 1 } } out
+}
 function baml.get(self: ?, key: K) -> V?  [builtin]
 function baml.get_or_insert(self: ?, key: K, default: V) -> V  [builtin]
 function baml.has(self: ?, key: K) -> bool  [builtin]
@@ -901,7 +904,7 @@ function baml.llm.call_llm_function(client: Client, function_name: string, args:
   { let jinja_string = match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }; let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure }; let result: T = client.execute_oneshot(context, 0) } result
 }
 function baml.llm.parse(json: string) -> TFinal  [expr] {
-  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } __sap_parse_final(json, cache)
+  { let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of(), reflect.type_of()) } __sap_parse_final(json, cache) catch (_) { root.errors.LlmClient { message: message } => throw root.errors.ParseError { message: message } }
 }
 function baml.llm.prompt_template_for(function_name: string, prompt_closure: (Context) -> PromptAst?) -> string  [expr] {
   {  } match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }

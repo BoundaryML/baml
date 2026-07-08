@@ -4,9 +4,9 @@ import type {
   BamlValueMedia,
   BamlValuePromptAst,
   BamlValuePromptAstSimple,
-} from './generated/baml_core/cffi/v1/baml_outbound';
-import { BamlOutboundValue, MediaTypeEnum } from './generated/baml_core/cffi/v1/baml_outbound';
-import { BamlHandleType } from './generated/baml_core/cffi/v1/baml_handle';
+} from './generated/baml_bridge/cffi/v1/baml_outbound';
+import { BamlOutboundValue, MediaTypeEnum } from './generated/baml_bridge/cffi/v1/baml_outbound';
+import { BamlHandleType } from './generated/baml_bridge/cffi/v1/baml_handle';
 import type { BamlJsValue, BamlJsClass, BamlJsHandle, BamlJsMedia, BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage } from './types';
 
 const HANDLE_TYPE_NAMES: Record<number, string> = {

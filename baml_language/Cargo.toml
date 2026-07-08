@@ -194,6 +194,8 @@ protoc-bin-vendored = "3"
 quote = { version = "1" }
 ratatui = "0.29"
 regex = { version = "1.10.2" }
+# gitignore-aware directory walking (workspace project discovery in the LSP)
+ignore = { version = "0.4" }
 base64 = "0.22"
 bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [

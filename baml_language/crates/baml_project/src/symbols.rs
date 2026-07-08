@@ -8,9 +8,14 @@ use baml_compiler2_hir::{
     file_item_tree,
     package::{PackageId, package_items},
 };
+use baml_compiler2_tir::package_interface::package_interface;
 use baml_db::Name;
 
-use crate::db::ProjectDatabase;
+use crate::{
+    db::ProjectDatabase,
+    param_schema,
+    param_schema::{ParamSchema, TypeSchema},
+};
 
 /// Symbol kind — locally defined since v1 HIR is removed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +54,22 @@ pub struct FunctionSymbol {
     pub client_name: Option<String>,
     /// Whether this function is compiler-generated (`render_prompt`, `build_request`, `resolve`).
     pub is_sub_function: bool,
+    /// Parameter schemas for the playground args form. Named types inside are
+    /// [`crate::FieldSchema::Ref`]s into [`FunctionListing::types`]. `None`
+    /// means no schema was extracted (function missing from the package
+    /// interface mid-edit, or extraction skipped for companions/internal
+    /// functions); `Some(vec![])` means the function takes no arguments.
+    pub params: Option<Vec<ParamSchema>>,
+}
+
+/// Playground function metadata plus the shared type table their param
+/// schemas reference into.
+#[derive(Debug, Clone)]
+pub struct FunctionListing {
+    pub functions: Vec<FunctionSymbol>,
+    /// Every named type referenced from any function's params, defined exactly
+    /// once and keyed by canonical dotted FQN (`user.shapes.Foo`).
+    pub types: std::collections::BTreeMap<String, TypeSchema>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,14 +122,17 @@ pub fn list_functions(db: &ProjectDatabase) -> Vec<Symbol> {
     result
 }
 
-/// List user-facing functions with metadata for the playground.
+/// List user-facing functions with metadata for the playground, along with
+/// the shared type table their param schemas reference.
 ///
 /// Extracts LLM metadata (client name, `is_llm`) from `declarative_meta` on the
 /// compiler2 [`Function`](baml_compiler2_hir::item_tree::Function) item tree entry.
-pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol> {
+pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
     let pkg_id = PackageId::new(db, Name::new("user"));
     let pkg = package_items(db, pkg_id);
-    let mut result = Vec::new();
+    let iface = package_interface(db, pkg_id);
+    let mut functions = Vec::new();
+    let mut types = std::collections::BTreeMap::new();
     for (namespace_path, ns_items) in &pkg.namespaces {
         for (name, defn) in &ns_items.values {
             if let Definition::Function(func_loc) = defn {
@@ -131,18 +155,36 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol>
                 // Sub-functions have names with '$' (e.g. MyFunc$render_prompt)
                 let is_sub_function = name.as_str().contains('$');
 
-                result.push(FunctionSymbol {
+                let origin: FunctionOrigin = func.origin.into();
+                // Companions clone parent params verbatim and non-userDefined
+                // functions are hidden by default — extracting schemas for
+                // them only duplicates payload. The UI degrades to raw mode.
+                let params = if is_sub_function || origin != FunctionOrigin::UserDefined {
+                    None
+                } else {
+                    param_schema::function_param_schemas(
+                        db,
+                        iface,
+                        namespace_path,
+                        name,
+                        is_llm,
+                        &mut types,
+                    )
+                };
+
+                functions.push(FunctionSymbol {
                     name: playground_function_name(namespace_path, name),
-                    origin: func.origin.into(),
+                    origin,
                     is_llm,
                     client_name,
                     is_sub_function,
+                    params,
                 });
             }
         }
     }
-    result.sort_by(|a, b| a.name.cmp(&b.name));
-    result
+    functions.sort_by(|a, b| a.name.cmp(&b.name));
+    FunctionListing { functions, types }
 }
 
 /// Function names exposed to the playground preserve source namespaces so the
@@ -218,6 +260,7 @@ mod tests {
         );
 
         let names = list_functions_with_metadata(&db)
+            .functions
             .into_iter()
             .map(|function| function.name)
             .collect::<Vec<_>>();

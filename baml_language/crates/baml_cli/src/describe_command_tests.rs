@@ -1082,6 +1082,18 @@ fn render_keyword_spawn() {
 }
 
 #[test]
+fn render_keyword_defer() {
+    let output = capture_keyword("defer");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_cleanup() {
+    let output = capture_keyword("cleanup");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_keyword_baml_sdk() {
     let output = capture_keyword("baml_sdk");
     insta::assert_snapshot!(output);
@@ -1103,6 +1115,19 @@ fn render_keyword_typescript() {
 fn render_keyword_patterns() {
     let output = capture_keyword("patterns");
     insta::assert_snapshot!(output);
+}
+
+/// `defer` and `cleanup` (BEP-042) resolve to keyword topics rather than
+/// falling through to "No symbol found" (regression test for B-632).
+#[test]
+fn dispatch_defer_and_cleanup_resolve_to_keyword() {
+    let db = simple_project();
+    for name in ["defer", "cleanup"] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`{name}` should resolve to a keyword topic, not fall through to 'No symbol found'"
+        );
+    }
 }
 
 #[test]

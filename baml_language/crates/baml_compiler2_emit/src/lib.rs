@@ -382,7 +382,7 @@ fn build_packages(
                     .find(|(an, _)| an == name)
                     .map(|(_, t)| t.clone())
                     .unwrap_or_else(|| {
-                        baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::BuiltinUnknown {
+                        baml_type::TyTemplate::from(baml_type::RealizedTy::BuiltinUnknown {
                             attr: TyAttr::default(),
                         })
                     });
@@ -590,13 +590,13 @@ fn build_packages(
             // The implementor pattern is the class at its own parameters; bounds
             // come from the class's generic parameters. Shared by all its blocks.
             let for_ty_pattern = if generics.is_empty() {
-                baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Class(
+                baml_type::TyTemplate::from(baml_type::RealizedTy::Class(
                     class_tn.clone(),
                     Vec::new(),
                     TyAttr::default(),
                 ))
             } else {
-                baml_type::TyTemplate::Class(
+                baml_type::TyTemplate::class(
                     class_tn.clone(),
                     (0..u32::try_from(generics.len()).expect("generic arity fits u32"))
                         .map(baml_type::TyTemplate::TypeArgRef)
@@ -1675,7 +1675,7 @@ fn emit_file_group(
             let mut fields = Vec::new();
             // Class-level generic params, used to resolve `T`-references in
             // field type expressions to `TyTemplate::TypeArgRef(N)`.  When
-            // empty, `tir2_to_template` produces `TyTemplate::Concrete(...)`
+            // empty, `tir2_to_template` produces a `Concrete`-equivalent leaf
             // for every leaf and `field_template == Concrete(field_type)`.
             let class_generic_params: Vec<baml_base::Name> = class_data.generic_params.clone();
             // BEP-044: collect only the class's actual runtime fields.
@@ -1711,7 +1711,12 @@ fn emit_file_group(
                         let null_ty = baml_type::RuntimeTy::Null {
                             attr: baml_type::TyAttr::default(),
                         };
-                        (null_ty.clone(), baml_type::TyTemplate::Concrete(null_ty))
+                        (
+                            null_ty.clone(),
+                            baml_type::TyTemplate::from(baml_type::RealizedTy::Null {
+                                attr: baml_type::TyAttr::default(),
+                            }),
+                        )
                     }
                 };
                 let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());

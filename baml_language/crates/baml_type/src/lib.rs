@@ -43,7 +43,6 @@ pub use family::*;
 pub use names::*;
 pub use primitive::*;
 pub use runtime_ty::*;
-pub use template::TyTemplate;
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to
 /// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32

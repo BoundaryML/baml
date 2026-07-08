@@ -173,9 +173,9 @@ name = "{name}"
 # Uncomment this to generate the Python SDK.
 #
 # Note: you also need to install the BAML runtime bridge for Python:
-#   uv add baml_core
-#   pip install baml_core
-#   conda install -c conda-forge baml_core
+#   uv add baml_bridge
+#   pip install baml_bridge
+#   conda install -c conda-forge baml_bridge
 #
 # [generator.python_client]
 # output_type = "python/pydantic"
@@ -185,10 +185,10 @@ name = "{name}"
 # Uncomment this to generate the Node SDK.
 #
 # Note: you also need to install the BAML runtime bridge for Node.js:
-#   npm install @boundaryml/baml-core-node
-#   pnpm add @boundaryml/baml-core-node
-#   yarn add @boundaryml/baml-core-node
-#   bun add @boundaryml/baml-core-node
+#   npm install @boundaryml/baml-bridge
+#   pnpm add @boundaryml/baml-bridge
+#   yarn add @boundaryml/baml-bridge
+#   bun add @boundaryml/baml-bridge
 #
 # [generator.node_client]
 # output_type = "typescript/node"

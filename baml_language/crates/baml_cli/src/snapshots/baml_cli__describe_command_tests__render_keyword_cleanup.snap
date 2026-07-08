@@ -1,0 +1,16 @@
+---
+source: crates/baml_cli/src/describe_command_tests.rs
+expression: output
+---
+cleanup — Magic finalizer method, recognized by name, that runs at most once per instance.
+
+Syntax:
+  class FileHandle {
+    path: string
+  
+    function cleanup(self) -> void {
+      // release the underlying resource here
+    }
+  }
+
+`cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return, and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.

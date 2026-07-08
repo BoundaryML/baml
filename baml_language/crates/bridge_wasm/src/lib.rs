@@ -89,7 +89,7 @@ use bex_events::{
     },
 };
 pub use bridge_ctypes::{
-    HANDLE_TABLE, baml_core, external_to_outbound, playground_run_args_to_bex_values,
+    HANDLE_TABLE, baml_bridge, external_to_outbound, playground_run_args_to_bex_values,
 };
 pub use error::BridgeError;
 pub use host_value::{complete_host_call, register_host_callable};

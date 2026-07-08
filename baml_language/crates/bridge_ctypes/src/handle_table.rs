@@ -10,7 +10,7 @@ use std::{
 
 use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
 
-use crate::baml_core::cffi::BamlHandleType;
+use crate::baml_bridge::cffi::BamlHandleType;
 
 /// Newtype wrapper around opaque `$rust_type` objects
 /// (`Arc<dyn Any + Send + Sync>`) stored as a handle.
@@ -215,7 +215,7 @@ mod tests {
     use bex_project::{BexExternalValue, HostValueArc, HostValueKind};
 
     use super::*;
-    use crate::{baml_core::cffi::baml_outbound_value::Value as BamlValueVariant, value_encode};
+    use crate::{baml_bridge::cffi::baml_outbound_value::Value as BamlValueVariant, value_encode};
 
     fn make_function_ref() -> CffiHandleTableEntry {
         CffiHandleTableEntry::FunctionRef { global_index: 42 }

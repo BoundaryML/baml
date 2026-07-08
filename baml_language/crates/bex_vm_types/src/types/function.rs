@@ -327,12 +327,29 @@ pub struct Closure {
 ///
 /// Created by `MakeBoundMethod`. The receiver is inserted as `self`
 /// at call time by `CallIndirect`.
+///
+/// Like every callable value, a bound method is fully realized: its complete
+/// type environment is curried in at creation via [`Self::type_args`], so the
+/// `CallIndirect` that invokes it carries no type arguments of its own.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// The receiver value (inserted as `self` at call time).
     pub receiver: Value,
+    /// The method's curried type arguments, in the callee frame's De Bruijn
+    /// order (`[class generics (→ Self), method fn generics]`) — the exact
+    /// vector a direct `receiver.method<…>(…)` call would seed into
+    /// `frame.type_args`. Materialized at `MakeBoundMethod` time and installed
+    /// as `frame.type_args` when the value is invoked by `CallIndirect`, so
+    /// `LoadType(TypeArgRef(N))` / `IsType` inside the body resolve correctly.
+    ///
+    /// `RuntimeTy` (not `RealizedTy`) mirrors [`Closure::captured_type_args`]
+    /// and [`GenericFunction::type_args`]: these positions should never carry a
+    /// type variable, but the upstream fix that stops typevars leaking into
+    /// value positions is still in flight, so all three stay `RuntimeTy` and
+    /// narrow to `RealizedTy` together once it lands.
+    pub type_args: Box<[baml_type::RuntimeTy]>,
 }
 
 /// A generic function instantiation carrying concrete type arguments.

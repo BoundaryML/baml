@@ -1021,6 +1021,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty_expr: &TypeExpr,
         diags: &mut Vec<TirTypeError>,
     ) -> Ty {
+        // `Self` is signature-only; in a method body it has no substitution (see
+        // `self_reference_span`). Reject it here — the sole choke every non-
+        // pattern body type annotation passes through — rather than let it
+        // resolve to a stray `TypeVar("Self")` (interface default methods, where
+        // `"Self"` is in `type_bindings`). The pattern and turbofish paths do
+        // their own inline lowering, so they guard separately. The silent
+        // natural-type caller drops `diags`, but the same annotation is reported
+        // once via its pattern/expression path.
+        if let Some(span) = crate::lower_type_expr::self_reference_span(ty_expr) {
+            diags.push(TirTypeError::SelfInBodyPosition { span });
+            return Ty::Error {
+                attr: TyAttr::default(),
+            };
+        }
         if self.type_bindings.is_empty() {
             crate::lower_type_expr::lower_type_expr_in_ns(
                 self.context.db(),
@@ -2198,6 +2212,24 @@ impl<'db> TypeInferenceBuilder<'db> {
         let caller_generic_params = self.generic_params.clone();
         let suppress_diags = self.is_auto_derived_body;
         for (param_name, type_arg_expr) in declared_params.iter().zip(type_args.iter()) {
+            // `type_of<Self>()` and other body turbofishes on `Self`: reject it,
+            // mirroring the body funnel. This inline path uses the caller's
+            // `generic_params`, where an interface default method's `"Self"`
+            // would otherwise resolve to a stray `TypeVar("Self")` and erase at
+            // runtime.
+            if let Some(span) = crate::lower_type_expr::self_reference_span(type_arg_expr) {
+                if !suppress_diags {
+                    self.context
+                        .report_simple(TirTypeError::SelfInBodyPosition { span }, call_expr_id);
+                }
+                bindings.insert(
+                    param_name.clone(),
+                    Ty::Error {
+                        attr: TyAttr::default(),
+                    },
+                );
+                continue;
+            }
             let mut diags = Vec::new();
             let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                 db,
@@ -8963,6 +8995,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return resolved;
                 }
             }
+        }
+        // A pattern type-test on `Self` (`match (x) { let s: Self => … }`,
+        // `x is Self`): reject it, mirroring the body funnel — this inline path
+        // uses `generic_params`, where an interface default method's `"Self"`
+        // would otherwise resolve to a stray `TypeVar("Self")`.
+        if let Some(span) = crate::lower_type_expr::self_reference_span(ty) {
+            self.report_at_pat_or_expr(
+                TirTypeError::SelfInBodyPosition { span },
+                pat_id,
+                fallback_expr,
+            );
+            return Ty::Error {
+                attr: TyAttr::default(),
+            };
         }
         let mut diags = Vec::new();
         let resolved = crate::lower_type_expr::lower_type_expr_in_ns(

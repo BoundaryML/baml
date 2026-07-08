@@ -74,6 +74,13 @@ pub struct FunctionInfo {
     pub origin: FunctionOrigin,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
+    /// Parameter schemas for the playground args form; named types inside are
+    /// refs into `ProjectUpdate.types`. `None` (omitted on the wire) means no
+    /// schema is available and the UI degrades to raw JSON; `Some(vec![])`
+    /// means the function takes no arguments. Do not collapse the empty vec —
+    /// the UI relies on the distinction.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<Vec<baml_project::ParamSchema>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -124,6 +131,13 @@ pub struct ProjectDiagnostic {
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
+    /// Shared type table for `FunctionInfo.params` refs: every named type
+    /// referenced from any function's schema, defined exactly once and keyed
+    /// by canonical dotted FQN. `None` (omitted on the wire) means the binary
+    /// predates the args form; `Some` may be an empty map. Same `None` ≠
+    /// `Some(empty)` discipline as `params`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub types: Option<std::collections::BTreeMap<String, baml_project::TypeSchema>>,
     pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
@@ -211,12 +225,18 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
 
     fn project_generation(&self, project_root: &str) -> Option<u64>;
 
+    /// Prepared control-flow graph for a function as of a project generation.
+    ///
+    /// Built lazily and cached per `(generation, function)`: a miss can only
+    /// be built while `generation` is still current. Playground run launches
+    /// call this right after capturing their generation to pin the graph for
+    /// the run's later overlay resolutions.
     fn control_flow_graph_for_generation(
         &self,
         project_root: &str,
         generation: u64,
         function_name: &str,
-    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph>;
+    ) -> Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>>;
 
     /// Request the control flow graph for a function.
     ///

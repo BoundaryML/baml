@@ -735,7 +735,7 @@ fn bigint_to_hex(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use bridge_ctypes::baml_core::cffi::{
+    use bridge_ctypes::baml_bridge::cffi::{
         BamlOutboundValue, BamlTyPrimitiveKind, baml_outbound_value::Value as BamlValueVariant,
         baml_ty,
     };
@@ -807,7 +807,7 @@ mod tests {
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
         assert!(matches!(
             media.value,
-            Some(bridge_ctypes::baml_core::cffi::baml_value_media::Value::Base64(_))
+            Some(bridge_ctypes::baml_bridge::cffi::baml_value_media::Value::Base64(_))
         ));
     }
 
