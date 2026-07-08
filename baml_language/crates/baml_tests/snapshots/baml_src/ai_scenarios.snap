@@ -71,6 +71,28 @@ function ai_scenarios.$init_test_ns_ai_scenarios_11_parallel_tools_usage(registr
     return
 }
 
+function ai_scenarios.$init_test_ns_ai_scenarios_12_tool_taxonomy_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "12: the taxonomy marker drives dispatch-side description"
+    make_closure .<lambda($init_test_ns_ai_scenarios_12_tool_taxonomy_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_13_searchable_tools_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "13: the catalog resolver pages in only matching tools"
+    make_closure .<lambda($init_test_ns_ai_scenarios_13_searchable_tools_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function ai_scenarios.$init_test_ns_ai_scenarios_14_multi_agent_usage(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "14: the dispatcher hands off to a specialist provider"
@@ -98,6 +120,23 @@ function ai_scenarios.$init_test_ns_ai_scenarios_15_guardrails_usage(registry: t
     load_var registry
     load_const "15: tripwire input aborts with a typed error before any call"
     make_closure .<lambda($init_test_ns_ai_scenarios_15_guardrails_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_16_agent_security_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "16: the allowlist gate denies out-of-policy calls as data"
+    make_closure .<lambda($init_test_ns_ai_scenarios_16_agent_security_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "16: the gate composes with a real ToolLoop run"
+    make_closure .<lambda($init_test_ns_ai_scenarios_16_agent_security_usage, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -138,6 +177,17 @@ function ai_scenarios.$init_test_ns_ai_scenarios_22_realtime_voice_usage(registr
     load_var registry
     load_const "23: LiveControl is negotiated on top of Realtime"
     make_closure .<lambda($init_test_ns_ai_scenarios_22_realtime_voice_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_25_voice_pipelines_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "25: the cascaded pipeline flows through all three stages"
+    make_closure .<lambda($init_test_ns_ai_scenarios_25_voice_pipelines_usage, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -191,6 +241,34 @@ function ai_scenarios.$init_test_ns_ai_scenarios_32_observability_usage(registry
     return
 }
 
+function ai_scenarios.$init_test_ns_ai_scenarios_33_evaluation_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "33: the eval runner scores task output with a judge"
+    make_closure .<lambda($init_test_ns_ai_scenarios_33_evaluation_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "36: the Support lattice is queryable before sending"
+    make_closure .<lambda($init_test_ns_ai_scenarios_33_evaluation_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_35_deployment_shapes_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "35: deployment shapes are config variance, and all negotiate HttpProvider"
+    make_closure .<lambda($init_test_ns_ai_scenarios_35_deployment_shapes_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function ai_scenarios.$init_test_ns_ai_scenarios_37_harness_basics_usage(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "42: ClaudeCode and PiAgent both negotiate as drivable harnesses"
@@ -234,6 +312,17 @@ function ai_scenarios.$init_test_ns_ai_scenarios_45_workflow_durable_usage(regis
     load_var registry
     load_const "45: durable steps key by (run, coordinate) and pass values through"
     make_closure .<lambda($init_test_ns_ai_scenarios_45_workflow_durable_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_46_workflow_observability_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "46: a run emits one typed event per step"
+    make_closure .<lambda($init_test_ns_ai_scenarios_46_workflow_observability_usage, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -464,6 +553,94 @@ function ai_scenarios.EchoProvider.baml.ai.HttpProvider.send(self: ai_scenarios.
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
     throw
+}
+
+function ai_scenarios.FakeStt$stream.Stt.transcribe(self: ai_scenarios.FakeStt$stream, audio_url: string) -> string {
+    load_const "transcript of "
+    load_var audio_url
+    bin_op +
+    return
+}
+
+function ai_scenarios.FakeStt.Stt.transcribe(self: ai_scenarios.FakeStt, audio_url: string) -> string {
+    load_const "transcript of "
+    load_var audio_url
+    bin_op +
+    return
+}
+
+function ai_scenarios.FakeTts$stream.Tts.synthesize(self: ai_scenarios.FakeTts$stream, text: string) -> string {
+    load_const "audio<"
+    load_var text
+    bin_op +
+    load_const ">"
+    bin_op +
+    return
+}
+
+function ai_scenarios.FakeTts.Tts.synthesize(self: ai_scenarios.FakeTts, text: string) -> string {
+    load_const "audio<"
+    load_var text
+    bin_op +
+    load_const ">"
+    bin_op +
+    return
+}
+
+function ai_scenarios.KeywordJudge$stream.Scorer.score(self: ai_scenarios.KeywordJudge$stream, input: string, output: string) -> ai_scenarios.EvalScore {
+    load_var2 3 1
+    load_field .0
+    call baml.String.includes
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0.0
+    load_const "missing "
+    load_var self
+    load_field .0
+    bin_op +
+    init_instance user.ai_scenarios.EvalScore .value, .reason
+    jump L2
+
+  L1:
+    load_const 1.0
+    load_const "contains "
+    load_var self
+    load_field .0
+    bin_op +
+    init_instance user.ai_scenarios.EvalScore .value, .reason
+
+  L2:
+    return
+}
+
+function ai_scenarios.KeywordJudge.Scorer.score(self: ai_scenarios.KeywordJudge, input: string, output: string) -> ai_scenarios.EvalScore {
+    load_var2 3 1
+    load_field .0
+    call baml.String.includes
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const 0.0
+    load_const "missing "
+    load_var self
+    load_field .0
+    bin_op +
+    init_instance user.ai_scenarios.EvalScore .value, .reason
+    jump L2
+
+  L1:
+    load_const 1.0
+    load_const "contains "
+    load_var self
+    load_field .0
+    bin_op +
+    init_instance user.ai_scenarios.EvalScore .value, .reason
+
+  L2:
+    return
 }
 
 function ai_scenarios.NullChannel$stream.baml.ai.Channel.close(self: ai_scenarios.NullChannel$stream) -> null {
@@ -1546,6 +1723,137 @@ function ai_scenarios.VoiceChat$with(instructions: string, project: (baml.ai.Res
     return
 }
 
+function ai_scenarios.browser_client(proxy_url: string) -> baml.ai.Provider {
+    load_const "gpt-5.4-mini"
+    load_const ""
+    load_var proxy_url
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.ai.OpenAi .model, .api_key, .base_url, .extra_headers, .extra_body, .append_output_schema
+    return
+}
+
+function ai_scenarios.cascaded_voice(stt: ai_scenarios.Stt, llm: baml.ai.Provider, tts: ai_scenarios.Tts, audio_url: string) -> string {
+    load_var2 1 4
+    load_type ai_scenarios.Stt
+    load_const "transcribe"
+    virtual_call nargs=2 ntypeargs=0
+    store_var text
+    load_var llm
+    is_type baml.ai.ToolLoop
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var llm
+    is_type baml.ai.Retry
+    pop_jump_if_false L1
+    jump L11
+
+  L1:
+    load_var llm
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L2
+    jump L11
+
+  L2:
+    load_var llm
+    is_type baml.ai.Gemini
+    pop_jump_if_false L3
+    jump L11
+
+  L3:
+    load_var llm
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L4
+    jump L11
+
+  L4:
+    load_var llm
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L5
+    jump L11
+
+  L5:
+    load_var llm
+    is_type baml.ai.Fallback
+    pop_jump_if_false L6
+    jump L11
+
+  L6:
+    load_var llm
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L7
+    jump L11
+
+  L7:
+    load_var llm
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var llm
+    is_type baml.llm.Client
+    pop_jump_if_false L9
+    jump L11
+
+  L9:
+    load_var llm
+    is_type ai_scenarios.EchoProvider
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_const "llm stage cannot produce a value"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L11:
+    load_type string
+    load_var2 2 6
+    load_type baml.ai.HttpProvider
+    load_const "call"
+    virtual_call nargs=2 ntypeargs=1
+    store_var reply
+    load_var2 3 7
+    load_type ai_scenarios.Tts
+    load_const "synthesize"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function ai_scenarios.describe_tool_kind(kt: ai_scenarios.KindedTool) -> string {
+    load_var kt
+    load_field .kind
+    discriminant
+    jump_table [L3, L2, L1, L0], default L5
+
+  L0: ToolKind.ComputerUse
+    load_const "operates a computer"
+    jump L4
+
+  L1: ToolKind.Mcp
+    load_const "runs on an MCP server"
+    jump L4
+
+  L2: ToolKind.Hosted
+    load_const "runs provider-side"
+    jump L4
+
+  L3: ToolKind.InProcess
+    load_const "runs in this process"
+
+  L4:
+    return
+
+  L5:
+    unreachable
+}
+
 function ai_scenarios.drive_any(h: baml.ai.Provider) -> string {
     load_var h
     is_type baml.ai.ClaudeCode
@@ -1745,6 +2053,16 @@ function ai_scenarios.echo_dispatch(calls: baml.ai.ToolCall[]) -> baml.ai.ToolRe
     unreachable
 }
 
+function ai_scenarios.edge_client(gateway_url: string, token: string) -> baml.ai.Provider {
+    load_const "gpt-5.4-mini"
+    load_var2 2 1
+    load_const null
+    load_const null
+    load_const null
+    init_instance baml.ai.OpenAi .model, .api_key, .base_url, .extra_headers, .extra_body, .append_output_schema
+    return
+}
+
 function ai_scenarios.lookup_tools() -> baml.ai.Tool[] {
     load_const "lookup"
     load_const "Look something up."
@@ -1752,6 +2070,257 @@ function ai_scenarios.lookup_tools() -> baml.ai.Tool[] {
     init_instance baml.ai.Tool .name, .description, .parameters
     load_type baml.ai.Tool
     alloc_array 1
+    return
+}
+
+function ai_scenarios.observe_pipeline(steps: string[]) -> ai_scenarios.StepEvent[] {
+    load_type ai_scenarios.StepEvent
+    alloc_array 0
+    store_var events
+    load_type string
+    load_var steps
+    call baml.iter.Iterable$for$T[].iter
+    store_var _3
+
+  L0:
+    load_var _3
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L22
+    load_type string
+    load_type never
+    load_var _3
+    call baml.iter.Peekable.Iterator.next
+    store_var _5
+    jump L19
+
+  L10:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L11:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L12:
+    load_type string
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Filter.Iterator.next
+    store_var _5
+    jump L19
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L14:
+    load_type string
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L19
+
+  L15:
+    load_type string
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Chain.Iterator.next
+    store_var _5
+    jump L19
+
+  L16:
+    load_type string
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
+    store_var _5
+    jump L19
+
+  L17:
+    load_type string
+    load_var _3
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _5
+    jump L19
+
+  L18:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _5
+
+  L19:
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_var2 2 4
+    load_const "done"
+    init_instance user.ai_scenarios.StepEvent .step, .status
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L21:
+    load_var events
+    return
+
+  L22:
+    unreachable
+}
+
+function ai_scenarios.run_eval(task: baml.ai.Provider, judge: ai_scenarios.Scorer, input: string) -> ai_scenarios.EvalScore {
+    load_var task
+    is_type baml.ai.ToolLoop
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var task
+    is_type baml.ai.Retry
+    pop_jump_if_false L1
+    jump L11
+
+  L1:
+    load_var task
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L2
+    jump L11
+
+  L2:
+    load_var task
+    is_type baml.ai.Gemini
+    pop_jump_if_false L3
+    jump L11
+
+  L3:
+    load_var task
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L4
+    jump L11
+
+  L4:
+    load_var task
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L5
+    jump L11
+
+  L5:
+    load_var task
+    is_type baml.ai.Fallback
+    pop_jump_if_false L6
+    jump L11
+
+  L6:
+    load_var task
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L7
+    jump L11
+
+  L7:
+    load_var task
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var task
+    is_type baml.llm.Client
+    pop_jump_if_false L9
+    jump L11
+
+  L9:
+    load_var task
+    is_type ai_scenarios.EchoProvider
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_const "task client cannot produce a value"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L11:
+    load_type string
+    load_var2 1 3
+    load_type baml.ai.HttpProvider
+    load_const "call"
+    virtual_call nargs=2 ntypeargs=1
+    store_var output
+    load_var2 2 3
+    load_var output
+    load_type ai_scenarios.Scorer
+    load_const "score"
+    virtual_call nargs=3 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -2288,6 +2857,209 @@ function ai_scenarios.sample_claude_code() -> baml.ai.ClaudeCode {
     alloc_array 2
     init_instance baml.ai.ClaudeCode .model, .sandbox, .permission_mode, .allowed_tools
     return
+}
+
+function ai_scenarios.search_tools(cat: ai_scenarios.ToolCatalog, query: string) -> baml.ai.Tool[] {
+    load_var ?2
+    make_cell
+    store_var ?2
+    load_type baml.ai.Tool
+    load_type never
+    load_var cat
+    load_field .tools
+    load_var query
+    make_closure .<lambda(search_tools, 0)>, 1
+    call baml.Array.filter
+    return
+}
+
+function ai_scenarios.security_gated_dispatch(calls: baml.ai.ToolCall[], allowed: string[]) -> baml.ai.ToolResult[] {
+    load_type baml.ai.ToolResult
+    alloc_array 0
+    store_var results
+    load_type baml.ai.ToolCall
+    load_var calls
+    call baml.iter.Iterable$for$T[].iter
+    store_var _4
+
+  L0:
+    load_var _4
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _4
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _4
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _4
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _4
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _4
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _4
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _4
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _4
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _4
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L25
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _4
+    call baml.iter.Peekable.Iterator.next
+    store_var _6
+    jump L19
+
+  L10:
+    load_var _4
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _6
+    jump L19
+
+  L11:
+    load_var _4
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _6
+    jump L19
+
+  L12:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _4
+    call baml.iter.Filter.Iterator.next
+    store_var _6
+    jump L19
+
+  L13:
+    load_var _4
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _6
+    jump L19
+
+  L14:
+    load_type baml.ai.ToolCall
+    load_var _4
+    call baml.iter.Repeat.Iterator.next
+    store_var _6
+    jump L19
+
+  L15:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_type never
+    load_var _4
+    call baml.iter.Chain.Iterator.next
+    store_var _6
+    jump L19
+
+  L16:
+    load_type baml.ai.ToolCall
+    load_type never
+    load_var _4
+    call baml.iter.StepBy.Iterator.next
+    store_var _6
+    jump L19
+
+  L17:
+    load_type baml.ai.ToolCall
+    load_var _4
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _6
+    jump L19
+
+  L18:
+    load_var _4
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _6
+
+  L19:
+    load_var _6
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L24
+
+  L20:
+    load_var _6
+    store_var c
+    load_type string
+    load_var2 2 6
+    load_field .name
+    call baml.Array.includes
+    pop_jump_if_false L21
+    jump L22
+
+  L21:
+    load_const "DENIED (policy): "
+    load_var c
+    load_field .name
+    bin_op +
+    store_var out
+    jump L23
+
+  L22:
+    load_const "ran "
+    load_var c
+    load_field .name
+    bin_op +
+    store_var out
+
+  L23:
+    load_var2 3 6
+    load_field .id
+    load_var out
+    init_instance baml.ai.ToolResult .id, .output
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L24:
+    load_var results
+    return
+
+  L25:
+    unreachable
 }
 
 function ai_scenarios.wf_doc_pipeline(p: baml.ai.Provider, url: string) -> string {
