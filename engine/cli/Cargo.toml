@@ -121,6 +121,8 @@ skip-integ-tests = []
 # Kept as a no-op alias: the HTTP stack (baml-http) statically links its
 # crypto (rustls + ring), so there is no system OpenSSL to opt into anymore.
 static-ssl = []
+# Statically vendor OpenSSL (forwarded to the runtime).
+native-tls-vendored = ["baml-runtime/native-tls-vendored"]
 
 [dev-dependencies]
 assert_cmd = "2"

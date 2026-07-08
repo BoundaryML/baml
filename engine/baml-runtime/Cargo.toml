@@ -194,6 +194,9 @@ default = [
   "studio",
 ]
 defaults = ["skip-integ-tests"]
+# Statically vendor OpenSSL for the native-tls backend (portable Linux builds
+# with no system libssl). Forwarded from baml-http.
+native-tls-vendored = ["baml-http/native-tls-vendored"]
 internal = []
 skip-integ-tests = []
 # `baml serve`: the local OpenAPI HTTP server. Off in minimal/vendored builds to

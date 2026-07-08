@@ -85,6 +85,8 @@ default = [
 bedrock = ["baml-runtime/bedrock", "baml-cli/bedrock"]
 # `baml-cli lsp` (the language server).
 lsp = ["baml-cli/lsp"]
+# Statically vendor OpenSSL for portable/hermetic Linux builds.
+native-tls-vendored = ["baml-runtime/native-tls-vendored", "baml-cli/native-tls-vendored"]
 # `baml-cli serve` / `baml-cli dev` (axum HTTP server + file watching).
 serve = ["baml-cli/serve"]
 dev = ["baml-cli/dev"]
