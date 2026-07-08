@@ -94,6 +94,84 @@ implements HttpProvider for root.llm.Client {
     ) -> ResponseMeta throws never {
         LegacyMeta {}
     }
+
+    // Override the interface default so a PORTED primitive (openai / anthropic /
+    // google-ai, expressible config) routes through its BAML-native provider
+    // class — the C.2 native routing, moved from `call_llm_function` into the
+    // bridge so the desugared `drive_call` path inherits it. Everything else
+    // falls through to the codec default above.
+    function call_messages_with<T, V, E2>(
+        self,
+        messages: ChatMessage[],
+        project: (ResponseMeta) -> V throws E2,
+    ) -> CallResult<T, V> throws root.errors.CallError | root.errors.UnknownError | E2 {
+        if (self.client_type == root.llm.ClientType.Primitive) {
+            let primitive = self.to_primitive_client() catch (e) {
+                _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: client construction failed"] },
+            };
+            match (native_provider_for(primitive)) {
+                null => {},
+                let np: Provider => {
+                    match (np) {
+                        let h: HttpProvider => {
+                            return h.call_messages_with<T, V, E2>(messages, project);
+                        },
+                        _ => {},
+                    }
+                },
+            }
+        }
+        let body = self.send(self.build_request<T>(messages));
+        CallResult<T, V> { value: self.parse<T>(body), meta: project(self.meta_of(body)) }
+    }
+}
+
+implements Streaming for root.llm.Client {
+    // Streaming through the bridge (the piece Phase B left open): a ported
+    // primitive whose native class supports Streaming routes natively; every
+    // other primitive streams over the legacy SSE machinery (specialize from
+    // messages -> legacy stream request -> accumulator `Stream`). Strategy
+    // configs lower to combinators at declaration, so only primitives reach
+    // this codec.
+    function stream_messages<TStream, TFinal>(
+        self,
+        messages: ChatMessage[],
+    ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
+        if (self.client_type != root.llm.ClientType.Primitive) {
+            throw root.errors.Unsupported {
+                message: "the legacy codec bridges primitive clients; strategy configs lower to new-model combinators",
+            };
+        }
+        let primitive = self.to_primitive_client() catch (e) {
+            _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: client construction failed"] },
+        };
+        match (native_provider_for(primitive)) {
+            null => {},
+            let np: Provider => {
+                match (np) {
+                    // Gemini's native class lacks Streaming — it falls through
+                    // to the legacy SSE path below, like `stream_llm_function` did.
+                    let s: Streaming => {
+                        return s.stream_messages<TStream, TFinal>(messages);
+                    },
+                    _ => {},
+                }
+            },
+        }
+        let ast = messages_to_prompt(messages);
+        let specialized = primitive.specialize_prompt(ast) catch (e) {
+            _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: specialize failed"] },
+        };
+        let request = primitive.build_request_stream(specialized, reflect.type_of<TFinal>()) catch (e) {
+            _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: build_request_stream failed"] },
+        };
+        let sse = root.http.fetch_sse(request) catch (e) {
+            _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: SSE connect failed"] },
+        };
+        self.__make_stream<TStream, TFinal>(sse) catch (e) {
+            _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: stream construction failed"] },
+        }
+    }
 }
 
 /// Route a legacy PRIMITIVE client to its BAML-native provider class when the

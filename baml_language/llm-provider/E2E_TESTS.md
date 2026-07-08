@@ -1,5 +1,16 @@
 # E2E tests that work completely
 
+> **UPDATE (2026-07-08, C.3 — the desugar is literal now):** LLM function
+> bodies compile to `baml.ai.drive_call<T>(client, Foo$render_prompt(…))` and
+> `$stream` to `drive_stream<Partial<T>,T>(…)` — `call_llm_function` /
+> `stream_llm_function` survive only as 1-line delegators and the legacy
+> orchestrator (`execute_*`, `build_plan`, `OrchestrationStep`) is DELETED.
+> Declared strategy configs lower to `baml.ai.Fallback`/`RoundRobin`/`Retry`;
+> the legacy `Client` bridge owns native routing + `Streaming`. Verified:
+> full corpus (2107 BAML tests), all `ai_*` wiremock + live suites (OpenAI,
+> Anthropic incl. streaming, Gemini, Responses, strict), live
+> `integ-test*` testsets 3/3, `bex_engine` render/request suites.
+
 > **UPDATE (2026-07-08, post-desugar):** the surface below predates the
 > capability-registry/desugar work (`_plan/llm-desugar-capabilities-plan.md`).
 > Since then: every LLM function takes `client: baml.ai.Provider` (native +

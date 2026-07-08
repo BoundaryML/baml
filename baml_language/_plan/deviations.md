@@ -357,3 +357,46 @@ JSON-native group, which is where an LLM wire-format language must be.
   failed over to a second member). Both now drive members with an identity projection
   (`(m) -> ResponseMeta { m }`, `throws never`) and apply `project` exactly once to the
   winning result. Asserted by call-counting tests in `ns_ai_scenarios/29_reliability`.
+
+## Phase C.3 — the literal desugar (call_llm_function retired as the routing seam)
+
+Landed per DCP §1.3 with these concretizations/divergences:
+
+- **Main body** lowers to `baml.ai.drive_call<T>(client, Foo$render_prompt(args…, client = client))`
+  for BOTH prompt modes — the plan's two-statement `let prompt = …` shape became a single
+  nested call (same semantics, one less binding). The backtick closure now lives ONLY in the
+  `$render_prompt`/`$build_request*` companion bodies; the prompt's interp diagnostics are
+  captured from the first companion build (they used to ride the main body).
+- **`$stream`** is now a plain `make_drive_companion` product (PPIR supplies
+  `<STREAM_EXPANDED, ORIGINAL>` explicitly), which fixes the old "inferred type-args don't
+  reach MIR" hole on the stream path — `reflect.type_of<TFinal>()` is real in the bridge.
+  The `LlmBodyDef.stream_body` stash is deleted.
+- **Native routing moved INTO the legacy bridge** (`Client.call_messages_with` override +
+  new `implements Streaming for Client`), not into `drive_call`: ported primitives
+  (openai/anthropic/google-ai) route to native classes from inside the bridge; everything
+  else uses the messages→prompt→specialize→legacy-request codec. Streaming through the
+  bridge (Phase B's open item) is the same shape over `build_request_stream` + `fetch_sse` +
+  `__make_stream`.
+- **Strategy configs lower at declaration** (`synthesize_client_let`): fallback →
+  `baml.ai.Fallback`, round-robin → `baml.ai.RoundRobin` (`start` → `counter`), and a
+  `retry_policy` reference wraps the config in `baml.ai.Retry { max: P.max_retries,
+  base_delay_ms: P.initial_delay_ms }`. `RetryPolicy.initial_delay_ms/multiplier/max_delay_ms`
+  became OPTIONAL (configs routinely omit them); `multiplier`/`max_delay_ms` are accepted but
+  the combinator's backoff is fixed ×2 uncapped. Legacy plan-expansion semantics
+  (`build_plan`'s retry × strategy cross-product, planner-state RR offsets) are replaced by
+  combinator composition — retry wraps the WHOLE strategy, matching `build_plan_with_state`.
+- **ctx.client for strategy clients**: prompts that branch on `${ctx.client.provider}` under
+  a declared strategy config now render against the NEUTRAL renderer (the combinator is not a
+  legacy Client), not the per-attempt member. Primitives keep their own config. This is the
+  documented prompt-hook-v1 loss; per-member `PromptSpecializer` is the future capability hook.
+- **`call_llm_function`/`stream_llm_function` survive as 1-line delegators** onto
+  `drive_call`/`drive_stream` over `llm.render_prompt` (direct callers exist in tests/tooling);
+  the orchestrator (`execute_*`, `build_plan`/`build_attempt`, `PlannerState`,
+  `OrchestrationStep`, `ExecutionContext`) is DELETED, along with the long-ignored
+  `bex_engine/tests/orchestration.rs`.
+- **`llm.render_prompt` native arm renders UNSPECIALIZED** (neutral renderer) — the Phase F
+  Anthropic system-hoist 400 fix now applies to every native-override path ($with etc.), not
+  just the old call_llm_function arm.
+- **Host fix**: `sys_llm::render_output_format` returns "" for a top-level `BuiltinUnknown`
+  (inference-only `T` at a direct `call_llm_function(...)` call without type args) instead of
+  panicking — matches the legacy request builder's tolerance.

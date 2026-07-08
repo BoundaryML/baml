@@ -1,4 +1,5 @@
-// Combinators (plan Phase 2 / D2): plain classes that wrap providers and forward a
+// Combinators (plan Phase 2 / D2; scenarios 29 reliability, 30 cascades/routing):
+// plain classes that wrap providers and forward a
 // capability by a runtime `match` over their members. Each combinator statically claims
 // the capabilities it forwards and degrades/errors at call time. Reachable fluently via
 // the factory methods on the `Provider` marker (`.with_retry`, `.fallback_to`).
@@ -196,17 +197,53 @@ class Retry {
 
     implements root.ai.Streaming {
         // A broken stream can't be transparently retried (partial output already
-        // emitted), so `Retry` forwards `.stream` once to a streaming inner member.
+        // emitted), but stream INITIATION can — request build / connect failures
+        // retry with the same backoff as the call path (legacy `execute_stream`
+        // parity). Once the `Stream` handle is returned, failures are the caller's.
         function stream_messages<TStream, TFinal>(
             self,
             messages: root.ai.ChatMessage[],
         ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
-            match (self.inner) {
-                let s: root.ai.Streaming => s.stream_messages<TStream, TFinal>(messages),
-                _ => {
-                    throw root.errors.UnknownError { data: null, message: ["retry: inner is not streaming"] }
-                },
+            if (self.inner.is_effectful()) {
+                throw root.errors.CannotRetry {
+                    message: "provider is effectful; wrap the idempotent part or use a bespoke combinator",
+                };
             }
+            let attempt: int = 0;
+            let delay_ms: int = self.base_delay_ms ?? 100;
+            while (true) {
+                match (self.inner) {
+                    let s: root.ai.Streaming => {
+                        let st: root.llm.Stream<TStream, TFinal> = s.stream_messages<TStream, TFinal>(messages) catch (e) {
+                            let f: root.errors.Failure => {
+                                if (attempt < self.max && f.is_retryable()) {
+                                    attempt = attempt + 1;
+                                    // `sleep` throws Io, which is not on the Stream channel —
+                                    // a failed sleep just means no backoff.
+                                    root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) catch (se) { _ => null };
+                                    delay_ms = delay_ms * 2;
+                                    continue;
+                                }
+                                throw e;
+                            },
+                            _ => {
+                                if (attempt < self.max) {
+                                    attempt = attempt + 1;
+                                    root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) catch (se) { _ => null };
+                                    delay_ms = delay_ms * 2;
+                                    continue;
+                                }
+                                throw e;
+                            }
+                        };
+                        return st;
+                    },
+                    _ => {
+                        throw root.errors.UnknownError { data: null, message: ["retry: inner is not streaming"] }
+                    },
+                }
+            }
+            root.sys.panic("unreachable")
         }
     }
 }
@@ -262,6 +299,27 @@ class RoundRobin {
                 let h: root.ai.HttpProvider => h.call_messages_with<T, V, E2>(messages, project),
                 _ => {
                     throw root.errors.UnknownError { data: null, message: ["round_robin: member not callable"] }
+                },
+            }
+        }
+    }
+
+    implements root.ai.Streaming {
+        // Same cursor, streaming surface: the chosen member must stream.
+        function stream_messages<TStream, TFinal>(
+            self,
+            messages: root.ai.ChatMessage[],
+        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
+            let n = self.members.length();
+            if (n == 0) {
+                throw root.errors.UnknownError { data: null, message: ["round_robin: no members"] };
+            }
+            let idx = self.counter % n;
+            self.counter = self.counter + 1;
+            match (self.members.at(idx)) {
+                let s: root.ai.Streaming => s.stream_messages<TStream, TFinal>(messages),
+                _ => {
+                    throw root.errors.UnknownError { data: null, message: ["round_robin: member not streaming"] }
                 },
             }
         }

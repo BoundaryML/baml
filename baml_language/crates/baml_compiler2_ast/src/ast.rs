@@ -1551,24 +1551,19 @@ pub struct LlmBodyDef {
     /// reference. Zero-arg only.
     pub client_is_call: bool,
     pub prompt: Option<RawPrompt>,
-    /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
-    /// the `$stream` companion — a `stream_llm_function(...)` call whose 4th
-    /// argument is the synthesized prompt closure. Built in `lower_cst` while
-    /// the CST backtick literal is still in hand (the AST must stay CST-free for
-    /// Salsa: a rowan node is `!Send`), and consumed by PPIR when it
-    /// materializes the `$stream` companion. The closure must capture the
-    /// companion's params, so it can't be shared with the oneshot body by
-    /// `ExprId` — it's a fully independent arena. `None` for legacy Jinja
-    /// `#"..."#` prompts (their `$stream` companion uses the 3-arg Jinja path).
-    pub stream_body: Option<(ExprBody, AstSourceMap)>,
     /// BEP-049 M5: for a new-mode (backtick) prompt, the pre-lowered bodies of
     /// the `render_prompt` / `build_request` / `build_request_stream` companions,
     /// keyed by target name. Each is a `<target>(client, fn, args,
     /// prompt_closure=…)` call carrying the same synthesized prompt closure, so
     /// the static preview/cURL render through the closure exactly like execution.
-    /// Built in `lower_cst` while the CST backtick is in hand (same reason as
-    /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
-    /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
+    /// Built in `lower_cst` while the CST backtick literal is still in hand (the
+    /// AST must stay CST-free for Salsa: a rowan node is `!Send`) and read back
+    /// by `make_llm_companion`. Each closure captures the companion's params, so
+    /// bodies can't share `ExprId`s — every entry is an independent arena. Empty
+    /// for legacy Jinja `#"..."#` prompts (their companions use the 3-arg Jinja
+    /// path). The MAIN body and the `$stream` companion no longer carry a
+    /// closure at all (DCP §1.3 Phase C.3): both desugar onto
+    /// `baml.ai.drive_call` / `drive_stream` over `$render_prompt`.
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
     pub span: TextRange,
 }

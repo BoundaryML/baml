@@ -117,6 +117,14 @@ pub fn render_output_format(
     return_type: &baml_type::RuntimeTy,
     ctx: &::sys_types::SysOpContext,
 ) -> String {
+    // A top-level BuiltinUnknown means the caller's `T` was inference-only and
+    // never reached MIR (e.g. `call_llm_function` invoked without explicit type
+    // args). The legacy request builder tolerated this by building no schema —
+    // match that: no type, no schema. (Nested non-data types inside a real
+    // structure still hit `render`'s unreachable, on purpose.)
+    if matches!(return_type, baml_type::RuntimeTy::BuiltinUnknown { .. }) {
+        return String::new();
+    }
     build_output_format_content(return_type, ctx)
         .render(&types::RenderOptions::default())
         .ok()

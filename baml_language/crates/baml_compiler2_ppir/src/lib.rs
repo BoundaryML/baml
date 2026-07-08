@@ -436,61 +436,69 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 .at(span);
 
                 // --- $stream companion ---
-                // Calls baml.llm.stream_llm_function(CLIENT, "FuncName", map { args })
+                // Desugared (DCP §1.3, Phase C.3): delegates to the stdlib
+                // streaming driver —
+                //   baml.ai.drive_stream<STREAM_EXPANDED, ORIGINAL>(
+                //       client, Foo$render_prompt(args…, client = client))
+                // `$render_prompt` owns prompt-mode dispatch (backtick closure
+                // vs legacy Jinja), so no closure body is stashed for `$stream`
+                // anymore. `make_drive_companion` requires the injected client
+                // param; a clientless LLM function keeps the legacy
+                // `stream_llm_function` shape (whose null-client arm errors at
+                // runtime, exactly as before).
                 {
-                    let param_names: Vec<Name> = func
-                        .params
-                        .iter()
-                        .filter(|p| p.name.as_str() != "client")
-                        .map(|p| p.name.clone())
-                        .collect();
-                    let client_arg_name = if func.params.iter().any(|p| p.name.as_str() == "client")
-                    {
-                        Some("client")
+                    let drive_companion = ast::make_drive_companion(
+                        func,
+                        ast::DriveCompanionSpec {
+                            suffix: Name::new("stream"),
+                            driver: vec![
+                                Name::new("baml"),
+                                Name::new("ai"),
+                                Name::new("drive_stream"),
+                            ],
+                            extra_generics: vec![],
+                            extra_params: vec![],
+                            driver_type_args: companion_type_args(),
+                            return_type: companion_stream_return_type.clone(),
+                        },
+                    );
+                    if let Some(companion) = drive_companion {
+                        synthetic_items.push(ast::Item::Function(companion));
                     } else {
-                        client_name.as_deref()
-                    };
-                    // BEP-049 M5e: a new-mode (backtick) function threads the
-                    // same `prompt`…`` closure into `stream_llm_function` that
-                    // the oneshot path threads into `call_llm_function`, so the
-                    // orchestrator renders via the closure instead of looking up
-                    // a (nonexistent) Jinja template. `lower_cst` pre-built this
-                    // body while the CST was still in hand (the closure captures
-                    // this function's params, hence a dedicated arena); reuse it.
-                    // Legacy Jinja prompts keep the 3-arg path.
-                    let stream_body = match &func.declarative_meta {
-                        Some(ast::DeclarativeMeta::Llm(llm)) => llm.stream_body.clone(),
-                        _ => None,
-                    };
-                    let (body, source_map) = stream_body.unwrap_or_else(|| {
-                        ast::synthesize_llm_builtin_call(
+                        let param_names: Vec<Name> = func
+                            .params
+                            .iter()
+                            .filter(|p| p.name.as_str() != "client")
+                            .map(|p| p.name.clone())
+                            .collect();
+                        let (body, source_map) = ast::synthesize_llm_builtin_call(
                             "stream_llm_function",
                             func.name.as_str(),
                             &param_names,
-                            client_arg_name,
+                            client_name.as_deref(),
                             companion_type_args(),
                             span,
-                        )
-                    });
-                    let companion = ast::FunctionDef {
-                        name: SmolStr::new(format!("{}$stream", func.name)),
-                        generic_params: func.generic_params.clone(),
-                        generic_param_bounds: func.generic_param_bounds.clone(),
-                        params: func.params.clone(),
-                        defaults: func.defaults.clone(),
-                        return_type: Some(companion_stream_return_type.clone()),
-                        throws: None,
-                        body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
-                        declarative_meta: None,
-                        origin: ast::FunctionOrigin::Companion,
-                        is_tagged_template_tag: func.is_tagged_template_tag,
-                        llm_companion_suffix: func.llm_companion_suffix.clone(),
-                        attributes: vec![],
-                        docstring: func.docstring.clone(),
-                        span,
-                        name_span,
-                    };
-                    synthetic_items.push(ast::Item::Function(companion));
+                        );
+                        let companion = ast::FunctionDef {
+                            name: SmolStr::new(format!("{}$stream", func.name)),
+                            generic_params: func.generic_params.clone(),
+                            generic_param_bounds: func.generic_param_bounds.clone(),
+                            params: func.params.clone(),
+                            defaults: func.defaults.clone(),
+                            return_type: Some(companion_stream_return_type.clone()),
+                            throws: None,
+                            body: Some(ast::FunctionBodyDef::Expr(body, source_map)),
+                            declarative_meta: None,
+                            origin: ast::FunctionOrigin::Companion,
+                            is_tagged_template_tag: func.is_tagged_template_tag,
+                            llm_companion_suffix: func.llm_companion_suffix.clone(),
+                            attributes: vec![],
+                            docstring: func.docstring.clone(),
+                            span,
+                            name_span,
+                        };
+                        synthetic_items.push(ast::Item::Function(companion));
+                    }
                 }
 
                 // --- $parse_stream companion ---

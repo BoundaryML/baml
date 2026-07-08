@@ -1,5 +1,6 @@
 // The request/response capability — owns `call`/`call_with` and their message-level
-// primitives. This is the capability most providers implement first.
+// primitives. This is the capability most providers implement first (the spine of
+// scenarios 01 single-turn, 02 structured output, 26 transports).
 
 //baml:llm_capability
 /// The HTTP request/response capability. Owns `call`/`call_with` (and their

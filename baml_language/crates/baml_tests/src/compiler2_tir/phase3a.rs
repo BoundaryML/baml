@@ -8,10 +8,11 @@ use super::support::{make_db, render_tir};
 
 #[test]
 fn backtick_llm_function_compiles_to_prompt_closure() {
-    // BEP-049 M5f: a backtick prompt in an LLM function compiles to a
-    // `call_llm_function(client, "Fn", args, prompt`…`)` body — the 4th arg is
-    // the synthesized `(Context) -> PromptAst` closure (legacy Jinja prompts
-    // keep the 3-arg form). The `${name}` interp captures the function param.
+    // DCP §1.3 (Phase C.3): the main body desugars onto the stdlib driver —
+    // `baml.ai.drive_call<T>(client, Greet$render_prompt(name = name, client = client))`
+    // — and the synthesized `(Context) -> PromptAst` closure (BEP-049 M5f)
+    // lives in the `$render_prompt` companion, which owns prompt-mode
+    // dispatch. The `${name}` interp captures the function param there.
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
@@ -36,8 +37,12 @@ function Greet(name: string) -> string {
         "backtick LLM function should compile clean, got:\n{tir}"
     );
     assert!(
-        tir.contains("call_llm_function") && tir.contains("prompt`"),
-        "body should call call_llm_function with a `prompt`…`` closure, got:\n{tir}"
+        tir.contains("drive_call"),
+        "main body should delegate to baml.ai.drive_call, got:\n{tir}"
+    );
+    assert!(
+        tir.contains("Greet$render_prompt") && tir.contains("prompt`"),
+        "$render_prompt companion should carry the `prompt`…`` closure, got:\n{tir}"
     );
 }
 

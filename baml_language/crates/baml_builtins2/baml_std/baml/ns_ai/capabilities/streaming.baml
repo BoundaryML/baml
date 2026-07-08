@@ -1,4 +1,5 @@
-// The incremental-output capability.
+// The incremental-output capability (scenario 04: partial structured streaming,
+// typed final values).
 
 //baml:llm_capability
 /// The incremental-output capability. Owns `stream_messages` (native) with a `stream`

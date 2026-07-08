@@ -81,12 +81,18 @@ enum ClientType {
   RoundRobin
 }
 
-/// Configures automatic retry behavior for an LLM client.
+/// Configures automatic retry behavior for an LLM client. A declared
+/// `retry_policy` block lowers to this value, and a client referencing it is
+/// wrapped in `baml.ai.Retry { max: max_retries, base_delay_ms: initial_delay_ms }`
+/// (DCP Phase C). The delay knobs are optional: an omitted `initial_delay_ms`
+/// falls back to `Retry`'s default (100ms, doubling); `multiplier` /
+/// `max_delay_ms` are accepted for config compatibility but the combinator's
+/// backoff is fixed at ×2 with no cap.
 class RetryPolicy {
   max_retries int
-  initial_delay_ms int
-  multiplier float
-  max_delay_ms int
+  initial_delay_ms int?
+  multiplier float?
+  max_delay_ms int?
 }
 
 /// An LLM client (primitive, fallback, or round-robin).
@@ -112,194 +118,6 @@ class Client {
     $rust_io_function
   }
 
-  function build_attempt(self) -> OrchestrationStep[] {
-    let planner_state = PlannerState { rr_client_names: [] }
-    self.build_attempt_with_state(planner_state)
-  }
-
-  function build_attempt_with_state(
-    self,
-    planner_state: PlannerState,
-  ) -> OrchestrationStep[] {
-    match (self.client_type) {
-      ClientType.Primitive => {
-        let primitive = self.to_primitive_client();
-        [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }]
-      }
-
-      ClientType.Fallback => {
-        let steps: OrchestrationStep[] = []
-        for (let sub in self.sub_clients) {
-          for (let step in sub.build_plan_with_state(planner_state)) {
-            steps.push(step)
-          }
-        }
-        steps
-      }
-
-      ClientType.RoundRobin => {
-        if (self.sub_clients.length() == 0) {
-          []
-        } else {
-          let idx = planner_state.rr_pick_index(
-            self.name,
-            self.counter,
-            self.sub_clients.length(),
-          );
-          self.sub_clients[idx].build_plan_with_state(planner_state)
-        }
-      }
-    }
-  }
-
-  function build_plan(self) -> OrchestrationStep[] {
-    let planner_state = PlannerState { rr_client_names: [] };
-    self.build_plan_with_state(planner_state)
-  }
-
-  function build_plan_with_state(
-    self,
-    planner_state: PlannerState,
-  ) -> OrchestrationStep[] {
-    match (self.retry) {
-      let r: RetryPolicy => {
-        let result: OrchestrationStep[] = [];
-        let current_delay = r.initial_delay_ms + 0.0;
-
-        for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
-          let delay = 0;
-          if (attempt > 0) {
-            delay = root.math.trunc(current_delay)
-            let next = current_delay * r.multiplier;
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0;
-            } else {
-              current_delay = next;
-            }
-          }
-
-          let inner = self.build_attempt_with_state(planner_state);
-          for (let step in inner) {
-            result.push(OrchestrationStep {
-              primitive_client: step.primitive_client,
-              delay_ms: delay,
-            });
-          }
-        }
-
-        result
-      }
-      null => self.build_attempt_with_state(planner_state),
-    }
-  }
-
-  function execute_stream<TStream, TFinal>(
-    self,
-    context: ExecutionContext,
-    inherited_delay_ms: int,
-  ) -> Stream<TStream, TFinal> {
-    match (self.retry) {
-      let r: RetryPolicy => {
-        let current_delay = r.initial_delay_ms + 0.0
-
-        for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
-          let attempt_delay = inherited_delay_ms
-          if (attempt > 0) {
-            attempt_delay = root.math.trunc(current_delay)
-            let next = current_delay * r.multiplier
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
-            } else {
-              current_delay = next
-            }
-          }
-
-          if (attempt == r.max_retries) {
-            attempt_delay = inherited_delay_ms
-          }
-
-          let result2: Stream<TStream, TFinal> = self.execute_once_stream<TStream, TFinal>(
-            context,
-            attempt_delay,
-          ) catch (e) {
-            _ => { continue; }
-          };
-
-          return result2;
-        }
-
-        throw root.errors.DevOther { message: "All orchestration steps failed" };
-      }
-      null => {
-        let result: Stream<TStream, TFinal> = self.execute_once_stream<TStream, TFinal>(
-          context,
-          inherited_delay_ms,
-        );
-        return result;
-      },
-    }
-  }
-
-  function execute_once_stream<TStream, TFinal>(
-    self,
-    context: ExecutionContext,
-    active_delay_ms: int,
-  ) -> Stream<TStream, TFinal> {
-    match (self.client_type) {
-      ClientType.Primitive => {
-        let primitive = self.to_primitive_client();
-        // On the stream path `reflect.type_of<TFinal>()` is `BuiltinUnknown`:
-        // the `$stream` companion calls this without explicit type-args and
-        // inferred type-args don't reach MIR (see `__make_stream`'s registry
-        // fallback). Resolve the real return type from the registry by name and
-        // use it for the whole attempt — the Jinja template may render
-        // `{{ ctx.output_format }}`, the closure's `${ctx.output_format}` needs
-        // it, and `build_request_stream` keys provider config off it. (The
-        // oneshot path instead uses `reflect.type_of<T>()`, which DOES reach
-        // MIR there.) Caveat: for a *generic* streaming function the registry
-        // holds the unspecialized return type, so `${ctx.output_format}` renders
-        // the generic schema — the oneshot path renders the specialized one.
-        let return_type = get_return_type(context.function_name);
-
-        // Render + specialize via the shared `render_specialized_prompt` (same
-        // path as oneshot and the static `build_request_stream` companion).
-        let specialized = primitive.render_specialized_prompt(
-          context.jinja_string, context.args, return_type, context.prompt_closure);
-
-        let http_request = primitive.build_request_stream(specialized, return_type);
-        let sse = root.http.fetch_sse(http_request);
-        let stream: Stream<TStream, TFinal> = self.__make_stream<TStream, TFinal>(sse);
-        return stream;
-      }
-
-      ClientType.Fallback => {
-        for (let sub in self.sub_clients) {
-          let result2: Stream<TStream, TFinal> = sub.execute_stream<TStream, TFinal>(
-            context,
-            active_delay_ms,
-          ) catch (e) {
-            _ => { continue; }
-          };
-          return result2;
-        }
-        throw root.errors.DevOther { message: "All orchestration steps failed" };
-      }
-
-      ClientType.RoundRobin => {
-        if (self.sub_clients.length() == 0) {
-          throw root.errors.DevOther { message: "RoundRobin client has no sub-clients" };
-        }
-        let idx = self.counter % self.sub_clients.length()
-        self.counter += 1
-        let result3: Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream<TStream, TFinal>(
-          context,
-          active_delay_ms,
-        );
-        return result3;
-      }
-    }
-  }
-
   /// DO NOT CALL FROM USER CODE
   function __make_stream<TStream, TFinal>(self, sse: root.http.SseStream) -> Stream<TStream, TFinal> {
     let primitive = self.to_primitive_client()
@@ -307,123 +125,16 @@ class Client {
     let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>())
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache }
   }
-
-  function execute_oneshot<T>(
-    self,
-    context: ExecutionContext,
-    inherited_delay_ms: int,
-  ) -> T {
-    match (self.retry) {
-      let r: RetryPolicy => {
-        let current_delay = r.initial_delay_ms + 0.0
-
-        for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
-          let attempt_delay = inherited_delay_ms
-          if (attempt > 0) {
-            attempt_delay = root.math.trunc(current_delay)
-            let next = current_delay * r.multiplier
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
-            } else {
-              current_delay = next
-            }
-          }
-
-          if (attempt == r.max_retries) {
-            attempt_delay = inherited_delay_ms
-          }
-
-          let result2: T = self.execute_once_oneshot<T>(
-            context,
-            attempt_delay,
-          ) catch (e) {
-            _ => { continue; }
-          };
-
-          return result2;
-        }
-
-        throw root.errors.DevOther { message: "All orchestration steps failed" };
-      }
-      null => {
-        let result: T = self.execute_once_oneshot<T>(
-          context,
-          inherited_delay_ms,
-        );
-        return result;
-      },
-    }
-  }
-
-  function execute_once_oneshot<T>(
-    self,
-    context: ExecutionContext,
-    active_delay_ms: int,
-  ) -> T {
-    match (self.client_type) {
-      ClientType.Primitive => {
-        let primitive = self.to_primitive_client()
-        let return_type = reflect.type_of<T>()
-
-        // Render (new-mode closure or legacy Jinja) + specialize via the shared
-        // `render_specialized_prompt`, the same path the static `build_request`
-        // companion uses — so execution and preview never drift.
-        let specialized = primitive.render_specialized_prompt(
-          context.jinja_string, context.args, return_type, context.prompt_closure)
-
-        let http_request = primitive.build_request(specialized, return_type)
-        let http_response = root.http.send(http_request)
-
-        if (http_response.ok()) {
-          let body = http_response.text()
-          let result: T = primitive.parse<T>(body) catch (e) {
-            _ => {
-              if (active_delay_ms > 0) {
-                root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n))
-              }
-              throw e;
-            }
-          };
-          result
-        } else {
-          let error_body = http_response.text() catch (e) {
-            _ => { "" }
-          };
-          if (active_delay_ms > 0) {
-            root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n))
-          }
-          throw root.errors.DevOther { message: "HTTP request failed: " + error_body };
-        }
-      }
-
-      ClientType.Fallback => {
-        for (let sub in self.sub_clients) {
-          let result2: T = sub.execute_oneshot<T>(
-            context,
-            active_delay_ms,
-          ) catch (e) {
-            _ => { continue; }
-          };
-          return result2;
-        }
-        throw root.errors.DevOther { message: "All orchestration steps failed" };
-      }
-
-      ClientType.RoundRobin => {
-        if (self.sub_clients.length() == 0) {
-          throw root.errors.DevOther { message: "RoundRobin client has no sub-clients" };
-        }
-        let idx = self.counter % self.sub_clients.length()
-        self.counter += 1
-        let result3: T = self.sub_clients[idx].execute_oneshot<T>(
-          context,
-          active_delay_ms,
-        );
-        return result3;
-      }
-    }
-  }
 }
+
+// NOTE (DCP §1.3, Phase C.3): the legacy orchestrator that used to live here —
+// `build_plan`/`build_attempt` (OrchestrationStep expansion), `PlannerState`,
+// `ExecutionContext`, and the `execute_{oneshot,stream}` retry/fallback/
+// round-robin loops — is retired. Declared strategy configs now lower to the
+// new-model combinators (`baml.ai.Fallback`/`RoundRobin`/`Retry`), primitives
+// are `baml.ai.Provider`s via the bridge implements blocks in
+// `ns_ai/core/legacy.baml`, and all routing happens in the capability match
+// inside the `baml.ai.drive_*` companion drivers.
 // ---------------------------------------------------------------------------
 // @providers annotations
 // ---------------------------------------------------------------------------

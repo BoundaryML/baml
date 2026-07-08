@@ -74,6 +74,15 @@ deterministic test (wiremock request-capture or VM runtime test) in `crates/baml
 **"compiled"** = realized as compiling BAML, verified by the `baml_src` suite; the native transport/persistence
 host surface is stubbed (throws) pending P6/P8.
 
+## The desugar is literal (Phase C.3, 2026-07-08)
+Every LLM function body IS `baml.ai.drive_call<T>(client, Foo$render_prompt(…))` (and
+`$stream` is `drive_stream<Partial<T>,T>(…)`) — there is no separate orchestrator anymore.
+Legacy `client<llm>` primitives participate as Providers via the bridge implements blocks
+(with native routing for ported providers inside `call_messages_with`/`stream_messages`),
+and declared fallback/round-robin/retry-policy configs lower to the `baml.ai` combinators
+at declaration. `baml.llm.call_llm_function`/`stream_llm_function` remain only as 1-line
+drive delegators for direct callers.
+
 ## Blockers: none for user-authored providers or capabilities
 E0125 is fixed, and the desugar/registry work went further: users declare their own
 **capabilities** (`//baml:llm_capability` + `//baml:llm_companion(<suffix>)` drivers) and every

@@ -162,3 +162,18 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
   text arrives as `response.output_text.delta`; terminal event `response.done`.
 - **`baml.ws` ops are gated under sys_native's `bundle-http` feature** (reuse the rustls
   provider); non-bundle / wasm builds fall back to Unsupported.
+
+## Throws-channel traps (found in C.3)
+
+- **`root.sys.sleep` throws `baml.errors.Io`** — and `Io` satisfies the `CallError` channel
+  but NOT `StreamError`. A retry/backoff loop inside a `throws StreamError | UnknownError`
+  method must catch around sleep (`catch (se) { _ => null }`) or the strict checker rejects it.
+- **`Client.__make_stream` implicitly throws `InvalidArgument | LlmClient`** (via
+  `to_primitive_client` + `new_stream_accumulator`) — wrap in a catch when calling from a
+  typed-channel method.
+- **`OpenAi.build_request<T>` renders the output schema unconditionally**, so a call chain
+  whose `T` never reached MIR (inference-only type args, e.g. direct
+  `baml.llm.call_llm_function(...)` with no explicit `<T>`) used to panic the host at
+  `output_format`. `sys_llm::render_output_format` now returns "" for a top-level
+  `BuiltinUnknown` — but the real fix in new code is always passing explicit type args
+  (the desugared companions do).
