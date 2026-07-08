@@ -35,13 +35,8 @@ function build_tree(root: string) -> CodeBlock[] {
                     depth: 1,
                 },
             );
-            manifest = manifest
-                + rel
-                + " ("
-                + i2s(decls.length())
-                + " decls, "
-                + i2s(loc)
-                + " lines)\n";
+            manifest
+                = manifest + rel + " (" + i2s(decls.length()) + " decls, " + i2s(loc) + " lines)\n";
         }
     }
     let none: string[] = [];

@@ -52,28 +52,33 @@ class IntentResult {
 function leaf_table(leaves: CodeBlock[]) -> string {
     let out = "";
     for (let l in leaves) {
-        out = out
-            + l.id
-            + " | "
-            + l.kind
-            + " | "
-            + l.name
-            + " | "
-            + squash_ws(truncate(l.source, 300))
-            + "\n";
+        out
+            = out
+                + l.id
+                + " | "
+                + l.kind
+                + " | "
+                + l.name
+                + " | "
+                + squash_ws(truncate(l.source, 300))
+                + "\n";
     }
     out
 }
 
-function child_intent_table(
-    parent: CodeBlock,
-    intents: map<string, Intention>,
-) -> string {
+function child_intent_table(parent: CodeBlock, intents: map<string, Intention>) -> string {
     let out = "";
     for (let cid in parent.child_ids) {
         match (intents.get(cid)) {
             let it: Intention => {
-                out = out + cid + " | " + squash_ws(it.goal) + " | " + squash_ws(it.mechanism) + "\n";
+                out
+                    = out
+                        + cid
+                        + " | "
+                        + squash_ws(it.goal)
+                        + " | "
+                        + squash_ws(it.mechanism)
+                        + "\n";
             },
             null => null,
         }
@@ -92,19 +97,20 @@ function pair_table(pairs: InteractionBlock[], by_id: map<string, CodeBlock>) ->
             let b: CodeBlock => b.kind + " " + squash_ws(truncate(block_head(b), 160)),
             null => "",
         };
-        out = out
-            + p.id
-            + " | "
-            + p.edge_kind
-            + " | A: "
-            + p.a_id
-            + " ("
-            + a_desc
-            + ") | B: "
-            + p.b_id
-            + " ("
-            + b_desc
-            + ")\n";
+        out
+            = out
+                + p.id
+                + " | "
+                + p.edge_kind
+                + " | A: "
+                + p.a_id
+                + " ("
+                + a_desc
+                + ") | B: "
+                + p.b_id
+                + " ("
+                + b_desc
+                + ")\n";
     }
     out
 }
@@ -227,10 +233,12 @@ function cached_leaf_intents(
     let out: IntentPair[] = [];
     for (let l in leaves) {
         let it = match (by_id.get(l.id)) {
-            let li: LeafIntent => Intention {
-                goal: li.goal,
-                mechanism: li.mechanism,
-                confidence: li.confidence.clamp(1, 5),
+            let li: LeafIntent => {
+                Intention {
+                    goal: li.goal,
+                    mechanism: li.mechanism,
+                    confidence: li.confidence.clamp(1, 5),
+                }
             },
             null => Intention { goal: "", mechanism: "", confidence: 1 },
         };
@@ -271,11 +279,7 @@ function cached_block_intent(
         },
         null => fresh_block_intent(cache_dir, key, block, child_intents, neighbors),
     };
-    return Intention {
-        goal: raw.goal,
-        mechanism: raw.mechanism,
-        confidence: raw.confidence.clamp(1, 5),
-    };
+    return Intention { goal: raw.goal, mechanism: raw.mechanism, confidence: raw.confidence.clamp(1, 5) };
 }
 
 function fresh_block_intent(
@@ -299,10 +303,7 @@ function cached_inter_intents(
     by_id: map<string, CodeBlock>,
 ) -> InterPair[] {
     let table = pair_table(pairs, by_id);
-    let key = cache_key(
-        "intent-inter@" + fast_model(),
-        parent_id + "#" + i2s(batch_no) + "\n" + table,
-    );
+    let key = cache_key("intent-inter@" + fast_model(), parent_id + "#" + i2s(batch_no) + "\n" + table);
     let raw = match (cache_get(cache_dir, key)) {
         let hit: string => {
             baml.json.from_string<InterBatchOut>(hit) catch (_) {
@@ -320,10 +321,12 @@ function cached_inter_intents(
     let out: InterPair[] = [];
     for (let p in pairs) {
         let it = match (got.get(p.id)) {
-            let ii: InterIntent => InteractionIntention {
-                relationship: ii.relationship,
-                purpose: ii.purpose,
-                confidence: ii.confidence.clamp(1, 5),
+            let ii: InterIntent => {
+                InteractionIntention {
+                    relationship: ii.relationship,
+                    purpose: ii.purpose,
+                    confidence: ii.confidence.clamp(1, 5),
+                }
             },
             null => InteractionIntention { relationship: "", purpose: "", confidence: 1 },
         };

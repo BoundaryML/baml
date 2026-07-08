@@ -97,7 +97,12 @@ function reference_interactions(blocks: CodeBlock[]) -> InteractionBlock[] {
                             let kind = if (c.kind == "test") {
                                 "exercises"
                             } else {
-                                if (to_kind == "class" || to_kind == "enum" || to_kind == "interface" || to_kind == "type_alias") {
+                                if (
+                                    to_kind == "class"
+                                        || to_kind == "enum"
+                                        || to_kind == "interface"
+                                        || to_kind == "type_alias"
+                                ) {
                                     "uses_type"
                                 } else {
                                     "calls"

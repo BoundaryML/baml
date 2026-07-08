@@ -133,37 +133,39 @@ testset "interactions" {
             } else {
                 "function " + name + "() -> int {\n    1\n}\n"
             };
-            blocks.push(
-                CodeBlock {
-                    id: "D:c.baml:" + name,
-                    parent_id: "F:c.baml",
-                    kind: "function",
-                    name: name,
-                    file: "c.baml",
-                    start_line: i * 4 + 1,
-                    end_line: i * 4 + 3,
-                    source: body,
-                    child_ids: none,
-                    depth: 2,
-                },
-            );
+            blocks
+                .push(
+                    CodeBlock {
+                        id: "D:c.baml:" + name,
+                        parent_id: "F:c.baml",
+                        kind: "function",
+                        name: name,
+                        file: "c.baml",
+                        start_line: i * 4 + 1,
+                        end_line: i * 4 + 3,
+                        source: body,
+                        child_ids: none,
+                        depth: 2,
+                    },
+                );
             child_ids.push("D:c.baml:" + name);
             i = i + 1;
         }
-        blocks.push(
-            CodeBlock {
-                id: "F:c.baml",
-                parent_id: null,
-                kind: "file",
-                name: "c.baml",
-                file: "c.baml",
-                start_line: 1,
-                end_line: 40,
-                source: "",
-                child_ids: child_ids,
-                depth: 1,
-            },
-        );
+        blocks
+            .push(
+                CodeBlock {
+                    id: "F:c.baml",
+                    parent_id: null,
+                    kind: "file",
+                    name: "c.baml",
+                    file: "c.baml",
+                    start_line: 1,
+                    end_line: 40,
+                    source: "",
+                    child_ids: child_ids,
+                    depth: 1,
+                },
+            );
         let refs: InteractionBlock[] = [];
         let capped = level_interactions(blocks, refs, 5);
         assert.equal(capped.length(), 5);

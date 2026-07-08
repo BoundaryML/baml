@@ -561,7 +561,11 @@ function rules_by_card(rules: RouteRule[]) -> map<string, RouteRule[]> {
 
 // Route one CodeBlock: static/gate matches, plus the no-rule bucket for
 // non-leaf blocks only. Result is in catalog order and fully deterministic.
-function route_block(block: CodeBlock, cards: PrincipleCard[], by_card: map<string, RouteRule[]>) -> Routed {
+function route_block(
+    block: CodeBlock,
+    cards: PrincipleCard[],
+    by_card: map<string, RouteRule[]>,
+) -> Routed {
     let source_lower = block.source.to_lower_case();
     let is_leaf = block.depth >= 3;
     // file/program blocks: keyword gates over the WHOLE file text match nearly
@@ -626,11 +630,7 @@ function interaction_rules() -> InterRouteRule[] {
             any_of: ["<t>", "decode<", "from_string<"],
         },
         // stringly-typed records flowing between blocks
-        InterRouteRule {
-            card_id: "P-062-3",
-            edge_kinds: ["uses_type"],
-            any_of: ["map<string"],
-        },
+        InterRouteRule { card_id: "P-062-3", edge_kinds: ["uses_type"], any_of: ["map<string"] },
         InterRouteRule {
             card_id: "P-062-4",
             edge_kinds: ["uses_type"],
@@ -648,11 +648,7 @@ function interaction_rules() -> InterRouteRule[] {
             any_of: ["timeout", "throws", "wrapper"],
         },
         // concurrency across a call edge
-        InterRouteRule {
-            card_id: "P-034-2",
-            edge_kinds: ["calls"],
-            any_of: ["spawn", "await"],
-        },
+        InterRouteRule { card_id: "P-034-2", edge_kinds: ["calls"], any_of: ["spawn", "await"] },
         InterRouteRule {
             card_id: "P-034-5",
             edge_kinds: ["calls"],
@@ -686,11 +682,7 @@ function interaction_rules() -> InterRouteRule[] {
             any_of: ["$parse", "$render_prompt", "$build_request"],
         },
         // namespaces: containment/sibling organization signals
-        InterRouteRule {
-            card_id: "P-008-1",
-            edge_kinds: ["contains", "sibling"],
-            any_of: ["ns_"],
-        },
+        InterRouteRule { card_id: "P-008-1", edge_kinds: ["contains", "sibling"], any_of: ["ns_"] },
         InterRouteRule {
             card_id: "P-008-2",
             edge_kinds: ["contains", "sibling"],
@@ -700,11 +692,7 @@ function interaction_rules() -> InterRouteRule[] {
 }
 
 // Route one interaction block. `source` is interaction_source(ib, by_id).
-function route_interaction(
-    ib: InteractionBlock,
-    source: string,
-    cards: PrincipleCard[],
-) -> Routed {
+function route_interaction(ib: InteractionBlock, source: string, cards: PrincipleCard[]) -> Routed {
     let source_lower = source.to_lower_case();
     let matched: map<string, bool> = {};
     for (let r in interaction_rules()) {

@@ -109,7 +109,8 @@ testset "scanner_decls" {
     }
 
     test "colliding decl names get ordinal ids" {
-        let src = "class Foo {\n    a: int,\n}\n" + "impl Foo {\n    function m(self) -> int {\n        1\n    }\n}\n";
+        let src = "class Foo {\n    a: int,\n}\n"
+            + "impl Foo {\n    function m(self) -> int {\n        1\n    }\n}\n";
         let decls = scan_file_decls("i.baml", src);
         assert.equal(decls.length(), 2);
         assert.equal(nth_block(decls, 0).id, "D:i.baml:Foo");
@@ -263,37 +264,42 @@ testset "scanner_members" {
 
 testset "scanner_tree" {
     test "tree assembly fills sorted child_ids and the program manifest" {
-        let blocks = scan_all("t.baml", "class A {\n    x: int,\n}\nfunction f(a: A) -> int {\n    let n = 1;\n    n\n}\n");
+        let blocks = scan_all(
+            "t.baml",
+            "class A {\n    x: int,\n}\nfunction f(a: A) -> int {\n    let n = 1;\n    n\n}\n",
+        );
         // simulate what build_tree does for one file
         let none: string[] = [];
-        blocks.push(
-            CodeBlock {
-                id: "F:t.baml",
-                parent_id: "PROGRAM",
-                kind: "file",
-                name: "t.baml",
-                file: "t.baml",
-                start_line: 1,
-                end_line: 7,
-                source: "",
-                child_ids: none,
-                depth: 1,
-            },
-        );
-        blocks.push(
-            CodeBlock {
-                id: "PROGRAM",
-                parent_id: null,
-                kind: "program",
-                name: "PROGRAM",
-                file: "",
-                start_line: 0,
-                end_line: 0,
-                source: "t.baml (2 decls, 7 lines)\n",
-                child_ids: none,
-                depth: 0,
-            },
-        );
+        blocks
+            .push(
+                CodeBlock {
+                    id: "F:t.baml",
+                    parent_id: "PROGRAM",
+                    kind: "file",
+                    name: "t.baml",
+                    file: "t.baml",
+                    start_line: 1,
+                    end_line: 7,
+                    source: "",
+                    child_ids: none,
+                    depth: 1,
+                },
+            );
+        blocks
+            .push(
+                CodeBlock {
+                    id: "PROGRAM",
+                    parent_id: null,
+                    kind: "program",
+                    name: "PROGRAM",
+                    file: "",
+                    start_line: 0,
+                    end_line: 0,
+                    source: "t.baml (2 decls, 7 lines)\n",
+                    child_ids: none,
+                    depth: 0,
+                },
+            );
         let tree = fill_child_ids(blocks);
         let prog = find_block(tree, "PROGRAM");
         assert.equal(prog.child_ids.length(), 1);

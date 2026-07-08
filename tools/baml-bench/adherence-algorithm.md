@@ -1,11 +1,17 @@
 # The BAML Adherence Score
 
-> **Status: implemented** — the pipeline in `baml_src/` implements this spec, in BAML,
-> with `claude -p` (via the claude-proxy) as the model backend. Determinism comes from a
-> content-addressed judgment cache plus mechanical validation of every LLM output; see
-> README.md §"Where the determinism comes from". §9's "natural BAML program" note is now
-> literal: `InferIntention`, `RouteCards`, `GradeChunk`, `RefuteFinding`, `ScanOmissions`
-> are the typed LLM functions in `baml_src/llm.baml`.
+> **Status: superseded by intentionbench** — the pipeline in `baml_src/` now implements
+> the second-generation design (see README.md): the flat chunk table of §3 became a
+> hierarchical CodeBlock tree (program → file → decl → member/var), the edge table
+> became first-class InteractionBlocks (by_depth containment, by_level siblings,
+> static references) each carrying their own inferred intention, intentions are
+> inferred bottom-up on every block (leaves batched per parent), routing is fully
+> deterministic (the grading prompt arbitrates borderline routes), and interaction
+> blocks are themselves routed and graded. §§5-8 (anchored rubric, evidence gate,
+> refutation, omission scan, weighted aggregation) carry over intact, with
+> `weight = card status × kind_weight × size_factor`. The typed LLM functions are
+> `InferLeafIntents`, `InferBlockIntent`, `InferInteractionIntents` (intent.baml) and
+> `GradeCards`, `RefuteFinding`, `ScanOmissions` (grade.baml).
 
 **Goal:** replace the vibe of "this codebase is slop" with a measurable question — *is this codebase using BAML's primitives the way we designed them to be used?* We are in a unique position: the BEPs record not just what each feature does but *why it exists and what it was for*. Adherence to that recorded intent is our definition of quality.
 

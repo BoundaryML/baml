@@ -135,10 +135,7 @@ function SeedSmoke(target: string, out: string, catalog: string) -> int {
             } else {
                 ""
             };
-            let bkey = cache_key(
-                "intent@" + fast_model(),
-                b.id + "\n" + b.source + "\n" + table + "\n" + neighbors,
-            );
+            let bkey = cache_key("intent@" + fast_model(), b.id + "\n" + b.source + "\n" + table + "\n" + neighbors);
             seed_put(cache_dir, bkey, canned_intent(b.id).to_json());
             seeded = seeded + 1;
         }
@@ -273,7 +270,7 @@ function SeedSmoke(target: string, out: string, catalog: string) -> int {
                         refuted: canned_refuted_for(job.subject_id, g.card_id),
                         reason: "canned refutation reason",
                     }
-                        .to_json(),
+                    .to_json(),
                 );
                 seeded = seeded + 1;
             }
@@ -318,7 +315,7 @@ function SeedSmoke(target: string, out: string, catalog: string) -> int {
                 },
             ],
         }
-            .to_json(),
+        .to_json(),
     );
     seeded = seeded + 1;
 

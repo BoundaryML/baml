@@ -157,7 +157,12 @@ function cached_grades(cache_dir: string, job: GradeJob) -> CardGrade[] {
     out
 }
 
-function fresh_grades(cache_dir: string, key: string, job: GradeJob, bodies: string) -> MultiGradeOut {
+function fresh_grades(
+    cache_dir: string,
+    key: string,
+    job: GradeJob,
+    bodies: string,
+) -> MultiGradeOut {
     let out = GradeCards(bodies, job.subject_kind, job.graded_source, job.intention_text, job.neighbors);
     store_json(cache_dir, key, out.to_json());
     out

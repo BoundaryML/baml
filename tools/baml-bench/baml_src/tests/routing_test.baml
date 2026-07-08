@@ -53,7 +53,12 @@ testset "routing_blocks" {
     test "static kind rules route llm_functions and tests" {
         let cards = [mk_card("P-036-2"), mk_card("P-023-2")];
         let by_card = rules_by_card(routing_rules());
-        let llmfn = mk_block("D:x.baml:Ask", "llm_function", 2, "function Ask() -> T {\n    client: X\n    prompt: #\"hi\"#\n}\n");
+        let llmfn = mk_block(
+            "D:x.baml:Ask",
+            "llm_function",
+            2,
+            "function Ask() -> T {\n    client: X\n    prompt: #\"hi\"#\n}\n",
+        );
         assert.is_true(routed_ids(route_block(llmfn, cards, by_card)).includes("P-036-2"));
         let t = mk_block("D:x.baml:t", "test", 2, "test \"t\" {\n    assert.equal(1, 1);\n}\n");
         assert.is_true(routed_ids(route_block(t, cards, by_card)).includes("P-023-2"));
@@ -114,7 +119,8 @@ testset "routing_interactions" {
             edge_kind: "sibling",
             evidenced: false,
         };
-        assert.equal(routed_ids(route_interaction(sib, src_match, [mk_card("P-044-1")])).length(), 0);
+        assert
+            .equal(routed_ids(route_interaction(sib, src_match, [mk_card("P-044-1")])).length(), 0);
         // exercises + assert routes the test-shape card
         let ex = InteractionBlock {
             id: "I:r:D:x.baml:t->D:x.baml:f",
@@ -125,7 +131,13 @@ testset "routing_interactions" {
             edge_kind: "exercises",
             evidenced: true,
         };
-        let r2 = routed_ids(route_interaction(ex, "# block A\ntest \"t\" {\n    assert.equal(f(), 1);\n}\n# block B\nfunction f() -> int {\n    1\n}\n", cards));
+        let r2 = routed_ids(
+            route_interaction(
+                ex,
+                "# block A\ntest \"t\" {\n    assert.equal(f(), 1);\n}\n# block B\nfunction f() -> int {\n    1\n}\n",
+                cards,
+            ),
+        );
         assert.is_true(r2.includes("P-023-4"));
     }
 }

@@ -641,7 +641,11 @@ function param_signature(source: string) -> SigScan {
                                     if (ch == ")") {
                                         pdepth = pdepth - 1;
                                         if (started && pdepth == 0) {
-                                            return SigScan { text: text, start_rel: start_rel, end_rel: rel };
+                                            return SigScan {
+                                                text: text,
+                                                start_rel: start_rel,
+                                                end_rel: rel,
+                                            };
                                         }
                                         if (started) {
                                             text = text + ch;

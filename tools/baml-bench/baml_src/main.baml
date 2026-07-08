@@ -130,17 +130,18 @@ function Run(target: string, out: string, catalog: string) -> int {
 // Render one block's intention lines for grading prompts + cache keys.
 function block_intent_text(intents: map<string, Intention>, id: string) -> string {
     match (intents.get(id)) {
-        let it: Intention => "goal: " + squash_ws(it.goal) + "\nmechanism: " + squash_ws(it.mechanism),
+        let it: Intention => {
+            "goal: " + squash_ws(it.goal) + "\nmechanism: " + squash_ws(it.mechanism)
+        },
         null => "",
     }
 }
 
 function inter_intent_text(intents: map<string, InteractionIntention>, id: string) -> string {
     match (intents.get(id)) {
-        let it: InteractionIntention => "relationship: "
-            + squash_ws(it.relationship)
-            + "\npurpose: "
-            + squash_ws(it.purpose),
+        let it: InteractionIntention => {
+            "relationship: " + squash_ws(it.relationship) + "\npurpose: " + squash_ws(it.purpose)
+        },
         null => "",
     }
 }
@@ -389,16 +390,7 @@ function run_pipeline(target: string, out: string, catalog_text: string, show_re
                 f.block_id + "#" + f.card_id
             },
         );
-    let report = build_report(
-        target,
-        blocks,
-        iset,
-        cards,
-        sorted_findings,
-        omissions,
-        routed_blocks,
-        blocks.length(),
-    );
+    let report = build_report(target, blocks, iset, cards, sorted_findings, omissions, routed_blocks, blocks.length());
     let json_text = baml.json.to_string(report) catch (_) {
         _ => "{}"
     };

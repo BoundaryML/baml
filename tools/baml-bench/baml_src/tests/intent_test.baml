@@ -2,7 +2,13 @@
 // content-addressed cache, run the cached_* path, assert deterministic
 // reconciliation — no model is ever called.
 
-function ib_fixture_block(id: string, kind: string, depth: int, name: string, source: string) -> CodeBlock {
+function ib_fixture_block(
+    id: string,
+    kind: string,
+    depth: int,
+    name: string,
+    source: string,
+) -> CodeBlock {
     let none: string[] = [];
     CodeBlock {
         id: id,
@@ -21,7 +27,13 @@ function ib_fixture_block(id: string, kind: string, depth: int, name: string, so
 testset "intent_cache" {
     test "cached_leaf_intents replays, drops unknown ids, fills missing neutral" {
         let dir = "/tmp/intentionbench-test-cache-leaf";
-        let parent = ib_fixture_block("D:x.baml:f", "function", 2, "f", "function f(a: int) -> int {\n    let b = a + 1;\n    b\n}\n");
+        let parent = ib_fixture_block(
+            "D:x.baml:f",
+            "function",
+            2,
+            "f",
+            "function f(a: int) -> int {\n    let b = a + 1;\n    b\n}\n",
+        );
         let leaf_a = ib_fixture_block("M:x.baml:f.a", "param", 3, "a", "a: int\n");
         let leaf_b = ib_fixture_block("V:x.baml:f.b#1", "var", 3, "b", "let b = a + 1;\n");
         let leaves = [leaf_a, leaf_b];
@@ -60,11 +72,12 @@ testset "intent_cache" {
         let dir = "/tmp/intentionbench-test-cache-block";
         let block = ib_fixture_block("D:x.baml:f", "function", 2, "f", "function f() -> int {\n    1\n}\n");
         let child_table = "V:x.baml:f.b#1 | hold the sum | int let\n";
-        let key = cache_key(
-            "intent@" + fast_model(),
-            block.id + "\n" + block.source + "\n" + child_table + "\n" + "",
+        let key = cache_key("intent@" + fast_model(), block.id + "\n" + block.source + "\n" + child_table + "\n" + "");
+        cache_put(
+            dir,
+            key,
+            "{\"goal\": \"produce one\", \"mechanism\": \"constant return\", \"confidence\": 0}",
         );
-        cache_put(dir, key, "{\"goal\": \"produce one\", \"mechanism\": \"constant return\", \"confidence\": 0}");
         let it = cached_block_intent(dir, block, child_table, "");
         assert.equal(it.goal, "produce one");
         assert.equal(it.confidence, 1); // clamped up
@@ -117,17 +130,18 @@ testset "intent_cache" {
         let pairs: InteractionBlock[] = [];
         let i = 0;
         while (i < 60) {
-            pairs.push(
-                InteractionBlock {
-                    id: "I:l:a" + pad6(i) + "~b",
-                    kind: "by_level",
-                    a_id: "a" + pad6(i),
-                    b_id: "b",
-                    parent_id: "F:x.baml",
-                    edge_kind: "sibling",
-                    evidenced: false,
-                },
-            );
+            pairs
+                .push(
+                    InteractionBlock {
+                        id: "I:l:a" + pad6(i) + "~b",
+                        kind: "by_level",
+                        a_id: "a" + pad6(i),
+                        b_id: "b",
+                        parent_id: "F:x.baml",
+                        edge_kind: "sibling",
+                        evidenced: false,
+                    },
+                );
             i = i + 1;
         }
         let jobs = inter_jobs(pairs);

@@ -58,12 +58,13 @@ function size_factor(span_lines: int, is_leafish: bool) -> float {
 }
 
 // The full weight of one graded (subject, card) pair.
-function finding_weight(card_weight: float, kind: string, span_lines: int, is_interaction: bool) -> float {
-    let leafish = is_interaction
-        || kind == "field"
-        || kind == "variant"
-        || kind == "param"
-        || kind == "var";
+function finding_weight(
+    card_weight: float,
+    kind: string,
+    span_lines: int,
+    is_interaction: bool,
+) -> float {
+    let leafish = is_interaction || kind == "field" || kind == "variant" || kind == "param" || kind == "var";
     card_weight * kind_weight(kind) * size_factor(span_lines, leafish)
 }
 
