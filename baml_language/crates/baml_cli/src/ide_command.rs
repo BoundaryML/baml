@@ -30,11 +30,11 @@ pub(crate) struct IdeInstallArgs {
     #[arg(long)]
     pub cursor: bool,
     /// Install the active toolchain's BAML VSIX into VS Code.
-    #[arg(long, conflicts_with = "cursor")]
+    #[arg(long)]
     pub code: bool,
     /// Copy the active toolchain's BAML VSIX into a directory for manual install.
-    #[arg(long, value_name = "DIR", conflicts_with_all = ["cursor", "code"])]
-    pub extract: Option<PathBuf>,
+    #[arg(long, value_name = "PATH")]
+    pub path: Option<PathBuf>,
 }
 
 impl IdeArgs {
@@ -48,18 +48,17 @@ impl IdeArgs {
 impl IdeInstallArgs {
     pub fn run(&self) -> Result<ExitCode> {
         let vsix = active_toolchain_vsix()?;
-        if let Some(dir) = &self.extract {
+        if let Some(dir) = &self.path {
             fs::create_dir_all(dir)
                 .with_context(|| format!("failed to create {}", dir.display()))?;
             let dest = dir.join("baml-vscode.vsix");
             fs::copy(&vsix, &dest).with_context(|| {
                 format!("failed to copy {} to {}", vsix.display(), dest.display())
             })?;
-            writeln!(
-                std::io::stdout(),
-                "extracted BAML IDE extension to {}",
-                dest.display()
-            )?;
+            #[allow(clippy::print_stdout)]
+            {
+                println!("extracted BAML IDE extension to {}", dest.display());
+            }
             return Ok(ExitCode::Success);
         }
 
@@ -88,7 +87,8 @@ impl IdeInstallArgs {
 
     fn resolve_editor(&self) -> Result<OsString> {
         if self.cursor {
-            return Ok(OsString::from("cursor"));
+            return command_on_path("cursor")
+                .ok_or_else(|| anyhow!("Cursor CLI `cursor` was not found on PATH"));
         }
         if self.code {
             return command_on_path("code")
