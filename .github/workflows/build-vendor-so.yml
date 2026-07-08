@@ -14,12 +14,18 @@
 name: Build vendored baml_py .so
 
 on:
+  # Manual trigger (only works once this workflow is on the default branch).
   workflow_dispatch:
     inputs:
       features:
         description: "Cargo features (comma-separated, added on top of --no-default-features)"
         required: true
         default: "vertex,native-tls-vendored"
+  # Tag trigger: works from any branch without the default-branch requirement.
+  # To run a one-off: `git tag vendor-so-1 && git push origin vendor-so-1`.
+  push:
+    tags:
+      - "vendor-so-*"
 
 permissions:
   contents: read
@@ -56,7 +62,7 @@ jobs:
           args: >-
             --release
             --no-default-features
-            --features ${{ github.event.inputs.features }}
+            --features ${{ github.event.inputs.features || 'vertex,native-tls-vendored' }}
             --out language_client_python/dist
             --manifest-path language_client_python/Cargo.toml
 
