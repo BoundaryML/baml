@@ -2531,7 +2531,29 @@ impl<'db> LoweringContext<'db> {
                 }
 
                 let target_ty = resolved_aliases.convert(&target_ty_tir);
-                if matches!(target_ty, RuntimeTy::Class(..)) {
+                if let RuntimeTy::Class(class_tn, _, _) = &target_ty {
+                    // Out-of-body `implements I for SomeClass`: register the
+                    // class as an implementor so interface-membership `match`
+                    // sees it (in-body blocks register in the class loop
+                    // above; without this, out-of-body class impls dispatch
+                    // fine but never match). push-unique keeps it idempotent.
+                    let root_iface_args_tir = lower_interface_target_args(
+                        db,
+                        &imp.interface_target,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &imp.generic_params,
+                        &mut diags,
+                    );
+                    register_class_for_interface_closure(
+                        db,
+                        root_iface_loc,
+                        &root_iface_args_tir,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        class_tn,
+                        out.interface_implementors,
+                    );
                     continue;
                 }
 
