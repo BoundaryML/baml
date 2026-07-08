@@ -81,9 +81,63 @@ impl PromptAst {
             Arc::new(PromptAst::Vec(final_result))
         }
     }
+
+    /// Flatten this prompt into an ordered list of `(role, content)` chat
+    /// messages. A `Message` node contributes its role; a role-less `Simple`
+    /// node contributes an empty role; nested `Vec` nodes are flattened in
+    /// document order. Backs the stdlib `PromptAst.messages()` accessor.
+    pub fn to_messages(&self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        self.collect_messages(&mut out);
+        out
+    }
+
+    fn collect_messages(&self, out: &mut Vec<(String, String)>) {
+        match self {
+            PromptAst::Simple(content) => out.push((String::new(), content.to_text())),
+            PromptAst::Message { role, content, .. } => {
+                out.push((role.clone(), content.to_text()));
+            }
+            PromptAst::Vec(items) => {
+                for item in items {
+                    item.collect_messages(out);
+                }
+            }
+        }
+    }
+
+    /// Render this prompt as readable plain text: each chat message as a
+    /// `[role]` header line followed by its content, messages separated by a
+    /// blank line. Role-less content is rendered with no header. Backs the
+    /// stdlib `PromptAst.text()` accessor, its `baml.ToString` conversion, and
+    /// the CLI's readable value print.
+    pub fn render_text(&self) -> String {
+        self.to_messages()
+            .into_iter()
+            .map(|(role, content)| {
+                if role.is_empty() {
+                    content
+                } else {
+                    format!("[{role}]\n{content}")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
 }
 
 impl PromptAstSimple {
+    /// Best-effort readable text for a content chunk. Strings render verbatim;
+    /// media renders via its `Display` placeholder (e.g. `image::url(...)`);
+    /// `Multiple` concatenates its parts in document order.
+    pub fn to_text(&self) -> String {
+        match self {
+            PromptAstSimple::String(s) => s.clone(),
+            PromptAstSimple::Media(media) => media.to_string(),
+            PromptAstSimple::Multiple(items) => items.iter().map(|item| item.to_text()).collect(),
+        }
+    }
+
     pub fn join(self: std::sync::Arc<Self>, other: std::sync::Arc<Self>) -> std::sync::Arc<Self> {
         Arc::new(PromptAstSimple::Multiple(vec![self, other])).merge_adjacent()
     }
@@ -239,5 +293,83 @@ mod tests {
         if let PromptAst::Simple(s) = &*merged {
             assert!(matches!(&**s, PromptAstSimple::String(t) if t == "abcd"));
         }
+    }
+
+    fn message(role: &str, text: &str) -> Arc<PromptAst> {
+        Arc::new(PromptAst::Message {
+            role: role.to_string(),
+            content: Arc::new(PromptAstSimple::String(text.to_string())),
+            metadata: serde_json::Value::Null,
+        })
+    }
+
+    #[test]
+    fn to_messages_flattens_role_messages_in_order() {
+        let ast = PromptAst::Vec(vec![
+            message("system", "You are helpful."),
+            message("user", "Hi World!"),
+        ]);
+        assert_eq!(
+            ast.to_messages(),
+            vec![
+                ("system".to_string(), "You are helpful.".to_string()),
+                ("user".to_string(), "Hi World!".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn to_messages_roleless_simple_has_empty_role() {
+        let ast = PromptAst::Simple(Arc::new(PromptAstSimple::String("just text".to_string())));
+        assert_eq!(
+            ast.to_messages(),
+            vec![(String::new(), "just text".to_string())]
+        );
+    }
+
+    #[test]
+    fn render_text_uses_role_headers_and_blank_line_separators() {
+        let ast = PromptAst::Vec(vec![
+            message("system", "You are helpful."),
+            message("user", "Hi World!"),
+        ]);
+        assert_eq!(
+            ast.render_text(),
+            "[system]\nYou are helpful.\n\n[user]\nHi World!"
+        );
+    }
+
+    #[test]
+    fn render_text_roleless_simple_has_no_header() {
+        let ast = PromptAst::Simple(Arc::new(PromptAstSimple::String("plain".to_string())));
+        assert_eq!(ast.render_text(), "plain");
+    }
+
+    #[test]
+    fn render_text_is_free_of_rust_debug_noise() {
+        let ast = message("system", "hello");
+        let rendered = ast.render_text();
+        for noise in [
+            "Adt(",
+            "String(",
+            "$rust_type",
+            "_data",
+            "Message {",
+            "Null",
+        ] {
+            assert!(
+                !rendered.contains(noise),
+                "render_text leaked Rust Debug noise {noise:?}: {rendered}"
+            );
+        }
+    }
+
+    #[test]
+    fn simple_to_text_concatenates_multiple_in_order() {
+        let simple = PromptAstSimple::Multiple(vec![
+            Arc::new(PromptAstSimple::String("foo".to_string())),
+            Arc::new(PromptAstSimple::String("bar".to_string())),
+        ]);
+        assert_eq!(simple.to_text(), "foobar");
     }
 }

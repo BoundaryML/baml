@@ -630,6 +630,37 @@ impl<T> io::IoClassLlmContext for T {
     }
 }
 
+/// Blanket impl — `PromptAst` accessors read the wrapped `bex_vm_types::PromptAst`
+/// and render it readably (B-627). `text()` is the single-string rendering (role
+/// headers + content) that also backs `string.from` / `to_string`; `messages()`
+/// is the structured role/content list.
+impl<T> io::IoClassLlmPromptAst for T {
+    fn text(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        prompt_ast: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::ok(unwrap_prompt_ast(&prompt_ast).render_text())
+    }
+
+    fn messages(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        prompt_ast: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<io::owned::llm::PromptMessage>> {
+        let messages = unwrap_prompt_ast(&prompt_ast)
+            .to_messages()
+            .into_iter()
+            .map(|(role, content)| io::owned::llm::PromptMessage { role, content })
+            .collect();
+        SysOpOutput::ok(messages)
+    }
+}
+
 impl<T> io::IoNamespaceLlm for T {
     fn get_jinja_template(
         &self,
