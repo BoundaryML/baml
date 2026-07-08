@@ -356,6 +356,25 @@ function ai_scenarios.ResearchIt$live(q: string, io: baml.ai.Channel, client: ba
     return
 }
 
+function ai_scenarios.ResearchIt$moderated(q: string, policy: string, client: baml.ai.Provider) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_scenarios.DeadDeclared
+    store_var client
+
+  L0:
+    load_var2 1 3
+    call user.ai_scenarios.ResearchIt$render_prompt
+    store_var _5
+    load_type string
+    load_var2 3 4
+    load_var policy
+    call user.ai_custom_capability.drive_moderated
+    return
+}
+
 function ai_scenarios.ResearchIt$parse(json: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
@@ -672,6 +691,25 @@ function ai_scenarios.Summarize$live(q: string, io: baml.ai.Channel, client: bam
     load_var2 3 4
     load_var io
     call baml.ai.drive_live
+    return
+}
+
+function ai_scenarios.Summarize$moderated(q: string, policy: string, client: baml.ai.Provider) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_scenarios.DeadObs
+    store_var client
+
+  L0:
+    load_var2 1 3
+    call user.ai_scenarios.Summarize$render_prompt
+    store_var _5
+    load_type string
+    load_var2 3 4
+    load_var policy
+    call user.ai_custom_capability.drive_moderated
     return
 }
 

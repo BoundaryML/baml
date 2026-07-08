@@ -1,0 +1,348 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function ai_custom_capability.$init_test_ns_ai_custom_capability_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "user capability: generated companion routes through the user's provider"
+    make_closure .<lambda($init_test_ns_ai_custom_capability_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "user capability: declared client without the capability is a typed Unsupported"
+    make_closure .<lambda($init_test_ns_ai_custom_capability_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "user capability: the driver itself is directly callable (the no-sugar path)"
+    make_closure .<lambda($init_test_ns_ai_custom_capability_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_custom_capability.ComposeNote(q: string, client: baml.ai.Provider) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_type string
+    load_var client
+    load_const "ComposeNote"
+    load_var q
+    load_const "q"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.call_llm_function
+    return
+}
+
+function ai_custom_capability.ComposeNote$build_request(q: string, client: baml.ai.Provider) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_var client
+    load_const "ComposeNote"
+    load_var q
+    load_const "q"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.build_request
+    return
+}
+
+function ai_custom_capability.ComposeNote$build_request_stream(q: string, client: baml.ai.Provider) -> baml.http.Request {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_var client
+    load_const "ComposeNote"
+    load_var q
+    load_const "q"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.build_request_stream
+    return
+}
+
+function ai_custom_capability.ComposeNote$live(q: string, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_var2 1 3
+    call user.ai_custom_capability.ComposeNote$render_prompt
+    store_var _5
+    load_type string
+    load_var2 3 4
+    load_var io
+    call baml.ai.drive_live
+    return
+}
+
+function ai_custom_capability.ComposeNote$moderated(q: string, policy: string, client: baml.ai.Provider) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_var2 1 3
+    call user.ai_custom_capability.ComposeNote$render_prompt
+    store_var _5
+    load_type string
+    load_var2 3 4
+    load_var policy
+    call user.ai_custom_capability.drive_moderated
+    return
+}
+
+function ai_custom_capability.ComposeNote$parse(json: string, client: baml.ai.Provider) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_type string | null
+    load_type string
+    load_var json
+    call baml.llm.parse
+    return
+}
+
+function ai_custom_capability.ComposeNote$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_type string | null
+    load_type string
+    load_var2 2 1
+    call baml.llm.make_stream_for
+    return
+}
+
+function ai_custom_capability.ComposeNote$render_prompt(q: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_var client
+    load_const "ComposeNote"
+    load_var q
+    load_const "q"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.render_prompt
+    return
+}
+
+function ai_custom_capability.ComposeNote$run_tools(q: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_var2 1 4
+    call user.ai_custom_capability.ComposeNote$render_prompt
+    store_var _6
+    load_type string
+    load_var2 4 5
+    load_var2 2 3
+    call baml.ai.drive_run_tools
+    return
+}
+
+function ai_custom_capability.ComposeNote$stream(q: string, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_type string | null
+    load_type string
+    load_var client
+    load_const "ComposeNote"
+    load_var q
+    load_const "q"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.stream_llm_function
+    return
+}
+
+function ai_custom_capability.ComposeNote$with(q: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<string, V> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.ai_custom_capability.DeadModerated
+    store_var client
+
+  L0:
+    load_var2 1 3
+    call user.ai_custom_capability.ComposeNote$render_prompt
+    store_var _5
+    load_type string
+    load_type #0
+    load_type #1
+    load_var2 3 4
+    load_var project
+    call baml.ai.drive_with
+    return
+}
+
+function ai_custom_capability.DeadModerated$new() -> null {
+    load_const "DeadModerated"
+    load_const "openai"
+    load_const "gpt-4o"
+    load_const "http://127.0.0.1:9"
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const null
+    load_const "unused"
+    load_const null
+    load_const null
+    load_type string
+    load_type string
+    alloc_map 0
+    load_type string
+    load_type string
+    alloc_map 0
+    load_type string
+    load_type unknown
+    alloc_map 0
+    init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
+    init_instance baml.llm.PrimitiveClient .name, .provider, .options
+    return
+}
+
+function ai_custom_capability.GuardedEcho$stream.Moderated.call_moderated(self: ai_custom_capability.GuardedEcho$stream, messages: baml.ai.ChatMessage[], policy: string) -> T {
+    load_type #0
+    load_const "["
+    load_var policy
+    bin_op +
+    load_const "] "
+    bin_op +
+    load_var self
+    load_field .0
+    bin_op +
+    call baml.sap.parse
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "moderated parse failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    return
+}
+
+function ai_custom_capability.GuardedEcho.Moderated.call_moderated(self: ai_custom_capability.GuardedEcho, messages: baml.ai.ChatMessage[], policy: string) -> T {
+    load_type #0
+    load_const "["
+    load_var policy
+    bin_op +
+    load_const "] "
+    bin_op +
+    load_var self
+    load_field .0
+    bin_op +
+    call baml.sap.parse
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "moderated parse failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    return
+}
+
+function ai_custom_capability.drive_moderated(client: baml.ai.Provider, prompt: baml.llm.PromptAst, policy: string) -> T {
+    load_var client
+    is_type ai_custom_capability.GuardedEcho
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const "client's provider is not Moderated"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L1:
+    load_var prompt
+    sys_op baml.ai.prompt_to_messages
+    store_var _7
+    load_type #0
+    load_var2 1 5
+    load_var policy
+    load_type ai_custom_capability.Moderated
+    load_const "call_moderated"
+    virtual_call nargs=3 ntypeargs=1
+    store_var _0
+    load_var _0
+    return
+}

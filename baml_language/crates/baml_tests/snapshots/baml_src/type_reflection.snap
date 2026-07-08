@@ -119,6 +119,25 @@ function type_reflection.GetBar$live(io: baml.ai.Channel, client: baml.ai.Provid
     return
 }
 
+function type_reflection.GetBar$moderated(policy: string, client: baml.ai.Provider) -> type_reflection.Bar {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
+    call user.type_reflection.GetBar$render_prompt
+    store_var _4
+    load_type type_reflection.Bar
+    load_var2 2 3
+    load_var policy
+    call user.ai_custom_capability.drive_moderated
+    return
+}
+
 function type_reflection.GetBar$parse(json: string, client: baml.ai.Provider) -> type_reflection.Bar {
     load_var client
     load_const <omitted>
@@ -305,6 +324,25 @@ function type_reflection.GetFoo$live(io: baml.ai.Channel, client: baml.ai.Provid
     load_var2 2 3
     load_var io
     call baml.ai.drive_live
+    return
+}
+
+function type_reflection.GetFoo$moderated(policy: string, client: baml.ai.Provider) -> type_reflection.Foo {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.type_reflection.TestClient
+    store_var client
+
+  L0:
+    load_var client
+    call user.type_reflection.GetFoo$render_prompt
+    store_var _4
+    load_type type_reflection.Foo
+    load_var2 2 3
+    load_var policy
+    call user.ai_custom_capability.drive_moderated
     return
 }
 

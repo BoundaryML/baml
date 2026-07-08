@@ -66,13 +66,43 @@ impl CapabilityRegistry {
     }
 }
 
+/// # Safety
+///
+/// Mirrors `PackageItems`'s impl: no Salsa-interned (`'db`) data inside, so
+/// storing by value is sound; `maybe_update` uses `PartialEq` for early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for CapabilityRegistry {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
 /// Collect the capability registry across all files (builtins + user).
 ///
-/// Files are visited in path order so the result — including
-/// first-declaration-wins suffix lookup — is deterministic. Not a Salsa
-/// query yet: callers are downstream passes (TIR validation, PPIR companion
-/// generation) whose own queries provide the caching boundary.
-pub fn capability_registry(db: &dyn crate::Db) -> CapabilityRegistry {
+/// Memoized per project ([`capability_registry_tracked`]): the walk touches
+/// every file's item tree, and both the check pass and PPIR expansion consult
+/// it per file — unmemoized that is O(files²).
+pub fn capability_registry(db: &dyn crate::Db) -> &CapabilityRegistry {
+    capability_registry_tracked(db, db.project())
+}
+
+#[salsa::tracked(returns(ref))]
+fn capability_registry_tracked(
+    db: &dyn crate::Db,
+    _project: baml_workspace::Project,
+) -> CapabilityRegistry {
     let mut files = crate::compiler2_all_files(db);
     files.sort_by_key(|f| f.path(db));
 

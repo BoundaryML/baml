@@ -11,7 +11,7 @@ fn registry_for(files: &[(&str, &str)]) -> CapabilityRegistry {
     for (path, source) in files {
         db.add_file(path, source);
     }
-    capability_registry(&db)
+    capability_registry(&db).clone()
 }
 
 /// Entries contributed by user files only — keeps these tests stable as

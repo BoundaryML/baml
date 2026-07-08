@@ -563,6 +563,41 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 if let Some(companion) = ast::llm_parse_companion(func, companion_type_args()) {
                     synthetic_items.push(ast::Item::Function(companion));
                 }
+
+                // --- USER-package capability-driver companions (DCP §1.4, Phase D) ---
+                // Stdlib suffixes generate at AST level (companions.rs); here
+                // every driver registered by a NON-builtin package grows a
+                // `Foo$<suffix>` companion, its signature read from the
+                // driver's item tree. Runs at PPIR because it needs the
+                // cross-package registry AND the stream-expanded return type
+                // (for `TPartial`-slotted drivers).
+                {
+                    let registry = baml_compiler2_hir::capability_registry::capability_registry(db);
+                    for driver in &registry.drivers {
+                        if driver.package.as_str() == "baml" {
+                            continue;
+                        }
+                        // First-declaration-wins: a shadowed suffix is an E0152
+                        // diagnostic, not a second companion.
+                        if registry
+                            .driver_for_suffix(driver.suffix.as_str())
+                            .is_none_or(|first| {
+                                first.file != driver.file || first.item != driver.item
+                            })
+                        {
+                            continue;
+                        }
+                        if let Some(companion) = make_user_drive_companion(
+                            db,
+                            func,
+                            driver,
+                            &original_return_type_expr,
+                            &stream_type_expr,
+                        ) {
+                            synthetic_items.push(ast::Item::Function(companion));
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -936,4 +971,158 @@ pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> Packag
     };
 
     PackageItems { namespaces, extra }
+}
+
+/// Build a `Foo$<suffix>` companion for a USER-package capability driver
+/// (DCP §1.4, Phase D). The driver's signature is read from its item tree:
+/// params after `(client, prompt)` become companion extras; generic params
+/// named `T` / `TPartial` are the return-type / stream-expanded slots and
+/// anything else is a passthrough companion generic. Returns `None` when the
+/// driver is malformed (E0151 reports that separately) or the parent lacks
+/// the injected client param.
+fn make_user_drive_companion(
+    db: &dyn Db,
+    parent: &ast::FunctionDef,
+    driver: &baml_compiler2_hir::capability_registry::CompanionDriver,
+    parent_return: &ast::TypeExpr,
+    stream_expanded: &ast::TypeExpr,
+) -> Option<ast::FunctionDef> {
+    let tree = baml_compiler2_hir::file_item_tree(db, driver.file);
+    let dfn = tree.functions.get(&driver.item)?;
+    if dfn.params.len() < 2 || !dfn.generic_params.iter().any(|g| g.as_str() == "T") {
+        return None;
+    }
+
+    // Driver call path: the companion is generated into the PARENT's
+    // namespace, which need not be the driver's — and a bare
+    // `[namespace…, name]` path from inside that namespace hits the
+    // relative-first resolution hazard. Use the `root.`-absolute form.
+    let mut driver_path: Vec<Name> = vec![Name::new("root")];
+    driver_path.extend(driver.namespace_path.iter().cloned());
+    driver_path.push(driver.function.clone());
+
+    let extras: Option<Vec<(Name, ast::TypeExpr)>> = dfn.params[2..]
+        .iter()
+        .map(|p| p.type_expr.clone().map(|ty| (p.name.clone(), ty)))
+        .collect();
+    let extras = extras?;
+
+    let extra_generics: Vec<Name> = dfn
+        .generic_params
+        .iter()
+        .filter(|g| g.as_str() != "T" && g.as_str() != "TPartial")
+        .cloned()
+        .collect();
+
+    let driver_type_args: Vec<ast::TypeExpr> = dfn
+        .generic_params
+        .iter()
+        .map(|g| match g.as_str() {
+            "T" => parent_return.clone(),
+            "TPartial" => stream_expanded.clone(),
+            other => (ast::TypeExprKind::Path {
+                segments: vec![Name::new(other)],
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+                attrs: vec![],
+            })
+            .at(parent.span),
+        })
+        .collect();
+
+    let mut subst: FxHashMap<&str, &ast::TypeExpr> = FxHashMap::default();
+    subst.insert("T", parent_return);
+    subst.insert("TPartial", stream_expanded);
+    let return_type = substitute_named_types(dfn.return_type.as_ref()?, &subst);
+
+    ast::make_drive_companion(
+        parent,
+        ast::DriveCompanionSpec {
+            suffix: driver.suffix.clone(),
+            driver: driver_path,
+            extra_generics,
+            extra_params: extras,
+            driver_type_args,
+            return_type,
+        },
+    )
+}
+
+/// Replace bare single-segment `Path` references (e.g. the driver's `T` /
+/// `TPartial` slots) with concrete type expressions, recursing through the
+/// composite type shapes. Non-matching kinds clone through unchanged.
+fn substitute_named_types(
+    te: &ast::TypeExpr,
+    subst: &FxHashMap<&str, &ast::TypeExpr>,
+) -> ast::TypeExpr {
+    use ast::TypeExprKind as K;
+    let kind = match &te.kind {
+        K::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            attrs,
+        } => {
+            if segments.len() == 1
+                && generic_args.is_empty()
+                && let Some(replacement) = subst.get(segments[0].as_str())
+            {
+                return (*replacement).clone();
+            }
+            K::Path {
+                segments: segments.clone(),
+                generic_args: generic_args
+                    .iter()
+                    .map(|a| substitute_named_types(a, subst))
+                    .collect(),
+                associated_type_bindings: associated_type_bindings.clone(),
+                attrs: attrs.clone(),
+            }
+        }
+        K::Optional { inner, attrs } => K::Optional {
+            inner: Box::new(substitute_named_types(inner, subst)),
+            attrs: attrs.clone(),
+        },
+        K::List { inner, attrs } => K::List {
+            inner: Box::new(substitute_named_types(inner, subst)),
+            attrs: attrs.clone(),
+        },
+        K::Map { key, value, attrs } => K::Map {
+            key: Box::new(substitute_named_types(key, subst)),
+            value: Box::new(substitute_named_types(value, subst)),
+            attrs: attrs.clone(),
+        },
+        K::Union { variants, attrs } => K::Union {
+            variants: variants
+                .iter()
+                .map(|v| substitute_named_types(v, subst))
+                .collect(),
+            attrs: attrs.clone(),
+        },
+        K::Function {
+            params,
+            ret,
+            throws,
+            attrs,
+        } => K::Function {
+            params: params
+                .iter()
+                .map(|p| ast::FunctionTypeParam {
+                    name: p.name.clone(),
+                    optional: p.optional,
+                    ty: substitute_named_types(&p.ty, subst),
+                })
+                .collect(),
+            ret: Box::new(substitute_named_types(ret, subst)),
+            throws: throws
+                .as_ref()
+                .map(|t| Box::new(substitute_named_types(t, subst))),
+            attrs: attrs.clone(),
+        },
+        _ => return te.clone(),
+    };
+    ast::TypeExpr {
+        span: te.span,
+        ..kind.at(te.span)
+    }
 }

@@ -25,6 +25,7 @@ pub use ast::*;
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
 pub use companions::llm_parse as llm_parse_companion;
+pub use companions::{DriveCompanionSpec, make_drive_companion};
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
 pub use lower_cst::{

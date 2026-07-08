@@ -155,19 +155,22 @@ fn ty_path(segments: &[&str], span: text_size::TextRange) -> TypeExpr {
     .at(span)
 }
 
-struct DriveCompanionSpec<'a> {
-    suffix: &'a str,
-    driver: &'a [&'a str],
+/// Also consumed by PPIR (`ppir_expansion_items`) to generate companions for
+/// USER-package drivers from the capability registry (Phase D) — hence pub.
+pub struct DriveCompanionSpec {
+    pub suffix: Name,
+    /// Path segments of the driver function (e.g. `["baml","ai","drive_with"]`).
+    pub driver: Vec<Name>,
     /// Extra generic params appended to the companion (e.g. `V`, `E2`).
-    extra_generics: &'a [&'a str],
+    pub extra_generics: Vec<Name>,
     /// Extra params appended after the parent's user params (name, type).
-    extra_params: Vec<(&'a str, TypeExpr)>,
-    /// Explicit type args for the driver call (first is the parent's return type).
-    driver_type_args: Vec<TypeExpr>,
-    return_type: TypeExpr,
+    pub extra_params: Vec<(Name, TypeExpr)>,
+    /// Explicit type args for the driver call (in the driver's declared order).
+    pub driver_type_args: Vec<TypeExpr>,
+    pub return_type: TypeExpr,
 }
 
-fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec<'_>) -> Option<FunctionDef> {
+pub fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec) -> Option<FunctionDef> {
     use la_arena::Arena;
 
     use crate::ast::{AstSourceMap, CallArg, Expr, ExprBody};
@@ -215,13 +218,13 @@ fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec<'_>) -> O
         args: render_args,
     });
 
-    let driver_callee = alloc(Expr::Path(spec.driver.iter().map(Name::new).collect()));
+    let driver_callee = alloc(Expr::Path(spec.driver.clone()));
     let mut driver_args = vec![
         CallArg::positional(client_ref),
         CallArg::positional(rendered),
     ];
     for (extra_name, _) in &spec.extra_params {
-        let arg = alloc(Expr::Path(vec![Name::new(*extra_name)]));
+        let arg = alloc(Expr::Path(vec![extra_name.clone()]));
         driver_args.push(CallArg::positional(arg));
     }
     let call = alloc(Expr::Call {
@@ -253,7 +256,7 @@ fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec<'_>) -> O
         .collect();
     for (extra_name, extra_ty) in spec.extra_params {
         params.push(Param {
-            name: Name::new(extra_name),
+            name: extra_name,
             type_expr: Some(extra_ty),
             default: None,
             span,
@@ -274,7 +277,7 @@ fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec<'_>) -> O
     let mut generic_params = parent.generic_params.clone();
     let mut generic_param_bounds = parent.generic_param_bounds.clone();
     for g in spec.extra_generics {
-        generic_params.push(Name::new(*g));
+        generic_params.push(g);
         generic_param_bounds.push(None);
     }
 
@@ -329,10 +332,10 @@ fn llm_drive_with(parent: &FunctionDef) -> Option<FunctionDef> {
     make_drive_companion(
         parent,
         DriveCompanionSpec {
-            suffix: "with",
-            driver: &["baml", "ai", "drive_with"],
-            extra_generics: &["V", "E2"],
-            extra_params: vec![("project", project_ty)],
+            suffix: Name::new("with"),
+            driver: vec![Name::new("baml"), Name::new("ai"), Name::new("drive_with")],
+            extra_generics: vec![Name::new("V"), Name::new("E2")],
+            extra_params: vec![(Name::new("project"), project_ty)],
             driver_type_args: vec![ret, ty_path(&["V"], span), ty_path(&["E2"], span)],
             return_type,
         },
@@ -373,10 +376,17 @@ fn llm_drive_run_tools(parent: &FunctionDef) -> Option<FunctionDef> {
     make_drive_companion(
         parent,
         DriveCompanionSpec {
-            suffix: "run_tools",
-            driver: &["baml", "ai", "drive_run_tools"],
-            extra_generics: &[],
-            extra_params: vec![("tools", tools_ty), ("dispatch", dispatch_ty)],
+            suffix: Name::new("run_tools"),
+            driver: vec![
+                Name::new("baml"),
+                Name::new("ai"),
+                Name::new("drive_run_tools"),
+            ],
+            extra_generics: vec![],
+            extra_params: vec![
+                (Name::new("tools"), tools_ty),
+                (Name::new("dispatch"), dispatch_ty),
+            ],
             driver_type_args: vec![ret.clone()],
             return_type: ret,
         },
@@ -390,10 +400,10 @@ fn llm_drive_live(parent: &FunctionDef) -> Option<FunctionDef> {
     make_drive_companion(
         parent,
         DriveCompanionSpec {
-            suffix: "live",
-            driver: &["baml", "ai", "drive_live"],
-            extra_generics: &[],
-            extra_params: vec![("io", ty_path(&["baml", "ai", "Channel"], span))],
+            suffix: Name::new("live"),
+            driver: vec![Name::new("baml"), Name::new("ai"), Name::new("drive_live")],
+            extra_generics: vec![],
+            extra_params: vec![(Name::new("io"), ty_path(&["baml", "ai", "Channel"], span))],
             driver_type_args: vec![ret],
             return_type: ty_path(&["baml", "ai", "Transcript"], span),
         },
