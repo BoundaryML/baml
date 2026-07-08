@@ -1,7 +1,7 @@
 //! Unit tests for the `LoadType` instruction and the `type_args` calling convention.
 //!
 //! These tests exercise Phase 3 of the type-reflection implementation:
-//! - `TyTemplate::Concrete(...)` → `LoadType` materialises the concrete `RuntimeTy`
+//! - `TyTemplate::from(...)` → `LoadType` materialises the concrete `RuntimeTy`
 //! - `TyTemplate::TypeArgRef(0)` → `LoadType` substitutes from `frame.type_args[0]`
 //! - Composite templates (e.g. `Array(TypeArgRef(0))`) substitute correctly
 //! - `Call { ntypeargs }` pops type args from the stack and stores them in the frame
@@ -114,11 +114,11 @@ fn run_with_bytecode_keep_vm(
 
 // ─── 3.1 & 3.5 ── LoadType with a fully-concrete template ───────────────────
 
-/// `LoadType(k)` where `k` is a `ConstValue::Type(TyTemplate::Concrete(int))`
+/// `LoadType(k)` where `k` is a `ConstValue::Type(TyTemplate::from(int))`
 /// should push an `Object::Type` whose inner `RuntimeTy` is `RuntimeTy::int()`.
 #[test]
 fn load_type_concrete_int() {
-    let template = TyTemplate::Concrete(RuntimeTy::int());
+    let template = TyTemplate::from(baml_type::RealizedTy::int());
     let (result, vm) = run_with_bytecode_keep_vm(
         "user.test_load_int",
         vec![Instruction::LoadType(0), Instruction::Return],
@@ -138,20 +138,24 @@ fn load_type_concrete_int() {
     }
 }
 
-/// A `TyTemplate::Concrete(string)` produces a `RuntimeTy::string()` payload distinct
-/// from a `TyTemplate::Concrete(int)`, and the resulting heap objects compare
+/// A `TyTemplate::from(string)` produces a `RuntimeTy::string()` payload distinct
+/// from a `TyTemplate::from(int)`, and the resulting heap objects compare
 /// unequal under `deep_equals`.
 #[test]
 fn load_type_concrete_string_different_from_int() {
     let (r_int, vm_int) = run_with_bytecode_keep_vm(
         "user.test_load_int2",
         vec![Instruction::LoadType(0), Instruction::Return],
-        vec![ConstValue::Type(TyTemplate::Concrete(RuntimeTy::int()))],
+        vec![ConstValue::Type(TyTemplate::from(
+            baml_type::RealizedTy::int(),
+        ))],
     );
     let (r_str, vm_str) = run_with_bytecode_keep_vm(
         "user.test_load_str",
         vec![Instruction::LoadType(0), Instruction::Return],
-        vec![ConstValue::Type(TyTemplate::Concrete(RuntimeTy::string()))],
+        vec![ConstValue::Type(TyTemplate::from(
+            baml_type::RealizedTy::string(),
+        ))],
     );
 
     let Some(p_int) = r_int.as_object_ptr() else {
@@ -248,7 +252,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
 /// should produce `Object::Type(RuntimeTy::list(int))`.
 #[test]
 fn load_type_array_of_type_arg_ref() {
-    let template = TyTemplate::Array(Box::new(TyTemplate::TypeArgRef(0)));
+    let template = TyTemplate::list(TyTemplate::TypeArgRef(0));
     let fn_name = "user.test_array_typearg";
 
     let mut program = compile_source(STUB_SOURCE);
@@ -350,7 +354,9 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
             },
             Instruction::Return,
         ],
-        vec![ConstValue::Type(TyTemplate::Concrete(RuntimeTy::string()))],
+        vec![ConstValue::Type(TyTemplate::from(
+            baml_type::RealizedTy::string(),
+        ))],
     );
     let _ = inner_obj_idx; // suppress unused warning
 

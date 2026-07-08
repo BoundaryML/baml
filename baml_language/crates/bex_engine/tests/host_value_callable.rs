@@ -33,7 +33,7 @@ use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
 };
 use bex_resource_types::{HostValueArc, HostValueKind};
-use bridge_ctypes::baml_core::cffi::{BamlOutboundValue, BamlToHostCall, baml_outbound_value};
+use bridge_ctypes::baml_bridge::cffi::{BamlOutboundValue, BamlToHostCall, baml_outbound_value};
 use common::compile_for_engine;
 use indexmap::IndexMap;
 use prost::Message;

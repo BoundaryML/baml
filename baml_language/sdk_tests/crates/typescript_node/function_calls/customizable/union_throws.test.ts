@@ -6,7 +6,7 @@
 // for union throws while `.value` still decoded fine.
 import "./baml_sdk/index.js";
 import { raises_test } from "./baml_sdk/index.js";
-import { BamlError } from "@boundaryml/baml-core-node";
+import { BamlError } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 
 describe("function_calls — union throws className", () => {

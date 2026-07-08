@@ -54,7 +54,9 @@ use tokio::{net::TcpListener, sync::broadcast};
 use crate::{
     playground_env::PlaygroundEnvState,
     playground_io::PlaygroundIoState,
-    playground_runs::{patch_to_wire, run_summary_to_wire, run_to_wire},
+    playground_runs::{
+        overlay_function_name_for_target, patch_to_wire, run_summary_to_wire, run_to_wire,
+    },
     playground_ws::{RunListFilter, RunListKind, RunListVisibility, WsInMessage, WsOutMessage},
 };
 
@@ -1586,6 +1588,15 @@ async fn handle_function_run(
 
     let broadcast_tx = state.broadcast_tx.clone();
     let project_generation = state.bex.project_generation(&project).unwrap_or(0);
+    // Pin the run's control-flow graph while its generation is still
+    // current, so overlay spans stay resolvable after later recompiles.
+    if let Some(function_name) = overlay_function_name_for_target(&target.run_target) {
+        let _ = state.bex.control_flow_graph_for_generation(
+            &project,
+            project_generation,
+            function_name,
+        );
+    }
     let fs_path = bex_project::FsPath::from_str(project);
     let boundary_id = BoundaryId::new_random();
     let value_capture =
@@ -2004,7 +2015,17 @@ async fn handle_ws_in_message(
                     return;
                 }
             };
-            match state.run_store.snapshot(boundary_id) {
+            // A terminal run may have been evicted from the in-memory store
+            // by the retention policy; rehydrate it from disk history like
+            // OpenHistory does.
+            let snapshot = state.run_store.snapshot(boundary_id).or_else(|| {
+                state.history_store.open(boundary_id).ok().map(|run| {
+                    let snapshot = run.clone();
+                    let _ = state.run_store.insert_replayed_run(run);
+                    snapshot
+                })
+            });
+            match snapshot {
                 Some(snapshot) => {
                     send_ws(
                         sink,

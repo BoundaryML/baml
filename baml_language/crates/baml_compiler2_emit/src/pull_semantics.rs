@@ -399,7 +399,7 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
                 // produced by the array-literal lowering (which emits the typed
                 // `Rvalue::Array`); this arm is a defensive fallback.
                 sink.alloc_array(
-                    &TyTemplate::Concrete(baml_type::RuntimeTy::unknown()),
+                    &TyTemplate::from(baml_type::RealizedTy::unknown()),
                     fields.len(),
                 )
             }

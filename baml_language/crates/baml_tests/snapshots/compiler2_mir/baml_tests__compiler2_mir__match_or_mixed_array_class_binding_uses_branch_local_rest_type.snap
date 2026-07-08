@@ -39,7 +39,7 @@ fn user.f(v: NumberBag | int[][]) -> int {
     }
 
     bb1: {
-        _7 = is_type(copy _1, int[][]);
+        _7 = is_type(copy _1, _[]);
         branch copy _7 -> [bb2, bb6];
     }
 

@@ -502,9 +502,9 @@ jobs:
           echo "CARGO_BUILD_JOBS=16" >> "$GITHUB_ENV"
         working-directory: baml_language
 
-      # Windows Python only: setup.ps1 builds one baml_core wheel and strips
+      # Windows Python only: setup.ps1 builds one baml_bridge wheel and strips
       # the editable source block from each fixture so `uv sync` installs that
-      # prebuilt wheel instead of rebuilding baml_core per fixture. The later
+      # prebuilt wheel instead of rebuilding baml_bridge per fixture. The later
       # test-time `uv run` processes also need this wheelhouse.
       - name: "Configure Python wheelhouse"
         if: matrix.os-label == 'windows' && matrix.sdk-label == 'python-pydantic2'

@@ -125,7 +125,9 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
             },
             Instruction::Return,
         ],
-        vec![ConstValue::Type(TyTemplate::Concrete(RuntimeTy::int()))],
+        vec![ConstValue::Type(TyTemplate::from(
+            baml_type::RealizedTy::int(),
+        ))],
     );
 
     let (result, vm) = run_fn(program, fn_name);

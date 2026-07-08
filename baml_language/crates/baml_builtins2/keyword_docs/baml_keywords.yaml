@@ -746,7 +746,7 @@ baml_sdk:
 python:
   summary: "Use BAML from Python via a generated Pydantic v2 SDK."
   syntax: |
-    pip install baml_core                  # the runtime (Python 3.10+)
+    pip install baml_bridge                  # the runtime (Python 3.10+)
 
     # baml.toml — declare a generator:
     [generator.app]
@@ -756,7 +756,7 @@ python:
 
     baml generate                          # emits the `baml_sdk` package into output_dir
   details: |
-    You install `baml_core` (the runtime); you import `baml_sdk` (the generated
+    You install `baml_bridge` (the runtime); you import `baml_sdk` (the generated
     code). Functions become top-level Python functions; classes/enums become
     Pydantic models:
 
@@ -769,7 +769,7 @@ python:
 typescript:
   summary: "Use BAML from TypeScript / Node.js via a generated SDK."
   syntax: |
-    npm install @boundaryml/baml-core-node   # the runtime
+    npm install @boundaryml/baml-bridge   # the runtime
 
     # baml.toml — declare a generator:
     [generator.app]

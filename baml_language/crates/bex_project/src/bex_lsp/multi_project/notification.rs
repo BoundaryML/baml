@@ -100,7 +100,12 @@ impl BexLspNotification for BexMulitProject {
         in_memory_changes.insert(crate::fs::FsPath::from_vfs(&path), new_text);
         drop(in_memory_changes);
 
-        self.refresh_project(&project_root, ProjectRefreshMode::InMemoryChangesOnly);
+        self.refresh_project(
+            &project_root,
+            ProjectRefreshMode::InMemoryChangesOnly {
+                changed: Some(path),
+            },
+        );
         Ok(())
     }
 

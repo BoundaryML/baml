@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { encodeCallArgs, encodeRunArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
-import { CallFunctionArgs, InboundMapEntry } from '../generated/baml_core/cffi/v1/baml_inbound';
-import { BamlHandleType } from '../generated/baml_core/cffi/v1/baml_handle';
-import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_core/cffi/v1/baml_outbound';
-import { BamlTyPrimitiveKind } from '../generated/baml_core/cffi/v1/baml_type';
+import { CallFunctionArgs, InboundMapEntry } from '../generated/baml_bridge/cffi/v1/baml_inbound';
+import { BamlHandleType } from '../generated/baml_bridge/cffi/v1/baml_handle';
+import { BamlOutboundValue, MediaTypeEnum } from '../generated/baml_bridge/cffi/v1/baml_outbound';
+import { BamlTyPrimitiveKind } from '../generated/baml_bridge/cffi/v1/baml_type';
 
 function decodeDelimitedEntries(bytes: Uint8Array): InboundMapEntry[] {
   const entries: InboundMapEntry[] = [];

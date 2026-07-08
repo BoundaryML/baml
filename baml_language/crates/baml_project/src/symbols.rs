@@ -187,23 +187,6 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> FunctionListing {
     FunctionListing { functions, types }
 }
 
-/// Playground-qualified function names only — for callers like the CFG
-/// snapshot that key by name and must not pay for schema extraction.
-pub fn list_playground_function_names(db: &ProjectDatabase) -> Vec<String> {
-    let pkg_id = PackageId::new(db, Name::new("user"));
-    let pkg = package_items(db, pkg_id);
-    let mut names = Vec::new();
-    for (namespace_path, ns_items) in &pkg.namespaces {
-        for (name, defn) in &ns_items.values {
-            if defn.kind() == DefinitionKind::Function {
-                names.push(playground_function_name(namespace_path, name));
-            }
-        }
-    }
-    names.sort();
-    names
-}
-
 /// Function names exposed to the playground preserve source namespaces so the
 /// UI can group them. Root-level functions keep their historical bare names.
 pub(crate) fn playground_function_name(namespace_path: &[Name], name: &Name) -> String {

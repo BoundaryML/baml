@@ -1,10 +1,10 @@
 name: BAML SDK Release - Build Node.js
 
 # Per-platform NAPI prebuild matrix for the Node.js SDK runtime package
-# `@boundaryml/baml-core-node`. Mirrors `build2-python-sdk.reusable.yaml` (same
+# `@boundaryml/baml-bridge`. Mirrors `build2-python-sdk.reusable.yaml` (same
 # 8-target set), with `napi-rs` standing in for `maturin`. Each job builds one
 # `*.node` native addon, assembles it into its publishable per-platform sub-package
-# (`@boundaryml/baml-core-node-<platform>`), and uploads that as `nodejs-sdk-<target>`.
+# (`@boundaryml/baml-bridge-<platform>`), and uploads that as `nodejs-sdk-<target>`.
 # The publish-npm job downloads them all, wires the umbrella package's
 # optionalDependencies, and publishes the umbrella + sub-packages.
 # Release builds must pass the frozen BAML language release plan so package.json

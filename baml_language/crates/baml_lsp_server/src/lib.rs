@@ -144,7 +144,14 @@ fn run_server_inner(
 
     // Broadcast channel for playground WS messages (fetch logs, env requests, etc.)
     let (broadcast_tx, _) = tokio::sync::broadcast::channel::<WsOutMessage>(64);
-    let run_store = Arc::new(bex_events::run::InMemoryRunStore::default());
+    // Terminal runs beyond the cap are evicted from memory; the playground
+    // rehydrates them on demand from the disk-backed history store.
+    let run_store = Arc::new(bex_events::run::InMemoryRunStore::new(
+        bex_events::run::RunRetentionPolicy {
+            max_terminal_runs: Some(100),
+            ..Default::default()
+        },
+    ));
     let _profile_observer = bex_events::run::register_profile_observer(Arc::new(
         playground_runs::RunStoreProfileObserver::new(run_store.clone(), broadcast_tx.clone()),
     ));

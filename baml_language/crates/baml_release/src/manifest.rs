@@ -24,7 +24,7 @@ pub struct VsixArtifact {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BamlCorePypi {
+pub struct BamlBridgePypi {
     pub version: String,
 }
 
@@ -38,7 +38,7 @@ pub struct ToolchainManifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vsix: Option<VsixArtifact>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub baml_core_pypi: Option<BamlCorePypi>,
+    pub baml_bridge_pypi: Option<BamlBridgePypi>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

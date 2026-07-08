@@ -225,12 +225,18 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
 
     fn project_generation(&self, project_root: &str) -> Option<u64>;
 
+    /// Prepared control-flow graph for a function as of a project generation.
+    ///
+    /// Built lazily and cached per `(generation, function)`: a miss can only
+    /// be built while `generation` is still current. Playground run launches
+    /// call this right after capturing their generation to pin the graph for
+    /// the run's later overlay resolutions.
     fn control_flow_graph_for_generation(
         &self,
         project_root: &str,
         generation: u64,
         function_name: &str,
-    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph>;
+    ) -> Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>>;
 
     /// Request the control flow graph for a function.
     ///

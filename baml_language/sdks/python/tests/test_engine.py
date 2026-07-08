@@ -12,7 +12,7 @@ Run with:
 
 import pytest
 
-from baml_core import BamlRuntime, FunctionResult, HostSpanManager, get_version, call_function, call_function_sync
+from baml_bridge import BamlRuntime, FunctionResult, HostSpanManager, get_version, call_function, call_function_sync
 
 
 # ============================================================================
