@@ -77,6 +77,8 @@ function         baml.ai._messages_text           <builtin>/baml/ns_ai/capabilit
 class            baml.ai.Fallback                 <builtin>/baml/ns_ai/combinators.baml:12
 class            baml.ai.Retry                    <builtin>/baml/ns_ai/combinators.baml:104
 class            baml.ai.RoundRobin               <builtin>/baml/ns_ai/combinators.baml:253
+class            baml.ai.UsageMeter               <builtin>/baml/ns_ai/combinators.baml:343
+class            baml.ai.Traced                   <builtin>/baml/ns_ai/combinators.baml:371
 class            baml.ai.LegacyMeta               <builtin>/baml/ns_ai/core/legacy.baml:19
 function         baml.ai.native_provider_for      <builtin>/baml/ns_ai/core/legacy.baml:188
 class            baml.ai.MessagePart              <builtin>/baml/ns_ai/core/messages.baml:30
@@ -89,6 +91,7 @@ class            baml.ai.Unavailable              <builtin>/baml/ns_ai/core/meta
 class            baml.ai.Logprob                  <builtin>/baml/ns_ai/core/meta.baml:25
 class            baml.ai.Citation                 <builtin>/baml/ns_ai/core/meta.baml:31
 interface        baml.ai.ResponseMeta             <builtin>/baml/ns_ai/core/meta.baml:40
+class            baml.ai.AggregateMeta            <builtin>/baml/ns_ai/core/meta.baml:57
 interface        baml.ai.Provider                 <builtin>/baml/ns_ai/core/provider.baml:35
 class            baml.ai.AnthropicHttpError       <builtin>/baml/ns_ai/providers/anthropic.baml:12
 class            baml.ai.AnthropicContentBlockWire <builtin>/baml/ns_ai/providers/anthropic.baml:56

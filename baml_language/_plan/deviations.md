@@ -400,3 +400,23 @@ Landed per DCP §1.3 with these concretizations/divergences:
 - **Host fix**: `sys_llm::render_output_format` returns "" for a top-level `BuiltinUnknown`
   (inference-only `T` at a direct `call_llm_function(...)` call without type args) instead of
   panicking — matches the legacy request builder's tolerance.
+
+## D4 aggregate provenance — observation-side, not projection-reshaping
+
+Plan D4 recommended combinators "build aggregate metas". Implemented as:
+- **`baml.ai.AggregateMeta { parts }`** — the vocabulary: usage() sums parts, finish_reason()
+  is the last part's, per-part dimensions stay on `.parts` (not merged).
+- **`baml.ai.UsageMeter` + `Traced`** — the observation tool: `meter.wrap(member)` /
+  `provider.traced(meter)` records each successful call's meta by reference-shared
+  accumulator; `meter.total()`/`.aggregate()` project usage over the chain.
+
+Deliberate divergences:
+- `Retry`/`Fallback` do NOT hand `project` an `AggregateMeta` — a failed attempt throws
+  without carrying its meta, so the "aggregate" would always be `[winner]`; wrapping it
+  would break projections that match a concrete meta class for zero information gain.
+  When errors carry meta (future), revisit.
+- `ToolLoop` still projects `LoopMeta { steps }` only: the `Tools` capability
+  (begin/step/submit) exposes no per-turn `ResponseMeta`, so turn usage is structurally
+  unobservable — same D7 seam gap as `per_turn_tools`.
+- `Traced.stream_messages` forwards without recording (stream metas aren't observable from
+  the `Stream` handle).

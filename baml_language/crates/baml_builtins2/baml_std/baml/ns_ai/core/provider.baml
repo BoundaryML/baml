@@ -47,4 +47,9 @@ interface Provider {
   function fallback_to(self, other: Provider) -> Fallback throws never {
     Fallback { members: [self, other] }
   }
+  /// D4 observability: record every successful call's meta into `meter`
+  /// (equivalent to `meter.wrap(self)`).
+  function traced(self, meter: UsageMeter) -> Traced throws never {
+    Traced { inner: self, meter: meter }
+  }
 }

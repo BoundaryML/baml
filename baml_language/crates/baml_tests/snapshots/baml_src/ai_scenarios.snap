@@ -498,6 +498,30 @@ function ai_scenarios.$init_test_ns_ai_scenarios_34_cost_tokens_usage(registry: 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "34: AggregateMeta sums usage across parts; finish_reason is the last part's"
+    make_closure .<lambda($init_test_ns_ai_scenarios_34_cost_tokens_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "34: Traced records metas as a side effect; the projection sees the original meta"
+    make_closure .<lambda($init_test_ns_ai_scenarios_34_cost_tokens_usage, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "34: meter.wrap over fallback members observes exactly what ran (the winner)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_34_cost_tokens_usage, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "34: one meter sums across round-robin members over several calls"
+    make_closure .<lambda($init_test_ns_ai_scenarios_34_cost_tokens_usage, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -886,134 +910,146 @@ function ai_scenarios.AskViaCall(p: baml.ai.Provider) -> string {
     load_var p
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L21
+    jump L23
 
   L0:
     load_var p
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L21
+    jump L23
 
   L1:
     load_var p
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L21
+    jump L23
 
   L2:
     load_var p
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L21
+    jump L23
 
   L3:
     load_var p
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L21
+    jump L23
 
   L4:
     load_var p
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L21
+    jump L23
 
   L5:
     load_var p
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L21
+    jump L23
 
   L6:
     load_var p
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L21
+    jump L23
 
   L7:
     load_var p
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L21
+    jump L23
 
   L8:
     load_var p
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L21
+    jump L23
 
   L9:
     load_var p
-    is_type ai_scenarios.MeteredEcho
+    is_type baml.llm.Client
     pop_jump_if_false L10
-    jump L21
+    jump L23
 
   L10:
     load_var p
-    is_type ai_scenarios.EchoProvider
+    is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L11
-    jump L21
+    jump L23
 
   L11:
     load_var p
-    is_type ai_scenarios.CountingEcho
+    is_type ai_scenarios.EchoProvider
     pop_jump_if_false L12
-    jump L21
+    jump L23
 
   L12:
     load_var p
-    is_type ai_scenarios.AlwaysFailProvider
+    is_type ai_scenarios.CountingEcho
     pop_jump_if_false L13
-    jump L21
+    jump L23
 
   L13:
     load_var p
-    is_type baml.ai.Retry
+    is_type ai_scenarios.AlwaysFailProvider
     pop_jump_if_false L14
-    jump L20
+    jump L23
 
   L14:
     load_var p
-    is_type baml.ai.OpenAi
+    is_type baml.ai.Retry
     pop_jump_if_false L15
-    jump L20
+    jump L22
 
   L15:
     load_var p
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.OpenAi
     pop_jump_if_false L16
-    jump L20
+    jump L22
 
   L16:
     load_var p
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L17
-    jump L20
+    jump L22
 
   L17:
     load_var p
-    is_type baml.ai.Anthropic
+    is_type baml.ai.Fallback
     pop_jump_if_false L18
-    jump L20
+    jump L22
 
   L18:
     load_var p
-    is_type baml.llm.Client
+    is_type baml.ai.Anthropic
     pop_jump_if_false L19
-    jump L20
+    jump L22
 
   L19:
-    load_const "neither"
+    load_var p
+    is_type baml.ai.Traced
+    pop_jump_if_false L20
     jump L22
 
   L20:
-    load_const "stream-only"
+    load_var p
+    is_type baml.llm.Client
+    pop_jump_if_false L21
     jump L22
 
   L21:
-    load_const "http"
+    load_const "neither"
+    jump L24
 
   L22:
+    load_const "stream-only"
+    jump L24
+
+  L23:
+    load_const "http"
+
+  L24:
     return
 }
 
@@ -3778,92 +3814,98 @@ function ai_scenarios.cascaded_voice(stt: ai_scenarios.Stt, llm: baml.ai.Provide
     load_var llm
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L14
+    jump L15
 
   L0:
     load_var llm
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L14
+    jump L15
 
   L1:
     load_var llm
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L14
+    jump L15
 
   L2:
     load_var llm
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L14
+    jump L15
 
   L3:
     load_var llm
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L14
+    jump L15
 
   L4:
     load_var llm
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L14
+    jump L15
 
   L5:
     load_var llm
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L14
+    jump L15
 
   L6:
     load_var llm
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L14
+    jump L15
 
   L7:
     load_var llm
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L14
+    jump L15
 
   L8:
     load_var llm
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L14
+    jump L15
 
   L9:
     load_var llm
-    is_type ai_scenarios.MeteredEcho
+    is_type baml.llm.Client
     pop_jump_if_false L10
-    jump L14
+    jump L15
 
   L10:
     load_var llm
-    is_type ai_scenarios.EchoProvider
+    is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L11
-    jump L14
+    jump L15
 
   L11:
     load_var llm
-    is_type ai_scenarios.CountingEcho
+    is_type ai_scenarios.EchoProvider
     pop_jump_if_false L12
-    jump L14
+    jump L15
 
   L12:
     load_var llm
-    is_type ai_scenarios.AlwaysFailProvider
+    is_type ai_scenarios.CountingEcho
     pop_jump_if_false L13
-    jump L14
+    jump L15
 
   L13:
+    load_var llm
+    is_type ai_scenarios.AlwaysFailProvider
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
     load_const "llm stage cannot produce a value"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L14:
+  L15:
     load_type string
     load_var2 2 6
     load_type baml.ai.HttpProvider
@@ -3909,19 +3951,19 @@ function ai_scenarios.describe_tool_kind(kt: ai_scenarios.KindedTool) -> string 
 
 function ai_scenarios.drive_any(h: baml.ai.Provider) -> string {
     load_var h
-    is_type baml.ai.ClaudeCode
+    is_type baml.ai.PiAgent
     pop_jump_if_false L0
     jump L5
 
   L0:
     load_var h
-    is_type baml.ai.OpenAiRealtime
+    is_type baml.ai.ClaudeCode
     pop_jump_if_false L1
     jump L5
 
   L1:
     load_var h
-    is_type baml.ai.PiAgent
+    is_type baml.ai.OpenAiRealtime
     pop_jump_if_false L2
     jump L5
 
@@ -4323,92 +4365,98 @@ function ai_scenarios.run_eval(task: baml.ai.Provider, judge: ai_scenarios.Score
     load_var task
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L14
+    jump L15
 
   L0:
     load_var task
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L14
+    jump L15
 
   L1:
     load_var task
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L14
+    jump L15
 
   L2:
     load_var task
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L14
+    jump L15
 
   L3:
     load_var task
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L14
+    jump L15
 
   L4:
     load_var task
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L14
+    jump L15
 
   L5:
     load_var task
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L14
+    jump L15
 
   L6:
     load_var task
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L14
+    jump L15
 
   L7:
     load_var task
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L14
+    jump L15
 
   L8:
     load_var task
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L14
+    jump L15
 
   L9:
     load_var task
-    is_type ai_scenarios.MeteredEcho
+    is_type baml.llm.Client
     pop_jump_if_false L10
-    jump L14
+    jump L15
 
   L10:
     load_var task
-    is_type ai_scenarios.EchoProvider
+    is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L11
-    jump L14
+    jump L15
 
   L11:
     load_var task
-    is_type ai_scenarios.CountingEcho
+    is_type ai_scenarios.EchoProvider
     pop_jump_if_false L12
-    jump L14
+    jump L15
 
   L12:
     load_var task
-    is_type ai_scenarios.AlwaysFailProvider
+    is_type ai_scenarios.CountingEcho
     pop_jump_if_false L13
-    jump L14
+    jump L15
 
   L13:
+    load_var task
+    is_type ai_scenarios.AlwaysFailProvider
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
     load_const "task client cannot produce a value"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L14:
+  L15:
     load_type string
     load_var2 1 3
     load_type baml.ai.HttpProvider
@@ -4715,7 +4763,7 @@ function ai_scenarios.s14_handoff_dispatch(specialist: baml.ai.Provider, calls: 
   L9:
     load_var _4
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L38
+    pop_jump_if_false L39
     load_type baml.ai.ToolCall
     load_type never
     load_var _4
@@ -4794,7 +4842,7 @@ function ai_scenarios.s14_handoff_dispatch(specialist: baml.ai.Provider, calls: 
     load_var _6
     is_type baml.iter.Done
     pop_jump_if_false L20
-    jump L37
+    jump L38
 
   L20:
     load_var _6
@@ -4802,92 +4850,98 @@ function ai_scenarios.s14_handoff_dispatch(specialist: baml.ai.Provider, calls: 
     load_var specialist
     is_type baml.ai.ToolLoop
     pop_jump_if_false L21
-    jump L35
+    jump L36
 
   L21:
     load_var specialist
     is_type baml.ai.Retry
     pop_jump_if_false L22
-    jump L35
+    jump L36
 
   L22:
     load_var specialist
     is_type baml.ai.OpenAi
     pop_jump_if_false L23
-    jump L35
+    jump L36
 
   L23:
     load_var specialist
     is_type baml.ai.Gemini
     pop_jump_if_false L24
-    jump L35
+    jump L36
 
   L24:
     load_var specialist
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L25
-    jump L35
+    jump L36
 
   L25:
     load_var specialist
     is_type baml.ai.RoundRobin
     pop_jump_if_false L26
-    jump L35
+    jump L36
 
   L26:
     load_var specialist
     is_type baml.ai.Fallback
     pop_jump_if_false L27
-    jump L35
+    jump L36
 
   L27:
     load_var specialist
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L28
-    jump L35
+    jump L36
 
   L28:
     load_var specialist
     is_type baml.ai.Anthropic
     pop_jump_if_false L29
-    jump L35
+    jump L36
 
   L29:
     load_var specialist
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L30
-    jump L35
+    jump L36
 
   L30:
     load_var specialist
-    is_type ai_scenarios.MeteredEcho
+    is_type baml.llm.Client
     pop_jump_if_false L31
-    jump L35
+    jump L36
 
   L31:
     load_var specialist
-    is_type ai_scenarios.EchoProvider
+    is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L32
-    jump L35
+    jump L36
 
   L32:
     load_var specialist
-    is_type ai_scenarios.CountingEcho
+    is_type ai_scenarios.EchoProvider
     pop_jump_if_false L33
-    jump L35
+    jump L36
 
   L33:
     load_var specialist
-    is_type ai_scenarios.AlwaysFailProvider
+    is_type ai_scenarios.CountingEcho
     pop_jump_if_false L34
-    jump L35
+    jump L36
 
   L34:
-    load_const "specialist is not callable"
-    store_var out
+    load_var specialist
+    is_type ai_scenarios.AlwaysFailProvider
+    pop_jump_if_false L35
     jump L36
 
   L35:
+    load_const "specialist is not callable"
+    store_var out
+    jump L37
+
+  L36:
     load_type string
     load_var2 1 6
     load_field .args
@@ -4895,13 +4949,13 @@ function ai_scenarios.s14_handoff_dispatch(specialist: baml.ai.Provider, calls: 
     load_const "call"
     virtual_call nargs=2 ntypeargs=1
     store_var out
-    jump L36
+    jump L37
     load_var e
     throw_if_panic
     load_const "sub-agent failed"
     store_var out
 
-  L36:
+  L37:
     load_var2 3 6
     load_field .id
     load_var out
@@ -4910,11 +4964,11 @@ function ai_scenarios.s14_handoff_dispatch(specialist: baml.ai.Provider, calls: 
     pop 1
     jump L0
 
-  L37:
+  L38:
     load_var results
     return
 
-  L38:
+  L39:
     unreachable
 }
 
@@ -4922,98 +4976,104 @@ function ai_scenarios.s15_guarded_call(p: baml.ai.Provider, prompt: string, bloc
     load_var2 2 3
     call baml.String.includes
     pop_jump_if_false L0
-    jump L16
+    jump L17
 
   L0:
     load_var p
     is_type baml.ai.ToolLoop
     pop_jump_if_false L1
-    jump L15
+    jump L16
 
   L1:
     load_var p
     is_type baml.ai.Retry
     pop_jump_if_false L2
-    jump L15
+    jump L16
 
   L2:
     load_var p
     is_type baml.ai.OpenAi
     pop_jump_if_false L3
-    jump L15
+    jump L16
 
   L3:
     load_var p
     is_type baml.ai.Gemini
     pop_jump_if_false L4
-    jump L15
+    jump L16
 
   L4:
     load_var p
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L5
-    jump L15
+    jump L16
 
   L5:
     load_var p
     is_type baml.ai.RoundRobin
     pop_jump_if_false L6
-    jump L15
+    jump L16
 
   L6:
     load_var p
     is_type baml.ai.Fallback
     pop_jump_if_false L7
-    jump L15
+    jump L16
 
   L7:
     load_var p
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L8
-    jump L15
+    jump L16
 
   L8:
     load_var p
     is_type baml.ai.Anthropic
     pop_jump_if_false L9
-    jump L15
+    jump L16
 
   L9:
     load_var p
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L10
-    jump L15
+    jump L16
 
   L10:
     load_var p
-    is_type ai_scenarios.MeteredEcho
+    is_type baml.llm.Client
     pop_jump_if_false L11
-    jump L15
+    jump L16
 
   L11:
     load_var p
-    is_type ai_scenarios.EchoProvider
+    is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L12
-    jump L15
+    jump L16
 
   L12:
     load_var p
-    is_type ai_scenarios.CountingEcho
+    is_type ai_scenarios.EchoProvider
     pop_jump_if_false L13
-    jump L15
+    jump L16
 
   L13:
     load_var p
-    is_type ai_scenarios.AlwaysFailProvider
+    is_type ai_scenarios.CountingEcho
     pop_jump_if_false L14
-    jump L15
+    jump L16
 
   L14:
+    load_var p
+    is_type ai_scenarios.AlwaysFailProvider
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
     load_const "client cannot produce a value"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L15:
+  L16:
     load_type string
     load_var2 1 2
     load_type baml.ai.HttpProvider
@@ -5023,7 +5083,7 @@ function ai_scenarios.s15_guarded_call(p: baml.ai.Provider, prompt: string, bloc
     load_var _0
     return
 
-  L16:
+  L17:
     load_const "input tripwire: blocked content"
     init_instance baml.errors.Unsupported .message
     throw
@@ -5065,92 +5125,98 @@ function ai_scenarios.s30_cascade(cheap: baml.ai.Provider, expensive: baml.ai.Pr
     load_var cheap
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L14
+    jump L15
 
   L0:
     load_var cheap
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L14
+    jump L15
 
   L1:
     load_var cheap
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L14
+    jump L15
 
   L2:
     load_var cheap
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L14
+    jump L15
 
   L3:
     load_var cheap
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L14
+    jump L15
 
   L4:
     load_var cheap
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L14
+    jump L15
 
   L5:
     load_var cheap
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L14
+    jump L15
 
   L6:
     load_var cheap
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L14
+    jump L15
 
   L7:
     load_var cheap
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L14
+    jump L15
 
   L8:
     load_var cheap
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L14
+    jump L15
 
   L9:
     load_var cheap
-    is_type ai_scenarios.MeteredEcho
+    is_type baml.llm.Client
     pop_jump_if_false L10
-    jump L14
+    jump L15
 
   L10:
     load_var cheap
-    is_type ai_scenarios.EchoProvider
+    is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L11
-    jump L14
+    jump L15
 
   L11:
     load_var cheap
-    is_type ai_scenarios.CountingEcho
+    is_type ai_scenarios.EchoProvider
     pop_jump_if_false L12
-    jump L14
+    jump L15
 
   L12:
     load_var cheap
-    is_type ai_scenarios.AlwaysFailProvider
+    is_type ai_scenarios.CountingEcho
     pop_jump_if_false L13
-    jump L14
+    jump L15
 
   L13:
+    load_var cheap
+    is_type ai_scenarios.AlwaysFailProvider
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
     load_const "cheap stage not callable"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L14:
+  L15:
     load_type string
     load_var2 1 3
     load_type baml.ai.HttpProvider
@@ -5161,112 +5227,118 @@ function ai_scenarios.s30_cascade(cheap: baml.ai.Provider, expensive: baml.ai.Pr
     load_const "UNSURE"
     call baml.String.includes
     unary_op !
-    pop_jump_if_false L15
-    jump L31
-
-  L15:
-    load_var expensive
-    is_type baml.ai.ToolLoop
     pop_jump_if_false L16
-    jump L30
+    jump L33
 
   L16:
     load_var expensive
-    is_type baml.ai.Retry
+    is_type baml.ai.ToolLoop
     pop_jump_if_false L17
-    jump L30
+    jump L32
 
   L17:
     load_var expensive
-    is_type baml.ai.OpenAi
+    is_type baml.ai.Retry
     pop_jump_if_false L18
-    jump L30
+    jump L32
 
   L18:
     load_var expensive
-    is_type baml.ai.Gemini
+    is_type baml.ai.OpenAi
     pop_jump_if_false L19
-    jump L30
+    jump L32
 
   L19:
     load_var expensive
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L20
-    jump L30
+    jump L32
 
   L20:
     load_var expensive
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L21
-    jump L30
+    jump L32
 
   L21:
     load_var expensive
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L22
-    jump L30
+    jump L32
 
   L22:
     load_var expensive
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.Fallback
     pop_jump_if_false L23
-    jump L30
+    jump L32
 
   L23:
     load_var expensive
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L24
-    jump L30
+    jump L32
 
   L24:
     load_var expensive
-    is_type baml.llm.Client
+    is_type baml.ai.Anthropic
     pop_jump_if_false L25
-    jump L30
+    jump L32
 
   L25:
     load_var expensive
-    is_type ai_scenarios.MeteredEcho
+    is_type baml.ai.Traced
     pop_jump_if_false L26
-    jump L30
+    jump L32
 
   L26:
     load_var expensive
-    is_type ai_scenarios.EchoProvider
+    is_type baml.llm.Client
     pop_jump_if_false L27
-    jump L30
+    jump L32
 
   L27:
     load_var expensive
-    is_type ai_scenarios.CountingEcho
+    is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L28
-    jump L30
+    jump L32
 
   L28:
     load_var expensive
-    is_type ai_scenarios.AlwaysFailProvider
+    is_type ai_scenarios.EchoProvider
     pop_jump_if_false L29
-    jump L30
+    jump L32
 
   L29:
+    load_var expensive
+    is_type ai_scenarios.CountingEcho
+    pop_jump_if_false L30
+    jump L32
+
+  L30:
+    load_var expensive
+    is_type ai_scenarios.AlwaysFailProvider
+    pop_jump_if_false L31
+    jump L32
+
+  L31:
     load_const "expensive stage not callable"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L30:
+  L32:
     load_type string
     load_var2 2 3
     load_type baml.ai.HttpProvider
     load_const "call"
     virtual_call nargs=2 ntypeargs=1
     store_var _0
-    jump L32
+    jump L34
 
-  L31:
+  L33:
     load_var first
     store_var _0
 
-  L32:
+  L34:
     load_var _0
     return
 }
@@ -5275,92 +5347,98 @@ function ai_scenarios.s47_step_run_agent(agent: baml.ai.Provider, task: string) 
     load_var agent
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L14
+    jump L15
 
   L0:
     load_var agent
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L14
+    jump L15
 
   L1:
     load_var agent
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L14
+    jump L15
 
   L2:
     load_var agent
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L14
+    jump L15
 
   L3:
     load_var agent
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L14
+    jump L15
 
   L4:
     load_var agent
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L14
+    jump L15
 
   L5:
     load_var agent
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L14
+    jump L15
 
   L6:
     load_var agent
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L14
+    jump L15
 
   L7:
     load_var agent
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L14
+    jump L15
 
   L8:
     load_var agent
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L14
+    jump L15
 
   L9:
     load_var agent
-    is_type ai_scenarios.MeteredEcho
+    is_type baml.llm.Client
     pop_jump_if_false L10
-    jump L14
+    jump L15
 
   L10:
     load_var agent
-    is_type ai_scenarios.EchoProvider
+    is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L11
-    jump L14
+    jump L15
 
   L11:
     load_var agent
-    is_type ai_scenarios.CountingEcho
+    is_type ai_scenarios.EchoProvider
     pop_jump_if_false L12
-    jump L14
+    jump L15
 
   L12:
     load_var agent
-    is_type ai_scenarios.AlwaysFailProvider
+    is_type ai_scenarios.CountingEcho
     pop_jump_if_false L13
-    jump L14
+    jump L15
 
   L13:
+    load_var agent
+    is_type ai_scenarios.AlwaysFailProvider
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
     load_const "step's agent is not runnable"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L14:
+  L15:
     load_type string
     load_var2 1 2
     load_type baml.ai.HttpProvider
@@ -5642,92 +5720,98 @@ function ai_scenarios.wf_model_text(p: baml.ai.Provider, prompt: string) -> stri
     load_var p
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L14
+    jump L15
 
   L0:
     load_var p
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L14
+    jump L15
 
   L1:
     load_var p
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L14
+    jump L15
 
   L2:
     load_var p
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L14
+    jump L15
 
   L3:
     load_var p
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L14
+    jump L15
 
   L4:
     load_var p
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L14
+    jump L15
 
   L5:
     load_var p
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L14
+    jump L15
 
   L6:
     load_var p
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L14
+    jump L15
 
   L7:
     load_var p
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L14
+    jump L15
 
   L8:
     load_var p
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L14
+    jump L15
 
   L9:
     load_var p
-    is_type ai_scenarios.MeteredEcho
+    is_type baml.llm.Client
     pop_jump_if_false L10
-    jump L14
+    jump L15
 
   L10:
     load_var p
-    is_type ai_scenarios.EchoProvider
+    is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L11
-    jump L14
+    jump L15
 
   L11:
     load_var p
-    is_type ai_scenarios.CountingEcho
+    is_type ai_scenarios.EchoProvider
     pop_jump_if_false L12
-    jump L14
+    jump L15
 
   L12:
     load_var p
-    is_type ai_scenarios.AlwaysFailProvider
+    is_type ai_scenarios.CountingEcho
     pop_jump_if_false L13
-    jump L14
+    jump L15
 
   L13:
+    load_var p
+    is_type ai_scenarios.AlwaysFailProvider
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
     load_const "client cannot produce a value"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L14:
+  L15:
     load_type string
     load_var2 1 2
     load_type baml.ai.HttpProvider

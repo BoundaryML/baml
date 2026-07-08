@@ -325,3 +325,122 @@ class RoundRobin {
         }
     }
 }
+
+/// D4 observability: a mutable usage accumulator shared (by reference) across
+/// the providers it wraps. `meter.wrap(p)` returns a `Traced` that records
+/// every successful call's `ResponseMeta` into the meter as a side effect —
+/// wrap each member of a `Fallback`/`RoundRobin` (or the whole chain) to
+/// project usage over everything that actually ran:
+///
+///   let meter = UsageMeter { entries: [] };
+///   let p = Fallback { members: [meter.wrap(Primary {}), meter.wrap(Backup {})] };
+///   … calls …
+///   meter.total()   // summed Usage across every observed call
+///
+/// Residue (honest bar, plan D4): a FAILED attempt throws without its meta, so
+/// billed-but-failed calls (e.g. a 200 that failed to parse) are invisible
+/// until errors carry meta.
+class UsageMeter {
+    entries: root.ai.ResponseMeta[],
+
+    function record(self, meta: root.ai.ResponseMeta) -> null throws never {
+        self.entries.push(meta);
+        null
+    }
+    /// Number of calls observed.
+    function calls(self) -> int throws never {
+        self.entries.length()
+    }
+    /// Summed usage across every observed call.
+    function total(self) -> root.ai.Usage throws never {
+        self.aggregate().usage()
+    }
+    /// The observed calls as one `AggregateMeta` (sum-usage `ResponseMeta`).
+    function aggregate(self) -> root.ai.AggregateMeta throws never {
+        root.ai.AggregateMeta { parts: self.entries }
+    }
+    function wrap(self, p: root.ai.Provider) -> Traced throws never {
+        Traced { inner: p, meter: self }
+    }
+}
+
+/// A transparent recording combinator (plan D4): forwards calls to `inner`
+/// unchanged and records each successful call's meta into `meter`. The
+/// caller's projection still receives the ORIGINAL winner meta — tracing is
+/// a side effect, not a reshaping.
+class Traced {
+    inner: root.ai.Provider,
+    meter: UsageMeter,
+
+    implements root.ai.Provider {
+        // Transparent: effectfulness is the inner provider's answer.
+        function is_effectful(self) -> bool throws never {
+            self.inner.is_effectful()
+        }
+    }
+
+    implements root.ai.HttpProvider {
+        type Body = unknown
+
+        function build_request<T>(
+            self,
+            messages: root.ai.ChatMessage[],
+        ) -> root.http.Request throws root.errors.UnknownError {
+            throw root.errors.UnknownError { data: null, message: ["traced forwards calls; no single request"] }
+        }
+        function send(
+            self,
+            request: root.http.Request,
+        ) -> unknown throws root.errors.UnknownError {
+            throw root.errors.UnknownError { data: null, message: ["traced does not send directly"] }
+        }
+        function parse<T>(
+            self,
+            from: unknown,
+        ) -> T throws root.errors.UnknownError {
+            throw root.errors.UnknownError { data: null, message: ["traced does not parse directly"] }
+        }
+        function meta_of(
+            self,
+            from: unknown,
+        ) -> root.ai.ResponseMeta throws root.errors.UnknownError {
+            throw root.errors.UnknownError { data: null, message: ["traced has no single meta"] }
+        }
+
+        function call_messages_with<T, V, E2>(
+            self,
+            messages: root.ai.ChatMessage[],
+            project: (root.ai.ResponseMeta) -> V throws E2,
+        ) -> root.ai.CallResult<T, V> throws root.errors.CallError | root.errors.UnknownError | E2 {
+            match (self.inner) {
+                let h: root.ai.HttpProvider => {
+                    let r0: root.ai.CallResult<T, root.ai.ResponseMeta> = h.call_messages_with<T, root.ai.ResponseMeta, never>(
+                        messages,
+                        (mm: root.ai.ResponseMeta) -> root.ai.ResponseMeta { mm },
+                    );
+                    self.meter.record(r0.meta);
+                    return root.ai.CallResult<T, V> { value: r0.value, meta: project(r0.meta) };
+                },
+                _ => {
+                    throw root.errors.UnknownError { data: null, message: ["traced: inner is not callable"] }
+                },
+            }
+        }
+    }
+
+    implements root.ai.Streaming {
+        // Stream metas are not observable from the `Stream` handle today, so a
+        // traced stream forwards WITHOUT recording (D4 residue).
+        function stream_messages<TStream, TFinal>(
+            self,
+            messages: root.ai.ChatMessage[],
+        ) -> root.llm.Stream<TStream, TFinal> throws root.errors.StreamError | root.errors.UnknownError {
+            match (self.inner) {
+                let s: root.ai.Streaming => s.stream_messages<TStream, TFinal>(messages),
+                _ => {
+                    throw root.errors.UnknownError { data: null, message: ["traced: inner is not streaming"] }
+                },
+            }
+        }
+    }
+}

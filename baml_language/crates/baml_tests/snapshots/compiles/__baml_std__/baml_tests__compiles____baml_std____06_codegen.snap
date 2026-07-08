@@ -1689,6 +1689,468 @@ function baml._to_string_default(value: T) -> string {
 function baml._to_string_shim(value: T) -> string {
 }
 
+function baml.ai.AggregateMeta$stream.ResponseMeta.citations(self: baml.ai.AggregateMeta$stream) -> baml.ai.Citation[] | baml.ai.Unavailable {
+    load_const "aggregate: read per-part dimensions off .parts"
+    init_instance baml.ai.Unavailable .reason
+    return
+}
+
+function baml.ai.AggregateMeta$stream.ResponseMeta.finish_reason(self: baml.ai.AggregateMeta$stream) -> string {
+    load_var self
+    load_field .0
+    store_var _3
+    load_var self
+    load_field .0
+    container_len
+    store_var _5
+    load_type baml.ai.ResponseMeta
+    load_var2 4 5
+    load_const 1
+    sub_int
+    call baml.Array.at
+    store_var _2
+    load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _2
+    load_type baml.ai.ResponseMeta
+    load_const "finish_reason"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    jump L2
+
+  L1:
+    load_const "unknown"
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
+function baml.ai.AggregateMeta$stream.ResponseMeta.logprobs(self: baml.ai.AggregateMeta$stream) -> baml.ai.Logprob[] | baml.ai.Unavailable {
+    load_const "aggregate: read per-part dimensions off .parts"
+    init_instance baml.ai.Unavailable .reason
+    return
+}
+
+function baml.ai.AggregateMeta$stream.ResponseMeta.reasoning(self: baml.ai.AggregateMeta$stream) -> string | baml.ai.Unavailable {
+    load_const "aggregate: read per-part dimensions off .parts"
+    init_instance baml.ai.Unavailable .reason
+    return
+}
+
+function baml.ai.AggregateMeta$stream.ResponseMeta.usage(self: baml.ai.AggregateMeta$stream) -> baml.ai.Usage {
+    load_const 0
+    store_var inp
+    load_const 0
+    store_var out
+    load_var self
+    load_field .0
+    store_var _4
+    load_type baml.ai.ResponseMeta
+    load_var _4
+    call baml.iter.Iterable$for$T[].iter
+    store_var _5
+
+  L0:
+    load_var _5
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _5
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _5
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _5
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _5
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _5
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _5
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _5
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _5
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _5
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L22
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var _5
+    call baml.iter.Peekable.Iterator.next
+    store_var _7
+    jump L19
+
+  L10:
+    load_var _5
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _7
+    jump L19
+
+  L11:
+    load_var _5
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _7
+    jump L19
+
+  L12:
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_type never
+    load_var _5
+    call baml.iter.Filter.Iterator.next
+    store_var _7
+    jump L19
+
+  L13:
+    load_var _5
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _7
+    jump L19
+
+  L14:
+    load_type baml.ai.ResponseMeta
+    load_var _5
+    call baml.iter.Repeat.Iterator.next
+    store_var _7
+    jump L19
+
+  L15:
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_type never
+    load_var _5
+    call baml.iter.Chain.Iterator.next
+    store_var _7
+    jump L19
+
+  L16:
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var _5
+    call baml.iter.StepBy.Iterator.next
+    store_var _7
+    jump L19
+
+  L17:
+    load_type baml.ai.ResponseMeta
+    load_var _5
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _7
+    jump L19
+
+  L18:
+    load_var _5
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _7
+
+  L19:
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_var _7
+    load_type baml.ai.ResponseMeta
+    load_const "usage"
+    virtual_call nargs=1 ntypeargs=0
+    store_var u
+    load_var2 2 7
+    load_field .input_tokens
+    add_int
+    store_var inp
+    load_var2 3 7
+    load_field .output_tokens
+    add_int
+    store_var out
+    jump L0
+
+  L21:
+    load_var2 2 3
+    init_instance baml.ai.Usage .input_tokens, .output_tokens
+    return
+
+  L22:
+    unreachable
+}
+
+function baml.ai.AggregateMeta.ResponseMeta.citations(self: baml.ai.AggregateMeta) -> baml.ai.Citation[] | baml.ai.Unavailable {
+    load_const "aggregate: read per-part dimensions off .parts"
+    init_instance baml.ai.Unavailable .reason
+    return
+}
+
+function baml.ai.AggregateMeta.ResponseMeta.finish_reason(self: baml.ai.AggregateMeta) -> string {
+    load_var self
+    load_field .0
+    store_var _3
+    load_var self
+    load_field .0
+    container_len
+    store_var _5
+    load_type baml.ai.ResponseMeta
+    load_var2 4 5
+    load_const 1
+    sub_int
+    call baml.Array.at
+    store_var _2
+    load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _2
+    load_type baml.ai.ResponseMeta
+    load_const "finish_reason"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    jump L2
+
+  L1:
+    load_const "unknown"
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
+function baml.ai.AggregateMeta.ResponseMeta.logprobs(self: baml.ai.AggregateMeta) -> baml.ai.Logprob[] | baml.ai.Unavailable {
+    load_const "aggregate: read per-part dimensions off .parts"
+    init_instance baml.ai.Unavailable .reason
+    return
+}
+
+function baml.ai.AggregateMeta.ResponseMeta.reasoning(self: baml.ai.AggregateMeta) -> string | baml.ai.Unavailable {
+    load_const "aggregate: read per-part dimensions off .parts"
+    init_instance baml.ai.Unavailable .reason
+    return
+}
+
+function baml.ai.AggregateMeta.ResponseMeta.usage(self: baml.ai.AggregateMeta) -> baml.ai.Usage {
+    load_const 0
+    store_var inp
+    load_const 0
+    store_var out
+    load_var self
+    load_field .0
+    store_var _4
+    load_type baml.ai.ResponseMeta
+    load_var _4
+    call baml.iter.Iterable$for$T[].iter
+    store_var _5
+
+  L0:
+    load_var _5
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _5
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _5
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _5
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _5
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _5
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _5
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _5
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _5
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _5
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L22
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var _5
+    call baml.iter.Peekable.Iterator.next
+    store_var _7
+    jump L19
+
+  L10:
+    load_var _5
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _7
+    jump L19
+
+  L11:
+    load_var _5
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _7
+    jump L19
+
+  L12:
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_type never
+    load_var _5
+    call baml.iter.Filter.Iterator.next
+    store_var _7
+    jump L19
+
+  L13:
+    load_var _5
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _7
+    jump L19
+
+  L14:
+    load_type baml.ai.ResponseMeta
+    load_var _5
+    call baml.iter.Repeat.Iterator.next
+    store_var _7
+    jump L19
+
+  L15:
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_type never
+    load_var _5
+    call baml.iter.Chain.Iterator.next
+    store_var _7
+    jump L19
+
+  L16:
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var _5
+    call baml.iter.StepBy.Iterator.next
+    store_var _7
+    jump L19
+
+  L17:
+    load_type baml.ai.ResponseMeta
+    load_var _5
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _7
+    jump L19
+
+  L18:
+    load_var _5
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _7
+
+  L19:
+    load_var _7
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L21
+
+  L20:
+    load_var _7
+    load_type baml.ai.ResponseMeta
+    load_const "usage"
+    virtual_call nargs=1 ntypeargs=0
+    store_var u
+    load_var2 2 7
+    load_field .input_tokens
+    add_int
+    store_var inp
+    load_var2 3 7
+    load_field .output_tokens
+    add_int
+    store_var out
+    jump L0
+
+  L21:
+    load_var2 2 3
+    init_instance baml.ai.Usage .input_tokens, .output_tokens
+    return
+
+  L22:
+    unreachable
+}
+
 function baml.ai.Anthropic$stream.root.ai.HttpProvider.build_request(self: baml.ai.Anthropic$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
     load_type #0
     sys_op baml.llm.render_output_format
@@ -4343,7 +4805,7 @@ function baml.ai.Fallback$stream.root.ai.HttpProvider.call_messages_with(self: b
   L9:
     load_var _5
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L33
+    pop_jump_if_false L34
     load_type baml.ai.Provider
     load_type never
     load_var _5
@@ -4422,69 +4884,75 @@ function baml.ai.Fallback$stream.root.ai.HttpProvider.call_messages_with(self: b
     load_var _7
     is_type baml.iter.Done
     pop_jump_if_false L20
-    jump L32
+    jump L33
 
   L20:
     load_var _7
     store_var_load_var m
     is_type baml.ai.ToolLoop
     pop_jump_if_false L21
-    jump L30
+    jump L31
 
   L21:
     load_var m
     is_type baml.ai.Retry
     pop_jump_if_false L22
-    jump L30
+    jump L31
 
   L22:
     load_var m
     is_type baml.ai.OpenAi
     pop_jump_if_false L23
-    jump L30
+    jump L31
 
   L23:
     load_var m
     is_type baml.ai.Gemini
     pop_jump_if_false L24
-    jump L30
+    jump L31
 
   L24:
     load_var m
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L25
-    jump L30
+    jump L31
 
   L25:
     load_var m
     is_type baml.ai.RoundRobin
     pop_jump_if_false L26
-    jump L30
+    jump L31
 
   L26:
     load_var m
     is_type baml.ai.Fallback
     pop_jump_if_false L27
-    jump L30
+    jump L31
 
   L27:
     load_var m
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L28
-    jump L30
+    jump L31
 
   L28:
     load_var m
     is_type baml.ai.Anthropic
     pop_jump_if_false L29
-    jump L30
+    jump L31
 
   L29:
+    load_var m
+    is_type baml.ai.Traced
+    pop_jump_if_false L30
+    jump L31
+
+  L30:
     load_var m
     is_type baml.llm.Client
     pop_jump_if_false L0
 
-  L30:
+  L31:
     load_type #0
     load_type baml.ai.ResponseMeta
     load_type never
@@ -4497,27 +4965,27 @@ function baml.ai.Fallback$stream.root.ai.HttpProvider.call_messages_with(self: b
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
     store_var r0
-    jump L31
+    jump L32
     load_var e
     throw_if_panic
     jump L0
 
-  L31:
+  L32:
     load_var r0
     load_field .value
-    store_var _54
+    store_var _55
     load_var r0
     load_field .meta
     load_var project
     call_indirect
-    store_var _55
+    store_var _56
     load_var2 10 11
     load_type #0
     load_type #1
     init_instance<2> baml.ai.CallResult .value, .meta
     return
 
-  L32:
+  L33:
     load_const null
     load_const "fallback: all providers failed"
     load_type string
@@ -4525,7 +4993,7 @@ function baml.ai.Fallback$stream.root.ai.HttpProvider.call_messages_with(self: b
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L33:
+  L34:
     unreachable
 }
 
@@ -4622,7 +5090,7 @@ function baml.ai.Fallback$stream.root.ai.Streaming.stream_messages(self: baml.ai
   L9:
     load_var _4
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L29
+    pop_jump_if_false L30
     load_type baml.ai.Provider
     load_type never
     load_var _4
@@ -4701,45 +5169,51 @@ function baml.ai.Fallback$stream.root.ai.Streaming.stream_messages(self: baml.ai
     load_var _6
     is_type baml.iter.Done
     pop_jump_if_false L20
-    jump L28
+    jump L29
 
   L20:
     load_var _6
     store_var_load_var m
     is_type baml.ai.Retry
     pop_jump_if_false L21
-    jump L26
+    jump L27
 
   L21:
     load_var m
     is_type baml.ai.OpenAi
     pop_jump_if_false L22
-    jump L26
+    jump L27
 
   L22:
     load_var m
     is_type baml.ai.RoundRobin
     pop_jump_if_false L23
-    jump L26
+    jump L27
 
   L23:
     load_var m
     is_type baml.ai.Fallback
     pop_jump_if_false L24
-    jump L26
+    jump L27
 
   L24:
     load_var m
     is_type baml.ai.Anthropic
     pop_jump_if_false L25
-    jump L26
+    jump L27
 
   L25:
+    load_var m
+    is_type baml.ai.Traced
+    pop_jump_if_false L26
+    jump L27
+
+  L26:
     load_var m
     is_type baml.llm.Client
     pop_jump_if_false L0
 
-  L26:
+  L27:
     load_type #0
     load_type #1
     load_var2 6 2
@@ -4747,16 +5221,16 @@ function baml.ai.Fallback$stream.root.ai.Streaming.stream_messages(self: baml.ai
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
     store_var st
-    jump L27
+    jump L28
     load_var e
     throw_if_panic
     jump L0
 
-  L27:
+  L28:
     load_var st
     return
 
-  L28:
+  L29:
     load_const null
     load_const "fallback: no streaming member"
     load_type string
@@ -4764,7 +5238,7 @@ function baml.ai.Fallback$stream.root.ai.Streaming.stream_messages(self: baml.ai
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L29:
+  L30:
     unreachable
 }
 
@@ -4843,7 +5317,7 @@ function baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: baml.ai.
   L9:
     load_var _5
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L33
+    pop_jump_if_false L34
     load_type baml.ai.Provider
     load_type never
     load_var _5
@@ -4922,69 +5396,75 @@ function baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: baml.ai.
     load_var _7
     is_type baml.iter.Done
     pop_jump_if_false L20
-    jump L32
+    jump L33
 
   L20:
     load_var _7
     store_var_load_var m
     is_type baml.ai.ToolLoop
     pop_jump_if_false L21
-    jump L30
+    jump L31
 
   L21:
     load_var m
     is_type baml.ai.Retry
     pop_jump_if_false L22
-    jump L30
+    jump L31
 
   L22:
     load_var m
     is_type baml.ai.OpenAi
     pop_jump_if_false L23
-    jump L30
+    jump L31
 
   L23:
     load_var m
     is_type baml.ai.Gemini
     pop_jump_if_false L24
-    jump L30
+    jump L31
 
   L24:
     load_var m
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L25
-    jump L30
+    jump L31
 
   L25:
     load_var m
     is_type baml.ai.RoundRobin
     pop_jump_if_false L26
-    jump L30
+    jump L31
 
   L26:
     load_var m
     is_type baml.ai.Fallback
     pop_jump_if_false L27
-    jump L30
+    jump L31
 
   L27:
     load_var m
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L28
-    jump L30
+    jump L31
 
   L28:
     load_var m
     is_type baml.ai.Anthropic
     pop_jump_if_false L29
-    jump L30
+    jump L31
 
   L29:
+    load_var m
+    is_type baml.ai.Traced
+    pop_jump_if_false L30
+    jump L31
+
+  L30:
     load_var m
     is_type baml.llm.Client
     pop_jump_if_false L0
 
-  L30:
+  L31:
     load_type #0
     load_type baml.ai.ResponseMeta
     load_type never
@@ -4997,27 +5477,27 @@ function baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: baml.ai.
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
     store_var r0
-    jump L31
+    jump L32
     load_var e
     throw_if_panic
     jump L0
 
-  L31:
+  L32:
     load_var r0
     load_field .value
-    store_var _54
+    store_var _55
     load_var r0
     load_field .meta
     load_var project
     call_indirect
-    store_var _55
+    store_var _56
     load_var2 10 11
     load_type #0
     load_type #1
     init_instance<2> baml.ai.CallResult .value, .meta
     return
 
-  L32:
+  L33:
     load_const null
     load_const "fallback: all providers failed"
     load_type string
@@ -5025,7 +5505,7 @@ function baml.ai.Fallback.root.ai.HttpProvider.call_messages_with(self: baml.ai.
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L33:
+  L34:
     unreachable
 }
 
@@ -5122,7 +5602,7 @@ function baml.ai.Fallback.root.ai.Streaming.stream_messages(self: baml.ai.Fallba
   L9:
     load_var _4
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L29
+    pop_jump_if_false L30
     load_type baml.ai.Provider
     load_type never
     load_var _4
@@ -5201,45 +5681,51 @@ function baml.ai.Fallback.root.ai.Streaming.stream_messages(self: baml.ai.Fallba
     load_var _6
     is_type baml.iter.Done
     pop_jump_if_false L20
-    jump L28
+    jump L29
 
   L20:
     load_var _6
     store_var_load_var m
     is_type baml.ai.Retry
     pop_jump_if_false L21
-    jump L26
+    jump L27
 
   L21:
     load_var m
     is_type baml.ai.OpenAi
     pop_jump_if_false L22
-    jump L26
+    jump L27
 
   L22:
     load_var m
     is_type baml.ai.RoundRobin
     pop_jump_if_false L23
-    jump L26
+    jump L27
 
   L23:
     load_var m
     is_type baml.ai.Fallback
     pop_jump_if_false L24
-    jump L26
+    jump L27
 
   L24:
     load_var m
     is_type baml.ai.Anthropic
     pop_jump_if_false L25
-    jump L26
+    jump L27
 
   L25:
+    load_var m
+    is_type baml.ai.Traced
+    pop_jump_if_false L26
+    jump L27
+
+  L26:
     load_var m
     is_type baml.llm.Client
     pop_jump_if_false L0
 
-  L26:
+  L27:
     load_type #0
     load_type #1
     load_var2 6 2
@@ -5247,16 +5733,16 @@ function baml.ai.Fallback.root.ai.Streaming.stream_messages(self: baml.ai.Fallba
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
     store_var st
-    jump L27
+    jump L28
     load_var e
     throw_if_panic
     jump L0
 
-  L27:
+  L28:
     load_var st
     return
 
-  L28:
+  L29:
     load_const null
     load_const "fallback: no streaming member"
     load_type string
@@ -5264,7 +5750,7 @@ function baml.ai.Fallback.root.ai.Streaming.stream_messages(self: baml.ai.Fallba
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L29:
+  L30:
     unreachable
 }
 
@@ -7722,7 +8208,7 @@ function baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
     call baml.ops.equals_equals
-    pop_jump_if_false L12
+    pop_jump_if_false L13
     load_var self
     call baml.llm.Client.to_primitive_client
     jump L0
@@ -7742,69 +8228,75 @@ function baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.
     load_const null
     cmp_op ==
     pop_jump_if_false L1
-    jump L12
+    jump L13
 
   L1:
     load_var _11
     store_var_load_var np
     is_type baml.ai.ToolLoop
     pop_jump_if_false L2
-    jump L11
+    jump L12
 
   L2:
     load_var np
     is_type baml.ai.Retry
     pop_jump_if_false L3
-    jump L11
+    jump L12
 
   L3:
     load_var np
     is_type baml.ai.OpenAi
     pop_jump_if_false L4
-    jump L11
+    jump L12
 
   L4:
     load_var np
     is_type baml.ai.Gemini
     pop_jump_if_false L5
-    jump L11
+    jump L12
 
   L5:
     load_var np
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L6
-    jump L11
+    jump L12
 
   L6:
     load_var np
     is_type baml.ai.RoundRobin
     pop_jump_if_false L7
-    jump L11
+    jump L12
 
   L7:
     load_var np
     is_type baml.ai.Fallback
     pop_jump_if_false L8
-    jump L11
+    jump L12
 
   L8:
     load_var np
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L9
-    jump L11
+    jump L12
 
   L9:
     load_var np
     is_type baml.ai.Anthropic
     pop_jump_if_false L10
-    jump L11
+    jump L12
 
   L10:
     load_var np
-    is_type baml.llm.Client
-    pop_jump_if_false L12
+    is_type baml.ai.Traced
+    pop_jump_if_false L11
+    jump L12
 
   L11:
+    load_var np
+    is_type baml.llm.Client
+    pop_jump_if_false L13
+
+  L12:
     load_type #0
     load_type #1
     load_type #2
@@ -7814,309 +8306,309 @@ function baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
     store_var _0
-    jump L57
-
-  L12:
-    load_type #0
-    store_var _31
-    load_var self
-    is_type baml.ai.OpenAi
-    pop_jump_if_false L13
-    jump L22
+    jump L58
 
   L13:
+    load_type #0
+    store_var _32
     load_var self
-    is_type baml.ai.Gemini
+    is_type baml.ai.OpenAi
     pop_jump_if_false L14
-    jump L21
+    jump L23
 
   L14:
     load_var self
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L15
-    jump L20
+    jump L22
 
   L15:
     load_var self
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L16
-    jump L19
+    jump L21
 
   L16:
     load_var self
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L17
-    jump L18
+    jump L20
 
   L17:
     load_var self
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L18
+    jump L19
+
+  L18:
+    load_var self
     is_type baml.llm.Client<...>
-    pop_jump_if_false L58
+    pop_jump_if_false L59
     load_var2 10 1
     load_var messages
     call baml.ai.HttpProvider$for$root.llm.Client.build_request
-    store_var _30
-    jump L23
-
-  L18:
-    load_var2 10 1
-    load_var messages
-    call baml.ai.Anthropic.root.ai.HttpProvider.build_request
-    store_var _30
-    jump L23
+    store_var _31
+    jump L24
 
   L19:
     load_var2 10 1
     load_var messages
-    call baml.ai.OpenAiStrict.root.ai.HttpProvider.build_request
-    store_var _30
-    jump L23
+    call baml.ai.Anthropic.root.ai.HttpProvider.build_request
+    store_var _31
+    jump L24
 
   L20:
     load_var2 10 1
     load_var messages
-    call baml.ai.OpenAiResponses.root.ai.HttpProvider.build_request
-    store_var _30
-    jump L23
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.build_request
+    store_var _31
+    jump L24
 
   L21:
     load_var2 10 1
     load_var messages
-    call baml.ai.Gemini.root.ai.HttpProvider.build_request
-    store_var _30
-    jump L23
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.build_request
+    store_var _31
+    jump L24
 
   L22:
     load_var2 10 1
     load_var messages
-    call baml.ai.OpenAi.root.ai.HttpProvider.build_request
-    store_var _30
+    call baml.ai.Gemini.root.ai.HttpProvider.build_request
+    store_var _31
+    jump L24
 
   L23:
-    load_var self
-    is_type baml.ai.OpenAi
-    pop_jump_if_false L24
-    jump L33
+    load_var2 10 1
+    load_var messages
+    call baml.ai.OpenAi.root.ai.HttpProvider.build_request
+    store_var _31
 
   L24:
     load_var self
-    is_type baml.ai.Gemini
+    is_type baml.ai.OpenAi
     pop_jump_if_false L25
-    jump L32
+    jump L34
 
   L25:
     load_var self
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L26
-    jump L31
+    jump L33
 
   L26:
     load_var self
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L27
-    jump L30
+    jump L32
 
   L27:
     load_var self
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L28
-    jump L29
+    jump L31
 
   L28:
     load_var self
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L29
+    jump L30
+
+  L29:
+    load_var self
     is_type baml.llm.Client<...>
-    pop_jump_if_false L58
+    pop_jump_if_false L59
     load_var2 1 9
     call baml.ai.HttpProvider$for$root.llm.Client.send
     store_var body
-    jump L34
-
-  L29:
-    load_var2 1 9
-    call baml.ai.Anthropic.root.ai.HttpProvider.send
-    store_var body
-    jump L34
+    jump L35
 
   L30:
     load_var2 1 9
-    call baml.ai.OpenAiStrict.root.ai.HttpProvider.send
+    call baml.ai.Anthropic.root.ai.HttpProvider.send
     store_var body
-    jump L34
+    jump L35
 
   L31:
     load_var2 1 9
-    call baml.ai.OpenAiResponses.root.ai.HttpProvider.send
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.send
     store_var body
-    jump L34
+    jump L35
 
   L32:
     load_var2 1 9
-    call baml.ai.Gemini.root.ai.HttpProvider.send
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.send
     store_var body
-    jump L34
+    jump L35
 
   L33:
+    load_var2 1 9
+    call baml.ai.Gemini.root.ai.HttpProvider.send
+    store_var body
+    jump L35
+
+  L34:
     load_var2 1 9
     call baml.ai.OpenAi.root.ai.HttpProvider.send
     store_var body
 
-  L34:
+  L35:
     load_var body
-    store_var _45
-    load_type #0
     store_var _46
+    load_type #0
+    store_var _47
     load_var self
     is_type baml.ai.OpenAi
-    pop_jump_if_false L35
-    jump L44
-
-  L35:
-    load_var self
-    is_type baml.ai.Gemini
     pop_jump_if_false L36
-    jump L43
+    jump L45
 
   L36:
     load_var self
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L37
-    jump L42
+    jump L44
 
   L37:
     load_var self
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L38
-    jump L41
+    jump L43
 
   L38:
     load_var self
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L39
-    jump L40
+    jump L42
 
   L39:
     load_var self
-    is_type baml.llm.Client<...>
-    pop_jump_if_false L58
-    load_var2 13 1
-    load_var _45
-    call baml.ai.HttpProvider$for$root.llm.Client.parse
-    store_var _44
-    jump L45
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L40
+    jump L41
 
   L40:
+    load_var self
+    is_type baml.llm.Client<...>
+    pop_jump_if_false L59
     load_var2 13 1
-    load_var _45
-    call baml.ai.Anthropic.root.ai.HttpProvider.parse
-    store_var _44
-    jump L45
+    load_var _46
+    call baml.ai.HttpProvider$for$root.llm.Client.parse
+    store_var _45
+    jump L46
 
   L41:
     load_var2 13 1
-    load_var _45
-    call baml.ai.OpenAiStrict.root.ai.HttpProvider.parse
-    store_var _44
-    jump L45
+    load_var _46
+    call baml.ai.Anthropic.root.ai.HttpProvider.parse
+    store_var _45
+    jump L46
 
   L42:
     load_var2 13 1
-    load_var _45
-    call baml.ai.OpenAiResponses.root.ai.HttpProvider.parse
-    store_var _44
-    jump L45
+    load_var _46
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.parse
+    store_var _45
+    jump L46
 
   L43:
     load_var2 13 1
-    load_var _45
-    call baml.ai.Gemini.root.ai.HttpProvider.parse
-    store_var _44
-    jump L45
+    load_var _46
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.parse
+    store_var _45
+    jump L46
 
   L44:
     load_var2 13 1
-    load_var _45
-    call baml.ai.OpenAi.root.ai.HttpProvider.parse
-    store_var _44
+    load_var _46
+    call baml.ai.Gemini.root.ai.HttpProvider.parse
+    store_var _45
+    jump L46
 
   L45:
-    load_var body
-    store_var _55
-    load_var self
-    is_type baml.ai.OpenAi
-    pop_jump_if_false L46
-    jump L55
+    load_var2 13 1
+    load_var _46
+    call baml.ai.OpenAi.root.ai.HttpProvider.parse
+    store_var _45
 
   L46:
+    load_var body
+    store_var _56
     load_var self
-    is_type baml.ai.Gemini
+    is_type baml.ai.OpenAi
     pop_jump_if_false L47
-    jump L54
+    jump L56
 
   L47:
     load_var self
-    is_type baml.ai.OpenAiResponses
+    is_type baml.ai.Gemini
     pop_jump_if_false L48
-    jump L53
+    jump L55
 
   L48:
     load_var self
-    is_type baml.ai.OpenAiStrict
+    is_type baml.ai.OpenAiResponses
     pop_jump_if_false L49
-    jump L52
+    jump L54
 
   L49:
     load_var self
-    is_type baml.ai.Anthropic
+    is_type baml.ai.OpenAiStrict
     pop_jump_if_false L50
-    jump L51
+    jump L53
 
   L50:
     load_var self
-    is_type baml.llm.Client<...>
-    pop_jump_if_false L58
-    load_var2 1 15
-    call baml.ai.HttpProvider$for$root.llm.Client.meta_of
-    jump L56
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L51
+    jump L52
 
   L51:
+    load_var self
+    is_type baml.llm.Client<...>
+    pop_jump_if_false L59
     load_var2 1 15
-    call baml.ai.Anthropic.root.ai.HttpProvider.meta_of
-    jump L56
+    call baml.ai.HttpProvider$for$root.llm.Client.meta_of
+    jump L57
 
   L52:
     load_var2 1 15
-    call baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of
-    jump L56
+    call baml.ai.Anthropic.root.ai.HttpProvider.meta_of
+    jump L57
 
   L53:
     load_var2 1 15
-    call baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of
-    jump L56
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of
+    jump L57
 
   L54:
     load_var2 1 15
-    call baml.ai.Gemini.root.ai.HttpProvider.meta_of
-    jump L56
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of
+    jump L57
 
   L55:
     load_var2 1 15
-    call baml.ai.OpenAi.root.ai.HttpProvider.meta_of
+    call baml.ai.Gemini.root.ai.HttpProvider.meta_of
+    jump L57
 
   L56:
+    load_var2 1 15
+    call baml.ai.OpenAi.root.ai.HttpProvider.meta_of
+
+  L57:
     load_var project
     call_indirect
-    store_var _53
+    store_var _54
     load_var2 11 14
     load_type #0
     load_type #1
     init_instance<2> baml.ai.CallResult .value, .meta
     store_var _0
 
-  L57:
+  L58:
     load_var _0
     return
 
-  L58:
+  L59:
     unreachable
 }
 
@@ -16892,6 +17384,12 @@ function baml.ai.Provider.is_effectful(self: baml.ai.Provider) -> bool {
     return
 }
 
+function baml.ai.Provider.traced(self: baml.ai.Provider, meter: baml.ai.UsageMeter) -> baml.ai.Traced {
+    load_var2 1 2
+    init_instance baml.ai.Traced .inner, .meter
+    return
+}
+
 function baml.ai.Provider.with_retry(self: baml.ai.Provider, max: int) -> baml.ai.Retry {
     load_var2 1 2
     load_const null
@@ -16917,7 +17415,7 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     store_var _4
     load_var _4
     pop_jump_if_false L0
-    jump L29
+    jump L30
 
   L0:
     load_const 0
@@ -16942,7 +17440,7 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
   L2:
     load_const "unreachable"
     call baml.sys.panic
-    jump L28
+    jump L29
 
   L3:
     load_var self
@@ -16950,63 +17448,69 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     store_var_load_var _11
     is_type baml.ai.ToolLoop
     pop_jump_if_false L4
-    jump L14
+    jump L15
 
   L4:
     load_var _11
     is_type baml.ai.Retry
     pop_jump_if_false L5
-    jump L14
+    jump L15
 
   L5:
     load_var _11
     is_type baml.ai.OpenAi
     pop_jump_if_false L6
-    jump L14
+    jump L15
 
   L6:
     load_var _11
     is_type baml.ai.Gemini
     pop_jump_if_false L7
-    jump L14
+    jump L15
 
   L7:
     load_var _11
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L8
-    jump L14
+    jump L15
 
   L8:
     load_var _11
     is_type baml.ai.RoundRobin
     pop_jump_if_false L9
-    jump L14
+    jump L15
 
   L9:
     load_var _11
     is_type baml.ai.Fallback
     pop_jump_if_false L10
-    jump L14
+    jump L15
 
   L10:
     load_var _11
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L11
-    jump L14
+    jump L15
 
   L11:
     load_var _11
     is_type baml.ai.Anthropic
     pop_jump_if_false L12
-    jump L14
+    jump L15
 
   L12:
     load_var _11
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L13
-    jump L14
+    jump L15
 
   L13:
+    load_var _11
+    is_type baml.llm.Client
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
     load_const null
     load_const "retry: inner is not callable"
     load_type string
@@ -17014,7 +17518,7 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L14:
+  L15:
     load_type #0
     load_type baml.ai.ResponseMeta
     load_type never
@@ -17027,56 +17531,56 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
     store_var r0
-    jump L27
+    jump L28
     load_var e
     is_type baml.errors.CannotRetry
-    pop_jump_if_false L15
-    jump L23
-
-  L15:
-    load_var e
-    is_type baml.errors.LoopBudgetExceeded
     pop_jump_if_false L16
-    jump L23
+    jump L24
 
   L16:
     load_var e
-    is_type baml.ai.AnthropicHttpError
+    is_type baml.errors.LoopBudgetExceeded
     pop_jump_if_false L17
-    jump L23
+    jump L24
 
   L17:
     load_var e
-    is_type baml.ai.GeminiHttpError
+    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L18
-    jump L23
+    jump L24
 
   L18:
     load_var e
-    is_type baml.ai.OpenAiHttpError
+    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L19
-    jump L23
+    jump L24
 
   L19:
     load_var e
-    is_type baml.errors.Unsupported
+    is_type baml.ai.OpenAiHttpError
     pop_jump_if_false L20
-    jump L23
+    jump L24
 
   L20:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L21
+    jump L24
+
+  L21:
     load_var e
     throw_if_panic
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    pop_jump_if_false L21
-    jump L22
+    pop_jump_if_false L22
+    jump L23
 
-  L21:
+  L22:
     load_var e
     rethrow
 
-  L22:
+  L23:
     load_var attempt
     load_const 1
     add_int
@@ -17091,26 +17595,26 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     store_var delay_ms
     jump L1
 
-  L23:
+  L24:
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    jump_if_false L24
+    jump_if_false L25
     pop 1
     load_var e
     load_type baml.errors.Failure
     load_const "is_retryable"
     virtual_call nargs=1 ntypeargs=0
 
-  L24:
-    pop_jump_if_false L25
-    jump L26
-
   L25:
+    pop_jump_if_false L26
+    jump L27
+
+  L26:
     load_var e
     rethrow
 
-  L26:
+  L27:
     load_var attempt
     load_const 1
     add_int
@@ -17125,24 +17629,24 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.call_messages_with(self: baml
     store_var delay_ms
     jump L1
 
-  L27:
+  L28:
     load_var r0
     load_field .value
-    store_var _53
+    store_var _54
     load_var r0
     load_field .meta
     load_var project
     call_indirect
-    store_var _54
+    store_var _55
     load_var2 11 12
     load_type #0
     load_type #1
     init_instance<2> baml.ai.CallResult .value, .meta
 
-  L28:
+  L29:
     return
 
-  L29:
+  L30:
     load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
     init_instance baml.errors.CannotRetry .message
     throw
@@ -17184,7 +17688,7 @@ function baml.ai.Retry$stream.root.ai.Streaming.stream_messages(self: baml.ai.Re
     store_var _3
     load_var _3
     pop_jump_if_false L0
-    jump L26
+    jump L27
 
   L0:
     load_const 0
@@ -17209,7 +17713,7 @@ function baml.ai.Retry$stream.root.ai.Streaming.stream_messages(self: baml.ai.Re
   L2:
     load_const "unreachable"
     call baml.sys.panic
-    jump L25
+    jump L26
 
   L3:
     load_var self
@@ -17217,39 +17721,45 @@ function baml.ai.Retry$stream.root.ai.Streaming.stream_messages(self: baml.ai.Re
     store_var_load_var _10
     is_type baml.ai.Retry
     pop_jump_if_false L4
-    jump L10
+    jump L11
 
   L4:
     load_var _10
     is_type baml.ai.OpenAi
     pop_jump_if_false L5
-    jump L10
+    jump L11
 
   L5:
     load_var _10
     is_type baml.ai.RoundRobin
     pop_jump_if_false L6
-    jump L10
+    jump L11
 
   L6:
     load_var _10
     is_type baml.ai.Fallback
     pop_jump_if_false L7
-    jump L10
+    jump L11
 
   L7:
     load_var _10
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L10
+    jump L11
 
   L8:
     load_var _10
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L10
+    jump L11
 
   L9:
+    load_var _10
+    is_type baml.llm.Client
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
     load_const null
     load_const "retry: inner is not streaming"
     load_type string
@@ -17257,7 +17767,7 @@ function baml.ai.Retry$stream.root.ai.Streaming.stream_messages(self: baml.ai.Re
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L10:
+  L11:
     load_type #0
     load_type #1
     load_var2 7 2
@@ -17265,50 +17775,50 @@ function baml.ai.Retry$stream.root.ai.Streaming.stream_messages(self: baml.ai.Re
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
     store_var st
-    jump L24
+    jump L25
     load_var e
     is_type baml.errors.CannotRetry
-    pop_jump_if_false L11
-    jump L19
-
-  L11:
-    load_var e
-    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L12
-    jump L19
+    jump L20
 
   L12:
     load_var e
-    is_type baml.ai.GeminiHttpError
+    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L13
-    jump L19
+    jump L20
 
   L13:
     load_var e
-    is_type baml.ai.OpenAiHttpError
+    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L14
-    jump L19
+    jump L20
 
   L14:
     load_var e
-    is_type baml.errors.Unsupported
+    is_type baml.ai.OpenAiHttpError
     pop_jump_if_false L15
-    jump L19
+    jump L20
 
   L15:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L16
+    jump L20
+
+  L16:
     load_var e
     throw_if_panic
     load_var2 4 1
     load_field .1
     cmp_int_op <
-    pop_jump_if_false L16
-    jump L17
+    pop_jump_if_false L17
+    jump L18
 
-  L16:
+  L17:
     load_var e
     rethrow
 
-  L17:
+  L18:
     load_var attempt
     load_const 1
     add_int
@@ -17317,37 +17827,37 @@ function baml.ai.Retry$stream.root.ai.Streaming.stream_messages(self: baml.ai.Re
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
-    jump L18
+    jump L19
     load_var se
     throw_if_panic
 
-  L18:
+  L19:
     load_var delay_ms
     load_const 2
     mul_int
     store_var delay_ms
     jump L1
 
-  L19:
+  L20:
     load_var2 4 1
     load_field .1
     cmp_int_op <
-    jump_if_false L20
+    jump_if_false L21
     pop 1
     load_var e
     load_type baml.errors.Failure
     load_const "is_retryable"
     virtual_call nargs=1 ntypeargs=0
 
-  L20:
-    pop_jump_if_false L21
-    jump L22
-
   L21:
+    pop_jump_if_false L22
+    jump L23
+
+  L22:
     load_var e
     rethrow
 
-  L22:
+  L23:
     load_var attempt
     load_const 1
     add_int
@@ -17356,24 +17866,24 @@ function baml.ai.Retry$stream.root.ai.Streaming.stream_messages(self: baml.ai.Re
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
-    jump L23
+    jump L24
     load_var se
     throw_if_panic
 
-  L23:
+  L24:
     load_var delay_ms
     load_const 2
     mul_int
     store_var delay_ms
     jump L1
 
-  L24:
+  L25:
     load_var st
 
-  L25:
+  L26:
     return
 
-  L26:
+  L27:
     load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
     init_instance baml.errors.CannotRetry .message
     throw
@@ -17397,7 +17907,7 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     store_var _4
     load_var _4
     pop_jump_if_false L0
-    jump L29
+    jump L30
 
   L0:
     load_const 0
@@ -17422,7 +17932,7 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
   L2:
     load_const "unreachable"
     call baml.sys.panic
-    jump L28
+    jump L29
 
   L3:
     load_var self
@@ -17430,63 +17940,69 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     store_var_load_var _11
     is_type baml.ai.ToolLoop
     pop_jump_if_false L4
-    jump L14
+    jump L15
 
   L4:
     load_var _11
     is_type baml.ai.Retry
     pop_jump_if_false L5
-    jump L14
+    jump L15
 
   L5:
     load_var _11
     is_type baml.ai.OpenAi
     pop_jump_if_false L6
-    jump L14
+    jump L15
 
   L6:
     load_var _11
     is_type baml.ai.Gemini
     pop_jump_if_false L7
-    jump L14
+    jump L15
 
   L7:
     load_var _11
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L8
-    jump L14
+    jump L15
 
   L8:
     load_var _11
     is_type baml.ai.RoundRobin
     pop_jump_if_false L9
-    jump L14
+    jump L15
 
   L9:
     load_var _11
     is_type baml.ai.Fallback
     pop_jump_if_false L10
-    jump L14
+    jump L15
 
   L10:
     load_var _11
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L11
-    jump L14
+    jump L15
 
   L11:
     load_var _11
     is_type baml.ai.Anthropic
     pop_jump_if_false L12
-    jump L14
+    jump L15
 
   L12:
     load_var _11
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L13
-    jump L14
+    jump L15
 
   L13:
+    load_var _11
+    is_type baml.llm.Client
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
     load_const null
     load_const "retry: inner is not callable"
     load_type string
@@ -17494,7 +18010,7 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L14:
+  L15:
     load_type #0
     load_type baml.ai.ResponseMeta
     load_type never
@@ -17507,56 +18023,56 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     load_const "call_messages_with"
     virtual_call nargs=3 ntypeargs=3
     store_var r0
-    jump L27
+    jump L28
     load_var e
     is_type baml.errors.CannotRetry
-    pop_jump_if_false L15
-    jump L23
-
-  L15:
-    load_var e
-    is_type baml.errors.LoopBudgetExceeded
     pop_jump_if_false L16
-    jump L23
+    jump L24
 
   L16:
     load_var e
-    is_type baml.ai.AnthropicHttpError
+    is_type baml.errors.LoopBudgetExceeded
     pop_jump_if_false L17
-    jump L23
+    jump L24
 
   L17:
     load_var e
-    is_type baml.ai.GeminiHttpError
+    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L18
-    jump L23
+    jump L24
 
   L18:
     load_var e
-    is_type baml.ai.OpenAiHttpError
+    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L19
-    jump L23
+    jump L24
 
   L19:
     load_var e
-    is_type baml.errors.Unsupported
+    is_type baml.ai.OpenAiHttpError
     pop_jump_if_false L20
-    jump L23
+    jump L24
 
   L20:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L21
+    jump L24
+
+  L21:
     load_var e
     throw_if_panic
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    pop_jump_if_false L21
-    jump L22
+    pop_jump_if_false L22
+    jump L23
 
-  L21:
+  L22:
     load_var e
     rethrow
 
-  L22:
+  L23:
     load_var attempt
     load_const 1
     add_int
@@ -17571,26 +18087,26 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     store_var delay_ms
     jump L1
 
-  L23:
+  L24:
     load_var2 5 1
     load_field .1
     cmp_int_op <
-    jump_if_false L24
+    jump_if_false L25
     pop 1
     load_var e
     load_type baml.errors.Failure
     load_const "is_retryable"
     virtual_call nargs=1 ntypeargs=0
 
-  L24:
-    pop_jump_if_false L25
-    jump L26
-
   L25:
+    pop_jump_if_false L26
+    jump L27
+
+  L26:
     load_var e
     rethrow
 
-  L26:
+  L27:
     load_var attempt
     load_const 1
     add_int
@@ -17605,24 +18121,24 @@ function baml.ai.Retry.root.ai.HttpProvider.call_messages_with(self: baml.ai.Ret
     store_var delay_ms
     jump L1
 
-  L27:
+  L28:
     load_var r0
     load_field .value
-    store_var _53
+    store_var _54
     load_var r0
     load_field .meta
     load_var project
     call_indirect
-    store_var _54
+    store_var _55
     load_var2 11 12
     load_type #0
     load_type #1
     init_instance<2> baml.ai.CallResult .value, .meta
 
-  L28:
+  L29:
     return
 
-  L29:
+  L30:
     load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
     init_instance baml.errors.CannotRetry .message
     throw
@@ -17664,7 +18180,7 @@ function baml.ai.Retry.root.ai.Streaming.stream_messages(self: baml.ai.Retry, me
     store_var _3
     load_var _3
     pop_jump_if_false L0
-    jump L26
+    jump L27
 
   L0:
     load_const 0
@@ -17689,7 +18205,7 @@ function baml.ai.Retry.root.ai.Streaming.stream_messages(self: baml.ai.Retry, me
   L2:
     load_const "unreachable"
     call baml.sys.panic
-    jump L25
+    jump L26
 
   L3:
     load_var self
@@ -17697,39 +18213,45 @@ function baml.ai.Retry.root.ai.Streaming.stream_messages(self: baml.ai.Retry, me
     store_var_load_var _10
     is_type baml.ai.Retry
     pop_jump_if_false L4
-    jump L10
+    jump L11
 
   L4:
     load_var _10
     is_type baml.ai.OpenAi
     pop_jump_if_false L5
-    jump L10
+    jump L11
 
   L5:
     load_var _10
     is_type baml.ai.RoundRobin
     pop_jump_if_false L6
-    jump L10
+    jump L11
 
   L6:
     load_var _10
     is_type baml.ai.Fallback
     pop_jump_if_false L7
-    jump L10
+    jump L11
 
   L7:
     load_var _10
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L10
+    jump L11
 
   L8:
     load_var _10
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L10
+    jump L11
 
   L9:
+    load_var _10
+    is_type baml.llm.Client
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
     load_const null
     load_const "retry: inner is not streaming"
     load_type string
@@ -17737,7 +18259,7 @@ function baml.ai.Retry.root.ai.Streaming.stream_messages(self: baml.ai.Retry, me
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L10:
+  L11:
     load_type #0
     load_type #1
     load_var2 7 2
@@ -17745,50 +18267,50 @@ function baml.ai.Retry.root.ai.Streaming.stream_messages(self: baml.ai.Retry, me
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
     store_var st
-    jump L24
+    jump L25
     load_var e
     is_type baml.errors.CannotRetry
-    pop_jump_if_false L11
-    jump L19
-
-  L11:
-    load_var e
-    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L12
-    jump L19
+    jump L20
 
   L12:
     load_var e
-    is_type baml.ai.GeminiHttpError
+    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L13
-    jump L19
+    jump L20
 
   L13:
     load_var e
-    is_type baml.ai.OpenAiHttpError
+    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L14
-    jump L19
+    jump L20
 
   L14:
     load_var e
-    is_type baml.errors.Unsupported
+    is_type baml.ai.OpenAiHttpError
     pop_jump_if_false L15
-    jump L19
+    jump L20
 
   L15:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L16
+    jump L20
+
+  L16:
     load_var e
     throw_if_panic
     load_var2 4 1
     load_field .1
     cmp_int_op <
-    pop_jump_if_false L16
-    jump L17
+    pop_jump_if_false L17
+    jump L18
 
-  L16:
+  L17:
     load_var e
     rethrow
 
-  L17:
+  L18:
     load_var attempt
     load_const 1
     add_int
@@ -17797,37 +18319,37 @@ function baml.ai.Retry.root.ai.Streaming.stream_messages(self: baml.ai.Retry, me
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
-    jump L18
+    jump L19
     load_var se
     throw_if_panic
 
-  L18:
+  L19:
     load_var delay_ms
     load_const 2
     mul_int
     store_var delay_ms
     jump L1
 
-  L19:
+  L20:
     load_var2 4 1
     load_field .1
     cmp_int_op <
-    jump_if_false L20
+    jump_if_false L21
     pop 1
     load_var e
     load_type baml.errors.Failure
     load_const "is_retryable"
     virtual_call nargs=1 ntypeargs=0
 
-  L20:
-    pop_jump_if_false L21
-    jump L22
-
   L21:
+    pop_jump_if_false L22
+    jump L23
+
+  L22:
     load_var e
     rethrow
 
-  L22:
+  L23:
     load_var attempt
     load_const 1
     add_int
@@ -17836,24 +18358,24 @@ function baml.ai.Retry.root.ai.Streaming.stream_messages(self: baml.ai.Retry, me
     call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
-    jump L23
+    jump L24
     load_var se
     throw_if_panic
 
-  L23:
+  L24:
     load_var delay_ms
     load_const 2
     mul_int
     store_var delay_ms
     jump L1
 
-  L24:
+  L25:
     load_var st
 
-  L25:
+  L26:
     return
 
-  L26:
+  L27:
     load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
     init_instance baml.errors.CannotRetry .message
     throw
@@ -17877,7 +18399,7 @@ function baml.ai.RoundRobin$stream.root.ai.HttpProvider.call_messages_with(self:
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
-    jump L12
+    jump L13
 
   L0:
     load_var self
@@ -17899,63 +18421,69 @@ function baml.ai.RoundRobin$stream.root.ai.HttpProvider.call_messages_with(self:
     load_var _14
     is_type baml.ai.ToolLoop
     pop_jump_if_false L1
-    jump L11
+    jump L12
 
   L1:
     load_var _14
     is_type baml.ai.Retry
     pop_jump_if_false L2
-    jump L11
+    jump L12
 
   L2:
     load_var _14
     is_type baml.ai.OpenAi
     pop_jump_if_false L3
-    jump L11
+    jump L12
 
   L3:
     load_var _14
     is_type baml.ai.Gemini
     pop_jump_if_false L4
-    jump L11
+    jump L12
 
   L4:
     load_var _14
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L5
-    jump L11
+    jump L12
 
   L5:
     load_var _14
     is_type baml.ai.RoundRobin
     pop_jump_if_false L6
-    jump L11
+    jump L12
 
   L6:
     load_var _14
     is_type baml.ai.Fallback
     pop_jump_if_false L7
-    jump L11
+    jump L12
 
   L7:
     load_var _14
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L8
-    jump L11
+    jump L12
 
   L8:
     load_var _14
     is_type baml.ai.Anthropic
     pop_jump_if_false L9
-    jump L11
+    jump L12
 
   L9:
     load_var _14
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L10
-    jump L11
+    jump L12
 
   L10:
+    load_var _14
+    is_type baml.llm.Client
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
     load_const null
     load_const "round_robin: member not callable"
     load_type string
@@ -17963,7 +18491,7 @@ function baml.ai.RoundRobin$stream.root.ai.HttpProvider.call_messages_with(self:
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L11:
+  L12:
     load_type #0
     load_type #1
     load_type #2
@@ -17976,7 +18504,7 @@ function baml.ai.RoundRobin$stream.root.ai.HttpProvider.call_messages_with(self:
     load_var _0
     return
 
-  L12:
+  L13:
     load_const null
     load_const "round_robin: no members"
     load_type string
@@ -18021,7 +18549,7 @@ function baml.ai.RoundRobin$stream.root.ai.Streaming.stream_messages(self: baml.
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
-    jump L8
+    jump L9
 
   L0:
     load_var self
@@ -18043,39 +18571,45 @@ function baml.ai.RoundRobin$stream.root.ai.Streaming.stream_messages(self: baml.
     load_var _13
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L7
+    jump L8
 
   L1:
     load_var _13
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L7
+    jump L8
 
   L2:
     load_var _13
     is_type baml.ai.RoundRobin
     pop_jump_if_false L3
-    jump L7
+    jump L8
 
   L3:
     load_var _13
     is_type baml.ai.Fallback
     pop_jump_if_false L4
-    jump L7
+    jump L8
 
   L4:
     load_var _13
     is_type baml.ai.Anthropic
     pop_jump_if_false L5
-    jump L7
+    jump L8
 
   L5:
     load_var _13
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L6
-    jump L7
+    jump L8
 
   L6:
+    load_var _13
+    is_type baml.llm.Client
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
     load_const null
     load_const "round_robin: member not streaming"
     load_type string
@@ -18083,7 +18617,7 @@ function baml.ai.RoundRobin$stream.root.ai.Streaming.stream_messages(self: baml.
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L7:
+  L8:
     load_type #0
     load_type #1
     load_var2 6 2
@@ -18094,7 +18628,7 @@ function baml.ai.RoundRobin$stream.root.ai.Streaming.stream_messages(self: baml.
     load_var _0
     return
 
-  L8:
+  L9:
     load_const null
     load_const "round_robin: no members"
     load_type string
@@ -18121,7 +18655,7 @@ function baml.ai.RoundRobin.root.ai.HttpProvider.call_messages_with(self: baml.a
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
-    jump L12
+    jump L13
 
   L0:
     load_var self
@@ -18143,63 +18677,69 @@ function baml.ai.RoundRobin.root.ai.HttpProvider.call_messages_with(self: baml.a
     load_var _14
     is_type baml.ai.ToolLoop
     pop_jump_if_false L1
-    jump L11
+    jump L12
 
   L1:
     load_var _14
     is_type baml.ai.Retry
     pop_jump_if_false L2
-    jump L11
+    jump L12
 
   L2:
     load_var _14
     is_type baml.ai.OpenAi
     pop_jump_if_false L3
-    jump L11
+    jump L12
 
   L3:
     load_var _14
     is_type baml.ai.Gemini
     pop_jump_if_false L4
-    jump L11
+    jump L12
 
   L4:
     load_var _14
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L5
-    jump L11
+    jump L12
 
   L5:
     load_var _14
     is_type baml.ai.RoundRobin
     pop_jump_if_false L6
-    jump L11
+    jump L12
 
   L6:
     load_var _14
     is_type baml.ai.Fallback
     pop_jump_if_false L7
-    jump L11
+    jump L12
 
   L7:
     load_var _14
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L8
-    jump L11
+    jump L12
 
   L8:
     load_var _14
     is_type baml.ai.Anthropic
     pop_jump_if_false L9
-    jump L11
+    jump L12
 
   L9:
     load_var _14
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L10
-    jump L11
+    jump L12
 
   L10:
+    load_var _14
+    is_type baml.llm.Client
+    pop_jump_if_false L11
+    jump L12
+
+  L11:
     load_const null
     load_const "round_robin: member not callable"
     load_type string
@@ -18207,7 +18747,7 @@ function baml.ai.RoundRobin.root.ai.HttpProvider.call_messages_with(self: baml.a
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L11:
+  L12:
     load_type #0
     load_type #1
     load_type #2
@@ -18220,7 +18760,7 @@ function baml.ai.RoundRobin.root.ai.HttpProvider.call_messages_with(self: baml.a
     load_var _0
     return
 
-  L12:
+  L13:
     load_const null
     load_const "round_robin: no members"
     load_type string
@@ -18265,7 +18805,7 @@ function baml.ai.RoundRobin.root.ai.Streaming.stream_messages(self: baml.ai.Roun
     load_const 0
     cmp_int_op ==
     pop_jump_if_false L0
-    jump L8
+    jump L9
 
   L0:
     load_var self
@@ -18287,39 +18827,45 @@ function baml.ai.RoundRobin.root.ai.Streaming.stream_messages(self: baml.ai.Roun
     load_var _13
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L7
+    jump L8
 
   L1:
     load_var _13
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L7
+    jump L8
 
   L2:
     load_var _13
     is_type baml.ai.RoundRobin
     pop_jump_if_false L3
-    jump L7
+    jump L8
 
   L3:
     load_var _13
     is_type baml.ai.Fallback
     pop_jump_if_false L4
-    jump L7
+    jump L8
 
   L4:
     load_var _13
     is_type baml.ai.Anthropic
     pop_jump_if_false L5
-    jump L7
+    jump L8
 
   L5:
     load_var _13
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L6
-    jump L7
+    jump L8
 
   L6:
+    load_var _13
+    is_type baml.llm.Client
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
     load_const null
     load_const "round_robin: member not streaming"
     load_type string
@@ -18327,7 +18873,7 @@ function baml.ai.RoundRobin.root.ai.Streaming.stream_messages(self: baml.ai.Roun
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L7:
+  L8:
     load_type #0
     load_type #1
     load_var2 6 2
@@ -18338,7 +18884,7 @@ function baml.ai.RoundRobin.root.ai.Streaming.stream_messages(self: baml.ai.Roun
     load_var _0
     return
 
-  L8:
+  L9:
     load_const null
     load_const "round_robin: no members"
     load_type string
@@ -18355,7 +18901,7 @@ function baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Cl
     call baml.ops.equals_equals
     unary_op !
     pop_jump_if_false L0
-    jump L14
+    jump L15
 
   L0:
     load_var self
@@ -18379,61 +18925,67 @@ function baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Cl
     load_const null
     cmp_op ==
     pop_jump_if_false L2
-    jump L9
+    jump L10
 
   L2:
     load_var _12
     store_var_load_var np
     is_type baml.ai.Retry
     pop_jump_if_false L3
-    jump L8
+    jump L9
 
   L3:
     load_var np
     is_type baml.ai.OpenAi
     pop_jump_if_false L4
-    jump L8
+    jump L9
 
   L4:
     load_var np
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L8
+    jump L9
 
   L5:
     load_var np
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L8
+    jump L9
 
   L6:
     load_var np
     is_type baml.ai.Anthropic
     pop_jump_if_false L7
-    jump L8
+    jump L9
 
   L7:
     load_var np
-    is_type baml.llm.Client
-    pop_jump_if_false L9
+    is_type baml.ai.Traced
+    pop_jump_if_false L8
+    jump L9
 
   L8:
+    load_var np
+    is_type baml.llm.Client
+    pop_jump_if_false L10
+
+  L9:
     load_type #0
     load_type #1
     load_var2 6 2
     load_type baml.ai.Streaming
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
-    jump L13
+    jump L14
 
-  L9:
+  L10:
     load_var messages
     sys_op baml.ai.messages_to_prompt
     store_var ast
     load_var2 3 7
     sys_op baml.llm.PrimitiveClient.specialize_prompt
     store_var specialized
-    jump L10
+    jump L11
     load_var e
     throw_if_panic
     load_var e
@@ -18443,11 +18995,11 @@ function baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Cl
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L10:
+  L11:
     load_var2 3 8
     load_type #1
     sys_op baml.llm.PrimitiveClient.build_request_stream
-    jump L11
+    jump L12
     load_var e
     throw_if_panic
     load_var e
@@ -18457,10 +19009,10 @@ function baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Cl
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L11:
+  L12:
     sys_op baml.http.fetch_sse
     store_var sse
-    jump L12
+    jump L13
     load_var e
     throw_if_panic
     load_var e
@@ -18470,12 +19022,12 @@ function baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Cl
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L12:
+  L13:
     load_type #0
     load_type #1
     load_var2 1 11
     call baml.llm.Client.__make_stream
-    jump L13
+    jump L14
     load_var e
     throw_if_panic
     load_var e
@@ -18485,10 +19037,10 @@ function baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Cl
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L13:
+  L14:
     return
 
-  L14:
+  L15:
     load_const "the legacy codec bridges primitive clients; strategy configs lower to new-model combinators"
     init_instance baml.errors.Unsupported .message
     throw
@@ -19039,6 +19591,562 @@ function baml.ai.Tools.run_tools(self: baml.ai.Tools, prompt: string, tools: bam
     virtual_call nargs=3 ntypeargs=0
     store_var t
     jump L0
+}
+
+function baml.ai.Traced$stream.root.ai.HttpProvider.build_request(self: baml.ai.Traced$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
+    load_const null
+    load_const "traced forwards calls; no single request"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.Traced$stream.root.ai.HttpProvider.call_messages_with(self: baml.ai.Traced$stream, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> {
+    load_var self
+    load_field .0
+    store_var_load_var _4
+    is_type baml.ai.ToolLoop
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var _4
+    is_type baml.ai.Retry
+    pop_jump_if_false L1
+    jump L11
+
+  L1:
+    load_var _4
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L2
+    jump L11
+
+  L2:
+    load_var _4
+    is_type baml.ai.Gemini
+    pop_jump_if_false L3
+    jump L11
+
+  L3:
+    load_var _4
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L4
+    jump L11
+
+  L4:
+    load_var _4
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L5
+    jump L11
+
+  L5:
+    load_var _4
+    is_type baml.ai.Fallback
+    pop_jump_if_false L6
+    jump L11
+
+  L6:
+    load_var _4
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L7
+    jump L11
+
+  L7:
+    load_var _4
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _4
+    is_type baml.ai.Traced
+    pop_jump_if_false L9
+    jump L11
+
+  L9:
+    load_var _4
+    is_type baml.llm.Client
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_const null
+    load_const "traced: inner is not callable"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L11:
+    load_type #0
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var2 4 2
+    load_type #0
+    load_type #1
+    load_type #2
+    make_closure .<lambda(Traced.call_messages_with, 0)>, captures=0, ntypeargs=3
+    load_type baml.ai.HttpProvider
+    load_const "call_messages_with"
+    virtual_call nargs=3 ntypeargs=3
+    store_var r0
+    load_var self
+    load_field .1
+    load_var r0
+    load_field .meta
+    call baml.ai.UsageMeter.record
+    pop 1
+    load_var r0
+    load_field .value
+    store_var _25
+    load_var r0
+    load_field .meta
+    load_var project
+    call_indirect
+    store_var _26
+    load_var2 6 7
+    load_type #0
+    load_type #1
+    init_instance<2> baml.ai.CallResult .value, .meta
+    return
+}
+
+function baml.ai.Traced$stream.root.ai.HttpProvider.meta_of(self: baml.ai.Traced$stream, from: unknown) -> baml.ai.ResponseMeta {
+    load_const null
+    load_const "traced has no single meta"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.Traced$stream.root.ai.HttpProvider.parse(self: baml.ai.Traced$stream, from: unknown) -> T {
+    load_const null
+    load_const "traced does not parse directly"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.Traced$stream.root.ai.HttpProvider.send(self: baml.ai.Traced$stream, request: baml.http.Request) -> unknown {
+    load_const null
+    load_const "traced does not send directly"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.Traced$stream.root.ai.Provider.is_effectful(self: baml.ai.Traced$stream) -> bool {
+    load_var self
+    load_field .0
+    load_type baml.ai.Provider
+    load_const "is_effectful"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.ai.Traced$stream.root.ai.Streaming.stream_messages(self: baml.ai.Traced$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> {
+    load_var self
+    load_field .0
+    store_var_load_var _3
+    is_type baml.ai.Retry
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var _3
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var _3
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _3
+    is_type baml.ai.Fallback
+    pop_jump_if_false L3
+    jump L7
+
+  L3:
+    load_var _3
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var _3
+    is_type baml.ai.Traced
+    pop_jump_if_false L5
+    jump L7
+
+  L5:
+    load_var _3
+    is_type baml.llm.Client
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const null
+    load_const "traced: inner is not streaming"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L7:
+    load_type #0
+    load_type #1
+    load_var2 4 2
+    load_type baml.ai.Streaming
+    load_const "stream_messages"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.ai.Traced.root.ai.HttpProvider.build_request(self: baml.ai.Traced, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
+    load_const null
+    load_const "traced forwards calls; no single request"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.Traced.root.ai.HttpProvider.call_messages_with(self: baml.ai.Traced, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> {
+    load_var self
+    load_field .0
+    store_var_load_var _4
+    is_type baml.ai.ToolLoop
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var _4
+    is_type baml.ai.Retry
+    pop_jump_if_false L1
+    jump L11
+
+  L1:
+    load_var _4
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L2
+    jump L11
+
+  L2:
+    load_var _4
+    is_type baml.ai.Gemini
+    pop_jump_if_false L3
+    jump L11
+
+  L3:
+    load_var _4
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L4
+    jump L11
+
+  L4:
+    load_var _4
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L5
+    jump L11
+
+  L5:
+    load_var _4
+    is_type baml.ai.Fallback
+    pop_jump_if_false L6
+    jump L11
+
+  L6:
+    load_var _4
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L7
+    jump L11
+
+  L7:
+    load_var _4
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _4
+    is_type baml.ai.Traced
+    pop_jump_if_false L9
+    jump L11
+
+  L9:
+    load_var _4
+    is_type baml.llm.Client
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_const null
+    load_const "traced: inner is not callable"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L11:
+    load_type #0
+    load_type baml.ai.ResponseMeta
+    load_type never
+    load_var2 4 2
+    load_type #0
+    load_type #1
+    load_type #2
+    make_closure .<lambda(Traced.call_messages_with, 0)>, captures=0, ntypeargs=3
+    load_type baml.ai.HttpProvider
+    load_const "call_messages_with"
+    virtual_call nargs=3 ntypeargs=3
+    store_var r0
+    load_var self
+    load_field .1
+    load_var r0
+    load_field .meta
+    call baml.ai.UsageMeter.record
+    pop 1
+    load_var r0
+    load_field .value
+    store_var _25
+    load_var r0
+    load_field .meta
+    load_var project
+    call_indirect
+    store_var _26
+    load_var2 6 7
+    load_type #0
+    load_type #1
+    init_instance<2> baml.ai.CallResult .value, .meta
+    return
+}
+
+function baml.ai.Traced.root.ai.HttpProvider.meta_of(self: baml.ai.Traced, from: unknown) -> baml.ai.ResponseMeta {
+    load_const null
+    load_const "traced has no single meta"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.Traced.root.ai.HttpProvider.parse(self: baml.ai.Traced, from: unknown) -> T {
+    load_const null
+    load_const "traced does not parse directly"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.Traced.root.ai.HttpProvider.send(self: baml.ai.Traced, request: baml.http.Request) -> unknown {
+    load_const null
+    load_const "traced does not send directly"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.Traced.root.ai.Provider.is_effectful(self: baml.ai.Traced) -> bool {
+    load_var self
+    load_field .0
+    load_type baml.ai.Provider
+    load_const "is_effectful"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.ai.Traced.root.ai.Streaming.stream_messages(self: baml.ai.Traced, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> {
+    load_var self
+    load_field .0
+    store_var_load_var _3
+    is_type baml.ai.Retry
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    load_var _3
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var _3
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _3
+    is_type baml.ai.Fallback
+    pop_jump_if_false L3
+    jump L7
+
+  L3:
+    load_var _3
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var _3
+    is_type baml.ai.Traced
+    pop_jump_if_false L5
+    jump L7
+
+  L5:
+    load_var _3
+    is_type baml.llm.Client
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const null
+    load_const "traced: inner is not streaming"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L7:
+    load_type #0
+    load_type #1
+    load_var2 4 2
+    load_type baml.ai.Streaming
+    load_const "stream_messages"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _0
+    load_var _0
+    return
+}
+
+function baml.ai.UsageMeter.aggregate(self: baml.ai.UsageMeter) -> baml.ai.AggregateMeta {
+    load_var self
+    load_field .entries
+    init_instance baml.ai.AggregateMeta .parts
+    return
+}
+
+function baml.ai.UsageMeter.calls(self: baml.ai.UsageMeter) -> int {
+    load_var self
+    load_field .entries
+    container_len
+    return
+}
+
+function baml.ai.UsageMeter.record(self: baml.ai.UsageMeter, meta: baml.ai.ResponseMeta) -> null {
+    load_type baml.ai.ResponseMeta
+    load_var self
+    load_field .entries
+    load_var meta
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
+}
+
+function baml.ai.UsageMeter.total(self: baml.ai.UsageMeter) -> baml.ai.Usage {
+    load_var self
+    call baml.ai.UsageMeter.aggregate
+    store_var _2
+    load_var _2
+    is_type baml.ai.AnthropicResponseMeta
+    pop_jump_if_false L0
+    jump L11
+
+  L0:
+    load_var _2
+    is_type baml.ai.LoopMeta
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var _2
+    is_type baml.ai.OpenAiResponsesMeta
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var _2
+    is_type baml.ai.OpenAiResponseMeta
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var _2
+    is_type baml.ai.GeminiResponseMeta
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var _2
+    is_type baml.ai.LegacyMeta
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var _2
+    is_type baml.ai.AggregateMeta
+    pop_jump_if_false L13
+    load_var _2
+    call baml.ai.AggregateMeta.ResponseMeta.usage
+    jump L12
+
+  L6:
+    load_var _2
+    call baml.ai.LegacyMeta.ResponseMeta.usage
+    jump L12
+
+  L7:
+    load_var _2
+    call baml.ai.GeminiResponseMeta.root.ai.ResponseMeta.usage
+    jump L12
+
+  L8:
+    load_var _2
+    call baml.ai.OpenAiResponseMeta.root.ai.ResponseMeta.usage
+    jump L12
+
+  L9:
+    load_var _2
+    call baml.ai.OpenAiResponsesMeta.root.ai.ResponseMeta.usage
+    jump L12
+
+  L10:
+    load_var _2
+    call baml.ai.LoopMeta.root.ai.ResponseMeta.usage
+    jump L12
+
+  L11:
+    load_var _2
+    call baml.ai.AnthropicResponseMeta.root.ai.ResponseMeta.usage
+
+  L12:
+    return
+
+  L13:
+    unreachable
+}
+
+function baml.ai.UsageMeter.wrap(self: baml.ai.UsageMeter, p: baml.ai.Provider) -> baml.ai.Traced {
+    load_var2 2 1
+    init_instance baml.ai.Traced .inner, .meter
+    return
 }
 
 function baml.ai._messages_text(messages: baml.ai.ChatMessage[]) -> string {
@@ -19798,147 +20906,159 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     load_var client
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L23
+    jump L25
 
   L0:
     load_var client
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L23
+    jump L25
 
   L1:
     load_var client
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L23
+    jump L25
 
   L2:
     load_var client
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L23
+    jump L25
 
   L3:
     load_var client
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L23
+    jump L25
 
   L4:
     load_var client
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L23
+    jump L25
 
   L5:
     load_var client
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L23
+    jump L25
 
   L6:
     load_var client
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L23
+    jump L25
 
   L7:
     load_var client
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L23
+    jump L25
 
   L8:
     load_var client
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L23
+    jump L25
 
   L9:
     load_var client
-    is_type baml.ai.Retry
+    is_type baml.llm.Client
     pop_jump_if_false L10
-    jump L16
+    jump L25
 
   L10:
     load_var client
-    is_type baml.ai.OpenAi
+    is_type baml.ai.Retry
     pop_jump_if_false L11
-    jump L16
+    jump L18
 
   L11:
     load_var client
-    is_type baml.ai.RoundRobin
+    is_type baml.ai.OpenAi
     pop_jump_if_false L12
-    jump L16
+    jump L18
 
   L12:
     load_var client
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L13
-    jump L16
+    jump L18
 
   L13:
     load_var client
-    is_type baml.ai.Anthropic
+    is_type baml.ai.Fallback
     pop_jump_if_false L14
-    jump L16
+    jump L18
 
   L14:
     load_var client
-    is_type baml.llm.Client
+    is_type baml.ai.Anthropic
     pop_jump_if_false L15
-    jump L16
+    jump L18
 
   L15:
+    load_var client
+    is_type baml.ai.Traced
+    pop_jump_if_false L16
+    jump L18
+
+  L16:
+    load_var client
+    is_type baml.llm.Client
+    pop_jump_if_false L17
+    jump L18
+
+  L17:
     load_const "client's provider supports neither HttpProvider nor Streaming"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L16:
+  L18:
     load_type #0
     load_type #0
     load_var2 1 4
     load_type baml.ai.Streaming
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
-    store_var _25
+    store_var _27
     load_type #0
     load_type #0
-    load_var _25
+    load_var _27
     call baml.llm.Stream.final
     store_var _0
-    jump L24
+    jump L26
     load_var e
     is_type baml.errors.CannotRetry
-    pop_jump_if_false L17
-    jump L22
-
-  L17:
-    load_var e
-    is_type baml.ai.AnthropicHttpError
-    pop_jump_if_false L18
-    jump L22
-
-  L18:
-    load_var e
-    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L19
-    jump L22
+    jump L24
 
   L19:
     load_var e
-    is_type baml.ai.OpenAiHttpError
+    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L20
-    jump L22
+    jump L24
 
   L20:
     load_var e
-    is_type baml.errors.Unsupported
+    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L21
-    jump L22
+    jump L24
 
   L21:
+    load_var e
+    is_type baml.ai.OpenAiHttpError
+    pop_jump_if_false L22
+    jump L24
+
+  L22:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L23
+    jump L24
+
+  L23:
     load_var e
     throw_if_panic
     load_var e
@@ -19948,11 +21068,11 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L22:
+  L24:
     load_var e
     throw
 
-  L23:
+  L25:
     load_type #0
     load_var2 1 4
     load_type baml.ai.HttpProvider
@@ -19960,7 +21080,7 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     virtual_call nargs=2 ntypeargs=1
     store_var _0
 
-  L24:
+  L26:
     load_var _0
     return
 }
@@ -19970,19 +21090,19 @@ function baml.ai.drive_live(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     sys_op baml.llm.prompt_to_text
     store_var text
     load_var client
-    is_type baml.ai.ClaudeCode
+    is_type baml.ai.PiAgent
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var client
-    is_type baml.ai.OpenAiRealtime
+    is_type baml.ai.ClaudeCode
     pop_jump_if_false L1
     jump L3
 
   L1:
     load_var client
-    is_type baml.ai.PiAgent
+    is_type baml.ai.OpenAiRealtime
     pop_jump_if_false L2
     jump L3
 
@@ -20035,44 +21155,50 @@ function baml.ai.drive_stream(client: baml.ai.Provider, prompt: baml.llm.PromptA
     load_var client
     is_type baml.ai.Retry
     pop_jump_if_false L0
-    jump L6
+    jump L7
 
   L0:
     load_var client
     is_type baml.ai.OpenAi
     pop_jump_if_false L1
-    jump L6
+    jump L7
 
   L1:
     load_var client
     is_type baml.ai.RoundRobin
     pop_jump_if_false L2
-    jump L6
+    jump L7
 
   L2:
     load_var client
     is_type baml.ai.Fallback
     pop_jump_if_false L3
-    jump L6
+    jump L7
 
   L3:
     load_var client
     is_type baml.ai.Anthropic
     pop_jump_if_false L4
-    jump L6
+    jump L7
 
   L4:
     load_var client
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L5
-    jump L6
+    jump L7
 
   L5:
+    load_var client
+    is_type baml.llm.Client
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
     load_const "client's provider does not support Streaming"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L6:
+  L7:
     load_type #0
     load_type #1
     load_var2 1 4
@@ -20091,68 +21217,74 @@ function baml.ai.drive_with(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     load_var client
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L10
+    jump L11
 
   L0:
     load_var client
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L10
+    jump L11
 
   L1:
     load_var client
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L10
+    jump L11
 
   L2:
     load_var client
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L10
+    jump L11
 
   L3:
     load_var client
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L10
+    jump L11
 
   L4:
     load_var client
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L10
+    jump L11
 
   L5:
     load_var client
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L10
+    jump L11
 
   L6:
     load_var client
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L10
+    jump L11
 
   L7:
     load_var client
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L10
+    jump L11
 
   L8:
     load_var client
-    is_type baml.llm.Client
+    is_type baml.ai.Traced
     pop_jump_if_false L9
-    jump L10
+    jump L11
 
   L9:
+    load_var client
+    is_type baml.llm.Client
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
     load_const "client's provider does not support HttpProvider (call_with)"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L10:
+  L11:
     load_type #0
     load_type #1
     load_type #2
