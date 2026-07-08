@@ -31,6 +31,11 @@ struct LiveProject {
     /// full refresh.
     last_published_files:
         std::sync::Arc<std::sync::Mutex<std::collections::HashSet<crate::fs::FsPath>>>,
+    /// Debounce epoch for scheduled engine rebuilds: every refresh bumps it,
+    /// and a scheduled rebuild only runs if its captured epoch is still
+    /// current after the debounce delay.
+    #[cfg(not(target_arch = "wasm32"))]
+    rebuild_epoch: std::sync::atomic::AtomicU64,
 }
 
 #[derive(Clone)]
@@ -85,7 +90,12 @@ pub trait LspClientSenderTrait {
 
 enum ProjectRefreshMode {
     Full,
-    InMemoryChangesOnly,
+    /// Re-apply open-editor buffers. When `changed` is set, only that file is
+    /// re-applied (a didChange touches exactly one document); `None` re-applies
+    /// every open buffer.
+    InMemoryChangesOnly {
+        changed: Option<vfs::VfsPath>,
+    },
     Only(Vec<vfs::VfsPath>),
 }
 
@@ -138,6 +148,8 @@ impl BexMulitProject {
             last_published_files: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::HashSet::new(),
             )),
+            #[cfg(not(target_arch = "wasm32"))]
+            rebuild_epoch: std::sync::atomic::AtomicU64::new(0),
         });
         projects.insert(crate::fs::FsPath::from_vfs(&root_path), project.clone());
         Ok(project)
@@ -160,14 +172,24 @@ impl BexMulitProject {
         Ok(bex)
     }
 
-    fn get_baml_project_root(path: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
+    /// Resolve the project root using real project markers only: the closest
+    /// ancestor with a `baml.toml` or a `baml_src/` directory. This is the
+    /// resolver used during workspace discovery, where a lenient fallback
+    /// would promote stray `.baml` files into full projects.
+    fn get_marked_baml_project_root(path: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
         let start = Self::project_search_start(path);
-        let root = find_baml_project_root_from_ancestors(
+        find_baml_project_root_from_ancestors(
             vfs_ancestors(start),
             Self::has_baml_toml,
             Self::has_baml_src_dir,
-        );
-        if let Some(root) = root {
+        )
+        .ok_or_else(|| {
+            LspError::ProjectRootNotFound(path.clone(), "Not a BAML project".to_string())
+        })
+    }
+
+    fn get_baml_project_root(path: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
+        if let Ok(root) = Self::get_marked_baml_project_root(path) {
             return Ok(root);
         }
 
@@ -310,19 +332,16 @@ impl BexMulitProject {
                 continue;
             }
 
-            if let Ok(pr) = Self::get_baml_project_root(root) {
+            // The workspace folder itself may live inside a project
+            // (e.g. the user opened `baml_src/` or a subdirectory).
+            if let Ok(pr) = Self::get_marked_baml_project_root(root) {
                 project_roots.push(pr);
             }
 
-            let Ok(dirs) = root.walk_dir() else {
-                tracing::warn!("Failed to walk workspace root: {}", root.as_str());
-                continue;
-            };
-            for entry in dirs.filter_map(Result::ok) {
-                if let Ok(pr) = Self::get_baml_project_root(&entry) {
-                    project_roots.push(pr);
-                }
-            }
+            #[cfg(not(target_arch = "wasm32"))]
+            project_roots.extend(self.collect_marked_project_roots(root));
+            #[cfg(target_arch = "wasm32")]
+            project_roots.extend(Self::collect_marked_project_roots(root));
         }
 
         project_roots.sort_by_key(|path| path.as_str().to_string());
@@ -357,11 +376,106 @@ impl BexMulitProject {
         project_roots
     }
 
+    /// Directories that are never descended into during workspace discovery,
+    /// even when a workspace has no `.gitignore` to prune them. Mirrors
+    /// `should_skip_poll_dir` in `baml_lsp_server`.
+    fn should_skip_discovery_dir(name: &str) -> bool {
+        name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist")
+    }
+
+    /// Recursively find directories that are project roots by real markers
+    /// (`baml.toml` file or `baml_src/` child).
+    ///
+    /// On native this walks with the `ignore` crate (like ruff), so
+    /// `.gitignore`d directories (`target/`, `node_modules/`, build output)
+    /// are pruned before descending; `should_skip_discovery_dir` is a
+    /// backstop for workspaces that are not git repositories.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn collect_marked_project_roots(&self, root: &vfs::VfsPath) -> Vec<vfs::VfsPath> {
+        // Native VfsPaths are OS paths joined onto the filesystem root, so
+        // the OS-level walker applies whenever the path really exists on
+        // disk. Fall back to the VFS walk otherwise (e.g. in-memory
+        // filesystems in tests).
+        let os_root = std::path::Path::new(root.as_str());
+        if os_root.is_dir() {
+            return self.collect_marked_project_roots_native(os_root);
+        }
+        let mut found = Vec::new();
+        Self::collect_marked_project_roots_vfs(root, &mut found);
+        found
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn collect_marked_project_roots(root: &vfs::VfsPath) -> Vec<vfs::VfsPath> {
+        let mut found = Vec::new();
+        Self::collect_marked_project_roots_vfs(root, &mut found);
+        found
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn collect_marked_project_roots_native(&self, os_root: &std::path::Path) -> Vec<vfs::VfsPath> {
+        let mut found = Vec::new();
+        for dir in Self::scan_marked_project_roots_native(os_root) {
+            match self
+                .fs
+                .get_path_from_path(&dir, "discover_workspace_projects")
+            {
+                Ok(vfs_path) => found.push(vfs_path),
+                Err(e) => tracing::warn!("Skipping discovered project root: {e}"),
+            }
+        }
+        found
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn scan_marked_project_roots_native(os_root: &std::path::Path) -> Vec<std::path::PathBuf> {
+        let mut found = Vec::new();
+        let walker = ignore::WalkBuilder::new(os_root)
+            .standard_filters(true)
+            .follow_links(false)
+            .filter_entry(|entry| {
+                let is_dir = entry.file_type().is_some_and(|t| t.is_dir());
+                !(is_dir
+                    && entry
+                        .file_name()
+                        .to_str()
+                        .is_some_and(Self::should_skip_discovery_dir))
+            })
+            .build();
+        for entry in walker.filter_map(Result::ok) {
+            if !entry.file_type().is_some_and(|t| t.is_dir()) {
+                continue;
+            }
+            let dir = entry.path();
+            if dir.join(BAML_TOML).is_file() || dir.join(BAML_SRC_DIR).is_dir() {
+                found.push(dir.to_path_buf());
+            }
+        }
+        found
+    }
+
+    fn collect_marked_project_roots_vfs(root: &vfs::VfsPath, found: &mut Vec<vfs::VfsPath>) {
+        if Self::has_baml_toml(root) || Self::has_baml_src_dir(root) {
+            found.push(root.clone());
+        }
+        let Ok(entries) = root.read_dir() else {
+            return;
+        };
+        for entry in entries {
+            if Self::should_skip_discovery_dir(&entry.filename()) {
+                continue;
+            }
+            if entry.is_dir().unwrap_or(false) {
+                Self::collect_marked_project_roots_vfs(&entry, found);
+            }
+        }
+    }
+
     fn refresh_project_async(&self, project_root: &vfs::VfsPath, refresh_mode: ProjectRefreshMode) {
         use crate::bex_lsp::notification::BexLspNotification;
         let mode_label = match &refresh_mode {
             ProjectRefreshMode::Full => "Full",
-            ProjectRefreshMode::InMemoryChangesOnly => "InMemoryChangesOnly",
+            ProjectRefreshMode::InMemoryChangesOnly { .. } => "InMemoryChangesOnly",
             ProjectRefreshMode::Only(_) => "Only",
         };
         tracing::debug!(
@@ -401,20 +515,32 @@ impl BexMulitProject {
 
                 let project = &project.project;
 
-                tracing::debug!("  update_all_sources...");
-                project.update_all_sources(&sources);
-                tracing::debug!("  update_all_sources done");
+                tracing::debug!("  apply_all_sources...");
+                project.apply_all_sources(&sources);
+                tracing::debug!("  apply_all_sources done");
             }
-            ProjectRefreshMode::InMemoryChangesOnly => {
+            ProjectRefreshMode::InMemoryChangesOnly { changed } => {
                 let in_memory_changes = project.in_memory_changes.lock().unwrap();
-                let sources = in_memory_changes
-                    .iter()
-                    .map(|(path, source)| (path.clone(), source.clone()))
-                    .collect();
+                // A didChange names the one document that changed; re-applying
+                // every open buffer would dirty their whole query chains.
+                let sources: HashMap<_, _> = match &changed {
+                    Some(path) => {
+                        let key = crate::fs::FsPath::from_vfs(path);
+                        in_memory_changes
+                            .get(&key)
+                            .map(|source| (key, source.clone()))
+                            .into_iter()
+                            .collect()
+                    }
+                    None => in_memory_changes
+                        .iter()
+                        .map(|(path, source)| (path.clone(), source.clone()))
+                        .collect(),
+                };
                 drop(in_memory_changes);
 
                 let project = &project.project;
-                project.update_some_sources(&sources);
+                project.apply_some_sources(&sources);
             }
             ProjectRefreshMode::Only(paths) => {
                 // TODO: make this smarter and only read that the required files, instead of reading all files
@@ -447,9 +573,17 @@ impl BexMulitProject {
                     .collect();
 
                 let project = &project.project;
-                project.update_some_sources(&sources);
+                project.apply_some_sources(&sources);
             }
         }
+
+        // Diagnostics are computed straight from the database below; the
+        // heavy tail (bytecode + engine + test collection) is debounced onto
+        // a background task on native so fast typing costs one rebuild, not
+        // one per keystroke. WASM has no timer/blocking facilities wired
+        // here, so it keeps the synchronous rebuild.
+        #[cfg(target_arch = "wasm32")]
+        let _ = project.project.update_bex();
 
         tracing::debug!("  computing diagnostics...");
         let diagnostics = project.project.diagnostics_by_file(self.position_encoding);
@@ -497,7 +631,53 @@ impl BexMulitProject {
             self.request_collect_tests_impl(project_root.as_str());
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
+        self.schedule_engine_rebuild(project_root, project);
+
         tracing::debug!("refresh_project done");
+    }
+
+    /// Debounced engine rebuild: bytecode generation, `BexEngine::new` (which
+    /// executes `$init`), and test collection are the heavy tail of a refresh.
+    /// Running them per keystroke burned CPU and heap on engines that were
+    /// discarded milliseconds later, so they run on a background task after
+    /// the project has been quiet for the debounce window.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn schedule_engine_rebuild(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: std::sync::Arc<LiveProject>,
+    ) {
+        use std::sync::atomic::Ordering;
+        const ENGINE_REBUILD_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
+
+        let epoch = project.rebuild_epoch.fetch_add(1, Ordering::SeqCst) + 1;
+        let this = self.clone();
+        let project_root = project_root.clone();
+        self.spawner.spawn(async move {
+            tokio::time::sleep(ENGINE_REBUILD_DEBOUNCE).await;
+            if project.rebuild_epoch.load(Ordering::SeqCst) != epoch {
+                // A newer refresh superseded this one; its own rebuild is scheduled.
+                return;
+            }
+            let rebuild_project = project.clone();
+            let rebuilt =
+                tokio::task::spawn_blocking(move || rebuild_project.project.update_bex().is_ok())
+                    .await
+                    .unwrap_or(false);
+            if !rebuilt || project.rebuild_epoch.load(Ordering::SeqCst) != epoch {
+                return;
+            }
+            // Re-announce the project now that the engine is current, and
+            // collect tests against it (mirrors the synchronous tail that ran
+            // per keystroke before debouncing).
+            let diagnostics = project.project.diagnostics_by_file(this.position_encoding);
+            let flat_diags = Self::flatten_diagnostics(&diagnostics);
+            this.send_update_project(&project_root, &project, flat_diags);
+            if project.project.is_bex_current() {
+                this.request_collect_tests_impl(project_root.as_str());
+            }
+        });
     }
 
     fn flatten_diagnostics(
@@ -1156,7 +1336,12 @@ impl super::BexLsp for BexMulitProject {
         in_memory_changes.insert(crate::fs::FsPath::from_vfs(&source_path), content);
         drop(in_memory_changes);
 
-        self.refresh_project(&project_root, ProjectRefreshMode::InMemoryChangesOnly);
+        self.refresh_project(
+            &project_root,
+            ProjectRefreshMode::InMemoryChangesOnly {
+                changed: Some(source_path),
+            },
+        );
         Ok(())
     }
 
@@ -1219,16 +1404,20 @@ impl super::BexLsp for BexMulitProject {
         project_root: &str,
         generation: u64,
         function_name: &str,
-    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
-        let projects = self.projects.lock().ok()?;
-        projects
-            .iter()
-            .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
-            .and_then(|(_, project)| {
-                project
-                    .project
-                    .control_flow_graph_for_generation(generation, function_name)
-            })
+    ) -> Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>> {
+        // Clone the project handle out of the registry lock: building a
+        // missing graph takes the project's database lock, which must not be
+        // held while the registry lock is.
+        let project = {
+            let projects = self.projects.lock().ok()?;
+            projects
+                .iter()
+                .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
+                .map(|(_, project)| project.clone())?
+        };
+        project
+            .project
+            .control_flow_graph_for_generation(generation, function_name)
     }
 
     fn request_control_flow_graph(&self, function_name: &str) {
@@ -1352,4 +1541,134 @@ pub fn new_lsp(
     spawner: BackgroundSpawner,
 ) -> impl crate::bex_lsp::BexLsp {
     BexMulitProject::new(sys_op_factory, sender, playground_sender, fs, spawner)
+}
+
+#[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
+mod tests {
+    use super::*;
+
+    impl crate::fs::BulkReadFileSystem for vfs::PhysicalFS {
+        fn read_many(&self, _glob: &str) -> vfs::VfsResult<Vec<(String, Vec<u8>)>> {
+            Ok(Vec::new())
+        }
+    }
+
+    struct TempWorkspace {
+        root: std::path::PathBuf,
+    }
+
+    impl TempWorkspace {
+        fn new(tag: &str) -> Self {
+            let root =
+                std::env::temp_dir().join(format!("bex_discovery_{}_{}", tag, std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            std::fs::create_dir_all(&root).unwrap();
+            Self { root }
+        }
+
+        fn file(&self, rel: &str, contents: &str) {
+            let path = self.root.join(rel);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, contents).unwrap();
+        }
+
+        fn dir(&self, rel: &str) {
+            std::fs::create_dir_all(self.root.join(rel)).unwrap();
+        }
+
+        fn vfs_path(&self, rel: &str) -> vfs::VfsPath {
+            let abs = self.root.join(rel);
+            crate::fs::BamlVFS::new(std::sync::Arc::new(Box::new(vfs::PhysicalFS::new("/"))))
+                .get_path_from_path(&abs, "test workspace path")
+                .unwrap()
+        }
+    }
+
+    impl Drop for TempWorkspace {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[test]
+    fn standalone_baml_file_is_not_promoted_by_strict_resolver() {
+        let ws = TempWorkspace::new("standalone_baml_language");
+        // Path contains a `baml_language` segment, triggering the lenient
+        // internal-dev fallback.
+        ws.file("baml_language/case.baml", "// standalone");
+        let file = ws.vfs_path("baml_language/case.baml");
+
+        let lenient = BexMulitProject::get_baml_project_root(&file).unwrap();
+        assert_eq!(lenient.as_str(), file.as_str());
+
+        let strict = BexMulitProject::get_marked_baml_project_root(&file);
+        assert!(matches!(strict, Err(LspError::ProjectRootNotFound(..))));
+    }
+
+    #[test]
+    fn strict_resolver_finds_marked_project_root() {
+        let ws = TempWorkspace::new("marked_root");
+        ws.file("proj/baml_src/main.baml", "// main");
+        let file = ws.vfs_path("proj/baml_src/main.baml");
+
+        let root = BexMulitProject::get_marked_baml_project_root(&file).unwrap();
+        assert_eq!(root.as_str(), ws.vfs_path("proj").as_str());
+    }
+
+    #[test]
+    fn native_scan_skips_generated_and_hidden_dirs() {
+        let ws = TempWorkspace::new("scan_skips");
+        ws.file("proj/baml_src/main.baml", "// main");
+        ws.dir("target/junk/baml_src");
+        ws.dir("node_modules/pkg/baml_src");
+        ws.dir(".hidden/baml_src");
+
+        let found = BexMulitProject::scan_marked_project_roots_native(&ws.root);
+        assert_eq!(
+            found,
+            vec![ws.root.join("proj")],
+            "only the real project should be discovered"
+        );
+    }
+
+    #[test]
+    fn native_scan_respects_gitignore() {
+        let ws = TempWorkspace::new("scan_gitignore");
+        // A `.git` dir marks the workspace as a git repo for the `ignore` crate.
+        ws.dir(".git");
+        ws.file(".gitignore", "generated/\n");
+        ws.dir("generated/baml_src");
+        ws.file("app/baml_src/main.baml", "// main");
+
+        let found = BexMulitProject::scan_marked_project_roots_native(&ws.root);
+        assert_eq!(
+            found,
+            vec![ws.root.join("app")],
+            "gitignored directories must not be discovered"
+        );
+    }
+
+    #[test]
+    fn vfs_walk_skips_generated_dirs_and_finds_markers() {
+        let root = vfs::VfsPath::new(vfs::MemoryFS::new());
+        for dir in [
+            "proj/baml_src",
+            "manifest_proj",
+            "node_modules/pkg/baml_src",
+            "target/junk/baml_src",
+        ] {
+            root.join(dir).unwrap().create_dir_all().unwrap();
+        }
+        root.join("manifest_proj/baml.toml")
+            .unwrap()
+            .create_file()
+            .unwrap();
+
+        let mut found = Vec::new();
+        BexMulitProject::collect_marked_project_roots_vfs(&root, &mut found);
+        let mut names: Vec<_> = found.iter().map(vfs::VfsPath::as_str).collect();
+        names.sort_unstable();
+        assert_eq!(names, vec!["/manifest_proj", "/proj"]);
+    }
 }
