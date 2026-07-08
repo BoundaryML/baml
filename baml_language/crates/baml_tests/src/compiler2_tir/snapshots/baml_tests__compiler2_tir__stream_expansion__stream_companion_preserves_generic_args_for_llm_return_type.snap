@@ -20,6 +20,15 @@ function user.GetBoxedInt$build_request(client: baml.ai.Provider = Dummy) -> bam
 function user.GetBoxedInt$build_request_stream(client: baml.ai.Provider = Dummy) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetBoxedInt", map {  }) : baml.http.Request
 }
+function user.GetBoxedInt$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = Dummy) -> baml.ai.CallResult<user.Box<int>, V> throws never {
+  baml.ai.drive_with<V, E2>(client, GetBoxedInt$render_prompt(client = client), project) : baml.ai.CallResult<user.Box<int>, V>
+}
+function user.GetBoxedInt$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = Dummy) -> user.Box<int> throws never {
+  baml.ai.drive_run_tools<T>(client, GetBoxedInt$render_prompt(client = client), tools, dispatch) : user.Box<int>
+}
+function user.GetBoxedInt$live(io: baml.ai.Channel, client: baml.ai.Provider = Dummy) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, GetBoxedInt$render_prompt(client = client), io) : baml.ai.Transcript
+}
 class user.Box$stream {
   value: T | null
 }

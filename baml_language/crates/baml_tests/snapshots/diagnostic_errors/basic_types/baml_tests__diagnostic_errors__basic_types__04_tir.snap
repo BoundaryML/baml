@@ -38,6 +38,15 @@ function user.GetUser$build_request(id: int, client: baml.ai.Provider = ...) -> 
 function user.GetUser$build_request_stream(id: int, client: baml.ai.Provider = ...) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetUser", map { "id": id }) : baml.http.Request
 }
+function user.GetUser$with<V, E2>(id: int, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<user.User, V> throws never {
+  baml.ai.drive_with<V, E2>(client, GetUser$render_prompt(id = id, client = client), project) : baml.ai.CallResult<user.User, V>
+}
+function user.GetUser$run_tools(id: int, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = ...) -> user.User throws never {
+  baml.ai.drive_run_tools<T>(client, GetUser$render_prompt(id = id, client = client), tools, dispatch) : user.User
+}
+function user.GetUser$live(id: int, io: baml.ai.Channel, client: baml.ai.Provider = ...) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, GetUser$render_prompt(id = id, client = client), io) : baml.ai.Transcript
+}
 function user.GetStatus(client: baml.ai.Provider = GPT4) -> user.Status throws never {
   baml.llm.call_llm_function<T>(client, "GetStatus", map {  }) : user.Status
   !! 128..173: unresolved name: GPT4
@@ -55,6 +64,21 @@ function user.GetStatus$build_request(client: baml.ai.Provider = GPT4) -> baml.h
 }
 function user.GetStatus$build_request_stream(client: baml.ai.Provider = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetStatus", map {  }) : baml.http.Request
+  !! 128..173: unresolved name: GPT4
+  !! 128..173: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.GetStatus$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<user.Status, V> throws never {
+  baml.ai.drive_with<V, E2>(client, GetStatus$render_prompt(client = client), project) : baml.ai.CallResult<user.Status, V>
+  !! 128..173: unresolved name: GPT4
+  !! 128..173: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.GetStatus$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4) -> user.Status throws never {
+  baml.ai.drive_run_tools<T>(client, GetStatus$render_prompt(client = client), tools, dispatch) : user.Status
+  !! 128..173: unresolved name: GPT4
+  !! 128..173: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.GetStatus$live(io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, GetStatus$render_prompt(client = client), io) : baml.ai.Transcript
   !! 128..173: unresolved name: GPT4
   !! 128..173: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -78,6 +102,21 @@ function user.GetMixedList$build_request_stream(client: baml.ai.Provider = GPT4)
   !! 259..308: unresolved name: GPT4
   !! 259..308: type mismatch: expected baml.ai.Provider, got unknown
 }
+function user.GetMixedList$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<(int | string)[], V> throws never {
+  baml.ai.drive_with<V, E2>(client, GetMixedList$render_prompt(client = client), project) : baml.ai.CallResult<(int | string)[], V>
+  !! 259..308: unresolved name: GPT4
+  !! 259..308: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.GetMixedList$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4) -> (int | string)[] throws never {
+  baml.ai.drive_run_tools<T>(client, GetMixedList$render_prompt(client = client), tools, dispatch) : (int | string)[]
+  !! 259..308: unresolved name: GPT4
+  !! 259..308: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.GetMixedList$live(io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, GetMixedList$render_prompt(client = client), io) : baml.ai.Transcript
+  !! 259..308: unresolved name: GPT4
+  !! 259..308: type mismatch: expected baml.ai.Provider, got unknown
+}
 function user.GetMixedMap(client: baml.ai.Provider = GPT4) -> map<string, int | string> throws never {
   baml.llm.call_llm_function<T>(client, "GetMixedMap", map {  }) : map<string, int | string>
   !! 362..410: unresolved name: GPT4
@@ -95,6 +134,21 @@ function user.GetMixedMap$build_request(client: baml.ai.Provider = GPT4) -> baml
 }
 function user.GetMixedMap$build_request_stream(client: baml.ai.Provider = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "GetMixedMap", map {  }) : baml.http.Request
+  !! 362..410: unresolved name: GPT4
+  !! 362..410: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.GetMixedMap$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<map<string, int | string>, V> throws never {
+  baml.ai.drive_with<V, E2>(client, GetMixedMap$render_prompt(client = client), project) : baml.ai.CallResult<map<string, int | string>, V>
+  !! 362..410: unresolved name: GPT4
+  !! 362..410: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.GetMixedMap$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4) -> map<string, int | string> throws never {
+  baml.ai.drive_run_tools<T>(client, GetMixedMap$render_prompt(client = client), tools, dispatch) : map<string, int | string>
+  !! 362..410: unresolved name: GPT4
+  !! 362..410: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.GetMixedMap$live(io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, GetMixedMap$render_prompt(client = client), io) : baml.ai.Transcript
   !! 362..410: unresolved name: GPT4
   !! 362..410: type mismatch: expected baml.ai.Provider, got unknown
 }

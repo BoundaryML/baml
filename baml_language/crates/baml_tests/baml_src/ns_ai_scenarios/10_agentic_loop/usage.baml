@@ -158,3 +158,31 @@ test "retry refuses to wrap the effectful loop" {
 class ScriptedNotTools {
     implements baml.ai.Provider {}
 }
+
+// ── The $run_tools companion (DCP §1.3): explicit-control agentic form ──────
+
+client<llm> DeadDeclared {
+  provider "openai"
+  options { model "gpt-4o" api_key "unused" base_url "http://127.0.0.1:9" }
+}
+
+function ResearchIt(q: string) -> string {
+  client DeadDeclared
+  prompt #"Answer with tools: {{ q }}"#
+}
+
+test "Foo$run_tools drives the loop through a swapped-in Tools provider" {
+    let agent = ScriptedTools { turns_wanted: 2, final_json: "companion answer" };
+    let r = ResearchIt$run_tools("q", lookup_tools(), echo_dispatch, client = agent) catch (e) {
+        _ => "companion failed",
+    };
+    assert.equal(r, "companion answer")
+}
+
+test "Foo$run_tools on a capability-less client is a typed Unsupported" {
+    let r = ResearchIt$run_tools("q", lookup_tools(), echo_dispatch, client = NoCapProvider {}) catch (e) {
+        let u: baml.errors.Unsupported => "unsupported",
+        _ => "wrong error",
+    };
+    assert.equal(r, "unsupported")
+}

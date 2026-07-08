@@ -27,6 +27,9 @@ const COMPANIONS: &[CompanionExpander] = &[
     llm_render_prompt,
     llm_build_request,
     llm_build_request_stream,
+    llm_drive_with,
+    llm_drive_run_tools,
+    llm_drive_live,
 ];
 
 /// Run all companion expanders on the given function.
@@ -126,6 +129,275 @@ pub fn llm_parse(parent: &FunctionDef, type_args: Vec<TypeExpr>) -> Option<Funct
         span: parent.span,
         name_span: parent.name_span,
     })
+}
+
+// ── Capability-driver companions (DCP §1.3, Phase C) ────────────────────────
+//
+// `Foo$with` / `Foo$run_tools` / `Foo$live` delegate to the stdlib capability
+// drivers (`baml.ai.drive_*`, the `//baml:llm_companion(<suffix>)`-marked
+// functions). The body is uniformly:
+//
+//   baml.ai.drive_<suffix><T, …>(client, Foo$render_prompt(args…, client = client), extra…)
+//
+// Calling the sibling `$render_prompt` companion keeps this mode-agnostic
+// (backtick closures vs legacy Jinja are its problem, not ours). The stdlib
+// suffix table here mirrors the baked capability registry — user-package
+// suffixes generate in Phase D via the HIR registry.
+
+/// A `TypeExpr` path with no generics.
+fn ty_path(segments: &[&str], span: text_size::TextRange) -> TypeExpr {
+    (TypeExprKind::Path {
+        segments: segments.iter().map(Name::new).collect(),
+        generic_args: vec![],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    })
+    .at(span)
+}
+
+struct DriveCompanionSpec<'a> {
+    suffix: &'a str,
+    driver: &'a [&'a str],
+    /// Extra generic params appended to the companion (e.g. `V`, `E2`).
+    extra_generics: &'a [&'a str],
+    /// Extra params appended after the parent's user params (name, type).
+    extra_params: Vec<(&'a str, TypeExpr)>,
+    /// Explicit type args for the driver call (first is the parent's return type).
+    driver_type_args: Vec<TypeExpr>,
+    return_type: TypeExpr,
+}
+
+fn make_drive_companion(parent: &FunctionDef, spec: DriveCompanionSpec<'_>) -> Option<FunctionDef> {
+    use la_arena::Arena;
+
+    use crate::ast::{AstSourceMap, CallArg, Expr, ExprBody};
+
+    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
+        return None;
+    }
+    // The injected client param is the negotiation seam; without it there is
+    // no provider to drive.
+    if !parent.params.iter().any(|p| p.name.as_str() == "client") {
+        return None;
+    }
+    let span = parent.span;
+
+    // Body: drive_<suffix><…>(client, Foo$render_prompt(user args…, client = client), extras…)
+    let mut exprs = Arena::new();
+    let mut expr_spans = Arena::new();
+    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(span);
+        id
+    };
+
+    let client_ref = alloc(Expr::Path(vec![Name::new("client")]));
+    let render_callee = alloc(Expr::Path(vec![Name::new(format!(
+        "{}$render_prompt",
+        parent.name
+    ))]));
+    // All user args ride BY NAME: defaulted parameters reject positional
+    // passing (E0005), and named works uniformly for the rest.
+    let mut render_args: Vec<CallArg> = parent
+        .params
+        .iter()
+        .filter(|p| p.name.as_str() != "client")
+        .map(|p| {
+            let arg = alloc(Expr::Path(vec![p.name.clone()]));
+            CallArg::named(p.name.clone(), arg)
+        })
+        .collect();
+    let client_for_render = alloc(Expr::Path(vec![Name::new("client")]));
+    render_args.push(CallArg::named("client", client_for_render));
+    let rendered = alloc(Expr::Call {
+        callee: render_callee,
+        type_args: vec![],
+        args: render_args,
+    });
+
+    let driver_callee = alloc(Expr::Path(spec.driver.iter().map(Name::new).collect()));
+    let mut driver_args = vec![
+        CallArg::positional(client_ref),
+        CallArg::positional(rendered),
+    ];
+    for (extra_name, _) in &spec.extra_params {
+        let arg = alloc(Expr::Path(vec![Name::new(*extra_name)]));
+        driver_args.push(CallArg::positional(arg));
+    }
+    let call = alloc(Expr::Call {
+        callee: driver_callee,
+        type_args: spec.driver_type_args,
+        args: driver_args,
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        catch_arms: Arena::new(),
+        type_annotations: Arena::new(),
+        root_expr: Some(call),
+    };
+
+    // Params: required user params, then the required extras, then the
+    // parent's DEFAULTED user params, then the client param. Required extras
+    // can't follow a defaulted param ("required parameter cannot appear after
+    // a defaulted parameter"), and the body passes user args by name, so this
+    // reordering is invisible to the call.
+    let mut params: Vec<Param> = parent
+        .params
+        .iter()
+        .filter(|p| p.name.as_str() != "client" && p.default.is_none())
+        .cloned()
+        .collect();
+    for (extra_name, extra_ty) in spec.extra_params {
+        params.push(Param {
+            name: Name::new(extra_name),
+            type_expr: Some(extra_ty),
+            default: None,
+            span,
+            name_span: parent.name_span,
+        });
+    }
+    params.extend(
+        parent
+            .params
+            .iter()
+            .filter(|p| p.name.as_str() != "client" && p.default.is_some())
+            .cloned(),
+    );
+    if let Some(client_param) = parent.params.iter().find(|p| p.name.as_str() == "client") {
+        params.push(client_param.clone());
+    }
+
+    let mut generic_params = parent.generic_params.clone();
+    let mut generic_param_bounds = parent.generic_param_bounds.clone();
+    for g in spec.extra_generics {
+        generic_params.push(Name::new(*g));
+        generic_param_bounds.push(None);
+    }
+
+    Some(FunctionDef {
+        name: Name::new(format!("{}${}", parent.name, spec.suffix)),
+        generic_params,
+        generic_param_bounds,
+        params,
+        defaults: parent.defaults.clone(),
+        return_type: Some(spec.return_type),
+        throws: None,
+        body: Some(FunctionBodyDef::Expr(
+            body,
+            AstSourceMap {
+                expr_spans,
+                ..Default::default()
+            },
+        )),
+        declarative_meta: None,
+        origin: crate::ast::FunctionOrigin::Companion,
+        attributes: vec![],
+        docstring: None,
+        is_tagged_template_tag: false,
+        llm_companion_suffix: None,
+        span,
+        name_span: parent.name_span,
+    })
+}
+
+/// `Foo$with(args…, project, client?) -> CallResult<T, V>` — value + sidecar.
+fn llm_drive_with(parent: &FunctionDef) -> Option<FunctionDef> {
+    let span = parent.span;
+    let ret = parent.return_type.clone()?;
+    let project_ty = (TypeExprKind::Function {
+        params: vec![crate::ast::FunctionTypeParam {
+            name: None,
+            optional: false,
+            ty: ty_path(&["baml", "ai", "ResponseMeta"], span),
+        }],
+        ret: Box::new(ty_path(&["V"], span)),
+        throws: Some(Box::new(ty_path(&["E2"], span))),
+        attrs: vec![],
+    })
+    .at(span);
+    let return_type = (TypeExprKind::Path {
+        segments: vec![Name::new("baml"), Name::new("ai"), Name::new("CallResult")],
+        generic_args: vec![ret.clone(), ty_path(&["V"], span)],
+        associated_type_bindings: vec![],
+        attrs: vec![],
+    })
+    .at(span);
+    make_drive_companion(
+        parent,
+        DriveCompanionSpec {
+            suffix: "with",
+            driver: &["baml", "ai", "drive_with"],
+            extra_generics: &["V", "E2"],
+            extra_params: vec![("project", project_ty)],
+            driver_type_args: vec![ret, ty_path(&["V"], span), ty_path(&["E2"], span)],
+            return_type,
+        },
+    )
+}
+
+/// `Foo$run_tools(args…, tools, dispatch, client?) -> T` — the explicit-control
+/// agentic form (the primary tool surface is a ToolLoop client on plain `Foo`).
+fn llm_drive_run_tools(parent: &FunctionDef) -> Option<FunctionDef> {
+    let span = parent.span;
+    let ret = parent.return_type.clone()?;
+    let tools_ty = (TypeExprKind::List {
+        inner: Box::new(ty_path(&["baml", "ai", "Tool"], span)),
+        attrs: vec![],
+    })
+    .at(span);
+    let dispatch_ty = (TypeExprKind::Function {
+        params: vec![crate::ast::FunctionTypeParam {
+            name: None,
+            optional: false,
+            ty: (TypeExprKind::List {
+                inner: Box::new(ty_path(&["baml", "ai", "ToolCall"], span)),
+                attrs: vec![],
+            })
+            .at(span),
+        }],
+        ret: Box::new(
+            (TypeExprKind::List {
+                inner: Box::new(ty_path(&["baml", "ai", "ToolResult"], span)),
+                attrs: vec![],
+            })
+            .at(span),
+        ),
+        throws: Some(Box::new((TypeExprKind::Never { attrs: vec![] }).at(span))),
+        attrs: vec![],
+    })
+    .at(span);
+    make_drive_companion(
+        parent,
+        DriveCompanionSpec {
+            suffix: "run_tools",
+            driver: &["baml", "ai", "drive_run_tools"],
+            extra_generics: &[],
+            extra_params: vec![("tools", tools_ty), ("dispatch", dispatch_ty)],
+            driver_type_args: vec![ret.clone()],
+            return_type: ret,
+        },
+    )
+}
+
+/// `Foo$live(args…, io, client?) -> baml.ai.Transcript` — live duplex session.
+fn llm_drive_live(parent: &FunctionDef) -> Option<FunctionDef> {
+    let span = parent.span;
+    let ret = parent.return_type.clone()?;
+    make_drive_companion(
+        parent,
+        DriveCompanionSpec {
+            suffix: "live",
+            driver: &["baml", "ai", "drive_live"],
+            extra_generics: &[],
+            extra_params: vec![("io", ty_path(&["baml", "ai", "Channel"], span))],
+            driver_type_args: vec![ret],
+            return_type: ty_path(&["baml", "ai", "Transcript"], span),
+        },
+    )
 }
 
 fn make_llm_companion(

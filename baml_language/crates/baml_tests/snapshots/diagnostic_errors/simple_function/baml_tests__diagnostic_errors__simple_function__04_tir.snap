@@ -22,6 +22,21 @@ function user.HelloWorld$build_request_stream(name: string, client: baml.ai.Prov
   !! 44..104: unresolved name: GPT4
   !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
+function user.HelloWorld$with<V, E2>(name: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V> throws never {
+  baml.ai.drive_with<V, E2>(client, HelloWorld$render_prompt(name = name, client = client), project) : baml.ai.CallResult<string, V>
+  !! 44..104: unresolved name: GPT4
+  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.HelloWorld$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4) -> string throws never {
+  baml.ai.drive_run_tools<T>(client, HelloWorld$render_prompt(name = name, client = client), tools, dispatch) : string
+  !! 44..104: unresolved name: GPT4
+  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.HelloWorld$live(name: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, HelloWorld$render_prompt(name = name, client = client), io) : baml.ai.Transcript
+  !! 44..104: unresolved name: GPT4
+  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
+}
 class user.User {
   name: string
   age: int

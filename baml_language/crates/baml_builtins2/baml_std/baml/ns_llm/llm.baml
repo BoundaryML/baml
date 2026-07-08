@@ -65,7 +65,15 @@ function legacy_client_of(client: root.ai.Provider) -> Client throws root.errors
 
 function render_prompt(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((Context) -> PromptAst)? = null) -> PromptAst {
   let return_type = get_return_type(function_name);
-  let primitive_client = legacy_client_of(client).to_primitive_client();
+  // Legacy clients render with their own primitive config; a NATIVE provider
+  // has no legacy config, so render with a neutral primitive (roles/media
+  // preserved; wire shaping is the native provider's job). This is the
+  // Phase C prompt hook — provider-specific specialization comes later.
+  let provider = client;
+  let primitive_client = match (provider) {
+    let lc: Client => lc.to_primitive_client(),
+    _ => from_shorthand("openai/gpt-4o"),
+  };
   let template = prompt_template_for(function_name, prompt_closure);
   // `render_specialized_prompt` is the same render the orchestrator uses, so the
   // playground preview/cURL render byte-identically to execution.

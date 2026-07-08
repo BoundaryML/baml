@@ -11,8 +11,17 @@ function user.GenerateImage$build_request(prompt: string, client: baml.ai.Provid
 function user.GenerateImage$build_request_stream(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GenerateImage", map { "prompt": prompt })
 }
+function user.GenerateImage$live(prompt: string, io: baml.ai.Channel, client: baml.ai.Provider = OpenAIImageResponses) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, GenerateImage$render_prompt(prompt = prompt, client = client), io)
+}
 function user.GenerateImage$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateImage", map { "prompt": prompt })
+}
+function user.GenerateImage$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = OpenAIImageResponses) -> image  [expr] {
+  baml.ai.drive_run_tools(client, GenerateImage$render_prompt(prompt = prompt, client = client), tools, dispatch)
+}
+function user.GenerateImage$with(prompt: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = OpenAIImageResponses) -> baml.ai.CallResult<image, V>  [expr] {
+  baml.ai.drive_with(client, GenerateImage$render_prompt(prompt = prompt, client = client), project)
 }
 function user.GenerateImageSet(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image[]  [llm] {
   baml.llm.call_llm_function(client, "GenerateImageSet", map { "prompt": prompt })
@@ -23,8 +32,17 @@ function user.GenerateImageSet$build_request(prompt: string, client: baml.ai.Pro
 function user.GenerateImageSet$build_request_stream(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GenerateImageSet", map { "prompt": prompt })
 }
+function user.GenerateImageSet$live(prompt: string, io: baml.ai.Channel, client: baml.ai.Provider = OpenAIImageResponses) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, GenerateImageSet$render_prompt(prompt = prompt, client = client), io)
+}
 function user.GenerateImageSet$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateImageSet", map { "prompt": prompt })
+}
+function user.GenerateImageSet$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = OpenAIImageResponses) -> image[]  [expr] {
+  baml.ai.drive_run_tools(client, GenerateImageSet$render_prompt(prompt = prompt, client = client), tools, dispatch)
+}
+function user.GenerateImageSet$with(prompt: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = OpenAIImageResponses) -> baml.ai.CallResult<image[], V>  [expr] {
+  baml.ai.drive_with(client, GenerateImageSet$render_prompt(prompt = prompt, client = client), project)
 }
 function user.GenerateMixedImageNarrative(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image | string[]  [llm] {
   baml.llm.call_llm_function(client, "GenerateMixedImag...", map { "prompt": prompt })
@@ -35,8 +53,17 @@ function user.GenerateMixedImageNarrative$build_request(prompt: string, client: 
 function user.GenerateMixedImageNarrative$build_request_stream(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GenerateMixedImag...", map { "prompt": prompt })
 }
+function user.GenerateMixedImageNarrative$live(prompt: string, io: baml.ai.Channel, client: baml.ai.Provider = OpenAIImageResponses) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, GenerateMixedImageNarrative$render_prompt(prompt = prompt, client = client), io)
+}
 function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateMixedImag...", map { "prompt": prompt })
+}
+function user.GenerateMixedImageNarrative$run_tools(prompt: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = OpenAIImageResponses) -> image | string[]  [expr] {
+  baml.ai.drive_run_tools(client, GenerateMixedImageNarrative$render_prompt(prompt = prompt, client = client), tools, dispatch)
+}
+function user.GenerateMixedImageNarrative$with(prompt: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = OpenAIImageResponses) -> baml.ai.CallResult<image | string[], V>  [expr] {
+  baml.ai.drive_with(client, GenerateMixedImageNarrative$render_prompt(prompt = prompt, client = client), project)
 }
 function user.OpenAIImageResponses$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "OpenAIImageResponses", provider: "openai-responses", options: baml.llm.PrimitiveClientOptions { model: "gpt-4.1", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "type": "image_generation", "size": "1024x1024", "quality": "low" }] } } }

@@ -27881,9 +27881,22 @@ function baml.llm.render_prompt(client: baml.ai.Provider, function_name: string,
     sys_op baml.llm.get_return_type
     store_var return_type
     load_var client
-    call baml.llm.legacy_client_of
+    is_type baml.llm.Client
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_const "openai/gpt-4o"
+    sys_op baml.llm.from_shorthand
+    store_var primitive_client
+    jump L3
+
+  L2:
+    load_var client
     call baml.llm.Client.to_primitive_client
     store_var primitive_client
+
+  L3:
     load_var2 2 4
     call baml.llm.prompt_template_for
     store_var template

@@ -1929,7 +1929,7 @@ function baml.llm.prompt_template_for(function_name: string, prompt_closure: (Co
   {  } match (prompt_closure) { null => get_jinja_template(function_name), _ => "" }
 }
 function baml.llm.render_prompt(client: root.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: (Context) -> PromptAst? = null) -> PromptAst  [expr] {
-  { let return_type = get_return_type(function_name); let primitive_client = legacy_client_of(client).to_primitive_client(); let template = prompt_template_for(function_name, prompt_closure) } primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
+  { let return_type = get_return_type(function_name); let provider = client; let primitive_client = match (provider) { lc: Client => lc.to_primitive_client(), _ => from_shorthand("openai/gpt-4o") }; let template = prompt_template_for(function_name, prompt_closure) } primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure)
 }
 function baml.llm.rr_local_offset(self: ?, client_name: string) -> int  [expr] {
   { let offset = 0; for seen_name in self.rr_client_names {  } if (seen_name Eq client_name) { offset Add= 1 } } offset

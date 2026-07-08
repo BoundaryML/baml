@@ -75,6 +75,25 @@ function user.CommentAfterArrow$build_request_stream(client: baml.ai.Provider) -
     return
 }
 
+function user.CommentAfterArrow$live(io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var client
+    call user.CommentAfterArrow$render_prompt
+    store_var _4
+    load_type string
+    load_var2 2 3
+    load_var io
+    call baml.ai.drive_live
+    return
+}
+
 function user.CommentAfterArrow$parse(json: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
@@ -126,6 +145,25 @@ function user.CommentAfterArrow$render_prompt(client: baml.ai.Provider) -> baml.
     return
 }
 
+function user.CommentAfterArrow$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var client
+    call user.CommentAfterArrow$render_prompt
+    store_var _5
+    load_type string
+    load_var2 3 4
+    load_var2 1 2
+    call baml.ai.drive_run_tools
+    return
+}
+
 function user.CommentAfterArrow$stream(client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
@@ -144,6 +182,27 @@ function user.CommentAfterArrow$stream(client: baml.ai.Provider) -> baml.llm.Str
     alloc_map 0
     load_const <omitted>
     call baml.llm.stream_llm_function
+    return
+}
+
+function user.CommentAfterArrow$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<string, V> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var client
+    call user.CommentAfterArrow$render_prompt
+    store_var _4
+    load_type string
+    load_type #0
+    load_type #1
+    load_var2 2 3
+    load_var project
+    call baml.ai.drive_with
     return
 }
 
@@ -214,6 +273,26 @@ function user.FunctionWithComments$build_request_stream(a: string, b: int, clien
     return
 }
 
+function user.FunctionWithComments$live(a: string, b: int, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var2 1 2
+    load_var client
+    call user.FunctionWithComments$render_prompt
+    store_var _6
+    load_type string
+    load_var2 4 5
+    load_var io
+    call baml.ai.drive_live
+    return
+}
+
 function user.FunctionWithComments$parse(json: string, client: baml.ai.Provider) -> string {
     load_var client
     load_const <omitted>
@@ -268,6 +347,26 @@ function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml
     return
 }
 
+function user.FunctionWithComments$run_tools(a: string, b: int, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var2 1 2
+    load_var client
+    call user.FunctionWithComments$render_prompt
+    store_var _7
+    load_type string
+    load_var2 5 6
+    load_var2 3 4
+    call baml.ai.drive_run_tools
+    return
+}
+
 function user.FunctionWithComments$stream(a: string, b: int, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
@@ -289,6 +388,28 @@ function user.FunctionWithComments$stream(a: string, b: int, client: baml.ai.Pro
     alloc_map 2
     load_const <omitted>
     call baml.llm.stream_llm_function
+    return
+}
+
+function user.FunctionWithComments$with(a: string, b: int, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<string, V> {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.TestClient
+    store_var client
+
+  L0:
+    load_var2 1 2
+    load_var client
+    call user.FunctionWithComments$render_prompt
+    store_var _6
+    load_type string
+    load_type #0
+    load_type #1
+    load_var2 4 5
+    load_var project
+    call baml.ai.drive_with
     return
 }
 

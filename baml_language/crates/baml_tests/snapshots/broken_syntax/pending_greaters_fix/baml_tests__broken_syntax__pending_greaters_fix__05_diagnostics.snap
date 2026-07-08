@@ -58,6 +58,78 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ extra_greater.baml:23:51 ]
+    │
+ 23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
+    ┆ ┆   
+ 26 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ extra_greater.baml:23:51 ]
+    │
+ 23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
+    ┆ ┆   
+ 26 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ extra_greater.baml:23:51 ]
+    │
+ 23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
+    ┆ ┆   
+ 26 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:23:51 ]
+    │
+ 23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
+    ┆ ┆   
+ 26 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:23:51 ]
+    │
+ 23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
+    ┆ ┆   
+ 26 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:23:51 ]
+    │
+ 23 │ ╭─▶ function BadParam(x: map<string, int>>) -> string {
+    ┆ ┆   
+ 26 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
   [type] error: unresolved name: GPT4
     ╭─[ extra_greater.baml:23:51 ]
     │
@@ -138,6 +210,78 @@ source: crates/baml_tests/src/generated_tests.rs
     │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
     │     
     │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ extra_greater.baml:29:47 ]
+    │
+ 29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
+    ┆ ┆   
+ 32 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ extra_greater.baml:29:47 ]
+    │
+ 29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
+    ┆ ┆   
+ 32 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: type mismatch: expected baml.ai.Provider, got unknown
+    ╭─[ extra_greater.baml:29:47 ]
+    │
+ 29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
+    ┆ ┆   
+ 32 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.ai.Provider, got unknown
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:29:47 ]
+    │
+ 29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
+    ┆ ┆   
+ 32 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:29:47 ]
+    │
+ 29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
+    ┆ ┆   
+ 32 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
+────╯
+
+  [type] error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:29:47 ]
+    │
+ 29 │ ╭─▶ function BadReturnType() -> map<string, int>> {
+    ┆ ┆   
+ 32 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0003
 ────╯
 
   [type] error: unresolved name: GPT4

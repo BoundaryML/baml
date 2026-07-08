@@ -11,8 +11,17 @@ function user.ExtractAny$build_request(client: baml.ai.Provider = TestClient) ->
 function user.ExtractAny$build_request_stream(client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "ExtractAny", map {  })
 }
+function user.ExtractAny$live(io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, ExtractAny$render_prompt(client = client), io)
+}
 function user.ExtractAny$render_prompt(client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "ExtractAny", map {  })
+}
+function user.ExtractAny$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = TestClient) -> baml.json.json  [expr] {
+  baml.ai.drive_run_tools(client, ExtractAny$render_prompt(client = client), tools, dispatch)
+}
+function user.ExtractAny$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<baml.json.json, V>  [expr] {
+  baml.ai.drive_with(client, ExtractAny$render_prompt(client = client), project)
 }
 function user.TestClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }

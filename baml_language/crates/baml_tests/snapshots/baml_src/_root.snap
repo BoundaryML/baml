@@ -3,12 +3,19 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function $init() -> null {
     call $init_let_0
+    store_global user.ai_scenarios.DeadDeclared
+    call $init_let_1
+    store_global user.ai_scenarios.DeadObs
+    call $init_let_2
     store_global user.type_reflection.TestClient
     load_const null
     return
 }
 
 function $init_test(registry: unknown) -> null {
+    load_var ?1
+    call ?
+    pop 1
     load_var ?1
     call ?
     pop 1

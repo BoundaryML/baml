@@ -20,8 +20,17 @@ function user.LlmFunction$build_request(input: string, client: baml.ai.Provider 
 function user.LlmFunction$build_request_stream(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "LlmFunction", map { "input": input })
 }
+function user.LlmFunction$live(input: string, io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, LlmFunction$render_prompt(input = input, client = client), io)
+}
 function user.LlmFunction$render_prompt(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmFunction", map { "input": input })
+}
+function user.LlmFunction$run_tools(input: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = TestClient) -> string  [expr] {
+  baml.ai.drive_run_tools(client, LlmFunction$render_prompt(input = input, client = client), tools, dispatch)
+}
+function user.LlmFunction$with(input: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<string, V>  [expr] {
+  baml.ai.drive_with(client, LlmFunction$render_prompt(input = input, client = client), project)
 }
 function user.MatchExpression(x: int) -> string  [expr] {
   {  } match (x) { 1 => { // [1] One } "one", 2 => { // [1] Two } "two", _ => { // [1] Default } "other" }

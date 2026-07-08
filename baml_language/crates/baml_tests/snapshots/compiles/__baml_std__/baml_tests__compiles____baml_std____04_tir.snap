@@ -7338,7 +7338,13 @@ function baml.llm.legacy_client_of(client: baml.ai.Provider) -> baml.llm.Client 
 function baml.llm.render_prompt(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
     let return_type = get_return_type(function_name) : type
-    let primitive_client = legacy_client_of(client).to_primitive_client() : baml.llm.PrimitiveClient
+    let provider = client : baml.ai.Provider
+    let primitive_client = : baml.llm.PrimitiveClient
+      match (provider : baml.ai.Provider) : baml.llm.PrimitiveClient
+        lc: Client =>
+          lc.to_primitive_client() : baml.llm.PrimitiveClient
+        _ =>
+          from_shorthand("openai/gpt-4o") : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
   }

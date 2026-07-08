@@ -16,8 +16,17 @@ function user.AskDocs$build_request(query: string, max_results: int = 10, filter
 function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
 }
+function user.AskDocs$live(query: string, io: baml.ai.Channel, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, AskDocs$render_prompt(query = query, max_results = max_results, filter = filter, client = client), io)
+}
 function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
+}
+function user.AskDocs$run_tools(query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> string  [expr] {
+  baml.ai.drive_run_tools(client, AskDocs$render_prompt(query = query, max_results = max_results, filter = filter, client = client), tools, dispatch)
+}
+function user.AskDocs$with(query: string, project: (baml.ai.ResponseMeta) -> V throws E2, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<string, V>  [expr] {
+  baml.ai.drive_with(client, AskDocs$render_prompt(query = query, max_results = max_results, filter = filter, client = client), project)
 }
 function user.DefaultFilter() -> string  [expr] {
   {  } "none"

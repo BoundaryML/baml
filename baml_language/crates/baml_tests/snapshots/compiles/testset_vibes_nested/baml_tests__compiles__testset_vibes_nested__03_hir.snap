@@ -19,8 +19,17 @@ function user.ClassifySentiment$build_request(text: string, client: baml.ai.Prov
 function user.ClassifySentiment$build_request_stream(text: string, client: baml.ai.Provider = GPT4o) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "ClassifySentiment", map { "text": text })
 }
+function user.ClassifySentiment$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4o) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, ClassifySentiment$render_prompt(text = text, client = client), io)
+}
 function user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "ClassifySentiment", map { "text": text })
+}
+function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4o) -> user.Sentiment  [expr] {
+  baml.ai.drive_run_tools(client, ClassifySentiment$render_prompt(text = text, client = client), tools, dispatch)
+}
+function user.ClassifySentiment$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4o) -> baml.ai.CallResult<user.Sentiment, V>  [expr] {
+  baml.ai.drive_with(client, ClassifySentiment$render_prompt(text = text, client = client), project)
 }
 function user.ClassifySentiment2(text: string, client: baml.ai.Provider = GPT4o) -> string  [llm] {
   baml.llm.call_llm_function(client, "ClassifySentiment2", map { "text": text })
@@ -31,8 +40,17 @@ function user.ClassifySentiment2$build_request(text: string, client: baml.ai.Pro
 function user.ClassifySentiment2$build_request_stream(text: string, client: baml.ai.Provider = GPT4o) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "ClassifySentiment2", map { "text": text })
 }
+function user.ClassifySentiment2$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4o) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, ClassifySentiment2$render_prompt(text = text, client = client), io)
+}
 function user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "ClassifySentiment2", map { "text": text })
+}
+function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4o) -> string  [expr] {
+  baml.ai.drive_run_tools(client, ClassifySentiment2$render_prompt(text = text, client = client), tools, dispatch)
+}
+function user.ClassifySentiment2$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4o) -> baml.ai.CallResult<string, V>  [expr] {
+  baml.ai.drive_with(client, ClassifySentiment2$render_prompt(text = text, client = client), project)
 }
 function user.Foo() -> string | image  [expr] {
   { let x = "foo"; let y = 2; { let i = 0; while i Lt y { x = "hi:  " Add x } } } x
@@ -49,8 +67,17 @@ function user.GenerateTests$build_request(count: int, topic: string, client: bam
 function user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.ai.Provider = GPT4o) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GenerateTests", map { "count": count, "topic": topic })
 }
+function user.GenerateTests$live(count: int, topic: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4o) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), io)
+}
 function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.Provider = GPT4o) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic })
+}
+function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4o) -> string[]  [expr] {
+  baml.ai.drive_run_tools(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), tools, dispatch)
+}
+function user.GenerateTests$with(count: int, topic: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4o) -> baml.ai.CallResult<string[], V>  [expr] {
+  baml.ai.drive_with(client, GenerateTests$render_prompt(count = count, topic = topic, client = client), project)
 }
 
 --- captures ---

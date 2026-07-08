@@ -157,6 +157,63 @@ fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: st
     }
 }
 
+fn user.AskDocs$live(query: string, io: baml.ai.Channel, max_results: int, filter: string, client: baml.ai.Provider) -> baml.ai.Transcript {
+    // Locals:
+    let _0: baml.ai.Transcript // _0 // return
+    let _1: string // query // param
+    let _2: baml.ai.Channel // io // param
+    let _3: int // max_results // param
+    let _4: string // filter // param
+    let _5: baml.ai.Provider // client // param
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: baml.llm.PromptAst
+    let _10: type
+
+    bb0: {
+        _6 = copy _3 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _7 = copy _4 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _4 = call const fn user.DefaultFilter() -> [bb4];
+    }
+
+    bb4: {
+        _8 = copy _5 == const <omitted>;
+        branch copy _8 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _5 = const fn user.TestClient;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _9 = call const fn user.AskDocs$render_prompt(copy _1, copy _3, copy _4, copy _5) -> [bb7];
+    }
+
+    bb7: {
+        _10 = load_type(string);
+        _0 = call const fn baml.ai.drive_live<copy _10>(copy _5, copy _9, copy _2) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
 fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -204,6 +261,125 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, c
     }
 
     bb7: {
+        return;
+    }
+}
+
+fn user.AskDocs$run_tools(query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, max_results: int, filter: string, client: baml.ai.Provider) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // query // param
+    let _2: baml.ai.Tool[] // tools // param
+    let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
+    let _4: int // max_results // param
+    let _5: string // filter // param
+    let _6: baml.ai.Provider // client // param
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: baml.llm.PromptAst
+    let _11: type
+
+    bb0: {
+        _7 = copy _4 == const <omitted>;
+        branch copy _7 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _4 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _8 = copy _5 == const <omitted>;
+        branch copy _8 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _5 = call const fn user.DefaultFilter() -> [bb4];
+    }
+
+    bb4: {
+        _9 = copy _6 == const <omitted>;
+        branch copy _9 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _6 = const fn user.TestClient;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _10 = call const fn user.AskDocs$render_prompt(copy _1, copy _4, copy _5, copy _6) -> [bb7];
+    }
+
+    bb7: {
+        _11 = load_type(string);
+        _0 = call const fn baml.ai.drive_run_tools<copy _11>(copy _6, copy _10, copy _2, copy _3) -> [bb8];
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+fn user.AskDocs$with(query: string, project: (baml.ai.ResponseMeta) -> V throws E2, max_results: int, filter: string, client: baml.ai.Provider) -> baml.ai.CallResult<string, V> {
+    // Locals:
+    let _0: baml.ai.CallResult<string, V> // _0 // return
+    let _1: string // query // param
+    let _2: (baml.ai.ResponseMeta) -> V throws E2 // project // param
+    let _3: int // max_results // param
+    let _4: string // filter // param
+    let _5: baml.ai.Provider // client // param
+    let _6: bool
+    let _7: bool
+    let _8: bool
+    let _9: baml.llm.PromptAst
+    let _10: type
+    let _11: type
+    let _12: type
+
+    bb0: {
+        _6 = copy _3 == const <omitted>;
+        branch copy _6 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _3 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _7 = copy _4 == const <omitted>;
+        branch copy _7 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _4 = call const fn user.DefaultFilter() -> [bb4];
+    }
+
+    bb4: {
+        _8 = copy _5 == const <omitted>;
+        branch copy _8 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _5 = const fn user.TestClient;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _9 = call const fn user.AskDocs$render_prompt(copy _1, copy _3, copy _4, copy _5) -> [bb7];
+    }
+
+    bb7: {
+        _10 = load_type(string);
+        _11 = load_type(#0);
+        _12 = load_type(#1);
+        _0 = call const fn baml.ai.drive_with<copy _10, copy _11, copy _12>(copy _5, copy _9, copy _2) -> [bb8];
+    }
+
+    bb8: {
         return;
     }
 }

@@ -658,6 +658,15 @@ function user.TestTarget$build_request(client: baml.ai.Provider = BasicClient) -
 function user.TestTarget$build_request_stream(client: baml.ai.Provider = BasicClient) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "TestTarget", map {  }) : baml.http.Request
 }
+function user.TestTarget$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = BasicClient) -> baml.ai.CallResult<string, V> throws never {
+  baml.ai.drive_with<V, E2>(client, TestTarget$render_prompt(client = client), project) : baml.ai.CallResult<string, V>
+}
+function user.TestTarget$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = BasicClient) -> string throws never {
+  baml.ai.drive_run_tools<T>(client, TestTarget$render_prompt(client = client), tools, dispatch) : string
+}
+function user.TestTarget$live(io: baml.ai.Channel, client: baml.ai.Provider = BasicClient) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, TestTarget$render_prompt(client = client), io) : baml.ai.Transcript
+}
 function user.C$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "C", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
@@ -981,6 +990,21 @@ function user.LlmBasic$build_request_stream(name: string, client: baml.ai.Provid
   !! 11147..11203: unresolved name: GPT4
   !! 11147..11203: type mismatch: expected baml.ai.Provider, got unknown
 }
+function user.LlmBasic$with<V, E2>(name: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V> throws never {
+  baml.ai.drive_with<V, E2>(client, LlmBasic$render_prompt(name = name, client = client), project) : baml.ai.CallResult<string, V>
+  !! 11147..11203: unresolved name: GPT4
+  !! 11147..11203: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.LlmBasic$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4) -> string throws never {
+  baml.ai.drive_run_tools<T>(client, LlmBasic$render_prompt(name = name, client = client), tools, dispatch) : string
+  !! 11147..11203: unresolved name: GPT4
+  !! 11147..11203: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.LlmBasic$live(name: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, LlmBasic$render_prompt(name = name, client = client), io) : baml.ai.Transcript
+  !! 11147..11203: unresolved name: GPT4
+  !! 11147..11203: type mismatch: expected baml.ai.Provider, got unknown
+}
 function user.LlmMultiLine(text: string, client: baml.ai.Provider = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmMultiLine", map { "text": text }) : string
   !! 11307..11428: unresolved name: GPT4
@@ -1001,6 +1025,21 @@ function user.LlmMultiLine$build_request_stream(text: string, client: baml.ai.Pr
   !! 11307..11428: unresolved name: GPT4
   !! 11307..11428: type mismatch: expected baml.ai.Provider, got unknown
 }
+function user.LlmMultiLine$with<V, E2>(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V> throws never {
+  baml.ai.drive_with<V, E2>(client, LlmMultiLine$render_prompt(text = text, client = client), project) : baml.ai.CallResult<string, V>
+  !! 11307..11428: unresolved name: GPT4
+  !! 11307..11428: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.LlmMultiLine$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4) -> string throws never {
+  baml.ai.drive_run_tools<T>(client, LlmMultiLine$render_prompt(text = text, client = client), tools, dispatch) : string
+  !! 11307..11428: unresolved name: GPT4
+  !! 11307..11428: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.LlmMultiLine$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, LlmMultiLine$render_prompt(text = text, client = client), io) : baml.ai.Transcript
+  !! 11307..11428: unresolved name: GPT4
+  !! 11307..11428: type mismatch: expected baml.ai.Provider, got unknown
+}
 function user.LlmStringClient(text: string, client: baml.ai.Provider = ...) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmStringClient", map { "text": text }) : string
 }
@@ -1012,6 +1051,15 @@ function user.LlmStringClient$build_request(text: string, client: baml.ai.Provid
 }
 function user.LlmStringClient$build_request_stream(text: string, client: baml.ai.Provider = ...) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmStringClient", map { "text": text }) : baml.http.Request
+}
+function user.LlmStringClient$with<V, E2>(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<string, V> throws never {
+  baml.ai.drive_with<V, E2>(client, LlmStringClient$render_prompt(text = text, client = client), project) : baml.ai.CallResult<string, V>
+}
+function user.LlmStringClient$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = ...) -> string throws never {
+  baml.ai.drive_run_tools<T>(client, LlmStringClient$render_prompt(text = text, client = client), tools, dispatch) : string
+}
+function user.LlmStringClient$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider = ...) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, LlmStringClient$render_prompt(text = text, client = client), io) : baml.ai.Transcript
 }
 function user.LlmReversedOrder(text: string, client: baml.ai.Provider = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmReversedOrder", map { "text": text }) : string
@@ -1033,6 +1081,21 @@ function user.LlmReversedOrder$build_request_stream(text: string, client: baml.a
   !! 11707..11763: unresolved name: GPT4
   !! 11707..11763: type mismatch: expected baml.ai.Provider, got unknown
 }
+function user.LlmReversedOrder$with<V, E2>(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V> throws never {
+  baml.ai.drive_with<V, E2>(client, LlmReversedOrder$render_prompt(text = text, client = client), project) : baml.ai.CallResult<string, V>
+  !! 11707..11763: unresolved name: GPT4
+  !! 11707..11763: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.LlmReversedOrder$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4) -> string throws never {
+  baml.ai.drive_run_tools<T>(client, LlmReversedOrder$render_prompt(text = text, client = client), tools, dispatch) : string
+  !! 11707..11763: unresolved name: GPT4
+  !! 11707..11763: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.LlmReversedOrder$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, LlmReversedOrder$render_prompt(text = text, client = client), io) : baml.ai.Transcript
+  !! 11707..11763: unresolved name: GPT4
+  !! 11707..11763: type mismatch: expected baml.ai.Provider, got unknown
+}
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.ai.Provider = GPT4) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
   !! 11949..12099: unresolved name: GPT4
@@ -1050,6 +1113,21 @@ function user.LlmWithLongSignature$build_request(first_context: string, second_c
 }
 function user.LlmWithLongSignature$build_request_stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.ai.Provider = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
+  !! 11949..12099: unresolved name: GPT4
+  !! 11949..12099: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.LlmWithLongSignature$with<V, E2>(first_context: string, second_context: string, third_context: string, user_query: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V> throws never {
+  baml.ai.drive_with<V, E2>(client, LlmWithLongSignature$render_prompt(first_context = first_context, second_context = second_context, third_context = third_context, user_query = user_query, client = client), project) : baml.ai.CallResult<string, V>
+  !! 11949..12099: unresolved name: GPT4
+  !! 11949..12099: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.LlmWithLongSignature$run_tools(first_context: string, second_context: string, third_context: string, user_query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4) -> string throws never {
+  baml.ai.drive_run_tools<T>(client, LlmWithLongSignature$render_prompt(first_context = first_context, second_context = second_context, third_context = third_context, user_query = user_query, client = client), tools, dispatch) : string
+  !! 11949..12099: unresolved name: GPT4
+  !! 11949..12099: type mismatch: expected baml.ai.Provider, got unknown
+}
+function user.LlmWithLongSignature$live(first_context: string, second_context: string, third_context: string, user_query: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, LlmWithLongSignature$render_prompt(first_context = first_context, second_context = second_context, third_context = third_context, user_query = user_query, client = client), io) : baml.ai.Transcript
   !! 11949..12099: unresolved name: GPT4
   !! 11949..12099: type mismatch: expected baml.ai.Provider, got unknown
 }

@@ -14,8 +14,17 @@ function user.Greet$build_request(name: string, client: baml.ai.Provider = Fast)
 function user.Greet$build_request_stream(name: string, client: baml.ai.Provider = Fast) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
 }
+function user.Greet$live(name: string, io: baml.ai.Channel, client: baml.ai.Provider = Fast) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, Greet$render_prompt(name = name, client = client), io)
+}
 function user.Greet$render_prompt(name: string, client: baml.ai.Provider = Fast) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
+}
+function user.Greet$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = Fast) -> string  [expr] {
+  baml.ai.drive_run_tools(client, Greet$render_prompt(name = name, client = client), tools, dispatch)
+}
+function user.Greet$with(name: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = Fast) -> baml.ai.CallResult<string, V>  [expr] {
+  baml.ai.drive_with(client, Greet$render_prompt(name = name, client = client), project)
 }
 
 --- captures ---

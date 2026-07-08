@@ -25535,11 +25535,13 @@ fn baml.llm.render_prompt(client: baml.ai.Provider, function_name: string, args:
     let _4: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null // prompt_closure // param
     let _5: bool
     let _6: type // return_type
-    let _7: baml.llm.PrimitiveClient // primitive_client
-    let _8: baml.llm.Client
-    let _9: string // template
-    let _10: string
-    let _11: type
+    let _7: baml.ai.Provider // provider
+    let _8: baml.llm.PrimitiveClient // primitive_client
+    let _9: bool
+    let _10: baml.llm.Client // lc
+    let _11: string // template
+    let _12: string
+    let _13: type
 
     bb0: {
         _5 = copy _4 == const <omitted>;
@@ -25556,24 +25558,31 @@ fn baml.llm.render_prompt(client: baml.ai.Provider, function_name: string, args:
     }
 
     bb3: {
-        _8 = call const fn baml.llm.legacy_client_of(copy _1) -> [bb4];
+        _7 = copy _1;
+        _9 = is_type(copy _7, baml.llm.Client);
+        branch copy _9 -> [bb5, bb4];
     }
 
     bb4: {
-        _7 = call const fn baml.llm.Client.to_primitive_client(copy _8) -> [bb5];
+        _8 = sys_op const fn baml.llm.from_shorthand(const "openai/gpt-4o") -> bb6;
     }
 
     bb5: {
-        _9 = call const fn baml.llm.prompt_template_for(copy _2, copy _4) -> [bb6];
+        _10 = copy _7;
+        _8 = call const fn baml.llm.Client.to_primitive_client(copy _10) -> [bb6];
     }
 
     bb6: {
-        _10 = copy _9;
-        _11 = copy _6;
-        _0 = call const fn baml.llm.PrimitiveClient.render_specialized_prompt(copy _7, copy _10, copy _3, copy _11, copy _4) -> [bb7];
+        _11 = call const fn baml.llm.prompt_template_for(copy _2, copy _4) -> [bb7];
     }
 
     bb7: {
+        _12 = copy _11;
+        _13 = copy _6;
+        _0 = call const fn baml.llm.PrimitiveClient.render_specialized_prompt(copy _8, copy _12, copy _3, copy _13, copy _4) -> [bb8];
+    }
+
+    bb8: {
         return;
     }
 }

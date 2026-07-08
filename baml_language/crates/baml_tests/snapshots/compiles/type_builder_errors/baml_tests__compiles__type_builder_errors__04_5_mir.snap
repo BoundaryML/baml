@@ -94,6 +94,42 @@ fn user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.ai.Pr
     }
 }
 
+fn user.TypeBuilderFn$live(from_text: string, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
+    // Locals:
+    let _0: baml.ai.Transcript // _0 // return
+    let _1: string // from_text // param
+    let _2: baml.ai.Channel // io // param
+    let _3: baml.ai.Provider // client // param
+    let _4: bool
+    let _5: baml.llm.Client[]
+    let _6: baml.llm.PromptAst
+    let _7: type
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _5 = []: baml.llm.Client[];
+        _3 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _5, const null, const 0_i64 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = call const fn user.TypeBuilderFn$render_prompt(copy _1, copy _3) -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(Resume);
+        _0 = call const fn baml.ai.drive_live<copy _7>(copy _3, copy _6, copy _2) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
 fn user.TypeBuilderFn$render_prompt(from_text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -120,6 +156,83 @@ fn user.TypeBuilderFn$render_prompt(from_text: string, client: baml.ai.Provider)
     }
 
     bb3: {
+        return;
+    }
+}
+
+fn user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider) -> Resume {
+    // Locals:
+    let _0: Resume // _0 // return
+    let _1: string // from_text // param
+    let _2: baml.ai.Tool[] // tools // param
+    let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
+    let _4: baml.ai.Provider // client // param
+    let _5: bool
+    let _6: baml.llm.Client[]
+    let _7: baml.llm.PromptAst
+    let _8: type
+
+    bb0: {
+        _5 = copy _4 == const <omitted>;
+        branch copy _5 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _6 = []: baml.llm.Client[];
+        _4 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _6, const null, const 0_i64 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        _7 = call const fn user.TypeBuilderFn$render_prompt(copy _1, copy _4) -> [bb3];
+    }
+
+    bb3: {
+        _8 = load_type(Resume);
+        _0 = call const fn baml.ai.drive_run_tools<copy _8>(copy _4, copy _7, copy _2, copy _3) -> [bb4];
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn user.TypeBuilderFn$with(from_text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<Resume, V> {
+    // Locals:
+    let _0: baml.ai.CallResult<Resume, V> // _0 // return
+    let _1: string // from_text // param
+    let _2: (baml.ai.ResponseMeta) -> V throws E2 // project // param
+    let _3: baml.ai.Provider // client // param
+    let _4: bool
+    let _5: baml.llm.Client[]
+    let _6: baml.llm.PromptAst
+    let _7: type
+    let _8: type
+    let _9: type
+
+    bb0: {
+        _4 = copy _3 == const <omitted>;
+        branch copy _4 -> [bb1, bb2];
+    }
+
+    bb1: {
+        _5 = []: baml.llm.Client[];
+        _3 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _5, const null, const 0_i64 };
+        goto -> bb2;
+    }
+
+    bb2: {
+        _6 = call const fn user.TypeBuilderFn$render_prompt(copy _1, copy _3) -> [bb3];
+    }
+
+    bb3: {
+        _7 = load_type(Resume);
+        _8 = load_type(#0);
+        _9 = load_type(#1);
+        _0 = call const fn baml.ai.drive_with<copy _7, copy _8, copy _9>(copy _3, copy _6, copy _2) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }

@@ -15,6 +15,15 @@ function user.HelloWorld$build_request(name: string, client: baml.ai.Provider = 
 function user.HelloWorld$build_request_stream(name: string, client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "HelloWorld", map { "name": name })
 }
+function user.HelloWorld$live(name: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript  [expr] {
+  baml.ai.drive_live(client, HelloWorld$render_prompt(name = name, client = client), io)
+}
 function user.HelloWorld$render_prompt(name: string, client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "HelloWorld", map { "name": name })
+}
+function user.HelloWorld$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = GPT4) -> string  [expr] {
+  baml.ai.drive_run_tools(client, HelloWorld$render_prompt(name = name, client = client), tools, dispatch)
+}
+function user.HelloWorld$with(name: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V>  [expr] {
+  baml.ai.drive_with(client, HelloWorld$render_prompt(name = name, client = client), project)
 }

@@ -17,6 +17,15 @@ function user.ExtractAny$build_request(client: baml.ai.Provider = TestClient) ->
 function user.ExtractAny$build_request_stream(client: baml.ai.Provider = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "ExtractAny", map {  }) : baml.http.Request
 }
+function user.ExtractAny$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<baml.json.json, V> throws never {
+  baml.ai.drive_with<V, E2>(client, ExtractAny$render_prompt(client = client), project) : baml.ai.CallResult<baml.json.json, V>
+}
+function user.ExtractAny$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = TestClient) -> baml.json.json throws never {
+  baml.ai.drive_run_tools<T>(client, ExtractAny$render_prompt(client = client), tools, dispatch) : baml.json.json
+}
+function user.ExtractAny$live(io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, ExtractAny$render_prompt(client = client), io) : baml.ai.Transcript
+}
 function user.ExtractAny$stream(client: baml.ai.Provider = TestClient) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> throws never {
   baml.llm.stream_llm_function(client, "ExtractAny", map {  }) : baml.llm.Stream<baml.json.json$stream | null, baml.json.json>
 }

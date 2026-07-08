@@ -14,6 +14,15 @@ function user.TypeBuilderFn$build_request(from_text: string, client: baml.ai.Pro
 function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.ai.Provider = ...) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.http.Request
 }
+function user.TypeBuilderFn$with<V, E2>(from_text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<user.Resume, V> throws never {
+  baml.ai.drive_with<V, E2>(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client), project) : baml.ai.CallResult<user.Resume, V>
+}
+function user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, client: baml.ai.Provider = ...) -> user.Resume throws never {
+  baml.ai.drive_run_tools<T>(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client), tools, dispatch) : user.Resume
+}
+function user.TypeBuilderFn$live(from_text: string, io: baml.ai.Channel, client: baml.ai.Provider = ...) -> baml.ai.Transcript throws never {
+  baml.ai.drive_live(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client), io) : baml.ai.Transcript
+}
 class user.Resume {
   name: string
 }
