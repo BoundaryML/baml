@@ -66,7 +66,7 @@ the 7 existing example files.
 ### Phase F — integ testset + Rust→BAML migration (DCP §1.6)
 - [x] Offline tier: complete (44 scenario homes, every one with green offline tests). Live tier seeded: `testset "integ-test-01/-02"` — OpenAI + Anthropic single-turn and OpenAI structured extraction through the desugared surface with native overrides, **all 3 proven live** via `infisical run --env=test`. Two footguns found + fixed en route (gotchas): same-named testsets across files silently drop one (unique names + glob filters), and the neutral-render system-role default 400'd Anthropic (override path now renders unspecialized).
 - [x] `baml_test()` runner excludes `-x "integ-test*::"` (default suite is network-free); env-gated `baml_integ_test()` runs `-i "integ-test*::"`.
-- [ ] Migrate `ai_*.rs`: network-free `baml_test!` tests → BAML test blocks; `*_live_*` → integ testset; delete migrated Rust tests. Keep only wiremock/request-capture + compiler-phase tests in Rust.
+- [x] Migration sweep (first pass): 6 pure-VM `ai_provider.rs` tests deleted with named scenario-test replacements (+1 migrated: retry-exhaustion → 29); `openai_implements_capabilities` retained (unique value). Remaining Rust tests are wiremock/request-capture, live-gated, or compiler-phase — the intended steady state. *(`*_live_*` → integ-testset consolidation continues opportunistically as scenarios grow live tiers.)*
 - [x] `E2E_TESTS.md` + `REALIZED.md` updated with the post-desugar surface (banner + blocker section rewrite).
 - [ ] Exit: default `cargo test -p baml_tests` touches no network; keyed run green against both APIs.
 
