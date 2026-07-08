@@ -362,6 +362,10 @@ function label_for_issue_status(status: string) -> string {
         "MERGED"
     } else if (status == "redraft" || status == "redrafting") {
         "REDRAFT"
+    } else if (status == "rejected") {
+        // A rejected issue's card shows the rejected label + Canceled state
+        // (previously fell to NOT_STARTED, which re-opened the card on re-sync).
+        "REJECTED"
     } else if (status == "verifying" || status == "reverify" || status == "reverifying") {
         // Auto-verify states are invisible on the board — the card rests at
         // not-started until the verdict moves it (closed -> MERGED).

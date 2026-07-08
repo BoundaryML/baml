@@ -46,7 +46,20 @@ function Dedup(reports: string, open_issues: string) -> DedupResult {
         Produce a deduplicated issue list. Each issue is either:
           - kind="skill"    -- the SKILL.md is wrong, incomplete, or unclear
           - kind="language" -- the BAML language/compiler itself has a real bug or limitation
-        Promote the `## Suggested improvements` items to issues too (category="suggestion"), deduped against everything else, so broader proposals reach the board alongside the bugs.
+
+        # Quality bar (CRITICAL — most candidate findings should NOT become issues)
+        The board is read by humans who fix things; every weak issue costs real triage time. File an issue ONLY when the reports show GENUINE FRICTION — concrete evidence that something went wrong or cost the agent real effort:
+          - an actual error, crash, or wrong output (best: with a verified repro), OR
+          - the agent demonstrably lost turns, was misled by the skill, or had to discover an undocumented workaround, OR
+          - a human transcript comment reporting a problem.
+        Do NOT file:
+          - API-taste or naming preferences ("X would read better as Y") with no failure behind them
+          - hypothetical "would be nice" features the run never actually needed
+          - stdlib wishlists or convenience helpers the agent worked around in one line
+          - restatements of documented, understood limitations that caused no confusion in the run
+          - praise, style observations, or anything whose removal would change nothing for the next run.
+        Promote a `## Suggested improvements` item to an issue (category="suggestion") ONLY when the run's transcript shows the friction that motivates it — the agent hit the gap, paid for it in turns or errors, and the report says so. A free-floating idea with no observed cost is dropped, not filed.
+        When in doubt, drop it. Fewer, stronger issues beat complete coverage — a missed minor paper-cut will be re-found by a later run; a weak issue wastes a human's attention today.
 
         # Classification rule (CRITICAL)
         If fixing the language would obviate the skill change, it's a LANGUAGE fix. Examples:
@@ -58,7 +71,8 @@ function Dedup(reports: string, open_issues: string) -> DedupResult {
 
         # Rules
         - Include `id` only when extending an existing open issue from open_issues. Omit `id` for new issues.
-        - `category` is "bug" for issues derived from an error/friction, or "suggestion" for a standalone improvement proposal. Default "bug".
+        - `category` is "bug" for issues derived from an error/failure, or "suggestion" for a friction-grounded improvement proposal (see the quality bar — an ungrounded proposal is dropped, not categorized). Default "bug".
+        - In `description`, name the observed friction: what failed or what it cost the agent (e.g. "burned 6 turns discovering..."). An issue whose description can't point at concrete friction shouldn't exist.
         - `suggestion` is a definitive, actionable fix in the skill or the language, written as structured Markdown with exactly these three parts: `**What to change:**` one sentence naming the fix; `**Where:**` the specific skill section, compiler area, or file the change lands in (as concretely as the reports allow); `**Change sketch:**` 2-5 bullets or a short fenced before/after snippet showing the shape of the change. Carry the agents' proposals through and sharpen them when several reports agree. ~50-200 words total. Always set it.
         - Titles under 80 chars.
         - Write `description` as a CONCISE Markdown bug report -- this becomes the issue body in Linear. Cover what's wrong and why it matters in ~2-4 sentences or a few short bullets. Be brief and information-dense: no padding, no restating the title, no multi-section essays, no narrating the agent's run. At most one `##` subheading, and only if it genuinely helps. Use `` `inline code` `` for identifiers. The reproduction goes in `repro`, never here. Keep each description well under ~150 words.
