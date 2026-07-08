@@ -440,6 +440,18 @@ pub async fn pick_port(base_port: u16, max_attempts: u16) -> anyhow::Result<(Tcp
     )
 }
 
+/// Resolve the given env var names against `lookup`, keeping only those set.
+/// Pure so tests never have to mutate the process environment.
+fn collect_referenced_env_vars(
+    names: &[String],
+    lookup: impl Fn(&str) -> Option<String>,
+) -> std::collections::HashMap<String, String> {
+    names
+        .iter()
+        .filter_map(|n| lookup(n).map(|v| (n.clone(), v)))
+        .collect()
+}
+
 /// Bind exactly `port` on loopback, with an actionable error when taken.
 pub async fn bind_exact_port(port: u16) -> anyhow::Result<TcpListener> {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -1539,19 +1551,19 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
 
     let mut broadcast_rx = state.broadcast_tx.subscribe();
 
-    // Send all process env vars so the UI can display them immediately.
+    // Send the env vars the project actually references (names from BAML
+    // source, values from the server process env). The full process
+    // environment is deliberately NOT sent — it contains unrelated secrets.
+    // Dynamically-computed keys still resolve lazily via the EnvVarRequest
+    // round-trip (playground_env.rs).
     {
-        let vars: std::collections::HashMap<String, String> = std::env::vars().collect();
+        let names = state.bex.all_env_var_names();
+        let vars = collect_referenced_env_vars(&names, |name| std::env::var(name).ok());
         if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
             && sink.send(msg).await.is_err()
         {
             return;
         }
-    }
-
-    // Send env var names referenced in BAML source code.
-    {
-        let names = state.bex.all_env_var_names();
         if let Some(msg) = to_ws_text(&WsOutMessage::KnownEnvVarNames { names })
             && sink.send(msg).await.is_err()
         {
@@ -3060,6 +3072,24 @@ mod tests {
         assert_eq!(query_param(Some("project=p"), "token"), None);
         assert_eq!(query_param(Some("token"), "token"), None);
         assert_eq!(query_param(None, "token"), None);
+    }
+
+    #[test]
+    fn collect_referenced_env_vars_filters_unset() {
+        let names = vec![
+            "OPENAI_API_KEY".to_string(),
+            "UNSET_VAR".to_string(),
+            "ANTHROPIC_API_KEY".to_string(),
+        ];
+        let vars = collect_referenced_env_vars(&names, |name| match name {
+            "OPENAI_API_KEY" => Some("sk-1".to_string()),
+            "ANTHROPIC_API_KEY" => Some("sk-2".to_string()),
+            _ => None,
+        });
+        assert_eq!(vars.len(), 2);
+        assert_eq!(vars["OPENAI_API_KEY"], "sk-1");
+        assert_eq!(vars["ANTHROPIC_API_KEY"], "sk-2");
+        assert!(!vars.contains_key("UNSET_VAR"));
     }
 
     #[tokio::test]
