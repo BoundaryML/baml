@@ -9,7 +9,10 @@ services:
       SUPERVISE: "web,ingress,baml_worker,baml_dedup,linear_sync"
       INGRESS_PORT: "8081"
       CONVEX_URL: "http://convex:3210"
-      CONVEX_ADMIN_KEY: "bammy-local|017fa262716197ab3da451de07695f72d028c1c9439796e1e840cf6122d7c1d987e51a5c67"
+      # Local self-hosted Convex admin key — mint one with:
+      #   docker compose exec convex ./generate_admin_key.sh
+      # then export CONVEX_ADMIN_KEY before `docker compose ... up`.
+      CONVEX_ADMIN_KEY: "${CONVEX_ADMIN_KEY:?mint via: docker compose exec convex ./generate_admin_key.sh}"
       SERVICE_URL: "http://localhost:8080"
       SERVICE_TOKEN: "devservicetoken"
       CLAUDE_PROXY_URLS: "http://claude-proxy:9090"
