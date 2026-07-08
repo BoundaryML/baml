@@ -34,6 +34,7 @@ struct LiveProject {
     /// Debounce epoch for scheduled engine rebuilds: every refresh bumps it,
     /// and a scheduled rebuild only runs if its captured epoch is still
     /// current after the debounce delay.
+    #[cfg(not(target_arch = "wasm32"))]
     rebuild_epoch: std::sync::atomic::AtomicU64,
 }
 
@@ -147,6 +148,7 @@ impl BexMulitProject {
             last_published_files: std::sync::Arc::new(std::sync::Mutex::new(
                 std::collections::HashSet::new(),
             )),
+            #[cfg(not(target_arch = "wasm32"))]
             rebuild_epoch: std::sync::atomic::AtomicU64::new(0),
         });
         projects.insert(crate::fs::FsPath::from_vfs(&root_path), project.clone());
@@ -336,7 +338,10 @@ impl BexMulitProject {
                 project_roots.push(pr);
             }
 
+            #[cfg(not(target_arch = "wasm32"))]
             project_roots.extend(self.collect_marked_project_roots(root));
+            #[cfg(target_arch = "wasm32")]
+            project_roots.extend(Self::collect_marked_project_roots(root));
         }
 
         project_roots.sort_by_key(|path| path.as_str().to_string());
@@ -385,18 +390,23 @@ impl BexMulitProject {
     /// `.gitignore`d directories (`target/`, `node_modules/`, build output)
     /// are pruned before descending; `should_skip_discovery_dir` is a
     /// backstop for workspaces that are not git repositories.
+    #[cfg(not(target_arch = "wasm32"))]
     fn collect_marked_project_roots(&self, root: &vfs::VfsPath) -> Vec<vfs::VfsPath> {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            // Native VfsPaths are OS paths joined onto the filesystem root, so
-            // the OS-level walker applies whenever the path really exists on
-            // disk. Fall back to the VFS walk otherwise (e.g. in-memory
-            // filesystems in tests).
-            let os_root = std::path::Path::new(root.as_str());
-            if os_root.is_dir() {
-                return self.collect_marked_project_roots_native(os_root);
-            }
+        // Native VfsPaths are OS paths joined onto the filesystem root, so
+        // the OS-level walker applies whenever the path really exists on
+        // disk. Fall back to the VFS walk otherwise (e.g. in-memory
+        // filesystems in tests).
+        let os_root = std::path::Path::new(root.as_str());
+        if os_root.is_dir() {
+            return self.collect_marked_project_roots_native(os_root);
         }
+        let mut found = Vec::new();
+        Self::collect_marked_project_roots_vfs(root, &mut found);
+        found
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn collect_marked_project_roots(root: &vfs::VfsPath) -> Vec<vfs::VfsPath> {
         let mut found = Vec::new();
         Self::collect_marked_project_roots_vfs(root, &mut found);
         found

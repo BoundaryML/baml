@@ -6,6 +6,7 @@
 //! Run with:
 //!   cargo test -p baml_tests --test memory_leak_audit -- --nocapture --ignored
 
+#[cfg(unix)]
 fn rss_mb() -> f64 {
     // macOS: ru_maxrss is bytes
     let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
@@ -23,6 +24,12 @@ fn rss_mb() -> f64 {
     }
 }
 
+#[cfg(not(unix))]
+fn rss_mb() -> f64 {
+    0.0
+}
+
+#[cfg(unix)]
 fn phys_footprint_mb() -> f64 {
     // Use current phys footprint via task_info would be better; fall back to ps
     let pid = std::process::id();
@@ -35,6 +42,11 @@ fn phys_footprint_mb() -> f64 {
         .parse::<f64>()
         .unwrap_or(0.0)
         / 1024.0
+}
+
+#[cfg(not(unix))]
+fn phys_footprint_mb() -> f64 {
+    rss_mb()
 }
 
 fn project_source(n_funcs: usize, edit_tag: usize) -> String {

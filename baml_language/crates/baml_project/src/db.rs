@@ -479,7 +479,7 @@ impl ProjectDatabase {
     /// Suitable for the playground which must function during editing.
     ///
     /// Callee graphs are inlined at every call site, memoized per callee, and
-    /// capped at [`CFG_EXPANSION_NODE_BUDGET`] total nodes — the fully-inlined
+    /// capped at 5,000 total nodes — the fully-inlined
     /// representation is otherwise exponential in call-chain depth.
     pub fn ast_control_flow_graph(
         &self,

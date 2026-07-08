@@ -116,9 +116,6 @@ pub(crate) fn publish_history_engine_closed(engine_id: crate::ids::EngineId) {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-pub(crate) fn publish_history_engine_closed(_engine_id: crate::ids::EngineId) {}
-
 #[cfg(not(target_arch = "wasm32"))]
 pub struct HistoryObserverRegistration {
     id: u64,
