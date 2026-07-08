@@ -3532,6 +3532,78 @@ function needs<T extends Marker>(x: T) -> int throws never {
         );
     }
 
+    // ── Field-link well-formedness (E0128 / E0129 / E0130) ──
+
+    #[test]
+    fn unknown_interface_field_link_is_reported() {
+        // `bogus as x`: the left side is not a field of `HasField` (E0128). The class field `x`
+        // exists (no E0129) and covers `HasField.x` (no E0124), isolating E0128.
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  x: int\n  implements HasField {\n    bogus as x\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::UnknownInterfaceFieldLink { field, .. } if field.as_str() == "bogus"
+            )),
+            "expected UnknownInterfaceFieldLink for `bogus`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn unknown_class_field_link_is_reported() {
+        // `x as bogus`: the right side is not a field of `Holder` (E0129). The interface field
+        // `x` exists (no E0128) and is linked (no E0124), isolating E0129.
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  x: int\n  implements HasField {\n    x as bogus\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::UnknownClassFieldInInterfaceLink { field, .. } if field.as_str() == "bogus"
+            )),
+            "expected UnknownClassFieldInInterfaceLink for `bogus`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn duplicate_interface_field_link_is_reported() {
+        // `x as a` and `x as b` both link the same interface field `x` (E0130).
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  a: int\n  b: int\n  \
+             implements HasField {\n    x as a\n    x as b\n  }\n}\n",
+        );
+        assert!(
+            diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::DuplicateInterfaceFieldLink { field, .. } if field.as_str() == "x"
+            )),
+            "expected DuplicateInterfaceFieldLink for `x`, got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn well_formed_field_link_is_accepted() {
+        // `x as y`: `x` is an interface field, `y` a class field, no duplicate — none of
+        // E0128/E0129/E0130 fire.
+        let diags = impl_diagnostics(
+            "interface HasField {\n  x: int\n}\n\
+             class Holder {\n  y: int\n  implements HasField {\n    x as y\n  }\n}\n",
+        );
+        assert!(
+            !diags.iter().any(|e| matches!(
+                e,
+                TirTypeError::UnknownInterfaceFieldLink { .. }
+                    | TirTypeError::UnknownClassFieldInInterfaceLink { .. }
+                    | TirTypeError::DuplicateInterfaceFieldLink { .. }
+            )),
+            "a well-formed field link should raise no link diagnostics, got {diags:?}"
+        );
+    }
+
     // ── `_` type-inference placeholder: rejected (inference variables unimplemented) ──
 
     #[test]

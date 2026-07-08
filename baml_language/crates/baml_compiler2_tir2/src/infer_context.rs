@@ -561,6 +561,25 @@ pub enum TirTypeError {
         /// failure; `None` when no local type appears anywhere in the impl's inputs.
         uncovered_param: Option<Name>,
     },
+    /// The left side of a `field as class_field` link does not name a field of the
+    /// implemented interface. Field-link well-formedness (E0128).
+    UnknownInterfaceFieldLink {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
+    /// The right side of a `field as class_field` link does not name a field of the
+    /// class. Field-link well-formedness (E0129).
+    UnknownClassFieldInInterfaceLink {
+        class: Name,
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
+    /// The same interface field is linked by more than one `field as class_field` link in
+    /// one `implements` block. Field-link well-formedness (E0130).
+    DuplicateInterfaceFieldLink {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -1309,6 +1328,31 @@ impl fmt::Display for TirTypeError {
                     interface.render_user_facing()
                 ),
             },
+            TirTypeError::UnknownInterfaceFieldLink { interface, field } => {
+                write!(
+                    f,
+                    "interface `{}` has no field `{field}` to link",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::UnknownClassFieldInInterfaceLink {
+                class,
+                interface,
+                field,
+            } => {
+                write!(
+                    f,
+                    "class `{class}` has no field `{field}` to link for interface `{}`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::DuplicateInterfaceFieldLink { interface, field } => {
+                write!(
+                    f,
+                    "field `{field}` of interface `{}` is linked more than once",
+                    interface.render_user_facing()
+                )
+            }
         }
     }
 }

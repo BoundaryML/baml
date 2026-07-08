@@ -101,6 +101,14 @@ pub enum ImplDiagnosticLocation {
     /// several share the name (itself an E0093 duplicate), the diagnostic marks all of them.
     /// Falls back to the whole block.
     Method(Name),
+    /// The interface-field side of a `field as class_field` link, by interface-field name —
+    /// resolved via [`ImplDataSourceMap::interface_field_link_spans`] to *every* link with that
+    /// interface-field name (a duplicate marks all sites). Falls back to the whole block.
+    InterfaceFieldLink(Name),
+    /// The class-field side of a `field as class_field` link, by class-field name — resolved via
+    /// [`ImplDataSourceMap::class_field_link_spans`] to *every* link with that class-field name.
+    /// Falls back to the whole block.
+    ClassFieldLink(Name),
 }
 
 /// Spans for an `implements` block, split out of [`ImplData`] for Salsa
@@ -118,6 +126,14 @@ pub struct ImplDataSourceMap {
     /// Override-method name → the span of *every* override with that name (source order), so a
     /// [`ImplDiagnosticLocation::Method`] diagnostic marks all same-named overrides.
     pub method_spans: HashMap<Name, Vec<Span>>,
+    /// Interface-field name → the span of the interface-field side of *every* `field as
+    /// class_field` link with that name, so an [`ImplDiagnosticLocation::InterfaceFieldLink`]
+    /// diagnostic (E0128/E0130) marks all such links.
+    pub interface_field_link_spans: HashMap<Name, Vec<Span>>,
+    /// Class-field name → the span of the class-field side of *every* `field as class_field` link
+    /// with that name, so an [`ImplDiagnosticLocation::ClassFieldLink`] diagnostic (E0129) marks
+    /// all such links.
+    pub class_field_link_spans: HashMap<Name, Vec<Span>>,
 }
 
 /// The qualified name of a resolved interface loc (head identity for building a
@@ -545,25 +561,87 @@ pub fn impl_data<'db>(
                 ));
             }
         }
-        // E0124: for an in-body impl of a field interface, each interface field must be
-        // covered by a same-named class field or an explicit `field as class_field` link.
-        // (Out-of-body field impls are already E0126, so field conformance is in-body only.)
-        if !iface_data.fields.is_empty()
-            && matches!(origin, InterfaceImplOrigin::InBodyClass { .. })
+        // Field-side conformance, in-body class impls only (out-of-body field impls are
+        // already E0126, and `field as` links only appear in a class body). Field-link
+        // well-formedness (E0128/E0129/E0130) runs whenever links are present; field coverage
+        // (E0124) runs when the interface declares fields.
+        if let InterfaceImplOrigin::InBodyClass { class_qtn } = &origin
             && let ImplSubject::InClass { class, .. } = &block.subject
+            && (!block.field_links.is_empty() || !iface_data.fields.is_empty())
         {
             let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class);
             let class_fields = crate::inference::resolve_class_fields(db, class_loc);
+            let is_iface_field =
+                |name: &Name| iface_data.fields.iter().any(|fld| fld.name == *name);
+            let is_class_field =
+                |name: &Name| class_fields.fields.iter().any(|(n, _, _)| n == name);
+
+            // Interface-field side of each link, deduped by interface-field name (the location
+            // resolves to every link with that name). E0130: linked more than once. E0128: the
+            // named interface field does not exist.
+            for (idx, link) in block.field_links.iter().enumerate() {
+                let iface_field = &link.interface_field;
+                if block.field_links[..idx]
+                    .iter()
+                    .any(|l| l.interface_field == *iface_field)
+                {
+                    continue;
+                }
+                if block.field_links[idx + 1..]
+                    .iter()
+                    .any(|l| l.interface_field == *iface_field)
+                {
+                    conformance_diags.push((
+                        crate::infer_context::TirTypeError::DuplicateInterfaceFieldLink {
+                            interface: iface_qtn.clone(),
+                            field: iface_field.clone(),
+                        },
+                        ImplDiagnosticLocation::InterfaceFieldLink(iface_field.clone()),
+                    ));
+                }
+                if !is_iface_field(iface_field) {
+                    conformance_diags.push((
+                        crate::infer_context::TirTypeError::UnknownInterfaceFieldLink {
+                            interface: iface_qtn.clone(),
+                            field: iface_field.clone(),
+                        },
+                        ImplDiagnosticLocation::InterfaceFieldLink(iface_field.clone()),
+                    ));
+                }
+            }
+            // Class-field side (E0129), only for links whose interface field is valid (an
+            // unknown-interface-field link is already E0128 — mirrors the old stack's skip).
+            // Deduped by class-field name among those eligible links.
+            for (idx, link) in block.field_links.iter().enumerate() {
+                if !is_iface_field(&link.interface_field) {
+                    continue;
+                }
+                let class_field = &link.class_field;
+                if block.field_links[..idx]
+                    .iter()
+                    .any(|l| l.class_field == *class_field && is_iface_field(&l.interface_field))
+                {
+                    continue;
+                }
+                if !is_class_field(class_field) {
+                    conformance_diags.push((
+                        crate::infer_context::TirTypeError::UnknownClassFieldInInterfaceLink {
+                            class: class_qtn.name().clone(),
+                            interface: iface_qtn.clone(),
+                            field: class_field.clone(),
+                        },
+                        ImplDiagnosticLocation::ClassFieldLink(class_field.clone()),
+                    ));
+                }
+            }
+            // E0124: every interface field must be covered by a same-named class field or an
+            // explicit `field as class_field` link.
             for iface_field in &iface_data.fields {
                 let linked = block
                     .field_links
                     .iter()
                     .any(|fl| fl.interface_field == iface_field.name);
-                let same_named = class_fields
-                    .fields
-                    .iter()
-                    .any(|(name, _, _)| *name == iface_field.name);
-                if !linked && !same_named {
+                if !linked && !is_class_field(&iface_field.name) {
                     conformance_diags.push((
                         crate::infer_context::TirTypeError::MissingInterfaceField {
                             interface: iface_qtn.clone(),
@@ -654,11 +732,27 @@ pub fn impl_data_source_map<'db>(
             .or_default()
             .push(Span::new(file_id, func.span));
     }
+    // Group each field link's endpoint spans by name, so a per-name field-link diagnostic
+    // (E0128/E0129/E0130) marks every link that mentions that name.
+    let mut interface_field_link_spans: HashMap<Name, Vec<Span>> = HashMap::new();
+    let mut class_field_link_spans: HashMap<Name, Vec<Span>> = HashMap::new();
+    for link in &block.field_links {
+        interface_field_link_spans
+            .entry(link.interface_field.clone())
+            .or_default()
+            .push(Span::new(file_id, link.interface_field_span));
+        class_field_link_spans
+            .entry(link.class_field.clone())
+            .or_default()
+            .push(Span::new(file_id, link.class_field_span));
+    }
     Some(ImplDataSourceMap {
         impl_span: Span::new(file_id, impl_range),
         interface_target_span: Span::new(file_id, block.interface_target.span),
         for_target_span,
         method_spans,
+        interface_field_link_spans,
+        class_field_link_spans,
     })
 }
 
