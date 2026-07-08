@@ -92,11 +92,11 @@ Check a scenario when its `ns_ai_scenarios/NN_*/` exists with green tests on the
 with the blocker instead of faking a run.
 
 - Single-turn & output: [ ] 01 [ ] 02 [ ] 03 [ ] 04 [ ] 05 [ ] 06 [ ] 07 [ ] 08
-- Tools & agents: [ ] 09 [ ] 10 [ ] 11 [ ] 12 [ ] 13 [ ] 14 [ ] 15 [ ] 16
+- Tools & agents: [ ] 09 [x] 10 (ToolLoop + $run_tools, offline) [ ] 11 [ ] 12 [ ] 13 [ ] 14 [ ] 15 [ ] 16
 - State & memory: [ ] 17 [ ] 18(P8-store) [ ] 19(P8-store) [ ] 20 [ ] 21(P8-store)
-- Realtime & voice: [ ] 22 [ ] 23 [ ] 24 [ ] 25 [ ] 26
-- Cross-cutting: [ ] 27 [ ] 28 [ ] 29 [ ] 30 [ ] 31 [ ] 32 [ ] 33 [ ] 34 [ ] 35 [ ] 36
-- Harnesses (P8-subprocess): [ ] 37 [ ] 38 [ ] 39 [ ] 40 [ ] 41 [ ] 42
+- Realtime & voice: [x] 22 (offline `$live` + fake; live tier = ai_realtime.rs) [x] 23 (negotiation) [ ] 24 [ ] 25 [ ] 26
+- Cross-cutting: [ ] 27 [ ] 28 [ ] 29 [ ] 30 [ ] 31 [x] 32 ($with value+meta, offline) [ ] 33 [ ] 34 [ ] 35 [ ] 36
+- Harnesses (P8-subprocess): [x] 37 (config+negotiation; BLOCKED:P8 for live) [ ] 38 [ ] 39 [ ] 40 [ ] 41 [x] 42 (drive_any negotiation)
 - Workflows: [ ] 43 [ ] 44(P8-store) [ ] 45(P8-store) [ ] 46 [ ] 47
 
 ## Working rules (summary — full version in [`README.md`](./README.md))
