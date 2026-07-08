@@ -50,7 +50,12 @@ import type {
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
 import { ArgsForm } from './ArgsForm';
-import { defaultValueForSchema } from './args-form-model';
+import {
+  defaultValueForSchema,
+  isPlainObject,
+  normalizeArgs,
+  typeLookupFrom,
+} from './args-form-model';
 import { ResultDisplay } from './ResultDisplay';
 import { ValueRenderer } from './ValueRenderer';
 import { CapturedValueCard } from './CapturedValueCard';
@@ -1512,21 +1517,30 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setPreviewLoading(false);
   }, [selectedFn]);
 
-  // Swap the args editor when the selected function changes: args the user
-  // typed for that function win, then its `argsByFunction` seed (exact or
-  // bare-name key, since selection may be namespaced), then the panel seed.
+  // The authoritative args string for a function at any moment: args the
+  // user typed for it this session win, then its `argsByFunction` seed
+  // (exact or bare-name key, since selection may be namespaced), then the
+  // panel seed. The swap effect writes this into argsJson on selection
+  // change; effects that must not read the (one-commit-stale on selection
+  // change) argsJson state read this instead.
+  const baseArgsFor = useCallback(
+    (fn: string) =>
+      typedArgsByFnRef.current[fn] ??
+      argsByFunction?.[fn] ??
+      argsByFunction?.[fn.split('.').pop() ?? ''] ??
+      initialArgsJson ??
+      '{}',
+    [argsByFunction, initialArgsJson],
+  );
+
+  // Swap the args editor when the selected function changes.
   const prevArgsFnRef = useRef(selectedFn);
   useEffect(() => {
     if (prevArgsFnRef.current === selectedFn) return;
     prevArgsFnRef.current = selectedFn;
     if (!selectedFn) return;
-    const seed =
-      argsByFunction?.[selectedFn] ??
-      argsByFunction?.[selectedFn.split('.').pop() ?? ''];
-    setArgsJson(
-      typedArgsByFnRef.current[selectedFn] ?? seed ?? initialArgsJson ?? '{}',
-    );
-  }, [selectedFn, argsByFunction, initialArgsJson]);
+    setArgsJson(baseArgsFor(selectedFn));
+  }, [selectedFn, baseArgsFor]);
 
   // Auto-refresh prompt/curl preview when args change while tab is active
   useEffect(() => {
@@ -2028,18 +2042,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // ── Args form wiring ─────────────────────────────────────────────────────
   // `undefined` = no schema shipped (old engine / extraction miss) → raw-only.
   const paramSchemas = selectedFnInfo?.params;
+  const projectTypes = currentUpdate?.types;
+  const typeLookup = useMemo(
+    () => typeLookupFrom(projectTypes),
+    [projectTypes],
+  );
   // The form can only render args that parse to a plain JSON object; anything
   // else (mid-edit raw JSON, array) falls back to the raw input with a notice
   // instead of destroying the user's text.
   const parsedArgs = useMemo<Record<string, unknown> | null>(() => {
     try {
       const parsed: unknown = JSON.parse(argsJson);
-      if (
-        typeof parsed === 'object' &&
-        parsed !== null &&
-        !Array.isArray(parsed)
-      ) {
-        return parsed as Record<string, unknown>;
+      if (isPlainObject(parsed)) {
+        return parsed;
       }
     } catch {
       // fall through
@@ -2053,25 +2068,78 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
   // Seed empty args with schema defaults, once per function per session. This
   // is what injects `$baml` class markers and required keys without the user
-  // touching every field. Skipped when the function already has typed args.
+  // touching every field. Skipped when the function already has typed args or
+  // a host seed. Deliberately does NOT read `argsJson`/`parsedArgs` — on the
+  // render where `selectedFn` changes those still reflect the previous
+  // function (the swap effect's setState lands next render), and reading them
+  // here used to clobber just-restored host seeds with machine defaults.
   const seededFnsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!selectedFn || !paramSchemas || paramSchemas.length === 0) return;
     if (seededFnsRef.current.has(selectedFn)) return;
     if (typedArgsByFnRef.current[selectedFn] !== undefined) return;
-    if (parsedArgs === null || Object.keys(parsedArgs).length > 0) return;
+    try {
+      const base: unknown = JSON.parse(baseArgsFor(selectedFn));
+      if (!isPlainObject(base) || Object.keys(base).length > 0) {
+        return; // a host seed exists — never overwrite it
+      }
+    } catch {
+      return; // leave an unparseable host seed for the user to see and fix
+    }
     seededFnsRef.current.add(selectedFn);
     const seeded: Record<string, unknown> = {};
     for (const param of paramSchemas) {
       if (!param.hasDefault) {
-        seeded[param.name] = defaultValueForSchema(param.schema);
+        seeded[param.name] = defaultValueForSchema(param.schema, typeLookup);
       }
     }
     // Write through the shared setter so the seed also lands in
     // typedArgsByFnRef — otherwise switching away and back restores '{}' and
     // the seeded defaults/markers are lost.
     updateArgsJson(JSON.stringify(seeded));
-  }, [selectedFn, paramSchemas, parsedArgs, updateArgsJson]);
+  }, [selectedFn, paramSchemas, typeLookup, baseArgsFor, updateArgsJson]);
+
+  // Normalize wire markers once per function while form mode is active: bare
+  // enum strings (hand-edited raw JSON, host seeds, pre-marker session
+  // memory) and markerless class objects render as typed widgets but would
+  // encode untyped (string / mapValue) — no String→Enum coercion exists on
+  // the args path. Rewriting through the shared setter keeps argsJson
+  // matching what the widgets display. Reads the authoritative args via
+  // baseArgsFor, never argsJson state (stale on the selection-change
+  // commit). Raw mode re-arms it, so hand edits get re-normalized on the
+  // way back into form mode.
+  const normalizeStateRef = useRef<{ fn: string | null; done: boolean }>({
+    fn: null,
+    done: false,
+  });
+  useEffect(() => {
+    const state = normalizeStateRef.current;
+    if (argsMode === 'raw') {
+      state.done = false;
+      return;
+    }
+    if (!selectedFn || !paramSchemas) return;
+    if (state.fn === selectedFn && state.done) return;
+    normalizeStateRef.current = { fn: selectedFn, done: true };
+    let args: unknown;
+    try {
+      args = JSON.parse(baseArgsFor(selectedFn));
+    } catch {
+      return; // not form-renderable; the raw fallback shows it as-is
+    }
+    if (!isPlainObject(args)) return;
+    const normalized = normalizeArgs(args, paramSchemas, typeLookup);
+    if (normalized !== args) {
+      updateArgsJson(JSON.stringify(normalized));
+    }
+  }, [
+    argsMode,
+    selectedFn,
+    paramSchemas,
+    typeLookup,
+    baseArgsFor,
+    updateArgsJson,
+  ]);
   // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
   // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
   // them. expr functions just return a structured value (raw == parsed).
@@ -2366,13 +2434,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         // playground (form fields, raw input, graph) without stealing
         // Cmd/Ctrl+Enter from the host's code editor.
         onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-            e.preventDefault();
-            // Same gate as the Run buttons: never start a run over build
-            // errors. (onRunFunction can't check this itself — hasErrors is
-            // derived after its declaration.)
-            if (!hasErrors) void onRunFunction();
-          }
+          if (!((e.metaKey || e.ctrlKey) && e.key === 'Enter')) return;
+          // Same gates as the Run buttons: no runs from the collection or
+          // test-run views (where the run tab, history, and error strip are
+          // all hidden — a run started here would be invisible), and never
+          // over build errors. (onRunFunction can't check these itself —
+          // hasErrors is derived after its declaration.) Don't swallow the
+          // keystroke when nothing will run.
+          if (viewingCollection || viewingTestRun) return;
+          e.preventDefault();
+          if (!hasErrors) void onRunFunction();
         }}
       >
         {/* ──── Combined top bar ──── */}
@@ -3127,6 +3198,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                         <ArgsForm
                           key={selectedFn ?? ''}
                           params={paramSchemas}
+                          types={projectTypes}
                           value={parsedArgs}
                           onChange={onArgsFormChange}
                         />

@@ -34,8 +34,9 @@ pub mod testing;
 pub use check::{CheckResult, collect_compiler2_diagnostics, collect_diagnostics};
 pub use client_codegen::build_symbol_pool;
 pub use db::{CursorContext, EventCallback, ProjectDatabase};
-pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema};
+pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
 pub use symbols::{
-    FunctionOrigin, FunctionSymbol, Symbol, SymbolKind, TestSymbol, list_functions,
-    list_functions_with_metadata, list_tests_with_metadata,
+    FunctionListing, FunctionOrigin, FunctionSymbol, Symbol, SymbolKind, TestSymbol,
+    list_functions, list_functions_with_metadata, list_playground_function_names,
+    list_tests_with_metadata,
 };

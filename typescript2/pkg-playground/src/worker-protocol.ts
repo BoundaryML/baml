@@ -79,10 +79,10 @@ export interface FieldSchemaField {
   schema: FieldSchema;
 }
 
-/** Self-contained recursive type schema for the args form (mirrors
- *  `baml_project::FieldSchema`). Class/enum `name`s are the canonical dotted
- *  FQN the engine registers (`user.shapes.Foo`), usable verbatim in `$baml`
- *  markers. */
+/** Recursive type schema for the args form (mirrors
+ *  `baml_project::FieldSchema`). Named types are `ref`s into
+ *  `ProjectUpdate.types`; `name`s are the canonical dotted FQN the engine
+ *  registers (`user.shapes.Foo`), usable verbatim in `$baml` markers. */
 export type FieldSchema =
   | { type: 'string' }
   | { type: 'int' }
@@ -92,19 +92,24 @@ export type FieldSchema =
   | { type: 'bigint' }
   | { type: 'media'; kind: string }
   | { type: 'literal'; value: unknown }
-  | { type: 'enum'; name: string; values: string[] }
-  | {
-      type: 'class';
-      name: string;
-      /** Empty when `recursive` — expansion stops at a repeated class. */
-      fields: FieldSchemaField[];
-      recursive: boolean;
-    }
+  /** Reference to a named type in `ProjectUpdate.types`; a dangling name
+   *  (mid-edit inconsistency) degrades to the raw-JSON fallback. */
+  | { type: 'ref'; name: string }
+  /** A specific-variant param type (`s: Status.Active`) — self-contained so
+   *  the form can emit the enum wire marker without a table entry. */
+  | { type: 'enumVariant'; name: string; value: string }
   | { type: 'list'; item: FieldSchema }
   | { type: 'map'; key: FieldSchema; value: FieldSchema }
   | { type: 'optional'; inner: FieldSchema }
   | { type: 'union'; variants: FieldSchema[] }
   | { type: 'unsupported'; display: string };
+
+/** A named type's definition in the per-project table (mirrors
+ *  `baml_project::TypeSchema`), keyed by canonical dotted FQN. */
+export type TypeSchema =
+  | { kind: 'class'; fields: FieldSchemaField[] }
+  | { kind: 'enum'; values: string[] }
+  | { kind: 'alias'; schema: FieldSchema };
 
 /** Metadata about a BAML function exposed to the playground.
  *
@@ -126,6 +131,10 @@ export interface FunctionInfo {
 export interface ProjectUpdate {
   isBexCurrent: boolean;
   functions: FunctionInfo[];
+  /** Shared type table for `FunctionInfo.params` refs. `undefined` = binary
+   *  predates the args form (refs, if any, degrade to raw JSON); may be an
+   *  empty object when no function references named types. */
+  types?: Record<string, TypeSchema>;
   diagnostics: DiagnosticEntry[];
 }
 

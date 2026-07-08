@@ -221,12 +221,14 @@ impl BexProject {
         &self,
     ) -> HashMap<String, baml_compiler2_visualization::control_flow::ControlFlowGraph> {
         let db = self.db.lock().unwrap();
-        baml_project::list_functions_with_metadata(&db)
+        // Name-keyed only — the schema-free listing avoids paying param
+        // extraction a second time on every successful build.
+        baml_project::list_playground_function_names(&db)
             .into_iter()
-            .filter_map(|function| {
-                let graph = db.ast_control_flow_graph(&function.name)?;
+            .filter_map(|name| {
+                let graph = db.ast_control_flow_graph(&name)?;
                 Some((
-                    function.name,
+                    name,
                     baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(
                         &graph,
                     ),

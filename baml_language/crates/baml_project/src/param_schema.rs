@@ -1,18 +1,23 @@
 //! Function-parameter schemas for the playground's dynamic args form.
 //!
-//! Converts a function's resolved parameter types ([`Ty`]) into a
-//! self-contained, serializable [`FieldSchema`] tree: class fields and enum
-//! variants are expanded inline (with a cycle guard — recursive types are
-//! legal through optional/list/map positions), nullable unions fold into
-//! `Optional`, type aliases resolve before dispatch, and every non-data
-//! variant (functions, interfaces, type variables, TIR sentinels, …) degrades
-//! to `Unsupported` rather than erroring: users hold invalid intermediate
-//! states constantly while editing.
+//! Converts a function's resolved parameter types ([`Ty`]) into a serializable
+//! [`FieldSchema`] tree plus a shared per-project type table: named types
+//! (classes, enums, aliases) are emitted once into the table and referenced by
+//! [`FieldSchema::Ref`], so the wire payload is proportional to the number of
+//! distinct types, not the number of paths through the type graph — aliases
+//! included, since inlining them would re-expand the target per reference
+//! site and blow up on alias DAGs exactly like the class-graph case. Nullable
+//! unions fold into `Optional`, and every non-data variant (functions,
+//! interfaces, type variables, TIR sentinels, …) degrades to `Unsupported`
+//! rather than erroring: users hold invalid intermediate states constantly
+//! while editing.
 //!
-//! Class and enum `name`s are the canonical dotted FQN the engine registers
-//! and emits (`user.shapes.Foo` — [`QualifiedTypeName::render_dotted`] with
-//! `user_facing = false`), so a `$baml: { type: name }` marker built from a
-//! schema round-trips through the args wire protocol unchanged.
+//! Table keys and type `name`s are the canonical dotted FQN the engine
+//! registers and emits (`user.shapes.Foo` — [`QualifiedTypeName::render_dotted`]
+//! with `user_facing = false`), so a `$baml: { type: name }` marker built from
+//! a schema round-trips through the args wire protocol unchanged.
+
+use std::collections::BTreeMap;
 
 use baml_compiler2_hir::package::PackageId;
 use baml_compiler2_tir::{
@@ -25,8 +30,15 @@ use serde::Serialize;
 use crate::db::ProjectDatabase;
 
 /// Guards runaway recursion through pathological (but legal) deeply-nested
-/// types. Same bound as TIR's `CycleDetector`.
+/// anonymous types (`map<string, map<string, …>>`). Named types don't count
+/// against it — each expands at most once into the table. Same bound as TIR's
+/// `CycleDetector`.
 const MAX_DEPTH: usize = 64;
+
+/// The compiler appends this synthetic parameter to every LLM function
+/// (`append_default_client_param`); `client` is a reserved name there, so a
+/// trailing match can only be the injected one. The form must not render it.
+const INJECTED_CLIENT_PARAM: (&str, &str) = ("client", "baml.llm.Client");
 
 /// Schema for one function parameter.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -49,7 +61,18 @@ pub struct FieldSchemaField {
     pub schema: FieldSchema,
 }
 
-/// A self-contained, recursively-expanded type schema for form rendering.
+/// A named type's definition in the per-project table
+/// (`ProjectUpdate.types`), keyed by canonical dotted FQN.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TypeSchema {
+    Class { fields: Vec<FieldSchemaField> },
+    Enum { values: Vec<String> },
+    Alias { schema: FieldSchema },
+}
+
+/// A type schema for form rendering. Named types are [`FieldSchema::Ref`]s
+/// into the type table; the entry's kind discriminates class/enum/alias.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum FieldSchema {
@@ -68,16 +91,16 @@ pub enum FieldSchema {
     Literal {
         value: serde_json::Value,
     },
-    Enum {
+    /// A reference to a named type in the table. A dangling name (mid-edit
+    /// inconsistency) degrades to raw JSON in the UI.
+    Ref {
         name: String,
-        values: Vec<String>,
     },
-    Class {
+    /// A specific-variant type (`s: Status.Active`) — self-contained (no table
+    /// entry needed) so the form can emit the enum wire marker directly.
+    EnumVariant {
         name: String,
-        /// Empty when `recursive` — the cycle guard stops inline expansion on
-        /// a repeated class; the form falls back to raw JSON for it.
-        fields: Vec<FieldSchemaField>,
-        recursive: bool,
+        value: String,
     },
     List {
         item: Box<FieldSchema>,
@@ -101,22 +124,38 @@ pub enum FieldSchema {
 }
 
 /// Extract parameter schemas for the function `name` in `namespace_path` of
-/// the user package. `None` means the function is missing from the package
-/// interface (mid-edit inconsistency) — the UI treats it as "no schema
-/// available", which is distinct from `Some(vec![])` ("takes no arguments").
+/// the user package, inserting every named type it references into `table`
+/// (shared across all functions of a project update). `None` means the
+/// function is missing from the package interface (mid-edit inconsistency) —
+/// the UI treats it as "no schema available", which is distinct from
+/// `Some(vec![])` ("takes no arguments").
 pub(crate) fn function_param_schemas(
     db: &ProjectDatabase,
     iface: &PackageInterface,
     namespace_path: &[Name],
     name: &Name,
+    is_llm: bool,
+    table: &mut BTreeMap<String, TypeSchema>,
 ) -> Option<Vec<ParamSchema>> {
     let func = iface.lookup_function(namespace_path, name)?;
-    let cx = SchemaCx {
+    let mut params = func.params.as_slice();
+    if is_llm && let Some((last, rest)) = params.split_last() {
+        let (client_name, client_ty) = INJECTED_CLIENT_PARAM;
+        let is_injected_client = last
+            .name
+            .as_ref()
+            .is_some_and(|n| n.as_str() == client_name)
+            && matches!(&last.ty, Ty::Class(qtn, _, _) if qtn.render_dotted(false) == client_ty);
+        if is_injected_client {
+            params = rest;
+        }
+    }
+    let mut cx = SchemaCx {
         db,
         user_iface: iface,
+        table,
     };
-    let params = func
-        .params
+    let params = params
         .iter()
         .enumerate()
         .map(|(i, param)| ParamSchema {
@@ -125,18 +164,23 @@ pub(crate) fn function_param_schemas(
                 .as_ref()
                 .map_or_else(|| format!("arg{i}"), ToString::to_string),
             has_default: matches!(param.mode, FunctionParamMode::Optional),
-            schema: cx.field_schema(&param.ty, &mut Vec::new(), 0),
+            schema: cx.field_schema(&param.ty, 0),
         })
         .collect();
     Some(params)
 }
 
-struct SchemaCx<'db> {
+struct SchemaCx<'db, 't> {
     db: &'db ProjectDatabase,
     user_iface: &'db PackageInterface,
+    /// Named types encountered so far, shared across every function of the
+    /// project update. Doubles as the occurs-check for recursive types: a
+    /// placeholder entry goes in before a body expands, so self-references
+    /// resolve to a `Ref` instead of recursing.
+    table: &'t mut BTreeMap<String, TypeSchema>,
 }
 
-impl<'db> SchemaCx<'db> {
+impl<'db> SchemaCx<'db, '_> {
     /// Resolve a type name to its exported definition: own-package types via
     /// the user interface, dependency types (stdlib/builtins) via that
     /// package's own Salsa-cached interface. A miss is expected mid-edit and
@@ -150,14 +194,10 @@ impl<'db> SchemaCx<'db> {
         }
     }
 
-    /// `path` holds the class/alias names currently being expanded (cycle
-    /// guard); `depth` counts every recursion step (structural nesting too).
-    fn field_schema(
-        &self,
-        ty: &Ty,
-        path: &mut Vec<QualifiedTypeName>,
-        depth: usize,
-    ) -> FieldSchema {
+    /// `depth` counts anonymous structural nesting within one type body; it
+    /// resets when a class or alias body is expanded into the table (each
+    /// body is its own source-bounded tree, expanded at most once).
+    fn field_schema(&mut self, ty: &Ty, depth: usize) -> FieldSchema {
         if depth >= MAX_DEPTH {
             return unsupported(ty);
         }
@@ -176,18 +216,20 @@ impl<'db> SchemaCx<'db> {
                 None => unsupported(ty),
             },
             Ty::Enum(qtn, _) => match self.lookup_type(qtn) {
-                Some(ExportedType::Enum { variants, .. }) => FieldSchema::Enum {
-                    name: qtn.render_dotted(false),
-                    values: variants.iter().map(ToString::to_string).collect(),
-                },
+                Some(ExportedType::Enum { variants, .. }) => {
+                    let name = qtn.render_dotted(false);
+                    let values = variants.iter().map(ToString::to_string).collect();
+                    self.table
+                        .entry(name.clone())
+                        .or_insert(TypeSchema::Enum { values });
+                    FieldSchema::Ref { name }
+                }
                 _ => unsupported(ty),
             },
-            // A specific-variant type (`s: Status.Active`): a single-value
-            // enum, so the form still emits a real enum wire value.
             Ty::EnumVariant(qtn, variant, _) => match self.lookup_type(qtn) {
-                Some(ExportedType::Enum { .. }) => FieldSchema::Enum {
+                Some(ExportedType::Enum { .. }) => FieldSchema::EnumVariant {
                     name: qtn.render_dotted(false),
-                    values: vec![variant.to_string()],
+                    value: variant.to_string(),
                 },
                 _ => unsupported(ty),
             },
@@ -198,12 +240,8 @@ impl<'db> SchemaCx<'db> {
                     return unsupported(ty);
                 }
                 let name = qtn.render_dotted(false);
-                if path.contains(qtn) {
-                    return FieldSchema::Class {
-                        name,
-                        fields: Vec::new(),
-                        recursive: true,
-                    };
+                if self.table.contains_key(&name) {
+                    return FieldSchema::Ref { name };
                 }
                 match self.lookup_type(qtn) {
                     Some(ExportedType::Class {
@@ -211,47 +249,61 @@ impl<'db> SchemaCx<'db> {
                         generic_params,
                         ..
                     }) if generic_params.is_empty() => {
-                        path.push(qtn.clone());
+                        // Placeholder before expanding the body: recursive
+                        // references hit the contains_key check above and
+                        // resolve to a Ref, so each class expands exactly once.
+                        self.table
+                            .insert(name.clone(), TypeSchema::Class { fields: Vec::new() });
                         let fields = fields
                             .iter()
                             .map(|(field_name, field_ty)| FieldSchemaField {
                                 name: field_name.to_string(),
-                                schema: self.field_schema(field_ty, path, depth + 1),
+                                schema: self.field_schema(field_ty, 0),
                             })
                             .collect();
-                        path.pop();
-                        FieldSchema::Class {
-                            name,
-                            fields,
-                            recursive: false,
-                        }
+                        self.table
+                            .insert(name.clone(), TypeSchema::Class { fields });
+                        FieldSchema::Ref { name }
                     }
                     _ => unsupported(ty),
                 }
             }
-            // Only recursive aliases survive TIR lowering (non-recursive ones
-            // are pre-expanded), so a revisit here is the common case, not the
-            // exception.
+            // Aliases are never pre-expanded by TIR lowering
+            // (`lower_type_expr_in_ns` emits `Ty::TypeAlias` for every alias
+            // reference), so this is the common path. Aliases are memoized
+            // into the table exactly like classes — inlining would re-expand
+            // the target per reference site, which blows up on alias DAGs
+            // just like the class-graph case.
             Ty::TypeAlias(qtn, _) => {
-                if path.contains(qtn) {
-                    return unsupported(ty);
+                let name = qtn.render_dotted(false);
+                if self.table.contains_key(&name) {
+                    return FieldSchema::Ref { name };
                 }
                 match self.lookup_type(qtn) {
                     Some(ExportedType::TypeAlias { resolved, .. }) => {
-                        path.push(qtn.clone());
-                        let schema = self.field_schema(resolved, path, depth + 1);
-                        path.pop();
-                        schema
+                        // Placeholder before expanding the target: recursive
+                        // references hit the contains_key check above, so each
+                        // alias expands exactly once.
+                        self.table.insert(
+                            name.clone(),
+                            TypeSchema::Alias {
+                                schema: FieldSchema::Null,
+                            },
+                        );
+                        let schema = self.field_schema(resolved, 0);
+                        self.table
+                            .insert(name.clone(), TypeSchema::Alias { schema });
+                        FieldSchema::Ref { name }
                     }
                     _ => unsupported(ty),
                 }
             }
             Ty::List(item, _) => FieldSchema::List {
-                item: Box::new(self.field_schema(item, path, depth + 1)),
+                item: Box::new(self.field_schema(item, depth + 1)),
             },
             Ty::Map { key, value, .. } => FieldSchema::Map {
-                key: Box::new(self.field_schema(key, path, depth + 1)),
-                value: Box::new(self.field_schema(value, path, depth + 1)),
+                key: Box::new(self.field_schema(key, depth + 1)),
+                value: Box::new(self.field_schema(value, depth + 1)),
             },
             Ty::Union(members, _) => {
                 if ty.is_nullable_union() {
@@ -262,14 +314,14 @@ impl<'db> SchemaCx<'db> {
                         FieldSchema::Null
                     } else {
                         FieldSchema::Optional {
-                            inner: Box::new(self.field_schema(&stripped, path, depth + 1)),
+                            inner: Box::new(self.field_schema(&stripped, depth + 1)),
                         }
                     }
                 } else {
                     FieldSchema::Union {
                         variants: members
                             .iter()
-                            .map(|member| self.field_schema(member, path, depth + 1))
+                            .map(|member| self.field_schema(member, depth + 1))
                             .collect(),
                     }
                 }
@@ -309,7 +361,10 @@ fn literal_value(lit: &LiteralValue) -> Option<serde_json::Value> {
 mod tests {
     use serde_json::{Value, json};
 
-    use crate::{db::ProjectDatabase, symbols::list_functions_with_metadata};
+    use crate::{
+        db::ProjectDatabase,
+        symbols::{FunctionListing, list_functions_with_metadata},
+    };
 
     fn db_with(files: &[(&str, &str)]) -> ProjectDatabase {
         let mut db = ProjectDatabase::new();
@@ -323,9 +378,9 @@ mod tests {
 
     /// The serialized `params` for `fn_name`, exactly as the playground
     /// notification will carry them.
-    fn params_json(db: &ProjectDatabase, fn_name: &str) -> Value {
-        let functions = list_functions_with_metadata(db);
-        let function = functions
+    fn params_json(listing: &FunctionListing, fn_name: &str) -> Value {
+        let function = listing
+            .functions
             .iter()
             .find(|f| f.name == fn_name)
             .unwrap_or_else(|| panic!("function {fn_name} not found"));
@@ -338,6 +393,10 @@ mod tests {
         .unwrap()
     }
 
+    fn types_json(listing: &FunctionListing) -> Value {
+        serde_json::to_value(&listing.types).unwrap()
+    }
+
     #[test]
     fn primitives_lists_and_nullable_unions() {
         let db = db_with(&[(
@@ -346,8 +405,9 @@ mod tests {
             function Prim(a: int, b: string, c: bool, d: float?, e: string[], f: map<string, float>) -> int { 1 }
             "#,
         )]);
+        let listing = list_functions_with_metadata(&db);
         assert_eq!(
-            params_json(&db, "Prim"),
+            params_json(&listing, "Prim"),
             json!([
                 { "name": "a", "hasDefault": false, "schema": { "type": "int" } },
                 { "name": "b", "hasDefault": false, "schema": { "type": "string" } },
@@ -361,16 +421,18 @@ mod tests {
                               "value": { "type": "float" } } },
             ])
         );
+        assert_eq!(types_json(&listing), json!({}));
     }
 
     #[test]
     fn nullary_function_gets_empty_schema_not_none() {
         let db = db_with(&[("main.baml", "function Zero() -> int { 1 }")]);
-        assert_eq!(params_json(&db, "Zero"), json!([]));
+        let listing = list_functions_with_metadata(&db);
+        assert_eq!(params_json(&listing, "Zero"), json!([]));
     }
 
     #[test]
-    fn enum_and_nested_class_expand_inline() {
+    fn enum_and_nested_class_become_table_refs() {
         let db = db_with(&[(
             "main.baml",
             r#"
@@ -384,26 +446,79 @@ mod tests {
             function F(p: Person, c: Color) -> int { 1 }
             "#,
         )]);
+        let listing = list_functions_with_metadata(&db);
         assert_eq!(
-            params_json(&db, "F"),
+            params_json(&listing, "F"),
             json!([
-                { "name": "p", "hasDefault": false, "schema": {
-                    "type": "class", "name": "user.Person", "recursive": false,
-                    "fields": [
-                        { "name": "name", "schema": { "type": "string" } },
-                        { "name": "age",
-                          "schema": { "type": "optional", "inner": { "type": "int" } } },
-                        { "name": "nested", "schema": {
-                            "type": "class", "name": "user.Nested", "recursive": false,
-                            "fields": [ { "name": "x", "schema": { "type": "int" } } ],
-                        } },
-                    ],
-                } },
-                { "name": "c", "hasDefault": false, "schema": {
-                    "type": "enum", "name": "user.Color",
-                    "values": ["Red", "Green", "Blue"],
-                } },
+                { "name": "p", "hasDefault": false,
+                  "schema": { "type": "ref", "name": "user.Person" } },
+                { "name": "c", "hasDefault": false,
+                  "schema": { "type": "ref", "name": "user.Color" } },
             ])
+        );
+        assert_eq!(
+            types_json(&listing),
+            json!({
+                "user.Color": { "kind": "enum", "values": ["Red", "Green", "Blue"] },
+                "user.Nested": { "kind": "class", "fields": [
+                    { "name": "x", "schema": { "type": "int" } },
+                ] },
+                "user.Person": { "kind": "class", "fields": [
+                    { "name": "name", "schema": { "type": "string" } },
+                    { "name": "age",
+                      "schema": { "type": "optional", "inner": { "type": "int" } } },
+                    { "name": "nested", "schema": { "type": "ref", "name": "user.Nested" } },
+                ] },
+            })
+        );
+    }
+
+    #[test]
+    fn shared_class_gets_one_table_entry_across_functions() {
+        let db = db_with(&[(
+            "main.baml",
+            r#"
+            class Shared { x int }
+            function A(s: Shared) -> int { 1 }
+            function B(s: Shared, t: Shared) -> int { 1 }
+            "#,
+        )]);
+        let listing = list_functions_with_metadata(&db);
+        let expected_ref = json!({ "type": "ref", "name": "user.Shared" });
+        assert_eq!(params_json(&listing, "A")[0]["schema"], expected_ref);
+        assert_eq!(params_json(&listing, "B")[0]["schema"], expected_ref);
+        assert_eq!(params_json(&listing, "B")[1]["schema"], expected_ref);
+        assert_eq!(
+            types_json(&listing),
+            json!({ "user.Shared": { "kind": "class", "fields": [
+                { "name": "x", "schema": { "type": "int" } },
+            ] } })
+        );
+    }
+
+    #[test]
+    fn diamond_dag_payload_is_linear_in_types() {
+        // The P0.1 reproducer: 13 classes, each with 3 fields of the next —
+        // inline expansion serialized this to 88 MB of params JSON. With the
+        // table it must stay a few KB, ∝ distinct types.
+        use std::fmt::Write;
+        let mut src = String::new();
+        for i in 0..12 {
+            let next = i + 1;
+            writeln!(src, "class C{i} {{ a C{next} b C{next} c C{next} }}").unwrap();
+        }
+        src.push_str("class C12 { x int }\nfunction F(p: C0) -> int { 1 }\n");
+        let db = db_with(&[("main.baml", &src)]);
+        let listing = list_functions_with_metadata(&db);
+        let params_bytes = serde_json::to_string(&params_json(&listing, "F"))
+            .unwrap()
+            .len();
+        let types_bytes = serde_json::to_string(&types_json(&listing)).unwrap().len();
+        let total = params_bytes + types_bytes;
+        assert!(total < 8 * 1024, "params+types serialized to {total} bytes");
+        assert_eq!(
+            params_json(&listing, "F")[0]["schema"],
+            json!({ "type": "ref", "name": "user.C0" })
         );
     }
 
@@ -416,19 +531,23 @@ mod tests {
             ),
             ("main.baml", "function Use(b: shapes.Box) -> int { 1 }"),
         ]);
-        let expected_schema = json!({
-            "type": "class", "name": "user.shapes.Box", "recursive": false,
-            "fields": [ { "name": "w", "schema": { "type": "int" } } ],
-        });
+        let listing = list_functions_with_metadata(&db);
+        let expected_ref = json!({ "type": "ref", "name": "user.shapes.Box" });
         assert_eq!(
-            params_json(&db, "shapes.Make")[0]["schema"],
-            expected_schema
+            params_json(&listing, "shapes.Make")[0]["schema"],
+            expected_ref
         );
-        assert_eq!(params_json(&db, "Use")[0]["schema"], expected_schema);
+        assert_eq!(params_json(&listing, "Use")[0]["schema"], expected_ref);
+        assert_eq!(
+            types_json(&listing)["user.shapes.Box"],
+            json!({ "kind": "class", "fields": [
+                { "name": "w", "schema": { "type": "int" } },
+            ] })
+        );
     }
 
     #[test]
-    fn recursive_class_is_cut_at_the_cycle() {
+    fn recursive_class_refers_to_itself_through_the_table() {
         let db = db_with(&[(
             "main.baml",
             r#"
@@ -439,23 +558,24 @@ mod tests {
             function Walk(t: Tree) -> int { 1 }
             "#,
         )]);
+        let listing = list_functions_with_metadata(&db);
         assert_eq!(
-            params_json(&db, "Walk")[0]["schema"],
-            json!({
-                "type": "class", "name": "user.Tree", "recursive": false,
-                "fields": [
-                    { "name": "value", "schema": { "type": "int" } },
-                    { "name": "children", "schema": { "type": "list", "item": {
-                        "type": "class", "name": "user.Tree",
-                        "recursive": true, "fields": [],
-                    } } },
-                ],
-            })
+            params_json(&listing, "Walk")[0]["schema"],
+            json!({ "type": "ref", "name": "user.Tree" })
+        );
+        assert_eq!(
+            types_json(&listing)["user.Tree"],
+            json!({ "kind": "class", "fields": [
+                { "name": "value", "schema": { "type": "int" } },
+                { "name": "children", "schema": {
+                    "type": "list", "item": { "type": "ref", "name": "user.Tree" },
+                } },
+            ] })
         );
     }
 
     #[test]
-    fn recursive_alias_expands_once_then_degrades() {
+    fn recursive_alias_gets_a_table_entry() {
         let db = db_with(&[(
             "main.baml",
             r#"
@@ -463,11 +583,100 @@ mod tests {
             function G(j: JSON) -> int { 1 }
             "#,
         )]);
-        let schema = &params_json(&db, "G")[0]["schema"];
-        assert_eq!(schema["type"], "union");
-        assert_eq!(schema["variants"][0], json!({ "type": "string" }));
-        assert_eq!(schema["variants"][1]["type"], "list");
-        assert_eq!(schema["variants"][1]["item"]["type"], "unsupported");
+        let listing = list_functions_with_metadata(&db);
+        assert_eq!(
+            params_json(&listing, "G")[0]["schema"],
+            json!({ "type": "ref", "name": "user.JSON" })
+        );
+        assert_eq!(
+            types_json(&listing)["user.JSON"],
+            json!({ "kind": "alias", "schema": { "type": "union", "variants": [
+                { "type": "string" },
+                { "type": "list", "item": { "type": "ref", "name": "user.JSON" } },
+            ] } })
+        );
+    }
+
+    #[test]
+    fn non_recursive_alias_gets_a_table_entry_too() {
+        // Aliases are memoized like classes — inlining would re-expand the
+        // target per reference site (exponential on alias DAGs).
+        let db = db_with(&[(
+            "main.baml",
+            "type Age = int\nfunction H(a: Age) -> int { 1 }",
+        )]);
+        let listing = list_functions_with_metadata(&db);
+        assert_eq!(
+            params_json(&listing, "H")[0]["schema"],
+            json!({ "type": "ref", "name": "user.Age" })
+        );
+        assert_eq!(
+            types_json(&listing),
+            json!({ "user.Age": { "kind": "alias", "schema": { "type": "int" } } })
+        );
+    }
+
+    #[test]
+    fn alias_dag_payload_is_linear_in_types() {
+        // Alias twin of the diamond-DAG reproducer: each alias references the
+        // previous one twice. Inline expansion made this ∝ 2^15 paths
+        // (measured 1.9 MB / 4 s); memoized it must stay a few KB.
+        use std::fmt::Write;
+        let mut src = String::from("type A0 = int\n");
+        for i in 1..=14 {
+            let prev = i - 1;
+            writeln!(src, "type A{i} = A{prev}[] | map<string, A{prev}>").unwrap();
+        }
+        src.push_str("function F(a: A14) -> int { 1 }\n");
+        let db = db_with(&[("main.baml", &src)]);
+        let listing = list_functions_with_metadata(&db);
+        let total = serde_json::to_string(&params_json(&listing, "F"))
+            .unwrap()
+            .len()
+            + serde_json::to_string(&types_json(&listing)).unwrap().len();
+        assert!(total < 8 * 1024, "params+types serialized to {total} bytes");
+        assert_eq!(
+            params_json(&listing, "F")[0]["schema"],
+            json!({ "type": "ref", "name": "user.A14" })
+        );
+    }
+
+    #[test]
+    fn pure_alias_cycle_degrades_to_mutual_refs() {
+        // `type A = B; type B = A` compiles clean; the table ties the cycle
+        // with mutual refs, which the UI resolves to the raw-JSON fallback.
+        let db = db_with(&[(
+            "main.baml",
+            "type A = B\ntype B = A\nfunction C(x: A) -> int { 1 }",
+        )]);
+        let listing = list_functions_with_metadata(&db);
+        assert_eq!(
+            params_json(&listing, "C")[0]["schema"],
+            json!({ "type": "ref", "name": "user.A" })
+        );
+        assert_eq!(
+            types_json(&listing),
+            json!({
+                "user.A": { "kind": "alias", "schema": { "type": "ref", "name": "user.B" } },
+                "user.B": { "kind": "alias", "schema": { "type": "ref", "name": "user.A" } },
+            })
+        );
+    }
+
+    #[test]
+    fn enum_variant_param_is_self_contained() {
+        let db = db_with(&[(
+            "main.baml",
+            r#"
+            enum Status { Active Inactive }
+            function V(s: Status.Active) -> int { 1 }
+            "#,
+        )]);
+        let listing = list_functions_with_metadata(&db);
+        assert_eq!(
+            params_json(&listing, "V")[0]["schema"],
+            json!({ "type": "enumVariant", "name": "user.Status", "value": "Active" })
+        );
     }
 
     #[test]
@@ -476,7 +685,8 @@ mod tests {
             "main.baml",
             "function U(x: int | string, y: (int | string)?) -> int { 1 }",
         )]);
-        let params = params_json(&db, "U");
+        let listing = list_functions_with_metadata(&db);
+        let params = params_json(&listing, "U");
         assert_eq!(
             params[0]["schema"],
             json!({ "type": "union",
@@ -492,13 +702,21 @@ mod tests {
     #[test]
     fn unresolved_param_type_degrades_to_unsupported() {
         let db = db_with(&[("main.baml", "function Bad(x: Nope) -> int { 1 }")]);
-        assert_eq!(params_json(&db, "Bad")[0]["schema"]["type"], "unsupported");
+        let listing = list_functions_with_metadata(&db);
+        assert_eq!(
+            params_json(&listing, "Bad")[0]["schema"]["type"],
+            "unsupported"
+        );
     }
 
     #[test]
     fn generic_param_degrades_to_unsupported() {
         let db = db_with(&[("main.baml", "function Id<T>(x: T) -> T { x }")]);
-        assert_eq!(params_json(&db, "Id")[0]["schema"]["type"], "unsupported");
+        let listing = list_functions_with_metadata(&db);
+        assert_eq!(
+            params_json(&listing, "Id")[0]["schema"]["type"],
+            "unsupported"
+        );
     }
 
     #[test]
@@ -507,12 +725,15 @@ mod tests {
             "main.baml",
             "function D(d: baml.time.PlainDate) -> int { 1 }",
         )]);
-        let schema = &params_json(&db, "D")[0]["schema"];
-        assert_eq!(schema["type"], "class");
-        assert_eq!(schema["name"], "baml.time.PlainDate");
-        assert_eq!(schema["recursive"], false);
+        let listing = list_functions_with_metadata(&db);
         assert_eq!(
-            schema["fields"][0],
+            params_json(&listing, "D")[0]["schema"],
+            json!({ "type": "ref", "name": "baml.time.PlainDate" })
+        );
+        let entry = &types_json(&listing)["baml.time.PlainDate"];
+        assert_eq!(entry["kind"], "class");
+        assert_eq!(
+            entry["fields"][0],
             json!({ "name": "_days", "schema": { "type": "int" } })
         );
     }
@@ -520,8 +741,9 @@ mod tests {
     #[test]
     fn media_param_carries_its_kind() {
         let db = db_with(&[("main.baml", "function Med(i: image) -> int { 1 }")]);
+        let listing = list_functions_with_metadata(&db);
         assert_eq!(
-            params_json(&db, "Med")[0]["schema"],
+            params_json(&listing, "Med")[0]["schema"],
             json!({ "type": "media", "kind": "image" })
         );
     }
@@ -529,9 +751,109 @@ mod tests {
     #[test]
     fn param_with_default_sets_has_default() {
         let db = db_with(&[("main.baml", "function Def(x: int, y: int = 3) -> int { 1 }")]);
-        let params = params_json(&db, "Def");
+        let listing = list_functions_with_metadata(&db);
+        let params = params_json(&listing, "Def");
         assert_eq!(params[0]["hasDefault"], false);
         assert_eq!(params[1]["hasDefault"], true);
         assert_eq!(params[1]["schema"], json!({ "type": "int" }));
+    }
+
+    const LLM_FIXTURE: &str = r##"
+client<llm> GPT4 {
+  provider "openai"
+  options {
+    model "gpt-4o"
+    api_key "test"
+  }
+}
+
+function Extract(text: string) -> string {
+  client GPT4
+  prompt #"{{ text }}"#
+}
+
+function Plain(x: int) -> int { x }
+"##;
+
+    #[test]
+    fn injected_client_param_is_dropped_from_llm_functions() {
+        let db = db_with(&[("main.baml", LLM_FIXTURE)]);
+        let listing = list_functions_with_metadata(&db);
+        // Only the user-declared param survives; the compiler-injected
+        // trailing `client: baml.llm.Client` must not reach the form.
+        assert_eq!(
+            params_json(&listing, "Extract"),
+            json!([
+                { "name": "text", "hasDefault": false, "schema": { "type": "string" } },
+            ])
+        );
+        // Expr functions are unaffected.
+        assert_eq!(
+            params_json(&listing, "Plain"),
+            json!([
+                { "name": "x", "hasDefault": false, "schema": { "type": "int" } },
+            ])
+        );
+    }
+
+    /// Pins the exact wire bytes of `params` + `types` against the golden
+    /// fixture that the TS side (`param-schema-golden.test.ts` in
+    /// pkg-playground) validates against its `worker-protocol.ts` mirror —
+    /// the FQN and shape contracts are otherwise enforced only by convention.
+    /// On drift, update the fixture and both mirrors together.
+    #[test]
+    fn wire_shape_matches_the_ts_golden_fixture() {
+        let db = db_with(&[(
+            "main.baml",
+            r#"
+            enum Color { Red Green Blue }
+            class Nested { x int }
+            class Person {
+                name string
+                age int?
+                color Color
+                nested Nested
+            }
+            type JSON = string | JSON[]
+            enum Status { Active Inactive }
+            function Golden(p: Person, c: Color, j: JSON, s: Status.Active, l: string[], m: map<string, float>, u: int | string, i: image, x: int = 3) -> int { 1 }
+            "#,
+        )]);
+        let listing = list_functions_with_metadata(&db);
+        let actual = serde_json::to_string_pretty(&serde_json::json!({
+            "params": params_json(&listing, "Golden"),
+            "types": types_json(&listing),
+        }))
+        .unwrap();
+        let golden = include_str!(
+            "../../../../typescript2/pkg-playground/src/__fixtures__/param-schema-golden.json"
+        );
+        assert_eq!(
+            actual,
+            golden.trim_end(),
+            "wire shape drifted from the golden fixture; actual:\n{actual}"
+        );
+    }
+
+    #[test]
+    fn extraction_is_skipped_for_sub_functions_and_non_user_origins() {
+        let db = db_with(&[("main.baml", LLM_FIXTURE)]);
+        let listing = list_functions_with_metadata(&db);
+        let skipped: Vec<_> = listing
+            .functions
+            .iter()
+            .filter(|f| f.is_sub_function || f.origin != crate::FunctionOrigin::UserDefined)
+            .collect();
+        assert!(
+            !skipped.is_empty(),
+            "fixture should produce companion/internal functions"
+        );
+        for function in skipped {
+            assert!(
+                function.params.is_none(),
+                "expected no schema for {}",
+                function.name
+            );
+        }
     }
 }

@@ -40,7 +40,8 @@ pub struct FieldSchemaField {
 
 /// Twin of `baml_project::FieldSchema` (via `bex_project`); both serialize
 /// with `tag = "type"` + camelCase so the JSON matches the WebSocket
-/// transport, which serializes the source struct directly.
+/// transport, which serializes the source struct directly. Named types are
+/// `Ref`s into the `ProjectUpdate.types` table.
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -57,14 +58,12 @@ pub enum FieldSchema {
     Literal {
         value: serde_json::Value,
     },
-    Enum {
+    Ref {
         name: String,
-        values: Vec<String>,
     },
-    Class {
+    EnumVariant {
         name: String,
-        fields: Vec<FieldSchemaField>,
-        recursive: bool,
+        value: String,
     },
     List {
         item: Box<FieldSchema>,
@@ -82,6 +81,17 @@ pub enum FieldSchema {
     Unsupported {
         display: String,
     },
+}
+
+/// Twin of `baml_project::TypeSchema` — one entry per named type in the
+/// per-project table, keyed by canonical dotted FQN.
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum TypeSchema {
+    Class { fields: Vec<FieldSchemaField> },
+    Enum { values: Vec<String> },
+    Alias { schema: FieldSchema },
 }
 
 impl From<bex_project::ParamSchema> for ParamSchema {
@@ -115,16 +125,8 @@ impl From<bex_project::FieldSchema> for FieldSchema {
             Src::Bigint => FieldSchema::Bigint,
             Src::Media { kind } => FieldSchema::Media { kind },
             Src::Literal { value } => FieldSchema::Literal { value },
-            Src::Enum { name, values } => FieldSchema::Enum { name, values },
-            Src::Class {
-                name,
-                fields,
-                recursive,
-            } => FieldSchema::Class {
-                name,
-                fields: fields.into_iter().map(Into::into).collect(),
-                recursive,
-            },
+            Src::Ref { name } => FieldSchema::Ref { name },
+            Src::EnumVariant { name, value } => FieldSchema::EnumVariant { name, value },
             Src::List { item } => FieldSchema::List {
                 item: Box::new((*item).into()),
             },
@@ -139,6 +141,21 @@ impl From<bex_project::FieldSchema> for FieldSchema {
                 variants: variants.into_iter().map(Into::into).collect(),
             },
             Src::Unsupported { display } => FieldSchema::Unsupported { display },
+        }
+    }
+}
+
+impl From<bex_project::TypeSchema> for TypeSchema {
+    fn from(t: bex_project::TypeSchema) -> Self {
+        use bex_project::TypeSchema as Src;
+        match t {
+            Src::Class { fields } => TypeSchema::Class {
+                fields: fields.into_iter().map(Into::into).collect(),
+            },
+            Src::Enum { values } => TypeSchema::Enum { values },
+            Src::Alias { schema } => TypeSchema::Alias {
+                schema: schema.into(),
+            },
         }
     }
 }
@@ -185,6 +202,10 @@ pub struct ProjectDiagnostic {
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
+    /// Shared type table for `FunctionInfo.params` refs; `None` = binary
+    /// predates the args form. Must match `bex_project::ProjectUpdate`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub types: Option<std::collections::BTreeMap<String, TypeSchema>>,
     pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
@@ -335,6 +356,12 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                                 params: f.params.map(|ps| ps.into_iter().map(Into::into).collect()),
                             })
                             .collect(),
+                        types: update.types.map(|types| {
+                            types
+                                .into_iter()
+                                .map(|(name, t)| (name, t.into()))
+                                .collect()
+                        }),
                         diagnostics: update
                             .diagnostics
                             .into_iter()
@@ -431,11 +458,14 @@ mod tests {
     /// `bex_project` source types: the WebSocket transport sends the source
     /// structs directly, so any serde divergence here would present as a
     /// worker-transport-only wire difference. Exercises every `FieldSchema`
-    /// variant through the `From` mapping.
+    /// and `TypeSchema` variant through the `From` mappings.
     #[test]
     fn schema_twins_serialize_identically_to_source_types() {
+        use std::collections::BTreeMap;
+
         use bex_project::{
             FieldSchema as Src, FieldSchemaField as SrcField, ParamSchema as SrcParam,
+            TypeSchema as SrcType,
         };
         let src = SrcParam {
             name: "p".to_string(),
@@ -454,24 +484,12 @@ mod tests {
                     Src::Literal {
                         value: serde_json::json!({ "k": [1, "two", true, null] }),
                     },
-                    Src::Enum {
-                        name: "user.Color".to_string(),
-                        values: vec!["Red".to_string(), "Green".to_string()],
-                    },
-                    Src::Class {
+                    Src::Ref {
                         name: "user.Person".to_string(),
-                        fields: vec![SrcField {
-                            name: "age".to_string(),
-                            schema: Src::Optional {
-                                inner: Box::new(Src::Int),
-                            },
-                        }],
-                        recursive: false,
                     },
-                    Src::Class {
-                        name: "user.Tree".to_string(),
-                        fields: vec![],
-                        recursive: true,
+                    Src::EnumVariant {
+                        name: "user.Status".to_string(),
+                        value: "Active".to_string(),
                     },
                     Src::List {
                         item: Box::new(Src::String),
@@ -490,6 +508,50 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&src).unwrap(),
             serde_json::to_value(&twin).unwrap(),
+        );
+
+        let src_types = BTreeMap::from([
+            (
+                "user.Person".to_string(),
+                SrcType::Class {
+                    fields: vec![SrcField {
+                        name: "age".to_string(),
+                        schema: Src::Optional {
+                            inner: Box::new(Src::Int),
+                        },
+                    }],
+                },
+            ),
+            (
+                "user.Color".to_string(),
+                SrcType::Enum {
+                    values: vec!["Red".to_string(), "Green".to_string()],
+                },
+            ),
+            (
+                "user.JSON".to_string(),
+                SrcType::Alias {
+                    schema: Src::Union {
+                        variants: vec![
+                            Src::String,
+                            Src::List {
+                                item: Box::new(Src::Ref {
+                                    name: "user.JSON".to_string(),
+                                }),
+                            },
+                        ],
+                    },
+                },
+            ),
+        ]);
+        let twin_types: BTreeMap<String, TypeSchema> = src_types
+            .clone()
+            .into_iter()
+            .map(|(name, t)| (name, t.into()))
+            .collect();
+        assert_eq!(
+            serde_json::to_value(&src_types).unwrap(),
+            serde_json::to_value(&twin_types).unwrap(),
         );
     }
 }
