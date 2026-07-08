@@ -257,6 +257,51 @@ function ai_scenarios.$init_test_ns_ai_scenarios_17_history_sessions_usage(regis
     return
 }
 
+function ai_scenarios.$init_test_ns_ai_scenarios_18_compaction_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "18: the window round-trips opaquely through compact"
+    make_closure .<lambda($init_test_ns_ai_scenarios_18_compaction_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "19: forking a session yields a distinct handle"
+    make_closure .<lambda($init_test_ns_ai_scenarios_18_compaction_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_20_server_chains_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "20: extending a chain threads only the handle"
+    make_closure .<lambda($init_test_ns_ai_scenarios_20_server_chains_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "20: a foreign-owner handle is refused, not silently re-driven"
+    make_closure .<lambda($init_test_ns_ai_scenarios_20_server_chains_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_21_memory_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "21: recall surfaces scored hits for a query"
+    make_closure .<lambda($init_test_ns_ai_scenarios_21_memory_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function ai_scenarios.$init_test_ns_ai_scenarios_22_realtime_voice_usage(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "22: Foo$live drives a swapped-in Realtime provider"
@@ -273,6 +318,23 @@ function ai_scenarios.$init_test_ns_ai_scenarios_22_realtime_voice_usage(registr
     load_var registry
     load_const "23: LiveControl is negotiated on top of Realtime"
     make_closure .<lambda($init_test_ns_ai_scenarios_22_realtime_voice_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_24_realtime_tools_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "24: one provider negotiates BOTH Realtime and Tools"
+    make_closure .<lambda($init_test_ns_ai_scenarios_24_realtime_tools_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "26: the same capability model spans transports — HTTP fake vs realtime fake"
+    make_closure .<lambda($init_test_ns_ai_scenarios_24_realtime_tools_usage, 1)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -438,6 +500,29 @@ function ai_scenarios.$init_test_ns_ai_scenarios_37_harness_basics_usage(registr
     return
 }
 
+function ai_scenarios.$init_test_ns_ai_scenarios_38_harness_permissions_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "38: sandbox + permission posture is provider config"
+    make_closure .<lambda($init_test_ns_ai_scenarios_38_harness_permissions_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "39: the tool surface is extensible per instance (allowed_tools)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_38_harness_permissions_usage, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "41: deployment variance is config variance — both are drivable harnesses"
+    make_closure .<lambda($init_test_ns_ai_scenarios_38_harness_permissions_usage, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
 function ai_scenarios.$init_test_ns_ai_scenarios_43_workflow_graph_usage(registry: testing.TestCollector) -> null {
     load_var registry
     load_const "43: the step graph fans out and combines over a provider"
@@ -475,6 +560,17 @@ function ai_scenarios.$init_test_ns_ai_scenarios_46_workflow_observability_usage
     load_var registry
     load_const "46: a run emits one typed event per step"
     make_closure .<lambda($init_test_ns_ai_scenarios_46_workflow_observability_usage, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_scenarios.$init_test_ns_ai_scenarios_47_workflow_agents_usage(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "47: a workflow step runs a nested agent (ToolLoop as Provider)"
+    make_closure .<lambda($init_test_ns_ai_scenarios_47_workflow_agents_usage, 0)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -2024,6 +2120,144 @@ function ai_scenarios.ResearchIt$with(q: string, project: (baml.ai.ResponseMeta)
     return
 }
 
+function ai_scenarios.ScriptedChains$stream.baml.ai.Chain.extend(self: ai_scenarios.ScriptedChains$stream, prompt: string, handle: baml.ai.ChainHandle) -> T {
+    load_var handle
+    load_field .owner
+    load_const "scripted"
+    cmp_op !=
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_type #0
+    load_var handle
+    load_field .id
+    load_const " += "
+    bin_op +
+    load_var prompt
+    bin_op +
+    call baml.sap.parse
+    jump L1
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    return
+
+  L2:
+    load_const null
+    load_const "foreign chain handle: "
+    load_var handle
+    load_field .owner
+    bin_op +
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function ai_scenarios.ScriptedChains.baml.ai.Chain.extend(self: ai_scenarios.ScriptedChains, prompt: string, handle: baml.ai.ChainHandle) -> T {
+    load_var handle
+    load_field .owner
+    load_const "scripted"
+    cmp_op !=
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    load_type #0
+    load_var handle
+    load_field .id
+    load_const " += "
+    bin_op +
+    load_var prompt
+    bin_op +
+    call baml.sap.parse
+    jump L1
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    return
+
+  L2:
+    load_const null
+    load_const "foreign chain handle: "
+    load_var handle
+    load_field .owner
+    bin_op +
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function ai_scenarios.ScriptedCompaction$stream.baml.ai.Branching.fork(self: ai_scenarios.ScriptedCompaction$stream, session: baml.ai.Session) -> baml.ai.Session {
+    load_var session
+    load_field ._id
+    load_const "-fork"
+    bin_op +
+    init_instance baml.ai.Session ._id
+    return
+}
+
+function ai_scenarios.ScriptedCompaction$stream.baml.ai.Compaction.compact(self: ai_scenarios.ScriptedCompaction$stream, window: baml.ai.Window) -> baml.ai.Window {
+    load_var window
+    load_field ._data
+    load_const ":compacted"
+    bin_op +
+    init_instance baml.ai.Window ._data
+    return
+}
+
+function ai_scenarios.ScriptedCompaction$stream.baml.ai.Compaction.window_of(self: ai_scenarios.ScriptedCompaction$stream, session: baml.ai.Session) -> baml.ai.Window {
+    load_const "w:"
+    load_var session
+    load_field ._id
+    bin_op +
+    init_instance baml.ai.Window ._data
+    return
+}
+
+function ai_scenarios.ScriptedCompaction.baml.ai.Branching.fork(self: ai_scenarios.ScriptedCompaction, session: baml.ai.Session) -> baml.ai.Session {
+    load_var session
+    load_field ._id
+    load_const "-fork"
+    bin_op +
+    init_instance baml.ai.Session ._id
+    return
+}
+
+function ai_scenarios.ScriptedCompaction.baml.ai.Compaction.compact(self: ai_scenarios.ScriptedCompaction, window: baml.ai.Window) -> baml.ai.Window {
+    load_var window
+    load_field ._data
+    load_const ":compacted"
+    bin_op +
+    init_instance baml.ai.Window ._data
+    return
+}
+
+function ai_scenarios.ScriptedCompaction.baml.ai.Compaction.window_of(self: ai_scenarios.ScriptedCompaction, session: baml.ai.Session) -> baml.ai.Window {
+    load_const "w:"
+    load_var session
+    load_field ._id
+    bin_op +
+    init_instance baml.ai.Window ._data
+    return
+}
+
 function ai_scenarios.ScriptedJobs$stream.baml.ai.Background.poll(self: ai_scenarios.ScriptedJobs$stream, job: baml.ai.Job<T>) -> T | null {
     load_var self
     load_field .0
@@ -2115,6 +2349,128 @@ function ai_scenarios.ScriptedJobs.baml.ai.Background.submit(self: ai_scenarios.
 
 function ai_scenarios.ScriptedJobs.baml.ai.Provider.is_effectful(self: ai_scenarios.ScriptedJobs) -> bool {
     load_const true
+    return
+}
+
+function ai_scenarios.ScriptedLiveTools$stream.baml.ai.Realtime.run(self: ai_scenarios.ScriptedLiveTools$stream, prompt: string, io: baml.ai.Channel) -> baml.ai.Transcript {
+    load_const "live: "
+    load_var prompt
+    bin_op +
+    init_instance baml.ai.Transcript .text
+    return
+}
+
+function ai_scenarios.ScriptedLiveTools$stream.baml.ai.Tools.begin(self: ai_scenarios.ScriptedLiveTools$stream, prompt: string, tools: baml.ai.Tool[]) -> ai_scenarios.ScriptState {
+    load_const 0
+    load_const 0
+    load_const "tool answer"
+    init_instance user.ai_scenarios.ScriptState .turns_wanted, .turns_done, .final_json
+    return
+}
+
+function ai_scenarios.ScriptedLiveTools$stream.baml.ai.Tools.step(self: ai_scenarios.ScriptedLiveTools$stream, t: ai_scenarios.ScriptState) -> T | baml.ai.ToolCalls {
+    load_type #0
+    load_var t
+    load_field .final_json
+    call baml.sap.parse
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    return
+}
+
+function ai_scenarios.ScriptedLiveTools$stream.baml.ai.Tools.submit(self: ai_scenarios.ScriptedLiveTools$stream, t: ai_scenarios.ScriptState, results: baml.ai.ToolResult[]) -> ai_scenarios.ScriptState {
+    load_var t
+    return
+}
+
+function ai_scenarios.ScriptedLiveTools.baml.ai.Realtime.run(self: ai_scenarios.ScriptedLiveTools, prompt: string, io: baml.ai.Channel) -> baml.ai.Transcript {
+    load_const "live: "
+    load_var prompt
+    bin_op +
+    init_instance baml.ai.Transcript .text
+    return
+}
+
+function ai_scenarios.ScriptedLiveTools.baml.ai.Tools.begin(self: ai_scenarios.ScriptedLiveTools, prompt: string, tools: baml.ai.Tool[]) -> ai_scenarios.ScriptState {
+    load_const 0
+    load_const 0
+    load_const "tool answer"
+    init_instance user.ai_scenarios.ScriptState .turns_wanted, .turns_done, .final_json
+    return
+}
+
+function ai_scenarios.ScriptedLiveTools.baml.ai.Tools.step(self: ai_scenarios.ScriptedLiveTools, t: ai_scenarios.ScriptState) -> T | baml.ai.ToolCalls {
+    load_type #0
+    load_var t
+    load_field .final_json
+    call baml.sap.parse
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "parse"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    return
+}
+
+function ai_scenarios.ScriptedLiveTools.baml.ai.Tools.submit(self: ai_scenarios.ScriptedLiveTools, t: ai_scenarios.ScriptState, results: baml.ai.ToolResult[]) -> ai_scenarios.ScriptState {
+    load_var t
+    return
+}
+
+function ai_scenarios.ScriptedMemory$stream.baml.ai.MemoryStore.recall(self: ai_scenarios.ScriptedMemory$stream, query: string, k: int) -> baml.ai.MemoryHit[] {
+    load_var self
+    load_field .0
+    load_const " (re: "
+    bin_op +
+    load_var query
+    bin_op +
+    load_const ")"
+    bin_op +
+    load_const 0.9
+    init_instance baml.ai.MemoryHit .text, .score
+    load_type baml.ai.MemoryHit
+    alloc_array 1
+    return
+}
+
+function ai_scenarios.ScriptedMemory$stream.baml.ai.MemoryStore.remember(self: ai_scenarios.ScriptedMemory$stream, fact: string) -> null {
+    load_const null
+    return
+}
+
+function ai_scenarios.ScriptedMemory.baml.ai.MemoryStore.recall(self: ai_scenarios.ScriptedMemory, query: string, k: int) -> baml.ai.MemoryHit[] {
+    load_var self
+    load_field .0
+    load_const " (re: "
+    bin_op +
+    load_var query
+    bin_op +
+    load_const ")"
+    bin_op +
+    load_const 0.9
+    init_instance baml.ai.MemoryHit .text, .score
+    load_type baml.ai.MemoryHit
+    alloc_array 1
+    return
+}
+
+function ai_scenarios.ScriptedMemory.baml.ai.MemoryStore.remember(self: ai_scenarios.ScriptedMemory, fact: string) -> null {
+    load_const null
     return
 }
 
@@ -3409,34 +3765,40 @@ function ai_scenarios.drive_any(h: baml.ai.Provider) -> string {
     load_var h
     is_type baml.ai.ClaudeCode
     pop_jump_if_false L0
-    jump L4
+    jump L5
 
   L0:
     load_var h
     is_type baml.ai.OpenAiRealtime
     pop_jump_if_false L1
-    jump L4
+    jump L5
 
   L1:
     load_var h
     is_type baml.ai.PiAgent
     pop_jump_if_false L2
-    jump L4
+    jump L5
 
   L2:
     load_var h
-    is_type ai_scenarios.ScriptedRealtime
+    is_type ai_scenarios.ScriptedLiveTools
     pop_jump_if_false L3
-    jump L4
+    jump L5
 
   L3:
-    load_const "not a harness"
+    load_var h
+    is_type ai_scenarios.ScriptedRealtime
+    pop_jump_if_false L4
     jump L5
 
   L4:
-    load_const "drivable harness"
+    load_const "not a harness"
+    jump L6
 
   L5:
+    load_const "drivable harness"
+
+  L6:
     return
 }
 
@@ -3614,6 +3976,17 @@ function ai_scenarios.edge_client(gateway_url: string, token: string) -> baml.ai
     return
 }
 
+function ai_scenarios.locked_down() -> baml.ai.ClaudeCode {
+    load_const null
+    load_const "read-only"
+    load_const "ask"
+    load_const "read"
+    load_type string
+    alloc_array 1
+    init_instance baml.ai.ClaudeCode .model, .sandbox, .permission_mode, .allowed_tools
+    return
+}
+
 function ai_scenarios.lookup_tools() -> baml.ai.Tool[] {
     load_const "lookup"
     load_const "Look something up."
@@ -3785,6 +4158,19 @@ function ai_scenarios.observe_pipeline(steps: string[]) -> ai_scenarios.StepEven
 
   L22:
     unreachable
+}
+
+function ai_scenarios.permissive() -> baml.ai.ClaudeCode {
+    load_const "opus"
+    load_const "danger-full-access"
+    load_const "auto"
+    load_const "read"
+    load_const "edit"
+    load_const "bash"
+    load_type string
+    alloc_array 3
+    init_instance baml.ai.ClaudeCode .model, .sandbox, .permission_mode, .allowed_tools
+    return
 }
 
 function ai_scenarios.run_eval(task: baml.ai.Provider, judge: ai_scenarios.Scorer, input: string) -> ai_scenarios.EvalScore {
@@ -4705,6 +5091,100 @@ function ai_scenarios.s30_cascade(cheap: baml.ai.Provider, expensive: baml.ai.Pr
     store_var _0
 
   L30:
+    load_var _0
+    return
+}
+
+function ai_scenarios.s47_step_run_agent(agent: baml.ai.Provider, task: string) -> string {
+    load_var agent
+    is_type baml.ai.ToolLoop
+    pop_jump_if_false L0
+    jump L13
+
+  L0:
+    load_var agent
+    is_type baml.ai.Retry
+    pop_jump_if_false L1
+    jump L13
+
+  L1:
+    load_var agent
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L2
+    jump L13
+
+  L2:
+    load_var agent
+    is_type baml.ai.Gemini
+    pop_jump_if_false L3
+    jump L13
+
+  L3:
+    load_var agent
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L4
+    jump L13
+
+  L4:
+    load_var agent
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L5
+    jump L13
+
+  L5:
+    load_var agent
+    is_type baml.ai.Fallback
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var agent
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L7
+    jump L13
+
+  L7:
+    load_var agent
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L13
+
+  L8:
+    load_var agent
+    is_type baml.llm.Client
+    pop_jump_if_false L9
+    jump L13
+
+  L9:
+    load_var agent
+    is_type ai_scenarios.MeteredEcho
+    pop_jump_if_false L10
+    jump L13
+
+  L10:
+    load_var agent
+    is_type ai_scenarios.EchoProvider
+    pop_jump_if_false L11
+    jump L13
+
+  L11:
+    load_var agent
+    is_type ai_scenarios.AlwaysFailProvider
+    pop_jump_if_false L12
+    jump L13
+
+  L12:
+    load_const "step's agent is not runnable"
+    init_instance baml.errors.Unsupported .message
+    throw
+
+  L13:
+    load_type string
+    load_var2 1 2
+    load_type baml.ai.HttpProvider
+    load_const "call"
+    virtual_call nargs=2 ntypeargs=1
+    store_var _0
     load_var _0
     return
 }
