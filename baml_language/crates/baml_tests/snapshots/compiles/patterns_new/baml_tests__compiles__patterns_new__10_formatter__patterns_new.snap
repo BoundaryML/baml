@@ -100,18 +100,14 @@ function unwrap_curried(
 function call_with_callback(runner: (((int) -> int) -> int) | (((string) -> int) -> int)) -> int {
     match (runner) {
         let r: ((int) -> int) -> int => {
-            r(
-                (x: int) -> int {
-                    x + 1
-                },
-            )
+            r((x: int) -> int {
+                x + 1
+            })
         },
         let r: ((string) -> int) -> int => {
-            r(
-                (s: string) -> int {
-                    0
-                },
-            )
+            r((s: string) -> int {
+                0
+            })
         },
     }
 }
