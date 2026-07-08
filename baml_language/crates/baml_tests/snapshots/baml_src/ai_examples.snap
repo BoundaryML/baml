@@ -500,35 +500,6 @@ function ai_examples.doc_pipeline(p: baml.ai.Provider, url: string) -> string {
     return
 }
 
-function ai_examples.drive_any(h: baml.ai.Provider) -> string {
-    load_var h
-    is_type baml.ai.ClaudeCode
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var h
-    is_type baml.ai.OpenAiRealtime
-    pop_jump_if_false L1
-    jump L3
-
-  L1:
-    load_var h
-    is_type baml.ai.PiAgent
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_const "not a harness"
-    jump L4
-
-  L3:
-    load_const "drivable harness"
-
-  L4:
-    return
-}
-
 function ai_examples.durable_pipeline(p: baml.ai.Provider, url: string, ckpt: ai_examples.Checkpoint) -> string {
     load_var ?1
     make_cell
@@ -612,28 +583,6 @@ function ai_examples.example_background(p: baml.ai.Provider, prompt: string, key
     load_var _8
 
   L4:
-    return
-}
-
-function ai_examples.example_barge_in(p: baml.ai.Provider, io: baml.ai.Channel, played_ms: int) -> null {
-    load_var p
-    is_type baml.ai.OpenAiRealtime
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "client has no live control"
-    init_instance baml.errors.Unsupported .message
-    throw
-
-  L1:
-    load_var2 1 2
-    load_var played_ms
-    load_type baml.ai.LiveControl
-    load_const "truncate"
-    virtual_call nargs=3 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
@@ -734,77 +683,6 @@ function ai_examples.example_suspend(p: baml.ai.Provider, prompt: string) -> str
     load_var _5
 
   L4:
-    return
-}
-
-function ai_examples.example_voice_chat(p: baml.ai.Provider, system: string, io: baml.ai.Channel) -> baml.ai.Transcript {
-    load_var p
-    is_type baml.ai.ClaudeCode
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var p
-    is_type baml.ai.OpenAiRealtime
-    pop_jump_if_false L1
-    jump L3
-
-  L1:
-    load_var p
-    is_type baml.ai.PiAgent
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_const "client is not realtime"
-    init_instance baml.errors.Unsupported .message
-    throw
-
-  L3:
-    load_var2 1 2
-    load_var io
-    load_type baml.ai.Realtime
-    load_const "run"
-    virtual_call nargs=3 ntypeargs=0
-    store_var _0
-    load_var _0
-    return
-}
-
-function ai_examples.fix_bug(h: baml.ai.Provider, task: string, io: baml.ai.Channel) -> baml.ai.Transcript {
-    load_var h
-    is_type baml.ai.ClaudeCode
-    pop_jump_if_false L0
-    jump L3
-
-  L0:
-    load_var h
-    is_type baml.ai.OpenAiRealtime
-    pop_jump_if_false L1
-    jump L3
-
-  L1:
-    load_var h
-    is_type baml.ai.PiAgent
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_const "client is not a drivable harness"
-    init_instance baml.errors.Unsupported .message
-    throw
-
-  L3:
-    load_var h
-    load_const "Fix the bug: "
-    load_var task
-    bin_op +
-    load_var io
-    load_type baml.ai.Realtime
-    load_const "run"
-    virtual_call nargs=3 ntypeargs=0
-    store_var _0
-    load_var _0
     return
 }
 
