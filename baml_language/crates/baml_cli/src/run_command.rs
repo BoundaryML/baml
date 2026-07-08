@@ -203,22 +203,20 @@ impl RunArgs {
     fn check_project_diagnostics(
         &self,
         db: &ProjectDatabase,
-        gate_files: Option<&[baml_db::SourceFile]>,
         bail_context: &str,
         reporter: &Reporter,
     ) -> Result<()> {
         let project = db
             .get_project()
             .ok_or_else(|| anyhow!("No project context"))?;
-        // With a per-file reuse plan, only dirty files are re-checked: a
-        // clean file references nothing whose signature changed, so its
-        // diagnostics are identical to the previous (error-free) compile.
-        let checked_files = match gate_files {
-            Some(files) => files.to_vec(),
-            None => db.get_source_files(),
-        };
+        // Diagnostics always run over the full project: `collect_diagnostics`
+        // checks every file for soundness. Per-file diagnostics invalidation is
+        // not yet proven complete, so passing only the reuse plan's dirty files
+        // as a filter would risk stale errors from clean dependents — the filter
+        // does not exist on the callee, and this must stay that way until the
+        // invalidation is sound.
         let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(db, project, &checked_files);
+        let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
 
         let errors: Vec<_> = diagnostics
             .iter()
@@ -746,12 +744,7 @@ impl RunArgs {
 
         // `baml run` keeps the compile phase silent; the program's output is
         // the point. Compile/count progress belongs to `check` and `generate`.
-        self.check_project_diagnostics(
-            &db,
-            reuse_plan.as_ref().map(|p| p.dirty_files.as_slice()),
-            "Cannot run: compilation errors found",
-            reporter,
-        )?;
+        self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
         self.vlog(format_args!("Compiling..."));
         let program = crate::bytecode_cache::compile_program(
             &db,
@@ -809,7 +802,6 @@ impl RunArgs {
         // render through the reporter when needed.
         self.check_project_diagnostics(
             &db,
-            None,
             &format!("Cannot run: compilation errors in {display}"),
             reporter,
         )?;
@@ -865,7 +857,6 @@ impl RunArgs {
 
         self.check_project_diagnostics(
             &db,
-            None,
             "Cannot evaluate expression: compilation errors",
             reporter,
         )?;

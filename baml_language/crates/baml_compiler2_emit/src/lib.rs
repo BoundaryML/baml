@@ -1106,6 +1106,7 @@ fn generate_impl(
                     name: test_data.name.to_string(),
                     function_names,
                     args,
+                    source_file: relative_source_path(db, *file),
                 });
             }
         }
@@ -1303,9 +1304,46 @@ impl<'a> ReuseContext<'a> {
                     // is compiled next.
                     pending_literal_start.get_or_insert(idx);
                 }
-                _ => {
-                    // Pass-2/3 objects (classes/enums/interfaces) precede all
-                    // Pass-4 blocks; anything else resets literal tracking.
+                // Pass-2/3 definition/descriptor objects precede all Pass-4
+                // blocks and are inert pool entries (the same set `relink.rs`
+                // `visit_object_operands` treats as inert), never a block's
+                // leading literal, so they reset literal tracking. Enumerated
+                // explicitly — rather than folded into a bare `_` — so that a
+                // NEW compiled-pool Object kind added beside a function is a
+                // conscious decision here: an interned literal must join the arm
+                // above, anything else resets like these.
+                Object::Package(..)
+                | Object::Interface(..)
+                | Object::ImplRule(..)
+                | Object::Class(..)
+                | Object::Enum(..)
+                | Object::Type(..) => {
+                    pending_literal_start = None;
+                }
+                // Runtime-only heap shapes: created during execution, never
+                // present in a compiled `Program` pool, so they can never be a
+                // block boundary and simply reset literal tracking. Enumerated
+                // exhaustively (no bare `_`) so a NEW `Object` variant is a
+                // compile error here, forcing a conscious classification.
+                Object::Instance(..)
+                | Object::Variant(..)
+                | Object::Closure(..)
+                | Object::BoundMethod(..)
+                | Object::HostClosure(..)
+                | Object::Cell(..)
+                | Object::Array(..)
+                | Object::Map(..)
+                | Object::Float(..)
+                | Object::Future(..)
+                | Object::UnscheduledFuture(..)
+                | Object::RustData(..)
+                | Object::Collector(..) => {
+                    pending_literal_start = None;
+                }
+                // Debug-only heap sentinel (feature-gated); this crate forwards
+                // `heap_debug` to bex_vm_types so the variant is nameable.
+                #[cfg(feature = "heap_debug")]
+                Object::Sentinel(..) => {
                     pending_literal_start = None;
                 }
             }
@@ -1620,17 +1658,18 @@ fn emit_file_group(
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
         let cache = &alias_caches[&pkg_info.package];
         for class_data in item_tree.classes.values() {
-            // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
-            let fq_name = if pkg_info.namespace_path.is_empty() {
-                format!("{}.{}", pkg_info.package, class_data.name)
-            } else {
-                let ns: Vec<&str> = pkg_info
-                    .namespace_path
-                    .iter()
-                    .map(baml_base::Name::as_str)
-                    .collect();
-                format!("{}.{}.{}", pkg_info.package, ns.join("."), class_data.name)
-            };
+            // Build the fully-qualified name ("user.MyClass" / "baml.ns.MyClass")
+            // through the SAME renderer MIR uses in `build_class_type_tags`
+            // (`QualifiedTypeName::render_dotted(false)`). The class type-tag is
+            // derived from this string, so emit and MIR MUST produce
+            // byte-identical output or `Switch`/`JumpTable` dispatch silently
+            // mismatches; sharing the one renderer is what pins them together.
+            let fq_name = baml_type::QualifiedTypeName::new(
+                pkg_info.package.clone(),
+                pkg_info.namespace_path.clone(),
+                class_data.name.clone(),
+            )
+            .render_dotted(false);
 
             let mut field_indices = HashMap::new();
             let mut fields = Vec::new();
@@ -1694,8 +1733,12 @@ fn emit_file_group(
                 && previous != fq_name
             {
                 return Err(LoweringError::Internal(format!(
-                    "class type-tag hash collision between `{previous}` and `{fq_name}`; \
-                     rename one of the classes"
+                    "the fully-qualified class names `{previous}` and `{fq_name}` \
+                     hash to the same 47-bit class type-tag. This is an extremely \
+                     rare hash collision between two class names, not a compiler \
+                     bug; renaming either class (or moving one to a different \
+                     namespace/package) resolves it. This is a known limitation of \
+                     content-addressed class type tags."
                 )));
             }
 
@@ -1807,16 +1850,15 @@ fn emit_file_group(
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
         for enum_data in item_tree.enums.values() {
-            let fq_name = if pkg_info.namespace_path.is_empty() {
-                format!("{}.{}", pkg_info.package, enum_data.name)
-            } else {
-                let ns: Vec<&str> = pkg_info
-                    .namespace_path
-                    .iter()
-                    .map(baml_base::Name::as_str)
-                    .collect();
-                format!("{}.{}.{}", pkg_info.package, ns.join("."), enum_data.name)
-            };
+            // Same single renderer as the class pass / MIR (see above): keep the
+            // fully-qualified name construction identical everywhere so the two
+            // never drift.
+            let fq_name = baml_type::QualifiedTypeName::new(
+                pkg_info.package.clone(),
+                pkg_info.namespace_path.clone(),
+                enum_data.name.clone(),
+            )
+            .render_dotted(false);
 
             let mut variant_map = HashMap::new();
             let mut variants = Vec::new();

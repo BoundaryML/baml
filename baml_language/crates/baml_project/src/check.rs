@@ -38,13 +38,22 @@ pub struct CheckResult {
 /// `baml_compiler_tir`. All diagnostics now come from the compiler2 pipeline via
 /// `baml_lsp2_actions::check_file`.
 ///
-/// The `project` and `source_files` parameters are accepted for API compatibility
-/// with existing callers but are not used — the compiler2 pipeline derives the
-/// file set internally from [`baml_compiler2_hir::compiler2_all_files`].
+/// Diagnostics are ALWAYS collected over the full project. The `project` and
+/// `_ignored_files` parameters are accepted for API compatibility with existing
+/// callers but are deliberately ignored: the compiler2 pipeline derives the file
+/// set internally from [`baml_compiler2_hir::compiler2_all_files`] and checks
+/// every file.
+///
+/// Callers that hold a per-file "dirty set" (e.g. from the bytecode-cache reuse
+/// plan) must NOT expect this function to honor it as a filter. Per-file
+/// diagnostics invalidation is not yet proven complete — narrowing the checked
+/// set to only the dirty files would risk surfacing stale diagnostics for clean
+/// files that transitively depend on a changed signature. Until that
+/// invalidation is proven sound, every file is re-diagnosed on every call.
 pub fn collect_diagnostics(
     db: &ProjectDatabase,
     _project: Project,
-    _source_files: &[SourceFile],
+    _ignored_files: &[SourceFile],
 ) -> Vec<Diagnostic> {
     collect_compiler2_diagnostics(db)
 }

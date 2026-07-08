@@ -26,3 +26,9 @@ indexmap = { workspace = true }
 log = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
+
+[features]
+# Forwarded to bex_vm_types so this crate can name the heap_debug-gated
+# `Object::Sentinel` variant in exhaustive matches (enabled transitively under
+# `--all-features` and the CI mirror).
+heap_debug = ["bex_vm_types/heap_debug"]

@@ -127,15 +127,12 @@ impl TestArgs {
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
             // and `baml generate` own the compile/count progress lines.
-            // With a reuse plan, only dirty files re-check: a clean file
-            // references nothing whose signature changed, so its diagnostics
-            // match the previous (error-free) compile.
+            // Diagnostics always run over the full project: `collect_diagnostics`
+            // checks every file for soundness. Per-file diagnostics invalidation
+            // is not yet proven complete, so narrowing to the reuse plan's dirty
+            // files would risk stale errors from clean dependents.
             let source_files = db.get_source_files();
-            let checked_files = match &reuse_plan {
-                Some(plan) => plan.dirty_files.clone(),
-                None => source_files.clone(),
-            };
-            let diagnostics = baml_project::collect_diagnostics(&db, project, &checked_files);
+            let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
             let errors: Vec<_> = diagnostics
                 .iter()
                 .filter(|d| d.severity == Severity::Error)
@@ -144,7 +141,7 @@ impl TestArgs {
                 // Render the full ariadne block so test errors look like
                 // run/pack errors instead of the previous "bullet list of
                 // messages" shape. Sources/paths cover ALL files — an error
-                // in a checked file may carry related spans elsewhere.
+                // in one file may carry related spans elsewhere.
                 let mut sources = std::collections::HashMap::new();
                 let mut file_paths = std::collections::HashMap::new();
                 for sf in &source_files {
@@ -400,32 +397,34 @@ fn discover_legacy_tests(
 /// (bytecode-cache hit path).
 ///
 /// `Program::test_cases` holds the same (test, target functions) pairs that
-/// HIR discovery yields — `run_legacy_test` already resolves each test
-/// against the engine's copy by name — and the target function's
-/// `source_file` supplies the `--list` display path, so no database is
-/// needed. Paths come out project-root-relative (how emit records them)
-/// rather than absolute; both forms are display-only.
+/// HIR discovery yields — `run_legacy_test` already resolves each test against
+/// the engine's copy by name — so no database is needed for execution.
+///
+/// KNOWN `--list` DIVERGENCE (interim): [`discover_legacy_tests`] (fresh run)
+/// derives each test's `file_path` from the file where the `test` block was
+/// *defined*. [`bex_vm_types::TestCase::source_file`] records that
+/// test-defining file (set in `baml_compiler2_emit` Pass 8 via
+/// `relative_source_path`, the same project-root-relative form
+/// `discover_legacy_tests` uses), so `--list` output is identical between a
+/// fresh compile and a bytecode-cache hit.
 fn legacy_tests_from_program(program: &bex_vm_types::Program) -> Vec<LegacyTest> {
     let mut tests = Vec::new();
     for tc in &program.test_cases {
+        // The test-defining file, recorded at emit time (Pass 8) via
+        // `relative_source_path` — the same project-root-relative form
+        // `discover_legacy_tests` uses, so `--list` output is identical
+        // between a fresh compile and a bytecode-cache hit. Empty only for a
+        // pre-FORMAT_VERSION-3 blob (impossible after the version bump).
+        let file_path = if tc.source_file.is_empty() {
+            PathBuf::from("<unknown>")
+        } else {
+            PathBuf::from(&tc.source_file)
+        };
         for func in &tc.function_names {
-            // The recorded target name may carry the `[...]` list rendering
-            // from the legacy `functions [...]` block; the object pool keys
-            // are bare fully-qualified names.
-            let bare = func.trim_start_matches('[').trim_end_matches(']');
-            let file_path = [func.as_str(), bare, &format!("user.{bare}")]
-                .iter()
-                .find_map(|name| program.function_indices.get(*name))
-                .and_then(|idx| program.objects.get(*idx))
-                .and_then(|obj| match obj {
-                    bex_vm_types::Object::Function(f) => Some(PathBuf::from(&f.source_file)),
-                    _ => None,
-                })
-                .unwrap_or_default();
             tests.push(LegacyTest {
                 function_name: func.clone(),
                 test_name: tc.name.clone(),
-                file_path,
+                file_path: file_path.clone(),
             });
         }
     }
