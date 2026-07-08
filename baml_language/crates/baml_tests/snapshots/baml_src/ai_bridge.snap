@@ -1,0 +1,37 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function ai_bridge.$init_test_ns_ai_bridge_legacy_bridge(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "legacy bridge builds a chat-completions request from messages"
+    make_closure .<lambda($init_test_ns_ai_bridge_legacy_bridge, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "legacy bridge is a Provider — negotiation sees HttpProvider"
+    make_closure .<lambda($init_test_ns_ai_bridge_legacy_bridge, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "legacy bridge refuses strategy configs with a typed Unsupported"
+    make_closure .<lambda($init_test_ns_ai_bridge_legacy_bridge, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function ai_bridge.legacy_openai() -> baml.llm.Client {
+    load_const "openai/gpt-4o"
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
+    alloc_array 0
+    load_const null
+    load_const 0
+    init_instance baml.llm.Client .name, .client_type, .sub_clients, .retry, .counter
+    return
+}

@@ -65,6 +65,8 @@ namespace baml.ai:
   class GeminiUsageWire { methods: [] }
   type HttpProvider
   class Job<T> { methods: [] }
+  class LegacyClient { methods: [build_request, send, parse, meta_of] }
+  class LegacyMeta { methods: [finish_reason, usage, reasoning, logprobs, citations] }
   type LiveControl
   class Logprob { methods: [] }
   class LoopInfo { methods: [] }
@@ -128,6 +130,7 @@ namespace baml.ai:
   function drive_stream<TPartial, T>
   function drive_with<T, V, E2>
   function has_tool_call
+  function messages_to_prompt
   function prompt_to_messages
   function step_count_is
 namespace baml.csv:

@@ -1222,6 +1222,186 @@ function baml.ai.RoundRobin$stream.call_messages_with<T, V, E2>(self: baml.ai.Ro
   !! 10085..10101: operator `+` cannot be applied to `int | null` and `1`
 }
 
+--- <builtin>/baml/ns_ai/core/legacy.baml ---
+class baml.ai.LegacyMeta {
+}
+function baml.ai.LegacyMeta.finish_reason(self: baml.ai.LegacyMeta) -> string throws never {
+  { : "unknown"
+    "unknown" : "unknown"
+  }
+}
+function baml.ai.LegacyMeta.usage(self: baml.ai.LegacyMeta) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+}
+function baml.ai.LegacyMeta.reasoning(self: baml.ai.LegacyMeta) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    Unavailable { reason: "legacy bridge sur..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.LegacyMeta.logprobs(self: baml.ai.LegacyMeta) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    Unavailable { reason: "legacy bridge sur..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.LegacyMeta.citations(self: baml.ai.LegacyMeta) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    Unavailable { reason: "legacy bridge sur..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.LegacyClient {
+  inner: baml.llm.Client
+}
+function baml.ai.LegacyClient.build_request<T>(self: baml.ai.LegacyClient, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.CallError | baml.errors.UnknownError {
+  { : baml.http.Request
+    if (self.inner.client_type != root.llm.ClientType.Primitive : bool) : void
+      { : never
+        throw root.errors.Unsupported { message: "LegacyClient brid..." } : baml.errors.Unsupported
+      }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (self.inner.to_primitive_client() : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
+    let ast = messages_to_prompt(messages) : baml.llm.PromptAst
+    let specialized = : baml.llm.PromptAst
+      catch (primitive.specialize_prompt(ast) : baml.llm.PromptAst) : baml.llm.PromptAst
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: sp..."] } : never
+    catch (primitive.build_request(specialized, reflect.type_of<T>()) : baml.http.Request) : baml.http.Request
+      catch (e)
+        _ =>
+          throw root.errors.UnknownError { data: e, message: ["legacy bridge: bu..."] } : never
+  }
+}
+function baml.ai.LegacyClient.send(self: baml.ai.LegacyClient, request: baml.http.Request) -> string throws baml.errors.UnknownError {
+  { : string
+    let response = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: se..."] } : never
+    catch (response.text() : string) : string
+      catch (e)
+        _ =>
+          throw root.errors.UnknownError { data: e, message: ["legacy bridge: bo..."] } : never
+  }
+}
+function baml.ai.LegacyClient.parse<T>(self: baml.ai.LegacyClient, from: string) -> T throws baml.errors.UnknownError {
+  { : T
+    let primitive = : baml.llm.PrimitiveClient
+      catch (self.inner.to_primitive_client() : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
+    catch (primitive.parse<T>(from) : T) : T
+      catch (e)
+        _ =>
+          throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } : never
+  }
+}
+function baml.ai.LegacyClient.meta_of(self: baml.ai.LegacyClient, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.LegacyMeta
+    LegacyMeta {  } : baml.ai.LegacyMeta
+  }
+}
+class baml.ai.LegacyMeta$stream {
+}
+function baml.ai.LegacyMeta$stream.finish_reason(self: baml.ai.LegacyMeta$stream) -> string throws never {
+  { : "unknown"
+    "unknown" : "unknown"
+  }
+}
+function baml.ai.LegacyMeta$stream.usage(self: baml.ai.LegacyMeta$stream) -> baml.ai.Usage throws never {
+  { : baml.ai.Usage
+    Usage { input_tokens: 0, output_tokens: 0 } : baml.ai.Usage
+  }
+}
+function baml.ai.LegacyMeta$stream.reasoning(self: baml.ai.LegacyMeta$stream) -> string | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    Unavailable { reason: "legacy bridge sur..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.LegacyMeta$stream.logprobs(self: baml.ai.LegacyMeta$stream) -> baml.ai.Logprob[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    Unavailable { reason: "legacy bridge sur..." } : baml.ai.Unavailable
+  }
+}
+function baml.ai.LegacyMeta$stream.citations(self: baml.ai.LegacyMeta$stream) -> baml.ai.Citation[] | baml.ai.Unavailable throws never {
+  { : baml.ai.Unavailable
+    Unavailable { reason: "legacy bridge sur..." } : baml.ai.Unavailable
+  }
+}
+class baml.ai.LegacyClient$stream {
+  inner: baml.llm.Client$stream | null
+}
+function baml.ai.LegacyClient$stream.build_request<T>(self: baml.ai.LegacyClient$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.CallError | baml.errors.UnknownError {
+  { : unknown
+    if (self.inner.client_type != root.llm.ClientType.Primitive : bool) : void
+      { : never
+        throw root.errors.Unsupported { message: "LegacyClient brid..." } : baml.errors.Unsupported
+      }
+    let primitive = : unknown
+      catch (self.inner.to_primitive_client() : unknown) : unknown
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
+    let ast = messages_to_prompt(messages) : baml.llm.PromptAst
+    let specialized = : unknown
+      catch (primitive.specialize_prompt(ast) : unknown) : unknown
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: sp..."] } : never
+    catch (primitive.build_request(specialized, reflect.type_of<T>()) : unknown) : unknown
+      catch (e)
+        _ =>
+          throw root.errors.UnknownError { data: e, message: ["legacy bridge: bu..."] } : never
+  }
+  !! 2255..2277: did you mean `self.inner?.client_type`? `self.inner.client_type` does not handle the case when `self.inner` is null
+  !! 2255..2277: did you mean `self.inner?.client_type`? `self.inner.client_type` does not handle the case when `self.inner` is null
+  !! 2543..2573: did you mean `self.inner?.to_primitive_client`? `self.inner.to_primitive_client` does not handle the case when `self.inner` is null
+  !! 2554..2573: type `baml.llm.Client$stream` has no member `to_primitive_client`
+  !! 2543..2575: `unknown | null` is not a function — it cannot be called
+  ?? 3082..3174: unreachable arm
+}
+function baml.ai.LegacyClient$stream.send(self: baml.ai.LegacyClient$stream, request: baml.http.Request) -> string throws baml.errors.UnknownError {
+  { : string
+    let response = : baml.http.Response
+      catch (root.http.send(request) : baml.http.Response) : baml.http.Response
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: se..."] } : never
+    catch (response.text() : string) : string
+      catch (e)
+        _ =>
+          throw root.errors.UnknownError { data: e, message: ["legacy bridge: bo..."] } : never
+  }
+}
+function baml.ai.LegacyClient$stream.parse<T>(self: baml.ai.LegacyClient$stream, from: string) -> T throws baml.errors.UnknownError {
+  { : unknown
+    let primitive = : unknown
+      catch (self.inner.to_primitive_client() : unknown) : unknown
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
+    catch (primitive.parse(from) : unknown) : unknown
+      catch (e)
+        _ =>
+          throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } : never
+  }
+  !! 3844..3874: did you mean `self.inner?.to_primitive_client`? `self.inner.to_primitive_client` does not handle the case when `self.inner` is null
+  !! 3855..3874: type `baml.llm.Client$stream` has no member `to_primitive_client`
+  !! 3844..3876: `unknown | null` is not a function — it cannot be called
+  ?? 4095..4179: unreachable arm
+}
+function baml.ai.LegacyClient$stream.meta_of(self: baml.ai.LegacyClient$stream, from: string) -> baml.ai.ResponseMeta throws never {
+  { : baml.ai.LegacyMeta
+    LegacyMeta {  } : baml.ai.LegacyMeta
+  }
+}
+
 --- <builtin>/baml/ns_ai/core/messages.baml ---
 class baml.ai.MessagePart {
   text: string | null

@@ -69,3 +69,11 @@ class ChatMessage {
 function prompt_to_messages(prompt: root.llm.PromptAst) -> ChatMessage[] throws never {
     $rust_io_function
 }
+
+/// Convert native `ChatMessage[]` back into a rendered `root.llm.PromptAst` —
+/// the reverse of `prompt_to_messages` (roles preserved, text and media parts
+/// interleaved). The seam the `LegacyClient` bridge uses to feed
+/// already-rendered messages into the legacy request pipeline.
+function messages_to_prompt(messages: ChatMessage[]) -> root.llm.PromptAst throws never {
+    $rust_io_function
+}

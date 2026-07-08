@@ -447,6 +447,40 @@ function baml.ai.stream_messages(self: ?, messages: root.ai.ChatMessage[]) -> ro
   { for m in self.members {  } match (m) { s: root.ai.Streaming => { let st: root.llm.Stream<TStream, TFinal> = s.stream_messages(messages) catch (e) { _ => { continue } }; return st }, _ => { continue } }; throw root.errors.UnknownError { data: null, message: ["fallback: no stre..."] } }
 }
 
+--- <builtin>/baml/ns_ai/core/legacy.baml ---
+class baml.ai.LegacyClient {
+  inner: root.llm.Client
+}
+class baml.ai.LegacyMeta {
+}
+function baml.ai.build_request(self: ?, messages: ChatMessage[]) -> root.http.Request  [expr] {
+  { if (self.inner.client_type Ne root.llm.ClientType.Primitive) { throw root.errors.Unsupported { message: "LegacyClient brid..." } }; let primitive = self.inner.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } }; let ast = messages_to_prompt(messages); let specialized = primitive.specialize_prompt(ast) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: sp..."] } } } primitive.build_request(specialized, reflect.type_of()) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: bu..."] } }
+}
+function baml.ai.citations(self: ?) -> Citation[] | Unavailable  [expr] {
+  {  } Unavailable { reason: "legacy bridge sur..." }
+}
+function baml.ai.finish_reason(self: ?) -> string  [expr] {
+  {  } "unknown"
+}
+function baml.ai.logprobs(self: ?) -> Logprob[] | Unavailable  [expr] {
+  {  } Unavailable { reason: "legacy bridge sur..." }
+}
+function baml.ai.meta_of(self: ?, from: string) -> ResponseMeta  [expr] {
+  {  } baml.ai.LegacyMeta {  }
+}
+function baml.ai.parse(self: ?, from: string) -> T  [expr] {
+  { let primitive = self.inner.to_primitive_client() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } } } primitive.parse(from) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: pa..."] } }
+}
+function baml.ai.reasoning(self: ?) -> string | Unavailable  [expr] {
+  {  } Unavailable { reason: "legacy bridge sur..." }
+}
+function baml.ai.send(self: ?, request: root.http.Request) -> string  [expr] {
+  { let response = root.http.send(request) catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: se..."] } } } response.text() catch (e) { _ => throw root.errors.UnknownError { data: e, message: ["legacy bridge: bo..."] } }
+}
+function baml.ai.usage(self: ?) -> Usage  [expr] {
+  {  } Usage { input_tokens: 0, output_tokens: 0 }
+}
+
 --- <builtin>/baml/ns_ai/core/messages.baml ---
 class baml.ai.ChatMessage {
   role: string
@@ -471,6 +505,7 @@ function baml.ai.from_image(img: image) -> baml.ai.MessagePart  [expr] {
 function baml.ai.from_text(text: string) -> baml.ai.MessagePart  [expr] {
   {  } baml.ai.MessagePart { text: text }
 }
+function baml.ai.messages_to_prompt(messages: baml.ai.ChatMessage[]) -> root.llm.PromptAst  [builtin]
 function baml.ai.prompt_to_messages(prompt: root.llm.PromptAst) -> baml.ai.ChatMessage[]  [builtin]
 function baml.ai.system(text: string) -> baml.ai.ChatMessage  [expr] {
   {  } baml.ai.ChatMessage { role: "system", parts: [MessagePart.from_text(text)] }

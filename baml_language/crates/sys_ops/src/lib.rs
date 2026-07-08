@@ -663,6 +663,77 @@ impl<T> io::IoNamespaceAi for T {
         };
         SysOpOutput::ok(prompt_ast_to_chat_messages(&ast))
     }
+
+    fn messages_to_prompt(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        messages: Vec<io::owned::ai::ChatMessage>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        use std::sync::Arc;
+
+        use baml_builtins2::{PromptAst, PromptAstSimple};
+
+        // Media slots arrive as `baml.media.*` instances whose `_data` carries the
+        // `Arc<MediaValue>` (the boundary form `prompt_ast_to_chat_messages` emits).
+        fn extract_media(v: &BexExternalValue) -> Option<Arc<baml_builtins2::MediaValue>> {
+            match v {
+                BexExternalValue::RustData(data) => {
+                    data.clone().downcast::<baml_builtins2::MediaValue>().ok()
+                }
+                BexExternalValue::Instance { fields, .. } => {
+                    fields.get("_data").and_then(extract_media)
+                }
+                BexExternalValue::Union { value, .. } => extract_media(value),
+                _ => None,
+            }
+        }
+
+        let mut nodes: Vec<Arc<PromptAst>> = Vec::new();
+        for m in messages {
+            let mut parts: Vec<Arc<PromptAstSimple>> = Vec::new();
+            for p in m.parts {
+                if let Some(t) = p.text
+                    && !t.is_empty()
+                {
+                    parts.push(Arc::new(PromptAstSimple::String(t)));
+                }
+                for slot in [&p.image, &p.audio, &p.pdf, &p.video] {
+                    if let Some(v) = slot
+                        && let Some(mv) = extract_media(v)
+                    {
+                        parts.push(Arc::new(PromptAstSimple::Media(mv)));
+                    }
+                }
+            }
+            let content = if parts.len() == 1 {
+                parts.pop().expect("len checked")
+            } else if parts.is_empty() {
+                // Preserve an empty message rather than dropping it (mirror of
+                // the forward direction's empty-part handling).
+                Arc::new(PromptAstSimple::String(String::new()))
+            } else {
+                Arc::new(PromptAstSimple::Multiple(parts))
+            };
+            nodes.push(Arc::new(PromptAst::Message {
+                role: m.role,
+                content,
+                metadata: serde_json::Value::Object(serde_json::Map::new()),
+            }));
+        }
+        let ast: Arc<PromptAst> = if nodes.len() == 1 {
+            nodes.pop().expect("len checked")
+        } else {
+            Arc::new(PromptAst::Vec(nodes))
+        };
+        SysOpOutput::ok(
+            io::owned::llm::PromptAst {
+                _data: ast as Arc<dyn std::any::Any + Send + Sync>,
+            }
+            .into_bex_external_value(),
+        )
+    }
 }
 
 /// Convert a `PromptAst` into native `baml.ai.ChatMessage` values: roles preserved,
