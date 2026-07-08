@@ -6582,11 +6582,11 @@ impl<'db> LoweringContext<'db> {
             }
             // An interface method referenced as a *value* on a generic- or
             // interface-typed receiver (`let f = x.eq`): no single concrete method
-            // exists statically, so bind the implementor's method by the
-            // receiver's runtime type (captured now). Mirrors the direct-call
-            // dispatch in `lower_call`, but yields a bound value. Candidates are
-            // resolved *before* lowering the receiver so a field access (no method
-            // candidates) falls through without lowering the prefix twice.
+            // exists statically, so bind the receiver's impl method by its runtime
+            // type at bind time — the value analogue of `lower_call`'s virtual
+            // dispatch. The declaring interface is resolved *before* lowering the
+            // receiver so a field access (no such method) falls through without
+            // lowering the prefix twice.
             //
             // Unlike the direct-call path this does not strip a trailing
             // type-qualifier segment (`x.Iface.method`): a qualified method
@@ -6605,27 +6605,24 @@ impl<'db> LoweringContext<'db> {
                 let recv_tir_ty = self
                     .tir_path_segment_type((self.current_metadata_scope, expr_id, recv_seg_idx))
                     .cloned();
-                if let Some((iface_tn, iface_type_args, iface_assoc)) = recv_tir_ty
+                if let Some(view) = recv_tir_ty
                     .as_ref()
                     .and_then(|ty| self.interface_dispatch_target_for_tir_ty(ty))
+                    .or_else(|| {
+                        recv_tir_ty
+                            .as_ref()
+                            .and_then(|ty| self.dispatch_target_for_concrete(ty, &method_name))
+                    })
+                    && self.mir_interface_declares_method(&view.0, &method_name)
                 {
-                    let resolved = self.interface_method_candidates_for(
-                        &iface_tn,
-                        &iface_type_args,
-                        &iface_assoc,
-                        &method_name,
-                        recv_tir_ty.as_ref(),
+                    let receiver_segments = &segments[..segments.len() - 1];
+                    let recv_local = self.lower_path_receiver_to_local(
+                        expr_id,
+                        receiver_segments,
+                        recv_root_local,
                     );
-                    if !resolved.is_empty() {
-                        let receiver_segments = &segments[..segments.len() - 1];
-                        let recv_local = self.lower_path_receiver_to_local(
-                            expr_id,
-                            receiver_segments,
-                            recv_root_local,
-                        );
-                        self.emit_bound_method_candidate_switch(recv_local, &resolved, &dest);
-                        return;
-                    }
+                    self.emit_virtual_bound_method(recv_local, &view, &method_name, &dest);
+                    return;
                 }
             }
             if self.locals.contains_key(&segments[0])
@@ -10187,33 +10184,22 @@ impl<'db> LoweringContext<'db> {
 
         // An interface method referenced as a *value* on a generic- or
         // interface-typed receiver (`let f = x.eq`): there is no single concrete
-        // method to bind statically, so bind the implementor's method by the
-        // receiver's runtime type (captured now — its type is fixed at this
-        // point). Resolve candidates *before* lowering the receiver so a field
-        // access (no method candidates) falls through to the field path below
+        // method to bind statically, so bind the receiver's impl method by its
+        // runtime type at bind time — the value analogue of the virtual call. The
+        // declaring interface is resolved *before* lowering the receiver so a
+        // field access (no such method) falls through to the field path below
         // without evaluating the receiver expression twice.
-        if let Some((iface_tn, iface_type_args, iface_assoc)) =
-            self.interface_dispatch_target_for_expr(base).or_else(|| {
-                self.tir_expr_type(self.expr_metadata_key(base))
-                    .and_then(|ty| self.dispatch_target_for_concrete(ty, field))
-            })
+        if let Some(view) = self.interface_dispatch_target_for_expr(base).or_else(|| {
+            self.tir_expr_type(self.expr_metadata_key(base))
+                .and_then(|ty| self.dispatch_target_for_concrete(ty, field))
+        }) && self.mir_interface_declares_method(&view.0, field)
         {
-            let recv_tir_ty = self.dispatch_receiver_static_tir_ty(base);
-            let resolved = self.interface_method_candidates_for(
-                &iface_tn,
-                &iface_type_args,
-                &iface_assoc,
-                field,
-                recv_tir_ty.as_ref(),
-            );
-            if !resolved.is_empty() {
-                let recv_op = self.lower_to_operand(base);
-                let recv_local = self.builder.temp(self.expr_ty(base));
-                self.builder
-                    .assign(Place::local(recv_local), Rvalue::Use(recv_op));
-                self.emit_bound_method_candidate_switch(recv_local, &resolved, &dest);
-                return;
-            }
+            let recv_op = self.lower_to_operand(base);
+            let recv_local = self.builder.temp(self.expr_ty(base));
+            self.builder
+                .assign(Place::local(recv_local), Rvalue::Use(recv_op));
+            self.emit_virtual_bound_method(recv_local, &view, field, &dest);
+            return;
         }
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
@@ -10761,6 +10747,45 @@ impl<'db> LoweringContext<'db> {
                 .assign(projection, Rvalue::Use(Operand::Copy(call_dest)));
         }
         true
+    }
+
+    /// Emit an [`Rvalue::MakeVirtualBoundMethod`] binding `method` of the interface
+    /// `view` on `recv_local` — the value analogue of [`Self::emit_virtual_call`].
+    /// The declaring-interface narrowing and the runtime-converted interface
+    /// template mirror the call form; the VM resolves the receiver's impl at bind
+    /// time and produces a `BoundMethod` carrying the impl's realized frame.
+    fn emit_virtual_bound_method(
+        &mut self,
+        recv_local: Local,
+        view: &InterfaceTypeView,
+        method: &Name,
+        dest: &Place,
+    ) {
+        let (decl_tn, decl_args, decl_assoc) = self.interface_view_declaring_method(view, method);
+        let iface_template = TyTemplate::Concrete(RuntimeTy::Interface(
+            decl_tn,
+            decl_args
+                .iter()
+                .map(|a| self.convert_tir_ty_for_runtime(a))
+                .collect(),
+            decl_assoc
+                .iter()
+                .map(|(name, ty)| (name.clone(), self.convert_tir_ty_for_runtime(ty)))
+                .collect(),
+            TyAttr::default(),
+        ));
+        self.builder.assign(
+            dest.clone(),
+            Rvalue::MakeVirtualBoundMethod {
+                iface: iface_template,
+                method: method.to_string(),
+                receiver: Operand::Copy(Place::Local(recv_local)),
+                // These value sites reference the method bare (`x.eq`); a
+                // *specialized* generic-method value (`x.map<int>`) reaches MIR
+                // as a generic-apply over the produced value, not here.
+                type_args: Vec::new(),
+            },
+        );
     }
 
     /// Lower the receiver of a method-call path (`receiver_segments` — the path

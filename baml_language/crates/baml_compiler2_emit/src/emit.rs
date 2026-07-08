@@ -731,6 +731,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Rvalue::IsType { operand, .. }
             | Rvalue::MakeBoundMethod {
                 receiver: operand, ..
+            }
+            | Rvalue::MakeVirtualBoundMethod {
+                receiver: operand, ..
             } => self.operand_reads_spawn_captured_local(operand, seen),
             Rvalue::MakeClosure { captures, .. } => captures
                 .iter()
@@ -1799,6 +1802,32 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 global_idx,
             )));
             self.set_operand(inst, OperandMeta::Global(func_name));
+            return;
+        }
+        if let Rvalue::MakeVirtualBoundMethod {
+            iface,
+            method,
+            receiver,
+            type_args,
+        } = rvalue
+        {
+            // Stack layout mirrors `VirtualCall`: receiver, then the method-level
+            // type args, then the interface type (each resolved against the frame
+            // by `LoadType`), then the method name — the opcode pops in reverse.
+            self.emit_operand_pull(receiver);
+            for template in type_args {
+                let const_idx = self.add_constant(ConstValue::Type(template.clone()));
+                let inst = self.emit(Instruction::LoadType(const_idx));
+                self.set_operand(inst, OperandMeta::Const(template.to_string()));
+            }
+            let iface_const = self.add_constant(ConstValue::Type(iface.clone()));
+            let inst = self.emit(Instruction::LoadType(iface_const));
+            self.set_operand(inst, OperandMeta::Const(iface.to_string()));
+            self.emit_constant(&Constant::String(method.clone()));
+            let inst = self.emit(Instruction::MakeVirtualBoundMethod {
+                ntypeargs: u16::try_from(type_args.len()).expect("ntypeargs fits in u16"),
+            });
+            self.set_operand(inst, OperandMeta::Callable(method.clone()));
             return;
         }
         // `MakeGenericFunction` needs no special handling here (it has no value

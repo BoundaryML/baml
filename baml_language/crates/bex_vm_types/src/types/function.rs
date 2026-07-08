@@ -325,14 +325,31 @@ pub struct Closure {
 
 /// A method bound to a specific receiver instance.
 ///
-/// Created by `MakeBoundMethod`. The receiver is inserted as `self`
-/// at call time by `CallIndirect`.
+/// Created by `MakeBoundMethod` (a statically-resolved method) or
+/// `MakeVirtualBoundMethod` (an interface method resolved from the receiver's
+/// runtime `Self` at bind time). The receiver is inserted as `self` at call time
+/// by `CallIndirect`.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// The receiver value (inserted as `self` at call time).
     pub receiver: Value,
+    /// The callee frame's **complete** type args, when the producer resolved them.
+    ///
+    /// `MakeVirtualBoundMethod` always fills this: the resolved impl's realized
+    /// frame — the impl's own generics, or the interface's args + associated types
+    /// for an inherited default (which the receiver's class args cannot express,
+    /// e.g. a blanket `implement<T> I for T[]` bound at `int[]`) — followed by any
+    /// method-level type args from the reference site.
+    ///
+    /// `None` is the statically-resolved `MakeBoundMethod`, which predates explicit
+    /// frame threading: the call path falls back to deriving the frame from the
+    /// receiver's `class_type_args` — an incomplete legacy scheme (it loses the
+    /// method's *own* generics; known bug), kept only until `MakeBoundMethod`
+    /// threads its frame the same way. New producers must fill `Some`, never lean
+    /// on the fallback.
+    pub type_args: Option<Box<[baml_type::RuntimeTy]>>,
 }
 
 /// A generic function instantiation carrying concrete type arguments.

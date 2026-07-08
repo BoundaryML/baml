@@ -732,7 +732,8 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
                 walk_operand_locals(cap, f);
             }
         }
-        Rvalue::MakeBoundMethod { receiver, .. } => {
+        Rvalue::MakeBoundMethod { receiver, .. }
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
             walk_operand_locals(receiver, f);
         }
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
@@ -1545,7 +1546,8 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         }
         Rvalue::IsType { operand, .. } => operand_has_projection(operand),
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
-        Rvalue::MakeBoundMethod { receiver, .. } => operand_has_projection(receiver),
+        Rvalue::MakeBoundMethod { receiver, .. }
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => operand_has_projection(receiver),
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => false,
         Rvalue::MakeGenericFunctionFromValue { value, .. } => operand_has_projection(value),
     }

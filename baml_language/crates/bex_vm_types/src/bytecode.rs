@@ -732,6 +732,24 @@ pub enum Instruction {
     /// Stack: `[receiver]` -> `[bound_method]`
     MakeBoundMethod(GlobalIndex),
 
+    /// Create a bound method for an *interface* method by resolving the receiver's
+    /// impl at runtime — the value analogue of `VirtualCall` (`let f = x.eq` where
+    /// `x`'s concrete type is statically unknown). Pops the method name, the
+    /// interface type (`Object::Type`), `ntypeargs` method-level type args, and the
+    /// receiver; resolves the receiver's concrete `Self` to its `implements` rule
+    /// (coherence guarantees at most one) and pushes an `Object::BoundMethod` over
+    /// the resolved method, carrying the callee's complete frame type args — the
+    /// impl's realized frame followed by the method-level args (a generic method's
+    /// own type args must be captured here or they are lost; the receiver cannot
+    /// express them).
+    ///
+    /// Stack: `[receiver, type_args…, iface_type, method_name]` -> `[bound_method]`
+    MakeVirtualBoundMethod {
+        /// Number of method-level `Object::Type` args on the stack (below the
+        /// interface type), appended to the resolved impl frame.
+        ntypeargs: u16,
+    },
+
     /// Create a generic-function value (`foo<T>`) from a base function's global
     /// index, popping `ntypeargs` `Object::Type` values from the stack into its
     /// `type_args`. Used for param-dependent instantiations; the fully-concrete
@@ -996,6 +1014,12 @@ pub enum OpCode {
 
     // ── Phase 5 trace-origin marker, appended to preserve discriminants ──
     Rethrow,
+
+    // ── Appended to preserve discriminants ──
+    // Virtual interface-method *value* (the value analogue of `VirtualCall`):
+    // no operands (1 byte); receiver, interface type, and method name are popped
+    // from the stack and the resolved bound method is pushed.
+    MakeVirtualBoundMethod,
 }
 
 impl OpCode {
@@ -1122,7 +1146,7 @@ impl OpCode {
             | Self::VirtualCallWithRuntimeId => 5,
 
             // 3-byte: opcode + u16
-            Self::MakeGenericFunctionFromValue => 3,
+            Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
             Self::AllocInstance
@@ -1152,6 +1176,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::AwaitAny as u8 => Ok(Self::AwaitAny),
             x if x == Self::Throw as u8 => Ok(Self::Throw),
             x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
+            x if x == Self::MakeVirtualBoundMethod as u8 => Ok(Self::MakeVirtualBoundMethod),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
@@ -1286,6 +1311,7 @@ impl std::fmt::Display for OpCode {
             Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
             Self::Throw => "THROW",
             Self::Rethrow => "RETHROW",
+            Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
@@ -1599,6 +1625,9 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Throw => f.write_str("THROW"),
             Instruction::Rethrow => f.write_str("RETHROW"),
+            Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                write!(f, "MAKE_VIRTUAL_BOUND_METHOD {ntypeargs}")
+            }
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
@@ -2201,7 +2230,8 @@ impl Bytecode {
                 }
 
                 // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
-                Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
+                Instruction::MakeGenericFunctionFromValue { ntypeargs }
+                | Instruction::MakeVirtualBoundMethod { ntypeargs } => {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
@@ -2415,6 +2445,7 @@ impl Bytecode {
             Instruction::AwaitAny => OpCode::AwaitAny,
             Instruction::Throw => OpCode::Throw,
             Instruction::Rethrow => OpCode::Rethrow,
+            Instruction::MakeVirtualBoundMethod { .. } => OpCode::MakeVirtualBoundMethod,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,

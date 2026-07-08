@@ -763,6 +763,27 @@ pub enum Rvalue {
         receiver: Operand,
     },
 
+    /// Create a bound method value for an *interface* method whose impl is
+    /// unknown statically — the value analogue of [`Terminator::VirtualCall`]
+    /// (`let f = x.eq` on an existential / bounded-type-var receiver). The VM
+    /// resolves the receiver's concrete `Self` to its impl at bind time and
+    /// produces a `BoundMethod` over the resolved method, carrying the impl's
+    /// realized frame type args.
+    MakeVirtualBoundMethod {
+        /// The interface to resolve against, as a template the emitter pushes
+        /// with `LoadType` (like [`Terminator::VirtualCall`]'s `iface`).
+        iface: TyTemplate,
+        /// The interface method's name.
+        method: String,
+        /// The receiver whose runtime concrete type is the `Self` to resolve on.
+        receiver: Operand,
+        /// Method-level type-argument templates from the reference site (a
+        /// generic interface method's own generics, when specialized there).
+        /// Appended to the resolved impl frame by the VM — dropping them would
+        /// lose the method's own generics.
+        type_args: Vec<TyTemplate>,
+    },
+
     /// Create a generic-function value (`foo<T>`) whose type arguments depend on
     /// the enclosing frame's type params, so they cannot be a compile-time
     /// constant. The emitter pushes a `LoadType` for each template (resolved

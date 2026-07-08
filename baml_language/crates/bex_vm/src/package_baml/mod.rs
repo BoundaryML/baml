@@ -269,6 +269,7 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
     Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: fn_ptr,
         receiver: v,
+        type_args: None,
     }))
 }
 
@@ -289,6 +290,7 @@ pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr>
     Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: fn_ptr,
         receiver: v,
+        type_args: None,
     }))
 }
 
@@ -333,6 +335,7 @@ pub(super) fn make_to_json_override_callee(vm: &mut BexVm, v: Value) -> Option<H
     Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: fn_ptr,
         receiver: v,
+        type_args: None,
     }))
 }
 
