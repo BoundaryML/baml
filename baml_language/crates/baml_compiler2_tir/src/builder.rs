@@ -14614,6 +14614,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         for pkg_id in self.registry_packages_for_interface_lookup(Some(base_ty), None) {
             let registry = crate::interfaces::package_implements_registry(db, pkg_id);
             for rule in &registry.interface_impl_rules {
+                // Cheap pre-filter: substitution never changes the interface
+                // QTN, so rules whose interface closure doesn't declare
+                // `member` are skipped before the (costly) pattern match.
+                let Ty::Interface(rule_iface_qtn, _, _, _) = &rule.interface_ty else {
+                    continue;
+                };
+                if !self.interface_closure_declares_method(rule_iface_qtn, member) {
+                    continue;
+                }
                 let Some(b) = crate::interfaces::match_ty_pattern(
                     &rule.for_ty_pattern,
                     base_ty,
@@ -14626,9 +14635,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let Ty::Interface(iface_qtn, iface_args, associated_bindings, _) = iface_ty else {
                     continue;
                 };
-                if !self.interface_closure_declares_method(&iface_qtn, member) {
-                    continue;
-                }
                 // Confirm via the full rule check so generic bounds are honored
                 // (e.g. `implements<T extends Named> Printable for Box<T>`).
                 let requested = Ty::Interface(
