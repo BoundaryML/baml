@@ -92,7 +92,7 @@ Check a scenario when its `ns_ai_scenarios/NN_*/` exists with green tests on the
 with the blocker instead of faking a run.
 
 - Single-turn & output: [ ] 01 [ ] 02 [ ] 03 [ ] 04 [ ] 05 [ ] 06 [ ] 07 [ ] 08
-- Tools & agents: [ ] 09 [x] 10 (ToolLoop + $run_tools, offline) [ ] 11 [ ] 12 [ ] 13 [ ] 14 [ ] 15 [ ] 16
+- Tools & agents: [ ] 09 [x] 10 (ToolLoop + $run_tools, offline) [x] 11 (parallel dispatch) [ ] 12 [ ] 13 [x] 14 (handoff) [x] 15 (tripwires) [ ] 16
 - State & memory: [ ] 17 [ ] 18(P8-store) [ ] 19(P8-store) [ ] 20 [ ] 21(P8-store)
 - Realtime & voice: [x] 22 (offline `$live` + fake; live tier = ai_realtime.rs) [x] 23 (negotiation) [ ] 24 [ ] 25 [ ] 26
 - Cross-cutting: [ ] 27 [ ] 28 [ ] 29 [ ] 30 [ ] 31 [x] 32 ($with value+meta, offline) [ ] 33 [ ] 34 [ ] 35 [ ] 36
