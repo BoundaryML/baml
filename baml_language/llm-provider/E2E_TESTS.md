@@ -1,5 +1,22 @@
 # E2E tests that work completely
 
+> **UPDATE (2026-07-08, post-desugar):** the surface below predates the
+> capability-registry/desugar work (`_plan/llm-desugar-capabilities-plan.md`).
+> Since then: every LLM function takes `client: baml.ai.Provider` (native +
+> combinator + legacy call-site overrides all live-proven), companions
+> `Foo$with/$run_tools/$live/$<custom>` generate from registered capability
+> drivers, the orchestrator delegation was replaced by
+> `baml.ai.native_provider_for` (openai/anthropic/google-ai route natively —
+> a DECLARED anthropic client now hits the native wire), and the BAML-level
+> suite grew to ~2085 tests including **44 scenario homes**
+> (`baml_src/ns_ai_scenarios/`) with offline tests plus a LIVE
+> `testset "integ-test-*"` tier (OpenAI + Anthropic single-turn, OpenAI
+> structured — all green via `infisical run --env=test -- cargo test -p
+> baml_tests --test baml_src baml_integ_test`). New e2e in the Rust suites:
+> client-override (native + combinator + declared-client-function) mocks,
+> declared-anthropic-native-wire, user-capability companions
+> (`ns_ai_custom_capability`).
+
 The verified end-to-end surface of the `baml.ai` provider model. **Live** = hits the real
 OpenAI API (`gpt-5.4-mini` / `gpt-realtime`), gated on `OPENAI_API_KEY` (skips without it).
 **Mock** = deterministic wiremock at the HTTP/SSE level, often with request-capture

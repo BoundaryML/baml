@@ -74,8 +74,11 @@ deterministic test (wiremock request-capture or VM runtime test) in `crates/baml
 **"compiled"** = realized as compiling BAML, verified by the `baml_src` suite; the native transport/persistence
 host surface is stubbed (throws) pending P6/P8.
 
-## The one blocker for user-authored providers
-Cross-package `requires`-satisfaction is broken (E0125): a user-package class can't implement a
-stdlib capability interface (its `implements Provider {}` isn't seen by the `requires` check), so
-provider classes currently live in stdlib. Fixing this is the top priority to make user-defined
-providers real — see [`../_plan/deviations.md`](../_plan/deviations.md).
+## Blockers: none for user-authored providers or capabilities
+E0125 is fixed, and the desugar/registry work went further: users declare their own
+**capabilities** (`//baml:llm_capability` + `//baml:llm_companion(<suffix>)` drivers) and every
+LLM function grows a generated `Foo$<suffix>` companion negotiating at runtime
+(`ns_ai_custom_capability/usage.baml` proves it e2e). Every scenario above with a runnable
+offline shape now lives as tests under `baml_src/ns_ai_scenarios/NN_*` (44 of 47; the rest are
+live/media-gated or P8-transport-shaped) — see `_plan/implementation-checklist.md` for the
+tracker and `_plan/llm-desugar-capabilities-plan.md` for the design.
