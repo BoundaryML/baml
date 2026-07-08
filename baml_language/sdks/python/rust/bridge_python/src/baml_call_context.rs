@@ -59,7 +59,7 @@ impl BamlCallContext {
     }
 
     /// Bind this controller to an in-flight CFFI call id for the duration of
-    /// one host call. Private runtime hook used by `baml_core`.
+    /// one host call. Private runtime hook used by `baml_bridge`.
     fn _attach_call_id(&self, call_id: u64) {
         if let Ok(mut ids) = self.active_call_ids.lock()
             && !ids.contains(&call_id)

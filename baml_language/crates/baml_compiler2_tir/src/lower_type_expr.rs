@@ -244,6 +244,68 @@ fn substitute_paths_walk(
 /// `replacement`. Used by signature lowering to pre-resolve `Self` to
 /// the enclosing class/interface's type expression before regular
 /// resolution runs.
+/// The source span of the first `Self` reference appearing anywhere in
+/// `type_expr` (a `Path` whose leading segment is `Self`, at any nesting depth),
+/// or `None` if it mentions no `Self`.
+///
+/// `Self` is a signature-only construct: every signature/declaration site
+/// resolves it up front with `substitute_self` against a replacement it
+/// supplies (the enclosing type, the impl receiver, or the interface's `Self`
+/// bound). A method *body* has no such replacement — a class body cannot name
+/// its own instantiation as a value type, and an interface default method
+/// cannot name the implementor — so body-position type lowering uses this to
+/// reject `Self` with a purposeful diagnostic instead of leaving it to resolve
+/// to a misbehaving type variable (interface default methods) or a bare
+/// "unresolved type" (class bodies). Mirrors `substitute_self`'s traversal so
+/// no `Self`-bearing position is missed.
+pub fn self_reference_span(type_expr: &TypeExpr) -> Option<text_size::TextRange> {
+    match &type_expr.kind {
+        TypeExprKind::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            ..
+        } => {
+            if segments.first().is_some_and(|s| s.as_str() == "Self") {
+                return Some(type_expr.span);
+            }
+            generic_args
+                .iter()
+                .find_map(self_reference_span)
+                .or_else(|| {
+                    associated_type_bindings
+                        .iter()
+                        .find_map(|binding| self_reference_span(&binding.ty))
+                })
+        }
+        TypeExprKind::AssociatedTypeProjection {
+            base, interface, ..
+        } => self_reference_span(base).or_else(|| {
+            interface
+                .as_ref()
+                .and_then(|interface| self_reference_span(interface))
+        }),
+        TypeExprKind::List { inner, .. } | TypeExprKind::Optional { inner, .. } => {
+            self_reference_span(inner)
+        }
+        TypeExprKind::Map { key, value, .. } => {
+            self_reference_span(key).or_else(|| self_reference_span(value))
+        }
+        TypeExprKind::Union { variants, .. } => variants.iter().find_map(self_reference_span),
+        TypeExprKind::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => params
+            .iter()
+            .find_map(|param| self_reference_span(&param.ty))
+            .or_else(|| self_reference_span(ret))
+            .or_else(|| throws.as_ref().and_then(|ty| self_reference_span(ty))),
+        _ => None,
+    }
+}
+
 fn substitute_self(type_expr: &TypeExpr, replacement: &TypeExpr) -> TypeExpr {
     match &type_expr.kind {
         TypeExprKind::Path {

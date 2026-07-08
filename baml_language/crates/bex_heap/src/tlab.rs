@@ -595,7 +595,7 @@ mod tests {
                     field_type: baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     },
-                    field_template: baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Int {
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
                         attr: baml_type::TyAttr::default(),
                     }),
                     description: None,
@@ -607,7 +607,7 @@ mod tests {
                     field_type: baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     },
-                    field_template: baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Int {
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
                         attr: baml_type::TyAttr::default(),
                     }),
                     description: None,

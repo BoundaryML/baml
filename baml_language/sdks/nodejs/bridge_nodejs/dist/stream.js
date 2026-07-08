@@ -2,10 +2,10 @@
  * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
  *
  * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-// stream.ts — pure-TS analog of sdks/python/src/baml_core/_stream.py.
+// stream.ts — pure-TS analog of sdks/python/src/baml_bridge/_stream.py.
 //
 // BamlStream wraps a BamlHandle whose HANDLE_TABLE row is a
 // `CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle })`

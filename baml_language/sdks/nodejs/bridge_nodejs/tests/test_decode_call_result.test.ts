@@ -5,13 +5,13 @@
 //   2. error/panic arms surface a BamlError/BamlPanic carrying the decoded
 //      value, BAML trace, and class FQN — not just a formatted string.
 
-import { baml_core } from '../dist/proto/baml_cffi.js';
+import { baml_bridge } from '../dist/proto/baml_cffi.js';
 import { decodeCallResult } from '../dist/index.js';
 import { BamlError, BamlPanic } from '../dist/index.js';
 
-const { BamlOutboundResult, BamlOutboundValue } = baml_core.cffi.v1;
+const { BamlOutboundResult, BamlOutboundValue } = baml_bridge.cffi.v1;
 
-function encodeResult(result: baml_core.cffi.v1.IBamlOutboundResult): Buffer {
+function encodeResult(result: baml_bridge.cffi.v1.IBamlOutboundResult): Buffer {
     return Buffer.from(BamlOutboundResult.encode(BamlOutboundResult.create(result)).finish());
 }
 
@@ -34,7 +34,7 @@ describe('decodeCallResult — inline media / prompt AST rejection', () => {
 describe('decodeCallResult — thrown value carries structured detail', () => {
     // An unmapped class FQN decodes to a plain object (the bare bridge has no
     // generated typemap), so `.value` is `{ message }` and `.className` is the FQN.
-    const thrown: baml_core.cffi.v1.IBamlOutboundValue = {
+    const thrown: baml_bridge.cffi.v1.IBamlOutboundValue = {
         classValue: {
             name: 'baml.errors.GenericSdkError',
             fields: [{ key: 'message', value: { stringValue: 'boom' } }],

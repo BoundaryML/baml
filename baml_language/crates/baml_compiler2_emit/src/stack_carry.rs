@@ -1468,7 +1468,7 @@ impl StackEffectSink for StackCarryPullSink<'_> {
 #[cfg(test)]
 mod tests {
     use baml_compiler2_mir::{AggregateKind, BasicBlock, LocalDecl, Statement};
-    use baml_type::{TyAttr, TyTemplate};
+    use baml_type::{RealizedTy, TyAttr, TyTemplate};
 
     use super::*;
 
@@ -1532,7 +1532,7 @@ mod tests {
 
         let ok = simulate_aggregate_operand_pull_stack(
             &Rvalue::Array(
-                TyTemplate::Concrete(RuntimeTy::unknown()),
+                TyTemplate::from(RealizedTy::unknown()),
                 vec![
                     Operand::copy_local(carried),
                     Operand::copy_local(sibling),
@@ -1586,8 +1586,8 @@ mod tests {
 
         let ok = simulate_aggregate_operand_pull_stack(
             &Rvalue::Map(
-                TyTemplate::Concrete(RuntimeTy::string()),
-                TyTemplate::Concrete(RuntimeTy::unknown()),
+                TyTemplate::from(RealizedTy::string()),
+                TyTemplate::from(RealizedTy::unknown()),
                 vec![
                     (
                         Operand::Constant(Constant::String("a".to_string())),
@@ -1614,8 +1614,8 @@ mod tests {
         let key = Local(1);
         let value = Local(2);
         let rvalue = Rvalue::Map(
-            TyTemplate::Concrete(RuntimeTy::string()),
-            TyTemplate::Concrete(RuntimeTy::unknown()),
+            TyTemplate::from(RealizedTy::string()),
+            TyTemplate::from(RealizedTy::unknown()),
             vec![(Operand::copy_local(key), Operand::copy_local(value))],
         );
 
@@ -1634,7 +1634,7 @@ mod tests {
 
         let ok = simulate_aggregate_operand_pull_stack(
             &Rvalue::Array(
-                TyTemplate::Concrete(RuntimeTy::unknown()),
+                TyTemplate::from(RealizedTy::unknown()),
                 vec![
                     Operand::copy_local(real_prefix),
                     Operand::copy_local(carried),
@@ -1664,7 +1664,7 @@ mod tests {
             &Rvalue::Aggregate {
                 kind: AggregateKind::Class {
                     name: "Box".to_string(),
-                    type_arg_templates: vec![TyTemplate::Concrete(int_ty())],
+                    type_arg_templates: vec![TyTemplate::from(baml_type::RealizedTy::int())],
                 },
                 fields: vec![Operand::copy_local(sibling), Operand::copy_local(carried)],
             },

@@ -18,40 +18,75 @@ function user.MakeWrapper() -> Wrapper {
 
 function user.MatchJson(j: baml.json.json) -> string {
     load_var j
-    type_tag
-    jump_table [L4, L2, L5, L6, L3, _, L1, L0], default L8
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L11
 
-  L0: map
+  L0:
+    load_var j
+    is_type bool
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var j
+    is_type int
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var j
+    is_type float
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var j
+    is_type string
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var j
+    is_type baml.json.json[]
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var j
+    is_type map<string, baml.json.json>
+    pop_jump_if_false L13
     load_const "map"
-    jump L7
+    jump L12
 
-  L1: list
+  L6:
     load_const "array"
-    jump L7
-
-  L2: string
-    load_const "string"
-    jump L7
-
-  L3: float
-    load_const "float"
-    jump L7
-
-  L4: int
-    load_const "int"
-    jump L7
-
-  L5: bool
-    load_const "bool"
-    jump L7
-
-  L6: null
-    load_const "null"
+    jump L12
 
   L7:
-    return
+    load_const "string"
+    jump L12
 
   L8:
+    load_const "float"
+    jump L12
+
+  L9:
+    load_const "int"
+    jump L12
+
+  L10:
+    load_const "bool"
+    jump L12
+
+  L11:
+    load_const "null"
+
+  L12:
+    return
+
+  L13:
     unreachable
 }
 

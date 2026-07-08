@@ -42,7 +42,7 @@ use bex_events::{
     },
 };
 use bex_vm_types::{CaptureCategory, CaptureOption, FunctionCaptureProps, Object};
-use bridge_ctypes::baml_core::cffi::{
+use bridge_ctypes::baml_bridge::cffi::{
     BamlOutboundValue, baml_outbound_value::Value as OutboundValue,
 };
 use common::compile_for_engine;

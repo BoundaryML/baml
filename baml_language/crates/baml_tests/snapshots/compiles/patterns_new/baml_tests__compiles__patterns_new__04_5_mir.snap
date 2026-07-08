@@ -1227,27 +1227,37 @@ fn user.unwrap_typed(cb: ((int) -> T throws never) | ((string) -> T throws never
     let _2: bool
     let _3: (int) -> T throws never // f
     let _4: (int) -> T throws never
-    let _5: (string) -> T throws never // f
-    let _6: (string) -> T throws never
+    let _5: bool
+    let _6: (string) -> T throws never // f
+    let _7: (string) -> T throws never
 
     bb0: {
-        _2 = is_type(copy _1, (int) -> T throws never);
-        branch copy _2 -> [bb2, bb1];
+        _2 = is_type(copy _1, (int) -> #0 throws never);
+        branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = copy _1;
-        _6 = copy _5;
-        _0 = call copy _6(const "") -> [bb3];
+        _5 = is_type(copy _1, (string) -> #0 throws never);
+        branch copy _5 -> [bb3, bb2];
     }
 
     bb2: {
-        _3 = copy _1;
-        _4 = copy _3;
-        _0 = call copy _4(const 0_i64) -> [bb3];
+        unreachable;
     }
 
     bb3: {
+        _6 = copy _1;
+        _7 = copy _6;
+        _0 = call copy _7(const "") -> [bb5];
+    }
+
+    bb4: {
+        _3 = copy _1;
+        _4 = copy _3;
+        _0 = call copy _4(const 0_i64) -> [bb5];
+    }
+
+    bb5: {
         return;
     }
 }
