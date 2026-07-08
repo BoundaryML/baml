@@ -55,16 +55,12 @@ function user.TestFunc(input: string, client: baml.ai.Provider) -> string {
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.TestFunc$render_prompt
+    store_var _4
     load_type string
-    load_var client
-    load_const "TestFunc"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -210,17 +206,13 @@ function user.TestFunc$stream(input: string, client: baml.ai.Provider) -> baml.l
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.TestFunc$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "TestFunc"
-    load_var input
-    load_const "input"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 

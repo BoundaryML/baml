@@ -26,14 +26,12 @@ function user.CommentAfterArrow(client: baml.ai.Provider) -> string {
     store_var client
 
   L0:
-    load_type string
     load_var client
-    load_const "CommentAfterArrow"
+    call user.CommentAfterArrow$render_prompt
+    store_var _3
     load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 1 2
+    call baml.ai.drive_call
     return
 }
 
@@ -173,15 +171,13 @@ function user.CommentAfterArrow$stream(client: baml.ai.Provider) -> baml.llm.Str
     store_var client
 
   L0:
+    load_var client
+    call user.CommentAfterArrow$render_prompt
+    store_var _3
     load_type string | null
     load_type string
-    load_var client
-    load_const "CommentAfterArrow"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 1 2
+    call baml.ai.drive_stream
     return
 }
 
@@ -215,17 +211,13 @@ function user.FunctionWithComments(a: string, b: int, client: baml.ai.Provider) 
     store_var client
 
   L0:
-    load_type string
-    load_var client
-    load_const "FunctionWithComments"
     load_var2 1 2
-    load_const "a"
-    load_const "b"
+    load_var client
+    call user.FunctionWithComments$render_prompt
+    store_var _5
     load_type string
-    load_type unknown
-    alloc_map 2
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 3 4
+    call baml.ai.drive_call
     return
 }
 
@@ -376,18 +368,14 @@ function user.FunctionWithComments$stream(a: string, b: int, client: baml.ai.Pro
     store_var client
 
   L0:
+    load_var2 1 2
+    load_var client
+    call user.FunctionWithComments$render_prompt
+    store_var _5
     load_type string | null
     load_type string
-    load_var client
-    load_const "FunctionWithComments"
-    load_var2 1 2
-    load_const "a"
-    load_const "b"
-    load_type string
-    load_type unknown
-    alloc_map 2
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 3 4
+    call baml.ai.drive_stream
     return
 }
 

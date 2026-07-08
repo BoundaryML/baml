@@ -100,7 +100,7 @@ namespace baml.ai:
   type Realtime
   type ResponseMeta
   class Retry { methods: [build_request, send, parse, meta_of, call_messages_with, stream_messages] }
-  class RoundRobin { methods: [build_request, send, parse, meta_of, call_messages_with] }
+  class RoundRobin { methods: [build_request, send, parse, meta_of, call_messages_with, stream_messages] }
   class Session { methods: [] }
   class Snapshot { methods: [] }
   type Streaming
@@ -299,15 +299,12 @@ namespace baml.llm:
   class AnthropicOptions { methods: [] }
   class AzureOpenAiOptions { methods: [] }
   class BedrockOptions { methods: [] }
-  class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute_stream, execute_once_stream, __make_stream, execute_oneshot, execute_once_oneshot] }
+  class Client { methods: [to_primitive_client, get_constructor, __make_stream] }
   enum ClientType
   class Context { methods: [output_format_with] }
   class ContextClient { methods: [] }
-  class ExecutionContext { methods: [] }
   class MediaUrlHandler { methods: [] }
-  class OrchestrationStep { methods: [] }
   class OutputFormat { methods: [] }
-  class PlannerState { methods: [rr_local_offset, rr_pick_index] }
   class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
   class PrimitiveClientOptions { methods: [] }
   class PromptAst { methods: [] }

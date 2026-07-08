@@ -15,7 +15,7 @@ class user.FieldAttributes {
   multiple: string?
 }
 function user.GetMixedList(client: baml.ai.Provider = GPT4) -> int | string[]  [llm] {
-  baml.llm.call_llm_function(client, "GetMixedList", map {  })
+  baml.ai.drive_call(client, GetMixedList$render_prompt(client = client))
 }
 function user.GetMixedList$build_request(client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GetMixedList", map {  })
@@ -36,7 +36,7 @@ function user.GetMixedList$with(project: (baml.ai.ResponseMeta) -> V throws E2, 
   baml.ai.drive_with(client, GetMixedList$render_prompt(client = client), project)
 }
 function user.GetMixedMap(client: baml.ai.Provider = GPT4) -> map<string, int | string>  [llm] {
-  baml.llm.call_llm_function(client, "GetMixedMap", map {  })
+  baml.ai.drive_call(client, GetMixedMap$render_prompt(client = client))
 }
 function user.GetMixedMap$build_request(client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GetMixedMap", map {  })
@@ -57,7 +57,7 @@ function user.GetMixedMap$with(project: (baml.ai.ResponseMeta) -> V throws E2, c
   baml.ai.drive_with(client, GetMixedMap$render_prompt(client = client), project)
 }
 function user.GetStatus(client: baml.ai.Provider = GPT4) -> Status  [llm] {
-  baml.llm.call_llm_function(client, "GetStatus", map {  })
+  baml.ai.drive_call(client, GetStatus$render_prompt(client = client))
 }
 function user.GetStatus$build_request(client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GetStatus", map {  })
@@ -78,7 +78,7 @@ function user.GetStatus$with(project: (baml.ai.ResponseMeta) -> V throws E2, cli
   baml.ai.drive_with(client, GetStatus$render_prompt(client = client), project)
 }
 function user.GetUser(id: int, client: baml.ai.Provider = ...) -> User  [llm] {
-  baml.llm.call_llm_function(client, "GetUser", map { "id": id })
+  baml.ai.drive_call(client, GetUser$render_prompt(id = id, client = client))
 }
 function user.GetUser$build_request(id: int, client: baml.ai.Provider = ...) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GetUser", map { "id": id })

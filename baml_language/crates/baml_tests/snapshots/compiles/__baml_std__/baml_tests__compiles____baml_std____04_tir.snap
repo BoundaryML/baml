@@ -973,14 +973,57 @@ function baml.ai.Retry.call_messages_with<T, V, E2>(self: baml.ai.Retry, message
 lambda baml.ai.Retry.call_messages_with {
 }
 function baml.ai.Retry.stream_messages<TStream, TFinal>(self: baml.ai.Retry, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
-  { : baml.llm.Stream<TStream, TFinal>
-    match (self.inner : baml.ai.Provider) : baml.llm.Stream<TStream, TFinal>
-      s: root.ai.Streaming =>
-        s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
-      _ =>
-        { : never
-          throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } : baml.errors.UnknownError
-        }
+  { : never
+    if (self.inner.is_effectful() : bool) : void
+      { : never
+        throw root.errors.CannotRetry { message: "provider is effec..." } : baml.errors.CannotRetry
+      }
+    let attempt: int = 0 : 0 -> int
+    let delay_ms: int = self.base_delay_ms ?? 100 : int
+    while true
+      { : never
+        match (self.inner : baml.ai.Provider) : never
+          s: root.ai.Streaming =>
+            { : never
+              let st: root.llm.Stream<TStream, TFinal> = : baml.llm.Stream<TStream, TFinal>
+                catch (s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>) : baml.llm.Stream<TStream, TFinal>
+                  catch (e)
+                    f: root.errors.Failure =>
+                      { : never
+                        if (attempt < self.max && f.is_retryable() : bool) : void
+                          { : never
+                            attempt = attempt + 1 : int
+                            catch (root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) : null) : null
+                              catch (se)
+                                _ =>
+                                  null : null
+                            delay_ms = delay_ms * 2 : int
+                            continue
+                          }
+                        throw e : baml.errors.StreamError
+                      }
+                    _ =>
+                      { : never
+                        if (attempt < self.max : bool) : void
+                          { : never
+                            attempt = attempt + 1 : int
+                            catch (root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) : null) : null
+                              catch (se)
+                                _ =>
+                                  null : null
+                            delay_ms = delay_ms * 2 : int
+                            continue
+                          }
+                        throw e : baml.errors.UnknownError
+                      }
+              return st : baml.llm.Stream<TStream, TFinal>
+            }
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } : baml.errors.UnknownError
+            }
+      }
+    root.sys.panic("unreachable") : never
   }
 }
 class baml.ai.RoundRobin {
@@ -1019,6 +1062,24 @@ function baml.ai.RoundRobin.call_messages_with<T, V, E2>(self: baml.ai.RoundRobi
     match (self.members.at(idx) : baml.ai.Provider | null) : baml.ai.CallResult<T, V>
       h: root.ai.HttpProvider =>
         h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>
+      _ =>
+        { : never
+          throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } : baml.errors.UnknownError
+        }
+  }
+}
+function baml.ai.RoundRobin.stream_messages<TStream, TFinal>(self: baml.ai.RoundRobin, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let n = self.members.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        throw root.errors.UnknownError { data: null, message: ["round_robin: no m..."] } : baml.errors.UnknownError
+      }
+    let idx = self.counter % n : int
+    self.counter = self.counter + 1 : int
+    match (self.members.at(idx) : baml.ai.Provider | null) : baml.llm.Stream<TStream, TFinal>
+      s: root.ai.Streaming =>
+        s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
       _ =>
         { : never
           throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } : baml.errors.UnknownError
@@ -1170,27 +1231,79 @@ function baml.ai.Retry$stream.call_messages_with<T, V, E2>(self: baml.ai.Retry$s
       }
     root.sys.panic("unreachable") : never
   }
-  !! 6213..6236: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
-  !! 6213..6238: `(() -> bool throws never) | null` is not a function — it cannot be called
-  !! 6213..6236: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
-  !! 6213..6238: `(() -> bool throws never) | null` is not a function — it cannot be called
-  !! 7413..7431: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 7413..7431: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 7999..8017: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
-  !! 7999..8017: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 6263..6286: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 6263..6288: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 6263..6286: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 6263..6288: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 7463..7481: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 7463..7481: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 8049..8067: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 8049..8067: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
 }
 lambda baml.ai.Retry$stream.call_messages_with {
 }
 function baml.ai.Retry$stream.stream_messages<TStream, TFinal>(self: baml.ai.Retry$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
-  { : baml.llm.Stream<TStream, TFinal>
-    match (self.inner : baml.ai.Provider | null) : baml.llm.Stream<TStream, TFinal>
-      s: root.ai.Streaming =>
-        s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
-      _ =>
-        { : never
-          throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } : baml.errors.UnknownError
-        }
+  { : never
+    if (self.inner.is_effectful() : unknown) : void
+      { : never
+        throw root.errors.CannotRetry { message: "provider is effec..." } : baml.errors.CannotRetry
+      }
+    let attempt: int = 0 : 0 -> int
+    let delay_ms: int = self.base_delay_ms ?? 100 : int
+    while true
+      { : never
+        match (self.inner : baml.ai.Provider | null) : never
+          s: root.ai.Streaming =>
+            { : never
+              let st: root.llm.Stream<TStream, TFinal> = : baml.llm.Stream<TStream, TFinal>
+                catch (s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>) : baml.llm.Stream<TStream, TFinal>
+                  catch (e)
+                    f: root.errors.Failure =>
+                      { : never
+                        if (attempt < self.max && f.is_retryable() : bool) : void
+                          { : never
+                            attempt = attempt + 1 : int
+                            catch (root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) : null) : null
+                              catch (se)
+                                _ =>
+                                  null : null
+                            delay_ms = delay_ms * 2 : int
+                            continue
+                          }
+                        throw e : baml.errors.StreamError
+                      }
+                    _ =>
+                      { : never
+                        if (attempt < self.max : bool) : void
+                          { : never
+                            attempt = attempt + 1 : int
+                            catch (root.sys.sleep(root.time.Duration.from_milliseconds(delay_ms)) : null) : null
+                              catch (se)
+                                _ =>
+                                  null : null
+                            delay_ms = delay_ms * 2 : int
+                            continue
+                          }
+                        throw e : baml.errors.UnknownError
+                      }
+              return st : baml.llm.Stream<TStream, TFinal>
+            }
+          _ =>
+            { : never
+              throw root.errors.UnknownError { data: null, message: ["retry: inner is n..."] } : baml.errors.UnknownError
+            }
+      }
+    root.sys.panic("unreachable") : never
   }
+  !! 9450..9473: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 9450..9475: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 9450..9473: did you mean `self.inner?.is_effectful`? `self.inner.is_effectful` does not handle the case when `self.inner` is null
+  !! 9450..9475: `(() -> bool throws never) | null` is not a function — it cannot be called
+  !! 10095..10113: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 10095..10113: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 10779..10797: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 10779..10797: cannot order `int` and `int | null` with `<`: ordering requires both operands to have the same type
+  !! 9381..9431: declared throws is `baml.errors.StreamError | baml.errors.UnknownError`, but this function may also throw `unknown`
 }
 class baml.ai.RoundRobin$stream {
   members: baml.ai.Provider[]
@@ -1233,9 +1346,30 @@ function baml.ai.RoundRobin$stream.call_messages_with<T, V, E2>(self: baml.ai.Ro
           throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } : baml.errors.UnknownError
         }
   }
-  !! 11335..11351: operator `%` cannot be applied to `int | null` and `int`
-  !! 11380..11396: operator `+` cannot be applied to `int | null` and `1`
-  !! 11380..11396: operator `+` cannot be applied to `int | null` and `1`
+  !! 13347..13363: operator `%` cannot be applied to `int | null` and `int`
+  !! 13392..13408: operator `+` cannot be applied to `int | null` and `1`
+  !! 13392..13408: operator `+` cannot be applied to `int | null` and `1`
+}
+function baml.ai.RoundRobin$stream.stream_messages<TStream, TFinal>(self: baml.ai.RoundRobin$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    let n = self.members.length() : int
+    if (n == 0 : bool) : void
+      { : never
+        throw root.errors.UnknownError { data: null, message: ["round_robin: no m..."] } : baml.errors.UnknownError
+      }
+    let idx = self.counter % n : unknown
+    self.counter = self.counter + 1 : unknown
+    match (self.members.at(idx) : baml.ai.Provider | null) : baml.llm.Stream<TStream, TFinal>
+      s: root.ai.Streaming =>
+        s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
+      _ =>
+        { : never
+          throw root.errors.UnknownError { data: null, message: ["round_robin: memb..."] } : baml.errors.UnknownError
+        }
+  }
+  !! 14272..14288: operator `%` cannot be applied to `int | null` and `int`
+  !! 14317..14333: operator `+` cannot be applied to `int | null` and `1`
+  !! 14317..14333: operator `+` cannot be applied to `int | null` and `1`
 }
 
 --- <builtin>/baml/ns_ai/core/legacy.baml ---
@@ -1355,6 +1489,83 @@ function baml.ai.parse<T>(self: unknown, from: string) -> T throws baml.errors.U
 function baml.ai.meta_of(self: unknown, from: string) -> baml.ai.ResponseMeta throws never {
   { : baml.ai.LegacyMeta
     LegacyMeta {  } : baml.ai.LegacyMeta
+  }
+}
+function baml.ai.call_messages_with<T, V, E2>(self: unknown, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+  { : baml.ai.CallResult<T, V>
+    if (self.client_type == root.llm.ClientType.Primitive : bool) : void
+      { : void
+        let primitive = : baml.llm.PrimitiveClient
+          catch (self.to_primitive_client() : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+            catch (e)
+              _ =>
+                throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
+        match (native_provider_for(primitive) : baml.ai.Provider | null) : void
+          null =>
+            { : void
+            }
+          np: Provider =>
+            { : void
+              match (np : baml.ai.Provider) : void
+                h: HttpProvider =>
+                  { : never
+                    return h.call_messages_with<V, E2>(messages, project) : baml.ai.CallResult<T, V>
+                  }
+                _ =>
+                  { : void
+                  }
+            }
+      }
+    let body = self.send(self.build_request<T>(messages)) : string
+    CallResult { value: self.parse<T>(body), meta: project(self.meta_of(body)) } : baml.ai.CallResult<T, V>
+  }
+}
+function baml.ai.stream_messages<TStream, TFinal>(self: unknown, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> throws baml.errors.StreamError | baml.errors.UnknownError {
+  { : baml.llm.Stream<TStream, TFinal>
+    if (self.client_type != root.llm.ClientType.Primitive : bool) : void
+      { : never
+        throw root.errors.Unsupported { message: "the legacy codec ..." } : baml.errors.Unsupported
+      }
+    let primitive = : baml.llm.PrimitiveClient
+      catch (self.to_primitive_client() : baml.llm.PrimitiveClient) : baml.llm.PrimitiveClient
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: cl..."] } : never
+    match (native_provider_for(primitive) : baml.ai.Provider | null) : void
+      null =>
+        { : void
+        }
+      np: Provider =>
+        { : void
+          match (np : baml.ai.Provider) : void
+            s: Streaming =>
+              { : never
+                return s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
+              }
+            _ =>
+              { : void
+              }
+        }
+    let ast = messages_to_prompt(messages) : baml.llm.PromptAst
+    let specialized = : baml.llm.PromptAst
+      catch (primitive.specialize_prompt(ast) : baml.llm.PromptAst) : baml.llm.PromptAst
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: sp..."] } : never
+    let request = : baml.http.Request
+      catch (primitive.build_request_stream(specialized, reflect.type_of<TFinal>()) : baml.http.Request) : baml.http.Request
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: bu..."] } : never
+    let sse = : baml.http.SseStream
+      catch (root.http.fetch_sse(request) : baml.http.SseStream) : baml.http.SseStream
+        catch (e)
+          _ =>
+            throw root.errors.UnknownError { data: e, message: ["legacy bridge: SS..."] } : never
+    catch (self.__make_stream(sse) : baml.llm.Stream<TStream, TFinal>) : baml.llm.Stream<TStream, TFinal>
+      catch (e)
+        _ =>
+          throw root.errors.UnknownError { data: e, message: ["legacy bridge: st..."] } : never
   }
 }
 class baml.ai.LegacyMeta$stream {
@@ -7336,39 +7547,6 @@ class baml.json.JsonPathError$stream {
 }
 
 --- <builtin>/baml/ns_llm/llm.baml ---
-class baml.llm.OrchestrationStep {
-  primitive_client: baml.llm.PrimitiveClient
-  delay_ms: int
-}
-class baml.llm.ExecutionContext {
-  jinja_string: string
-  args: map<string, unknown>
-  function_name: string
-  prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null
-}
-class baml.llm.PlannerState {
-  rr_client_names: string[]
-}
-function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int throws never {
-  { : int
-    let offset = 0 : 0 -> int
-    for seen_name in self.rr_client_names
-      { : void
-        if (seen_name == client_name : bool) : void
-          { : void
-            offset Add= 1 : int
-          }
-      }
-    offset : int
-  }
-}
-function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, counter: int, sub_client_count: int) -> int throws never {
-  { : int
-    let local_offset = self.rr_local_offset(client_name) : int
-    self.rr_client_names.push(client_name) : int
-    counter + local_offset % sub_client_count : int
-  }
-}
 function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> string throws baml.errors.InvalidArgument {
   { : string | ""
     match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
@@ -7391,15 +7569,22 @@ function baml.llm.legacy_client_of(client: baml.ai.Provider) -> baml.llm.Client 
 function baml.llm.render_prompt(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
     let return_type = get_return_type(function_name) : type
-    let provider = client : baml.ai.Provider
-    let primitive_client = : baml.llm.PrimitiveClient
-      match (provider : baml.ai.Provider) : baml.llm.PrimitiveClient
-        lc: Client =>
-          lc.to_primitive_client() : baml.llm.PrimitiveClient
-        _ =>
-          from_shorthand("openai/gpt-4o") : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
-    primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
+    let provider = client : baml.ai.Provider
+    match (provider : baml.ai.Provider) : baml.llm.PromptAst
+      lc: Client =>
+        { : baml.llm.PromptAst
+          lc.to_primitive_client().render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
+        }
+      _ =>
+        { : baml.llm.PromptAst
+          let renderer = from_shorthand("openai/gpt-4o") : baml.llm.PrimitiveClient
+          match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
+            null =>
+              renderer.render_prompt(template, args, return_type) : baml.llm.PromptAst
+            closure: (Context) -> PromptAst =>
+              closure(build_prompt_context(renderer, return_type)) : baml.llm.PromptAst
+        }
   }
 }
 function baml.llm.build_request(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.http.Request throws never {
@@ -7428,127 +7613,18 @@ function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws never {
 }
 function baml.llm.call_llm_function<T>(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {
   { : T
-    let jinja_string = : string | "" -> string
-      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
-        null =>
-          get_jinja_template(function_name) : string
-        _ =>
-          "" : ""
-    match (client : baml.ai.Provider) : T
-      lc: Client =>
-        { : T
-          if (lc.client_type == ClientType.Primitive : bool) : void
-            { : void
-              let primitive = lc.to_primitive_client() : baml.llm.PrimitiveClient
-              match (root.ai.native_provider_for(primitive) : baml.ai.Provider | null) : void
-                null =>
-                  { : void
-                  }
-                np: root.ai.Provider =>
-                  { : void
-                    let return_type = get_return_type(function_name) : type
-                    let specialized = primitive.render_specialized_prompt(jinja_string, args, return_type, prompt_closure) : baml.llm.PromptAst
-                    match (np : baml.ai.Provider) : void
-                      h: root.ai.HttpProvider =>
-                        { : never
-                          return h.call_messages<T>(root.ai.prompt_to_messages(specialized)) : T
-                        }
-                      _ =>
-                        { : void
-                        }
-                  }
-            }
-          let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
-          let result: T = lc.execute_oneshot<T>(context, 0) : T
-          result : T
-        }
-      h: root.ai.HttpProvider =>
-        { : T
-          let renderer = from_shorthand("openai/gpt-4o") : baml.llm.PrimitiveClient
-          let return_type = get_return_type(function_name) : type
-          let prompt0 = : baml.llm.PromptAst
-            match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
-              null =>
-                renderer.render_prompt(jinja_string, args, return_type) : baml.llm.PromptAst
-              closure: (Context) -> PromptAst =>
-                closure(build_prompt_context(renderer, return_type)) : baml.llm.PromptAst
-          let messages = root.ai.prompt_to_messages(prompt0) : baml.ai.ChatMessage[]
-          h.call_messages<T>(messages) : T
-        }
-      _ =>
-        throw root.errors.Unsupported { message: "client override s..." } : never
+    root.ai.drive_call<T>(client, render_prompt(client, function_name, args, prompt_closure = prompt_closure)) : T
   }
 }
 function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.ai.Provider, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : baml.llm.Stream<TStream, TFinal>
-    let jinja_string = : string | "" -> string
-      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
-        null =>
-          get_jinja_template(function_name) : string
-        _ =>
-          "" : ""
-    match (client : baml.ai.Provider) : baml.llm.Stream<TStream, TFinal>
-      lc: Client =>
-        { : baml.llm.Stream<TStream, TFinal>
-          if (lc.client_type == ClientType.Primitive : bool) : void
-            { : void
-              let primitive = lc.to_primitive_client() : baml.llm.PrimitiveClient
-              match (root.ai.native_provider_for(primitive) : baml.ai.Provider | null) : void
-                null =>
-                  { : void
-                  }
-                np: root.ai.Provider =>
-                  { : void
-                    let return_type = get_return_type(function_name) : type
-                    let specialized = primitive.render_specialized_prompt(jinja_string, args, return_type, prompt_closure) : baml.llm.PromptAst
-                    match (np : baml.ai.Provider) : void
-                      s2: root.ai.Streaming =>
-                        { : never
-                          return s2.stream_messages(root.ai.prompt_to_messages(specialized)) : baml.llm.Stream<TStream, TFinal>
-                        }
-                      _ =>
-                        { : void
-                        }
-                  }
-            }
-          let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name, prompt_closure: prompt_closure } : baml.llm.ExecutionContext
-          let result: Stream<TStream, TFinal> = lc.execute_stream(context, 0) : baml.llm.Stream<TStream, TFinal>
-          result : baml.llm.Stream<TStream, TFinal>
-        }
-      s: root.ai.Streaming =>
-        { : baml.llm.Stream<TStream, TFinal>
-          let renderer = from_shorthand("openai/gpt-4o") : baml.llm.PrimitiveClient
-          let return_type = get_return_type(function_name) : type
-          let prompt0 = : baml.llm.PromptAst
-            match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
-              null =>
-                renderer.render_prompt(jinja_string, args, return_type) : baml.llm.PromptAst
-              closure: (Context) -> PromptAst =>
-                closure(build_prompt_context(renderer, return_type)) : baml.llm.PromptAst
-          let messages = root.ai.prompt_to_messages(prompt0) : baml.ai.ChatMessage[]
-          s.stream_messages(messages) : baml.llm.Stream<TStream, TFinal>
-        }
-      _ =>
-        throw root.errors.Unsupported { message: "client override s..." } : never
+    root.ai.drive_stream(client, render_prompt(client, function_name, args, prompt_closure = prompt_closure)) : baml.llm.Stream<TStream, TFinal>
   }
 }
 function baml.llm.make_stream_for<TStream, TFinal>(client: baml.ai.Provider, sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : baml.llm.Stream<TStream, TFinal>
     legacy_client_of(client).__make_stream(sse) : baml.llm.Stream<TStream, TFinal>
   }
-}
-class baml.llm.OrchestrationStep$stream {
-  primitive_client: baml.llm.PrimitiveClient$stream | null
-  delay_ms: int | null
-}
-class baml.llm.ExecutionContext$stream {
-  jinja_string: string | null
-  args: map<string, unknown>
-  function_name: string | null
-  prompt_closure: unknown | null
-}
-class baml.llm.PlannerState$stream {
-  rr_client_names: string[]
 }
 
 --- <builtin>/baml/ns_llm/llm_types.baml ---
@@ -7577,9 +7653,9 @@ class baml.llm.Context {
 enum baml.llm.ClientType
 class baml.llm.RetryPolicy {
   max_retries: int
-  initial_delay_ms: int
-  multiplier: float
-  max_delay_ms: int
+  initial_delay_ms: int | null
+  multiplier: float | null
+  max_delay_ms: int | null
 }
 class baml.llm.Client {
   name: string
@@ -7600,301 +7676,12 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
       }
   }
 }
-function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
-  { : baml.llm.OrchestrationStep[]
-    let planner_state = PlannerState { rr_client_names: [] } : baml.llm.PlannerState
-    self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
-  }
-}
-function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
-  { : baml.llm.OrchestrationStep[]
-    match (self.client_type : baml.llm.ClientType) : baml.llm.OrchestrationStep[]
-      ClientType.Primitive =>
-        { : baml.llm.OrchestrationStep[]
-          let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }] : baml.llm.OrchestrationStep[]
-        }
-      ClientType.Fallback =>
-        { : baml.llm.OrchestrationStep[]
-          let steps: OrchestrationStep[] = [] : baml.llm.OrchestrationStep[]
-          for sub in self.sub_clients
-            { : void
-              for step in sub.build_plan_with_state(planner_state)
-                { : int
-                  steps.push(step) : int
-                }
-            }
-          steps : baml.llm.OrchestrationStep[]
-        }
-      ClientType.RoundRobin =>
-        { : baml.llm.OrchestrationStep[]
-          if (self.sub_clients.length() == 0 : bool) : baml.llm.OrchestrationStep[]
-            { : baml.llm.OrchestrationStep[]
-              [] : baml.llm.OrchestrationStep[]
-            }
-          else
-            { : baml.llm.OrchestrationStep[]
-              let idx = planner_state.rr_pick_index(self.name, self.counter, self.sub_clients.length()) : int
-              self.sub_clients[idx].build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
-            }
-        }
-  }
-}
-function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
-  { : baml.llm.OrchestrationStep[]
-    let planner_state = PlannerState { rr_client_names: [] } : baml.llm.PlannerState
-    self.build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
-  }
-}
-function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
-  { : baml.llm.OrchestrationStep[]
-    match (self.retry : baml.llm.RetryPolicy | null) : baml.llm.OrchestrationStep[]
-      r: RetryPolicy =>
-        { : baml.llm.OrchestrationStep[]
-          let result: OrchestrationStep[] = [] : baml.llm.OrchestrationStep[]
-          let current_delay = r.initial_delay_ms + 0.0 : float
-          { : void
-            let attempt = 0 : 0 -> int
-            while attempt <= r.max_retries
-              { : void
-                let delay = 0 : 0 -> int
-                if (attempt > 0 : bool) : void
-                  { : void
-                    delay = root.math.trunc(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
-                      { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
-                      }
-                    else
-                      { : void
-                        current_delay = next : float
-                      }
-                  }
-                let inner = self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
-                for step in inner
-                  { : void
-                    result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) : int
-                  }
-              }
-          }
-          result : baml.llm.OrchestrationStep[]
-        }
-      null =>
-        self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
-  }
-}
-function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<TStream, TFinal> throws never {
-  { : never
-    match (self.retry : baml.llm.RetryPolicy | null) : never
-      r: RetryPolicy =>
-        { : never
-          let current_delay = r.initial_delay_ms + 0.0 : float
-          { : void
-            let attempt = 0 : 0 -> int
-            while attempt <= r.max_retries
-              { : never
-                let attempt_delay = inherited_delay_ms : int
-                if (attempt > 0 : bool) : void
-                  { : void
-                    attempt_delay = root.math.trunc(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
-                      { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
-                      }
-                    else
-                      { : void
-                        current_delay = next : float
-                      }
-                  }
-                if (attempt == r.max_retries : bool) : void
-                  { : void
-                    attempt_delay = inherited_delay_ms : int
-                  }
-                let result2: Stream<TStream, TFinal> = : baml.llm.Stream<TStream, TFinal>
-                  catch (self.execute_once_stream(context, attempt_delay) : baml.llm.Stream<TStream, TFinal>) : baml.llm.Stream<TStream, TFinal>
-                    catch (e)
-                      _ =>
-                        { : never
-                          continue
-                        }
-                return result2 : baml.llm.Stream<TStream, TFinal>
-              }
-          }
-          throw root.errors.DevOther { message: "All orchestration..." } : baml.errors.DevOther
-        }
-      null =>
-        { : never
-          let result: Stream<TStream, TFinal> = self.execute_once_stream(context, inherited_delay_ms) : baml.llm.Stream<TStream, TFinal>
-          return result : baml.llm.Stream<TStream, TFinal>
-        }
-  }
-}
-function baml.llm.Client.execute_once_stream<TStream, TFinal>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<TStream, TFinal> throws never {
-  { : never
-    match (self.client_type : baml.llm.ClientType) : never
-      ClientType.Primitive =>
-        { : never
-          let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          let return_type = get_return_type(context.function_name) : type
-          let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
-          let http_request = primitive.build_request_stream(specialized, return_type) : baml.http.Request
-          let sse = root.http.fetch_sse(http_request) : baml.http.SseStream
-          let stream: Stream<TStream, TFinal> = self.__make_stream(sse) : baml.llm.Stream<TStream, TFinal>
-          return stream : baml.llm.Stream<TStream, TFinal>
-        }
-      ClientType.Fallback =>
-        { : never
-          for sub in self.sub_clients
-            { : never
-              let result2: Stream<TStream, TFinal> = : baml.llm.Stream<TStream, TFinal>
-                catch (sub.execute_stream(context, active_delay_ms) : baml.llm.Stream<TStream, TFinal>) : baml.llm.Stream<TStream, TFinal>
-                  catch (e)
-                    _ =>
-                      { : never
-                        continue
-                      }
-              return result2 : baml.llm.Stream<TStream, TFinal>
-            }
-          throw root.errors.DevOther { message: "All orchestration..." } : baml.errors.DevOther
-        }
-      ClientType.RoundRobin =>
-        { : never
-          if (self.sub_clients.length() == 0 : bool) : void
-            { : never
-              throw root.errors.DevOther { message: "RoundRobin client..." } : baml.errors.DevOther
-            }
-          let idx = self.counter % self.sub_clients.length() : int
-          self.counter Add= 1 : int
-          let result3: Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms) : baml.llm.Stream<TStream, TFinal>
-          return result3 : baml.llm.Stream<TStream, TFinal>
-        }
-  }
-}
 function baml.llm.Client.__make_stream<TStream, TFinal>(self: baml.llm.Client, sse: baml.http.SseStream) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : baml.llm.Stream<TStream, TFinal>
     let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
     let acc = primitive.new_stream_accumulator() : baml.llm.StreamAccumulator
     let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
     Stream { _client: primitive, _acc: acc, _sse: sse, _cache: cache } : baml.llm.Stream<TStream, TFinal>
-  }
-}
-function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
-  { : never
-    match (self.retry : baml.llm.RetryPolicy | null) : never
-      r: RetryPolicy =>
-        { : never
-          let current_delay = r.initial_delay_ms + 0.0 : float
-          { : void
-            let attempt = 0 : 0 -> int
-            while attempt <= r.max_retries
-              { : never
-                let attempt_delay = inherited_delay_ms : int
-                if (attempt > 0 : bool) : void
-                  { : void
-                    attempt_delay = root.math.trunc(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
-                      { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
-                      }
-                    else
-                      { : void
-                        current_delay = next : float
-                      }
-                  }
-                if (attempt == r.max_retries : bool) : void
-                  { : void
-                    attempt_delay = inherited_delay_ms : int
-                  }
-                let result2: T = : T
-                  catch (self.execute_once_oneshot<T>(context, attempt_delay) : T) : T
-                    catch (e)
-                      _ =>
-                        { : never
-                          continue
-                        }
-                return result2 : T
-              }
-          }
-          throw root.errors.DevOther { message: "All orchestration..." } : baml.errors.DevOther
-        }
-      null =>
-        { : never
-          let result: T = self.execute_once_oneshot<T>(context, inherited_delay_ms) : T
-          return result : T
-        }
-  }
-}
-function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws never {
-  { : T
-    match (self.client_type : baml.llm.ClientType) : T
-      ClientType.Primitive =>
-        { : T
-          let primitive = self.to_primitive_client() : baml.llm.PrimitiveClient
-          let return_type = reflect.type_of() : type
-          let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure) : baml.llm.PromptAst
-          let http_request = primitive.build_request(specialized, return_type) : baml.http.Request
-          let http_response = root.http.send(http_request) : baml.http.Response
-          if (http_response.ok() : bool) : T
-            { : T
-              let body = http_response.text() : string
-              let result: T = : T
-                catch (primitive.parse<T>(body) : T) : T
-                  catch (e)
-                    _ =>
-                      { : never
-                        if (active_delay_ms > 0 : bool) : void
-                          { : null
-                            root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
-                          }
-                        throw e : baml.errors.LlmClient
-                      }
-              result : T
-            }
-          else
-            { : never
-              let error_body = : string | "" -> string
-                catch (http_response.text() : string) : string | ""
-                  catch (e)
-                    _ =>
-                      { : ""
-                        "" : ""
-                      }
-              if (active_delay_ms > 0 : bool) : void
-                { : null
-                  root.sys.sleep(root.time.Duration.from_nanoseconds(active_delay_ms * 1000000n)) : null
-                }
-              throw root.errors.DevOther { message: "HTTP request fail..." + error_body } : baml.errors.DevOther
-            }
-        }
-      ClientType.Fallback =>
-        { : never
-          for sub in self.sub_clients
-            { : never
-              let result2: T = : T
-                catch (sub.execute_oneshot<T>(context, active_delay_ms) : T) : T
-                  catch (e)
-                    _ =>
-                      { : never
-                        continue
-                      }
-              return result2 : T
-            }
-          throw root.errors.DevOther { message: "All orchestration..." } : baml.errors.DevOther
-        }
-      ClientType.RoundRobin =>
-        { : never
-          if (self.sub_clients.length() == 0 : bool) : void
-            { : never
-              throw root.errors.DevOther { message: "RoundRobin client..." } : baml.errors.DevOther
-            }
-          let idx = self.counter % self.sub_clients.length() : int
-          self.counter Add= 1 : int
-          let result3: T = self.sub_clients[idx].execute_oneshot<T>(context, active_delay_ms) : T
-          return result3 : T
-        }
   }
 }
 class baml.llm.MediaUrlHandler {

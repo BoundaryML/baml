@@ -26,14 +26,12 @@ function user.ExtractAny(client: baml.ai.Provider) -> baml.json.json {
     store_var client
 
   L0:
-    load_type baml.json.json
     load_var client
-    load_const "ExtractAny"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    call user.ExtractAny$render_prompt
+    store_var _3
+    load_type baml.json.json
+    load_var2 1 2
+    call baml.ai.drive_call
     return
 }
 
@@ -173,15 +171,13 @@ function user.ExtractAny$stream(client: baml.ai.Provider) -> baml.llm.Stream<bam
     store_var client
 
   L0:
+    load_var client
+    call user.ExtractAny$render_prompt
+    store_var _3
     load_type baml.json.json$stream | null
     load_type baml.json.json
-    load_var client
-    load_const "ExtractAny"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 1 2
+    call baml.ai.drive_stream
     return
 }
 

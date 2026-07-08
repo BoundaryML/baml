@@ -7,7 +7,7 @@ class user.TopLevelClass {
 }
 enum user.TopLevelEnum {A, B}
 function user.Fn(client: baml.ai.Provider = ...) -> string  [llm] {
-  baml.llm.call_llm_function(client, "Fn", map {  })
+  baml.ai.drive_call(client, Fn$render_prompt(client = client))
 }
 function user.Fn$build_request(client: baml.ai.Provider = ...) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "Fn", map {  })

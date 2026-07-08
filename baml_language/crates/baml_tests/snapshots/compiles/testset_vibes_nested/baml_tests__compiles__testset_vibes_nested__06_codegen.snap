@@ -45,16 +45,12 @@ function user.ClassifySentiment(text: string, client: baml.ai.Provider) -> Senti
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ClassifySentiment$render_prompt
+    store_var _4
     load_type Sentiment
-    load_var client
-    load_const "ClassifySentiment"
-    load_var text
-    load_const "text"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -200,17 +196,13 @@ function user.ClassifySentiment$stream(text: string, client: baml.ai.Provider) -
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ClassifySentiment$render_prompt
+    store_var _4
     load_type Sentiment$stream | null
     load_type Sentiment
-    load_var client
-    load_const "ClassifySentiment"
-    load_var text
-    load_const "text"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -244,16 +236,12 @@ function user.ClassifySentiment2(text: string, client: baml.ai.Provider) -> stri
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ClassifySentiment2$render_prompt
+    store_var _4
     load_type string
-    load_var client
-    load_const "ClassifySentiment2"
-    load_var text
-    load_const "text"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -399,17 +387,13 @@ function user.ClassifySentiment2$stream(text: string, client: baml.ai.Provider) 
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ClassifySentiment2$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "ClassifySentiment2"
-    load_var text
-    load_const "text"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -504,17 +488,13 @@ function user.GenerateTests(count: int, topic: string, client: baml.ai.Provider)
     store_var client
 
   L0:
-    load_type string[]
-    load_var client
-    load_const "GenerateTests"
     load_var2 1 2
-    load_const "count"
-    load_const "topic"
-    load_type string
-    load_type unknown
-    alloc_map 2
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var client
+    call user.GenerateTests$render_prompt
+    store_var _5
+    load_type string[]
+    load_var2 3 4
+    call baml.ai.drive_call
     return
 }
 
@@ -665,18 +645,14 @@ function user.GenerateTests$stream(count: int, topic: string, client: baml.ai.Pr
     store_var client
 
   L0:
-    load_type string[]
-    load_type string[]
-    load_var client
-    load_const "GenerateTests"
     load_var2 1 2
-    load_const "count"
-    load_const "topic"
-    load_type string
-    load_type unknown
-    alloc_map 2
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var client
+    call user.GenerateTests$render_prompt
+    store_var _5
+    load_type string[]
+    load_type string[]
+    load_var2 3 4
+    call baml.ai.drive_stream
     return
 }
 

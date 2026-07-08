@@ -7,7 +7,7 @@ class user.User {
   age: int
 }
 function user.HelloWorld(name: string, client: baml.ai.Provider = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "HelloWorld", map { "name": name })
+  baml.ai.drive_call(client, HelloWorld$render_prompt(name = name, client = client))
 }
 function user.HelloWorld$build_request(name: string, client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "HelloWorld", map { "name": name })

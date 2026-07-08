@@ -6,7 +6,7 @@ function user.Fast$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "Fast", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.Greet(name: string, client: baml.ai.Provider = Fast) -> string  [llm] {
-  baml.llm.call_llm_function(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
+  baml.ai.drive_call(client, Greet$render_prompt(name = name, client = client))
 }
 function user.Greet$build_request(name: string, client: baml.ai.Provider = Fast) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`)
@@ -28,7 +28,6 @@ function user.Greet$with(name: string, project: (baml.ai.ResponseMeta) -> V thro
 }
 
 --- captures ---
-lambda () in Greet: captures [name]
 lambda () in Greet$render_prompt: captures [name]
 lambda () in Greet$build_request: captures [name]
 lambda () in Greet$build_request_stream: captures [name]

@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 function user.CommentAfterArrow(client: baml.ai.Provider = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "CommentAfterArrow", map {  })
+  baml.ai.drive_call(client, CommentAfterArrow$render_prompt(client = client))
 }
 function user.CommentAfterArrow$build_request(client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "CommentAfterArrow", map {  })
@@ -24,7 +24,7 @@ function user.CommentAfterArrow$with(project: (baml.ai.ResponseMeta) -> V throws
   baml.ai.drive_with(client, CommentAfterArrow$render_prompt(client = client), project)
 }
 function user.FunctionWithComments(a: string, b: int, client: baml.ai.Provider = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "FunctionWithComments", map { "a": a, "b": b })
+  baml.ai.drive_call(client, FunctionWithComments$render_prompt(a = a, b = b, client = client))
 }
 function user.FunctionWithComments$build_request(a: string, b: int, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "FunctionWithComments", map { "a": a, "b": b })

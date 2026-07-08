@@ -12,7 +12,7 @@ function user.IfElseWithHeaders(flag: bool) -> string  [expr] {
   { // [1] Check flag } if (flag) { // [1] True branch } "yes" else { // [1] False branch } "no"
 }
 function user.LlmFunction(input: string, client: baml.ai.Provider = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmFunction", map { "input": input })
+  baml.ai.drive_call(client, LlmFunction$render_prompt(input = input, client = client))
 }
 function user.LlmFunction$build_request(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmFunction", map { "input": input })

@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 function user.GenerateImage(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image  [llm] {
-  baml.llm.call_llm_function(client, "GenerateImage", map { "prompt": prompt })
+  baml.ai.drive_call(client, GenerateImage$render_prompt(prompt = prompt, client = client))
 }
 function user.GenerateImage$build_request(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GenerateImage", map { "prompt": prompt })
@@ -24,7 +24,7 @@ function user.GenerateImage$with(prompt: string, project: (baml.ai.ResponseMeta)
   baml.ai.drive_with(client, GenerateImage$render_prompt(prompt = prompt, client = client), project)
 }
 function user.GenerateImageSet(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image[]  [llm] {
-  baml.llm.call_llm_function(client, "GenerateImageSet", map { "prompt": prompt })
+  baml.ai.drive_call(client, GenerateImageSet$render_prompt(prompt = prompt, client = client))
 }
 function user.GenerateImageSet$build_request(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GenerateImageSet", map { "prompt": prompt })
@@ -45,7 +45,7 @@ function user.GenerateImageSet$with(prompt: string, project: (baml.ai.ResponseMe
   baml.ai.drive_with(client, GenerateImageSet$render_prompt(prompt = prompt, client = client), project)
 }
 function user.GenerateMixedImageNarrative(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image | string[]  [llm] {
-  baml.llm.call_llm_function(client, "GenerateMixedImag...", map { "prompt": prompt })
+  baml.ai.drive_call(client, GenerateMixedImageNarrative$render_prompt(prompt = prompt, client = client))
 }
 function user.GenerateMixedImageNarrative$build_request(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GenerateMixedImag...", map { "prompt": prompt })

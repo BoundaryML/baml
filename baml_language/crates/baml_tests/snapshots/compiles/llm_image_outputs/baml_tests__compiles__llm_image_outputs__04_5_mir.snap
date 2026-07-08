@@ -8,7 +8,7 @@ fn user.GenerateImage(prompt: string, client: baml.ai.Provider) -> image {
     let _1: string // prompt // param
     let _2: baml.ai.Provider // client // param
     let _3: bool
-    let _4: map<string, unknown>
+    let _4: baml.llm.PromptAst
     let _5: type
 
     bb0: {
@@ -22,12 +22,15 @@ fn user.GenerateImage(prompt: string, client: baml.ai.Provider) -> image {
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImage", copy _4, const <omitted>) -> [bb3];
+        _4 = call const fn user.GenerateImage$render_prompt(copy _1, copy _2) -> [bb3];
     }
 
     bb3: {
+        _5 = load_type(image);
+        _0 = call const fn baml.ai.drive_call<copy _5>(copy _2, copy _4) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -229,7 +232,7 @@ fn user.GenerateImageSet(prompt: string, client: baml.ai.Provider) -> image[] {
     let _1: string // prompt // param
     let _2: baml.ai.Provider // client // param
     let _3: bool
-    let _4: map<string, unknown>
+    let _4: baml.llm.PromptAst
     let _5: type
 
     bb0: {
@@ -243,12 +246,15 @@ fn user.GenerateImageSet(prompt: string, client: baml.ai.Provider) -> image[] {
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateImageSet", copy _4, const <omitted>) -> [bb3];
+        _4 = call const fn user.GenerateImageSet$render_prompt(copy _1, copy _2) -> [bb3];
     }
 
     bb3: {
+        _5 = load_type(image[]);
+        _0 = call const fn baml.ai.drive_call<copy _5>(copy _2, copy _4) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -450,7 +456,7 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.ai.Provider) ->
     let _1: string // prompt // param
     let _2: baml.ai.Provider // client // param
     let _3: bool
-    let _4: map<string, unknown>
+    let _4: baml.llm.PromptAst
     let _5: type
 
     bb0: {
@@ -464,12 +470,15 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.ai.Provider) ->
     }
 
     bb2: {
-        _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image | string[]);
-        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
+        _4 = call const fn user.GenerateMixedImageNarrative$render_prompt(copy _1, copy _2) -> [bb3];
     }
 
     bb3: {
+        _5 = load_type(image | string[]);
+        _0 = call const fn baml.ai.drive_call<copy _5>(copy _2, copy _4) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }

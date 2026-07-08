@@ -4622,7 +4622,7 @@ function baml.ai.Fallback$stream.root.ai.Streaming.stream_messages(self: baml.ai
   L9:
     load_var _4
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L27
+    pop_jump_if_false L29
     load_type baml.ai.Provider
     load_type never
     load_var _4
@@ -4701,33 +4701,45 @@ function baml.ai.Fallback$stream.root.ai.Streaming.stream_messages(self: baml.ai
     load_var _6
     is_type baml.iter.Done
     pop_jump_if_false L20
-    jump L26
+    jump L28
 
   L20:
     load_var _6
     store_var_load_var m
     is_type baml.ai.Retry
     pop_jump_if_false L21
-    jump L24
+    jump L26
 
   L21:
     load_var m
     is_type baml.ai.OpenAi
     pop_jump_if_false L22
-    jump L24
+    jump L26
 
   L22:
     load_var m
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L23
-    jump L24
+    jump L26
 
   L23:
     load_var m
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L0
+    is_type baml.ai.Fallback
+    pop_jump_if_false L24
+    jump L26
 
   L24:
+    load_var m
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L25
+    jump L26
+
+  L25:
+    load_var m
+    is_type baml.llm.Client
+    pop_jump_if_false L0
+
+  L26:
     load_type #0
     load_type #1
     load_var2 6 2
@@ -4735,16 +4747,16 @@ function baml.ai.Fallback$stream.root.ai.Streaming.stream_messages(self: baml.ai
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
     store_var st
-    jump L25
+    jump L27
     load_var e
     throw_if_panic
     jump L0
 
-  L25:
+  L27:
     load_var st
     return
 
-  L26:
+  L28:
     load_const null
     load_const "fallback: no streaming member"
     load_type string
@@ -4752,7 +4764,7 @@ function baml.ai.Fallback$stream.root.ai.Streaming.stream_messages(self: baml.ai
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L27:
+  L29:
     unreachable
 }
 
@@ -5110,7 +5122,7 @@ function baml.ai.Fallback.root.ai.Streaming.stream_messages(self: baml.ai.Fallba
   L9:
     load_var _4
     is_type baml.iter.Peekable<...>
-    pop_jump_if_false L27
+    pop_jump_if_false L29
     load_type baml.ai.Provider
     load_type never
     load_var _4
@@ -5189,33 +5201,45 @@ function baml.ai.Fallback.root.ai.Streaming.stream_messages(self: baml.ai.Fallba
     load_var _6
     is_type baml.iter.Done
     pop_jump_if_false L20
-    jump L26
+    jump L28
 
   L20:
     load_var _6
     store_var_load_var m
     is_type baml.ai.Retry
     pop_jump_if_false L21
-    jump L24
+    jump L26
 
   L21:
     load_var m
     is_type baml.ai.OpenAi
     pop_jump_if_false L22
-    jump L24
+    jump L26
 
   L22:
     load_var m
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L23
-    jump L24
+    jump L26
 
   L23:
     load_var m
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L0
+    is_type baml.ai.Fallback
+    pop_jump_if_false L24
+    jump L26
 
   L24:
+    load_var m
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L25
+    jump L26
+
+  L25:
+    load_var m
+    is_type baml.llm.Client
+    pop_jump_if_false L0
+
+  L26:
     load_type #0
     load_type #1
     load_var2 6 2
@@ -5223,16 +5247,16 @@ function baml.ai.Fallback.root.ai.Streaming.stream_messages(self: baml.ai.Fallba
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
     store_var st
-    jump L25
+    jump L27
     load_var e
     throw_if_panic
     jump L0
 
-  L25:
+  L27:
     load_var st
     return
 
-  L26:
+  L28:
     load_const null
     load_const "fallback: no streaming member"
     load_type string
@@ -5240,7 +5264,7 @@ function baml.ai.Fallback.root.ai.Streaming.stream_messages(self: baml.ai.Fallba
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L27:
+  L29:
     unreachable
 }
 
@@ -7690,6 +7714,410 @@ function baml.ai.HttpProvider$for$root.llm.Client.build_request(self: baml.llm.C
     load_const "the legacy codec bridges primitive clients; strategy configs lower to new-model combinators"
     init_instance baml.errors.Unsupported .message
     throw
+}
+
+function baml.ai.HttpProvider$for$root.llm.Client.call_messages_with(self: baml.llm.Client, messages: baml.ai.ChatMessage[], project: (baml.ai.ResponseMeta) -> V throws E2) -> baml.ai.CallResult<T, V> {
+    load_var self
+    load_field .client_type
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    call baml.ops.equals_equals
+    pop_jump_if_false L12
+    load_var self
+    call baml.llm.Client.to_primitive_client
+    jump L0
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: client construction failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L0:
+    call baml.ai.native_provider_for
+    store_var _11
+    load_var _11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L12
+
+  L1:
+    load_var _11
+    store_var_load_var np
+    is_type baml.ai.ToolLoop
+    pop_jump_if_false L2
+    jump L11
+
+  L2:
+    load_var np
+    is_type baml.ai.Retry
+    pop_jump_if_false L3
+    jump L11
+
+  L3:
+    load_var np
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L4
+    jump L11
+
+  L4:
+    load_var np
+    is_type baml.ai.Gemini
+    pop_jump_if_false L5
+    jump L11
+
+  L5:
+    load_var np
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L6
+    jump L11
+
+  L6:
+    load_var np
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L7
+    jump L11
+
+  L7:
+    load_var np
+    is_type baml.ai.Fallback
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var np
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L9
+    jump L11
+
+  L9:
+    load_var np
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L10
+    jump L11
+
+  L10:
+    load_var np
+    is_type baml.llm.Client
+    pop_jump_if_false L12
+
+  L11:
+    load_type #0
+    load_type #1
+    load_type #2
+    load_var2 7 2
+    load_var project
+    load_type baml.ai.HttpProvider
+    load_const "call_messages_with"
+    virtual_call nargs=3 ntypeargs=3
+    store_var _0
+    jump L57
+
+  L12:
+    load_type #0
+    store_var _31
+    load_var self
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L13
+    jump L22
+
+  L13:
+    load_var self
+    is_type baml.ai.Gemini
+    pop_jump_if_false L14
+    jump L21
+
+  L14:
+    load_var self
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L15
+    jump L20
+
+  L15:
+    load_var self
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L16
+    jump L19
+
+  L16:
+    load_var self
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L17
+    jump L18
+
+  L17:
+    load_var self
+    is_type baml.llm.Client<...>
+    pop_jump_if_false L58
+    load_var2 10 1
+    load_var messages
+    call baml.ai.HttpProvider$for$root.llm.Client.build_request
+    store_var _30
+    jump L23
+
+  L18:
+    load_var2 10 1
+    load_var messages
+    call baml.ai.Anthropic.root.ai.HttpProvider.build_request
+    store_var _30
+    jump L23
+
+  L19:
+    load_var2 10 1
+    load_var messages
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.build_request
+    store_var _30
+    jump L23
+
+  L20:
+    load_var2 10 1
+    load_var messages
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.build_request
+    store_var _30
+    jump L23
+
+  L21:
+    load_var2 10 1
+    load_var messages
+    call baml.ai.Gemini.root.ai.HttpProvider.build_request
+    store_var _30
+    jump L23
+
+  L22:
+    load_var2 10 1
+    load_var messages
+    call baml.ai.OpenAi.root.ai.HttpProvider.build_request
+    store_var _30
+
+  L23:
+    load_var self
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L24
+    jump L33
+
+  L24:
+    load_var self
+    is_type baml.ai.Gemini
+    pop_jump_if_false L25
+    jump L32
+
+  L25:
+    load_var self
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L26
+    jump L31
+
+  L26:
+    load_var self
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L27
+    jump L30
+
+  L27:
+    load_var self
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L28
+    jump L29
+
+  L28:
+    load_var self
+    is_type baml.llm.Client<...>
+    pop_jump_if_false L58
+    load_var2 1 9
+    call baml.ai.HttpProvider$for$root.llm.Client.send
+    store_var body
+    jump L34
+
+  L29:
+    load_var2 1 9
+    call baml.ai.Anthropic.root.ai.HttpProvider.send
+    store_var body
+    jump L34
+
+  L30:
+    load_var2 1 9
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.send
+    store_var body
+    jump L34
+
+  L31:
+    load_var2 1 9
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.send
+    store_var body
+    jump L34
+
+  L32:
+    load_var2 1 9
+    call baml.ai.Gemini.root.ai.HttpProvider.send
+    store_var body
+    jump L34
+
+  L33:
+    load_var2 1 9
+    call baml.ai.OpenAi.root.ai.HttpProvider.send
+    store_var body
+
+  L34:
+    load_var body
+    store_var _45
+    load_type #0
+    store_var _46
+    load_var self
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L35
+    jump L44
+
+  L35:
+    load_var self
+    is_type baml.ai.Gemini
+    pop_jump_if_false L36
+    jump L43
+
+  L36:
+    load_var self
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L37
+    jump L42
+
+  L37:
+    load_var self
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L38
+    jump L41
+
+  L38:
+    load_var self
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L39
+    jump L40
+
+  L39:
+    load_var self
+    is_type baml.llm.Client<...>
+    pop_jump_if_false L58
+    load_var2 13 1
+    load_var _45
+    call baml.ai.HttpProvider$for$root.llm.Client.parse
+    store_var _44
+    jump L45
+
+  L40:
+    load_var2 13 1
+    load_var _45
+    call baml.ai.Anthropic.root.ai.HttpProvider.parse
+    store_var _44
+    jump L45
+
+  L41:
+    load_var2 13 1
+    load_var _45
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.parse
+    store_var _44
+    jump L45
+
+  L42:
+    load_var2 13 1
+    load_var _45
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.parse
+    store_var _44
+    jump L45
+
+  L43:
+    load_var2 13 1
+    load_var _45
+    call baml.ai.Gemini.root.ai.HttpProvider.parse
+    store_var _44
+    jump L45
+
+  L44:
+    load_var2 13 1
+    load_var _45
+    call baml.ai.OpenAi.root.ai.HttpProvider.parse
+    store_var _44
+
+  L45:
+    load_var body
+    store_var _55
+    load_var self
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L46
+    jump L55
+
+  L46:
+    load_var self
+    is_type baml.ai.Gemini
+    pop_jump_if_false L47
+    jump L54
+
+  L47:
+    load_var self
+    is_type baml.ai.OpenAiResponses
+    pop_jump_if_false L48
+    jump L53
+
+  L48:
+    load_var self
+    is_type baml.ai.OpenAiStrict
+    pop_jump_if_false L49
+    jump L52
+
+  L49:
+    load_var self
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L50
+    jump L51
+
+  L50:
+    load_var self
+    is_type baml.llm.Client<...>
+    pop_jump_if_false L58
+    load_var2 1 15
+    call baml.ai.HttpProvider$for$root.llm.Client.meta_of
+    jump L56
+
+  L51:
+    load_var2 1 15
+    call baml.ai.Anthropic.root.ai.HttpProvider.meta_of
+    jump L56
+
+  L52:
+    load_var2 1 15
+    call baml.ai.OpenAiStrict.root.ai.HttpProvider.meta_of
+    jump L56
+
+  L53:
+    load_var2 1 15
+    call baml.ai.OpenAiResponses.root.ai.HttpProvider.meta_of
+    jump L56
+
+  L54:
+    load_var2 1 15
+    call baml.ai.Gemini.root.ai.HttpProvider.meta_of
+    jump L56
+
+  L55:
+    load_var2 1 15
+    call baml.ai.OpenAi.root.ai.HttpProvider.meta_of
+
+  L56:
+    load_var project
+    call_indirect
+    store_var _53
+    load_var2 11 14
+    load_type #0
+    load_type #1
+    init_instance<2> baml.ai.CallResult .value, .meta
+    store_var _0
+
+  L57:
+    load_var _0
+    return
+
+  L58:
+    unreachable
 }
 
 function baml.ai.HttpProvider$for$root.llm.Client.meta_of(self: baml.llm.Client, from: string) -> baml.ai.ResponseMeta {
@@ -16750,30 +17178,78 @@ function baml.ai.Retry$stream.root.ai.HttpProvider.send(self: baml.ai.Retry$stre
 function baml.ai.Retry$stream.root.ai.Streaming.stream_messages(self: baml.ai.Retry$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> {
     load_var self
     load_field .0
-    store_var_load_var _3
-    is_type baml.ai.Retry
+    load_type baml.ai.Provider
+    load_const "is_effectful"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
     pop_jump_if_false L0
-    jump L4
+    jump L26
 
   L0:
-    load_var _3
-    is_type baml.ai.OpenAi
+    load_const 0
+    store_var attempt
+    load_var self
+    load_field .2
+    store_var _8
+    load_var _8
+    store_var delay_ms
+    load_var _8
+    load_const null
+    cmp_op ==
     pop_jump_if_false L1
-    jump L4
+    load_const 100
+    store_var delay_ms
 
   L1:
-    load_var _3
-    is_type baml.ai.Fallback
+    load_const true
     pop_jump_if_false L2
-    jump L4
+    jump L3
 
   L2:
-    load_var _3
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L3
-    jump L4
+    load_const "unreachable"
+    call baml.sys.panic
+    jump L25
 
   L3:
+    load_var self
+    load_field .0
+    store_var_load_var _10
+    is_type baml.ai.Retry
+    pop_jump_if_false L4
+    jump L10
+
+  L4:
+    load_var _10
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L5
+    jump L10
+
+  L5:
+    load_var _10
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L6
+    jump L10
+
+  L6:
+    load_var _10
+    is_type baml.ai.Fallback
+    pop_jump_if_false L7
+    jump L10
+
+  L7:
+    load_var _10
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L10
+
+  L8:
+    load_var _10
+    is_type baml.llm.Client
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
     load_const null
     load_const "retry: inner is not streaming"
     load_type string
@@ -16781,16 +17257,126 @@ function baml.ai.Retry$stream.root.ai.Streaming.stream_messages(self: baml.ai.Re
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L4:
+  L10:
     load_type #0
     load_type #1
-    load_var2 4 2
+    load_var2 7 2
     load_type baml.ai.Streaming
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
-    store_var _0
-    load_var _0
+    store_var st
+    jump L24
+    load_var e
+    is_type baml.errors.CannotRetry
+    pop_jump_if_false L11
+    jump L19
+
+  L11:
+    load_var e
+    is_type baml.ai.AnthropicHttpError
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var e
+    is_type baml.ai.GeminiHttpError
+    pop_jump_if_false L13
+    jump L19
+
+  L13:
+    load_var e
+    is_type baml.ai.OpenAiHttpError
+    pop_jump_if_false L14
+    jump L19
+
+  L14:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L15
+    jump L19
+
+  L15:
+    load_var e
+    throw_if_panic
+    load_var2 4 1
+    load_field .1
+    cmp_int_op <
+    pop_jump_if_false L16
+    jump L17
+
+  L16:
+    load_var e
+    rethrow
+
+  L17:
+    load_var attempt
+    load_const 1
+    add_int
+    store_var attempt
+    load_var delay_ms
+    call baml.time.Duration.from_milliseconds
+    sys_op baml.sys.sleep
+    pop 1
+    jump L18
+    load_var se
+    throw_if_panic
+
+  L18:
+    load_var delay_ms
+    load_const 2
+    mul_int
+    store_var delay_ms
+    jump L1
+
+  L19:
+    load_var2 4 1
+    load_field .1
+    cmp_int_op <
+    jump_if_false L20
+    pop 1
+    load_var e
+    load_type baml.errors.Failure
+    load_const "is_retryable"
+    virtual_call nargs=1 ntypeargs=0
+
+  L20:
+    pop_jump_if_false L21
+    jump L22
+
+  L21:
+    load_var e
+    rethrow
+
+  L22:
+    load_var attempt
+    load_const 1
+    add_int
+    store_var attempt
+    load_var delay_ms
+    call baml.time.Duration.from_milliseconds
+    sys_op baml.sys.sleep
+    pop 1
+    jump L23
+    load_var se
+    throw_if_panic
+
+  L23:
+    load_var delay_ms
+    load_const 2
+    mul_int
+    store_var delay_ms
+    jump L1
+
+  L24:
+    load_var st
+
+  L25:
     return
+
+  L26:
+    load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
+    init_instance baml.errors.CannotRetry .message
+    throw
 }
 
 function baml.ai.Retry.root.ai.HttpProvider.build_request(self: baml.ai.Retry, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
@@ -17072,30 +17658,78 @@ function baml.ai.Retry.root.ai.HttpProvider.send(self: baml.ai.Retry, request: b
 function baml.ai.Retry.root.ai.Streaming.stream_messages(self: baml.ai.Retry, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> {
     load_var self
     load_field .0
-    store_var_load_var _3
-    is_type baml.ai.Retry
+    load_type baml.ai.Provider
+    load_const "is_effectful"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _3
+    load_var _3
     pop_jump_if_false L0
-    jump L4
+    jump L26
 
   L0:
-    load_var _3
-    is_type baml.ai.OpenAi
+    load_const 0
+    store_var attempt
+    load_var self
+    load_field .2
+    store_var _8
+    load_var _8
+    store_var delay_ms
+    load_var _8
+    load_const null
+    cmp_op ==
     pop_jump_if_false L1
-    jump L4
+    load_const 100
+    store_var delay_ms
 
   L1:
-    load_var _3
-    is_type baml.ai.Fallback
+    load_const true
     pop_jump_if_false L2
-    jump L4
+    jump L3
 
   L2:
-    load_var _3
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L3
-    jump L4
+    load_const "unreachable"
+    call baml.sys.panic
+    jump L25
 
   L3:
+    load_var self
+    load_field .0
+    store_var_load_var _10
+    is_type baml.ai.Retry
+    pop_jump_if_false L4
+    jump L10
+
+  L4:
+    load_var _10
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L5
+    jump L10
+
+  L5:
+    load_var _10
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L6
+    jump L10
+
+  L6:
+    load_var _10
+    is_type baml.ai.Fallback
+    pop_jump_if_false L7
+    jump L10
+
+  L7:
+    load_var _10
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L8
+    jump L10
+
+  L8:
+    load_var _10
+    is_type baml.llm.Client
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
     load_const null
     load_const "retry: inner is not streaming"
     load_type string
@@ -17103,16 +17737,126 @@ function baml.ai.Retry.root.ai.Streaming.stream_messages(self: baml.ai.Retry, me
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L4:
+  L10:
     load_type #0
     load_type #1
-    load_var2 4 2
+    load_var2 7 2
     load_type baml.ai.Streaming
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
-    store_var _0
-    load_var _0
+    store_var st
+    jump L24
+    load_var e
+    is_type baml.errors.CannotRetry
+    pop_jump_if_false L11
+    jump L19
+
+  L11:
+    load_var e
+    is_type baml.ai.AnthropicHttpError
+    pop_jump_if_false L12
+    jump L19
+
+  L12:
+    load_var e
+    is_type baml.ai.GeminiHttpError
+    pop_jump_if_false L13
+    jump L19
+
+  L13:
+    load_var e
+    is_type baml.ai.OpenAiHttpError
+    pop_jump_if_false L14
+    jump L19
+
+  L14:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L15
+    jump L19
+
+  L15:
+    load_var e
+    throw_if_panic
+    load_var2 4 1
+    load_field .1
+    cmp_int_op <
+    pop_jump_if_false L16
+    jump L17
+
+  L16:
+    load_var e
+    rethrow
+
+  L17:
+    load_var attempt
+    load_const 1
+    add_int
+    store_var attempt
+    load_var delay_ms
+    call baml.time.Duration.from_milliseconds
+    sys_op baml.sys.sleep
+    pop 1
+    jump L18
+    load_var se
+    throw_if_panic
+
+  L18:
+    load_var delay_ms
+    load_const 2
+    mul_int
+    store_var delay_ms
+    jump L1
+
+  L19:
+    load_var2 4 1
+    load_field .1
+    cmp_int_op <
+    jump_if_false L20
+    pop 1
+    load_var e
+    load_type baml.errors.Failure
+    load_const "is_retryable"
+    virtual_call nargs=1 ntypeargs=0
+
+  L20:
+    pop_jump_if_false L21
+    jump L22
+
+  L21:
+    load_var e
+    rethrow
+
+  L22:
+    load_var attempt
+    load_const 1
+    add_int
+    store_var attempt
+    load_var delay_ms
+    call baml.time.Duration.from_milliseconds
+    sys_op baml.sys.sleep
+    pop 1
+    jump L23
+    load_var se
+    throw_if_panic
+
+  L23:
+    load_var delay_ms
+    load_const 2
+    mul_int
+    store_var delay_ms
+    jump L1
+
+  L24:
+    load_var st
+
+  L25:
     return
+
+  L26:
+    load_const "provider is effectful; wrap the idempotent part or use a bespoke combinator"
+    init_instance baml.errors.CannotRetry .message
+    throw
 }
 
 function baml.ai.RoundRobin$stream.root.ai.HttpProvider.build_request(self: baml.ai.RoundRobin$stream, messages: baml.ai.ChatMessage[]) -> baml.http.Request {
@@ -17262,6 +18006,97 @@ function baml.ai.RoundRobin$stream.root.ai.HttpProvider.parse(self: baml.ai.Roun
 function baml.ai.RoundRobin$stream.root.ai.HttpProvider.send(self: baml.ai.RoundRobin$stream, request: baml.http.Request) -> unknown {
     load_const null
     load_const "round_robin does not send directly"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.RoundRobin$stream.root.ai.Streaming.stream_messages(self: baml.ai.RoundRobin$stream, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> {
+    load_var self
+    load_field .0
+    container_len
+    store_var n
+    load_var n
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L8
+
+  L0:
+    load_var self
+    load_field .1
+    load_var n
+    mod_int
+    store_var idx
+    load_var2 1 1
+    load_field .1
+    load_const 1
+    bin_op +
+    store_field .1
+    load_type baml.ai.Provider
+    load_var self
+    load_field .0
+    load_var idx
+    call baml.Array.at
+    store_var _13
+    load_var _13
+    is_type baml.ai.Retry
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var _13
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _13
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L3
+    jump L7
+
+  L3:
+    load_var _13
+    is_type baml.ai.Fallback
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var _13
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L5
+    jump L7
+
+  L5:
+    load_var _13
+    is_type baml.llm.Client
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const null
+    load_const "round_robin: member not streaming"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L7:
+    load_type #0
+    load_type #1
+    load_var2 6 2
+    load_type baml.ai.Streaming
+    load_const "stream_messages"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _0
+    load_var _0
+    return
+
+  L8:
+    load_const null
+    load_const "round_robin: no members"
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
@@ -17418,6 +18253,244 @@ function baml.ai.RoundRobin.root.ai.HttpProvider.send(self: baml.ai.RoundRobin, 
     load_type string
     alloc_array 1
     init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.RoundRobin.root.ai.Streaming.stream_messages(self: baml.ai.RoundRobin, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> {
+    load_var self
+    load_field .0
+    container_len
+    store_var n
+    load_var n
+    load_const 0
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L8
+
+  L0:
+    load_var self
+    load_field .1
+    load_var n
+    mod_int
+    store_var idx
+    load_var2 1 1
+    load_field .1
+    load_const 1
+    bin_op +
+    store_field .1
+    load_type baml.ai.Provider
+    load_var self
+    load_field .0
+    load_var idx
+    call baml.Array.at
+    store_var _13
+    load_var _13
+    is_type baml.ai.Retry
+    pop_jump_if_false L1
+    jump L7
+
+  L1:
+    load_var _13
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _13
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L3
+    jump L7
+
+  L3:
+    load_var _13
+    is_type baml.ai.Fallback
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var _13
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L5
+    jump L7
+
+  L5:
+    load_var _13
+    is_type baml.llm.Client
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const null
+    load_const "round_robin: member not streaming"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L7:
+    load_type #0
+    load_type #1
+    load_var2 6 2
+    load_type baml.ai.Streaming
+    load_const "stream_messages"
+    virtual_call nargs=2 ntypeargs=2
+    store_var _0
+    load_var _0
+    return
+
+  L8:
+    load_const null
+    load_const "round_robin: no members"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+}
+
+function baml.ai.Streaming$for$root.llm.Client.stream_messages(self: baml.llm.Client, messages: baml.ai.ChatMessage[]) -> baml.llm.Stream<TStream, TFinal> {
+    load_var self
+    load_field .client_type
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    call baml.ops.equals_equals
+    unary_op !
+    pop_jump_if_false L0
+    jump L14
+
+  L0:
+    load_var self
+    call baml.llm.Client.to_primitive_client
+    store_var primitive
+    jump L1
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: client construction failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L1:
+    load_var primitive
+    call baml.ai.native_provider_for
+    store_var _12
+    load_var _12
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var _12
+    store_var_load_var np
+    is_type baml.ai.Retry
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var np
+    is_type baml.ai.OpenAi
+    pop_jump_if_false L4
+    jump L8
+
+  L4:
+    load_var np
+    is_type baml.ai.RoundRobin
+    pop_jump_if_false L5
+    jump L8
+
+  L5:
+    load_var np
+    is_type baml.ai.Fallback
+    pop_jump_if_false L6
+    jump L8
+
+  L6:
+    load_var np
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L7
+    jump L8
+
+  L7:
+    load_var np
+    is_type baml.llm.Client
+    pop_jump_if_false L9
+
+  L8:
+    load_type #0
+    load_type #1
+    load_var2 6 2
+    load_type baml.ai.Streaming
+    load_const "stream_messages"
+    virtual_call nargs=2 ntypeargs=2
+    jump L13
+
+  L9:
+    load_var messages
+    sys_op baml.ai.messages_to_prompt
+    store_var ast
+    load_var2 3 7
+    sys_op baml.llm.PrimitiveClient.specialize_prompt
+    store_var specialized
+    jump L10
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: specialize failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L10:
+    load_var2 3 8
+    load_type #1
+    sys_op baml.llm.PrimitiveClient.build_request_stream
+    jump L11
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: build_request_stream failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L11:
+    sys_op baml.http.fetch_sse
+    store_var sse
+    jump L12
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: SSE connect failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L12:
+    load_type #0
+    load_type #1
+    load_var2 1 11
+    call baml.llm.Client.__make_stream
+    jump L13
+    load_var e
+    throw_if_panic
+    load_var e
+    load_const "legacy bridge: stream construction failed"
+    load_type string
+    alloc_array 1
+    init_instance baml.errors.UnknownError .data, .message
+    throw
+
+  L13:
+    return
+
+  L14:
+    load_const "the legacy codec bridges primitive clients; strategy configs lower to new-model combinators"
+    init_instance baml.errors.Unsupported .message
     throw
 }
 
@@ -18725,135 +19798,147 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     load_var client
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L21
+    jump L23
 
   L0:
     load_var client
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L21
+    jump L23
 
   L1:
     load_var client
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L21
+    jump L23
 
   L2:
     load_var client
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L21
+    jump L23
 
   L3:
     load_var client
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L21
+    jump L23
 
   L4:
     load_var client
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L21
+    jump L23
 
   L5:
     load_var client
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L21
+    jump L23
 
   L6:
     load_var client
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L21
+    jump L23
 
   L7:
     load_var client
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L21
+    jump L23
 
   L8:
     load_var client
     is_type baml.llm.Client
     pop_jump_if_false L9
-    jump L21
+    jump L23
 
   L9:
     load_var client
     is_type baml.ai.Retry
     pop_jump_if_false L10
-    jump L14
+    jump L16
 
   L10:
     load_var client
     is_type baml.ai.OpenAi
     pop_jump_if_false L11
-    jump L14
+    jump L16
 
   L11:
     load_var client
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L12
-    jump L14
+    jump L16
 
   L12:
     load_var client
-    is_type baml.ai.Anthropic
+    is_type baml.ai.Fallback
     pop_jump_if_false L13
-    jump L14
+    jump L16
 
   L13:
+    load_var client
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L14
+    jump L16
+
+  L14:
+    load_var client
+    is_type baml.llm.Client
+    pop_jump_if_false L15
+    jump L16
+
+  L15:
     load_const "client's provider supports neither HttpProvider nor Streaming"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L14:
+  L16:
     load_type #0
     load_type #0
     load_var2 1 4
     load_type baml.ai.Streaming
     load_const "stream_messages"
     virtual_call nargs=2 ntypeargs=2
-    store_var _23
+    store_var _25
     load_type #0
     load_type #0
-    load_var _23
+    load_var _25
     call baml.llm.Stream.final
     store_var _0
-    jump L22
+    jump L24
     load_var e
     is_type baml.errors.CannotRetry
-    pop_jump_if_false L15
-    jump L20
-
-  L15:
-    load_var e
-    is_type baml.ai.AnthropicHttpError
-    pop_jump_if_false L16
-    jump L20
-
-  L16:
-    load_var e
-    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L17
-    jump L20
+    jump L22
 
   L17:
     load_var e
-    is_type baml.ai.OpenAiHttpError
+    is_type baml.ai.AnthropicHttpError
     pop_jump_if_false L18
-    jump L20
+    jump L22
 
   L18:
     load_var e
-    is_type baml.errors.Unsupported
+    is_type baml.ai.GeminiHttpError
     pop_jump_if_false L19
-    jump L20
+    jump L22
 
   L19:
+    load_var e
+    is_type baml.ai.OpenAiHttpError
+    pop_jump_if_false L20
+    jump L22
+
+  L20:
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L21
+    jump L22
+
+  L21:
     load_var e
     throw_if_panic
     load_var e
@@ -18863,11 +19948,11 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     init_instance baml.errors.UnknownError .data, .message
     throw
 
-  L20:
+  L22:
     load_var e
     throw
 
-  L21:
+  L23:
     load_type #0
     load_var2 1 4
     load_type baml.ai.HttpProvider
@@ -18875,7 +19960,7 @@ function baml.ai.drive_call(client: baml.ai.Provider, prompt: baml.llm.PromptAst
     virtual_call nargs=2 ntypeargs=1
     store_var _0
 
-  L22:
+  L24:
     load_var _0
     return
 }
@@ -18950,32 +20035,44 @@ function baml.ai.drive_stream(client: baml.ai.Provider, prompt: baml.llm.PromptA
     load_var client
     is_type baml.ai.Retry
     pop_jump_if_false L0
-    jump L4
+    jump L6
 
   L0:
     load_var client
     is_type baml.ai.OpenAi
     pop_jump_if_false L1
-    jump L4
+    jump L6
 
   L1:
     load_var client
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L2
-    jump L4
+    jump L6
 
   L2:
     load_var client
-    is_type baml.ai.Anthropic
+    is_type baml.ai.Fallback
     pop_jump_if_false L3
-    jump L4
+    jump L6
 
   L3:
+    load_var client
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L4
+    jump L6
+
+  L4:
+    load_var client
+    is_type baml.llm.Client
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
     load_const "client's provider does not support Streaming"
     init_instance baml.errors.Unsupported .message
     throw
 
-  L4:
+  L6:
     load_type #0
     load_type #1
     load_var2 1 4
@@ -25704,1409 +26801,6 @@ function baml.llm.Client.__make_stream(self: baml.llm.Client, sse: baml.http.Sse
     return
 }
 
-function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
-    load_var self
-    load_type string
-    alloc_array 0
-    init_instance baml.llm.PlannerState .rr_client_names
-    call baml.llm.Client.build_attempt_with_state
-    return
-}
-
-function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
-    load_var self
-    load_field .client_type
-    discriminant
-    load_const ClientType.Primitive
-    cmp_int_op ==
-    pop_jump_if_false L0
-    jump L48
-
-  L0:
-    load_var self
-    load_field .client_type
-    discriminant
-    load_const ClientType.Fallback
-    cmp_int_op ==
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_var self
-    load_field .sub_clients
-    container_len
-    store_var _78
-    load_var _78
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var self
-    load_field .name
-    store_var _81
-    load_var self
-    load_field .counter
-    store_var _82
-    load_var self
-    load_field .sub_clients
-    container_len
-    store_var _83
-    load_var2 2 13
-    load_var2 14 15
-    call baml.llm.PlannerState.rr_pick_index
-    store_var idx
-    load_var self
-    load_field .sub_clients
-    load_var idx
-    load_array_element
-    load_var planner_state
-    call baml.llm.Client.build_plan_with_state
-    jump L49
-
-  L3:
-    load_type baml.llm.OrchestrationStep
-    alloc_array 0
-    jump L49
-
-  L4:
-    load_type baml.llm.OrchestrationStep
-    alloc_array 0
-    store_var steps
-    load_var self
-    load_field .sub_clients
-    store_var _9
-    load_type baml.llm.Client
-    load_var _9
-    call baml.iter.Iterable$for$T[].iter
-    store_var _10
-
-  L5:
-    load_var _10
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L6
-    jump L23
-
-  L6:
-    load_var _10
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L7
-    jump L22
-
-  L7:
-    load_var _10
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L8
-    jump L21
-
-  L8:
-    load_var _10
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L9
-    jump L20
-
-  L9:
-    load_var _10
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L10
-    jump L19
-
-  L10:
-    load_var _10
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L11
-    jump L18
-
-  L11:
-    load_var _10
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L12
-    jump L17
-
-  L12:
-    load_var _10
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L13
-    jump L16
-
-  L13:
-    load_var _10
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L14
-    jump L15
-
-  L14:
-    load_var _10
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L50
-    load_type baml.llm.Client
-    load_type never
-    load_var _10
-    call baml.iter.Peekable.Iterator.next
-    store_var _12
-    jump L24
-
-  L15:
-    load_var _10
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _12
-    jump L24
-
-  L16:
-    load_var _10
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _12
-    jump L24
-
-  L17:
-    load_type baml.llm.Client
-    load_type never
-    load_type never
-    load_var _10
-    call baml.iter.Filter.Iterator.next
-    store_var _12
-    jump L24
-
-  L18:
-    load_var _10
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _12
-    jump L24
-
-  L19:
-    load_type baml.llm.Client
-    load_var _10
-    call baml.iter.Repeat.Iterator.next
-    store_var _12
-    jump L24
-
-  L20:
-    load_type baml.llm.Client
-    load_type never
-    load_type never
-    load_var _10
-    call baml.iter.Chain.Iterator.next
-    store_var _12
-    jump L24
-
-  L21:
-    load_type baml.llm.Client
-    load_type never
-    load_var _10
-    call baml.iter.StepBy.Iterator.next
-    store_var _12
-    jump L24
-
-  L22:
-    load_type baml.llm.Client
-    load_var _10
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _12
-    jump L24
-
-  L23:
-    load_var _10
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _12
-
-  L24:
-    load_var _12
-    is_type baml.iter.Done
-    pop_jump_if_false L25
-    jump L47
-
-  L25:
-    load_var2 7 2
-    call baml.llm.Client.build_plan_with_state
-    store_var _42
-    load_type baml.llm.OrchestrationStep
-    load_var _42
-    call baml.iter.Iterable$for$T[].iter
-    store_var _43
-
-  L26:
-    load_var _43
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L27
-    jump L44
-
-  L27:
-    load_var _43
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L28
-    jump L43
-
-  L28:
-    load_var _43
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L29
-    jump L42
-
-  L29:
-    load_var _43
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L30
-    jump L41
-
-  L30:
-    load_var _43
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L31
-    jump L40
-
-  L31:
-    load_var _43
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L32
-    jump L39
-
-  L32:
-    load_var _43
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L33
-    jump L38
-
-  L33:
-    load_var _43
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L34
-    jump L37
-
-  L34:
-    load_var _43
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L35
-    jump L36
-
-  L35:
-    load_var _43
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L50
-    load_type baml.llm.OrchestrationStep
-    load_type never
-    load_var _43
-    call baml.iter.Peekable.Iterator.next
-    store_var _45
-    jump L45
-
-  L36:
-    load_var _43
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _45
-    jump L45
-
-  L37:
-    load_var _43
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _45
-    jump L45
-
-  L38:
-    load_type baml.llm.OrchestrationStep
-    load_type never
-    load_type never
-    load_var _43
-    call baml.iter.Filter.Iterator.next
-    store_var _45
-    jump L45
-
-  L39:
-    load_var _43
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _45
-    jump L45
-
-  L40:
-    load_type baml.llm.OrchestrationStep
-    load_var _43
-    call baml.iter.Repeat.Iterator.next
-    store_var _45
-    jump L45
-
-  L41:
-    load_type baml.llm.OrchestrationStep
-    load_type never
-    load_type never
-    load_var _43
-    call baml.iter.Chain.Iterator.next
-    store_var _45
-    jump L45
-
-  L42:
-    load_type baml.llm.OrchestrationStep
-    load_type never
-    load_var _43
-    call baml.iter.StepBy.Iterator.next
-    store_var _45
-    jump L45
-
-  L43:
-    load_type baml.llm.OrchestrationStep
-    load_var _43
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _45
-    jump L45
-
-  L44:
-    load_var _43
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _45
-
-  L45:
-    load_var _45
-    is_type baml.iter.Done
-    pop_jump_if_false L46
-    jump L5
-
-  L46:
-    load_var2 4 10
-    call baml.Array.push
-    pop 1
-    jump L26
-
-  L47:
-    load_var steps
-    jump L49
-
-  L48:
-    load_var self
-    call baml.llm.Client.to_primitive_client
-    store_var primitive
-    load_var primitive
-    load_const 0
-    init_instance baml.llm.OrchestrationStep .primitive_client, .delay_ms
-    load_type baml.llm.OrchestrationStep
-    alloc_array 1
-
-  L49:
-    return
-
-  L50:
-    unreachable
-}
-
-function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
-    load_var self
-    load_type string
-    alloc_array 0
-    init_instance baml.llm.PlannerState .rr_client_names
-    call baml.llm.Client.build_plan_with_state
-    return
-}
-
-function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
-    load_var self
-    load_field .retry
-    store_var_load_var _3
-    is_type baml.llm.RetryPolicy
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var2 1 2
-    call baml.llm.Client.build_attempt_with_state
-    jump L4
-
-  L1:
-    load_var _3
-    store_var r
-    load_type baml.llm.OrchestrationStep
-    alloc_array 0
-    store_var result
-    load_var r
-    load_field .initial_delay_ms
-    load_const 0.0
-    bin_op +
-    store_var current_delay
-    load_const 0
-    store_var attempt
-
-  L2:
-    load_var2 7 4
-    load_field .max_retries
-    cmp_int_op <=
-    pop_jump_if_false L3
-    jump L5
-
-  L3:
-    load_var result
-
-  L4:
-    return
-
-  L5:
-    load_const 0
-    store_var delay
-    load_var attempt
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L8
-    load_var current_delay
-    call baml.math.trunc
-    store_var delay
-    load_var2 6 4
-    load_field .multiplier
-    mul_float
-    store_var_load_var next
-    load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
-    cmp_float_op >
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_var next
-    store_var current_delay
-    jump L8
-
-  L7:
-    load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
-    store_var current_delay
-
-  L8:
-    load_var2 1 2
-    call baml.llm.Client.build_attempt_with_state
-    store_var inner
-    load_type baml.llm.OrchestrationStep
-    load_var inner
-    call baml.iter.Iterable$for$T[].iter
-    store_var _27
-
-  L9:
-    load_var _27
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L10
-    jump L27
-
-  L10:
-    load_var _27
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L11
-    jump L26
-
-  L11:
-    load_var _27
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L12
-    jump L25
-
-  L12:
-    load_var _27
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L13
-    jump L24
-
-  L13:
-    load_var _27
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L14
-    jump L23
-
-  L14:
-    load_var _27
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L15
-    jump L22
-
-  L15:
-    load_var _27
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L16
-    jump L21
-
-  L16:
-    load_var _27
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L17
-    jump L20
-
-  L17:
-    load_var _27
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L18
-    jump L19
-
-  L18:
-    load_var _27
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L31
-    load_type baml.llm.OrchestrationStep
-    load_type never
-    load_var _27
-    call baml.iter.Peekable.Iterator.next
-    store_var _29
-    jump L28
-
-  L19:
-    load_var _27
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _29
-    jump L28
-
-  L20:
-    load_var _27
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _29
-    jump L28
-
-  L21:
-    load_type baml.llm.OrchestrationStep
-    load_type never
-    load_type never
-    load_var _27
-    call baml.iter.Filter.Iterator.next
-    store_var _29
-    jump L28
-
-  L22:
-    load_var _27
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _29
-    jump L28
-
-  L23:
-    load_type baml.llm.OrchestrationStep
-    load_var _27
-    call baml.iter.Repeat.Iterator.next
-    store_var _29
-    jump L28
-
-  L24:
-    load_type baml.llm.OrchestrationStep
-    load_type never
-    load_type never
-    load_var _27
-    call baml.iter.Chain.Iterator.next
-    store_var _29
-    jump L28
-
-  L25:
-    load_type baml.llm.OrchestrationStep
-    load_type never
-    load_var _27
-    call baml.iter.StepBy.Iterator.next
-    store_var _29
-    jump L28
-
-  L26:
-    load_type baml.llm.OrchestrationStep
-    load_var _27
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _29
-    jump L28
-
-  L27:
-    load_var _27
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _29
-
-  L28:
-    load_var _29
-    is_type baml.iter.Done
-    pop_jump_if_false L29
-    jump L30
-
-  L29:
-    load_var2 5 12
-    load_field .primitive_client
-    load_var delay
-    init_instance baml.llm.OrchestrationStep .primitive_client, .delay_ms
-    call baml.Array.push
-    pop 1
-    jump L9
-
-  L30:
-    load_var attempt
-    load_const 1
-    add_int
-    store_var attempt
-    jump L2
-
-  L31:
-    unreachable
-}
-
-function baml.llm.Client.execute_once_oneshot(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T {
-    load_var self
-    load_field .client_type
-    discriminant
-    load_const ClientType.Primitive
-    cmp_int_op ==
-    pop_jump_if_false L0
-    jump L28
-
-  L0:
-    load_var self
-    load_field .client_type
-    discriminant
-    load_const ClientType.Fallback
-    cmp_int_op ==
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_var self
-    load_field .sub_clients
-    container_len
-    store_var _75
-    load_var _75
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var self
-    load_field .counter
-    store_var _79
-    load_var self
-    load_field .sub_clients
-    container_len
-    store_var _80
-    load_var self
-    copy 0
-    load_field .counter
-    load_const 1
-    bin_op +
-    store_field .counter
-    load_type #0
-    load_var self
-    load_field .sub_clients
-    load_var2 17 18
-    mod_int
-    load_array_element
-    load_var2 2 3
-    call baml.llm.Client.execute_oneshot
-    jump L34
-
-  L3:
-    load_const "RoundRobin client has no sub-clients"
-    init_instance baml.errors.DevOther .message
-    throw
-
-  L4:
-    load_var self
-    load_field .sub_clients
-    store_var _37
-    load_type baml.llm.Client
-    load_var _37
-    call baml.iter.Iterable$for$T[].iter
-    store_var _38
-
-  L5:
-    load_var _38
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L6
-    jump L23
-
-  L6:
-    load_var _38
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L7
-    jump L22
-
-  L7:
-    load_var _38
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L8
-    jump L21
-
-  L8:
-    load_var _38
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L9
-    jump L20
-
-  L9:
-    load_var _38
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L10
-    jump L19
-
-  L10:
-    load_var _38
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L11
-    jump L18
-
-  L11:
-    load_var _38
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L12
-    jump L17
-
-  L12:
-    load_var _38
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L13
-    jump L16
-
-  L13:
-    load_var _38
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L14
-    jump L15
-
-  L14:
-    load_var _38
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L35
-    load_type baml.llm.Client
-    load_type never
-    load_var _38
-    call baml.iter.Peekable.Iterator.next
-    store_var _40
-    jump L24
-
-  L15:
-    load_var _38
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _40
-    jump L24
-
-  L16:
-    load_var _38
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _40
-    jump L24
-
-  L17:
-    load_type baml.llm.Client
-    load_type never
-    load_type never
-    load_var _38
-    call baml.iter.Filter.Iterator.next
-    store_var _40
-    jump L24
-
-  L18:
-    load_var _38
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _40
-    jump L24
-
-  L19:
-    load_type baml.llm.Client
-    load_var _38
-    call baml.iter.Repeat.Iterator.next
-    store_var _40
-    jump L24
-
-  L20:
-    load_type baml.llm.Client
-    load_type never
-    load_type never
-    load_var _38
-    call baml.iter.Chain.Iterator.next
-    store_var _40
-    jump L24
-
-  L21:
-    load_type baml.llm.Client
-    load_type never
-    load_var _38
-    call baml.iter.StepBy.Iterator.next
-    store_var _40
-    jump L24
-
-  L22:
-    load_type baml.llm.Client
-    load_var _38
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _40
-    jump L24
-
-  L23:
-    load_var _38
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _40
-
-  L24:
-    load_var _40
-    is_type baml.iter.Done
-    pop_jump_if_false L25
-    jump L27
-
-  L25:
-    load_type #0
-    load_var2 14 2
-    load_var active_delay_ms
-    call baml.llm.Client.execute_oneshot
-    jump L26
-    load_var e
-    throw_if_panic
-    jump L5
-
-  L26:
-    jump L34
-
-  L27:
-    load_const "All orchestration steps failed"
-    init_instance baml.errors.DevOther .message
-    throw
-
-  L28:
-    load_var self
-    call baml.llm.Client.to_primitive_client
-    store_var primitive
-    load_type #0
-    store_var return_type
-    load_var2 4 2
-    load_field .jinja_string
-    load_var context
-    load_field .args
-    load_var2 5 2
-    load_field .prompt_closure
-    call baml.llm.PrimitiveClient.render_specialized_prompt
-    store_var specialized
-    load_var2 4 6
-    load_var return_type
-    sys_op baml.llm.PrimitiveClient.build_request
-    load_const <omitted>
-    call baml.http.send
-    store_var http_response
-    load_var http_response
-    call baml.http.Response.ok
-    pop_jump_if_false L29
-    jump L32
-
-  L29:
-    load_var http_response
-    sys_op baml.http.Response.text
-    store_var error_body
-    jump L30
-    load_var e
-    throw_if_panic
-    load_const ""
-    store_var error_body
-
-  L30:
-    load_var active_delay_ms
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L31
-    load_var active_delay_ms
-    load_const 1000000n
-    mul_bigint
-    call baml.time.Duration.from_nanoseconds
-    sys_op baml.sys.sleep
-    pop 1
-
-  L31:
-    load_const "HTTP request failed: "
-    load_var error_body
-    bin_op +
-    init_instance baml.errors.DevOther .message
-    throw
-
-  L32:
-    load_var http_response
-    sys_op baml.http.Response.text
-    store_var body
-    load_var2 4 8
-    load_type #0
-    sys_op baml.llm.PrimitiveClient.parse
-    jump L34
-    load_var e
-    throw_if_panic
-    load_var active_delay_ms
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L33
-    load_var active_delay_ms
-    load_const 1000000n
-    mul_bigint
-    call baml.time.Duration.from_nanoseconds
-    sys_op baml.sys.sleep
-    pop 1
-
-  L33:
-    load_var e
-    rethrow
-
-  L34:
-    return
-
-  L35:
-    unreachable
-}
-
-function baml.llm.Client.execute_once_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.Stream<TStream, TFinal> {
-    load_var self
-    load_field .client_type
-    discriminant
-    load_const ClientType.Primitive
-    cmp_int_op ==
-    pop_jump_if_false L0
-    jump L28
-
-  L0:
-    load_var self
-    load_field .client_type
-    discriminant
-    load_const ClientType.Fallback
-    cmp_int_op ==
-    pop_jump_if_false L1
-    jump L4
-
-  L1:
-    load_var self
-    load_field .sub_clients
-    container_len
-    store_var _62
-    load_var _62
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var self
-    load_field .counter
-    store_var _66
-    load_var self
-    load_field .sub_clients
-    container_len
-    store_var _67
-    load_var self
-    copy 0
-    load_field .counter
-    load_const 1
-    bin_op +
-    store_field .counter
-    load_type #0
-    load_type #1
-    load_var self
-    load_field .sub_clients
-    load_var2 13 14
-    mod_int
-    load_array_element
-    load_var2 2 3
-    call baml.llm.Client.execute_stream
-    jump L29
-
-  L3:
-    load_const "RoundRobin client has no sub-clients"
-    init_instance baml.errors.DevOther .message
-    throw
-
-  L4:
-    load_var self
-    load_field .sub_clients
-    store_var _23
-    load_type baml.llm.Client
-    load_var _23
-    call baml.iter.Iterable$for$T[].iter
-    store_var _24
-
-  L5:
-    load_var _24
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L6
-    jump L23
-
-  L6:
-    load_var _24
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L7
-    jump L22
-
-  L7:
-    load_var _24
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L8
-    jump L21
-
-  L8:
-    load_var _24
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L9
-    jump L20
-
-  L9:
-    load_var _24
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L10
-    jump L19
-
-  L10:
-    load_var _24
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L11
-    jump L18
-
-  L11:
-    load_var _24
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L12
-    jump L17
-
-  L12:
-    load_var _24
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L13
-    jump L16
-
-  L13:
-    load_var _24
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L14
-    jump L15
-
-  L14:
-    load_var _24
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L30
-    load_type baml.llm.Client
-    load_type never
-    load_var _24
-    call baml.iter.Peekable.Iterator.next
-    store_var _26
-    jump L24
-
-  L15:
-    load_var _24
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _26
-    jump L24
-
-  L16:
-    load_var _24
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _26
-    jump L24
-
-  L17:
-    load_type baml.llm.Client
-    load_type never
-    load_type never
-    load_var _24
-    call baml.iter.Filter.Iterator.next
-    store_var _26
-    jump L24
-
-  L18:
-    load_var _24
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _26
-    jump L24
-
-  L19:
-    load_type baml.llm.Client
-    load_var _24
-    call baml.iter.Repeat.Iterator.next
-    store_var _26
-    jump L24
-
-  L20:
-    load_type baml.llm.Client
-    load_type never
-    load_type never
-    load_var _24
-    call baml.iter.Chain.Iterator.next
-    store_var _26
-    jump L24
-
-  L21:
-    load_type baml.llm.Client
-    load_type never
-    load_var _24
-    call baml.iter.StepBy.Iterator.next
-    store_var _26
-    jump L24
-
-  L22:
-    load_type baml.llm.Client
-    load_var _24
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _26
-    jump L24
-
-  L23:
-    load_var _24
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _26
-
-  L24:
-    load_var _26
-    is_type baml.iter.Done
-    pop_jump_if_false L25
-    jump L27
-
-  L25:
-    load_type #0
-    load_type #1
-    load_var2 10 2
-    load_var active_delay_ms
-    call baml.llm.Client.execute_stream
-    jump L26
-    load_var e
-    throw_if_panic
-    jump L5
-
-  L26:
-    jump L29
-
-  L27:
-    load_const "All orchestration steps failed"
-    init_instance baml.errors.DevOther .message
-    throw
-
-  L28:
-    load_var self
-    call baml.llm.Client.to_primitive_client
-    store_var primitive
-    load_var context
-    load_field .function_name
-    sys_op baml.llm.get_return_type
-    store_var return_type
-    load_var2 4 2
-    load_field .jinja_string
-    load_var context
-    load_field .args
-    load_var2 5 2
-    load_field .prompt_closure
-    call baml.llm.PrimitiveClient.render_specialized_prompt
-    store_var specialized
-    load_var2 4 6
-    load_var return_type
-    sys_op baml.llm.PrimitiveClient.build_request_stream
-    sys_op baml.http.fetch_sse
-    store_var sse
-    load_type #0
-    load_type #1
-    load_var2 1 7
-    call baml.llm.Client.__make_stream
-
-  L29:
-    return
-
-  L30:
-    unreachable
-}
-
-function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T {
-    load_var self
-    load_field .retry
-    store_var_load_var _4
-    is_type baml.llm.RetryPolicy
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_type #0
-    load_var2 1 2
-    load_var inherited_delay_ms
-    call baml.llm.Client.execute_once_oneshot
-    jump L9
-
-  L1:
-    load_var _4
-    store_var_load_var r
-    load_field .initial_delay_ms
-    load_const 0.0
-    bin_op +
-    store_var current_delay
-    load_const 0
-    store_var attempt
-
-  L2:
-    load_var2 7 5
-    load_field .max_retries
-    cmp_int_op <=
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const "All orchestration steps failed"
-    init_instance baml.errors.DevOther .message
-    throw
-
-  L4:
-    load_var inherited_delay_ms
-    store_var attempt_delay
-    load_var attempt
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L7
-    load_var current_delay
-    call baml.math.trunc
-    store_var attempt_delay
-    load_var2 6 5
-    load_field .multiplier
-    mul_float
-    store_var_load_var next
-    load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
-    cmp_float_op >
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
-    load_var next
-    store_var current_delay
-    jump L7
-
-  L6:
-    load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
-    store_var current_delay
-
-  L7:
-    load_var2 7 5
-    load_field .max_retries
-    cmp_int_op ==
-    pop_jump_if_false L8
-    load_var inherited_delay_ms
-    store_var attempt_delay
-
-  L8:
-    load_type #0
-    load_var2 1 2
-    load_var attempt_delay
-    call baml.llm.Client.execute_once_oneshot
-    jump L9
-    load_var e
-    throw_if_panic
-    load_var attempt
-    load_const 1
-    add_int
-    store_var attempt
-    jump L2
-
-  L9:
-    return
-}
-
-function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<TStream, TFinal> {
-    load_var self
-    load_field .retry
-    store_var_load_var _4
-    is_type baml.llm.RetryPolicy
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_type #0
-    load_type #1
-    load_var2 1 2
-    load_var inherited_delay_ms
-    call baml.llm.Client.execute_once_stream
-    jump L9
-
-  L1:
-    load_var _4
-    store_var_load_var r
-    load_field .initial_delay_ms
-    load_const 0.0
-    bin_op +
-    store_var current_delay
-    load_const 0
-    store_var attempt
-
-  L2:
-    load_var2 7 5
-    load_field .max_retries
-    cmp_int_op <=
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const "All orchestration steps failed"
-    init_instance baml.errors.DevOther .message
-    throw
-
-  L4:
-    load_var inherited_delay_ms
-    store_var attempt_delay
-    load_var attempt
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L7
-    load_var current_delay
-    call baml.math.trunc
-    store_var attempt_delay
-    load_var2 6 5
-    load_field .multiplier
-    mul_float
-    store_var_load_var next
-    load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
-    cmp_float_op >
-    pop_jump_if_false L5
-    jump L6
-
-  L5:
-    load_var next
-    store_var current_delay
-    jump L7
-
-  L6:
-    load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
-    store_var current_delay
-
-  L7:
-    load_var2 7 5
-    load_field .max_retries
-    cmp_int_op ==
-    pop_jump_if_false L8
-    load_var inherited_delay_ms
-    store_var attempt_delay
-
-  L8:
-    load_type #0
-    load_type #1
-    load_var2 1 2
-    load_var attempt_delay
-    call baml.llm.Client.execute_once_stream
-    jump L9
-    load_var e
-    throw_if_panic
-    load_var attempt
-    load_const 1
-    add_int
-    store_var attempt
-    jump L2
-
-  L9:
-    return
-}
-
 function baml.llm.Client.get_constructor(self: baml.llm.Client) -> () -> baml.llm.PrimitiveClient throws baml.errors.InvalidArgument {
 }
 
@@ -27134,190 +26828,6 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
 }
 
 function baml.llm.Context.output_format_with(self: baml.llm.Context, prefix: string | null, or_splitter: string | null, enum_value_prefix: string | null, hoisted_class_prefix: string | null, always_hoist_enums: bool | null, quote_class_fields: bool | null, hoist_classes: string[] | null, map_style: string | null, render_null_as: string | null) -> string {
-}
-
-function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
-    load_const 0
-    store_var offset
-    load_var self
-    load_field .rr_client_names
-    store_var _4
-    load_type string
-    load_var _4
-    call baml.iter.Iterable$for$T[].iter
-    store_var _5
-
-  L0:
-    load_var _5
-    is_type baml.iter.Flatten<...>
-    pop_jump_if_false L1
-    jump L18
-
-  L1:
-    load_var _5
-    is_type baml.iter.ArrayIterator<...>
-    pop_jump_if_false L2
-    jump L17
-
-  L2:
-    load_var _5
-    is_type baml.iter.StepBy<...>
-    pop_jump_if_false L3
-    jump L16
-
-  L3:
-    load_var _5
-    is_type baml.iter.Chain<...>
-    pop_jump_if_false L4
-    jump L15
-
-  L4:
-    load_var _5
-    is_type baml.iter.Repeat<...>
-    pop_jump_if_false L5
-    jump L14
-
-  L5:
-    load_var _5
-    is_type baml.iter.Map<...>
-    pop_jump_if_false L6
-    jump L13
-
-  L6:
-    load_var _5
-    is_type baml.iter.Filter<...>
-    pop_jump_if_false L7
-    jump L12
-
-  L7:
-    load_var _5
-    is_type baml.iter.FilterMap<...>
-    pop_jump_if_false L8
-    jump L11
-
-  L8:
-    load_var _5
-    is_type baml.iter.FlatMap<...>
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_var _5
-    is_type baml.iter.Peekable<...>
-    pop_jump_if_false L22
-    load_type string
-    load_type never
-    load_var _5
-    call baml.iter.Peekable.Iterator.next
-    store_var _7
-    jump L19
-
-  L10:
-    load_var _5
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
-    store_var _7
-    jump L19
-
-  L11:
-    load_var _5
-    make_bound_method baml.iter.FilterMap.Iterator.next
-    call_indirect
-    store_var _7
-    jump L19
-
-  L12:
-    load_type string
-    load_type never
-    load_type never
-    load_var _5
-    call baml.iter.Filter.Iterator.next
-    store_var _7
-    jump L19
-
-  L13:
-    load_var _5
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _7
-    jump L19
-
-  L14:
-    load_type string
-    load_var _5
-    call baml.iter.Repeat.Iterator.next
-    store_var _7
-    jump L19
-
-  L15:
-    load_type string
-    load_type never
-    load_type never
-    load_var _5
-    call baml.iter.Chain.Iterator.next
-    store_var _7
-    jump L19
-
-  L16:
-    load_type string
-    load_type never
-    load_var _5
-    call baml.iter.StepBy.Iterator.next
-    store_var _7
-    jump L19
-
-  L17:
-    load_type string
-    load_var _5
-    call baml.iter.ArrayIterator.Iterator.next
-    store_var _7
-    jump L19
-
-  L18:
-    load_var _5
-    make_bound_method baml.iter.Flatten.Iterator.next
-    call_indirect
-    store_var _7
-
-  L19:
-    load_var _7
-    is_type baml.iter.Done
-    pop_jump_if_false L20
-    jump L21
-
-  L20:
-    load_var2 6 2
-    cmp_op ==
-    pop_jump_if_false L0
-    load_var offset
-    load_const 1
-    add_int
-    store_var offset
-    jump L0
-
-  L21:
-    load_var offset
-    return
-
-  L22:
-    unreachable
-}
-
-function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, counter: int, sub_client_count: int) -> int {
-    load_var2 1 2
-    call baml.llm.PlannerState.rr_local_offset
-    store_var local_offset
-    load_type string
-    load_var self
-    load_field .rr_client_names
-    load_var client_name
-    call baml.Array.push
-    pop 1
-    load_var2 3 5
-    add_int
-    load_var sub_client_count
-    mod_int
-    return
 }
 
 function baml.llm.PrimitiveClient.build_request(self: baml.llm.PrimitiveClient, prompt: baml.llm.PromptAst, return_type: type) -> baml.http.Request {
@@ -27661,243 +27171,13 @@ function baml.llm.call_llm_function(client: baml.ai.Provider, function_name: str
     store_var prompt_closure
 
   L0:
-    load_var prompt_closure
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const ""
-    store_var jinja_string
-    jump L3
-
-  L2:
-    load_var function_name
-    sys_op baml.llm.get_jinja_template
-    store_var jinja_string
-
-  L3:
-    load_var client
-    is_type baml.llm.Client
-    pop_jump_if_false L4
-    jump L19
-
-  L4:
-    load_var client
-    is_type baml.ai.ToolLoop
-    pop_jump_if_false L5
-    jump L15
-
-  L5:
-    load_var client
-    is_type baml.ai.Retry
-    pop_jump_if_false L6
-    jump L15
-
-  L6:
-    load_var client
-    is_type baml.ai.OpenAi
-    pop_jump_if_false L7
-    jump L15
-
-  L7:
-    load_var client
-    is_type baml.ai.Gemini
-    pop_jump_if_false L8
-    jump L15
-
-  L8:
-    load_var client
-    is_type baml.ai.OpenAiResponses
-    pop_jump_if_false L9
-    jump L15
-
-  L9:
-    load_var client
-    is_type baml.ai.RoundRobin
-    pop_jump_if_false L10
-    jump L15
-
-  L10:
-    load_var client
-    is_type baml.ai.Fallback
-    pop_jump_if_false L11
-    jump L15
-
-  L11:
-    load_var client
-    is_type baml.ai.OpenAiStrict
-    pop_jump_if_false L12
-    jump L15
-
-  L12:
-    load_var client
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L13
-    jump L15
-
-  L13:
-    load_var client
-    is_type baml.llm.Client
-    pop_jump_if_false L14
-    jump L15
-
-  L14:
-    load_const "client override supports neither the legacy bridge nor HttpProvider"
-    init_instance baml.errors.Unsupported .message
-    throw
-
-  L15:
-    load_const "openai/gpt-4o"
-    sys_op baml.llm.from_shorthand
-    store_var renderer
-    load_var function_name
-    sys_op baml.llm.get_return_type
-    store_var return_type
-    load_var prompt_closure
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L16
-    jump L17
-
-  L16:
-    load_var prompt_closure
-    store_var _58
-    load_var2 13 14
-    call baml.llm.build_prompt_context
-    load_var _58
-    call_indirect
-    jump L18
-
-  L17:
-    load_var2 13 6
-    load_var2 3 14
-    sys_op baml.llm.PrimitiveClient.render_prompt
-
-  L18:
-    sys_op baml.ai.prompt_to_messages
-    store_var messages
+    load_var2 1 2
+    load_var2 3 4
+    call baml.llm.render_prompt
+    store_var _6
     load_type #0
-    load_var2 1 16
-    load_type baml.ai.HttpProvider
-    load_const "call_messages"
-    virtual_call nargs=2 ntypeargs=1
-    store_var _0
-    jump L32
-
-  L19:
-    load_var client
-    load_field .client_type
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    call baml.ops.equals_equals
-    pop_jump_if_false L31
-    load_var client
-    call baml.llm.Client.to_primitive_client
-    store_var primitive
-    load_var primitive
-    call baml.ai.native_provider_for
-    store_var _13
-    load_var _13
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L20
-    jump L31
-
-  L20:
-    load_var _13
-    store_var np
-    load_var function_name
-    sys_op baml.llm.get_return_type
-    store_var return_type
-    load_var2 7 6
-    load_var2 3 10
-    load_var prompt_closure
-    call baml.llm.PrimitiveClient.render_specialized_prompt
-    store_var specialized
-    load_var np
-    is_type baml.ai.ToolLoop
-    pop_jump_if_false L21
-    jump L30
-
-  L21:
-    load_var np
-    is_type baml.ai.Retry
-    pop_jump_if_false L22
-    jump L30
-
-  L22:
-    load_var np
-    is_type baml.ai.OpenAi
-    pop_jump_if_false L23
-    jump L30
-
-  L23:
-    load_var np
-    is_type baml.ai.Gemini
-    pop_jump_if_false L24
-    jump L30
-
-  L24:
-    load_var np
-    is_type baml.ai.OpenAiResponses
-    pop_jump_if_false L25
-    jump L30
-
-  L25:
-    load_var np
-    is_type baml.ai.RoundRobin
-    pop_jump_if_false L26
-    jump L30
-
-  L26:
-    load_var np
-    is_type baml.ai.Fallback
-    pop_jump_if_false L27
-    jump L30
-
-  L27:
-    load_var np
-    is_type baml.ai.OpenAiStrict
-    pop_jump_if_false L28
-    jump L30
-
-  L28:
-    load_var np
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L29
-    jump L30
-
-  L29:
-    load_var np
-    is_type baml.llm.Client
-    pop_jump_if_false L31
-
-  L30:
-    load_var specialized
-    sys_op baml.ai.prompt_to_messages
-    store_var _32
-    load_type #0
-    load_var2 9 12
-    load_type baml.ai.HttpProvider
-    load_const "call_messages"
-    virtual_call nargs=2 ntypeargs=1
-    store_var _0
-    jump L32
-
-  L31:
-    load_type #0
-    load_var2 1 6
-    load_var2 3 2
-    load_var prompt_closure
-    init_instance baml.llm.ExecutionContext .jinja_string, .args, .function_name, .prompt_closure
-    load_const 0
-    call baml.llm.Client.execute_oneshot
-    store_var _0
-
-  L32:
-    load_var _0
+    load_var2 1 5
+    call baml.ai.drive_call
     return
 }
 
@@ -28007,30 +27287,47 @@ function baml.llm.render_prompt(client: baml.ai.Provider, function_name: string,
     load_var function_name
     sys_op baml.llm.get_return_type
     store_var return_type
+    load_var2 2 4
+    call baml.llm.prompt_template_for
+    store_var template
     load_var client
     is_type baml.llm.Client
     pop_jump_if_false L1
-    jump L2
+    jump L4
 
   L1:
     load_const "openai/gpt-4o"
     sys_op baml.llm.from_shorthand
-    store_var primitive_client
+    store_var renderer
+    load_var prompt_closure
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
     jump L3
 
   L2:
-    load_var client
-    call baml.llm.Client.to_primitive_client
-    store_var primitive_client
+    load_var prompt_closure
+    store_var _19
+    load_var2 7 5
+    call baml.llm.build_prompt_context
+    load_var _19
+    call_indirect
+    jump L5
 
   L3:
-    load_var2 2 4
-    call baml.llm.prompt_template_for
-    store_var template
-    load_var2 6 7
+    load_var2 7 6
     load_var2 3 5
-    load_var prompt_closure
+    sys_op baml.llm.PrimitiveClient.render_prompt
+    jump L5
+
+  L4:
+    load_var client
+    call baml.llm.Client.to_primitive_client
+    load_var2 6 3
+    load_var2 5 4
     call baml.llm.PrimitiveClient.render_specialized_prompt
+
+  L5:
     return
 }
 
@@ -28043,174 +27340,14 @@ function baml.llm.stream_llm_function(client: baml.ai.Provider, function_name: s
     store_var prompt_closure
 
   L0:
-    load_var prompt_closure
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L1
-    jump L2
-
-  L1:
-    load_const ""
-    store_var jinja_string
-    jump L3
-
-  L2:
-    load_var function_name
-    sys_op baml.llm.get_jinja_template
-    store_var jinja_string
-
-  L3:
-    load_var client
-    is_type baml.llm.Client
-    pop_jump_if_false L4
-    jump L13
-
-  L4:
-    load_var client
-    is_type baml.ai.Retry
-    pop_jump_if_false L5
-    jump L9
-
-  L5:
-    load_var client
-    is_type baml.ai.OpenAi
-    pop_jump_if_false L6
-    jump L9
-
-  L6:
-    load_var client
-    is_type baml.ai.Fallback
-    pop_jump_if_false L7
-    jump L9
-
-  L7:
-    load_var client
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L8
-    jump L9
-
-  L8:
-    load_const "client override supports neither the legacy bridge nor Streaming"
-    init_instance baml.errors.Unsupported .message
-    throw
-
-  L9:
-    load_const "openai/gpt-4o"
-    sys_op baml.llm.from_shorthand
-    store_var renderer
-    load_var function_name
-    sys_op baml.llm.get_return_type
-    store_var return_type
-    load_var prompt_closure
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L10
-    jump L11
-
-  L10:
-    load_var prompt_closure
-    store_var _48
-    load_var2 13 14
-    call baml.llm.build_prompt_context
-    load_var _48
-    call_indirect
-    jump L12
-
-  L11:
-    load_var2 13 6
-    load_var2 3 14
-    sys_op baml.llm.PrimitiveClient.render_prompt
-
-  L12:
-    sys_op baml.ai.prompt_to_messages
-    store_var messages
+    load_var2 1 2
+    load_var2 3 4
+    call baml.llm.render_prompt
+    store_var _6
     load_type #0
     load_type #1
-    load_var2 1 16
-    load_type baml.ai.Streaming
-    load_const "stream_messages"
-    virtual_call nargs=2 ntypeargs=2
-    store_var _0
-    jump L20
-
-  L13:
-    load_var client
-    load_field .client_type
-    load_const baml.llm.ClientType.Primitive
-    alloc_variant baml.llm.ClientType
-    call baml.ops.equals_equals
-    pop_jump_if_false L19
-    load_var client
-    call baml.llm.Client.to_primitive_client
-    store_var primitive
-    load_var primitive
-    call baml.ai.native_provider_for
-    store_var _13
-    load_var _13
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L14
-    jump L19
-
-  L14:
-    load_var _13
-    store_var np
-    load_var function_name
-    sys_op baml.llm.get_return_type
-    store_var return_type
-    load_var2 7 6
-    load_var2 3 10
-    load_var prompt_closure
-    call baml.llm.PrimitiveClient.render_specialized_prompt
-    store_var specialized
-    load_var np
-    is_type baml.ai.Retry
-    pop_jump_if_false L15
-    jump L18
-
-  L15:
-    load_var np
-    is_type baml.ai.OpenAi
-    pop_jump_if_false L16
-    jump L18
-
-  L16:
-    load_var np
-    is_type baml.ai.Fallback
-    pop_jump_if_false L17
-    jump L18
-
-  L17:
-    load_var np
-    is_type baml.ai.Anthropic
-    pop_jump_if_false L19
-
-  L18:
-    load_var specialized
-    sys_op baml.ai.prompt_to_messages
-    store_var _26
-    load_type #0
-    load_type #1
-    load_var2 9 12
-    load_type baml.ai.Streaming
-    load_const "stream_messages"
-    virtual_call nargs=2 ntypeargs=2
-    store_var _0
-    jump L20
-
-  L19:
-    load_type #0
-    load_type #1
-    load_var2 1 6
-    load_var2 3 2
-    load_var prompt_closure
-    init_instance baml.llm.ExecutionContext .jinja_string, .args, .function_name, .prompt_closure
-    load_const 0
-    call baml.llm.Client.execute_stream
-    store_var _0
-
-  L20:
-    load_var _0
+    load_var2 1 5
+    call baml.ai.drive_stream
     return
 }
 

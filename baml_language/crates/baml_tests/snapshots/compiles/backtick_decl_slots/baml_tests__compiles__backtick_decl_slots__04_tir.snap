@@ -6,7 +6,7 @@ function user.Fast$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "Fast", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.Greet(name: string, client: baml.ai.Provider = Fast) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : string
+  baml.ai.drive_call<T>(client, Greet$render_prompt(name = name, client = client)) : string
 }
 function user.Greet$render_prompt(name: string, client: baml.ai.Provider = Fast) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst
@@ -27,7 +27,7 @@ function user.Greet$live(name: string, io: baml.ai.Channel, client: baml.ai.Prov
   baml.ai.drive_live(client, Greet$render_prompt(name = name, client = client), io) : baml.ai.Transcript
 }
 function user.Greet$stream(name: string, client: baml.ai.Provider = Fast) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, Greet$render_prompt(name = name, client = client)) : baml.llm.Stream<string | null, string>
 }
 function user.Greet$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = Fast) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>

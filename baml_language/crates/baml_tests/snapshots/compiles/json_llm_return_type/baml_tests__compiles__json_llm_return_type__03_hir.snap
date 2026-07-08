@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 function user.ExtractAny(client: baml.ai.Provider = TestClient) -> baml.json.json  [llm] {
-  baml.llm.call_llm_function(client, "ExtractAny", map {  })
+  baml.ai.drive_call(client, ExtractAny$render_prompt(client = client))
 }
 function user.ExtractAny$build_request(client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "ExtractAny", map {  })

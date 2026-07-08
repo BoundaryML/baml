@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.HelloWorld(name: string, client: baml.ai.Provider = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "HelloWorld", map { "name": name }) : string
+  baml.ai.drive_call<T>(client, HelloWorld$render_prompt(name = name, client = client)) : string
   !! 44..104: unresolved name: GPT4
   !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -42,7 +42,7 @@ class user.User {
   age: int
 }
 function user.HelloWorld$stream(name: string, client: baml.ai.Provider = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "HelloWorld", map { "name": name }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, HelloWorld$render_prompt(name = name, client = client)) : baml.llm.Stream<string | null, string>
   !! 44..104: unresolved name: GPT4
   !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }

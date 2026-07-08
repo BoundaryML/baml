@@ -50,9 +50,6 @@ function user.Fast$new() -> null {
 }
 
 function user.Greet(name: string, client: baml.ai.Provider) -> string {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -61,20 +58,12 @@ function user.Greet(name: string, client: baml.ai.Provider) -> string {
     store_var client
 
   L0:
-    load_var name
-    make_closure .<tagged(Greet, 0)>, 1
-    call baml.llm.prompt
-    store_var _5
+    load_var2 1 2
+    call user.Greet$render_prompt
+    store_var _4
     load_type string
-    load_var client
-    load_const "Greet"
-    load_deref ?1
-    load_const "name"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_var _5
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -233,9 +222,6 @@ function user.Greet$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (ba
 }
 
 function user.Greet$stream(name: string, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
-    load_var ?1
-    make_cell
-    store_var ?1
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -244,21 +230,13 @@ function user.Greet$stream(name: string, client: baml.ai.Provider) -> baml.llm.S
     store_var client
 
   L0:
-    load_var name
-    make_closure .<tagged(Greet$stream, 0)>, 1
-    call baml.llm.prompt
-    store_var _5
+    load_var2 1 2
+    call user.Greet$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "Greet"
-    load_deref ?1
-    load_const "name"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_var _5
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 

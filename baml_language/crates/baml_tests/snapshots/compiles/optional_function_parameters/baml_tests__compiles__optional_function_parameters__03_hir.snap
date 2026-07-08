@@ -8,7 +8,7 @@ class user.SearchService {
 type user.NarrowSearcher = (query: string, filter?: string?) -> string[]
 type user.Searcher = (query: string, max_results?: int) -> int
 function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })
+  baml.ai.drive_call(client, AskDocs$render_prompt(query = query, max_results = max_results, filter = filter, client = client))
 }
 function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter })

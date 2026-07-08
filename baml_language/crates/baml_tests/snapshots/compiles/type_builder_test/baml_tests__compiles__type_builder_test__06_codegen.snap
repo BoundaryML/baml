@@ -26,14 +26,12 @@ function user.Fn(client: baml.ai.Provider) -> string {
     store_var client
 
   L0:
-    load_type string
     load_var client
-    load_const "Fn"
+    call user.Fn$render_prompt
+    store_var _4
     load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 1 2
+    call baml.ai.drive_call
     return
 }
 
@@ -229,15 +227,13 @@ function user.Fn$stream(client: baml.ai.Provider) -> baml.llm.Stream<string | nu
     store_var client
 
   L0:
+    load_var client
+    call user.Fn$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "Fn"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 1 2
+    call baml.ai.drive_stream
     return
 }
 

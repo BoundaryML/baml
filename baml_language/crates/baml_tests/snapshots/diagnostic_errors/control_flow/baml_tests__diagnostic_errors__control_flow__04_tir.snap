@@ -122,7 +122,7 @@ function user.TestClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.LlmFunction(input: string, client: baml.ai.Provider = TestClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmFunction", map { "input": input }) : string
+  baml.ai.drive_call<T>(client, LlmFunction$render_prompt(input = input, client = client)) : string
 }
 function user.LlmFunction$render_prompt(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmFunction", map { "input": input }) : baml.llm.PromptAst
@@ -143,7 +143,7 @@ function user.LlmFunction$live(input: string, io: baml.ai.Channel, client: baml.
   baml.ai.drive_live(client, LlmFunction$render_prompt(input = input, client = client), io) : baml.ai.Transcript
 }
 function user.LlmFunction$stream(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmFunction", map { "input": input }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, LlmFunction$render_prompt(input = input, client = client)) : baml.llm.Stream<string | null, string>
 }
 function user.LlmFunction$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = TestClient) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>

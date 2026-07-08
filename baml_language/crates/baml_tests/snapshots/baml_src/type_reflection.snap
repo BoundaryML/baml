@@ -51,14 +51,12 @@ function type_reflection.GetBar(client: baml.ai.Provider) -> type_reflection.Bar
     store_var client
 
   L0:
-    load_type type_reflection.Bar
     load_var client
-    load_const "GetBar"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    call user.type_reflection.GetBar$render_prompt
+    store_var _3
+    load_type type_reflection.Bar
+    load_var2 1 2
+    call baml.ai.drive_call
     return
 }
 
@@ -217,15 +215,13 @@ function type_reflection.GetBar$stream(client: baml.ai.Provider) -> baml.llm.Str
     store_var client
 
   L0:
+    load_var client
+    call user.type_reflection.GetBar$render_prompt
+    store_var _3
     load_type type_reflection.Bar$stream | null
     load_type type_reflection.Bar
-    load_var client
-    load_const "GetBar"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 1 2
+    call baml.ai.drive_stream
     return
 }
 
@@ -259,14 +255,12 @@ function type_reflection.GetFoo(client: baml.ai.Provider) -> type_reflection.Foo
     store_var client
 
   L0:
-    load_type type_reflection.Foo
     load_var client
-    load_const "GetFoo"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    call user.type_reflection.GetFoo$render_prompt
+    store_var _3
+    load_type type_reflection.Foo
+    load_var2 1 2
+    call baml.ai.drive_call
     return
 }
 
@@ -425,15 +419,13 @@ function type_reflection.GetFoo$stream(client: baml.ai.Provider) -> baml.llm.Str
     store_var client
 
   L0:
+    load_var client
+    call user.type_reflection.GetFoo$render_prompt
+    store_var _3
     load_type type_reflection.Foo$stream | null
     load_type type_reflection.Foo
-    load_var client
-    load_const "GetFoo"
-    load_type string
-    load_type unknown
-    alloc_map 0
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 1 2
+    call baml.ai.drive_stream
     return
 }
 

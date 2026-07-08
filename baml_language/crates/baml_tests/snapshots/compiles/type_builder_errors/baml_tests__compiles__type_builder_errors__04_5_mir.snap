@@ -9,7 +9,7 @@ fn user.TypeBuilderFn(from_text: string, client: baml.ai.Provider) -> Resume {
     let _2: baml.ai.Provider // client // param
     let _3: bool
     let _4: baml.llm.Client[]
-    let _5: map<string, unknown>
+    let _5: baml.llm.PromptAst
     let _6: type
 
     bb0: {
@@ -24,12 +24,15 @@ fn user.TypeBuilderFn(from_text: string, client: baml.ai.Provider) -> Resume {
     }
 
     bb2: {
-        _5 = { const "from_text": copy _1 }: map<string, unknown>;
-        _6 = load_type(Resume);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _2, const "TypeBuilderFn", copy _5, const <omitted>) -> [bb3];
+        _5 = call const fn user.TypeBuilderFn$render_prompt(copy _1, copy _2) -> [bb3];
     }
 
     bb3: {
+        _6 = load_type(Resume);
+        _0 = call const fn baml.ai.drive_call<copy _6>(copy _2, copy _5) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }

@@ -647,7 +647,7 @@ function user.TriviaLongValueClientBlock$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.TestTarget(client: baml.ai.Provider = BasicClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "TestTarget", map {  }) : string
+  baml.ai.drive_call<T>(client, TestTarget$render_prompt(client = client)) : string
 }
 function user.TestTarget$render_prompt(client: baml.ai.Provider = BasicClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "TestTarget", map {  }) : baml.llm.PromptAst
@@ -680,7 +680,7 @@ function user.SameLineClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "SameLineClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.TestTarget$stream(client: baml.ai.Provider = BasicClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "TestTarget", map {  }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, TestTarget$render_prompt(client = client)) : baml.llm.Stream<string | null, string>
 }
 function user.TestTarget$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = BasicClient) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>
@@ -971,7 +971,7 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws nev
   }
 }
 function user.LlmBasic(name: string, client: baml.ai.Provider = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmBasic", map { "name": name }) : string
+  baml.ai.drive_call<T>(client, LlmBasic$render_prompt(name = name, client = client)) : string
   !! 11147..11203: unresolved name: GPT4
   !! 11147..11203: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -1006,7 +1006,7 @@ function user.LlmBasic$live(name: string, io: baml.ai.Channel, client: baml.ai.P
   !! 11147..11203: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.LlmMultiLine(text: string, client: baml.ai.Provider = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmMultiLine", map { "text": text }) : string
+  baml.ai.drive_call<T>(client, LlmMultiLine$render_prompt(text = text, client = client)) : string
   !! 11307..11428: unresolved name: GPT4
   !! 11307..11428: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -1041,7 +1041,7 @@ function user.LlmMultiLine$live(text: string, io: baml.ai.Channel, client: baml.
   !! 11307..11428: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.LlmStringClient(text: string, client: baml.ai.Provider = ...) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmStringClient", map { "text": text }) : string
+  baml.ai.drive_call<T>(client, LlmStringClient$render_prompt(text = text, client = client)) : string
 }
 function user.LlmStringClient$render_prompt(text: string, client: baml.ai.Provider = ...) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmStringClient", map { "text": text }) : baml.llm.PromptAst
@@ -1062,7 +1062,7 @@ function user.LlmStringClient$live(text: string, io: baml.ai.Channel, client: ba
   baml.ai.drive_live(client, LlmStringClient$render_prompt(text = text, client = client), io) : baml.ai.Transcript
 }
 function user.LlmReversedOrder(text: string, client: baml.ai.Provider = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmReversedOrder", map { "text": text }) : string
+  baml.ai.drive_call<T>(client, LlmReversedOrder$render_prompt(text = text, client = client)) : string
   !! 11707..11763: unresolved name: GPT4
   !! 11707..11763: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -1097,7 +1097,7 @@ function user.LlmReversedOrder$live(text: string, io: baml.ai.Channel, client: b
   !! 11707..11763: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.ai.Provider = GPT4) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
+  baml.ai.drive_call<T>(client, LlmWithLongSignature$render_prompt(first_context = first_context, second_context = second_context, third_context = third_context, user_query = user_query, client = client)) : string
   !! 11949..12099: unresolved name: GPT4
   !! 11949..12099: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -1162,7 +1162,7 @@ function user.NoColonComplexTypes(items: int[], mapping: map<string, int>) -> st
   }
 }
 function user.LlmBasic$stream(name: string, client: baml.ai.Provider = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmBasic", map { "name": name }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, LlmBasic$render_prompt(name = name, client = client)) : baml.llm.Stream<string | null, string>
   !! 11147..11203: unresolved name: GPT4
   !! 11147..11203: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -1177,7 +1177,7 @@ function user.LlmBasic$parse(json: string, client: baml.ai.Provider = GPT4) -> s
   !! 11147..11203: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.LlmMultiLine$stream(text: string, client: baml.ai.Provider = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmMultiLine", map { "text": text }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, LlmMultiLine$render_prompt(text = text, client = client)) : baml.llm.Stream<string | null, string>
   !! 11307..11428: unresolved name: GPT4
   !! 11307..11428: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -1192,7 +1192,7 @@ function user.LlmMultiLine$parse(json: string, client: baml.ai.Provider = GPT4) 
   !! 11307..11428: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.LlmStringClient$stream(text: string, client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmStringClient", map { "text": text }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, LlmStringClient$render_prompt(text = text, client = client)) : baml.llm.Stream<string | null, string>
 }
 function user.LlmStringClient$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>
@@ -1201,7 +1201,7 @@ function user.LlmStringClient$parse(json: string, client: baml.ai.Provider = ...
   baml.llm.parse<TFinal>(json) : string
 }
 function user.LlmReversedOrder$stream(text: string, client: baml.ai.Provider = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmReversedOrder", map { "text": text }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, LlmReversedOrder$render_prompt(text = text, client = client)) : baml.llm.Stream<string | null, string>
   !! 11707..11763: unresolved name: GPT4
   !! 11707..11763: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -1216,7 +1216,7 @@ function user.LlmReversedOrder$parse(json: string, client: baml.ai.Provider = GP
   !! 11707..11763: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.LlmWithLongSignature$stream(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.ai.Provider = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, LlmWithLongSignature$render_prompt(first_context = first_context, second_context = second_context, third_context = third_context, user_query = user_query, client = client)) : baml.llm.Stream<string | null, string>
   !! 11949..12099: unresolved name: GPT4
   !! 11949..12099: type mismatch: expected baml.ai.Provider, got unknown
 }

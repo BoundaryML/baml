@@ -6,7 +6,7 @@ function user.OpenAIImageResponses$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "OpenAIImageResponses", provider: "openai-responses", options: baml.llm.PrimitiveClientOptions { model: "gpt-4.1", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [map { "type": "image_generation", "size": "1024x1024", "quality": "low" }] } } } : baml.llm.PrimitiveClient
 }
 function user.GenerateImage(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image throws never {
-  baml.llm.call_llm_function<T>(client, "GenerateImage", map { "prompt": prompt }) : image
+  baml.ai.drive_call<T>(client, GenerateImage$render_prompt(prompt = prompt, client = client)) : image
 }
 function user.GenerateImage$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GenerateImage", map { "prompt": prompt }) : baml.llm.PromptAst
@@ -27,7 +27,7 @@ function user.GenerateImage$live(prompt: string, io: baml.ai.Channel, client: ba
   baml.ai.drive_live(client, GenerateImage$render_prompt(prompt = prompt, client = client), io) : baml.ai.Transcript
 }
 function user.GenerateImageSet(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> image[] throws never {
-  baml.llm.call_llm_function<T>(client, "GenerateImageSet", map { "prompt": prompt }) : image[]
+  baml.ai.drive_call<T>(client, GenerateImageSet$render_prompt(prompt = prompt, client = client)) : image[]
 }
 function user.GenerateImageSet$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GenerateImageSet", map { "prompt": prompt }) : baml.llm.PromptAst
@@ -48,7 +48,7 @@ function user.GenerateImageSet$live(prompt: string, io: baml.ai.Channel, client:
   baml.ai.drive_live(client, GenerateImageSet$render_prompt(prompt = prompt, client = client), io) : baml.ai.Transcript
 }
 function user.GenerateMixedImageNarrative(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> (image | string)[] throws never {
-  baml.llm.call_llm_function<T>(client, "GenerateMixedImag...", map { "prompt": prompt }) : (image | string)[]
+  baml.ai.drive_call<T>(client, GenerateMixedImageNarrative$render_prompt(prompt = prompt, client = client)) : (image | string)[]
 }
 function user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GenerateMixedImag...", map { "prompt": prompt }) : baml.llm.PromptAst
@@ -69,7 +69,7 @@ function user.GenerateMixedImageNarrative$live(prompt: string, io: baml.ai.Chann
   baml.ai.drive_live(client, GenerateMixedImageNarrative$render_prompt(prompt = prompt, client = client), io) : baml.ai.Transcript
 }
 function user.GenerateImage$stream(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.Stream<image, image> throws never {
-  baml.llm.stream_llm_function(client, "GenerateImage", map { "prompt": prompt }) : baml.llm.Stream<image, image>
+  baml.ai.drive_stream(client, GenerateImage$render_prompt(prompt = prompt, client = client)) : baml.llm.Stream<image, image>
 }
 function user.GenerateImage$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.Stream<image, image> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<image, image>
@@ -78,7 +78,7 @@ function user.GenerateImage$parse(json: string, client: baml.ai.Provider = OpenA
   baml.llm.parse<TFinal>(json) : image
 }
 function user.GenerateImageSet$stream(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.Stream<image[], image[]> throws never {
-  baml.llm.stream_llm_function(client, "GenerateImageSet", map { "prompt": prompt }) : baml.llm.Stream<image[], image[]>
+  baml.ai.drive_stream(client, GenerateImageSet$render_prompt(prompt = prompt, client = client)) : baml.llm.Stream<image[], image[]>
 }
 function user.GenerateImageSet$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.Stream<image[], image[]> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<image[], image[]>
@@ -87,7 +87,7 @@ function user.GenerateImageSet$parse(json: string, client: baml.ai.Provider = Op
   baml.llm.parse<TFinal>(json) : image[]
 }
 function user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.Stream<(image | string)[], (image | string)[]> throws never {
-  baml.llm.stream_llm_function(client, "GenerateMixedImag...", map { "prompt": prompt }) : baml.llm.Stream<(image | string)[], (image | string)[]>
+  baml.ai.drive_stream(client, GenerateMixedImageNarrative$render_prompt(prompt = prompt, client = client)) : baml.llm.Stream<(image | string)[], (image | string)[]>
 }
 function user.GenerateMixedImageNarrative$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = OpenAIImageResponses) -> baml.llm.Stream<(image | string)[], (image | string)[]> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<(image | string)[], (image | string)[]>

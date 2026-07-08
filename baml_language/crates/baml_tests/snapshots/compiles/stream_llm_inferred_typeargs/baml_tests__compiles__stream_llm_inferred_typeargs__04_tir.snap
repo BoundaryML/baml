@@ -6,7 +6,7 @@ function user.TestClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: "http://localhost:...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.TestFunc(input: string, client: baml.ai.Provider = TestClient) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "TestFunc", map { "input": input }) : string
+  baml.ai.drive_call<T>(client, TestFunc$render_prompt(input = input, client = client)) : string
 }
 function user.TestFunc$render_prompt(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "TestFunc", map { "input": input }) : baml.llm.PromptAst
@@ -32,7 +32,7 @@ function user.call_stream_inferred() -> baml.llm.Stream<null | string, string> t
   }
 }
 function user.TestFunc$stream(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "TestFunc", map { "input": input }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, TestFunc$render_prompt(input = input, client = client)) : baml.llm.Stream<string | null, string>
 }
 function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = TestClient) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>

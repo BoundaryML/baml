@@ -42,19 +42,13 @@ function user.AskDocs(query: string, max_results: int, filter: string, client: b
     store_var client
 
   L2:
-    load_type string
-    load_var client
-    load_const "AskDocs"
     load_var2 1 2
-    load_var filter
-    load_const "query"
-    load_const "max_results"
-    load_const "filter"
+    load_var2 3 4
+    call user.AskDocs$render_prompt
+    store_var _8
     load_type string
-    load_type unknown
-    alloc_map 3
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 4 5
+    call baml.ai.drive_call
     return
 }
 
@@ -307,20 +301,14 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string, cl
     store_var client
 
   L2:
+    load_var2 1 2
+    load_var2 3 4
+    call user.AskDocs$render_prompt
+    store_var _8
     load_type string | null
     load_type string
-    load_var client
-    load_const "AskDocs"
-    load_var2 1 2
-    load_var filter
-    load_const "query"
-    load_const "max_results"
-    load_const "filter"
-    load_type string
-    load_type unknown
-    alloc_map 3
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 4 5
+    call baml.ai.drive_stream
     return
 }
 

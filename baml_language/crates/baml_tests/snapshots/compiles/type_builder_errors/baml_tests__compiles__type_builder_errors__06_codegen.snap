@@ -26,16 +26,12 @@ function user.TypeBuilderFn(from_text: string, client: baml.ai.Provider) -> Resu
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.TypeBuilderFn$render_prompt
+    store_var _5
     load_type Resume
-    load_var client
-    load_const "TypeBuilderFn"
-    load_var from_text
-    load_const "from_text"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -237,17 +233,13 @@ function user.TypeBuilderFn$stream(from_text: string, client: baml.ai.Provider) 
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.TypeBuilderFn$render_prompt
+    store_var _5
     load_type Resume$stream | null
     load_type Resume
-    load_var client
-    load_const "TypeBuilderFn"
-    load_var from_text
-    load_const "from_text"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 

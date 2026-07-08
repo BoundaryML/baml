@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.Fn(client: baml.ai.Provider = ...) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "Fn", map {  }) : string
+  baml.ai.drive_call<T>(client, Fn$render_prompt(client = client)) : string
 }
 function user.Fn$render_prompt(client: baml.ai.Provider = ...) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "Fn", map {  }) : baml.llm.PromptAst
@@ -28,7 +28,7 @@ class user.TopLevelClass {
 }
 enum user.TopLevelEnum
 function user.Fn$stream(client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "Fn", map {  }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, Fn$render_prompt(client = client)) : baml.llm.Stream<string | null, string>
 }
 function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>

@@ -681,16 +681,12 @@ function ai_scenarios.AskOnce(q: string, client: baml.ai.Provider) -> string {
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.AskOnce$render_prompt
+    store_var _4
     load_type string
-    load_var client
-    load_const "AskOnce"
-    load_var q
-    load_const "q"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -855,17 +851,13 @@ function ai_scenarios.AskOnce$stream(q: string, client: baml.ai.Provider) -> bam
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.AskOnce$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "AskOnce"
-    load_var q
-    load_const "q"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -894,122 +886,134 @@ function ai_scenarios.AskViaCall(p: baml.ai.Provider) -> string {
     load_var p
     is_type baml.ai.ToolLoop
     pop_jump_if_false L0
-    jump L19
+    jump L21
 
   L0:
     load_var p
     is_type baml.ai.Retry
     pop_jump_if_false L1
-    jump L19
+    jump L21
 
   L1:
     load_var p
     is_type baml.ai.OpenAi
     pop_jump_if_false L2
-    jump L19
+    jump L21
 
   L2:
     load_var p
     is_type baml.ai.Gemini
     pop_jump_if_false L3
-    jump L19
+    jump L21
 
   L3:
     load_var p
     is_type baml.ai.OpenAiResponses
     pop_jump_if_false L4
-    jump L19
+    jump L21
 
   L4:
     load_var p
     is_type baml.ai.RoundRobin
     pop_jump_if_false L5
-    jump L19
+    jump L21
 
   L5:
     load_var p
     is_type baml.ai.Fallback
     pop_jump_if_false L6
-    jump L19
+    jump L21
 
   L6:
     load_var p
     is_type baml.ai.OpenAiStrict
     pop_jump_if_false L7
-    jump L19
+    jump L21
 
   L7:
     load_var p
     is_type baml.ai.Anthropic
     pop_jump_if_false L8
-    jump L19
+    jump L21
 
   L8:
     load_var p
     is_type baml.llm.Client
     pop_jump_if_false L9
-    jump L19
+    jump L21
 
   L9:
     load_var p
     is_type ai_scenarios.MeteredEcho
     pop_jump_if_false L10
-    jump L19
+    jump L21
 
   L10:
     load_var p
     is_type ai_scenarios.EchoProvider
     pop_jump_if_false L11
-    jump L19
+    jump L21
 
   L11:
     load_var p
     is_type ai_scenarios.CountingEcho
     pop_jump_if_false L12
-    jump L19
+    jump L21
 
   L12:
     load_var p
     is_type ai_scenarios.AlwaysFailProvider
     pop_jump_if_false L13
-    jump L19
+    jump L21
 
   L13:
     load_var p
     is_type baml.ai.Retry
     pop_jump_if_false L14
-    jump L18
+    jump L20
 
   L14:
     load_var p
     is_type baml.ai.OpenAi
     pop_jump_if_false L15
-    jump L18
+    jump L20
 
   L15:
     load_var p
-    is_type baml.ai.Fallback
+    is_type baml.ai.RoundRobin
     pop_jump_if_false L16
-    jump L18
+    jump L20
 
   L16:
     load_var p
-    is_type baml.ai.Anthropic
+    is_type baml.ai.Fallback
     pop_jump_if_false L17
-    jump L18
+    jump L20
 
   L17:
-    load_const "neither"
+    load_var p
+    is_type baml.ai.Anthropic
+    pop_jump_if_false L18
     jump L20
 
   L18:
-    load_const "stream-only"
+    load_var p
+    is_type baml.llm.Client
+    pop_jump_if_false L19
     jump L20
 
   L19:
-    load_const "http"
+    load_const "neither"
+    jump L22
 
   L20:
+    load_const "stream-only"
+    jump L22
+
+  L21:
+    load_const "http"
+
+  L22:
     return
 }
 
@@ -1511,16 +1515,12 @@ function ai_scenarios.ExtractPerson(doc: string, client: baml.ai.Provider) -> ai
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.ExtractPerson$render_prompt
+    store_var _4
     load_type ai_scenarios.S02Person
-    load_var client
-    load_const "ExtractPerson"
-    load_var doc
-    load_const "doc"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -1685,17 +1685,13 @@ function ai_scenarios.ExtractPerson$stream(doc: string, client: baml.ai.Provider
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.ExtractPerson$render_prompt
+    store_var _4
     load_type ai_scenarios.S02Person$stream | null
     load_type ai_scenarios.S02Person
-    load_var client
-    load_const "ExtractPerson"
-    load_var doc
-    load_const "doc"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -2095,16 +2091,12 @@ function ai_scenarios.ResearchIt(q: string, client: baml.ai.Provider) -> string 
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.ResearchIt$render_prompt
+    store_var _4
     load_type string
-    load_var client
-    load_const "ResearchIt"
-    load_var q
-    load_const "q"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -2269,17 +2261,13 @@ function ai_scenarios.ResearchIt$stream(q: string, client: baml.ai.Provider) -> 
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.ResearchIt$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "ResearchIt"
-    load_var q
-    load_const "q"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -2939,16 +2927,12 @@ function ai_scenarios.StreamStory(topic: string, client: baml.ai.Provider) -> st
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.StreamStory$render_prompt
+    store_var _4
     load_type string
-    load_var client
-    load_const "StreamStory"
-    load_var topic
-    load_const "topic"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -3113,17 +3097,13 @@ function ai_scenarios.StreamStory$stream(topic: string, client: baml.ai.Provider
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.StreamStory$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "StreamStory"
-    load_var topic
-    load_const "topic"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -3157,16 +3137,12 @@ function ai_scenarios.Summarize(q: string, client: baml.ai.Provider) -> string {
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.Summarize$render_prompt
+    store_var _4
     load_type string
-    load_var client
-    load_const "Summarize"
-    load_var q
-    load_const "q"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -3331,17 +3307,13 @@ function ai_scenarios.Summarize$stream(q: string, client: baml.ai.Provider) -> b
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.Summarize$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "Summarize"
-    load_var q
-    load_const "q"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -3375,16 +3347,12 @@ function ai_scenarios.ThinkHard(q: string, client: baml.ai.Provider) -> string {
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.ThinkHard$render_prompt
+    store_var _4
     load_type string
-    load_var client
-    load_const "ThinkHard"
-    load_var q
-    load_const "q"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -3549,17 +3517,13 @@ function ai_scenarios.ThinkHard$stream(q: string, client: baml.ai.Provider) -> b
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.ThinkHard$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "ThinkHard"
-    load_var q
-    load_const "q"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -3593,16 +3557,12 @@ function ai_scenarios.VoiceChat(instructions: string, client: baml.ai.Provider) 
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.VoiceChat$render_prompt
+    store_var _4
     load_type string
-    load_var client
-    load_const "VoiceChat"
-    load_var instructions
-    load_const "instructions"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -3767,17 +3727,13 @@ function ai_scenarios.VoiceChat$stream(instructions: string, client: baml.ai.Pro
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.ai_scenarios.VoiceChat$render_prompt
+    store_var _4
     load_type string | null
     load_type string
-    load_var client
-    load_const "VoiceChat"
-    load_var instructions
-    load_const "instructions"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 

@@ -6,7 +6,7 @@ function user.TestClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.ExtractAny(client: baml.ai.Provider = TestClient) -> baml.json.json throws never {
-  baml.llm.call_llm_function<T>(client, "ExtractAny", map {  }) : baml.json.json
+  baml.ai.drive_call<T>(client, ExtractAny$render_prompt(client = client)) : baml.json.json
 }
 function user.ExtractAny$render_prompt(client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "ExtractAny", map {  }) : baml.llm.PromptAst
@@ -27,7 +27,7 @@ function user.ExtractAny$live(io: baml.ai.Channel, client: baml.ai.Provider = Te
   baml.ai.drive_live(client, ExtractAny$render_prompt(client = client), io) : baml.ai.Transcript
 }
 function user.ExtractAny$stream(client: baml.ai.Provider = TestClient) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> throws never {
-  baml.llm.stream_llm_function(client, "ExtractAny", map {  }) : baml.llm.Stream<baml.json.json$stream | null, baml.json.json>
+  baml.ai.drive_stream(client, ExtractAny$render_prompt(client = client)) : baml.llm.Stream<baml.json.json$stream | null, baml.json.json>
 }
 function user.ExtractAny$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = TestClient) -> baml.llm.Stream<baml.json.json$stream | null, baml.json.json> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<baml.json.json$stream | null, baml.json.json>

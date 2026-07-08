@@ -26,16 +26,12 @@ function user.GenerateImage(prompt: string, client: baml.ai.Provider) -> image {
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.GenerateImage$render_prompt
+    store_var _4
     load_type image
-    load_var client
-    load_const "GenerateImage"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -181,17 +177,13 @@ function user.GenerateImage$stream(prompt: string, client: baml.ai.Provider) -> 
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.GenerateImage$render_prompt
+    store_var _4
     load_type image
     load_type image
-    load_var client
-    load_const "GenerateImage"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -225,16 +217,12 @@ function user.GenerateImageSet(prompt: string, client: baml.ai.Provider) -> imag
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.GenerateImageSet$render_prompt
+    store_var _4
     load_type image[]
-    load_var client
-    load_const "GenerateImageSet"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -380,17 +368,13 @@ function user.GenerateImageSet$stream(prompt: string, client: baml.ai.Provider) 
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.GenerateImageSet$render_prompt
+    store_var _4
     load_type image[]
     load_type image[]
-    load_var client
-    load_const "GenerateImageSet"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 
@@ -424,16 +408,12 @@ function user.GenerateMixedImageNarrative(prompt: string, client: baml.ai.Provid
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.GenerateMixedImageNarrative$render_prompt
+    store_var _4
     load_type image | string[]
-    load_var client
-    load_const "GenerateMixedImageNarrative"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.call_llm_function
+    load_var2 2 3
+    call baml.ai.drive_call
     return
 }
 
@@ -579,17 +559,13 @@ function user.GenerateMixedImageNarrative$stream(prompt: string, client: baml.ai
     store_var client
 
   L0:
+    load_var2 1 2
+    call user.GenerateMixedImageNarrative$render_prompt
+    store_var _4
     load_type image | string[]
     load_type image | string[]
-    load_var client
-    load_const "GenerateMixedImageNarrative"
-    load_var prompt
-    load_const "prompt"
-    load_type string
-    load_type unknown
-    alloc_map 1
-    load_const <omitted>
-    call baml.llm.stream_llm_function
+    load_var2 2 3
+    call baml.ai.drive_stream
     return
 }
 

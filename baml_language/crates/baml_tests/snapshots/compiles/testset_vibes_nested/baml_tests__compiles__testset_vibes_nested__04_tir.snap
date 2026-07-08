@@ -11,7 +11,7 @@ class user.Sentiment {
   reasoning: string
 }
 function user.ClassifySentiment(text: string, client: baml.ai.Provider = GPT4o) -> user.Sentiment throws never {
-  baml.llm.call_llm_function<T>(client, "ClassifySentiment", map { "text": text }) : user.Sentiment
+  baml.ai.drive_call<T>(client, ClassifySentiment$render_prompt(text = text, client = client)) : user.Sentiment
 }
 function user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider = GPT4o) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "ClassifySentiment", map { "text": text }) : baml.llm.PromptAst
@@ -32,7 +32,7 @@ function user.ClassifySentiment$live(text: string, io: baml.ai.Channel, client: 
   baml.ai.drive_live(client, ClassifySentiment$render_prompt(text = text, client = client), io) : baml.ai.Transcript
 }
 function user.GenerateTests(count: int, topic: string, client: baml.ai.Provider = GPT4o) -> string[] throws never {
-  baml.llm.call_llm_function<T>(client, "GenerateTests", map { "count": count, "topic": topic }) : string[]
+  baml.ai.drive_call<T>(client, GenerateTests$render_prompt(count = count, topic = topic, client = client)) : string[]
 }
 function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.Provider = GPT4o) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.llm.PromptAst
@@ -67,7 +67,7 @@ function user.Foo() -> string | image throws never {
   }
 }
 function user.ClassifySentiment2(text: string, client: baml.ai.Provider = GPT4o) -> string throws never {
-  baml.llm.call_llm_function<T>(client, "ClassifySentiment2", map { "text": text }) : string
+  baml.ai.drive_call<T>(client, ClassifySentiment2$render_prompt(text = text, client = client)) : string
 }
 function user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider = GPT4o) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "ClassifySentiment2", map { "text": text }) : baml.llm.PromptAst
@@ -121,7 +121,7 @@ class user.Sentiment$stream {
   reasoning: string | null
 }
 function user.ClassifySentiment$stream(text: string, client: baml.ai.Provider = GPT4o) -> baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment> throws never {
-  baml.llm.stream_llm_function(client, "ClassifySentiment", map { "text": text }) : baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>
+  baml.ai.drive_stream(client, ClassifySentiment$render_prompt(text = text, client = client)) : baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>
 }
 function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = GPT4o) -> baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<user.Sentiment$stream | null, user.Sentiment>
@@ -130,7 +130,7 @@ function user.ClassifySentiment$parse(json: string, client: baml.ai.Provider = G
   baml.llm.parse<TFinal>(json) : user.Sentiment
 }
 function user.GenerateTests$stream(count: int, topic: string, client: baml.ai.Provider = GPT4o) -> baml.llm.Stream<string[], string[]> throws never {
-  baml.llm.stream_llm_function(client, "GenerateTests", map { "count": count, "topic": topic }) : baml.llm.Stream<string[], string[]>
+  baml.ai.drive_stream(client, GenerateTests$render_prompt(count = count, topic = topic, client = client)) : baml.llm.Stream<string[], string[]>
 }
 function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = GPT4o) -> baml.llm.Stream<string[], string[]> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string[], string[]>
@@ -139,7 +139,7 @@ function user.GenerateTests$parse(json: string, client: baml.ai.Provider = GPT4o
   baml.llm.parse<TFinal>(json) : string[]
 }
 function user.ClassifySentiment2$stream(text: string, client: baml.ai.Provider = GPT4o) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.stream_llm_function(client, "ClassifySentiment2", map { "text": text }) : baml.llm.Stream<string | null, string>
+  baml.ai.drive_stream(client, ClassifySentiment2$render_prompt(text = text, client = client)) : baml.llm.Stream<string | null, string>
 }
 function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = GPT4o) -> baml.llm.Stream<string | null, string> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>

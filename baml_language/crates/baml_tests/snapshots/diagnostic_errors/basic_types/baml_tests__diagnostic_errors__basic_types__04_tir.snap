@@ -27,7 +27,7 @@ class user.ClassAttributes$stream {
   name: string | null
 }
 function user.GetUser(id: int, client: baml.ai.Provider = ...) -> user.User throws never {
-  baml.llm.call_llm_function<T>(client, "GetUser", map { "id": id }) : user.User
+  baml.ai.drive_call<T>(client, GetUser$render_prompt(id = id, client = client)) : user.User
 }
 function user.GetUser$render_prompt(id: int, client: baml.ai.Provider = ...) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "GetUser", map { "id": id }) : baml.llm.PromptAst
@@ -48,7 +48,7 @@ function user.GetUser$live(id: int, io: baml.ai.Channel, client: baml.ai.Provide
   baml.ai.drive_live(client, GetUser$render_prompt(id = id, client = client), io) : baml.ai.Transcript
 }
 function user.GetStatus(client: baml.ai.Provider = GPT4) -> user.Status throws never {
-  baml.llm.call_llm_function<T>(client, "GetStatus", map {  }) : user.Status
+  baml.ai.drive_call<T>(client, GetStatus$render_prompt(client = client)) : user.Status
   !! 128..173: unresolved name: GPT4
   !! 128..173: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -83,7 +83,7 @@ function user.GetStatus$live(io: baml.ai.Channel, client: baml.ai.Provider = GPT
   !! 128..173: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.GetMixedList(client: baml.ai.Provider = GPT4) -> (int | string)[] throws never {
-  baml.llm.call_llm_function<T>(client, "GetMixedList", map {  }) : (int | string)[]
+  baml.ai.drive_call<T>(client, GetMixedList$render_prompt(client = client)) : (int | string)[]
   !! 259..308: unresolved name: GPT4
   !! 259..308: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -118,7 +118,7 @@ function user.GetMixedList$live(io: baml.ai.Channel, client: baml.ai.Provider = 
   !! 259..308: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.GetMixedMap(client: baml.ai.Provider = GPT4) -> map<string, int | string> throws never {
-  baml.llm.call_llm_function<T>(client, "GetMixedMap", map {  }) : map<string, int | string>
+  baml.ai.drive_call<T>(client, GetMixedMap$render_prompt(client = client)) : map<string, int | string>
   !! 362..410: unresolved name: GPT4
   !! 362..410: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -153,7 +153,7 @@ function user.GetMixedMap$live(io: baml.ai.Channel, client: baml.ai.Provider = G
   !! 362..410: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.GetUser$stream(id: int, client: baml.ai.Provider = ...) -> baml.llm.Stream<user.User$stream | null, user.User> throws never {
-  baml.llm.stream_llm_function(client, "GetUser", map { "id": id }) : baml.llm.Stream<user.User$stream | null, user.User>
+  baml.ai.drive_stream(client, GetUser$render_prompt(id = id, client = client)) : baml.llm.Stream<user.User$stream | null, user.User>
 }
 function user.GetUser$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = ...) -> baml.llm.Stream<user.User$stream | null, user.User> throws never {
   baml.llm.make_stream_for(client, sse) : baml.llm.Stream<user.User$stream | null, user.User>
@@ -162,7 +162,7 @@ function user.GetUser$parse(json: string, client: baml.ai.Provider = ...) -> use
   baml.llm.parse<TFinal>(json) : user.User
 }
 function user.GetStatus$stream(client: baml.ai.Provider = GPT4) -> baml.llm.Stream<user.Status | null, user.Status> throws never {
-  baml.llm.stream_llm_function(client, "GetStatus", map {  }) : baml.llm.Stream<user.Status | null, user.Status>
+  baml.ai.drive_stream(client, GetStatus$render_prompt(client = client)) : baml.llm.Stream<user.Status | null, user.Status>
   !! 128..173: unresolved name: GPT4
   !! 128..173: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -177,7 +177,7 @@ function user.GetStatus$parse(json: string, client: baml.ai.Provider = GPT4) -> 
   !! 128..173: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.GetMixedList$stream(client: baml.ai.Provider = GPT4) -> baml.llm.Stream<(int | string)[], (int | string)[]> throws never {
-  baml.llm.stream_llm_function(client, "GetMixedList", map {  }) : baml.llm.Stream<(int | string)[], (int | string)[]>
+  baml.ai.drive_stream(client, GetMixedList$render_prompt(client = client)) : baml.llm.Stream<(int | string)[], (int | string)[]>
   !! 259..308: unresolved name: GPT4
   !! 259..308: type mismatch: expected baml.ai.Provider, got unknown
 }
@@ -192,7 +192,7 @@ function user.GetMixedList$parse(json: string, client: baml.ai.Provider = GPT4) 
   !! 259..308: type mismatch: expected baml.ai.Provider, got unknown
 }
 function user.GetMixedMap$stream(client: baml.ai.Provider = GPT4) -> baml.llm.Stream<map<string, int | string>, map<string, int | string>> throws never {
-  baml.llm.stream_llm_function(client, "GetMixedMap", map {  }) : baml.llm.Stream<map<string, int | string>, map<string, int | string>>
+  baml.ai.drive_stream(client, GetMixedMap$render_prompt(client = client)) : baml.llm.Stream<map<string, int | string>, map<string, int | string>>
   !! 362..410: unresolved name: GPT4
   !! 362..410: type mismatch: expected baml.ai.Provider, got unknown
 }

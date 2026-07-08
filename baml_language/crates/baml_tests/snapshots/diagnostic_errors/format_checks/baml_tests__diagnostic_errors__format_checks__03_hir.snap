@@ -284,7 +284,7 @@ function user.StringProviderClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: "mistralai/mistral...", base_url: "https://openroute...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TestTarget(client: baml.ai.Provider = BasicClient) -> string  [llm] {
-  baml.llm.call_llm_function(client, "TestTarget", map {  })
+  baml.ai.drive_call(client, TestTarget$render_prompt(client = client))
 }
 function user.TestTarget$build_request(client: baml.ai.Provider = BasicClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "TestTarget", map {  })
@@ -378,7 +378,7 @@ function user.FinalExpr(a: int, b: int) -> int  [expr] {
   {  } a Add b
 }
 function user.LlmBasic(name: string, client: baml.ai.Provider = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmBasic", map { "name": name })
+  baml.ai.drive_call(client, LlmBasic$render_prompt(name = name, client = client))
 }
 function user.LlmBasic$build_request(name: string, client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmBasic", map { "name": name })
@@ -399,7 +399,7 @@ function user.LlmBasic$with(name: string, project: (baml.ai.ResponseMeta) -> V t
   baml.ai.drive_with(client, LlmBasic$render_prompt(name = name, client = client), project)
 }
 function user.LlmMultiLine(text: string, client: baml.ai.Provider = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmMultiLine", map { "text": text })
+  baml.ai.drive_call(client, LlmMultiLine$render_prompt(text = text, client = client))
 }
 function user.LlmMultiLine$build_request(text: string, client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmMultiLine", map { "text": text })
@@ -420,7 +420,7 @@ function user.LlmMultiLine$with(text: string, project: (baml.ai.ResponseMeta) ->
   baml.ai.drive_with(client, LlmMultiLine$render_prompt(text = text, client = client), project)
 }
 function user.LlmReversedOrder(text: string, client: baml.ai.Provider = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmReversedOrder", map { "text": text })
+  baml.ai.drive_call(client, LlmReversedOrder$render_prompt(text = text, client = client))
 }
 function user.LlmReversedOrder$build_request(text: string, client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmReversedOrder", map { "text": text })
@@ -441,7 +441,7 @@ function user.LlmReversedOrder$with(text: string, project: (baml.ai.ResponseMeta
   baml.ai.drive_with(client, LlmReversedOrder$render_prompt(text = text, client = client), project)
 }
 function user.LlmStringClient(text: string, client: baml.ai.Provider = ...) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmStringClient", map { "text": text })
+  baml.ai.drive_call(client, LlmStringClient$render_prompt(text = text, client = client))
 }
 function user.LlmStringClient$build_request(text: string, client: baml.ai.Provider = ...) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmStringClient", map { "text": text })
@@ -462,7 +462,7 @@ function user.LlmStringClient$with(text: string, project: (baml.ai.ResponseMeta)
   baml.ai.drive_with(client, LlmStringClient$render_prompt(text = text, client = client), project)
 }
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.ai.Provider = GPT4) -> string  [llm] {
-  baml.llm.call_llm_function(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
+  baml.ai.drive_call(client, LlmWithLongSignature$render_prompt(first_context = first_context, second_context = second_context, third_context = third_context, user_query = user_query, client = client))
 }
 function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string, client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })

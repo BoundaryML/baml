@@ -7,7 +7,7 @@ fn user.CommentAfterArrow(client: baml.ai.Provider) -> string {
     let _0: string // _0 // return
     let _1: baml.ai.Provider // client // param
     let _2: bool
-    let _3: map<string, unknown>
+    let _3: baml.llm.PromptAst
     let _4: type
 
     bb0: {
@@ -21,12 +21,15 @@ fn user.CommentAfterArrow(client: baml.ai.Provider) -> string {
     }
 
     bb2: {
-        _3 = {  }: map<string, unknown>;
-        _4 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "CommentAfterArrow", copy _3, const <omitted>) -> [bb3];
+        _3 = call const fn user.CommentAfterArrow$render_prompt(copy _1) -> [bb3];
     }
 
     bb3: {
+        _4 = load_type(string);
+        _0 = call const fn baml.ai.drive_call<copy _4>(copy _1, copy _3) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
@@ -223,7 +226,7 @@ fn user.FunctionWithComments(a: string, b: int, client: baml.ai.Provider) -> str
     let _2: int // b // param
     let _3: baml.ai.Provider // client // param
     let _4: bool
-    let _5: map<string, unknown>
+    let _5: baml.llm.PromptAst
     let _6: type
 
     bb0: {
@@ -237,12 +240,15 @@ fn user.FunctionWithComments(a: string, b: int, client: baml.ai.Provider) -> str
     }
 
     bb2: {
-        _5 = { const "a": copy _1, const "b": copy _2 }: map<string, unknown>;
-        _6 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "FunctionWithComments", copy _5, const <omitted>) -> [bb3];
+        _5 = call const fn user.FunctionWithComments$render_prompt(copy _1, copy _2, copy _3) -> [bb3];
     }
 
     bb3: {
+        _6 = load_type(string);
+        _0 = call const fn baml.ai.drive_call<copy _6>(copy _3, copy _5) -> [bb4];
+    }
+
+    bb4: {
         return;
     }
 }
