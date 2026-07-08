@@ -370,12 +370,36 @@ catch:
   details: "`expr catch (e) { ErrorType => handler, ... }` binds the caught error to `e` and dispatches on its type. Only the listed error types are handled; any other error keeps propagating, so `catch` need not be exhaustive. Chain a `catch_all` to handle the rest."
 
 catch_all:
-  summary: "Handles every error a preceding expression can throw (exhaustive)."
+  summary: "Handles every error type a preceding expression can throw (exhaustive over errors, not panics)."
   syntax: |
     let result = risky_call() catch_all (e) {
       _ => fallback_value,
     }
-  details: "`expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` if a throw type is left unhandled."
+  details: "`expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` if a throw type is left unhandled. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics."
+
+defer:
+  summary: "Schedules a block to run when the enclosing block exits, in LIFO order."
+  syntax: |
+    function process(path: string) -> string {
+      let handle = FileHandle { path: path }
+      defer {
+        handle.cleanup()
+      }
+      return handle.read()
+    }
+  details: "`defer { ... }` registers a block that runs on every exit of the enclosing block — normal completion, `return`, `break`/`continue`, and error unwinding — so it is the standard way to release a resource exactly once on all paths. Several defers in the same scope run in LIFO order: the last one declared runs first. The body reads the live enclosing scope at exit; it is not a closure that captures values at the `defer` site. A `throw` inside the body is allowed, but a `return`/`break`/`continue` that would escape the body is rejected. See `baml describe cleanup` for the per-instance finalizer that `defer` commonly invokes."
+
+cleanup:
+  summary: "Magic finalizer method, recognized by name, that runs at most once per instance."
+  syntax: |
+    class FileHandle {
+      path: string
+
+      function cleanup(self) -> void {
+        // release the underlying resource here
+      }
+    }
+  details: "`cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return, and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`."
 
 match:
   summary: "Pattern matching — branches based on the shape or type of a value."
