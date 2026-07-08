@@ -1094,6 +1094,12 @@ fn render_keyword_cleanup() {
 }
 
 #[test]
+fn render_keyword_playground() {
+    let output = capture_keyword("playground");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_keyword_baml_sdk() {
     let output = capture_keyword("baml_sdk");
     insta::assert_snapshot!(output);
@@ -1132,9 +1138,17 @@ fn dispatch_defer_and_cleanup_resolve_to_keyword() {
 
 #[test]
 fn dispatch_language_topic_resolves_to_keyword() {
-    // Language/SDK + pattern topics route to keyword docs, not package resolution.
+    // Language/SDK + pattern topics and CLI-command topics route to keyword
+    // docs, not package resolution.
     let db = simple_project();
-    for name in ["python", "typescript", "baml_sdk", "patterns", "pattern"] {
+    for name in [
+        "python",
+        "typescript",
+        "baml_sdk",
+        "patterns",
+        "pattern",
+        "playground",
+    ] {
         assert!(
             matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
             "`{name}` should resolve to a keyword topic"
