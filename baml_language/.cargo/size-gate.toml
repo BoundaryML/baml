@@ -36,17 +36,18 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 16.09 MB file (generics: TyArg/TyClass proto types +
-# engine/compiler/sdkgen generics support, +499 KB / +3.2% vs the prior
-# 15.59 MB baseline).
+# macOS arm64: baseline 17.14 MB file (incremental compilation: bex_cache +
+# per-file reuse/relink + invalidation, ~+3.5% vs the prior 16.56 MB baseline).
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 17_052_433
-# Linux x86_64: baseline 21.51 MB file.
+max_file_bytes = 17_649_783
+# Linux x86_64: baseline 22.26 MB file (incremental compilation, ~+3.4% vs the
+# prior 21.53 MB baseline).
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 22_176_914
-# Windows x86_64: baseline 18.11 MB file.
+max_file_bytes = 22_932_497
+# Windows x86_64: baseline 18.73 MB file (incremental compilation, ~+3.4% vs the
+# prior 18.11 MB baseline).
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 18_657_997
+max_file_bytes = 19_288_192
 
 [artifacts.packed-program]
 kind = "pack"
@@ -82,6 +83,7 @@ no_default_features = true
 wasm = true
 policy.max_delta_pct = 3.0
 
-# Single platform; baseline 4.06 MB gzip.
+# Single platform; baseline 4.20 MB gzip (incremental compilation, ~+3.4% vs the
+# prior 4.06 MB baseline).
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = 4_180_730
+max_gzip_bytes = 4_323_819
