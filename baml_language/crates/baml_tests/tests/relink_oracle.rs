@@ -1,21 +1,23 @@
-//! Per-file relink oracle: reusing a clean file's compiled bytecode from a
-//! previous `Program` must produce byte-identical output to a full compile.
+//! Per-file relink oracle (B-693 Stage 3): reusing a clean file's compiled
+//! unit from a previous compile's decomposed image must produce byte-identical
+//! output to a full compile.
 //!
 //! Each scenario edits one file of a three-file project, full-compiles the
-//! edited sources, and relinks the same sources against the *previous*
-//! program with the unchanged files marked clean. Relocation is genuinely
-//! exercised: adding items shifts `GlobalIndex`/`ObjectIndex` layouts, so
-//! spliced functions only match the full compile if every cross-function
-//! reference was correctly rewritten.
+//! edited sources, and relinks the same sources routing through symbolic units:
+//! clean files' units come verbatim from the *previous* compile's
+//! `emit_units`, dirty files are emitted fresh, and `link(clean + fresh)` must
+//! equal the full compile. Relocation is genuinely exercised — adding items
+//! shifts `GlobalIndex`/`ObjectIndex` layouts, so a reused unit only matches the
+//! full compile if the linker rewrote every cross-unit reference correctly.
 
 use std::{collections::HashSet, path::Path};
 
 use baml_compiler2_emit::{
-    CompileOptions, OptLevel, generate_project_bytecode_with_reuse,
+    CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_reuse_units,
     generate_project_bytecode_with_stdlib, generate_stdlib_program,
 };
 use baml_project::ProjectDatabase;
-use bex_vm_types::{Object, Program};
+use bex_vm_types::{CompilationUnit, Object, Program};
 
 const ROOT: &str = "/relink-oracle";
 
@@ -79,8 +81,27 @@ fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
     .expect("full compile failed")
 }
 
-fn relink(files: &[(&str, &str)], base: &Program, prev: &Program, clean: &[&str]) -> Program {
-    relink_with_db(build_db(files), base, prev, clean)
+/// The previous compile's symbolic image: the units the reuse path draws clean
+/// files from (in the CLI this is what `plan_reuse` loads from the cache; here
+/// it is produced in-process by `emit_units` over the previous sources).
+fn prev_units(files: &[(&str, &str)]) -> Vec<CompilationUnit> {
+    emit_units(
+        &build_db(files),
+        &CompileOptions {
+            emit_test_cases: false,
+        },
+        OptLevel::Two,
+    )
+    .expect("emit_units for previous compile failed")
+}
+
+fn relink(
+    files: &[(&str, &str)],
+    base: &Program,
+    prev_units: &[CompilationUnit],
+    clean: &[&str],
+) -> Program {
+    relink_with_db(build_db(files), base, prev_units, clean)
 }
 
 /// Relink exactly as the CLI does: throw facts for the clean files are
@@ -90,7 +111,7 @@ fn relink_seeded(
     files: &[(&str, &str)],
     prev_files: &[(&str, &str)],
     base: &Program,
-    prev: &Program,
+    prev_units: &[CompilationUnit],
     clean: &[&str],
 ) -> Program {
     use baml_compiler2_tir::throw_inference::file_throw_facts;
@@ -105,19 +126,24 @@ fn relink_seeded(
     }
     let mut db = build_db(files);
     db.set_seeded_throw_facts(seeds);
-    relink_with_db(db, base, prev, clean)
+    relink_with_db(db, base, prev_units, clean)
 }
 
-fn relink_with_db(db: ProjectDatabase, base: &Program, prev: &Program, clean: &[&str]) -> Program {
+fn relink_with_db(
+    db: ProjectDatabase,
+    base: &Program,
+    prev_units: &[CompilationUnit],
+    clean: &[&str],
+) -> Program {
     let clean_files: HashSet<String> = clean.iter().map(ToString::to_string).collect();
-    generate_project_bytecode_with_reuse(
+    generate_project_bytecode_with_reuse_units(
         &db,
         &CompileOptions {
             emit_test_cases: false,
         },
         OptLevel::Two,
         base,
-        prev,
+        prev_units,
         &clean_files,
     )
     .expect("relink failed")
@@ -127,11 +153,12 @@ fn assert_relink_matches(
     label: &str,
     edited: &[(&str, &str)],
     base: &Program,
-    prev: &Program,
+    prev_units: &[CompilationUnit],
     clean: &[&str],
 ) {
     let full = borsh::to_vec(&compile_full(edited, base)).expect("serialize full");
-    let relinked = borsh::to_vec(&relink(edited, base, prev, clean)).expect("serialize relink");
+    let relinked =
+        borsh::to_vec(&relink(edited, base, prev_units, clean)).expect("serialize relink");
     assert!(
         full == relinked,
         "{label}: relink differs from full compile (lengths {} vs {}, first diff at {:?})",
@@ -145,9 +172,9 @@ fn assert_relink_matches(
 fn relink_is_byte_identical_to_full_compile() {
     let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
     let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
-    let prev = compile_full(&files, &base);
+    let prev = prev_units(&files);
 
-    // 1. Body-only edit in b: a and c splice with identical layout.
+    // 1. Body-only edit in b: a and c reuse with identical layout.
     let b_body_edit = B_BAML.replace("v * factor", "factor * v");
     let edited = [
         ("a.baml", A_BAML),
@@ -196,9 +223,9 @@ fn relink_is_byte_identical_to_full_compile() {
     assert_relink_matches("added lambda", &edited, &base, &prev, &["a.baml", "c.baml"]);
 
     // 4b. Edit c, whose FIRST function leads with a string literal: the
-    //    literal object precedes c's first Function in the pool, so a naive
-    //    block scan glues it onto b's block — b would splice a stale copy
-    //    while dirty c re-interns its own, diverging by exactly those bytes.
+    //    literal object precedes c's first Function in the pool. The stored
+    //    unit format keeps that literal inside c's own `code` bucket, so a
+    //    reused b never absorbs it and dirty c re-interns its own.
     let c_body_edit = C_BAML.replace("make_point(3, 4)", "make_point(5, 6)");
     let edited = [
         ("a.baml", A_BAML),
@@ -213,14 +240,14 @@ fn relink_is_byte_identical_to_full_compile() {
         &["a.baml", "b.baml"],
     );
 
-    // 5. Deleted file: c disappears; a and b splice into the smaller layout.
+    // 5. Deleted file: c disappears; a and b reuse into the smaller layout.
     let edited = [("a.baml", A_BAML), ("b.baml", B_BAML)];
     assert_relink_matches("deleted file", &edited, &base, &prev, &["a.baml", "b.baml"]);
 
     // 6. Body edit that changes INFERRED interface: `throws` is inferred
     //    from bodies, so this edit changes the transitive throws of c's
     //    main() (which calls magnitude_ish) even though c is untouched and
-    //    no *written* signature changed. A naive splice would keep c's stale
+    //    no *written* signature changed. A naive reuse would keep c's stale
     //    throws metadata; the relink must detect the mismatch and demote c.
     let b_added_throw = B_BAML.replace(
         "p.x * p.x + p.y * p.y",
@@ -251,7 +278,7 @@ fn relink_is_byte_identical_to_full_compile() {
 fn seeded_relink_is_byte_identical_to_full_compile() {
     let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
     let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
-    let prev = compile_full(&files, &base);
+    let prev = prev_units(&files);
 
     // Body edit.
     let b_body_edit = B_BAML.replace("v * factor", "factor * v");
@@ -294,21 +321,34 @@ fn seeded_relink_is_byte_identical_to_full_compile() {
     assert!(full == seeded, "seeded relink differs (throws edit)");
 }
 
-/// Prove the splice path actually runs (byte-equality alone would also pass
-/// if "clean" files were silently recompiled): plant a probe in a cosmetic,
-/// serialized field of the previous program's clean-file function and find
-/// it in the relink output.
+/// Prove the reuse path actually draws the clean file from `prev_units`
+/// (byte-equality alone would also pass if "clean" files were silently
+/// recompiled): plant a probe in a cosmetic, serialized field of the previous
+/// image's clean-file function and find it in the relink output.
 #[test]
-fn relink_actually_splices_from_prev() {
+fn relink_actually_reuses_prev_unit() {
     let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
     let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
-    let mut prev = compile_full(&files, &base);
+    let mut prev = prev_units(&files);
 
-    let idx = prev.function_indices["user.magnitude_ish"];
-    let Some(Object::Function(function)) = prev.objects.get_mut(idx) else {
-        panic!("user.magnitude_ish not found");
-    };
-    function.display_return_type = "PROBE_FROM_PREV".to_string();
+    // Plant the probe inside b's unit — the `code` bucket entry that compiled
+    // `user.magnitude_ish`. It survives to the linked output only if b's unit
+    // is reused verbatim, not recompiled.
+    let mut planted = false;
+    for unit in &mut prev {
+        if unit.source_file != "b.baml" {
+            continue;
+        }
+        for obj in &mut unit.code {
+            if let Object::Function(function) = obj
+                && function.name == "user.magnitude_ish"
+            {
+                function.display_return_type = "PROBE_FROM_PREV".to_string();
+                planted = true;
+            }
+        }
+    }
+    assert!(planted, "failed to plant probe in b's unit");
 
     // Edit c so that b (home of the probed function) stays clean.
     let c_body_edit = C_BAML.replace("scale(p, 2)", "scale(p, 3)");
@@ -324,6 +364,6 @@ fn relink_actually_splices_from_prev() {
     };
     assert_eq!(
         function.display_return_type, "PROBE_FROM_PREV",
-        "clean file was recompiled instead of spliced"
+        "clean file was recompiled instead of reused from prev_units"
     );
 }

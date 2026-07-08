@@ -18,8 +18,8 @@ use std::{
 use baml_db::{
     SourceFile,
     baml_compiler2_emit::{
-        CompileOptions, LoweringError, OptLevel, generate_project_bytecode,
-        generate_project_bytecode_with_reuse, generate_project_bytecode_with_stdlib,
+        CompileOptions, LoweringError, OptLevel, decompose_units, generate_project_bytecode,
+        generate_project_bytecode_with_reuse_units, generate_project_bytecode_with_stdlib,
         generate_stdlib_program,
     },
     baml_compiler2_hir,
@@ -27,9 +27,9 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 use bex_cache::{
     BytecodeCache, CacheKey, KeyInputs, ManifestFile, ProjectManifest, compiler_fingerprint,
-    compute_key, manifest_key,
+    compute_key, image_key, manifest_key,
 };
-use bex_vm_types::{Object, Program, relink};
+use bex_vm_types::{CompilationUnit, LinkableImage, Object, Program, relink};
 use sha2::{Digest, Sha256};
 
 use crate::{file_signature::file_signature_hash, project_load::ResolvedProject};
@@ -59,10 +59,16 @@ pub(crate) struct CacheContext {
     cache: BytecodeCache,
     /// Whole-project Program, keyed by sources + options + compiler build.
     key: CacheKey,
+    /// Symbolic [`LinkableImage`] accompanying the Program blob (B-693 Stage 3),
+    /// derived from `key` — the source of `prev_units` for the next compile.
+    image_key: CacheKey,
     /// Precompiled stdlib slice, keyed by compiler build + opt level only.
     stdlib_key: CacheKey,
     /// Latest-compile manifest, fixed per (project root, options, build).
     manifest_key: CacheKey,
+    /// Whether test cases are emitted — needed to decompose the compiled
+    /// Program back into units for the image blob.
+    emit_test_cases: bool,
 }
 
 impl CacheContext {
@@ -99,6 +105,7 @@ impl CacheContext {
         Some(CacheContext {
             cache: BytecodeCache::open(dir).with_remote_from_env(),
             key,
+            image_key: image_key(key.as_bytes()),
             stdlib_key: bex_cache::stdlib_key(&fingerprint, CLI_OPT_LEVEL as u8),
             manifest_key: manifest_key(
                 &fingerprint,
@@ -107,6 +114,7 @@ impl CacheContext {
                 &resolved.root,
                 resolved.manifest.as_deref(),
             ),
+            emit_test_cases,
         })
     }
 
@@ -179,21 +187,23 @@ pub(crate) fn compile_program(
         }
     };
     if let Some(plan) = plan {
-        match generate_project_bytecode_with_reuse(
+        match generate_project_bytecode_with_reuse_units(
             db,
             options,
             CLI_OPT_LEVEL,
             &base,
-            &plan.prev,
+            &plan.prev_units,
             &plan.clean_files,
         ) {
             Ok(program) => return Ok(program),
-            // A construct the splice can't relocate: fall back to the full
-            // (stdlib-spliced) compile. Never an error the user should see.
-            Err(LoweringError::ReuseUnsupported(reason)) => {
-                cache_debug(format_args!("relink fell back: {reason}"));
+            // A real compile error must surface — it is not a reuse problem.
+            Err(err @ LoweringError::ProjectHasErrors { .. }) => return Err(err),
+            // A corrupt/incompatible previous image or an unrelocatable
+            // construct: fall back to the full (stdlib-spliced) compile, which
+            // is byte-identical. Never an error the user should see.
+            Err(other) => {
+                cache_debug(format_args!("units relink fell back: {other}"));
             }
-            Err(other) => return Err(other),
         }
     }
     generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &base)
@@ -210,8 +220,9 @@ pub(crate) struct ReusePlan {
     /// signature changed, so its diagnostics are identical to the previous
     /// (error-free, or it wouldn't have been cached) compile.
     pub(crate) dirty_files: Vec<SourceFile>,
-    /// The previous compile's Program, splice source.
-    pub(crate) prev: Program,
+    /// The previous compile's symbolic units (B-693 Stage 3): clean files' units
+    /// are reused verbatim, the rest re-emitted, then linked.
+    pub(crate) prev_units: Vec<CompilationUnit>,
     /// Per-file throw facts for the clean files (full path → facts), to be
     /// seeded into the database before compiling so their bodies are never
     /// re-walked by throw inference.
@@ -623,10 +634,17 @@ impl CacheContext {
             cache_debug(format_args!("manifest undecodable — full compile"));
             return None;
         };
-        let Some(prev) = self.cache.load(&CacheKey::from_bytes(manifest.program_key)) else {
-            cache_debug(format_args!("previous blob missing — full compile"));
+        // Load the previous compile's symbolic image (B-693 Stage 3), keyed off
+        // the Program blob's key. A missing / undecodable image means no reuse.
+        let Some(image_bytes) = self.cache.load_raw(&image_key(&manifest.program_key)) else {
+            cache_debug(format_args!("previous image missing — full compile"));
             return None;
         };
+        let Ok(prev_image) = borsh::from_slice::<LinkableImage>(&image_bytes) else {
+            cache_debug(format_args!("previous image undecodable — full compile"));
+            return None;
+        };
+        let prev_units = prev_image.units;
 
         let prev_files: HashMap<&str, &ManifestFile> = manifest
             .files
@@ -748,7 +766,7 @@ impl CacheContext {
         Some(ReusePlan {
             clean_files,
             dirty_files,
-            prev,
+            prev_units,
             seeded_throw_facts,
         })
     }
@@ -761,6 +779,24 @@ impl CacheContext {
         program: &Program,
     ) -> std::io::Result<()> {
         self.store(program)?;
+
+        // Store the symbolic image alongside the Program blob (B-693 Stage 3) so
+        // the next incremental compile can reuse clean files' units. Best-effort:
+        // if the decomposition fails, the next compile simply full-compiles.
+        let options = CompileOptions {
+            emit_test_cases: self.emit_test_cases,
+        };
+        match decompose_units(db, &options, program) {
+            Ok(units) => match borsh::to_vec(&LinkableImage { units }) {
+                Ok(payload) => {
+                    if let Err(e) = self.cache.store_raw(&self.image_key, &payload) {
+                        cache_debug(format_args!("image store failed: {e}"));
+                    }
+                }
+                Err(e) => cache_debug(format_args!("image serialize failed: {e}")),
+            },
+            Err(e) => cache_debug(format_args!("image decompose failed: {e}")),
+        }
 
         let mut referenced = referenced_names_by_file(program);
         let mut files: Vec<ManifestFile> = user_files_with_rel_paths(db)

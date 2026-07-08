@@ -43,8 +43,8 @@ pub use types::{
     sys_op_for_path, type_tags,
 };
 pub use unit::{
-    CompilationUnit, ExportTable, GenericFnKey, InitTail, LetDef, LocalRef, ProgramImplRuleFrag,
-    ProgramMethodImplFrag, ProgramPackageFrag, Symbol, SymbolKind,
+    CompilationUnit, ExportTable, GenericFnKey, InitTail, LetDef, LinkableImage, LocalRef,
+    ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag, Symbol, SymbolKind,
 };
 
 /// Used to check if the VM should yield early.

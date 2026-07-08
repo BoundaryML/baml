@@ -28,7 +28,13 @@ use sha2::{Digest, Sha256};
 
 /// Bump whenever the serialized `Program` layout or the entry header changes.
 /// Part of both the cache key and the entry header.
-pub const FORMAT_VERSION: u32 = 3;
+///
+/// v4 (B-693 Stage 3): alongside the linked `Program` blob, a compile now also
+/// stores a symbolic [`LinkableImage`](bex_vm_types::LinkableImage) under
+/// [`image_key`] so an incremental compile can reuse clean files' units. The
+/// bump turns every pre-v4 entry into a universal miss (no image blob existed),
+/// so `plan_reuse` never finds a manifest without a matching image.
+pub const FORMAT_VERSION: u32 = 4;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -181,6 +187,22 @@ pub fn manifest_key(
         }
         None => h.update([0u8]),
     }
+    CacheKey(h.finalize().into())
+}
+
+/// Key for the symbolic [`LinkableImage`](bex_vm_types::LinkableImage) that
+/// accompanies a `Program` blob (B-693 Stage 3).
+///
+/// Derived deterministically from the Program blob's own key, so the store side
+/// (which knows `self.key`) and the reuse side (which reads `program_key` from
+/// the previous manifest) agree without threading a second key through the
+/// manifest. Distinct from the `Program` key so the two payloads never collide.
+pub fn image_key(program_key: &[u8; 32]) -> CacheKey {
+    let mut h = Sha256::new();
+    h.update(MAGIC);
+    h.update(FORMAT_VERSION.to_le_bytes());
+    h.update(b"linkable-image");
+    h.update(program_key);
     CacheKey(h.finalize().into())
 }
 

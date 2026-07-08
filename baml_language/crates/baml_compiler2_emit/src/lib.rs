@@ -962,6 +962,124 @@ pub fn generate_project_bytecode_with_reuse(
     )
 }
 
+/// B-693 Stage 3: incremental compile routed through symbolic units + the
+/// load-time linker instead of the pool-splice.
+///
+/// Clean files' units are taken **verbatim** from `prev_units` (the previous
+/// compile's decomposed image) — their bodies are never re-lowered. Dirty files
+/// are emitted fresh, and `link(clean prev units + fresh dirty units)` produces
+/// a `Program` byte-identical to a full compile (the generalized relink oracle).
+///
+/// The dirty-file emit leans on the existing pool-splice machinery
+/// ([`generate_impl`] with a reuse context): it lowers only the dirty files'
+/// bodies (clean function bodies are spliced from `prev`, never re-lowered — the
+/// real win), producing a byte-identical `Program`, which is then decomposed
+/// into fresh units. Only the dirty (and throws-demoted) files' fresh units are
+/// kept; every clean file's *local* content — its classes, enums, interfaces,
+/// code, and import/export tables — comes from `prev_units`. The whole-program
+/// products (each package's fragment, the group `$init` tail) are always taken
+/// from this compile's fresh decomposition, so a clean carrier unit never
+/// re-imports stale package structure.
+///
+/// `clean_files` is the caller's optimistic clean set; a file is only truly
+/// reused when its inferred transitive `throws` still match `prev` (design §4 —
+/// the throws gate stays in emit for Stage 3). `prev_units` must come from the
+/// same compiler build / options / stdlib base.
+///
+/// # Errors
+///
+/// Propagates any [`LoweringError`] from the dirty-file emit or the
+/// decomposition, and returns [`LoweringError::Internal`] if `prev_units` fail
+/// to link (a corrupt / incompatible previous image).
+pub fn generate_project_bytecode_with_reuse_units(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+) -> Result<Program, LoweringError> {
+    // Reconstruct the previous Program: the pool-splice needs it as its clone
+    // source, and the throws gate compares against its functions' `throws_type`.
+    // `link(prev_units)` is byte-identical to the previous full compile.
+    let prev_program = bex_vm_types::link::link(prev_units)
+        .map_err(|e| LoweringError::Internal(format!("relink previous units: {e}")))?;
+
+    // The throws gate (design §4): a caller-clean file is only reused if its
+    // inferred transitive throws still match `prev`. `throws` is body-inferred
+    // and invisible to the signature hash, so a body edit elsewhere can change a
+    // clean file's transitive throws; such a file must be re-emitted, not reused.
+    let all_files = compiler2_all_files(db);
+    let alias_caches = build_alias_caches(db, &all_files);
+    let mut effective_clean: HashSet<String> = HashSet::new();
+    for file in &all_files {
+        let rel = relative_source_path(db, *file);
+        if clean_files.contains(&rel) {
+            let pkg = file_package(db, *file);
+            if spliced_throws_match(db, *file, &prev_program, &alias_caches[&pkg.package]) {
+                effective_clean.insert(rel);
+            }
+        }
+    }
+
+    // Emit the dirty files fresh (clean function bodies are spliced from `prev`,
+    // never re-lowered), yielding a byte-identical `Program`, then decompose it
+    // into per-file symbolic units.
+    let full = generate_impl(
+        db,
+        options,
+        opt,
+        Some(base),
+        false,
+        Some((&prev_program, &effective_clean)),
+    )?;
+    let mut fresh_units = decompose_program_into_units(db, options, &full)?;
+
+    // Assemble the final unit set: clean files' local content from `prev_units`,
+    // everything else fresh. Whole-program products (package fragments, the
+    // `$init` tail) always come from this compile's fresh decomposition.
+    let prev_by_source: HashMap<&str, &CompilationUnit> = prev_units
+        .iter()
+        .map(|u| (u.source_file.as_str(), u))
+        .collect();
+    let mut assembled: Vec<CompilationUnit> = Vec::with_capacity(fresh_units.len());
+    for fresh in &mut fresh_units {
+        // Reuse `prev`'s local content only when the file is (a) effectively
+        // clean and (b) its symbolic *structure* — import and export tables —
+        // still matches the fresh decomposition. The tables are a pure function
+        // of the file's own source plus the *names* it references, so for a
+        // genuinely clean file they are identical (any code-byte difference is
+        // then a cosmetic, serialized-only field we intend to preserve, e.g. a
+        // probe). If they drift — e.g. a generic-function instantiation's
+        // interning owner moved to another unit (design §9 R1), turning a local
+        // definition into an import — the fresh unit is authoritative, keeping
+        // the linked image byte-identical to a full compile.
+        let reusable = effective_clean.contains(&fresh.source_file)
+            && prev_by_source
+                .get(fresh.source_file.as_str())
+                .is_some_and(|prev| {
+                    prev.object_imports == fresh.object_imports
+                        && prev.global_imports == fresh.global_imports
+                        && prev.exports == fresh.exports
+                });
+        if reusable {
+            let prev = prev_by_source[fresh.source_file.as_str()];
+            let mut unit = prev.clone();
+            // Whole-program / whole-group products are recomputed every compile;
+            // take them from the fresh decomposition so a clean carrier unit
+            // never carries a stale package fragment or `$init` tail.
+            unit.package_fragment = std::mem::take(&mut fresh.package_fragment);
+            unit.init_tail = fresh.init_tail.take();
+            assembled.push(unit);
+        } else {
+            assembled.push(std::mem::take(fresh));
+        }
+    }
+
+    bex_vm_types::link::link(&assembled)
+        .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))
+}
+
 /// B-693 Stage 2: emit every source file as a relocatable
 /// [`CompilationUnit`](bex_vm_types::CompilationUnit).
 ///
@@ -991,6 +1109,27 @@ pub fn emit_units(
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
     let program = generate_project_bytecode_with_opt(db, options, opt)?;
     decompose_program_into_units(db, options, &program)
+}
+
+/// Decompose an already-compiled `Program` into per-file symbolic
+/// [`CompilationUnit`]s — the inverse of [`link`](bex_vm_types::link::link).
+///
+/// Used by the CLI to build the cacheable [`LinkableImage`](bex_vm_types::LinkableImage)
+/// after a compile so the next incremental compile can reuse clean files' units.
+/// `program` must be the output of a compile over `db` with `options` (a full
+/// compile, a stdlib splice, or a reuse relink — all byte-identical), so the
+/// decomposition's file-attribution invariants hold.
+///
+/// # Errors
+///
+/// [`LoweringError::Internal`] if the program holds a pool object the
+/// decomposition cannot attribute to a source file.
+pub fn decompose_units(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    program: &Program,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    decompose_program_into_units(db, options, program)
 }
 
 /// Per-object attribution kind, computed during the pool walk.
