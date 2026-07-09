@@ -3250,7 +3250,7 @@ fn duplicate_associated_type_binding_on_interface_value_errors() {
             return 0
         }
         "#,
-        "Duplicate associated type binding",
+        "is bound more than once",
     );
 }
 
@@ -3268,7 +3268,7 @@ fn duplicate_associated_type_binding_on_interface_value_with_union_errors() {
             return 0
         }
         "#,
-        "Duplicate associated type binding",
+        "is bound more than once",
     );
 }
 

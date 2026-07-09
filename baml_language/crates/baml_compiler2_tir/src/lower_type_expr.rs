@@ -575,6 +575,7 @@ pub fn lower_type_expr(
                                         .collect()
                                 })
                                 .unwrap_or_default();
+                            let iface_qtn = qualify_def(db, def, short);
                             let mut seen_associated_bindings = FxHashSet::default();
                             let lowered_associated_bindings: Vec<(baml_base::Name, Ty)> =
                                 associated_type_bindings
@@ -589,15 +590,16 @@ pub fn lower_type_expr(
                                                     .collect(),
                                             });
                                         }
+                                        // The same associated type specified twice in an
+                                        // existential's arguments (`I<Item = a, Item = b>`) — the
+                                        // existential counterpart of the impl-side duplicate.
                                         if !seen_associated_bindings.insert(binding.name.clone()) {
-                                            diagnostics.push(TirTypeError::TypeMismatch {
-                                                expected: Ty::Unknown {
-                                                    attr: TyAttr::default(),
+                                            diagnostics.push(
+                                                TirTypeError::DuplicateAssociatedTypeBinding {
+                                                    interface: iface_qtn.clone(),
+                                                    name: binding.name.clone(),
                                                 },
-                                                got: Ty::Unknown {
-                                                    attr: TyAttr::default(),
-                                                },
-                                            });
+                                            );
                                         }
                                         (
                                             binding.name.clone(),
@@ -605,7 +607,6 @@ pub fn lower_type_expr(
                                         )
                                     })
                                     .collect();
-                            let iface_qtn = qualify_def(db, def, short);
                             // §1.7(a): eagerly fill each omitted, defaulted associated type at
                             // this existential. `Self` is the existential itself (its explicit
                             // pins plus the defaults filled so far), so a Self-referencing
