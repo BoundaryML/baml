@@ -12128,3 +12128,89 @@ fn ordering_on_same_concrete_primitive_is_ok() {
 // (The `int | 99` catch-result ordering — where the union must be normalized to
 // its single concrete base `int` before the union rejection — is exercised at
 // runtime by `baml_src/ns_arrays/sort_comparable.baml`.)
+
+// ── Group N: cross-file out-of-body implementors in interface `match`/`catch` ──
+//
+// Regression cluster for a perf-merge (`pkg-alias-query`) regression that dropped
+// the registration of *out-of-body* `implements Iface for ConcreteClass` blocks
+// into the flat implementor map (`interface_implementors`) used by
+// `emit_is_type_branch`. The class-def loop only sees `implements` blocks in the
+// SAME FILE as the `class`; cross-file out-of-body impls are registered solely by
+// the `implements_for` loop, which the perf merge changed to `continue` on class
+// targets. Result: an interface arm/clause whose static target is an interface
+// *member of the scrutinee union* expanded to an implementor set missing every
+// cross-file concrete implementor, so the arm silently missed.
+//
+// The stdlib provides the exact cross-file shape: `baml.errors.Unsupported` is
+// declared in `ns_errors/errors.baml` but `implements StreamError for Unsupported`
+// lives in `ns_errors/capability.baml`.
+
+#[tokio::test]
+async fn interface_union_member_matches_cross_file_out_of_body_implementor() {
+    // The union member is the INTERFACE type itself; the runtime value is a
+    // concrete cross-file implementor. The interface arm must match, and the
+    // bound value must be a live interface view (method dispatch works).
+    let output = baml_test!(
+        r#"
+function main() -> string {
+    let v: baml.errors.StreamError | int = baml.errors.Unsupported { message: "x" };
+    match (v) {
+        let s: baml.errors.StreamError => if (s.is_network_error()) { "net" } else { "hit" },
+        _ => "missed",
+    }
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("hit".into()));
+}
+
+#[tokio::test]
+async fn catch_by_channel_interface_catches_thrown_concrete_error() {
+    // The documented error-triage idiom: a function declares a channel-interface
+    // `throws` and throws a concrete implementor of it; the caller catches by the
+    // channel interface. `Unsupported` implements `StreamError` cross-file, so the
+    // `StreamError` clause must catch it rather than falling through to `_`.
+    let output = baml_test!(
+        baml: r#"
+function boom() -> int throws baml.errors.StreamError | baml.errors.UnknownError {
+    throw baml.errors.Unsupported { message: "nope" }
+}
+function main() -> int {
+    boom() catch (e) {
+        let s: baml.errors.StreamError => 1,
+        _ => -2,
+    }
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
+#[tokio::test]
+async fn interface_union_member_matches_in_body_implementor() {
+    // Sibling shape (the `06: SaveTo` family): interface-typed union member, value
+    // is a concrete implementor declared with an IN-BODY `implements` block. This
+    // path (class-def loop) was never broken, but the test guards the whole
+    // interface-membership `match` family together.
+    let output = baml_test!(
+        r#"
+interface Channel {
+    function tag(self) -> string throws never
+}
+class Widget {
+    note: string
+    implements Channel {
+        function tag(self) -> string throws never { "widget" }
+    }
+}
+function main() -> string {
+    let c: Channel | int = Widget { note: "x" };
+    match (c) {
+        let h: Channel => h.tag(),
+        _ => "missed",
+    }
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::String("widget".into()));
+}
