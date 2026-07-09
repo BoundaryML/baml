@@ -66,8 +66,10 @@ pub(crate) struct InterfaceMethodSpec {
     kwargs: Vec<InterfaceMethodParam>,
     return_type: baml_compiler2_ast::TypeExpr,
     throws: baml_compiler2_ast::TypeExpr,
-    /// Method generic params with their optional interface bound, unified.
-    generics: Vec<(Name, Option<baml_compiler2_ast::TypeExpr>)>,
+    /// Method generic params with their interface-bound *conjunction* (`T extends A & B`),
+    /// unified. Currently at most one element per param — the parser surfaces only the first
+    /// conjunct — but a list so an override's bounds compare correctly once §3.6 lands.
+    generics: Vec<(Name, Vec<baml_compiler2_ast::TypeExpr>)>,
 }
 
 impl InterfaceMethodSpec {
@@ -86,7 +88,11 @@ impl InterfaceMethodSpec {
             .user_generic_params
             .iter()
             .cloned()
-            .zip(function_generic_param_bounds_exprs(db, func_loc))
+            .zip(
+                function_generic_param_bounds_exprs(db, func_loc)
+                    .into_iter()
+                    .map(|bound| bound.into_iter().collect()),
+            )
             .collect();
         Self {
             args,
@@ -107,7 +113,12 @@ impl InterfaceMethodSpec {
             .generic_params
             .iter()
             .cloned()
-            .zip(sig.generic_param_bounds.iter().cloned())
+            .zip(
+                sig.generic_param_bounds
+                    .iter()
+                    .cloned()
+                    .map(|bound| bound.into_iter().collect()),
+            )
             .collect();
         Self {
             args,
@@ -122,6 +133,13 @@ impl InterfaceMethodSpec {
     /// lowering this spec's signature through a context.
     pub(crate) fn generic_param_names(&self) -> Vec<Name> {
         self.generics.iter().map(|(name, _)| name.clone()).collect()
+    }
+
+    /// The method's generic parameters paired with their interface-bound conjunction
+    /// (declaration order) — so an override's bounds can be checked against the interface
+    /// method's (an implementation may not add a requirement the interface does not declare).
+    pub(crate) fn generic_bounds(&self) -> &[(Name, Vec<baml_compiler2_ast::TypeExpr>)] {
+        &self.generics
     }
 
     /// Lower this normalized signature to a `Ty::Function` through `ctx` (which resolves `Self`,
@@ -1160,10 +1178,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
         }
         function_generic_params.extend(generic_names.iter().cloned());
+        // Call-site bound enforcement (`function_generic_param_bounds: Vec<Option<Ty>>`) is still
+        // single-bound; take the first conjunct until that path is retyped to a conjunction
+        // (currently a no-op — the parser surfaces at most one). Conformance (E0120) reads the
+        // full conjunction via `generic_bounds()`.
         let bound_exprs: Vec<Option<baml_compiler2_ast::TypeExpr>> = spec
             .generics
             .iter()
-            .map(|(_, bound)| bound.clone())
+            .map(|(_, bound)| bound.first().cloned())
             .collect();
         function_generic_param_bounds.extend(lower_generic_param_bounds(
             db,

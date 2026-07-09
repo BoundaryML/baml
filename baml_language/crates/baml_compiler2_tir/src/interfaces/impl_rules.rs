@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use baml_base::{Name, Span, TyAttr};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
-use baml_type::{QualifiedTypeName, Ty};
+use baml_type::{QualifiedTypeName, Ty, normalize::TypeContext};
 
 use crate::{
     generics::{contains_typevar, substitute_ty},
@@ -886,6 +886,46 @@ fn collect_type_var_names(ty: &Ty, out: &mut Vec<Name>) {
     }
 }
 
+/// A method spec's generic parameters paired with their lowered interface-bound *conjunction*
+/// (declaration order), for comparing an override's bounds against the interface method's. A
+/// bound is a conjunction (`T extends A & B`), so each param maps to a list of interfaces; each
+/// lowers in `scope_generics` (the enclosing + method type variables). A non-interface /
+/// unresolved conjunct (already diagnosed at its own declaration) is dropped.
+fn method_generic_bound_interfaces(
+    db: &dyn crate::Db,
+    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    ns: &[Name],
+    scope_generics: &[Name],
+    spec: &crate::builder::interface_resolution::InterfaceMethodSpec,
+) -> Vec<(Name, Vec<baml_type::Interface>)> {
+    let empty = crate::lower_type_expr::TypeVarBoundsMap::default();
+    spec.generic_bounds()
+        .iter()
+        .map(|(name, bound_exprs)| {
+            let conjunction = bound_exprs
+                .iter()
+                .filter_map(|te| {
+                    let mut d = Vec::new();
+                    crate::lower_type_expr::lower_type_expr(
+                        te,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: pkg_items,
+                            ns_context: ns,
+                            generic_params: scope_generics,
+                            bounds: &empty,
+                            self_ty: None,
+                        },
+                        &mut d,
+                    )
+                    .as_interface()
+                })
+                .collect();
+            (name.clone(), conjunction)
+        })
+        .collect()
+}
+
 /// The RFC-2451 covered-rule outcome for an out-of-body impl.
 enum OrphanOutcome {
     Ok,
@@ -1228,8 +1268,54 @@ pub fn validate_impl_signatures<'db>(
                     expected: iface_fn,
                     got: impl_fn,
                 },
-                ImplDiagnosticLocation::Method(method_name),
+                ImplDiagnosticLocation::Method(method_name.clone()),
             ));
+        }
+
+        // An override may not add a generic bound the interface method does not declare — that
+        // would reject callers the interface accepts (Rust's E0276). Method generic bounds are
+        // not part of the `Ty::Function` compared above, so check them positionally: each
+        // override bound must be entailed by the interface method's bound at the same position
+        // (equal, or a super-interface that `requires` it).
+        let impl_bounds = method_generic_bound_interfaces(
+            db,
+            &res_ctx.own_items,
+            &pkg_info.namespace_path,
+            &impl_scope_generics,
+            &impl_spec,
+        );
+        let iface_method_bounds = method_generic_bound_interfaces(
+            db,
+            iface_pkg_items,
+            &iface_pkg_info.namespace_path,
+            &iface_scope_generics,
+            &iface_spec,
+        );
+        for (i, (param, impl_conjunction)) in impl_bounds.iter().enumerate() {
+            let iface_conjunction = iface_method_bounds
+                .get(i)
+                .map(|(_, b)| b.as_slice())
+                .unwrap_or(&[]);
+            // Every conjunct the override requires must be entailed by the interface method's
+            // conjunction (equal, or a super-interface that `requires` it); an unentailed one is
+            // a stricter requirement.
+            for impl_bound in impl_conjunction {
+                let entailed = iface_conjunction.iter().any(|iface_bound| {
+                    super::carried_bound_satisfies(&ctx, iface_bound, impl_bound)
+                        || ctx.interface_requires(iface_bound, impl_bound)
+                });
+                if !entailed {
+                    diags.push((
+                        crate::infer_context::TirTypeError::InterfaceMethodAddsGenericBound {
+                            interface: iface_qtn.clone(),
+                            method: method_name.clone(),
+                            param: param.clone(),
+                            bound: impl_bound.clone(),
+                        },
+                        ImplDiagnosticLocation::Method(method_name.clone()),
+                    ));
+                }
+            }
         }
     }
 

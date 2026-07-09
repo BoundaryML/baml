@@ -2007,7 +2007,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnknownInterfaceMember { .. } => DiagnosticId::UnknownInterfaceMember,
         TirTypeError::MissingInterfaceField { .. } => DiagnosticId::MissingInterfaceField,
         TirTypeError::InterfaceFieldTypeMismatch { .. } => DiagnosticId::InterfaceFieldTypeMismatch,
-        TirTypeError::InterfaceMethodSignatureMismatch { .. } => {
+        TirTypeError::InterfaceMethodSignatureMismatch { .. }
+        | TirTypeError::InterfaceMethodAddsGenericBound { .. } => {
             DiagnosticId::InterfaceMethodSignatureMismatch
         }
         TirTypeError::MissingRequiredInterface { .. } => DiagnosticId::MissingRequiredInterface,

@@ -10083,9 +10083,14 @@ async fn wf3_blanket_on_blanket_chain_runtime() {
 /// args) is now rejected at compile time — previously it compiled, was accepted
 /// as `Tagged<int|string|bool>`, and crashed the VM.
 /// `_plan/wf3/generics-bounds-blanket/p13c_phantom_single.baml`
+/// Rust-faithful (E0207): an impl type parameter is *constrained* if it appears in the
+/// implemented interface reference (`Tagged<T>`), not only the self type — so
+/// `implements<T> Tagged<T> for Holder` is a valid blanket over the interface parameter
+/// (mirrors Rust's `impl<T> From<T> for MyType`). The existential `Tagged<int>` pins
+/// `T = int`, so there is no erasure at the use site.
 #[test]
-fn wf3_phantom_impl_type_param_is_rejected() {
-    let errors = collect_compile_errors(
+fn wf3_impl_type_param_in_interface_args_is_accepted() {
+    assert_zero_compile_errors(
         r#"
         interface Tagged<T> { function tag(self) -> string throws never }
         class Holder { v: int }
@@ -10097,11 +10102,6 @@ fn wf3_phantom_impl_type_param_is_rejected() {
             return a.tag()
         }
         "#,
-    );
-    assert!(
-        !errors.is_empty(),
-        "an unconstrained phantom type param in an `implements` (`T` only in the \
-         interface args) is unsound and must be a compile error; got none"
     );
 }
 

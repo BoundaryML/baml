@@ -542,6 +542,15 @@ pub enum TirTypeError {
         /// The override's signature.
         got: Ty,
     },
+    /// An override declares a generic bound on one of its type parameters that the interface
+    /// method does not require — the implementation has stricter requirements than the
+    /// interface (Rust's E0276), so a caller satisfying the interface could be rejected.
+    InterfaceMethodAddsGenericBound {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+        param: Name,
+        bound: baml_type::Interface,
+    },
     /// The impl's target type does not implement an interface the implemented interface
     /// `requires` — implementing `I` requires also implementing each of `I`'s parents.
     /// Impl conformance (E0125).
@@ -1363,6 +1372,21 @@ impl fmt::Display for TirTypeError {
                     got.render_user_facing(),
                     interface.render_user_facing(),
                     expected.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceMethodAddsGenericBound {
+                interface,
+                method,
+                param,
+                bound,
+            } => {
+                write!(
+                    f,
+                    "method `{method}` requires `{param}: {}`, but interface `{}`'s `{method}` \
+                     declares no such bound — an implementation may not add requirements the \
+                     interface does not",
+                    bound.to_ty().render_user_facing(),
+                    interface.render_user_facing()
                 )
             }
             TirTypeError::MissingRequiredInterface {
