@@ -100,6 +100,90 @@ function main() -> baml.llm.PromptAst {
 }
 
 #[tokio::test]
+async fn prompt_interpolates_class_and_array_like_ordinary_string() {
+    // B-563: `${class_value}` / `${array_value}` inside a `prompt` backtick string
+    // used to silently render an EMPTY string — the assembler only stringified
+    // scalars (string/int/float/bool) and dropped every composite. They must now
+    // render via the same implicit `to_string` (`string.from`) an ordinary
+    // backtick string applies, so the `prompt` form is byte-identical to the
+    // ordinary-string form (which was never broken). `main` renders both and
+    // returns them joined by a sentinel so the test can compare them directly.
+    let output = baml_test!(
+        r#"
+class Point {
+  x int
+  y int
+}
+
+function main() -> string {
+  let p = Point { x: 1, y: 2 }
+  let xs = [10, 20, 30]
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
+  let ctx = baml.llm.Context { client: cc, tags: {} }
+  let render = prompt`Point ${p} list ${xs}`
+  let from_prompt = render(ctx).text()
+  let from_string = `Point ${p} list ${xs}`
+  from_prompt + " <=> " + from_string
+}
+"#
+    );
+    let rendered = match &output.result {
+        Ok(BexExternalValue::String(s)) => s.to_string(),
+        other => panic!("expected a string result, got {other:?}"),
+    };
+    let (from_prompt, from_string) = rendered
+        .split_once(" <=> ")
+        .expect("main should return the two renderings joined by ` <=> `");
+    // The composite renders (not empty — the B-563 bug produced empty here) and
+    // is exactly what the same values yield in an ordinary backtick string.
+    assert_eq!(
+        from_prompt, from_string,
+        "prompt interpolation of a class/array must match ordinary string interpolation"
+    );
+    assert_eq!(
+        from_prompt, "Point Point { x: 1, y: 2 } list [10, 20, 30]",
+        "class and array must render via their `to_string` form, not empty"
+    );
+}
+
+#[tokio::test]
+async fn prompt_interpolation_honors_to_string_override() {
+    // B-563 follow-through: because composites route through `string.from` (the
+    // real implicit `to_string`), a user `baml.ToString` override is honored in a
+    // `prompt` exactly as it is in an ordinary backtick string — a sys-op-level
+    // structural renderer could not do this. `${role(...)}` still splits messages.
+    let output = baml_test!(
+        r#"
+class Labeled {
+  tag string
+  implements baml.ToString {
+    function to_string(self) -> string throws never {
+      "LBL<" + self.tag + ">"
+    }
+  }
+}
+
+function main() -> string {
+  let v = Labeled { tag: "hi" }
+  let cc = baml.llm.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
+  let ctx = baml.llm.Context { client: cc, tags: {} }
+  let render = prompt`${role("system")}head ${v}${role("user")}tail ${v}`
+  render(ctx).text()
+}
+"#
+    );
+    let rendered = match &output.result {
+        Ok(BexExternalValue::String(s)) => s.to_string(),
+        other => panic!("expected a string result, got {other:?}"),
+    };
+    // Both messages render the override, and the roles still split the content.
+    assert_eq!(
+        rendered, "[system]\nhead LBL<hi>\n\n[user]\ntail LBL<hi>",
+        "override must apply in every message and roles must still split"
+    );
+}
+
+#[tokio::test]
 async fn prompt_interpolates_ctx_output_format() {
     // BEP-049 M5b: `${ctx.output_format}` renders the return type's schema.
     // `render_output_format(reflect.type_of<Person>())` produces the schema
