@@ -122,6 +122,10 @@ impl TestArgs {
                 // Clean files' throw facts come from the manifest, so throw
                 // inference never re-walks their bodies.
                 db.set_seeded_throw_facts(plan.seeded_throw_facts.clone());
+                // Clean functions' `callable_throws` come from their cached
+                // interface fragments (Phase 2), so a dirty file's inference never
+                // pulls a clean callee's body. Before the first typecheck query.
+                db.set_seeded_callable_throws(plan.seeded_callable_throws.clone());
             }
 
             // Seed the stdlib typed interface (B-694) before the first typecheck
@@ -193,6 +197,7 @@ impl TestArgs {
                 ctx.verify_against(&bytecode)?;
                 ctx.verify_stdlib_interface(&db)?;
                 ctx.verify_diagnostics(&db)?;
+                ctx.verify_interface_fragments(&db)?;
                 let fresh = fresh_diagnostics
                     .as_ref()
                     .expect("a cache is present, so fresh diagnostics were computed");

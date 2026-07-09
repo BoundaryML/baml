@@ -378,6 +378,26 @@ fn callable_throws_cycle_initial<'db>(
 
 #[salsa::tracked(returns(ref), cycle_initial=callable_throws_cycle_initial)]
 pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Ty {
+    // Phase 2c: a seeded value from a previous compile short-circuits body
+    // inference for a clean function, returning exactly the `Ty` this query
+    // produced last time. `seeds.by_path(db)` is a *tracked* read of the
+    // `SeededCallableThrows` input (present-from-construction, empty until
+    // seeded), so a later seed reliably invalidates this memo. The seed is
+    // keyed by (source path, item-tree `LocalItemId`) — process-independent for
+    // byte-identical files. Only functions the reuse plan proved clean are
+    // seeded, so a converged fixpoint value is returned without re-entering the
+    // callee body; a dirty function is never in the map and infers below.
+    if let Some(seeds) = db.seeded_callable_throws() {
+        let path = function.file(db).path(db).display().to_string();
+        if let Some(ty) = seeds
+            .by_path(db)
+            .get(&path)
+            .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
+        {
+            return ty.clone();
+        }
+    }
+
     let declared = lowered_declared_callable_throws(db, function);
     let declared_has_hole = declared.as_ref().is_some_and(throws_ty_has_infer_hole);
 

@@ -72,6 +72,20 @@ pub trait Db: salsa::Database {
     fn seeded_stdlib_interface(&self) -> Option<SeededStdlibInterface> {
         None
     }
+
+    /// Per-function `callable_throws` values from a previous compile, keyed by
+    /// (source path, item-tree `LocalItemId`).
+    ///
+    /// When present, `callable::callable_throws` returns the seeded `Ty` for a
+    /// clean function instead of inferring its body — the bytecode cache sets
+    /// this for functions the per-file reuse plan proved unchanged (both their
+    /// own body and their transitive throw contributors are stable, per the
+    /// throws-taint closure). Cutting `callable_throws` removes the last cold
+    /// `infer_scope_types` pull a dirty file otherwise forces on its clean
+    /// callees. Defaults to `None`: every other database infers honestly.
+    fn seeded_callable_throws(&self) -> Option<SeededCallableThrows> {
+        None
+    }
 }
 
 /// Input: per-file `FunctionThrowFacts` from a previous compile, keyed by
@@ -81,6 +95,23 @@ pub struct SeededThrowFacts {
     #[returns(ref)]
     pub by_path:
         std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+}
+
+/// Input: exact per-function `callable_throws` results from a previous compile,
+/// keyed by source-file path string (`SourceFile::path` display form) then by
+/// item-tree `LocalItemId::as_u32`.
+///
+/// Holds a typed `baml_type::Ty` — not opaque bytes like [`SeededStdlibInterface`]
+/// — because `Ty` is a low-crate type this workspace crate can already name
+/// (same as [`SeededThrowFacts`]). The `LocalItemId` key is a content-derived,
+/// process-independent item-tree index, so a byte-identical file's functions map
+/// to the same keys across compiles. `callable_throws` reads it through a
+/// *tracked* dependency (present-from-construction, empty until seeded — the
+/// #3924 discipline), so a later seed on a reused database invalidates the memo.
+#[salsa::input]
+pub struct SeededCallableThrows {
+    #[returns(ref)]
+    pub by_path: std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>>,
 }
 
 /// Input: the stdlib packages' resolved `PackageInterface`s from a previous

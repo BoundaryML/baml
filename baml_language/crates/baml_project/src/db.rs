@@ -148,6 +148,17 @@ pub struct ProjectDatabase {
     /// **tracked** dependency (an absent-then-added handle would leave a stale
     /// memo on a reused database, e.g. the LSP's long-lived `ProjectDatabase`).
     seeded_stdlib_interface: Option<baml_workspace::SeededStdlibInterface>,
+    /// Per-function `callable_throws` values seeded from a previous compile
+    /// (Phase 2 interface fragments; bytecode cache).
+    ///
+    /// Same present-from-construction discipline as `seeded_throw_facts` and
+    /// `seeded_stdlib_interface` above: a real `#[salsa::input]` handle created
+    /// **once** (empty) in the constructors and thereafter mutated in place via
+    /// its Salsa setter, so it is always `Some` and `callable::callable_throws`
+    /// reads the seed through a **tracked** dependency (an absent-then-added
+    /// handle would leave a stale memo on a reused database, e.g. the LSP's
+    /// long-lived `ProjectDatabase`).
+    seeded_callable_throws: Option<baml_workspace::SeededCallableThrows>,
     /// Maps file paths to their `SourceFile` handles (user files only).
     file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps file paths to compiler2-only `SourceFile` handles.
@@ -178,6 +189,10 @@ impl baml_workspace::Db for ProjectDatabase {
 
     fn seeded_stdlib_interface(&self) -> Option<baml_workspace::SeededStdlibInterface> {
         self.seeded_stdlib_interface
+    }
+
+    fn seeded_callable_throws(&self) -> Option<baml_workspace::SeededCallableThrows> {
+        self.seeded_callable_throws
     }
 }
 
@@ -232,6 +247,7 @@ impl ProjectDatabase {
             compiler2_extra_files: None,
             seeded_throw_facts: None,
             seeded_stdlib_interface: None,
+            seeded_callable_throws: None,
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
@@ -239,6 +255,7 @@ impl ProjectDatabase {
         };
         db.seeded_throw_facts = Some(db.empty_seeded_throw_facts());
         db.seeded_stdlib_interface = Some(db.empty_seeded_stdlib_interface());
+        db.seeded_callable_throws = Some(db.empty_seeded_callable_throws());
         db
     }
 
@@ -264,6 +281,16 @@ impl ProjectDatabase {
         baml_workspace::SeededStdlibInterface::new(self, std::collections::BTreeMap::new())
     }
 
+    /// Create the always-present, initially-empty `SeededCallableThrows` Salsa
+    /// input. Same present-from-construction discipline as
+    /// `empty_seeded_throw_facts` so `callable::callable_throws` records a
+    /// *tracked* dependency on the seed map: an empty map means "no seeds" and
+    /// every function infers its throws honestly, exactly as an unseeded
+    /// database. See the field docs on `seeded_callable_throws`.
+    fn empty_seeded_callable_throws(&self) -> baml_workspace::SeededCallableThrows {
+        baml_workspace::SeededCallableThrows::new(self, std::collections::BTreeMap::new())
+    }
+
     /// Create a new database with an event callback for tracking query execution.
     ///
     /// The callback will be invoked for various Salsa events, including:
@@ -279,6 +306,7 @@ impl ProjectDatabase {
             compiler2_extra_files: None,
             seeded_throw_facts: None,
             seeded_stdlib_interface: None,
+            seeded_callable_throws: None,
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
@@ -286,6 +314,7 @@ impl ProjectDatabase {
         };
         db.seeded_throw_facts = Some(db.empty_seeded_throw_facts());
         db.seeded_stdlib_interface = Some(db.empty_seeded_stdlib_interface());
+        db.seeded_callable_throws = Some(db.empty_seeded_callable_throws());
         db
     }
 
@@ -358,6 +387,28 @@ impl ProjectDatabase {
             .seeded_stdlib_interface
             .expect("SeededStdlibInterface input is created in ProjectDatabase::new");
         seeds.set_by_package(self).to(by_package);
+    }
+
+    /// Seed per-function `callable_throws` values from a previous compile of
+    /// identical file content (Phase 2 interface fragments); the outer key is a
+    /// full source-file path string, the inner key an item-tree
+    /// `LocalItemId::as_u32`.
+    ///
+    /// Mutates the always-present `SeededCallableThrows` input (created in `new`)
+    /// through its Salsa setter, so it bumps the revision and correctly
+    /// invalidates any already-computed `callable_throws` memo — safe to call
+    /// before *or* after queries have run. Only functions the reuse plan proved
+    /// clean (unchanged body and unchanged transitive throw contributors) ever
+    /// appear, so a dirty or throws-tainted function is never seeded and always
+    /// infers honestly.
+    pub fn set_seeded_callable_throws(
+        &mut self,
+        by_path: std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>>,
+    ) {
+        let seeds = self
+            .seeded_callable_throws
+            .expect("SeededCallableThrows input is created in ProjectDatabase::new");
+        seeds.set_by_path(self).to(by_path);
     }
 
     pub fn get_source_files(&self) -> Vec<SourceFile> {

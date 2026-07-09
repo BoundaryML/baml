@@ -13,6 +13,9 @@
 //! - `BAML_NO_DIAGNOSTICS_CACHE=1` — check every file instead of serving clean
 //!   files from the per-file diagnostics cache (reuse / throws-seed unaffected),
 //!   to isolate that feature's win.
+//! - `BAML_NO_CALLABLE_THROWS_CACHE=1` — empty the per-function `callable_throws`
+//!   seed so every function infers its throws honestly (reuse / diagnostics
+//!   serving unaffected), to isolate the Phase 2 fragment seed's win.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -199,6 +202,16 @@ impl CacheContext {
         std::env::var_os("BAML_NO_DIAGNOSTICS_CACHE").is_some_and(|v| v == "1")
     }
 
+    /// Isolation toggle for measuring the `callable_throws` seed's win:
+    /// `BAML_NO_CALLABLE_THROWS_CACHE=1` empties `plan.seeded_callable_throws`
+    /// so every function infers its throws honestly (the last cold
+    /// `infer_scope_types` pull a dirty file forces on its clean callees),
+    /// leaving reuse / diagnostics serving intact. `BAML_NO_BYTECODE_CACHE`
+    /// already disables the whole cache, so this is the finer-grained knob.
+    fn callable_throws_cache_disabled() -> bool {
+        std::env::var_os("BAML_NO_CALLABLE_THROWS_CACHE").is_some_and(|v| v == "1")
+    }
+
     /// Load the cached stdlib typed-interface blob (B-694), if present:
     /// `load_raw` + borsh-decode into `package-name -> borsh(PackageInterface)`.
     /// `None` on a miss, a decode failure, or when the interface cache is
@@ -372,6 +385,14 @@ pub(crate) struct ReusePlan {
     /// re-walked by throw inference.
     pub(crate) seeded_throw_facts:
         std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+    /// Per-function `callable_throws` seeds projected from the clean files'
+    /// cached interface fragments (Phase 2), keyed by full source path then by
+    /// item-tree `LocalItemId::as_u32`. Injected before the first typecheck so a
+    /// clean function's throws are served without inferring its (or any
+    /// transitively-clean callee's) body. Empty under
+    /// `BAML_NO_CALLABLE_THROWS_CACHE=1`.
+    pub(crate) seeded_callable_throws:
+        std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>>,
     /// Clean files' opaque diagnostics blobs carried from the previous manifest,
     /// by rel_path. Rehydrated to serve those files' diagnostics without
     /// re-checking, and copied verbatim into the next manifest.
@@ -754,6 +775,252 @@ fn user_files_with_rel_paths(db: &ProjectDatabase) -> Vec<(SourceFile, String)> 
         .collect()
 }
 
+/// The clean/dirty partition of the current user files against a previous
+/// manifest. Shared by [`CacheContext::plan_reuse`] (to build the reuse plan)
+/// and [`CacheContext::verify_interface_fragments`] (to check exactly the files
+/// that would have been seeded).
+struct DirtyPartition {
+    /// Root-relative paths eligible for reuse (clean).
+    clean_files: HashSet<String>,
+    /// Current `SourceFile`s that must be re-derived (dirty).
+    dirty_files: Vec<SourceFile>,
+}
+
+/// Partition the current user files into clean (reusable) and dirty against a
+/// previous manifest.
+///
+/// Dirty = content-changed ∪ added ∪ (files whose referenced names intersect the
+/// signature/layout/impl change set, one hop) ∪ (files reachable from a
+/// throws-changed function through the transitive throws-taint closure).
+///
+/// The throws-taint closure is the Phase 2 upgrade over the one-hop throws
+/// propagation. `callable_throws` is transitive over the call graph, so a throws
+/// change can flow through a *content-clean intermediary* — whose own
+/// `file_throw_facts` are byte-identical, only its solved transitive throws grew
+/// — to a caller the one-hop pass never reaches. The closure seeds a worklist
+/// with the last-segment names of every function whose facts changed (or was
+/// added/removed), then walks reverse call edges — over-approximated by
+/// `referenced_names` — marking each referencing file dirty and re-tainting its
+/// own functions, stopping at closed-`throws` contracts (whose `callable_throws`
+/// is the declared set, independent of callees). It strictly subsumes the
+/// one-hop version (direct callers ⊂ transitive callers) and over-dirties only,
+/// so a seeded function's body and transitive throw contributors are always
+/// stable — the invariant the `callable_throws` seed rests on.
+fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> DirtyPartition {
+    let prev_files: HashMap<&str, &ManifestFile> = manifest
+        .files
+        .iter()
+        .map(|f| (f.rel_path.as_str(), f))
+        .collect();
+
+    let current = user_files_with_rel_paths(db);
+    let current_rels: HashSet<&str> = current.iter().map(|(_, rel)| rel.as_str()).collect();
+
+    // Δ: names whose *signature/layout/impl* meaning may have changed (one-hop).
+    let mut changed_names: HashSet<String> = HashSet::new();
+    // Files needing recompilation for their own sake.
+    let mut dirty: HashSet<String> = HashSet::new();
+    let mut type_signature_changed = false;
+    let mut impl_set_changed = false;
+    // Root-cause function names whose `callable_throws` may have changed — the
+    // seed of the transitive throws-taint closure. Last-segment form, matched
+    // against `referenced_names` (the reverse-call-edge over-approximation).
+    let mut throws_taint: HashSet<String> = HashSet::new();
+
+    let throw_fn_names = |facts: &[baml_type::throw_facts::FunctionThrowFacts]| -> Vec<String> {
+        facts
+            .iter()
+            .map(|f| last_segment(f.key.as_str()).to_string())
+            .collect()
+    };
+
+    for (sf, rel) in &current {
+        match prev_files.get(rel.as_str()) {
+            None => {
+                // Added file: recompiles, and its names may shadow existing
+                // references anywhere.
+                dirty.insert(rel.clone());
+                changed_names.extend(defined_names(db, *sf));
+                if file_defines_type(db, *sf) {
+                    type_signature_changed = true;
+                }
+                if file_has_impl_construct(db, *sf) {
+                    impl_set_changed = true;
+                }
+                // An added function may shadow an existing callee, so callers'
+                // transitive throws can move — seed the taint closure.
+                let fresh = baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, *sf);
+                throws_taint.extend(throw_fn_names(&fresh.0));
+            }
+            Some(entry) => {
+                if entry.content_hash == content_hash(sf.text(db)) {
+                    continue;
+                }
+                dirty.insert(rel.clone());
+                // Throws taint: a body-only edit that grows this file's inferred
+                // throws leaves its `signature_hash` unchanged, so no signature
+                // sentinel catches it. When the fresh facts differ from the
+                // stored ones, seed the taint closure with both the fresh and
+                // the stored function names — a rename/removal shifts which
+                // callers resolve where.
+                let fresh = baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, *sf);
+                if fresh.0 != entry.throw_facts {
+                    throws_taint.extend(throw_fn_names(&fresh.0));
+                    throws_taint.extend(throw_fn_names(&entry.throw_facts));
+                }
+                if file_has_impl_construct(db, *sf) {
+                    impl_set_changed = true;
+                }
+                if entry.signature_hash != file_signature_hash(db, *sf) {
+                    changed_names.extend(entry.defined_names.iter().cloned());
+                    changed_names.extend(defined_names(db, *sf));
+                    if file_defines_type(db, *sf) {
+                        type_signature_changed = true;
+                    }
+                }
+            }
+        }
+    }
+    for (rel, entry) in &prev_files {
+        if !current_rels.contains(rel) {
+            // Removed file: its names vanish from resolution.
+            changed_names.extend(entry.defined_names.iter().cloned());
+            type_signature_changed = true;
+            if entry.referenced_names.iter().any(|n| n == IMPL_SENTINEL) {
+                impl_set_changed = true;
+            }
+            // A removed function's callers now resolve elsewhere or error — a
+            // throws change; seed the taint closure with its function names.
+            throws_taint.extend(throw_fn_names(&entry.throw_facts));
+        }
+    }
+    if type_signature_changed {
+        changed_names.insert(LAYOUT_SENTINEL.to_string());
+    }
+    if impl_set_changed {
+        changed_names.insert(IMPL_SENTINEL.to_string());
+    }
+
+    // One-hop propagation for signature/layout/impl changes: an unchanged file
+    // referencing a changed name is dirty. A layout dependency surfaces in the
+    // referencing file directly, so one hop suffices; only *throws* are
+    // transitive (the closure below).
+    for (_, rel) in &current {
+        if dirty.contains(rel) {
+            continue;
+        }
+        let Some(entry) = prev_files.get(rel.as_str()) else {
+            continue;
+        };
+        if entry
+            .referenced_names
+            .iter()
+            .any(|name| changed_names.contains(name))
+        {
+            dirty.insert(rel.clone());
+        }
+    }
+
+    // Transitive throws-taint closure, firewall-pruned. Reverse index: a
+    // last-segment name -> the current files whose stored bytecode references it.
+    let mut referencers: HashMap<&str, Vec<&str>> = HashMap::new();
+    for (rel, entry) in &prev_files {
+        if !current_rels.contains(rel) {
+            continue;
+        }
+        for name in &entry.referenced_names {
+            referencers.entry(name.as_str()).or_default().push(rel);
+        }
+    }
+    let mut worklist: Vec<String> = throws_taint.iter().cloned().collect();
+    // Re-taint each newly-reached file's functions exactly once.
+    let mut retainted: HashSet<String> = HashSet::new();
+    while let Some(name) = worklist.pop() {
+        let Some(rels) = referencers.get(name.as_str()) else {
+            continue;
+        };
+        for &rel in rels {
+            // A file referencing a tainted name is dirty (its open functions'
+            // throws may have moved); mark it and re-taint its own non-firewall
+            // functions so the change propagates transitively.
+            dirty.insert(rel.to_string());
+            if !retainted.insert(rel.to_string()) {
+                continue;
+            }
+            let Some(entry) = prev_files.get(rel) else {
+                continue;
+            };
+            for ff in &entry.throw_facts {
+                // Closed `throws` contract: `callable_throws` is the declared
+                // set, independent of callees, so the taint stops here.
+                if ff.has_declared_contract {
+                    continue;
+                }
+                let n = last_segment(ff.key.as_str()).to_string();
+                if throws_taint.insert(n.clone()) {
+                    worklist.push(n);
+                }
+            }
+        }
+    }
+
+    let clean_files: HashSet<String> = current
+        .iter()
+        .filter(|(_, rel)| !dirty.contains(rel))
+        .map(|(_, rel)| rel.clone())
+        .collect();
+    let dirty_files: Vec<SourceFile> = current
+        .iter()
+        .filter(|(_, rel)| dirty.contains(rel))
+        .map(|(sf, _)| *sf)
+        .collect();
+
+    DirtyPartition {
+        clean_files,
+        dirty_files,
+    }
+}
+
+/// Project each clean file's cached interface fragment into a per-function
+/// `callable_throws` seed map, keyed by full source path then by item-tree
+/// `LocalItemId::as_u32` (the fragment's key form). A unit whose fragment is
+/// empty or fails to decode is skipped — its functions then infer honestly
+/// (degrade, never miscompile). Empty under `BAML_NO_CALLABLE_THROWS_CACHE=1`.
+fn project_callable_throws_seeds(
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+    root: Option<&PathBuf>,
+) -> std::collections::BTreeMap<String, std::collections::BTreeMap<u32, baml_type::Ty>> {
+    if CacheContext::callable_throws_cache_disabled() {
+        return std::collections::BTreeMap::new();
+    }
+    use baml_db::baml_compiler2_tir::package_interface::FileInterfaceFragment;
+    let mut by_path = std::collections::BTreeMap::new();
+    for unit in prev_units {
+        if !clean_files.contains(&unit.source_file) || unit.interface_fragment.is_empty() {
+            continue;
+        }
+        let fragment: FileInterfaceFragment = match borsh::from_slice(&unit.interface_fragment) {
+            Ok(f) => f,
+            Err(e) => {
+                cache_debug(format_args!(
+                    "interface fragment for `{}` undecodable: {e}",
+                    unit.source_file
+                ));
+                continue;
+            }
+        };
+        if fragment.callable_throws_by_id.is_empty() {
+            continue;
+        }
+        let full = root
+            .map(|r| r.join(&unit.source_file).display().to_string())
+            .unwrap_or_else(|| unit.source_file.clone());
+        by_path.insert(full, fragment.callable_throws_by_id);
+    }
+    by_path
+}
+
 impl CacheContext {
     /// Decide which files can reuse their previously compiled bytecode.
     ///
@@ -761,22 +1028,10 @@ impl CacheContext {
     /// previous blob trimmed, or everything is dirty) — callers take the
     /// stdlib-splice path and gate diagnostics on all files.
     ///
-    /// Dirty = content-changed ∪ added ∪ (files whose referenced names
-    /// intersect Δ), where Δ is the last-segment names defined by any file
-    /// whose *signature* changed, was added, or was removed. Name matching is
-    /// deliberately conservative: it catches shadowing (an added `foo`
-    /// changing what existing `foo` references resolve to) and impl-method
-    /// additions without needing resolution-aware dependency edges. One
-    /// round suffices — signature changes only originate from actual edits,
-    /// never from recompilation.
-    ///
-    /// A file's referenced names include both its bytecode operands and the
-    /// types named in its source annotations (`syntactic_type_names`), plus a
-    /// `LAYOUT_SENTINEL` when its bytecode bakes a type's layout. Δ gains the
-    /// same sentinel on any type-signature change. Together these close the
-    /// layout holes the bytecode-only set missed: a positional field read
-    /// (`p.x`), an enum variant match, a virtual call, or an inline-expanded
-    /// type alias whose defining type's layout shifts.
+    /// The clean/dirty partition (with the throws-taint closure) is computed by
+    /// [`compute_dirty_partition`]; this method loads the manifest and previous
+    /// image, then attaches the reuse seeds (throw facts, `callable_throws`
+    /// fragments) and clean-file diagnostics blobs for the clean set.
     pub(crate) fn plan_reuse(&self, db: &ProjectDatabase) -> Option<ReusePlan> {
         // The verify tripwire must exercise the full compile path — a
         // relink-produced blob verified against a relink compile would only
@@ -805,133 +1060,15 @@ impl CacheContext {
         };
         let prev_units = prev_image.units;
 
-        let prev_files: HashMap<&str, &ManifestFile> = manifest
-            .files
-            .iter()
-            .map(|f| (f.rel_path.as_str(), f))
-            .collect();
-
-        let current = user_files_with_rel_paths(db);
-        let current_rels: HashSet<&str> = current.iter().map(|(_, rel)| rel.as_str()).collect();
-
-        // Δ: names whose definitions may have changed meaning.
-        let mut changed_names: HashSet<String> = HashSet::new();
-        // Files needing recompilation for their own sake.
-        let mut dirty: HashSet<String> = HashSet::new();
-        // Did any *type* (class/enum/interface/alias) signature change? Gates
-        // the `LAYOUT_SENTINEL`: a layout can only move when a type-defining
-        // file's signature changes, so a function-only edit leaves it false.
-        let mut type_signature_changed = false;
-        // Did the package's interface-`impl` set change? Gates the
-        // `IMPL_SENTINEL`: a coherence verdict can only move when an
-        // impl-bearing file is added, edited, or removed.
-        let mut impl_set_changed = false;
-
-        for (sf, rel) in &current {
-            match prev_files.get(rel.as_str()) {
-                None => {
-                    // Added file: recompiles, and its names may shadow
-                    // existing references anywhere.
-                    dirty.insert(rel.clone());
-                    changed_names.extend(defined_names(db, *sf));
-                    if file_defines_type(db, *sf) {
-                        type_signature_changed = true;
-                    }
-                    if file_has_impl_construct(db, *sf) {
-                        impl_set_changed = true;
-                    }
-                }
-                Some(entry) => {
-                    if entry.content_hash == content_hash(sf.text(db)) {
-                        continue;
-                    }
-                    dirty.insert(rel.clone());
-                    // Throws propagation (Risk 1): `throws` is body-inferred but
-                    // interface-visible. A body-only edit that grows this file's
-                    // inferred throws leaves its `signature_hash` unchanged, so a
-                    // caller's throws-contract (E0096/E0097) and catch-exhaustiveness
-                    // (E0094/E0095) diagnostics would be served stale. Compare fresh
-                    // facts to the stored ones; on any change treat this file's names
-                    // as changed so referencing files are re-checked. Free: a dirty
-                    // file is body-walked anyway, and the query is salsa-memoized.
-                    if baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, *sf).0
-                        != entry.throw_facts
-                    {
-                        changed_names.extend(defined_names(db, *sf));
-                    }
-                    if file_has_impl_construct(db, *sf) {
-                        impl_set_changed = true;
-                    }
-                    if entry.signature_hash != file_signature_hash(db, *sf) {
-                        changed_names.extend(entry.defined_names.iter().cloned());
-                        changed_names.extend(defined_names(db, *sf));
-                        // A type's layout may have moved. (Over-approximate: a
-                        // function-only edit in a file that also defines a type
-                        // trips this too — sound, only costs reuse.)
-                        if file_defines_type(db, *sf) {
-                            type_signature_changed = true;
-                        }
-                    }
-                }
-            }
-        }
-        for (rel, entry) in &prev_files {
-            if !current_rels.contains(rel) {
-                // Removed file: its names vanish from resolution. Its item kind
-                // isn't recoverable from the manifest, so conservatively assume
-                // a type (and thus a layout) may have vanished.
-                changed_names.extend(entry.defined_names.iter().cloned());
-                type_signature_changed = true;
-                // A removed impl file (its stored refs carry the sentinel)
-                // changes the package's impl set — re-check coherence peers.
-                if entry.referenced_names.iter().any(|n| n == IMPL_SENTINEL) {
-                    impl_set_changed = true;
-                }
-            }
-        }
-        // Conservative fallback for layout dependencies whose receiver type is
-        // inferred (named in no signature): any type-layout change re-lowers
-        // every file whose bytecode baked a layout (`LAYOUT_SENTINEL`).
-        if type_signature_changed {
-            changed_names.insert(LAYOUT_SENTINEL.to_string());
-        }
-        // Conservative fallback for whole-package coherence: any impl-set change
-        // re-checks every coherence-participating file (`IMPL_SENTINEL`).
-        if impl_set_changed {
-            changed_names.insert(IMPL_SENTINEL.to_string());
-        }
-
-        // Propagate: unchanged files referencing a changed name are dirty.
-        for (_, rel) in &current {
-            if dirty.contains(rel) {
-                continue;
-            }
-            let Some(entry) = prev_files.get(rel.as_str()) else {
-                continue;
-            };
-            if entry
-                .referenced_names
-                .iter()
-                .any(|name| changed_names.contains(name))
-            {
-                dirty.insert(rel.clone());
-            }
-        }
-
-        let clean_files: HashSet<String> = current
-            .iter()
-            .filter(|(_, rel)| !dirty.contains(rel))
-            .map(|(_, rel)| rel.clone())
-            .collect();
-        if clean_files.is_empty() {
+        let partition = compute_dirty_partition(db, &manifest);
+        if partition.clean_files.is_empty() {
             cache_debug(format_args!("all files dirty — full compile"));
             return None;
         }
-        let dirty_files: Vec<SourceFile> = current
-            .iter()
-            .filter(|(_, rel)| dirty.contains(rel))
-            .map(|(sf, _)| *sf)
-            .collect();
+        let DirtyPartition {
+            clean_files,
+            dirty_files,
+        } = partition;
         cache_debug(format_args!(
             "reuse plan: {} clean, {} dirty",
             clean_files.len(),
@@ -955,6 +1092,14 @@ impl CacheContext {
             })
             .collect();
 
+        // Project clean files' cached interface fragments into a per-function
+        // `callable_throws` seed (Phase 2): a clean function's throws — and hence
+        // any dirty caller's throws-dependent inference over it — are served
+        // without walking its body. The throws-taint closure guarantees a seeded
+        // function's transitive throw contributors are all unchanged.
+        let seeded_callable_throws =
+            project_callable_throws_seeds(&prev_units, &clean_files, root.as_ref());
+
         // Carry clean files' cached diagnostics blobs verbatim (already
         // rel-path-keyed): the gate rehydrates them to serve those files without
         // re-checking, and they are copied into the next manifest unchanged.
@@ -970,6 +1115,7 @@ impl CacheContext {
             dirty_files,
             prev_units,
             seeded_throw_facts,
+            seeded_callable_throws,
             clean_diagnostics,
         })
     }
@@ -1212,6 +1358,91 @@ impl CacheContext {
     fn load_prev_manifest_for_verify(&self) -> Option<ProjectManifest> {
         let bytes = self.cache.load_raw(&self.manifest_key)?;
         borsh::from_slice::<ProjectManifest>(&bytes).ok()
+    }
+
+    /// Load the previous compile's symbolic units for the verify oracle,
+    /// bypassing the `plan_reuse` verify short-circuit.
+    fn load_prev_units_for_verify(
+        &self,
+        manifest: &ProjectManifest,
+    ) -> Option<Vec<CompilationUnit>> {
+        let image_bytes = self.cache.load_raw(&image_key(&manifest.program_key))?;
+        borsh::from_slice::<LinkableImage>(&image_bytes)
+            .ok()
+            .map(|image| image.units)
+    }
+
+    /// Localized interface-fragment / `callable_throws`-seed verify oracle
+    /// (analog of `verify_stdlib_interface` / `verify_diagnostics`): under
+    /// `BAML_CACHE_VERIFY` the reuse plan is disabled, so `db` derives every
+    /// fragment honestly (no seed served). This compares each *taint-clean*
+    /// file's stored fragment against that honest re-derivation.
+    ///
+    /// The clean set is the exact throws-taint-closure partition a served warm
+    /// compile would seed — not merely the content-unchanged files — so the
+    /// oracle checks precisely what would have been seeded. A clean file whose
+    /// stored fragment differs from honest means the closure failed to dirty a
+    /// file whose `callable_throws` (or export surface) actually moved: the seed
+    /// would have been stale, a hard `bail!`. Because the fragment carries every
+    /// callable's exact `callable_throws` (both in `callable_throws_by_id` and in
+    /// each `ExportedFunction`), the whole-fragment byte compare subsumes the
+    /// per-function seeded==honest assertion.
+    pub(crate) fn verify_interface_fragments(&self, db: &ProjectDatabase) -> anyhow::Result<()> {
+        if !Self::verify_enabled() {
+            return Ok(());
+        }
+        self.check_interface_fragments_against_honest(db)
+    }
+
+    /// The env-independent core of [`Self::verify_interface_fragments`], so the
+    /// oracle's discriminating power (pass on a faithful fragment, bail on a
+    /// stale one) is unit-testable without mutating the process environment.
+    pub(crate) fn check_interface_fragments_against_honest(
+        &self,
+        db: &ProjectDatabase,
+    ) -> anyhow::Result<()> {
+        let Some(manifest) = self.load_prev_manifest_for_verify() else {
+            return Ok(());
+        };
+        let Some(prev_units) = self.load_prev_units_for_verify(&manifest) else {
+            return Ok(());
+        };
+        let Some(root) = db.get_project().map(|p| p.root(db).clone()) else {
+            return Ok(());
+        };
+        // Exactly the files a served warm compile would have seeded.
+        let clean_files = compute_dirty_partition(db, &manifest).clean_files;
+
+        for unit in &prev_units {
+            if !clean_files.contains(&unit.source_file) || unit.interface_fragment.is_empty() {
+                continue;
+            }
+            let full = root.join(&unit.source_file);
+            let Some(sf) = db.get_file(&full) else {
+                continue; // file removed — never seeded
+            };
+            let honest =
+                baml_db::baml_compiler2_tir::package_interface::file_interface_fragment(db, sf);
+            let honest_bytes = borsh::to_vec(honest).map_err(|e| {
+                anyhow::anyhow!(
+                    "honest interface fragment for `{}` failed to serialize: {e}",
+                    unit.source_file
+                )
+            })?;
+            if honest_bytes != unit.interface_fragment {
+                anyhow::bail!(
+                    "BAML_CACHE_VERIFY: cached interface fragment for `{}` differs from a fresh \
+                     derivation ({} cached vs {} fresh bytes). A clean file's stored fragment is \
+                     a stale substitute — the throws-taint closure failed to dirty a file whose \
+                     `callable_throws` or export surface changed, so the seeded value would be \
+                     wrong. Please report this.",
+                    unit.source_file,
+                    unit.interface_fragment.len(),
+                    honest_bytes.len(),
+                );
+            }
+        }
+        Ok(())
     }
 
     /// Test hook: overwrite one file's cached diagnostics with an empty blob,
