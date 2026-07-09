@@ -1465,6 +1465,31 @@ impl CacheContext {
             .store_raw(&self.manifest_key, &payload)
             .expect("manifest re-stored");
     }
+
+    /// Test hook: overwrite one file's stored interface fragment in the previous
+    /// image, simulating a stale/corrupt fragment (as a mis-projected seed would
+    /// be). Used by the fragment verify oracle's negative test.
+    #[cfg(test)]
+    pub(crate) fn poison_image_fragment_for_test(&self, rel_path: &str, fragment: Vec<u8>) {
+        let manifest_bytes = self
+            .cache
+            .load_raw(&self.manifest_key)
+            .expect("manifest present");
+        let manifest: ProjectManifest =
+            borsh::from_slice(&manifest_bytes).expect("manifest decodes");
+        let img_key = image_key(&manifest.program_key);
+        let image_bytes = self.cache.load_raw(&img_key).expect("image present");
+        let mut image: LinkableImage = borsh::from_slice(&image_bytes).expect("image decodes");
+        for unit in &mut image.units {
+            if unit.source_file == rel_path {
+                unit.interface_fragment = fragment.clone();
+            }
+        }
+        let payload = borsh::to_vec(&image).expect("image serializes");
+        self.cache
+            .store_raw(&img_key, &payload)
+            .expect("image re-stored");
+    }
 }
 
 /// The merged (gate/render) diagnostics plus the per-file blobs to persist,
@@ -1611,6 +1636,73 @@ mod tests {
             .collect();
         let _ = std::fs::remove_dir_all(&root);
         Some(dirty)
+    }
+
+    /// The reuse plan's file partition after an edit, by basename: which files
+    /// are dirty, which stay clean, and which carry a `callable_throws` seed
+    /// (Phase 2). Used by the seeding-specific scenarios below.
+    #[derive(Debug)]
+    struct PlanSummary {
+        dirty: HashSet<String>,
+        clean: HashSet<String>,
+        seeded: HashSet<String>,
+    }
+
+    fn basename(s: &str) -> String {
+        Path::new(s)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| s.to_string())
+    }
+
+    /// Compile+cache `initial`, then plan a reuse against `edited` and summarize
+    /// the partition (dirty / clean / seeded) by basename. `None` when caching is
+    /// disabled or on non-Linux (see `dirty_after_edit`). Every scenario keeps at
+    /// least one unrelated clean file so a reuse plan is always produced.
+    fn plan_after_edit(initial: &[(&str, &str)], edited: &[(&str, &str)]) -> Option<PlanSummary> {
+        if cache_disabled() || !cfg!(target_os = "linux") {
+            return None;
+        }
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+
+        let r1 = resolved(&root, initial);
+        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
+        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
+        let program1 =
+            compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile succeeds");
+        let fresh1 = ctx1
+            .collect_diagnostics_incremental(&db1, None)
+            .fresh_by_file;
+        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
+            .expect("manifest stored");
+
+        let r2 = resolved(&root, edited);
+        let db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let plan = ctx2.plan_reuse(&db2).expect("reuse plan available");
+
+        let dirty: HashSet<String> = plan
+            .dirty_files
+            .iter()
+            .filter_map(|sf| {
+                sf.path(&db2)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+            })
+            .collect();
+        let clean: HashSet<String> = plan.clean_files.iter().map(|r| basename(r)).collect();
+        let seeded: HashSet<String> = plan
+            .seeded_callable_throws
+            .keys()
+            .map(|p| basename(p))
+            .collect();
+        let _ = std::fs::remove_dir_all(&root);
+        Some(PlanSummary {
+            dirty,
+            clean,
+            seeded,
+        })
     }
 
     // ── FINDING 1: field reorder (receiver named in the signature) ───────────
@@ -1771,6 +1863,225 @@ mod tests {
             !dirty.contains("z.baml"),
             "an unrelated file must stay clean; dirty = {dirty:?}"
         );
+    }
+
+    // ── Phase 2d: seeding-specific scenarios ─────────────────────────────────
+
+    #[test]
+    fn plan_reuse_dirties_transitive_caller_through_clean_intermediary() {
+        // A -> B -> C. Only C's body is edited (its inferred throws grow from
+        // none to MyErr). B and A are byte-identical, so B is a *clean
+        // intermediary*: its own `file_throw_facts` are unchanged, yet its solved
+        // transitive throws grew and A's throws grew through it. The one-hop
+        // propagation reaches only B (which references C by name); ONLY the
+        // transitive throws-taint closure reaches A. This is the sharp §5b case
+        // — A must be dirtied so its `callable_throws` seed is never served stale.
+        let err = "class MyErr {\n  msg string\n}\n";
+        let c_v1 = "function c() -> int {\n  1\n}\n";
+        let c_v2 = "function c() -> int {\n  throw MyErr { msg: \"boom\" }\n}\n";
+        let b = "function b() -> int {\n  c()\n}\n";
+        let a = "function a() -> int {\n  b()\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("err.baml", err),
+            ("c.baml", c_v1),
+            ("b.baml", b),
+            ("a.baml", a),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("err.baml", err),
+            ("c.baml", c_v2),
+            ("b.baml", b),
+            ("a.baml", a),
+            ("z.baml", unrelated),
+        ];
+        let Some(p) = plan_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("c.baml"),
+            "the edited callee must be dirty; {p:?}"
+        );
+        assert!(
+            p.dirty.contains("b.baml"),
+            "the clean intermediary (direct caller of C) must be dirty; {p:?}"
+        );
+        assert!(
+            p.dirty.contains("a.baml"),
+            "the TRANSITIVE caller through the clean intermediary must be dirty — \
+             only the taint closure reaches it; dirty = {:?}",
+            p.dirty
+        );
+        assert!(
+            !p.seeded.contains("a.baml"),
+            "a transitively-tainted caller must NOT be seeded; seeded = {:?}",
+            p.seeded
+        );
+        assert!(
+            p.clean.contains("z.baml") && p.seeded.contains("z.baml"),
+            "an unrelated file stays clean and seeded; {p:?}"
+        );
+    }
+
+    #[test]
+    fn plan_reuse_firewall_stops_taint_at_closed_throws_contract() {
+        // A -> B -> C, but B declares a *closed* `throws` contract. C's inferred
+        // throws change ({MyErr} -> {OtherErr}), so B is (over-)dirtied for
+        // referencing C — but B's `callable_throws` is its declared set,
+        // independent of C, so the taint STOPS at B: A's throws are unchanged, so
+        // A stays clean and its seed remains valid.
+        let err = "class MyErr {\n  msg string\n}\nclass OtherErr {\n  msg string\n}\n";
+        let c_v1 = "function c() -> int {\n  throw MyErr { msg: \"x\" }\n}\n";
+        let c_v2 = "function c() -> int {\n  throw OtherErr { msg: \"y\" }\n}\n";
+        let b = "function b() -> int throws MyErr {\n  c()\n}\n";
+        let a = "function a() -> int {\n  b()\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("err.baml", err),
+            ("c.baml", c_v1),
+            ("b.baml", b),
+            ("a.baml", a),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("err.baml", err),
+            ("c.baml", c_v2),
+            ("b.baml", b),
+            ("a.baml", a),
+            ("z.baml", unrelated),
+        ];
+        let Some(p) = plan_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("c.baml"),
+            "the edited callee must be dirty; {p:?}"
+        );
+        assert!(
+            p.clean.contains("a.baml"),
+            "the closed-`throws` firewall must keep A clean; dirty = {:?}",
+            p.dirty
+        );
+        assert!(
+            p.seeded.contains("a.baml"),
+            "A must be seeded — its throws are unchanged behind the firewall; \
+             seeded = {:?}",
+            p.seeded
+        );
+    }
+
+    #[test]
+    fn plan_reuse_body_edit_not_touching_throws_keeps_callers_seeded() {
+        // A -> B -> C. B's body is rewritten (a no-op `let`), so B is
+        // content-dirty and re-emitted, but its inferred throws are unchanged, so
+        // the taint closure never fires: A stays clean and its `callable_throws`
+        // seed is served, as does the untouched callee C.
+        let c = "function c() -> int {\n  1\n}\n";
+        let b_v1 = "function b() -> int {\n  c()\n}\n";
+        let b_v2 = "function b() -> int {\n  let r = c()\n  r\n}\n";
+        let a = "function a() -> int {\n  b()\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("c.baml", c),
+            ("b.baml", b_v1),
+            ("a.baml", a),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("c.baml", c),
+            ("b.baml", b_v2),
+            ("a.baml", a),
+            ("z.baml", unrelated),
+        ];
+        let Some(p) = plan_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("b.baml"),
+            "the body-edited file must be dirty; {p:?}"
+        );
+        assert!(
+            p.clean.contains("a.baml") && p.seeded.contains("a.baml"),
+            "a caller whose callee's throws are unchanged stays clean and seeded; {p:?}"
+        );
+        assert!(
+            p.clean.contains("c.baml") && p.seeded.contains("c.baml"),
+            "the untouched callee stays clean and seeded; {p:?}"
+        );
+    }
+
+    #[test]
+    fn plan_reuse_signature_edit_invalidates_caller_seed() {
+        // A change to C's *signature* (a new param) dirties its direct caller B
+        // (which names C), so B's seed is invalidated — riding the same name
+        // propagation the throws closure extends, but proving a signature edit is
+        // also caught for the `callable_throws` seed.
+        let c_v1 = "function c() -> int {\n  1\n}\n";
+        let c_v2 = "function c(x: int) -> int {\n  x\n}\n";
+        let b_v1 = "function b() -> int {\n  c()\n}\n";
+        let b_v2 = "function b() -> int {\n  c(1)\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [("c.baml", c_v1), ("b.baml", b_v1), ("z.baml", unrelated)];
+        let edited = [("c.baml", c_v2), ("b.baml", b_v2), ("z.baml", unrelated)];
+        let Some(p) = plan_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("c.baml") && p.dirty.contains("b.baml"),
+            "a signature edit dirties the callee and its caller; {p:?}"
+        );
+        assert!(
+            !p.seeded.contains("b.baml"),
+            "a dirtied caller must not be seeded; seeded = {:?}",
+            p.seeded
+        );
+        assert!(
+            p.clean.contains("z.baml") && p.seeded.contains("z.baml"),
+            "an unrelated file stays clean and seeded; {p:?}"
+        );
+    }
+
+    #[test]
+    fn verify_interface_fragments_bails_on_stale_fragment() {
+        // Seed-vs-honest divergence tripwire (unit level): corrupt a clean file's
+        // stored fragment and the verify core must bail, naming the file. This is
+        // the single assumption the whole scheme rests on — that a served seed
+        // equals the honest re-derivation.
+        if cache_disabled() || !cfg!(target_os = "linux") {
+            return;
+        }
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+        let files = [
+            ("a.baml", "function a() -> int {\n  1\n}\n"),
+            ("b.baml", "function b() -> int {\n  2\n}\n"),
+        ];
+        let r = resolved(&root, &files);
+        let db = crate::project_load::build_db_from_sources(&r, |_| {});
+        let ctx = CacheContext::open(&r, false).expect("cache opens");
+        let program = compile_program(&db, &opts(), Some(&ctx), None).expect("compile succeeds");
+        let fresh = ctx.collect_diagnostics_incremental(&db, None).fresh_by_file;
+        ctx.store_with_manifest(&db, &program, &fresh, None)
+            .expect("manifest stored");
+
+        // A faithful fragment cache passes the oracle (all files content-clean).
+        let db2 = crate::project_load::build_db_from_sources(&r, |_| {});
+        let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
+        ctx2.check_interface_fragments_against_honest(&db2)
+            .expect("faithful fragments pass the oracle");
+
+        // Corrupt a.baml's stored fragment; the oracle must now bail on it.
+        ctx2.poison_image_fragment_for_test("a.baml", vec![0xde, 0xad, 0xbe, 0xef]);
+        let db3 = crate::project_load::build_db_from_sources(&r, |_| {});
+        let err = ctx2
+            .check_interface_fragments_against_honest(&db3)
+            .expect_err("a stale stored fragment must bail");
+        assert!(
+            err.to_string().contains("a.baml"),
+            "the bail must name the drifted file; got: {err}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     // ── Risk 2: impl edit dirties coherence peers ────────────────────────────
