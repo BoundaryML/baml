@@ -192,6 +192,7 @@ prost-build = "0.14.1"
 protoc-bin-vendored = "3"
 quote = { version = "1" }
 ratatui = "0.29"
+rayon = { version = "1.10" }
 regex = { version = "1.10.2" }
 base64 = "0.22"
 bytecount = "0.6"

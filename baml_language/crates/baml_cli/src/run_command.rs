@@ -246,13 +246,11 @@ impl RunArgs {
 
     /// Compile `db` to bytecode and build a `BexEngine`.
     fn compile_to_engine(&self, db: &ProjectDatabase, argv: Vec<String>) -> Result<BexEngine> {
-        let bytecode = baml_compiler2_emit::generate_project_bytecode(
-            db,
-            &baml_compiler2_emit::CompileOptions {
+        let bytecode = db
+            .generate_bytecode_unchecked(&baml_compiler2_emit::CompileOptions {
                 emit_test_cases: false,
-            },
-        )
-        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            })
+            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
         BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), argv)
             .map_err(|e| anyhow!("Failed to create engine: {e:?}"))
     }

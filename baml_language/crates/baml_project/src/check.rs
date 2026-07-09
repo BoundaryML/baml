@@ -59,10 +59,33 @@ pub fn collect_diagnostics(
 /// stable snapshot output.
 pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
-    let mut diagnostics: Vec<Diagnostic> = Vec::new();
-    for file in &source_files {
-        diagnostics.extend(lsp2_check_file(db, *file));
-    }
+
+    // Per-file checking is independent (results are sorted below), so fan it
+    // out across cores. Salsa db handles are Send but not Sync (per-handle
+    // local state), so clone one per file up front and move it into the
+    // worker; the handles share storage and synchronize per query, so a
+    // package-level query is still computed once and reused by all workers.
+    #[cfg(not(target_arch = "wasm32"))]
+    let mut diagnostics: Vec<Diagnostic> = {
+        use rayon::prelude::*;
+        let mut work: Vec<(ProjectDatabase, SourceFile)> =
+            source_files.iter().map(|file| (db.clone(), *file)).collect();
+        // Largest files first: check cost varies wildly per file, and a big
+        // file picked up last leaves every other worker idle waiting for it.
+        work.sort_by_key(|(_, file)| std::cmp::Reverse(file.text(db).len()));
+        work.into_par_iter()
+            .flat_map_iter(|(db, file)| lsp2_check_file(&db, file))
+            .collect()
+    };
+
+    #[cfg(target_arch = "wasm32")]
+    let mut diagnostics: Vec<Diagnostic> = {
+        let mut diagnostics = Vec::new();
+        for file in &source_files {
+            diagnostics.extend(lsp2_check_file(db, *file));
+        }
+        diagnostics
+    };
 
     // Collect package-level diagnostics (name conflicts and namespace shadows).
     // Discover all unique packages from file metadata.

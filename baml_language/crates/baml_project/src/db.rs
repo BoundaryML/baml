@@ -430,7 +430,76 @@ impl ProjectDatabase {
         let opts = baml_compiler2_emit::CompileOptions {
             emit_test_cases: false,
         };
-        baml_compiler2_emit::generate_project_bytecode(self, &opts)
+        self.generate_bytecode_unchecked(&opts)
+    }
+
+    /// Compile the project to bytecode with the given options, pre-lowering
+    /// all function MIR in parallel on native targets.
+    ///
+    /// "Unchecked" = no diagnostics gate: the caller must already have
+    /// verified the project has no type errors (MIR lowering deliberately
+    /// panics when error-recovery types reach it). CLI commands that render
+    /// diagnostics themselves (`test`, `run`, `pack`, `check`) call this
+    /// after their own gate; everything else should go through
+    /// [`Self::get_bytecode`].
+    pub fn generate_bytecode_unchecked(
+        &self,
+        opts: &baml_compiler2_emit::CompileOptions,
+    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
+        let opt = baml_compiler2_mir::OptLevel::Two;
+        #[cfg(not(target_arch = "wasm32"))]
+        return baml_compiler2_emit::generate_project_bytecode_prelowered(
+            self,
+            opts,
+            opt,
+            self.pre_lower_mir_parallel(opt),
+        );
+        #[cfg(target_arch = "wasm32")]
+        baml_compiler2_emit::generate_project_bytecode_with_opt(self, opts, opt)
+    }
+
+    /// Lower every function's MIR in parallel, for [`Self::get_bytecode`].
+    ///
+    /// MIR lowering (`lower_function_cached`) is not a Salsa query and
+    /// dominates bytecode-build time, but functions lower independently, so
+    /// fan the work out per file across cores. Each worker moves its own
+    /// cloned db handle (Salsa handles share storage and synchronize per
+    /// query) and shares one dispatch-candidate cache across the functions of
+    /// its file. The emit driver consumes the map and falls back to lowering
+    /// inline for anything missing, so the map is purely a performance
+    /// hand-off. Uses the PPIR item tree — the same enumeration the emit
+    /// driver's Pass 4 walks — so keys line up exactly.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn pre_lower_mir_parallel(
+        &self,
+        opt: baml_compiler2_mir::OptLevel,
+    ) -> baml_compiler2_emit::PreLoweredMir {
+        use rayon::prelude::*;
+        let files = baml_compiler2_hir::compiler2_all_files(self);
+        let work: Vec<(ProjectDatabase, SourceFile)> =
+            files.iter().map(|file| (self.clone(), *file)).collect();
+        work.into_par_iter()
+            .flat_map_iter(|(db, file)| {
+                let item_tree = baml_compiler2_ppir::file_item_tree(&db, file);
+                let dispatch_cache = std::rc::Rc::default();
+                let lowered: Vec<_> = item_tree
+                    .functions
+                    .keys()
+                    .map(|local_id| {
+                        let func_loc =
+                            baml_compiler2_hir::loc::FunctionLoc::new(&db, file, *local_id);
+                        let mir = baml_compiler2_mir::lower_function_cached(
+                            &db,
+                            func_loc,
+                            opt,
+                            &dispatch_cache,
+                        );
+                        ((file, *local_id), mir)
+                    })
+                    .collect();
+                lowered
+            })
+            .collect()
     }
 
     /// Build a control flow graph for the given function using the compiler2 AST builder.

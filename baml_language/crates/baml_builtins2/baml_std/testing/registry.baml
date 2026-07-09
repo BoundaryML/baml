@@ -18,30 +18,36 @@ class TestCollector {
   prefix string
   tests TestRegistration[]
   testsets TestSetRegistration[]
+  // Registrations seen per base name, for duplicate-name numbering ("x",
+  // "x#2", "x#3", …). A counter map instead of rescanning the arrays keeps
+  // registration O(1) — projects register thousands of tests and the rescan
+  // made discovery quadratic. Tests and testsets number independently.
+  test_name_counts map<string, int>
+  testset_name_counts map<string, int>
 
   function new(prefix: string) -> TestCollector {
-    TestCollector { prefix: prefix, tests: [], testsets: [] }
+    TestCollector { prefix: prefix, tests: [], testsets: [], test_name_counts: {}, testset_name_counts: {} }
   }
 
   function register_test(self, name: string, body: TestBody, runner: TestRunner?) -> void {
     let full_name = if (self.prefix == "") { name } else { self.prefix + "/" + name }
-    let count = 0
-    let hash_prefix = full_name + "#"
-    for (let t in self.tests) {
-      if (t.name == full_name || t.name.starts_with(hash_prefix)) { count += 1 } else { null }
+    let count = match (self.test_name_counts.get(full_name)) {
+      let c: int => c,
+      null => 0,
     }
     let final_name = if (count > 0) { full_name + "#" + string.from(count + 1) } else { full_name }
+    self.test_name_counts.set(full_name, count + 1)
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner })
   }
 
   function register_test_set(self, name: string, collector: TestSetBody, runner: TestSetRunner?) -> void {
     let full_name = if (self.prefix == "") { name } else { self.prefix + "/" + name }
-    let count = 0
-    let hash_prefix = full_name + "#"
-    for (let ts in self.testsets) {
-      if (ts.name == full_name || ts.name.starts_with(hash_prefix)) { count += 1 } else { null }
+    let count = match (self.testset_name_counts.get(full_name)) {
+      let c: int => c,
+      null => 0,
     }
     let final_name = if (count > 0) { full_name + "#" + string.from(count + 1) } else { full_name }
+    self.testset_name_counts.set(full_name, count + 1)
     let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner })
   }
 
@@ -214,7 +220,7 @@ class TestRegistry {
       let existing: TestRegistry => existing,
       null => {
         let start = baml.sys.now_ms()
-        let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] }
+        let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [], test_name_counts: {}, testset_name_counts: {} }
         ts.collector(sub_collector)
         let elapsed = baml.sys.now_ms() - start
         let sub_registry = TestRegistry {

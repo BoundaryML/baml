@@ -38,6 +38,11 @@ salsa = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
 text-size = { workspace = true }
 
+# CPU-parallel `check` fan-out. Not available on wasm (bridge_wasm depends on
+# this crate transitively): wasm builds keep the serial loop.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = { workspace = true }
+
 [features]
 default = [  ]
 # Exposes `baml_project::testing::*`, which contains compile helpers that panic

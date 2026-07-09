@@ -21,9 +21,9 @@ use baml_compiler2_hir::{
     package::PackageId,
 };
 use baml_compiler2_mir::{
-    BuiltinKind, DispatchCandidateCache, Local, MirFunctionBody, MirFunctionKind, Operand, Place,
-    ResolvedAliases, Rvalue, StatementKind, Terminator, def_to_item_ref, lower_function_cached,
-    lower_let_body_cached,
+    BuiltinKind, DispatchCandidateCache, Local, MirFunction, MirFunctionBody, MirFunctionKind,
+    Operand, Place, ResolvedAliases, Rvalue, StatementKind, Terminator, def_to_item_ref,
+    lower_function_cached, lower_let_body_cached,
 };
 // Use the PPIR item tree (which includes synthetic *$stream items) rather than
 // the bare HIR item tree, to stay consistent with TIR's LocalItemId indices.
@@ -861,6 +861,20 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     baml_type::QualifiedTypeName::from_dotted_path(fq)
 }
 
+/// Functions already lowered to MIR by the caller (possibly in parallel),
+/// keyed the same way Pass 4 enumerates them: `(file, local item id)` from the
+/// PPIR item tree. Entries MUST have been lowered at the same [`OptLevel`]
+/// passed to the driver; the driver consumes matching entries and falls back
+/// to lowering inline for anything missing, so the map is purely a
+/// performance hand-off.
+pub type PreLoweredMir = rustc_hash::FxHashMap<
+    (
+        baml_base::SourceFile,
+        baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
+    ),
+    MirFunction,
+>;
+
 /// Generate bytecode for the entire project (default: `OptLevel::Two`).
 pub fn generate_project_bytecode(
     db: &dyn baml_compiler2_mir::Db,
@@ -874,6 +888,26 @@ pub fn generate_project_bytecode_with_opt(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
     opt: OptLevel,
+) -> Result<Program, LoweringError> {
+    generate_project_bytecode_inner(db, options, opt, PreLoweredMir::default())
+}
+
+/// [`generate_project_bytecode_with_opt`] consuming caller-pre-lowered MIR
+/// (see [`PreLoweredMir`]). `opt` must match the level the map was lowered at.
+pub fn generate_project_bytecode_prelowered(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    pre_lowered: PreLoweredMir,
+) -> Result<Program, LoweringError> {
+    generate_project_bytecode_inner(db, options, opt, pre_lowered)
+}
+
+fn generate_project_bytecode_inner(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    mut pre_lowered: PreLoweredMir,
 ) -> Result<Program, LoweringError> {
     let mut program = Program::new();
     let all_files = compiler2_all_files(db);
@@ -1243,8 +1277,9 @@ pub fn generate_project_bytecode_with_opt(
         let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir =
-                lower_function_cached(db, func_loc, opt, &dispatch_caches[&pkg_info_pass4.package]);
+            let mir = pre_lowered.remove(&(*file, *local_id)).unwrap_or_else(|| {
+                lower_function_cached(db, func_loc, opt, &dispatch_caches[&pkg_info_pass4.package])
+            });
             let fq_name = mir.item_ref.to_string();
 
             let mut compiled_fn = match &mir.kind {
@@ -2958,6 +2993,7 @@ mod tests {
             origin: ast::FunctionOrigin::UserDefined,
             docstring: None,
             is_tagged_template_tag: false,
+            llm_companion_suffix: None,
             span: baml_base::Span::fake().range,
         };
         let parameter_defaults = baml_compiler2_hir::signature::FunctionParameterDefaults {
