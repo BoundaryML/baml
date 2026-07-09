@@ -17,10 +17,11 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.OpenRouterMistralSmall3_1_24b$new() -> null {
+function user.OpenRouterMistralSmall3_1_24b$new(lenient: bool) -> null {
     load_const "OPENROUTER_API_KEY"
-    call baml.env.get_or_panic
-    store_var _2
+    load_var lenient
+    call baml.env.get_or_panic_lenient
+    store_var _3
     load_const "OpenRouterMistralSmall3_1_24b"
     load_const "openai-generic"
     load_const "mistralai/mistral-small-3.1-24b-instruct"
@@ -32,7 +33,7 @@ function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     load_const null
     load_const null
     load_const null
-    load_var _2
+    load_var _3
     load_const null
     load_const null
     load_type string

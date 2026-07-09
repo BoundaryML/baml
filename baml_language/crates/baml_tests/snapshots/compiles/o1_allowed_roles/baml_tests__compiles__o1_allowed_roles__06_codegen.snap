@@ -23,7 +23,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.Gpt4oClient$new() -> null {
+function user.Gpt4oClient$new(lenient: bool) -> null {
     load_const "Gpt4oClient"
     load_const "openai"
     load_const "gpt-4o"
@@ -52,7 +52,7 @@ function user.Gpt4oClient$new() -> null {
     return
 }
 
-function user.O1Client$new() -> null {
+function user.O1Client$new(lenient: bool) -> null {
     load_const "O1Client"
     load_const "openai"
     load_const "o1"
@@ -81,7 +81,7 @@ function user.O1Client$new() -> null {
     return
 }
 
-function user.O1MiniClient$new() -> null {
+function user.O1MiniClient$new(lenient: bool) -> null {
     load_const "O1MiniClient"
     load_const "openai"
     load_const "o1-mini"
@@ -110,7 +110,7 @@ function user.O1MiniClient$new() -> null {
     return
 }
 
-function user.O1WithExplicitRoles$new() -> null {
+function user.O1WithExplicitRoles$new(lenient: bool) -> null {
     load_const "O1WithExplicitRoles"
     load_const "openai"
     load_const "o1"

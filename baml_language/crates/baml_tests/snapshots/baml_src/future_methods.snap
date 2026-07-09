@@ -116,5 +116,10 @@ function future_methods.methods_on_pending_future() -> baml.future.FutureState {
     pop 1
     load_var f
     call baml.future.Future.state
+    store_var observed
+    load_var f
+    call baml.future.Future.cancel
+    pop 1
+    load_var observed
     return
 }

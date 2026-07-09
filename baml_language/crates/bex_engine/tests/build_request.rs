@@ -9,6 +9,10 @@
 //! option forwarding live in `sys_llm::build_request::openai::tests` and
 //! `sys_llm::build_request::mod::tests`.
 
+// The B-489 api_key-defaulting tests set `OPENAI_API_KEY` via `std::env::set_var`
+// (nextest isolates each test in its own process).
+#![allow(unsafe_code)]
+
 mod common;
 
 use std::sync::Arc;
@@ -146,6 +150,88 @@ function get_body() -> string {
                 }
             ]
         })
+    );
+}
+
+// ============================================================================
+// Named client api_key defaulting (B-489)
+//
+// A named `client<llm>` with `provider openai` and no explicit `api_key` must
+// default the key from the provider's conventional env var (`OPENAI_API_KEY`),
+// exactly as the `"openai/model"` inline shorthand does. An explicit `api_key`
+// in `options` still wins.
+//
+// These tests read the `authorization` header on the built request rather than
+// the body (auth headers are where the key lands). They rely on nextest's
+// process-per-test isolation for the `OPENAI_API_KEY` env var; both write the
+// same value so a shared-process `cargo test` run cannot observe a torn value.
+// ============================================================================
+
+const OPENAI_ENV_KEY: &str = "sk-from-env-b489";
+
+/// Read the `authorization` header off the request `F$build_request` builds.
+async fn openai_authorization_header(source: &str) -> String {
+    let full = [
+        source,
+        r##"
+function F(name: string) -> string {
+    client C
+    prompt #"Hello, {{ name }}!"#
+}
+function get_auth() -> string {
+    baml.llm.build_request(C, "F", { "name": "Alice" }).headers.get("authorization") ?? "MISSING"
+}
+"##,
+    ]
+    .join("\n");
+    let result = run_baml(&full, "get_auth").await;
+    as_string(&result).to_string()
+}
+
+#[tokio::test]
+async fn test_named_openai_client_defaults_api_key_from_env() {
+    // SAFETY: nextest runs each test in its own process; other tests in this
+    // binary set `api_key` explicitly and never read `OPENAI_API_KEY`.
+    unsafe { std::env::set_var("OPENAI_API_KEY", OPENAI_ENV_KEY) };
+
+    // Named client, provider openai, NO explicit api_key.
+    let auth = openai_authorization_header(
+        r#"
+client C {
+    provider openai
+    options { model "gpt-4o" }
+}
+"#,
+    )
+    .await;
+
+    assert_eq!(
+        auth,
+        format!("Bearer {OPENAI_ENV_KEY}"),
+        "named openai client with no api_key should default to OPENAI_API_KEY"
+    );
+}
+
+#[tokio::test]
+async fn test_named_openai_client_explicit_api_key_overrides_env() {
+    // SAFETY: see sibling test. Same value written so a shared-process run
+    // cannot race on the value.
+    unsafe { std::env::set_var("OPENAI_API_KEY", OPENAI_ENV_KEY) };
+
+    // Explicit api_key must win over the env-var default.
+    let auth = openai_authorization_header(
+        r#"
+client C {
+    provider openai
+    options { model "gpt-4o"  api_key "sk-explicit" }
+}
+"#,
+    )
+    .await;
+
+    assert_eq!(
+        auth, "Bearer sk-explicit",
+        "explicit api_key must override the OPENAI_API_KEY default"
     );
 }
 

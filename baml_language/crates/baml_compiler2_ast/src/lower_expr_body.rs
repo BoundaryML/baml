@@ -787,6 +787,8 @@ impl LoweringContext {
             SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
             SyntaxKind::THROW_EXPR => self.lower_throw_expr(node),
             SyntaxKind::RETURN_EXPR => self.lower_return_expr(node),
+            SyntaxKind::BREAK_EXPR => self.lower_jump_expr(node, Stmt::Break),
+            SyntaxKind::CONTINUE_EXPR => self.lower_jump_expr(node, Stmt::Continue),
             SyntaxKind::BLOCK_EXPR => {
                 if let Some(block) = baml_compiler_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
@@ -1275,6 +1277,11 @@ impl LoweringContext {
         let mut op = None;
         let mut operand = None;
         let mut double_op = false;
+        // Set when the prefix operator is `~` (bitwise NOT). Desugared below
+        // into `-x - 1` (two's-complement complement) rather than a dedicated
+        // `UnaryOp` variant, so it reuses the existing, correct `Neg`/`Sub`
+        // type rules and VM opcodes without a new operator in the pipeline.
+        let mut bit_not = false;
         // Value of an `INTEGER_LITERAL` token seen *directly* in this
         // `UNARY_EXPR` (not via a child node like a parenthesized expr).
         let mut direct_int_lit: Option<i64> = None;
@@ -1288,6 +1295,7 @@ impl LoweringContext {
                     let span = token.text_range();
                     match token.kind() {
                         SyntaxKind::NOT => op = Some(UnaryOp::Not),
+                        SyntaxKind::TILDE => bit_not = true,
                         SyntaxKind::MINUS => op = Some(UnaryOp::Neg),
                         SyntaxKind::MINUS_MINUS => {
                             op = Some(UnaryOp::Neg);
@@ -1329,6 +1337,45 @@ impl LoweringContext {
         }
 
         let expr = operand.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+
+        // Bitwise NOT: desugar `~x` into `-x - 1`. Two's-complement complement
+        // is `~x == -x - 1`, correct for every BAML int (63-bit signed) whose
+        // negation is representable. Lowering to existing `Neg`/`Sub` keeps `~`
+        // out of the type checker and VM as a distinct operator while producing
+        // the correct value; the operand is evaluated exactly once. The lone
+        // corner is `~INT_MIN`: its result (`INT_MAX`) is representable, but the
+        // intermediate `-INT_MIN` overflows the range, so it throws/errors like
+        // any other `-INT_MIN` — an inherent limitation of negating INT_MIN
+        // here, not a silent wrong answer (the bug this fix removes).
+        if bit_not {
+            let span = node.span_range();
+            // Every node built here is compiler-generated: the user wrote `~`,
+            // which desugars away entirely, so — unlike the backtick/tagged
+            // desugarings, whose outer `Template` still maps 1:1 to user syntax
+            // — no surviving node corresponds to the source. Mark all of them
+            // synthetic (so tooling like inlay hints skips them) and restore the
+            // flag afterward. Only the operand `x`, lowered above, is user code
+            // and keeps its real, non-synthetic id.
+            let prev_synth = std::mem::replace(&mut self.synthesizing, true);
+            let neg = self.alloc_expr(
+                Expr::Unary {
+                    op: UnaryOp::Neg,
+                    expr,
+                },
+                span,
+            );
+            let one = self.alloc_expr(Expr::Literal(Literal::Int(1)), span);
+            let result = self.alloc_expr(
+                Expr::Binary {
+                    op: BinaryOp::Sub,
+                    lhs: neg,
+                    rhs: one,
+                },
+                span,
+            );
+            self.synthesizing = prev_synth;
+            return result;
+        }
 
         let Some(op) = op else {
             return expr;
@@ -4510,6 +4557,28 @@ impl LoweringContext {
     fn lower_return_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let value = self.lower_optional_return_value(node);
         self.alloc_expr(Expr::Return { value }, node.span_range())
+    }
+
+    /// Lower a `break`/`continue` used in expression position (`BREAK_EXPR` /
+    /// `CONTINUE_EXPR`, e.g. a bare match arm `0 => break`) into a block that
+    /// holds the corresponding jump statement: `{ break; }` / `{ continue; }`.
+    ///
+    /// `break`/`continue` carry no value, so — unlike `return` — they need no
+    /// dedicated `Expr` variant. Desugaring to a single-statement block reuses
+    /// the fully-tested `Stmt::Break`/`Stmt::Continue` machinery (divergence
+    /// typing to `never`, defer replay/unwatch, defer-escape diagnostics) and
+    /// makes the braceless form behave identically to the already-accepted
+    /// braced arm.
+    fn lower_jump_expr(&mut self, node: &SyntaxNode, jump: Stmt) -> ExprId {
+        let span = node.span_range();
+        let stmt = self.alloc_stmt(jump, span);
+        self.alloc_expr(
+            Expr::Block {
+                stmts: vec![stmt],
+                tail_expr: None,
+            },
+            span,
+        )
     }
 
     /// Lower `defer { BODY }` (BEP-042). The CST shape is

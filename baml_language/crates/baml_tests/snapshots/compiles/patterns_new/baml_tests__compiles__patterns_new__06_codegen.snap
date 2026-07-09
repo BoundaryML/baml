@@ -881,11 +881,14 @@ function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) 
 
 function user.unwrap_typed(cb: ((int) -> T throws never) | ((string) -> T throws never)) -> T {
     load_var cb
-    is_type (int) -> T throws never
+    is_type (int) -> #0 throws never
     pop_jump_if_false L0
     jump L1
 
   L0:
+    load_var cb
+    is_type (string) -> #0 throws never
+    pop_jump_if_false L3
     load_const ""
     load_var cb
     call_indirect
@@ -898,4 +901,7 @@ function user.unwrap_typed(cb: ((int) -> T throws never) | ((string) -> T throws
 
   L2:
     return
+
+  L3:
+    unreachable
 }

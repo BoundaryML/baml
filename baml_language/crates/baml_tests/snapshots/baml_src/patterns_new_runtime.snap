@@ -747,7 +747,7 @@ function patterns_new_runtime.dispatch_union_cb(cb: ((int) -> int throws never) 
 
 function patterns_new_runtime.exact_length(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -759,7 +759,7 @@ function patterns_new_runtime.exact_length(xs: int[]) -> int {
 
   L0:
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L1
     load_var xs
     container_len
@@ -771,7 +771,7 @@ function patterns_new_runtime.exact_length(xs: int[]) -> int {
 
   L1:
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L2
     load_var xs
     container_len
@@ -1663,7 +1663,7 @@ function patterns_new_runtime.pick_sheet(s: patterns_new_runtime.Sheet1) -> int 
 
 function patterns_new_runtime.prefix_length(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -1850,7 +1850,7 @@ function patterns_new_runtime.score_abcde(v: patterns_new_runtime.ABCDE_A | patt
 
 function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
     load_var xs
-    is_type bool[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -1868,7 +1868,7 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
 
   L0:
     load_var xs
-    is_type bool[]
+    is_type _[]
     pop_jump_if_false L1
     load_var xs
     container_len
@@ -1890,7 +1890,7 @@ function patterns_new_runtime.score_bool_slice(xs: bool[]) -> int {
 
   L1:
     load_var xs
-    is_type bool[]
+    is_type _[]
     pop_jump_if_false L2
     load_var xs
     container_len
@@ -1951,7 +1951,7 @@ function patterns_new_runtime.score_depth(v: patterns_new_runtime.DepthClass | p
 
 function patterns_new_runtime.score_empty_prefix_rest(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -1980,7 +1980,7 @@ function patterns_new_runtime.score_exact_length_45() -> int {
     load_type int
     alloc_array 2
     store_var_load_var _1
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var _1
     container_len
@@ -1992,7 +1992,7 @@ function patterns_new_runtime.score_exact_length_45() -> int {
 
   L0:
     load_var _1
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L1
     load_var _1
     container_len
@@ -2204,7 +2204,7 @@ function patterns_new_runtime.score_int_string_array(v: int[] | string[]) -> int
 
 function patterns_new_runtime.score_ints(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -2228,7 +2228,7 @@ function patterns_new_runtime.score_ints(xs: int[]) -> int {
 
   L0:
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L1
     load_var xs
     container_len
@@ -2364,7 +2364,7 @@ function patterns_new_runtime.score_or_array_refine(v: int[] | string[]) -> int 
 
 function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
     load_var rows
-    is_type int[][]
+    is_type _[]
     pop_jump_if_false L0
     load_var rows
     container_len
@@ -2388,7 +2388,7 @@ function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
 
   L0:
     load_var rows
-    is_type int[][]
+    is_type _[]
     pop_jump_if_false L1
     load_var rows
     container_len
@@ -2435,7 +2435,7 @@ function patterns_new_runtime.score_or_nested_2d(rows: int[][]) -> int {
 
 function patterns_new_runtime.score_or_share(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -2447,7 +2447,7 @@ function patterns_new_runtime.score_or_share(xs: int[]) -> int {
 
   L0:
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L1
     load_var xs
     container_len
@@ -2478,10 +2478,10 @@ function patterns_new_runtime.score_or_share(xs: int[]) -> int {
 
 function patterns_new_runtime.score_outer_chain(xs: int[][]) -> int {
     load_var xs
-    is_type int[][]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
-    is_type int[][]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -2624,7 +2624,7 @@ function patterns_new_runtime.score_personid(v: patterns_new_runtime.PersonIdA |
 
 function patterns_new_runtime.score_prefix_two_suffix(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -2697,7 +2697,7 @@ function patterns_new_runtime.score_refine_a(v: patterns_new_runtime.RefineA | p
 
 function patterns_new_runtime.score_rest_copy(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -2731,7 +2731,7 @@ function patterns_new_runtime.score_rest_copy(xs: int[]) -> int {
 
 function patterns_new_runtime.score_strings_len(xs: string[]) -> int {
     load_var xs
-    is_type string[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -2760,7 +2760,7 @@ function patterns_new_runtime.score_strings_len(xs: string[]) -> int {
 
 function patterns_new_runtime.score_suffix_rest(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -2801,7 +2801,7 @@ function patterns_new_runtime.score_suffix_rest(xs: int[]) -> int {
 
 function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -> int {
     load_var teams
-    is_type patterns_new_runtime.Team2[]
+    is_type _[]
     pop_jump_if_false L0
     load_var teams
     container_len
@@ -2830,7 +2830,7 @@ function patterns_new_runtime.score_team2(teams: patterns_new_runtime.Team2[]) -
 
   L0:
     load_var teams
-    is_type patterns_new_runtime.Team2[]
+    is_type _[]
     pop_jump_if_false L1
     load_var teams
     container_len
@@ -2946,7 +2946,7 @@ function patterns_new_runtime.score_team4(team: patterns_new_runtime.Team4) -> i
 
 function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -2990,7 +2990,7 @@ function patterns_new_runtime.score_two_prefix(xs: int[]) -> int {
 
 function patterns_new_runtime.score_user_score(users: patterns_new_runtime.UserScore[]) -> int {
     load_var users
-    is_type patterns_new_runtime.UserScore[]
+    is_type _[]
     pop_jump_if_false L0
     load_var users
     container_len
@@ -3025,7 +3025,7 @@ function patterns_new_runtime.score_user_score(users: patterns_new_runtime.UserS
 
 function patterns_new_runtime.score_wildcard_second(xs: int[]) -> int {
     load_var xs
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var xs
     container_len
@@ -3050,7 +3050,7 @@ function patterns_new_runtime.score_wildcard_second(xs: int[]) -> int {
 
 function patterns_new_runtime.score_wildcard_user(users: patterns_new_runtime.UserScore[]) -> int {
     load_var users
-    is_type patterns_new_runtime.UserScore[]
+    is_type _[]
     pop_jump_if_false L0
     load_var users
     container_len
@@ -3081,7 +3081,7 @@ function patterns_new_runtime.score_wildcard_user(users: patterns_new_runtime.Us
 
 function patterns_new_runtime.score_wrap2(v: int[][] | patterns_new_runtime.Wrap2) -> int {
     load_var v
-    is_type int[][]
+    is_type _[]
     pop_jump_if_false L0
     load_var v
     container_len
@@ -5790,7 +5790,7 @@ function patterns_new_runtime.test_match_alphabet() -> int {
     load_type int
     alloc_array 26
     store_var_load_var _1
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var _1
     container_len
@@ -5919,7 +5919,7 @@ function patterns_new_runtime.test_match_array_shadows_outer() -> int {
     load_type int
     alloc_array 2
     store_var_load_var _3
-    is_type int[]
+    is_type _[]
     pop_jump_if_false L0
     load_var _3
     container_len
@@ -5996,10 +5996,10 @@ function patterns_new_runtime.test_match_chain_trailing_binding() -> int {
     load_type int[]
     alloc_array 1
     store_var_load_var _1
-    is_type int[][]
+    is_type _[]
     pop_jump_if_false L0
     load_var _1
-    is_type int[][]
+    is_type _[]
     pop_jump_if_false L0
     load_var _1
     container_len
@@ -6139,7 +6139,7 @@ function patterns_new_runtime.test_match_nested_array_projects_inner() -> int {
     load_type int[]
     alloc_array 1
     store_var_load_var _1
-    is_type int[][]
+    is_type _[]
     pop_jump_if_false L0
     load_var _1
     container_len

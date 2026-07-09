@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { ExecutionPanel, WebSocketRuntimePort, type SourceNavigationTarget } from '@b/pkg-playground';
+import {
+  ExecutionPanel,
+  WebSocketRuntimePort,
+  type WebSocketRuntimePortStatus,
+  type SourceNavigationTarget,
+} from '@b/pkg-playground';
+// Subpath import: the package index re-exports MonacoEditor, which must stay
+// out of this bundle (see the lazy() note below).
+import { withPlaygroundToken } from '@b/pkg-editor/token';
 
 // Monaco workbench is heavy (monaco-vscode-api) and only needed when the user
 // opens the editor view; lazy-load it so the plain playground (and the VS Code
@@ -54,6 +62,8 @@ function getVsCodeApi() {
 
 const App: React.FC = () => {
   const [port, setPort] = useState<WebSocketRuntimePort | null>(null);
+  const [connectionStatus, setConnectionStatus] =
+    useState<WebSocketRuntimePortStatus>('connecting');
   const [activeProject, setActiveProject] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [editorHasUnsaved, setEditorHasUnsaved] = useState(false);
@@ -104,14 +114,21 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // When loaded directly in a VS Code webview (no iframe), the extension
-    // injects __PLAYGROUND_WS_URL. Fall back to location-based URL for
+    // injects __PLAYGROUND_WS_URL (no session token in that mode). Fall back
+    // to a location-based URL — carrying the page's ?token= — for
     // standalone / iframe / dev scenarios.
     const wsUrl =
-      window.__PLAYGROUND_WS_URL ?? `ws://${window.location.host}/api/ws`;
+      window.__PLAYGROUND_WS_URL ??
+      withPlaygroundToken(`ws://${window.location.host}/api/ws`);
     const runtimePort = new WebSocketRuntimePort(wsUrl);
     setPort(runtimePort);
     return () => runtimePort.dispose();
   }, []);
+
+  useEffect(() => {
+    if (!port) return;
+    return port.onStatusChange(setConnectionStatus);
+  }, [port]);
 
   // Track the active project from playground notifications so the editor view
   // can be rooted at (and load source files for) the real project.
@@ -210,6 +227,12 @@ const App: React.FC = () => {
 
   return (
     <div className="playground-root flex h-full min-h-0 w-full flex-col overflow-hidden">
+      {connectionStatus === 'retrying' && (
+        <div className="shrink-0 border-b border-amber-600/50 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-600">
+          Can&apos;t reach the playground server — open the exact URL printed by{' '}
+          <code>baml playground</code>, including the token.
+        </div>
+      )}
       {(inVsCode || canShowEditor) && (
         <header className="flex h-10 shrink-0 items-center justify-end gap-2 border-b border-border bg-background px-2">
           {editorActive && (

@@ -3,7 +3,7 @@ name = "__PYPROJECT_NAME__"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "baml_core",
+    "baml_bridge",
     "pydantic>=2",
     # `UNSET` is a `typing_extensions.Sentinel` (PEP 661); recognizing a
     # sentinel in a type expression needs pyright >= 1.1.410.
@@ -21,7 +21,7 @@ dev = []
 package = false
 
 [tool.uv.sources]
-baml_core = { path = "../../../../../sdks/python", editable = true }
+baml_bridge = { path = "../../../../../sdks/python", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["."]

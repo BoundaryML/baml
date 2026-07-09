@@ -54,6 +54,15 @@ test "shift_right" {
     assert.is_true(baml.deep_equals(10 >> 3, 1))
 }
 
+// Bitwise NOT (`~`) is two's-complement complement: `~x == -x - 1`. Regression
+// for B-766, where `~` silently lowered to the identity (`~x == x`).
+test "bitwise_not" {
+    assert.is_true(baml.deep_equals(~0, -1))
+    assert.is_true(baml.deep_equals(~1, -2))
+    assert.is_true(baml.deep_equals(~255, -256))
+    assert.is_true(baml.deep_equals(~(-1), 0))
+}
+
 // ─── Unary ───────────────────────────────────────────────────────────────────
 
 test "unary_negate" {

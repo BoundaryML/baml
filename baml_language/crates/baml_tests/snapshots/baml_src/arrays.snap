@@ -758,6 +758,107 @@ function arrays.$init_test_ns_arrays_arrays(registry: testing.TestCollector) -> 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "array_generate_passes_index_0_to_n_minus_1"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 179)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_maps_index_through_f"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 181)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_calls_f_once_per_index"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 183)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_slots_are_independent"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 185)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_filled_shares_mutable_slots_unlike_generate"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 186)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_zero_length_is_empty"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 187)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_negative_length_is_empty"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 189)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_propagates_error"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 191)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function arrays.$init_test_ns_arrays_reductions(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "float_mean_basic"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_mean_single"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_mean_empty_throws"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_odd"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_even"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_unsorted_input"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_does_not_mutate_input"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_empty_throws"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -886,6 +987,77 @@ function arrays.$init_test_ns_arrays_sort_comparable(registry: testing.TestColle
     load_var registry
     load_const "sort_user_class_out_of_body_impl"
     make_closure .<lambda($init_test_ns_arrays_sort_comparable, 24)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function arrays.$init_test_ns_arrays_sum(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "array_sum_int_basic"
+    make_closure .<lambda($init_test_ns_arrays_sum, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_single"
+    make_closure .<lambda($init_test_ns_arrays_sum, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_empty_is_zero"
+    make_closure .<lambda($init_test_ns_arrays_sum, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_negatives"
+    make_closure .<lambda($init_test_ns_arrays_sum, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_mixed_magnitudes"
+    make_closure .<lambda($init_test_ns_arrays_sum, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_overflow_throws"
+    make_closure .<lambda($init_test_ns_arrays_sum, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_boundary_no_overflow"
+    make_closure .<lambda($init_test_ns_arrays_sum, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_basic"
+    make_closure .<lambda($init_test_ns_arrays_sum, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_single"
+    make_closure .<lambda($init_test_ns_arrays_sum, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_empty_is_zero"
+    make_closure .<lambda($init_test_ns_arrays_sum, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_mixed"
+    make_closure .<lambda($init_test_ns_arrays_sum, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -1038,6 +1210,46 @@ function arrays.array_index_write(idx: int) -> int[] {
     return
 }
 
+function arrays.filled_aliases_grid() -> int[][] {
+    load_type int
+    load_const 2
+    load_const 0
+    call baml.Array.filled
+    store_var row
+    load_type int[]
+    load_const 3
+    load_var row
+    call baml.Array.filled
+    store_var grid
+    load_type int
+    load_var grid
+    load_const 0
+    load_array_element
+    load_const 99
+    call baml.Array.push
+    pop 1
+    load_var grid
+    return
+}
+
+function arrays.generate_independence_grid() -> int[][] {
+    load_type int[]
+    load_type never
+    load_const 3
+    make_closure .<lambda(generate_independence_grid, 0)>, 0
+    call baml.Array.generate
+    store_var grid
+    load_type int
+    load_var grid
+    load_const 0
+    load_array_element
+    load_const 99
+    call baml.Array.push
+    pop 1
+    load_var grid
+    return
+}
+
 function arrays.run_sort_generic_ints() -> int[] {
     load_type int
     load_const 3
@@ -1095,5 +1307,36 @@ function arrays.sort_strings(xs: string[]) -> string[] {
     load_type string
     load_var xs
     call baml.Sortable$for$T[].sort
+    return
+}
+
+function arrays.sum_int_overflow_(a: int, b: int) -> int {
+    load_var2 1 2
+    load_type int
+    alloc_array 2
+    call baml.Summable$for$int[].sum
+    jump L2
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 1
+    unary_op -
+
+  L2:
+    return
+}
+
+function arrays.sum_int_two_(a: int, b: int) -> int {
+    load_var2 1 2
+    load_type int
+    alloc_array 2
+    call baml.Summable$for$int[].sum
     return
 }

@@ -1,8 +1,0 @@
----
-source: crates/baml_cli/src/describe_command_tests.rs
-expression: output
----
-function         baml.math.trunc                  <builtin>/baml/ns_math/math.baml:2
-function         baml.math.sum                    <builtin>/baml/ns_math/math.baml:22
-function         baml.math.mean                   <builtin>/baml/ns_math/math.baml:39
-function         baml.math.median                 <builtin>/baml/ns_math/math.baml:60

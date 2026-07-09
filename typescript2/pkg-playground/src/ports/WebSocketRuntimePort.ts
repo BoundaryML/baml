@@ -22,6 +22,15 @@ import { isPlaygroundProtocolCompatible } from '../protocol';
 
 const MAX_RECONNECT_DELAY = 5000;
 
+/**
+ * Connection lifecycle as observable from the browser: `connecting` until the
+ * first handshake resolves, `open` while connected, `retrying` once a
+ * handshake has failed or the socket closed and the backoff loop is running.
+ * (Browsers hide the HTTP status of a failed WS upgrade, so a 401 for a
+ * missing session token is indistinguishable from the server being down.)
+ */
+export type WebSocketRuntimePortStatus = 'connecting' | 'open' | 'retrying';
+
 export class WebSocketRuntimePort implements RuntimePort {
   private url: string;
   private ws: WebSocket | null = null;
@@ -32,6 +41,8 @@ export class WebSocketRuntimePort implements RuntimePort {
   private reconnectDelay = 500;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private playgroundCompatible = true;
+  private status: WebSocketRuntimePortStatus = 'connecting';
+  private statusHandlers = new Set<(status: WebSocketRuntimePortStatus) => void>();
 
   constructor(url: string) {
     this.url = url;
@@ -49,6 +60,7 @@ export class WebSocketRuntimePort implements RuntimePort {
     }
 
     this.ws.onopen = () => {
+      this.setStatus('open');
       this.reconnectDelay = 500; // reset backoff
       // Flush queued outgoing messages.
       for (const msg of this.outQueue) {
@@ -88,6 +100,7 @@ export class WebSocketRuntimePort implements RuntimePort {
 
   private scheduleReconnect(): void {
     if (this.disposed || this.reconnectTimer) return;
+    this.setStatus('retrying');
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
@@ -111,6 +124,24 @@ export class WebSocketRuntimePort implements RuntimePort {
     } else {
       this.outQueue.push(raw);
     }
+  }
+
+  private setStatus(status: WebSocketRuntimePortStatus): void {
+    if (this.status === status) return;
+    this.status = status;
+    for (const h of this.statusHandlers) h(status);
+  }
+
+  /**
+   * Observe connection status changes. The handler is invoked immediately
+   * with the current status, then on every transition. Returns unsubscribe.
+   */
+  onStatusChange(handler: (status: WebSocketRuntimePortStatus) => void): () => void {
+    this.statusHandlers.add(handler);
+    handler(this.status);
+    return () => {
+      this.statusHandlers.delete(handler);
+    };
   }
 
   onMessage(handler: (msg: WorkerOutMessage) => void): () => void {
@@ -145,6 +176,7 @@ export class WebSocketRuntimePort implements RuntimePort {
       this.ws = null;
     }
     this.handlers.clear();
+    this.statusHandlers.clear();
     this.outQueue = [];
     this.inBuffer = [];
   }

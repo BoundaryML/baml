@@ -47,13 +47,82 @@ pub enum Expression {
     ByteString(t::ByteString),
     Lambda(Box<LambdaExpr>),
     /// A braceless `return …` in expression position (a `RETURN_EXPR`, e.g. a
-    /// `catch`/`match` arm value like `_ => return 0`). Held as a raw text range
-    /// like [`Expression::Unknown`], but kept as a distinct variant so the arm
-    /// printers can recognize it: when they wrap a braceless arm body into a
-    /// block they append the `;` that a block-position `return` requires, so the
-    /// output round-trips through `RETURN_STMT` (i.e. is idempotent).
-    Return(TextRange),
-    Unknown(TextRange),
+    /// `catch`/`match` arm value like `_ => return 0`). Printed verbatim, like
+    /// [`Expression::Unknown`] and backed by the same [`VerbatimSpan`], but kept
+    /// as a distinct variant so the arm printers can recognize it: when they wrap
+    /// a braceless arm body into a block they append the `;` that a block-position
+    /// `return` requires, so the output round-trips through `RETURN_STMT` (i.e. is
+    /// idempotent).
+    Return(VerbatimSpan),
+    /// A braceless `break` in expression position (a `BREAK_EXPR`, e.g. a
+    /// `catch`/`match` arm value like `0 => break`). Handled exactly like
+    /// [`Expression::Return`] and backed by the same [`VerbatimSpan`]: when an arm
+    /// printer wraps it into a block it appends the `;` that a block-position
+    /// `break` requires, so the output round-trips through `BREAK_STMT`.
+    Break(VerbatimSpan),
+    /// A braceless `continue` in expression position (a `CONTINUE_EXPR`). The
+    /// `continue` counterpart of [`Expression::Break`].
+    Continue(VerbatimSpan),
+    Unknown(VerbatimSpan),
+}
+
+/// A node the strong AST does not model and prints verbatim: an unmodeled
+/// expression (e.g. `defer { … }`, `throw e`, `await f`, `spawn { … }`,
+/// `x.as<T>`) held as [`Expression::Unknown`], or a braceless jump held as
+/// [`Expression::Return`], [`Expression::Break`], or [`Expression::Continue`].
+///
+/// Rather than a single whole-node span, this carries the node's true first and
+/// last *token* ranges. The trivia classifier keys leading/trailing comments to
+/// individual token ranges, so [`Printable::leftmost_token`] /
+/// [`Printable::rightmost_token`] must return those exact token ranges for a
+/// comment to attach and emit. A whole-node span never matches a token key, so
+/// a trailing comment on the node was silently dropped — the `defer` statement
+/// comment-loss bug (B-629), and the same class of bug for a braceless `return`
+/// arm. A whole-node span can also begin inside leading trivia (the parser
+/// attaches a preceding comment to the node), which would re-print that comment
+/// verbatim at the wrong indent; the `content_range` used for printing excludes
+/// it.
+#[derive(Debug)]
+pub struct VerbatimSpan {
+    /// Range of the first non-trivia token — the leading-trivia anchor.
+    first_token: TextRange,
+    /// Range of the last non-trivia token — the trailing-trivia anchor.
+    last_token: TextRange,
+}
+
+impl VerbatimSpan {
+    /// Build from the verbatim-printed syntax element, capturing its first and
+    /// last non-trivia token ranges. Any leading/trailing trivia that the CST
+    /// attaches inside the node is skipped so the anchors line up with the
+    /// classifier's per-token comment keys.
+    fn from_element(elem: &SyntaxElement) -> Self {
+        if let Some(node) = elem.as_node() {
+            let mut tokens = node
+                .descendants_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .filter(|t| !t.kind().is_trivia());
+            if let Some(first) = tokens.next() {
+                let first_token = first.text_range();
+                let last_token = tokens.last().map_or(first_token, |t| t.text_range());
+                return VerbatimSpan {
+                    first_token,
+                    last_token,
+                };
+            }
+        }
+        // A bare token, or a node with only trivia: the whole span is the token.
+        let whole = elem.text_range();
+        VerbatimSpan {
+            first_token: whole,
+            last_token: whole,
+        }
+    }
+
+    /// The verbatim source span to print: from the first token to the last,
+    /// excluding any leading/trailing trivia the CST folded into the node.
+    fn content_range(&self) -> TextRange {
+        TextRange::new(self.first_token.start(), self.last_token.end())
+    }
 }
 
 impl Expression {
@@ -143,8 +212,10 @@ impl FromCST for Expression {
                 t::ByteString::from_cst(elem).map(Expression::ByteString)?
             }
             SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
-            SyntaxKind::RETURN_EXPR => Expression::Return(elem.text_range()),
-            _ => Expression::Unknown(elem.text_range()),
+            SyntaxKind::RETURN_EXPR => Expression::Return(VerbatimSpan::from_element(&elem)),
+            SyntaxKind::BREAK_EXPR => Expression::Break(VerbatimSpan::from_element(&elem)),
+            SyntaxKind::CONTINUE_EXPR => Expression::Continue(VerbatimSpan::from_element(&elem)),
+            _ => Expression::Unknown(VerbatimSpan::from_element(&elem)),
         };
         Ok(expr)
     }
@@ -193,15 +264,15 @@ impl Expression {
             }
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
             Expression::Lambda(_) => None,
-            Expression::Return(_) => None,
-            Expression::Unknown(range) => {
+            Expression::Return(_) | Expression::Break(_) | Expression::Continue(_) => None,
+            Expression::Unknown(unknown) => {
                 // Unmodeled nodes (e.g. `await f`, `x.as<T>`, `spawn { … }`,
                 // `throw e`) print their source verbatim (see `print`). When that
                 // text is a single line it occupies a known width and can sit
                 // inline like any other fitting expression. Reporting `None` here
                 // used to force every *enclosing* expression to wrap even when the
                 // whole thing fit the width budget (B-231).
-                let text = &input.input[*range];
+                let text = &input.input[unknown.content_range()];
                 if text.contains('\n') {
                     None
                 } else {
@@ -245,12 +316,13 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.print(shape, printer),
             Expression::ByteString(bs) => bs.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
-            // Print the raw `return …` text. The arm printers add the `;` when
-            // they wrap this into a block (see `CatchArm`/`MatchArm`). A braceless
-            // `return` only appears as a whole arm value, never nested inside
-            // another expression, so it always reports multi-lined.
-            Expression::Return(range) => {
-                printer.print_input_range_trimmed_start(*range);
+            // Print the raw `return …` / `break` / `continue` text. The arm
+            // printers add the `;` when they wrap this into a block (see
+            // `CatchArm`/`MatchArm`). A braceless jump only appears as a whole
+            // arm value, never nested inside another expression, so it always
+            // reports multi-lined.
+            Expression::Return(jump) | Expression::Break(jump) | Expression::Continue(jump) => {
+                printer.print_input_range_trimmed_start(jump.content_range());
                 PrintInfo::default_multi_lined()
             }
             // Unmodeled nodes print their source verbatim. Report `multi_lined`
@@ -258,10 +330,11 @@ impl Printable for Expression {
             // unknown node (`await f`, `x.as<T>`, …) must not claim to be
             // multi-line, or it force-wraps its parents even when everything fits
             // on one line (B-231).
-            Expression::Unknown(range) => {
-                printer.print_input_range_trimmed_start(*range);
+            Expression::Unknown(unknown) => {
+                let range = unknown.content_range();
+                printer.print_input_range_trimmed_start(range);
                 PrintInfo {
-                    multi_lined: printer.input[*range].contains('\n'),
+                    multi_lined: printer.input[range].contains('\n'),
                 }
             }
         }
@@ -294,7 +367,10 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.leftmost_token(),
             Expression::ByteString(bs) => bs.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
-            Expression::Return(range) | Expression::Unknown(range) => *range,
+            Expression::Return(span)
+            | Expression::Break(span)
+            | Expression::Continue(span)
+            | Expression::Unknown(span) => span.first_token,
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -325,7 +401,10 @@ impl Printable for Expression {
             Expression::BacktickString(bt) => bt.rightmost_token(),
             Expression::ByteString(bs) => bs.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
-            Expression::Return(range) | Expression::Unknown(range) => *range,
+            Expression::Return(span)
+            | Expression::Break(span)
+            | Expression::Continue(span)
+            | Expression::Unknown(span) => span.last_token,
         }
     }
 }
@@ -1763,6 +1842,28 @@ impl MatchArm {
     }
 }
 
+/// Print an arm body that is being wrapped into a `{ … }` block (the `{` and
+/// newline are already emitted; the caller emits the closing `}`).
+///
+/// `arm_indent` is the arm's own indent; the body is printed one level deeper.
+/// A braceless jump body (`return`/`break`/`continue`) additionally gets its
+/// statement `;` — and its trailing trivia is deliberately left for the arm
+/// level so a same-line comment stays attached to the arm (emitted after the
+/// wrapped `},`) instead of being split from the `;` or dropped/duplicated when
+/// the arm has no comma (B-629).
+fn print_wrapped_arm_body(printer: &mut Printer, body: &Expression, arm_indent: usize) {
+    let inner_indent = arm_indent + printer.config.indent_width;
+    if matches!(
+        body,
+        Expression::Return(_) | Expression::Break(_) | Expression::Continue(_)
+    ) {
+        printer.print_standalone_leading_and_body(body, inner_indent);
+        printer.print_str(";");
+    } else {
+        printer.print_standalone_with_trivia(body, inner_indent);
+    }
+}
+
 impl Printable for MatchArm {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let condition_info = self.print_condition(&shape, printer);
@@ -1786,15 +1887,7 @@ impl Printable for MatchArm {
                 // put the body in a block expression
                 printer.print_str("{");
                 printer.print_newline();
-                printer.print_standalone_with_trivia(
-                    &self.body,
-                    shape.indent + printer.config.indent_width,
-                );
-                // A braceless `return` wrapped into a block needs its statement
-                // `;` so the output round-trips through `RETURN_STMT`.
-                if matches!(&self.body, Expression::Return(_)) {
-                    printer.print_str(";");
-                }
+                print_wrapped_arm_body(printer, &self.body, shape.indent);
                 printer.print_newline();
                 printer.print_spaces(shape.indent);
                 printer.print_str("},");
@@ -1851,15 +1944,7 @@ impl Printable for MatchArm {
             // create a block expression around it
             printer.print_str("{");
             printer.print_newline();
-            printer.print_standalone_with_trivia(
-                &self.body,
-                shape.indent + printer.config.indent_width,
-            );
-            // A braceless `return` wrapped into a block needs its statement `;`
-            // so the output round-trips through `RETURN_STMT`.
-            if matches!(&self.body, Expression::Return(_)) {
-                printer.print_str(";");
-            }
+            print_wrapped_arm_body(printer, &self.body, shape.indent);
             printer.print_newline();
             printer.print_spaces(shape.indent);
             printer.print_str("},");
@@ -2250,15 +2335,7 @@ impl Printable for CatchArm {
         if try_body_info.multi_lined || try_body.len() > line_len_remaining {
             printer.print_str("{");
             printer.print_newline();
-            printer.print_standalone_with_trivia(
-                &self.body,
-                shape.indent + printer.config.indent_width,
-            );
-            // A braceless `return` wrapped into a block needs its statement `;`
-            // so the output round-trips through `RETURN_STMT` (idempotent).
-            if matches!(&self.body, Expression::Return(_)) {
-                printer.print_str(";");
-            }
+            print_wrapped_arm_body(printer, &self.body, shape.indent);
             printer.print_newline();
             printer.print_spaces(shape.indent);
             printer.print_str("}");

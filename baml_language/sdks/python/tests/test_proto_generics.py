@@ -1,6 +1,6 @@
 """Unit tests for the generic-aware encoder/decoder helpers added in 13b.
 
-These tests exercise the pure-Python helpers in `baml_core.proto`
+These tests exercise the pure-Python helpers in `baml_bridge.proto`
 directly — they don't go through the Rust FFI, so they isolate the
 serialization changes from the rest of the bridge.
 
@@ -24,15 +24,15 @@ from typing import Generic, List, TypeVar
 
 import pydantic
 
-from baml_core.proto import (  # noqa: E402
+from baml_bridge.proto import (  # noqa: E402
     _base_class_for_fqn,
     _ty_to_python_type,
     _parameterize_tys,
     _set_inbound_value,
     python_type_to_wire_ty,
 )
-from baml_core.typemap import BamlTypeMap, get_type_map, set_type_map
-from baml_core.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
+from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
+from baml_bridge.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
 
 
 def _set_primitive(kind):
@@ -315,7 +315,7 @@ def _build_class_value(fqn: str, fields: list, type_args: list):
 def test_decode_class_parameterizes_with_generic_args():
     """13b §3.1, §3.4 — a generic class with `type_args = [int]` decodes
     to a `Box[int]` instance, not bare `Box`."""
-    from baml_core import proto as proto_mod
+    from baml_bridge import proto as proto_mod
 
     tm = _fresh_typemap_with(Box)
 
@@ -337,7 +337,7 @@ def test_decode_class_graceful_degradation_when_args_empty():
     """13b §3.5 — when the Rust producer hasn't been updated yet,
     `type_args` is empty. Decode still produces a usable instance —
     just unparameterized."""
-    from baml_core import proto as proto_mod
+    from baml_bridge import proto as proto_mod
 
     tm = _fresh_typemap_with(Box)
 
@@ -356,7 +356,7 @@ def test_decode_class_nested_generic():
     Models the `Crate<Box<int>>` shape (Crate's T is bound to `Box<int>`,
     so `contents: List[T]` becomes `List[Box[int]]`).
     """
-    from baml_core import proto as proto_mod
+    from baml_bridge import proto as proto_mod
 
     tm = _fresh_typemap_with(Box, Crate)
 
@@ -391,8 +391,8 @@ def test_decode_class_nested_generic():
 
 import pytest  # noqa: E402
 
-from baml_core import _resolve_types_kwarg  # noqa: E402
-from baml_core.cffi.v1 import baml_type_pb2  # noqa: E402
+from baml_bridge import _resolve_types_kwarg  # noqa: E402
+from baml_bridge.cffi.v1 import baml_type_pb2  # noqa: E402
 
 
 def test_generic_instance_carries_class_ty():
@@ -447,7 +447,7 @@ def test_resolve_types_empty_params_rejects_types_kwarg():
 # Phase 6: `fn[...]` subscript desugars to the `_types={...}` dict form
 # ---------------------------------------------------------------------------
 
-from baml_core import _GenericCallable  # noqa: E402
+from baml_bridge import _GenericCallable  # noqa: E402
 
 
 def test_generic_callable_subscript_desugars_to_types_dict():

@@ -638,6 +638,36 @@ impl<'a> Parser<'a> {
             .is_some_and(|t| t.kind == TokenKind::Word)
     }
 
+    /// True when a postfix `(` must NOT be glued onto the expression parsed so
+    /// far as a call, because that expression is *block-terminated* (its last
+    /// real token is `}` — an `if`/`match`/block/loop body) and the `(` opens a
+    /// fresh line.
+    ///
+    /// This is the guard-`if` early-return case (B-622):
+    ///   if (x < 0) { throw ... }
+    ///   (x * 2)
+    /// Without it the parser glues `{ ... }(x * 2)` into a call on the void
+    /// `if` result. Keying on a block-terminating `}` (rather than any callee)
+    /// keeps ordinary multi-line calls — a method chain whose `(` lands on a
+    /// later line than an identifier/`)` callee — parsing as calls, matching
+    /// the deliberately-tested `foo()`-then-`(1)` chained-call behavior. The
+    /// newline requirement keeps same-line `<block>(…)` forms (e.g. an
+    /// immediately-invoked block) untouched.
+    fn newline_separates_block_expr_from_paren(&self) -> bool {
+        self.has_newline_ahead() && self.last_significant_emitted_token_is_block_close()
+    }
+
+    /// Kind-check on the most recently *emitted* significant token: is it a
+    /// closing `}`? Trailing trivia after the current expression has not been
+    /// emitted yet at postfix-decision time, so the last non-trivia token event
+    /// is the final real token of the expression parsed so far.
+    fn last_significant_emitted_token_is_block_close(&self) -> bool {
+        self.events.iter().rev().find_map(|event| match event {
+            Event::Token { kind, .. } if !kind.is_trivia() => Some(*kind),
+            _ => None,
+        }) == Some(SyntaxKind::R_BRACE)
+    }
+
     /// Check if there's a newline before the next non-trivia token.
     /// Comments are treated as trivia for this purpose.
     fn has_newline_ahead(&self) -> bool {
@@ -4211,6 +4241,16 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::TypeBuilder) {
                     // Parse type_builder block - HIR will emit proper error for non-test context
                     p.parse_type_builder_block();
+                } else if p.at(TokenKind::Comma) || p.at(TokenKind::Semicolon) {
+                    // LLM-block fields are separated by a newline, not by `,`/`;`.
+                    // Name the real requirement here instead of letting the value
+                    // scanner swallow the separator and misreport `prompt` as
+                    // missing (B-621).
+                    let sep = p.current().map(|t| t.text.clone()).unwrap_or_default();
+                    p.error_here(format!(
+                        "unexpected `{sep}` between LLM function fields; separate `client` and `prompt` with a newline"
+                    ));
+                    p.bump();
                 } else {
                     // Unexpected token in LLM function
                     p.error_unexpected_token(format!(
@@ -4252,18 +4292,49 @@ impl<'a> Parser<'a> {
             if p.at(TokenKind::Quote) {
                 p.parse_string();
             } else if p.at(TokenKind::Word) {
-                // Parse unquoted client value - consume tokens until newline or brace
-                // This handles cases like: openai/gpt-4o-mini
+                // Parse unquoted client value - consume tokens until newline, brace,
+                // a field separator, or the start of the next LLM-block field. This
+                // handles multi-token shorthands like `openai/gpt-4o-mini` while still
+                // terminating the scan on a single-line body such as
+                // `{ client: Fast prompt: `...` }`, where the value must not swallow
+                // `prompt` and then misreport it as missing (B-621). Stopping at `,`/`;`
+                // keeps them out of the client value so they surface an accurate
+                // block-level diagnostic instead.
+                //
+                // The field-start boundary only applies once a value token has been
+                // consumed: a bare `client` whose value is absent (with the next field
+                // on the following line) must stop immediately via the newline check
+                // rather than absorbing that field, and a client whose name happens to
+                // be `prompt` is still read as the value.
+                let mut consumed_value = false;
                 while !p.at_end() {
-                    if p.at(TokenKind::RBrace) || p.at(TokenKind::LBrace) || p.has_newline_ahead() {
+                    if p.at(TokenKind::RBrace)
+                        || p.at(TokenKind::LBrace)
+                        || p.at(TokenKind::Comma)
+                        || p.at(TokenKind::Semicolon)
+                        || p.has_newline_ahead()
+                        || (consumed_value && p.at_llm_field_start())
+                    {
                         break;
                     }
                     p.bump();
+                    consumed_value = true;
                 }
             } else {
                 p.error_unexpected_token("client name".to_string());
             }
         });
+    }
+
+    /// True when the parser is positioned at the start of an LLM-block field
+    /// (`client`, `prompt`, or `type_builder`). The unquoted client-value scan
+    /// uses this to stop at the next field so that fields written on a single
+    /// line (with no separating newline) are not merged into the client value.
+    fn at_llm_field_start(&self) -> bool {
+        self.at(TokenKind::Client)
+            || self.at(TokenKind::TypeBuilder)
+            || (self.at(TokenKind::Word)
+                && self.current().map(|t| t.text == "prompt").unwrap_or(false))
     }
 
     fn parse_prompt_field(&mut self) {
@@ -4604,6 +4675,28 @@ impl<'a> Parser<'a> {
             {
                 p.parse_expr_bp_no_catch(0);
             }
+        });
+    }
+
+    /// Parse `break` in expression position as a `BREAK_EXPR` — a diverging
+    /// expression of type `never`, mirroring `parse_return_expr`. This is what
+    /// lets a braceless `break` be a `catch`/`match` arm value (`0 => break`).
+    /// Statement position is still handled by `parse_break_stmt` (see
+    /// `parse_stmt`), so this only fires when `break` is reached through
+    /// expression parsing. Unlike the statement form, we don't eat a trailing
+    /// `;` here — that belongs to the enclosing statement, not the expression.
+    fn parse_break_expr(&mut self) {
+        self.with_node(SyntaxKind::BREAK_EXPR, |p| {
+            p.expect(TokenKind::Break);
+        });
+    }
+
+    /// Parse `continue` in expression position as a `CONTINUE_EXPR` — the
+    /// `continue` counterpart of `parse_break_expr`. Statement-position
+    /// `continue` is still handled by `parse_continue_stmt`.
+    fn parse_continue_expr(&mut self) {
+        self.with_node(SyntaxKind::CONTINUE_EXPR, |p| {
+            p.expect(TokenKind::Continue);
         });
     }
 
@@ -5811,8 +5904,22 @@ impl<'a> Parser<'a> {
                 self.parse_expr_bp(5); // right_bp = 5 (left associative)
                 self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
                 self.finish_node();
-            } else if op == TokenKind::LParen {
-                // Function call
+            } else if op == TokenKind::LParen && !self.newline_separates_block_expr_from_paren() {
+                // Function call.
+                //
+                // The `newline_separates_block_expr_from_paren()` guard fixes a
+                // guard-style early return (B-622): a block-terminated
+                // statement whose value is discarded, followed on the *next
+                // line* by a parenthesized expression, must not glue into a
+                // call on that value. For example
+                //   if (x < 0) { throw ... }
+                //   (x * 2)
+                // would otherwise parse as `{ ... }(x * 2)`, invoking the void
+                // `if` result (E0006 "`void` is not a function"). Only the
+                // block-terminated + newline shape is separated (mirroring
+                // Rust's expression-statement rule); ordinary calls whose `(`
+                // sits on a later line than a non-`}` callee — e.g. a method
+                // chain broken across lines by comments — still parse as calls.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
                 self.parse_call_args();
@@ -6239,6 +6346,15 @@ impl<'a> Parser<'a> {
             // `catch`/`match` arm value. Statement-position `return` is taken by
             // `parse_stmt` before reaching here.
             self.parse_return_expr();
+        } else if self.at(TokenKind::Break) {
+            // Break expression (diverging, type `never`) — lets `break` be a
+            // `catch`/`match` arm value, symmetric with `return`.
+            // Statement-position `break` is taken by `parse_stmt` first.
+            self.parse_break_expr();
+        } else if self.at(TokenKind::Continue) {
+            // Continue expression (diverging, type `never`) — the `continue`
+            // counterpart of the `break` case above.
+            self.parse_continue_expr();
         } else if self.at(TokenKind::Word) {
             // Collect text as owned String so the borrow is released before any &mut calls.
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
@@ -8978,6 +9094,154 @@ function Foo() -> {
     }
 
     #[test]
+    fn single_line_llm_body_parses_client_and_prompt_fields() {
+        // B-621: a single-line LLM body with `client` and `prompt` on the same
+        // line must not swallow `prompt` into the unquoted client value and then
+        // misreport it as missing. Both fields must be recognized, error-free.
+        let source = "function F(raw: string) -> C { client: Fast prompt: `hi` }\n";
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let llm_body = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY)
+            .expect("expected an LLM_FUNCTION_BODY, not an expression body");
+
+        let client_field = llm_body
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CLIENT_FIELD)
+            .expect("expected a CLIENT_FIELD");
+        assert!(
+            client_field.text().to_string().contains("Fast"),
+            "client field should name `Fast`, got: {}",
+            client_field.text()
+        );
+        // The `prompt` word and its value must land in the PROMPT_FIELD, not the
+        // client value.
+        assert!(
+            !client_field.text().to_string().contains("prompt"),
+            "client value must not swallow the `prompt` field: {}",
+            client_field.text()
+        );
+
+        assert!(
+            llm_body
+                .children()
+                .any(|n| n.kind() == SyntaxKind::PROMPT_FIELD),
+            "expected a PROMPT_FIELD in the single-line body"
+        );
+    }
+
+    #[test]
+    fn llm_body_bare_client_does_not_swallow_next_line_prompt_field() {
+        // B-621 regression guard: a bare `client` with no value on its line must
+        // NOT absorb the `prompt` field that starts on the following line into the
+        // client value. The client value stays empty and the PROMPT_FIELD is parsed.
+        let source = "function F(raw: string) -> C {\n  client\n  prompt #\"hi\"#\n}\n";
+
+        let (root, _errors) = parse_source(source);
+        let llm_body = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::LLM_FUNCTION_BODY)
+            .expect("expected an LLM_FUNCTION_BODY");
+
+        let client_field = llm_body
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CLIENT_FIELD)
+            .expect("expected a CLIENT_FIELD");
+        assert!(
+            !client_field.text().to_string().contains("prompt"),
+            "bare `client` must not swallow the next-line `prompt` field: {}",
+            client_field.text()
+        );
+        assert!(
+            llm_body
+                .children()
+                .any(|n| n.kind() == SyntaxKind::PROMPT_FIELD),
+            "expected the `prompt` field to be parsed as its own PROMPT_FIELD"
+        );
+    }
+
+    #[test]
+    fn llm_body_client_scan_terminates_on_truncated_and_eof_inputs() {
+        // B-621 hang guard: the unquoted client-value scan must make forward
+        // progress and terminate for every input, including bodies truncated at
+        // EOF with no closing brace, newline, or next-field-start to break on.
+        // If the scan can spin, `parse_source` never returns and this test hangs
+        // (surfacing as a timeout instead of relying on wasm-pack to catch it).
+        let inputs = [
+            "function F() -> C { client",
+            "function F() -> C { client:",
+            "function F() -> C { client Fast",
+            "function F() -> C { client: Fast",
+            "function F() -> C { client Fast prompt",
+            "function F() -> C { client Fast prompt:",
+            "function F() -> C { client Fast, ",
+            "function F() -> C { client Fast; ",
+            "function F() -> C { client Fast prompt: `hi`",
+            "function F() -> C { client openai/gpt-4o-mini",
+            "function F() -> C { client openai/gpt-4o-mini prompt",
+            "function F() -> C { client Fast //trailing",
+            "function F() -> C { client Fast /*unterminated",
+            "function F() -> C { client Fast prompt `hi",
+            "function F() -> C {\n  client",
+            "function F() -> C {\n  client\n  prompt",
+            "function F() -> C {\n  client\n",
+        ];
+        for input in inputs {
+            // The assertion is simply that this call returns.
+            let _ = parse_source(input);
+        }
+    }
+
+    #[test]
+    fn single_line_llm_body_comma_separator_reports_targeted_error() {
+        // B-621: `,` between fields is not a valid separator. The diagnostic must
+        // name the real requirement (a newline) rather than falsely claiming the
+        // prompt is missing.
+        let source = "function F(raw: string) -> C { client: Fast, prompt: `hi` }\n";
+
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message.contains("separate `client` and `prompt` with a newline")
+            )),
+            "expected a targeted separator diagnostic, got: {errors:#?}"
+        );
+        assert!(
+            !errors
+                .iter()
+                .any(|error| format!("{error:?}").contains("missing 'prompt'")),
+            "the misleading missing-prompt error must not fire: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn single_line_llm_body_semicolon_separator_reports_targeted_error() {
+        // B-621: same as the comma case, for `;`.
+        let source = "function F(raw: string) -> C { client: Fast; prompt: `hi` }\n";
+
+        let (_root, errors) = parse_source(source);
+        assert!(
+            errors.iter().any(|error| matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message.contains("separate `client` and `prompt` with a newline")
+            )),
+            "expected a targeted separator diagnostic, got: {errors:#?}"
+        );
+        assert!(
+            !errors
+                .iter()
+                .any(|error| format!("{error:?}").contains("missing 'prompt'")),
+            "the misleading missing-prompt error must not fire: {errors:#?}"
+        );
+    }
+
+    #[test]
     fn accepts_parameter_parenthesized_type_without_colon() {
         // BEP-019: colons are optional in function parameters.
         // `x (int | string)` is valid syntax.
@@ -9106,6 +9370,52 @@ function Demo() -> int {
             .filter(|n| n.kind() == SyntaxKind::THROW_EXPR)
             .count();
         assert_eq!(throw_expr_count, 2);
+    }
+
+    #[test]
+    fn parses_break_and_continue_as_match_arm_expressions() {
+        // B-619: bare `break`/`continue` are valid in match-arm expression
+        // position (symmetric with `return`), producing BREAK_EXPR/CONTINUE_EXPR
+        // nodes — no `E0010 Expected expression` error.
+        let source = r#"
+function Demo(n: int) -> int {
+  let x = n;
+  while (true) {
+    match (x) {
+      0 => break,
+      1 => continue,
+      _ => { x = x - 1; }
+    }
+  }
+  x
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let break_expr_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::BREAK_EXPR)
+            .count();
+        assert_eq!(break_expr_count, 1, "expected one BREAK_EXPR node");
+
+        let continue_expr_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CONTINUE_EXPR)
+            .count();
+        assert_eq!(continue_expr_count, 1, "expected one CONTINUE_EXPR node");
+
+        // Bare `break`/`continue` in statement position still parse as the
+        // statement forms — the expression forms only fire through expression
+        // parsing (the match arms above).
+        assert_eq!(
+            root.descendants()
+                .filter(|n| n.kind() == SyntaxKind::BREAK_STMT)
+                .count(),
+            0,
+            "arm-position break should not be a BREAK_STMT"
+        );
     }
 
     #[test]
@@ -11623,5 +11933,87 @@ function f() -> int {
 "#;
         let (_root, errors) = parse_source(source);
         assert_no_errors(&errors);
+    }
+
+    #[test]
+    fn guard_if_then_parenthesized_return_on_next_line_is_two_statements() {
+        // Regression (B-622): a guard `if (cond) { throw ... }` with no else,
+        // followed on the next line by a parenthesized return expression, must
+        // parse as TWO statements. Without the newline guard on the postfix
+        // call branch the parser glued `{ ... }(x * 2)` into a call on the void
+        // `if` result, producing a misleading E0006 downstream.
+        let source = r#"function f(x: int) -> int {
+    if (x < 0) { throw baml.errors.InvalidArgument { message: "neg" } }
+    (x * 2)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // The `if` and the `(x * 2)` are separate statements: the parenthesized
+        // return must NOT be wrapped in a CALL_EXPR on the if-result.
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 0,
+            "the parenthesized return must not be parsed as a call on the void `if` result"
+        );
+    }
+
+    #[test]
+    fn call_with_paren_on_same_line_still_parses_as_call() {
+        // The block-close guard must not disturb ordinary calls whose `(`
+        // follows the callee on the same line — including multi-line argument
+        // lists, where the `(` still sits on the callee's line.
+        let source = r#"function f() -> int {
+    let a = g(1, 2)
+    let b = g(
+        3,
+        4,
+    )
+    a + b
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 2,
+            "both same-line and multi-line-argument calls must still parse as calls"
+        );
+    }
+
+    #[test]
+    fn non_block_callee_then_paren_on_next_line_still_chains() {
+        // The B-622 fix keys strictly on a block-terminating `}` callee: a
+        // *non*-block callee (here a call `g()`, ending in `)`) followed by `(`
+        // on the next line must STILL glue into a chained call `g()(1)`. This
+        // preserves the deliberately-tested `foo()`-then-`(1)` behavior and
+        // guards against a future over-broad "newline separates" change.
+        let source = r#"function f(g: () -> (int) -> int) -> int {
+    g()
+    (1)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        // `g()(1)` is one CALL_EXPR wrapping another (the outer call applies the
+        // returned lambda), so two CALL_EXPR nodes total — the newline did NOT
+        // split them into separate statements.
+        let call_exprs = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
+            .count();
+        assert_eq!(
+            call_exprs, 2,
+            "a non-block callee followed by `(` on the next line must still chain as a call"
+        );
     }
 }

@@ -17,7 +17,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.MyAwsClient$new() -> null {
+function user.MyAwsClient$new(lenient: bool) -> null {
     load_const "MyAwsClient"
     load_const "aws-bedrock"
     load_const "anthropic.claude-3-haiku-20240307-v1:0"

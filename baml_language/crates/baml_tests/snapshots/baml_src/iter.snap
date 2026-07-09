@@ -353,7 +353,7 @@ function iter.iter_array_as_iterable_param_inner(xs: baml.iter.Iterable<Item = i
 
   L10:
     load_var xs
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L23
     load_type int
     load_var xs
@@ -3260,7 +3260,7 @@ function iter.iter_for_in_array_iterator() -> int[] {
 
   L10:
     load_var _2
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L46
     load_type int
     load_var _2
@@ -4113,7 +4113,7 @@ function iter.iter_for_in_range() -> int[] {
 
   L10:
     load_var _2
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L46
     load_type int
     load_var _2
@@ -4441,7 +4441,7 @@ function iter.iter_for_in_repeat() -> int[] {
 
   L10:
     load_var _2
-    is_type T[]
+    is_type _[]
     pop_jump_if_false L46
     load_type int
     load_var _2

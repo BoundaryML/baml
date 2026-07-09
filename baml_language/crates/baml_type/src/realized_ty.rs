@@ -1,10 +1,52 @@
-//! Regression tests for the generated [`RealizedTy`] conversions.
+//! Inherent impls and regression tests for [`RealizedTy`], the deep subset of
+//! [`Ty`] with no type variables at any depth.
 //!
-//! [`RealizedTy`] (the deep subset of [`Ty`] with no type variables at any
-//! depth) and its conversions are generated in [`crate::family`] by the
-//! `ty_family!` macro. These tests pin the narrowing contract — `RealizedTy`
+//! [`RealizedTy`] and its conversions are generated in [`crate::family`] by the
+//! `ty_family!` macro; this module holds its hand-written behaviour, mirroring
+//! [`crate::runtime_ty`]. The tests pin the narrowing contract — `RealizedTy`
 //! deeply excludes the `typevar`-axis variants (`TypeVar`,
 //! `AssociatedTypeProjection`) and rejects them by name.
+
+use crate::{RealizedTy, TyAttr};
+
+impl RealizedTy {
+    // --- Primitive constructors (default TyAttr) ---
+
+    /// `int` with default attributes.
+    pub fn int() -> Self {
+        RealizedTy::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `string` with default attributes.
+    pub fn string() -> Self {
+        RealizedTy::String {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `null` with default attributes.
+    pub fn null() -> Self {
+        RealizedTy::Null {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `unknown` (the top type) with default attributes.
+    pub fn unknown() -> Self {
+        RealizedTy::BuiltinUnknown {
+            attr: TyAttr::default(),
+        }
+    }
+}
+
+impl std::fmt::Display for RealizedTy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Zero-cost borrowed upcast; rendering lives on `Ty`.
+        std::fmt::Display::fmt(self.as_ty(), f)
+    }
+}
 
 #[cfg(test)]
 mod tests {

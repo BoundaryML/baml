@@ -1021,6 +1021,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty_expr: &TypeExpr,
         diags: &mut Vec<TirTypeError>,
     ) -> Ty {
+        // `Self` is signature-only; in a method body it has no substitution (see
+        // `self_reference_span`). Reject it here — the sole choke every non-
+        // pattern body type annotation passes through — rather than let it
+        // resolve to a stray `TypeVar("Self")` (interface default methods, where
+        // `"Self"` is in `type_bindings`). The pattern and turbofish paths do
+        // their own inline lowering, so they guard separately. The silent
+        // natural-type caller drops `diags`, but the same annotation is reported
+        // once via its pattern/expression path.
+        if let Some(span) = crate::lower_type_expr::self_reference_span(ty_expr) {
+            diags.push(TirTypeError::SelfInBodyPosition { span });
+            return Ty::Error {
+                attr: TyAttr::default(),
+            };
+        }
         if self.type_bindings.is_empty() {
             crate::lower_type_expr::lower_type_expr_in_ns(
                 self.context.db(),
@@ -2114,6 +2128,15 @@ impl<'db> TypeInferenceBuilder<'db> {
             resolved.push(ty);
         }
 
+        // A `_` in a bare generic instantiation *value* (`let f = id<_>`) has no
+        // argument or initializer to be solved from — unlike the call form
+        // `id<_>(x)`, which infers it. With no candidate, each hole is rejected
+        // (see the expression-context `_` hole policy on
+        // `fill_expression_type_arg_hole`).
+        for (idx, ty) in resolved.iter_mut().enumerate() {
+            *ty = self.fill_expression_type_arg_hole(ty, None, &generic_params[idx], expr_id);
+        }
+
         let bindings = crate::generics::bind_type_vars(&generic_params, &resolved);
 
         // Generic-bound enforcement: each supplied type arg must satisfy its
@@ -2189,6 +2212,24 @@ impl<'db> TypeInferenceBuilder<'db> {
         let caller_generic_params = self.generic_params.clone();
         let suppress_diags = self.is_auto_derived_body;
         for (param_name, type_arg_expr) in declared_params.iter().zip(type_args.iter()) {
+            // `type_of<Self>()` and other body turbofishes on `Self`: reject it,
+            // mirroring the body funnel. This inline path uses the caller's
+            // `generic_params`, where an interface default method's `"Self"`
+            // would otherwise resolve to a stray `TypeVar("Self")` and erase at
+            // runtime.
+            if let Some(span) = crate::lower_type_expr::self_reference_span(type_arg_expr) {
+                if !suppress_diags {
+                    self.context
+                        .report_simple(TirTypeError::SelfInBodyPosition { span }, call_expr_id);
+                }
+                bindings.insert(
+                    param_name.clone(),
+                    Ty::Error {
+                        attr: TyAttr::default(),
+                    },
+                );
+                continue;
+            }
             let mut diags = Vec::new();
             let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                 db,
@@ -2418,8 +2459,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // must thread `T = string`, not `T = literal "hi"` — the runtime
                 // compares class type args invariantly, so an escaped instance
                 // carrying the literal would never match `is Box<string>`.
-                // (Explicit type args never reach here; recording is gated on
-                // `!explicit_args_used`.)
+                // (Fully-explicit type args never reach here; recording is gated
+                // on `!explicit_args_used`, except partial `_`-hole type args,
+                // which record their solved values in declared-generic order.)
                 let ty = bindings
                     .get(param)
                     .cloned()
@@ -3478,6 +3520,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                     bindings.entry(name.clone()).or_insert_with(|| ty.clone());
                 }
 
+                // A `_` inside an explicit type-argument list (`race<T, _>`) is a
+                // PARTIAL annotation: the user pinned some type args and left the
+                // rest as inference holes. Pull the hole-bearing bindings out so
+                // ordinary argument inference (the `runtime_type_arg_bindings`
+                // pass below) can solve them, then fill them back — mirroring the
+                // `_`-in-`let` path (`fill_infer_holes`). Left in `bindings`, a raw
+                // `Ty::Infer` would substitute straight into the call's result
+                // type and trip the runtime-lowering boundary (an `unreachable!`).
+                let hole_type_arg_bindings: Vec<(Name, Ty)> = bindings
+                    .iter()
+                    .filter(|(_, ty)| Self::ty_has_infer_hole(ty))
+                    .map(|(name, ty)| (name.clone(), ty.clone()))
+                    .collect();
+                for (name, _) in &hole_type_arg_bindings {
+                    bindings.remove(name);
+                }
+
                 // Only explicit call-site type args suppress inference. Owner
                 // interface args seeded for default methods are already known,
                 // but method generics still need normal argument/return inference.
@@ -3794,6 +3853,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                         &mut runtime_type_arg_bindings,
                     );
                 }
+
+                // Fill the `_` holes pulled out of the explicit type args above
+                // from what argument inference solved (`runtime_type_arg_bindings`
+                // ran over every argument regardless of `run_inference_phases`).
+                // See the expression-context `_` hole policy on
+                // `fill_expression_type_arg_hole`.
+                for (name, partial) in &hole_type_arg_bindings {
+                    let candidate = runtime_type_arg_bindings.get(name);
+                    let filled =
+                        self.fill_expression_type_arg_hole(partial, candidate, name, expr_id);
+                    bindings.insert(name.clone(), filled);
+                }
                 self.validate_function_generic_bounds(
                     expr_id,
                     &generic_params,
@@ -3837,6 +3908,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                         runtime_type_arg_params,
                         &runtime_type_arg_bindings,
                     );
+                    self.record_call_type_args(expr_id, type_args);
+                } else if !hole_type_arg_bindings.is_empty() && !generic_params.is_empty() {
+                    // Explicit type args carrying `_` holes (`race<T, _>`): record
+                    // the SOLVED args in the callee's declared-generic order so it
+                    // matches the written type-arg positions. MIR substitutes these
+                    // into the hole slots instead of re-lowering the raw `_`, which
+                    // would otherwise reach runtime lowering as a `Ty::Infer`.
+                    let type_args = self.runtime_call_type_args(&generic_params, &bindings);
                     self.record_call_type_args(expr_id, type_args);
                 }
 
@@ -4895,6 +4974,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_simple(diag, expr_id);
         }
+        // An upcast target is an explicit ascription (`c.as<Show<_>>`); a `_`
+        // there has nothing to be inferred from and must not reach the subtype
+        // check below, where an inference hole trips structural normalization.
+        // The hole is nested in the interface type (no single parameter), so it
+        // is rejected with the ascription form of the diagnostic — see the
+        // expression-context `_` hole policy on `report_uninferable_type_hole`.
+        if Self::ty_has_infer_hole(&target_ty) {
+            return self.report_uninferable_type_hole(None, expr_id);
+        }
         let valid_target = matches!(target_ty, Ty::Interface(_, _, _, _));
         if !valid_target && !matches!(target_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
             self.context.report_simple(
@@ -5628,8 +5716,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         let ty = self.lower_object_type_name(expr_id, type_name, obj_type_args);
         let ty = match ty {
             Ty::Class(class_name, type_args, attr) => {
-                if type_args.is_empty()
-                    && obj_type_args.is_empty()
+                // A partial `Box<_> { … }` carries `_` inference holes in its
+                // type args; fill them from the field values just like the bare
+                // `Box { … }` form (which arrives with empty `type_args`). A raw
+                // `Ty::Infer` left in the class args would reach structural
+                // normalization and panic (`normalize.rs`).
+                //
+                // This is the object-construction case of the expression-context
+                // `_` hole policy (see `fill_expression_type_arg_hole`): the fill
+                // source is the field values, and an unconstrained *phantom* param
+                // recovers to `BuiltinUnknown` rather than erroring, so it resolves
+                // holes inline below instead of routing through the shared helper.
+                let has_type_arg_hole = type_args.iter().any(Self::ty_has_infer_hole);
+                if (type_args.is_empty() || has_type_arg_hole)
                     && let Some(class_loc) = self.resolve_class_loc(&class_name)
                 {
                     let class_tree = baml_compiler2_hir::file_item_tree(
@@ -5690,19 +5789,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                         let inferred_type_args: Vec<Ty> = class_data
                             .generic_params
                             .iter()
-                            .map(|param| match bindings.get(param) {
-                                Some(bound) => bound.clone(),
-                                None => {
-                                    if field_constrained_params.contains(param) {
-                                        self.context.report_simple(
-                                            TirTypeError::CannotInferTypeParameter {
-                                                name: param.clone(),
-                                            },
-                                            expr_id,
-                                        );
+                            .enumerate()
+                            .map(|(idx, param)| {
+                                // Keep an explicitly-provided non-hole arg
+                                // (`Box<int, _>` pins the first, infers the
+                                // second); only holes and the bare form infer.
+                                if let Some(explicit) = type_args.get(idx) {
+                                    if !Self::ty_has_infer_hole(explicit) {
+                                        return explicit.clone();
                                     }
-                                    Ty::BuiltinUnknown {
-                                        attr: TyAttr::default(),
+                                }
+                                match bindings.get(param) {
+                                    Some(bound) => bound.clone(),
+                                    None => {
+                                        if field_constrained_params.contains(param) {
+                                            self.context.report_simple(
+                                                TirTypeError::CannotInferTypeParameter {
+                                                    name: param.clone(),
+                                                },
+                                                expr_id,
+                                            );
+                                        }
+                                        Ty::BuiltinUnknown {
+                                            attr: TyAttr::default(),
+                                        }
                                     }
                                 }
                             })
@@ -8595,6 +8705,71 @@ impl<'db> TypeInferenceBuilder<'db> {
         filled
     }
 
+    // ── Expression-context `_` hole policy ──────────────────────────────────
+    //
+    // `_` (`Ty::Infer`) is firewalled to `Ty::Error` at every DECLARATION-site
+    // type position by `check_wildcard_type` (in the AST layer), so a signature,
+    // field, alias, or bound never carries a hole into type checking. The
+    // EXPRESSION positions that admit a written type — a call turbofish
+    // (`race<T, _>`), an object construction (`Box<_> { … }`), a generic-apply
+    // value (`id<_>`), and an upcast target (`.as<Show<_>>`) — bypass that
+    // firewall, so each must fill the hole from a local source or reject it
+    // *here*, before the resulting type reaches a subtype / structural-normalize
+    // check (`normalize.rs`) or MIR runtime lowering (`runtime_ty.rs`), both of
+    // which treat a surviving `Ty::Infer` as an unreachable compiler bug.
+    //
+    // The two helpers below are that shared policy. Object construction resolves
+    // its holes inline (its source is the field values, and an unconstrained
+    // *phantom* param recovers to `BuiltinUnknown` rather than erroring), so it
+    // does not route through them, but it follows the same rule.
+
+    /// Report that a `_` hole could not be inferred and neutralize it to
+    /// `Ty::Error` (so it never reaches a subtype/normalize check). `param`
+    /// names the offending type parameter for the diagnostic; pass `None` for a
+    /// hole nested in an ascription (`.as<Show<_>>`) that has no single
+    /// parameter, matching the pattern path's `unresolved type: _`.
+    fn report_uninferable_type_hole(&mut self, param: Option<&Name>, at: ExprId) -> Ty {
+        let diagnostic = match param {
+            Some(name) => TirTypeError::CannotInferTypeParameter { name: name.clone() },
+            None => TirTypeError::UnresolvedType {
+                name: Name::new("_"),
+                suggestions: Vec::new(),
+                span: TextRange::default(),
+            },
+        };
+        self.context.report_simple(diagnostic, at);
+        Ty::Error {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// Resolve one explicitly-written type argument that may carry a `_` hole:
+    /// keep it unchanged when concrete, fill its holes from `candidate` (what
+    /// the site's local inference solved for this parameter) while preserving
+    /// every non-hole position the user wrote, or — when there is no candidate
+    /// or the fill leaves a hole / resolution failure — reject it as an
+    /// un-inferable `param` via [`Self::report_uninferable_type_hole`]. This is
+    /// the single fill-or-reject used by the call-turbofish and
+    /// generic-apply-value positions.
+    fn fill_expression_type_arg_hole(
+        &mut self,
+        partial: &Ty,
+        candidate: Option<&Ty>,
+        param: &Name,
+        at: ExprId,
+    ) -> Ty {
+        if !Self::ty_has_infer_hole(partial) {
+            return partial.clone();
+        }
+        if let Some(candidate) = candidate {
+            let filled = Self::fill_infer_holes(partial, candidate);
+            if !Self::ty_has_infer_hole(&filled) && !Self::ty_contains_resolution_failure(&filled) {
+                return filled;
+            }
+        }
+        self.report_uninferable_type_hole(Some(param), at)
+    }
+
     /// Strict resolution-failure check: only the recovery placeholders
     /// (`Unknown`/`Error`) count, NOT the builtin `unknown` top type. A `let`
     /// annotation like `unknown[]` is a real expected type and must pin the
@@ -8820,6 +8995,20 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return resolved;
                 }
             }
+        }
+        // A pattern type-test on `Self` (`match (x) { let s: Self => … }`,
+        // `x is Self`): reject it, mirroring the body funnel — this inline path
+        // uses `generic_params`, where an interface default method's `"Self"`
+        // would otherwise resolve to a stray `TypeVar("Self")`.
+        if let Some(span) = crate::lower_type_expr::self_reference_span(ty) {
+            self.report_at_pat_or_expr(
+                TirTypeError::SelfInBodyPosition { span },
+                pat_id,
+                fallback_expr,
+            );
+            return Ty::Error {
+                attr: TyAttr::default(),
+            };
         }
         let mut diags = Vec::new();
         let resolved = crate::lower_type_expr::lower_type_expr_in_ns(

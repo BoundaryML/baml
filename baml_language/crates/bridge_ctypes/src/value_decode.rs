@@ -10,7 +10,7 @@ use indexmap::IndexMap;
 use prost::Message;
 
 use crate::{
-    baml_core::cffi::{
+    baml_bridge::cffi::{
         BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry,
         InboundMapValue, InboundValue, inbound_value::Value as InboundValueVariant,
     },
@@ -186,7 +186,7 @@ fn convert_enum(e: InboundEnumValue) -> BexExternalValue {
 }
 
 fn extract_string_key(entry: &InboundMapEntry) -> Result<String, CtypesError> {
-    use crate::baml_core::cffi::inbound_map_entry::Key;
+    use crate::baml_bridge::cffi::inbound_map_entry::Key;
     match &entry.key {
         Some(Key::StringKey(s)) => Ok(s.clone()),
         Some(Key::IntKey(i)) => Ok(i.to_string()),
@@ -234,7 +234,7 @@ pub fn playground_run_args_to_bex_values(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{baml_core::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
+    use crate::{baml_bridge::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
 
     #[test]
     fn decode_inbound_host_value_callable() {
@@ -325,7 +325,7 @@ mod tests {
     /// to the parallel inbound discriminator.
     fn bigint_round_trip(original: &BexExternalValue) -> BexExternalValue {
         use crate::{
-            baml_core::cffi::baml_outbound_value::Value as OutboundVariant,
+            baml_bridge::cffi::baml_outbound_value::Value as OutboundVariant,
             handle_table::CffiHandleTableOptions, value_encode::external_to_outbound,
         };
 
@@ -411,7 +411,7 @@ mod tests {
     /// lands them in `BexExternalValue::Instance::type_args`.
     #[test]
     fn convert_class_decodes_generic_type_args() {
-        use crate::baml_core::cffi::{
+        use crate::baml_bridge::cffi::{
             BamlTy, BamlTyClass, BamlTyPrimitive, BamlTyPrimitiveKind, InboundClassValue,
             baml_ty::Ty as TyVariant,
         };
@@ -445,7 +445,7 @@ mod tests {
     /// A non-generic instance binds its FQN from `class_ty` with empty `type_args`.
     #[test]
     fn convert_class_non_generic_has_empty_type_args() {
-        use crate::baml_core::cffi::{BamlTyClass, InboundClassValue};
+        use crate::baml_bridge::cffi::{BamlTyClass, InboundClassValue};
         let class = InboundClassValue {
             fields: vec![],
             class_ty: Some(BamlTyClass {

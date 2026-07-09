@@ -32,7 +32,7 @@ import traceback
 import pytest
 
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
-from baml_core import BamlCallContext, BamlCancelledError, call_function, get_runtime
+from baml_bridge import BamlCallContext, BamlCancelledError, call_function, get_runtime
 from baml_sdk import hello_world
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument

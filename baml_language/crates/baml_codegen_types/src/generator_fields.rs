@@ -13,7 +13,7 @@ pub enum OutputType {
     /// Python with Pydantic v1 models.
     #[strum(serialize = "python/pydantic/v1")]
     PythonPydanticV1,
-    /// TypeScript + Node.js SDK (`@boundaryml/baml-core-node` runtime).
+    /// TypeScript + Node.js SDK (`@boundaryml/baml-bridge` runtime).
     #[strum(serialize = "typescript/node")]
     TypescriptNode,
 }

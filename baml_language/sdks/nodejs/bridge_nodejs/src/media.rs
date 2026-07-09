@@ -8,7 +8,7 @@
 //!
 //! These four are runtime-owned stdlib value classes: codegen does NOT emit
 //! a structural class body for them — it re-exports them from
-//! `@boundaryml/baml-core-node` under aliases (`BamlImage as Image`, etc.). See
+//! `@boundaryml/baml-bridge` under aliases (`BamlImage as Image`, etc.). See
 //! `00a-spec-codegen-mappings.md` "Stdlib Re-Exports".
 //!
 //! The key is stored inline as a raw `(key, handle_type)` pair (rather than a
@@ -27,7 +27,7 @@ use bridge_cffi::{
     baml_media_from_base64, baml_media_from_file, baml_media_from_url, baml_media_mime_type,
     baml_media_url, free_buffer,
 };
-use bridge_ctypes::baml_core::cffi::{BamlHandleType, MediaTypeEnum};
+use bridge_ctypes::baml_bridge::cffi::{BamlHandleType, MediaTypeEnum};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 

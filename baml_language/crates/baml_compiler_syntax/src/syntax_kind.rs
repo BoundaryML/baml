@@ -343,6 +343,17 @@ pub enum SyntaxKind {
     /// arm value (e.g. `_ => return 0`) without the statement-only restriction.
     /// Statement-position `return` still parses as `RETURN_STMT`.
     RETURN_EXPR,
+    /// `break` in expression position — a diverging expression of type `never`
+    /// (mirrors `RETURN_EXPR`). Lets `break` appear as a `catch`/`match` arm
+    /// value (e.g. `0 => break`) without the statement-only restriction.
+    /// Statement-position `break` still parses as `BREAK_STMT`.
+    BREAK_EXPR,
+    /// `continue` in expression position — a diverging expression of type
+    /// `never` (mirrors `RETURN_EXPR`). Lets `continue` appear as a
+    /// `catch`/`match` arm value (e.g. `0 => continue`) without the
+    /// statement-only restriction. Statement-position `continue` still parses
+    /// as `CONTINUE_STMT`.
+    CONTINUE_EXPR,
     /// `spawn name_expr? block` — BEP-034 spawn expression.
     /// Structure: `KW_SPAWN [expr] BLOCK_EXPR`.
     SPAWN_EXPR,

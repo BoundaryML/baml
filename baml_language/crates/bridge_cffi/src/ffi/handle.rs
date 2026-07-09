@@ -5,7 +5,7 @@ use std::{ffi::CStr, ptr};
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
 use bridge_ctypes::{
     CffiHandleTableEntry, HANDLE_TABLE,
-    baml_core::cffi::{BamlHandleType, MediaTypeEnum},
+    baml_bridge::cffi::{BamlHandleType, MediaTypeEnum},
 };
 
 use crate::Buffer;
@@ -357,7 +357,7 @@ pub unsafe extern "C" fn baml_media_mime_type(
 mod tests {
     use std::{ffi::CString, ptr};
 
-    use bridge_ctypes::baml_core::cffi::MediaTypeEnum;
+    use bridge_ctypes::baml_bridge::cffi::MediaTypeEnum;
 
     use super::*;
 

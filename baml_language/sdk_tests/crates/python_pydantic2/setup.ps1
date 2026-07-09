@@ -7,7 +7,7 @@
 # `cargo test --no-run` populates each fixture's `generated/pyproject.toml`.
 #
 # See setup.sh for the baseline rationale. The Windows CI path uses the
-# build-caching/04 approach B optimization: build baml_core once as a
+# build-caching/04 approach B optimization: build baml_bridge once as a
 # wheel, then install that wheel into every fixture venv. This avoids the
 # redundant per-fixture editable build that `uv sync` can trigger before
 # the shared extension rebuild.
@@ -30,7 +30,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     $UvBin = (mise which uv).Trim()
 }
 
-# 1. Build the shared baml_core wheel once. `sdks/python/.venv` supplies
+# 1. Build the shared baml_bridge wheel once. `sdks/python/.venv` supplies
 #    maturin at a stable path, keeping pyo3 fingerprints stable.
 $SdkPyVenv = Join-Path $SdkPy '.venv'
 $MaturinExe = Join-Path $SdkPyVenv 'Scripts\maturin.exe'
@@ -46,7 +46,7 @@ try {
 } finally {
     Pop-Location
 }
-Write-Host '==> maturin build (shared baml_core wheel)'
+Write-Host '==> maturin build (shared baml_bridge wheel)'
 Push-Location $SdkPy
 try {
     $env:VIRTUAL_ENV = $SdkPyVenv
@@ -56,8 +56,8 @@ try {
     Pop-Location
 }
 
-# 2. Per fixture: install deps + the prebuilt baml_core wheel. Strip the
-#    editable `[tool.uv.sources] baml_core` block so baml_core resolves
+# 2. Per fixture: install deps + the prebuilt baml_bridge wheel. Strip the
+#    editable `[tool.uv.sources] baml_bridge` block so baml_bridge resolves
 #    as a normal dependency from UV_FIND_LINKS.
 if (-not $env:UV_FIND_LINKS) { $env:UV_FIND_LINKS = $WheelDir }
 Get-ChildItem -Directory | ForEach-Object {
