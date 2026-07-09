@@ -359,6 +359,66 @@ fn oracle_new_error_in_dirty_file() {
     );
 }
 
+// ── Phase 2 follow-up: layout-scoped sentinel in mixed class+function files ──
+
+// A file that defines a class AND a free function; a layout-baker naming
+// nothing it defines.
+const MIXED_SIG_V1: &str =
+    "class Widget {\n  w int\n  h int\n}\nfunction helper(a: int) -> int {\n  a\n}\n";
+const MIXED_SIG_V2: &str =
+    "class Widget {\n  w int\n  h int\n}\nfunction helper(a: int, b: int) -> int {\n  a + b\n}\n";
+const MIXED_REORDER: &str =
+    "class Widget {\n  h int\n  w int\n}\nfunction helper(a: int) -> int {\n  a\n}\n";
+const LAYOUT_BAKER: &str =
+    "class Other {\n  a int\n  b int\n}\nfunction reado(o: Other) -> int {\n  o.a\n}\n";
+
+#[test]
+fn oracle_mixed_file_function_sig_edit() {
+    // A function-only signature edit in a class-defining file must not fire the
+    // layout sentinel: the served (incremental) diagnostics still match the
+    // honest full check, and the layout-baker stays clean.
+    let initial = [
+        ("mixed.baml", MIXED_SIG_V1),
+        ("baker.baml", LAYOUT_BAKER),
+        ("z.baml", UNRELATED),
+    ];
+    let edited = [
+        ("mixed.baml", MIXED_SIG_V2),
+        ("baker.baml", LAYOUT_BAKER),
+        ("z.baml", UNRELATED),
+    ];
+    let Some(dirty) = assert_served_equals_honest(&initial, &edited) else {
+        return;
+    };
+    assert!(
+        !dirty.contains("baker.baml"),
+        "the layout-baker must stay clean on a function-only sig edit: {dirty:?}"
+    );
+}
+
+#[test]
+fn oracle_mixed_file_field_reorder() {
+    // A field reorder in the same mixed file fires the sentinel (dirtying the
+    // layout-baker); served must still equal honest.
+    let initial = [
+        ("mixed.baml", MIXED_SIG_V1),
+        ("baker.baml", LAYOUT_BAKER),
+        ("z.baml", UNRELATED),
+    ];
+    let edited = [
+        ("mixed.baml", MIXED_REORDER),
+        ("baker.baml", LAYOUT_BAKER),
+        ("z.baml", UNRELATED),
+    ];
+    let Some(dirty) = assert_served_equals_honest(&initial, &edited) else {
+        return;
+    };
+    assert!(
+        dirty.contains("baker.baml"),
+        "a field reorder must fire the sentinel and dirty the layout-baker: {dirty:?}"
+    );
+}
+
 // ── Verify oracle: passes on a faithful cache, bails on a stale one ──────────
 
 /// Store a manifest for `files` (a warning-bearing clean file), then hand the

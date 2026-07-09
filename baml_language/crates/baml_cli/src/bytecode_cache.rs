@@ -39,7 +39,10 @@ use bex_cache::{
 use bex_vm_types::{CompilationUnit, LinkableImage, Object, Program, relink};
 use sha2::{Digest, Sha256};
 
-use crate::{file_signature::file_signature_hash, project_load::ResolvedProject};
+use crate::{
+    file_signature::{file_layout_hash, file_signature_hash},
+    project_load::ResolvedProject,
+};
 
 /// The optimization level every CLI compile uses (the emit default).
 const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
@@ -625,9 +628,10 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
 
 /// Whether `file` declares any type whose *layout* another file's bytecode may
 /// bake in: a class (field order), an enum (discriminants), an interface
-/// (dispatch), or a type alias (inline expansion). Gates the `LAYOUT_SENTINEL`:
-/// only a change to a file defining such a type can move a layout, so a
-/// function-only edit never trips the conservative fallback.
+/// (dispatch), or a type alias (inline expansion). Used for the added-file case
+/// of the `LAYOUT_SENTINEL`, where there is no prior `layout_hash` to diff
+/// against; a *modified* file instead compares its [`file_layout_hash`] so a
+/// function-only edit in a type-defining file no longer trips the sentinel.
 fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     !item_tree.classes.is_empty()
@@ -820,7 +824,11 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
     let mut changed_names: HashSet<String> = HashSet::new();
     // Files needing recompilation for their own sake.
     let mut dirty: HashSet<String> = HashSet::new();
-    let mut type_signature_changed = false;
+    // A type's layout (field offset, enum discriminant, type tag, vtable slot)
+    // moved somewhere, so every file that bakes any layout must re-lower. Raised
+    // by a modified file whose `layout_hash` changed, or any added/removed
+    // type-defining file — never by a plain function-signature edit.
+    let mut layout_changed = false;
     let mut impl_set_changed = false;
     // Root-cause function names whose `callable_throws` may have changed — the
     // seed of the transitive throws-taint closure. Last-segment form, matched
@@ -841,8 +849,11 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                 // references anywhere.
                 dirty.insert(rel.clone());
                 changed_names.extend(defined_names(db, *sf));
+                // A newly-introduced type conservatively counts as a layout
+                // change: the file is new, so there is no prior `layout_hash` to
+                // diff against.
                 if file_defines_type(db, *sf) {
-                    type_signature_changed = true;
+                    layout_changed = true;
                 }
                 if file_has_impl_construct(db, *sf) {
                     impl_set_changed = true;
@@ -874,18 +885,27 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                 if entry.signature_hash != file_signature_hash(db, *sf) {
                     changed_names.extend(entry.defined_names.iter().cloned());
                     changed_names.extend(defined_names(db, *sf));
-                    if file_defines_type(db, *sf) {
-                        type_signature_changed = true;
-                    }
+                }
+                // Fire the layout sentinel only when this file's *layout*
+                // surface actually moved — a field/variant/alias reorder, a new
+                // generic parameter — not merely because a type-defining file's
+                // signature changed. A function-only signature edit in a
+                // class-defining file leaves `layout_hash` fixed, so it no longer
+                // drags every layout-baking file into the dirty set.
+                if entry.layout_hash != file_layout_hash(db, *sf) {
+                    layout_changed = true;
                 }
             }
         }
     }
     for (rel, entry) in &prev_files {
         if !current_rels.contains(rel) {
-            // Removed file: its names vanish from resolution.
+            // Removed file: its names vanish from resolution. A removal can
+            // erase a type another file inferred-baked, so it conservatively
+            // counts as a layout change (there is no current `layout_hash` to
+            // diff, and removals are rare on the hot edit path).
             changed_names.extend(entry.defined_names.iter().cloned());
-            type_signature_changed = true;
+            layout_changed = true;
             if entry.referenced_names.iter().any(|n| n == IMPL_SENTINEL) {
                 impl_set_changed = true;
             }
@@ -894,7 +914,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
             throws_taint.extend(throw_fn_names(&entry.throw_facts));
         }
     }
-    if type_signature_changed {
+    if layout_changed {
         changed_names.insert(LAYOUT_SENTINEL.to_string());
     }
     if impl_set_changed {
@@ -1179,6 +1199,7 @@ impl CacheContext {
                 ManifestFile {
                     content_hash: content_hash(sf.text(db)),
                     signature_hash: file_signature_hash(db, sf),
+                    layout_hash: file_layout_hash(db, sf),
                     defined_names: defined_names(db, sf),
                     referenced_names,
                     // Free: seeded files return their seeds verbatim, dirty
@@ -1703,6 +1724,205 @@ mod tests {
             clean,
             seeded,
         })
+    }
+
+    /// Like [`plan_after_edit`], but also runs the full incremental flow the CLI
+    /// runs — seed the plan's throw facts + `callable_throws`, relink through the
+    /// reuse units — and compares the relinked `Program` byte-for-byte against an
+    /// honest full compile of the same edited sources. Returns the plan summary
+    /// plus whether relink and full are byte-identical. `None` when caching is
+    /// disabled or on non-Linux (see `dirty_after_edit`).
+    fn plan_and_relink_after_edit(
+        initial: &[(&str, &str)],
+        edited: &[(&str, &str)],
+    ) -> Option<(PlanSummary, bool)> {
+        if cache_disabled() || !cfg!(target_os = "linux") {
+            return None;
+        }
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+
+        // v1: compile and store the manifest + image.
+        let r1 = resolved(&root, initial);
+        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
+        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
+        let program1 =
+            compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile succeeds");
+        let fresh1 = ctx1
+            .collect_diagnostics_incremental(&db1, None)
+            .fresh_by_file;
+        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
+            .expect("manifest stored");
+
+        // v2 served path: plan reuse, seed exactly as the CLI does, relink.
+        let r2 = resolved(&root, edited);
+        let mut db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let plan = ctx2.plan_reuse(&db2).expect("reuse plan available");
+        db2.set_seeded_throw_facts(plan.seeded_throw_facts.clone());
+        db2.set_seeded_callable_throws(plan.seeded_callable_throws.clone());
+        let relinked =
+            compile_program(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("relink compile");
+
+        // v2 honest path: an independent fresh database, no reuse plan — the
+        // stdlib-spliced full compile the relink must reproduce byte-for-byte.
+        let db_full = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let full = compile_program(&db_full, &opts(), Some(&ctx2), None).expect("full compile");
+        let byte_identical = borsh::to_vec(&relinked).expect("ser relink")
+            == borsh::to_vec(&full).expect("ser full");
+
+        let summary = PlanSummary {
+            dirty: plan
+                .dirty_files
+                .iter()
+                .filter_map(|sf| {
+                    sf.path(&db2)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                })
+                .collect(),
+            clean: plan.clean_files.iter().map(|r| basename(r)).collect(),
+            seeded: plan
+                .seeded_callable_throws
+                .keys()
+                .map(|p| basename(p))
+                .collect(),
+        };
+        let _ = std::fs::remove_dir_all(&root);
+        Some((summary, byte_identical))
+    }
+
+    // ── Phase 2 follow-up: layout-scoped sentinel (mixed class+function files) ─
+
+    /// A function-signature edit in a file that ALSO defines a class must leave
+    /// the layout sentinel unraised: only the edited file is dirty, an unrelated
+    /// layout-baking file stays clean (the whole win), and the relink is
+    /// byte-identical to a full compile.
+    #[test]
+    fn plan_reuse_mixed_file_function_sig_edit_stays_minimal() {
+        let mixed_v1 = "class Widget {\n  w int\n  h int\n}\n\
+                        function helper(a: int) -> int {\n  a\n}\n";
+        // Only `helper`'s signature changes; `Widget`'s layout is untouched.
+        let mixed_v2 = "class Widget {\n  w int\n  h int\n}\n\
+                        function helper(a: int, b: int) -> int {\n  a + b\n}\n";
+        // A layout-baker naming nothing `mixed.baml` defines: `o.a` bakes
+        // `Other`'s field offset, so it carries LAYOUT_SENTINEL — the file the
+        // old "any sig change in a type-defining file" rule wrongly dirtied.
+        let baker = "class Other {\n  a int\n  b int\n}\n\
+                     function reado(o: Other) -> int {\n  o.a\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("mixed.baml", mixed_v1),
+            ("baker.baml", baker),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("mixed.baml", mixed_v2),
+            ("baker.baml", baker),
+            ("z.baml", unrelated),
+        ];
+        let Some((p, byte_identical)) = plan_and_relink_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("mixed.baml"),
+            "the edited file must be dirty; {p:?}"
+        );
+        assert!(
+            !p.dirty.contains("baker.baml"),
+            "a layout-baking file must stay clean on a function-only sig edit — \
+             the layout sentinel must NOT fire; dirty = {:?}",
+            p.dirty
+        );
+        assert!(
+            p.clean.contains("baker.baml") && p.clean.contains("z.baml"),
+            "both non-edited files stay clean; {p:?}"
+        );
+        assert!(
+            byte_identical,
+            "relink must be byte-identical to a full compile"
+        );
+    }
+
+    /// A field reorder in that same mixed file MUST fire the sentinel: the
+    /// layout-baking `baker.baml` is dragged into the dirty set, and the relink
+    /// stays byte-identical.
+    #[test]
+    fn plan_reuse_mixed_file_field_reorder_fires_sentinel() {
+        let mixed_v1 = "class Widget {\n  w int\n  h int\n}\n\
+                        function helper(a: int) -> int {\n  a\n}\n";
+        let mixed_v2 = "class Widget {\n  h int\n  w int\n}\n\
+                        function helper(a: int) -> int {\n  a\n}\n";
+        let baker = "class Other {\n  a int\n  b int\n}\n\
+                     function reado(o: Other) -> int {\n  o.a\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("mixed.baml", mixed_v1),
+            ("baker.baml", baker),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("mixed.baml", mixed_v2),
+            ("baker.baml", baker),
+            ("z.baml", unrelated),
+        ];
+        let Some((p, byte_identical)) = plan_and_relink_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("mixed.baml"),
+            "the reordered file must be dirty; {p:?}"
+        );
+        assert!(
+            p.dirty.contains("baker.baml"),
+            "a field reorder must fire the layout sentinel and dirty every \
+             layout-baking file; dirty = {:?}",
+            p.dirty
+        );
+        assert!(
+            byte_identical,
+            "relink must be byte-identical to a full compile"
+        );
+    }
+
+    /// Verification bar #4: editing a class's generic-parameter list is a layout
+    /// change — it must fire the sentinel (the generic-param count feeds the
+    /// class object), dirtying layout-baking files, byte-identity preserved.
+    #[test]
+    fn plan_reuse_mixed_file_type_param_edit_fires_sentinel() {
+        let mixed_v1 = "class Box<T> {\n  value T\n}\n\
+                        function helper(a: int) -> int {\n  a\n}\n";
+        let mixed_v2 = "class Box<T, U> {\n  value T\n}\n\
+                        function helper(a: int) -> int {\n  a\n}\n";
+        let baker = "class Other {\n  a int\n  b int\n}\n\
+                     function reado(o: Other) -> int {\n  o.a\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("mixed.baml", mixed_v1),
+            ("baker.baml", baker),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("mixed.baml", mixed_v2),
+            ("baker.baml", baker),
+            ("z.baml", unrelated),
+        ];
+        let Some((p, byte_identical)) = plan_and_relink_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("mixed.baml"),
+            "the edited file must be dirty; {p:?}"
+        );
+        assert!(
+            p.dirty.contains("baker.baml"),
+            "a generic-parameter change must fire the layout sentinel; dirty = {:?}",
+            p.dirty
+        );
+        assert!(
+            byte_identical,
+            "relink must be byte-identical to a full compile"
+        );
     }
 
     // ── FINDING 1: field reorder (receiver named in the signature) ───────────

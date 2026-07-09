@@ -58,7 +58,17 @@ use sha2::{Digest, Sha256};
 /// seed. The added field changes the image wire format, making every pre-v6
 /// image undecodable (`plan_reuse`'s `LinkableImage` decode fails → `None` →
 /// full compile), so no pre-v6 entry is ever reused. No hand migration.
-pub const FORMAT_VERSION: u32 = 6;
+///
+/// v7 (layout-scoped sentinel): each [`ManifestFile`] now carries a
+/// `layout_hash` beside its `signature_hash` — a hash of exactly the file's
+/// type-layout-affecting surface (class/enum/interface/alias/impl declarations,
+/// function bodies blanked). The dirty-set computation raises the layout
+/// sentinel only when a modified file's `layout_hash` moves, not on every
+/// signature change in a type-defining file. The added trailing field makes
+/// every pre-v7 manifest fail to decode (borsh runs off the end), so
+/// `plan_reuse` falls back to a full compile rather than reading a manifest
+/// lacking the field. No hand migration.
+pub const FORMAT_VERSION: u32 = 7;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -166,6 +176,15 @@ pub struct ManifestFile {
     pub content_hash: [u8; 32],
     /// Hash of the file's signature (body regions excluded).
     pub signature_hash: [u8; 32],
+    /// Hash of the file's type-*layout* surface: its class/enum/interface/alias
+    /// and out-of-body `implements` declarations, with function bodies blanked
+    /// (exactly the surface that can move a field offset, an enum discriminant,
+    /// a type tag, or a vtable slot baked into *other* files' bytecode). A file
+    /// with no such declarations hashes to a fixed constant. Function signatures
+    /// never contribute, so a function-only signature edit in a type-defining
+    /// file leaves this stable — the input the dirty-set pass uses to fire the
+    /// layout sentinel only when a type's layout actually changed.
+    pub layout_hash: [u8; 32],
     /// Last-segment names of symbols this file defines.
     pub defined_names: Vec<String>,
     /// Last-segment names this file's compiled bytecode references.
@@ -724,6 +743,7 @@ mod tests {
                 rel_path: "a.baml".to_string(),
                 content_hash: [2u8; 32],
                 signature_hash: [3u8; 32],
+                layout_hash: [4u8; 32],
                 defined_names: vec!["foo".to_string()],
                 referenced_names: vec!["Bar".to_string()],
                 throw_facts: Vec::new(),
@@ -742,12 +762,12 @@ mod tests {
     }
 
     #[test]
-    fn pre_v5_manifest_payload_is_a_miss() {
-        // A manifest serialized without the `diagnostics` field (the pre-v5
+    fn pre_v7_manifest_payload_is_a_miss() {
+        // A manifest serialized without the `layout_hash` field (the pre-v7
         // layout) must not decode into the current `ProjectManifest`, so an old
-        // cache degrades to a full compile rather than a stale-diagnostics
-        // serve. Emulate the old layout by borsh-encoding a struct missing the
-        // trailing field and confirming it fails to round-trip.
+        // cache degrades to a full compile rather than serving against a
+        // misaligned manifest. Emulate the old layout by borsh-encoding a struct
+        // missing that field and confirming it fails to round-trip.
         #[derive(borsh::BorshSerialize)]
         struct LegacyManifestFile {
             rel_path: String,
@@ -756,6 +776,7 @@ mod tests {
             defined_names: Vec<String>,
             referenced_names: Vec<String>,
             throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
+            diagnostics: Vec<u8>,
         }
         #[derive(borsh::BorshSerialize)]
         struct LegacyManifest {
@@ -771,14 +792,16 @@ mod tests {
                 defined_names: Vec::new(),
                 referenced_names: Vec::new(),
                 throw_facts: Vec::new(),
+                diagnostics: Vec::new(),
             }],
         };
         let bytes = borsh::to_vec(&legacy).expect("serialize legacy");
-        // Borsh is not self-describing: the missing trailing `diagnostics` Vec
-        // makes the decode run off the end of the buffer.
+        // Borsh is not self-describing: the absent `layout_hash` shifts every
+        // following field, so the decode misreads a length prefix and runs off
+        // the end of the buffer.
         assert!(
             borsh::from_slice::<ProjectManifest>(&bytes).is_err(),
-            "a pre-v5 manifest layout must fail to decode into the v5 struct"
+            "a pre-v7 manifest layout must fail to decode into the v7 struct"
         );
     }
 
