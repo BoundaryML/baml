@@ -1583,3 +1583,67 @@ async fn spawned_awaiter_of_internal_error_future_does_not_wedge() {
     );
     drop(arc);
 }
+
+/// The scenario-15 "concurrent guards" topology: children spawned INSIDE a
+/// `.map` closure, joined with `baml.future.all` under a spawned parent, with
+/// a linked CancelToken — and ONE child hitting an uncatchable engine error
+/// while its siblings are parked. Before the spawn-leak fix this parked at
+/// 0% CPU forever (the guardrail deadlock documented in
+/// ns_ai_scenarios/15_guardrails); with it, the error propagates and the
+/// call resolves. Kept alongside the minimal nested-spawn repro because the
+/// map-closure + all() + cancel-token topology exercises the settle path
+/// through `future.all`'s cancel-the-rest arm as well.
+#[tokio::test]
+async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
+    let source = r#"
+        function main(boom: () -> string) -> string {
+            let parent = spawn {
+                let tok = baml.spawn.CancelToken.new();
+                let items = [1, 2, 3];
+                let futures = items.map((n: int) -> baml.future.Future<string, null> {
+                    spawn with baml.spawn.options(cancel = tok) {
+                        if (n == 2) {
+                            // parks the awaiter first, then faults the bridge
+                            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+                            boom()
+                        } else {
+                            baml.sys.sleep(baml.time.Duration.from_milliseconds(150n));
+                            "guard-" + n.to_string()
+                        }
+                    }
+                });
+                let all = (await baml.future.all(futures)) catch_all (e) {
+                    _ => ["all-failed"]
+                };
+                tok.cancel();
+                all.join(",")
+            };
+            await parent
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::BridgeFailure {
+        message: "guard boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let call = engine.call_function(
+        "main",
+        vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        true,
+    );
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(10), call).await;
+
+    // Load-bearing assertion: the engine RESOLVED (no 0%-CPU park). The exact
+    // shape of the result is secondary — an uncatchable bridge fault may
+    // surface as an engine error or be absorbed by the catch_all depending on
+    // scheduling; the deadlock is what this test pins.
+    let _result = outcome
+        .expect("engine wedged: spawn-in-map guard topology never resolved (the spawn-leak regressed)");
+}
