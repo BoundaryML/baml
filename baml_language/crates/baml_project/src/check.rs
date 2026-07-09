@@ -66,14 +66,63 @@ pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     for file in &source_files {
         diagnostics.extend(lsp2_check_file(db, *file));
     }
+    diagnostics.extend(package_level_diagnostics(db, &source_files));
+    sort_diagnostics(&mut diagnostics);
+    diagnostics
+}
 
-    // Collect package-level diagnostics (name conflicts and namespace shadows).
-    // Discover all unique packages from file metadata.
-    let mut seen_packages = std::collections::HashSet::new();
+/// The per-checked-file split alongside the merged, honest-ordered set produced
+/// by [`collect_compiler2_diagnostics_narrowed`].
+pub struct NarrowedDiagnostics {
+    /// Merged set: freshly-checked files' diagnostics, the caller-supplied
+    /// clean-file `precomputed`, and the always-recomputed package-level
+    /// diagnostics — sorted by the same comparator as the honest collector, so
+    /// it renders byte-identically to a full run.
+    pub merged: Vec<Diagnostic>,
+    /// Only the diagnostics `check_file` freshly produced for the checked
+    /// files. Excludes `precomputed` and the package-level set, so it is exactly
+    /// what the caller persists per dirty file (the package-level set is never
+    /// cached — it is recomputed every compile).
+    pub fresh: Vec<Diagnostic>,
+}
+
+/// Like [`collect_compiler2_diagnostics`], but run `check_file` only for files
+/// where `should_check(file)` is true and fold in `precomputed` — diagnostics
+/// for the skipped (clean) files, already rehydrated with current-process
+/// `FileId`s. Builtins must be forced through `should_check` by the caller
+/// (they never appear in the manifest / clean set). Package-level
+/// conflicts/shadows are always recomputed. The final sort re-runs on
+/// current-process `FileId`s, so the merged set renders byte-identically to the
+/// honest collector when `should_check` is all-true and `precomputed` is empty.
+pub fn collect_compiler2_diagnostics_narrowed(
+    db: &ProjectDatabase,
+    should_check: &dyn Fn(SourceFile) -> bool,
+    precomputed: Vec<Diagnostic>,
+) -> NarrowedDiagnostics {
+    let source_files = baml_compiler2_hir::compiler2_all_files(db);
+    let mut fresh: Vec<Diagnostic> = Vec::new();
     for file in &source_files {
+        if should_check(*file) {
+            fresh.extend(lsp2_check_file(db, *file));
+        }
+    }
+    let mut merged = fresh.clone();
+    merged.extend(precomputed);
+    merged.extend(package_level_diagnostics(db, &source_files));
+    sort_diagnostics(&mut merged);
+    NarrowedDiagnostics { merged, fresh }
+}
+
+/// Package-level diagnostics (cross-file name conflicts and namespace shadows),
+/// emitted outside `check_file` and therefore recomputed on every compile —
+/// never served from the per-file diagnostics cache.
+fn package_level_diagnostics(db: &ProjectDatabase, source_files: &[SourceFile]) -> Vec<Diagnostic> {
+    let mut seen_packages = std::collections::HashSet::new();
+    for file in source_files {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
         seen_packages.insert(pkg_info.package.clone());
     }
+    let mut diagnostics = Vec::new();
     for pkg_name in seen_packages {
         let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name);
         let items = baml_compiler2_hir::package::package_items(db, pkg_id);
@@ -84,6 +133,11 @@ pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
             diagnostics.push(shadow.to_diagnostic(db));
         }
     }
+    diagnostics
+}
+
+/// Stable snapshot ordering: by (`file_id`, primary span start, message).
+fn sort_diagnostics(diagnostics: &mut [Diagnostic]) {
     diagnostics.sort_by(|a, b| {
         let a_span = a.primary_span();
         let b_span = b.primary_span();
@@ -104,7 +158,6 @@ pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
             (None, None) => a.message.cmp(&b.message),
         }
     });
-    diagnostics
 }
 
 impl ProjectDatabase {
@@ -206,5 +259,31 @@ mod tests {
 
         let result = db.check();
         assert!(!result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn narrowed_all_dirty_equals_honest() {
+        // The oracle floor: with `should_check` all-true and no precomputed
+        // clean-file set, the narrowed collector must reproduce the honest
+        // collector's merged set exactly (same diagnostics, same order).
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(Path::new("/narrow-eq"));
+        db.add_or_update_file(
+            Path::new("/narrow-eq/a.baml"),
+            "class Foo {\n  x int\n}\nfunction bad() -> int {\n  \"nope\"\n}\n",
+        );
+        db.add_or_update_file(
+            Path::new("/narrow-eq/b.baml"),
+            "function ok() -> int {\n  1\n}\n",
+        );
+
+        let honest = collect_compiler2_diagnostics(&db);
+        let narrowed = collect_compiler2_diagnostics_narrowed(&db, &|_| true, Vec::new());
+        assert_eq!(
+            honest, narrowed.merged,
+            "narrowed all-true must equal honest"
+        );
+        // `fresh` excludes the package-level set, so it is a subset of merged.
+        assert!(narrowed.fresh.len() <= narrowed.merged.len());
     }
 }
