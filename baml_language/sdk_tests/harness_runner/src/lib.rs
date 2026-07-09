@@ -202,6 +202,60 @@ pub fn assert_typescript_node_generated_esm(fixture: &str) {
     );
 }
 
+/// Assert that the browser generator emits ESM with browser-oriented module
+/// resolution and dispatches exclusively through the web bridge package.
+pub fn assert_typescript_web_generated_esm(fixture: &str) {
+    let manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let generated = manifest.join(fixture).join("generated");
+    assert!(
+        generated.exists(),
+        "{fixture}/generated/ not found at {} - did build.rs run?",
+        generated.display()
+    );
+    let package_json = fs::read_to_string(generated.join("package.json"))
+        .unwrap_or_else(|e| panic!("{fixture}: read generated/package.json: {e}"));
+    assert!(
+        package_json.contains(r#""type": "module""#),
+        "{fixture}: generated package.json must mark the fixture as ESM"
+    );
+    let tsconfig = fs::read_to_string(generated.join("tsconfig.json"))
+        .unwrap_or_else(|e| panic!("{fixture}: read generated/tsconfig.json: {e}"));
+    assert!(
+        tsconfig.contains(r#""module": "ESNext""#)
+            && tsconfig.contains(r#""moduleResolution": "Bundler""#),
+        "{fixture}: generated tsconfig.json must use browser ESM resolution"
+    );
+    let mut saw_web_bridge = false;
+    for path in collect_ts_files(&generated.join("baml_sdk")) {
+        let contents = fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("{fixture}: read {}: {e}", path.display()));
+        assert!(
+            !contents.contains("@boundaryml/baml-bridge\""),
+            "{fixture}: generated {} still dispatches through the Node bridge",
+            path.display()
+        );
+        if contents.contains("@boundaryml/baml-bridge-web") {
+            saw_web_bridge = true;
+        }
+        for (line_no, line) in contents.lines().enumerate() {
+            if let Some(specifier) = import_from_specifier(line) {
+                assert!(
+                    !specifier.starts_with('.') || specifier.ends_with(".js"),
+                    "{fixture}: generated {}:{} has extensionless relative import `{specifier}`",
+                    path.display(),
+                    line_no + 1
+                );
+            }
+        }
+    }
+    assert!(
+        saw_web_bridge,
+        "{fixture}: generated SDK never imports @boundaryml/baml-bridge-web"
+    );
+}
+
 fn collect_ts_files(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_ts_files_inner(root, &mut files);
@@ -460,4 +514,16 @@ pub mod typescript_node {
     }
 
     pub use crate::typescript_node_test_suite as test_suite;
+}
+
+/// Browser + TypeScript generator's test-side glue.
+pub mod typescript_web {
+    #[macro_export]
+    macro_rules! typescript_web_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/typescript_web_tests.rs"));
+        };
+    }
+
+    pub use crate::typescript_web_test_suite as test_suite;
 }

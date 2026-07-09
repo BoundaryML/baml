@@ -1,0 +1,25 @@
+[package]
+name = "bridge_web"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+bridge_cffi = { workspace = true, default-features = false }
+wasm-bindgen = { workspace = true }
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.ci]
+wasm_support = true
+
+[lints]
+workspace = true

@@ -9,6 +9,12 @@
 //! (handles, host values, objects, runtime lifecycle, callbacks) live under
 //! `ffi`.
 
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
+
+#[cfg(not(target_arch = "wasm32"))]
 use std::{
     collections::HashMap,
     ffi::CStr,
@@ -16,25 +22,43 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+#[cfg(not(target_arch = "wasm32"))]
 use bex_project::Bex;
+#[cfg(not(target_arch = "wasm32"))]
 use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
+#[cfg(not(target_arch = "wasm32"))]
 use futures::future::FutureExt;
+#[cfg(not(target_arch = "wasm32"))]
 use once_cell::sync::OnceCell;
+#[cfg(not(target_arch = "wasm32"))]
 use sys_native::SysOpsExt;
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::runtime::Runtime;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod baml_to_host;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod buffer;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod collector;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod error;
+#[cfg(not(target_arch = "wasm32"))]
 mod ffi;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod host_spans;
+#[cfg(not(target_arch = "wasm32"))]
 mod panic;
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use baml_to_host::{call_and_encode, error_to_outbound, result_to_outbound};
+#[cfg(not(target_arch = "wasm32"))]
 pub use bridge_ctypes::baml_bridge;
+#[cfg(not(target_arch = "wasm32"))]
 pub use buffer::Buffer;
+#[cfg(not(target_arch = "wasm32"))]
 pub use error::BridgeError;
+#[cfg(not(target_arch = "wasm32"))]
 pub use ffi::{
     callbacks::{CallbackFn, register_callback},
     handle::{
@@ -51,6 +75,7 @@ pub use ffi::{
     runtime::{create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli, version},
 };
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::ffi::callbacks::send_outbound_result_to_callback;
 
 // ============================================================================
@@ -58,12 +83,15 @@ use crate::ffi::callbacks::send_outbound_result_to_callback;
 // ============================================================================
 
 /// Global Bex runtime. Uses RwLock to allow replacing the runtime.
+#[cfg(not(target_arch = "wasm32"))]
 static RUNTIME_INSTANCE: RwLock<Option<Arc<dyn Bex>>> = RwLock::new(None);
 
 /// Global Tokio runtime for async execution.
+#[cfg(not(target_arch = "wasm32"))]
 static TOKIO_RUNTIME: OnceCell<Arc<Runtime>> = OnceCell::new();
 
 /// Initialize the global Tokio runtime.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
     let result = TOKIO_RUNTIME.get_or_try_init(|| {
         Runtime::new()
@@ -74,6 +102,7 @@ pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
 }
 
 /// Get a clone of the global runtime, or error if not initialized.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     RUNTIME_INSTANCE
         .read()
@@ -89,6 +118,7 @@ pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 /// # Arguments
 /// * `root_path` - Root path for BAML files
 /// * `src_files` - Map of filename to content
+#[cfg(not(target_arch = "wasm32"))]
 pub fn initialize_runtime(
     root_path: &str,
     src_files: HashMap<String, String>,
@@ -117,6 +147,7 @@ pub fn initialize_runtime(
 /// `baml pack` embeds in its pack envelope. Decoding and engine construction
 /// live behind `bex_project::new_from_bytecode` so the bridge stays on the
 /// `bex_project` surface rather than reaching into bex internals.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>, BridgeError> {
     let rt: Arc<dyn Bex> = bex_project::new_from_bytecode(bytecode, bex_project::SysOps::native())?;
 
@@ -125,6 +156,7 @@ pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>,
     Ok(rt)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
     let mut guard = RUNTIME_INSTANCE
         .write()
@@ -143,6 +175,7 @@ fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
 /// Result/error is delivered via the registered callback as a
 /// `BamlOutboundResult` envelope — including pre-call host-boundary failures,
 /// which are synthesized into the envelope via [`error_to_outbound`].
+#[cfg(not(target_arch = "wasm32"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn call_function(
     function_name: *const libc::c_char,
@@ -157,6 +190,7 @@ pub extern "C" fn call_function(
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn call_function_inner(
     function_name: *const libc::c_char,
     encoded_args: *const u8,
@@ -212,6 +246,7 @@ fn call_function_inner(
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn decoded_call_id(id: u64) -> Result<sys_types::CallId, BridgeError> {
     if id == 0 {
         return Err(BridgeError::InvalidCallId);
@@ -220,11 +255,13 @@ fn decoded_call_id(id: u64) -> Result<sys_types::CallId, BridgeError> {
 }
 
 /// Allocate a new process-unique function-call ID.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn new_function_call_id() -> u64 {
     sys_types::CallId::next().0
 }
 
 /// Build a function-call context builder for a CFFI-owned call id.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn function_call_context_builder(
     call_id: sys_types::CallId,
 ) -> bex_project::FunctionCallContextBuilder {
@@ -234,6 +271,7 @@ pub fn function_call_context_builder(
 /// Cancel an in-flight function call by ID.
 ///
 /// Returns true on success, false if the runtime is not initialized.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn cancel_function_call_by_id(id: u64) -> bool {
     if id == 0 {
         return false;
@@ -248,6 +286,7 @@ pub fn cancel_function_call_by_id(id: u64) -> bool {
 }
 
 /// Allocate a new process-unique function-call ID.
+#[cfg(not(target_arch = "wasm32"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn new_function_call() -> u64 {
     new_function_call_id()
@@ -256,6 +295,7 @@ pub extern "C" fn new_function_call() -> u64 {
 /// Cancel an in-flight function call.
 ///
 /// Returns 0 on success, 1 if the call ID is unknown or already completed.
+#[cfg(not(target_arch = "wasm32"))]
 #[unsafe(no_mangle)]
 pub extern "C" fn cancel_function_call(id: u64) -> i32 {
     if cancel_function_call_by_id(id) { 0 } else { 1 }

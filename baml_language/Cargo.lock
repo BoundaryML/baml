@@ -1649,6 +1649,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bridge_web"
+version = "0.0.0-beta"
+dependencies = [
+ "bridge_cffi",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "bstr"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6540,6 +6548,7 @@ dependencies = [
  "borsh",
  "sdkgen_python_pydantic2",
  "sdkgen_typescript_node",
+ "sdkgen_typescript_web",
 ]
 
 [[package]]
@@ -6562,6 +6571,14 @@ dependencies = [
 
 [[package]]
 name = "sdk_test_typescript_node"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
+name = "sdk_test_typescript_web"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
@@ -6592,6 +6609,14 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_base",
  "baml_codegen_types",
+]
+
+[[package]]
+name = "sdkgen_typescript_web"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_codegen_types",
+ "sdkgen_typescript_node",
 ]
 
 [[package]]

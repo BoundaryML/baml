@@ -22,6 +22,22 @@ filter = 'package(=sdk_test_typescript_node)'
 platform = { host = 'cfg(windows)' }
 setup = 'typescript_node_pnpm_win'
 
+[scripts.setup.typescript_web_pnpm_unix]
+command = './sdk_tests/crates/typescript_web/setup.sh'
+
+[scripts.setup.typescript_web_pnpm_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/typescript_web/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_typescript_web)'
+platform = { host = 'cfg(unix)' }
+setup = 'typescript_web_pnpm_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_typescript_web)'
+platform = { host = 'cfg(windows)' }
+setup = 'typescript_web_pnpm_win'
+
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per
 # fixture plus one incremental `maturin develop`; Windows builds one wheel

@@ -1,0 +1,21 @@
+{
+  "name": "__PACKAGE_NAME__",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@boundaryml/baml-bridge-web": "file:../../../../../sdks/web/bridge_web"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vitest/browser": "^4.0.16",
+    "@vitest/browser-playwright": "^4.0.16",
+    "playwright": "^1.57.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.0.0",
+    "vitest": "^4.0.16"
+  }
+}

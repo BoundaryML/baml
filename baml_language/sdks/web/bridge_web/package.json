@@ -1,0 +1,21 @@
+{
+  "name": "@boundaryml/baml-bridge-web",
+  "version": "0.0.0",
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build:wasm": "wasm-pack build . --target web --dev --out-dir dist/wasm --out-name bridge_web_core && node scripts/prepare-wasm-package.mjs",
+    "build:ts": "tsc -p tsconfig.json",
+    "build:debug": "pnpm build:wasm && pnpm build:ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

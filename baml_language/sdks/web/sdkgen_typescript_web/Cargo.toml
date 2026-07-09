@@ -1,0 +1,18 @@
+[package]
+name = "sdkgen_typescript_web"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+baml_codegen_types = { workspace = true }
+sdkgen_typescript_node = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

@@ -38,6 +38,7 @@ use baml_project::ProjectDatabase;
 
 pub mod python_pydantic2;
 pub mod typescript_node;
+pub mod typescript_web;
 
 /// Emit one Cargo build-script line. Cargo consumes directives and
 /// warnings from stdout, so this intentionally writes there.

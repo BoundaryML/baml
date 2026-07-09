@@ -29,6 +29,12 @@ jobs:
   determine_changes:
     name: "Determine changes"
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    # The merge-queue fast-path step needs actions:read (list workflow runs)
+    # and pull-requests:read; the workflow-level block grants neither.
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     outputs:
       # Flag that is raised when any code in baml_language is changed
       code: ${{ steps.check_code.outputs.changed }}
@@ -59,13 +65,117 @@ jobs:
       # when the PR title/body or a commit message opts in.
       run_perf: ${{ steps.check_perf.outputs.run }}
     steps:
+      # Merge-queue fast path: decide whether this merge-group run can reuse
+      # the PR's own green CI run instead of re-running everything. Skip
+      # requires ALL of:
+      #
+      #   1. The PR head CONTAINS the commit the queue merges it onto (the
+      #      merge-group commit's first parent = base tip + any PRs ahead in
+      #      the group). Ancestry — not just tree equality — is what makes
+      #      reuse sound: the base branch only moves forward, so the base of
+      #      every earlier PR CI run is an ancestor of today's queue base,
+      #      hence of the PR head — meaning that run tested the PR head's
+      #      EXACT content (including this workflow file), not some other
+      #      blend.
+      #   2. The merge-group tree is byte-identical to the PR head tree.
+      #      Implied by 1 for a well-formed merge; asserted anyway.
+      #   3. A successful pull_request run of THIS workflow exists for the PR
+      #      head. Stricter than "required checks green" (which the queue
+      #      already guarantees): the WHOLE run must be green, informational
+      #      jobs included.
+      #
+      # When skip=true, every later step in this job is skipped, so every
+      # output stays empty and every downstream `== 'true'` gate is false:
+      # all jobs skip (docs' inner jobs via docs_changed=''), and
+      # ci-failure-alert — the required check — reports success via its
+      # skipped=success pattern.
+      #
+      # Fail-open by construction: any API error or unexpected shape leaves
+      # skip=false and the merge group runs full CI, exactly like today.
+      - name: Check whether the PR run already covered this tree
+        id: mq_fast_path
+        if: github.event_name == 'merge_group'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            let skip = false;
+            let note;
+            try {
+              // The merge-group branch is gh-readonly-queue/<base>/pr-<n>-<sha>;
+              // the base branch name may contain slashes, so match only the
+              // final /pr-<number>-<hex> component.
+              const headRef = context.payload.merge_group.head_ref;
+              const match = headRef.match(/\/pr-(\d+)-[0-9a-fA-F]+$/);
+              if (!match) {
+                throw new Error(`no PR number in merge-group ref ${headRef}`);
+              }
+              const pullNumber = Number(match[1]);
+              const { data: pull } = await github.rest.pulls.get({
+                owner, repo, pull_number: pullNumber,
+              });
+              const head = pull.head.sha;
+
+              // context.sha is the merge-group commit: merge(queue base, PR head).
+              const { data: mg } = await github.rest.git.getCommit({
+                owner, repo, commit_sha: context.sha,
+              });
+              const queueBase = (mg.parents[0] || {}).sha;
+              const prHead = (mg.parents[1] || {}).sha;
+              const { data: headCommit } = await github.rest.git.getCommit({
+                owner, repo, commit_sha: head,
+              });
+
+              // status 'ahead'/'identical' ⟺ queueBase is an ancestor of head.
+              const { data: cmp } = await github.rest.repos.compareCommitsWithBasehead({
+                owner, repo, basehead: `${queueBase}...${head}`, per_page: 1,
+              });
+
+              const { data: runs } = await github.rest.actions.listWorkflowRuns({
+                owner, repo,
+                workflow_id: 'ci.yaml',
+                event: 'pull_request',
+                status: 'success',
+                head_sha: head,
+                per_page: 1,
+              });
+              const greenRun = runs.workflow_runs[0];
+
+              const blockers = [];
+              if (prHead !== head) {
+                blockers.push(`merge-group second parent ${prHead} is not the PR head ${head}`);
+              }
+              if (!['ahead', 'identical'].includes(cmp.status)) {
+                blockers.push(`PR head does not contain queue base ${queueBase} (comparison: ${cmp.status})`);
+              }
+              if (mg.tree.sha !== headCommit.tree.sha) {
+                blockers.push(`merge-group tree ${mg.tree.sha} differs from PR head tree ${headCommit.tree.sha}`);
+              }
+              if (!greenRun) {
+                blockers.push(`no successful pull_request CI run for head ${head}`);
+              }
+
+              skip = blockers.length === 0;
+              note = skip
+                ? `Merge-queue fast path: PR #${pullNumber} head ${head} contains the queue base and ` +
+                  `already passed CI as-is (${greenRun.html_url}); skipping all jobs.`
+                : `Merge-queue fast path not taken for PR #${pullNumber}: ${blockers.join('; ')}. Running full CI.`;
+            } catch (error) {
+              note = `Merge-queue fast path check failed (${error.message}); running full CI.`;
+            }
+            core.setOutput('skip', String(skip));
+            core.notice(note);
+            await core.summary.addRaw(note, true).write();
+
       - uses: useblacksmith/checkout@v1
+        if: steps.mq_fast_path.outputs.skip != 'true'
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Determine merge base
         id: merge_base
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref || 'canary' }}
         run: |
@@ -74,6 +184,7 @@ jobs:
 
       - name: Check if code changed
         id: check_code
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -102,6 +213,7 @@ jobs:
 
       - name: Check if lexer code changed
         id: check_lexer
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -118,6 +230,7 @@ jobs:
 
       - name: Check if parser code changed
         id: check_parser
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -134,6 +247,7 @@ jobs:
 
       - name: Check if HIR code changed
         id: check_hir
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -150,6 +264,7 @@ jobs:
 
       - name: Check if THIR code changed
         id: check_thir
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -165,6 +280,7 @@ jobs:
 
       - name: Check if codegen code changed
         id: check_codegen
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -180,6 +296,7 @@ jobs:
 
       - name: Check if docs changed
         id: check_docs
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -196,6 +313,7 @@ jobs:
 
       - name: Check if webview changed
         id: check_webview
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -213,6 +331,7 @@ jobs:
 
       - name: Check if grammar changed
         id: check_grammar
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -235,6 +354,7 @@ jobs:
 
       - name: Check if unsafe code changed
         id: check_unsafe
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -248,6 +368,7 @@ jobs:
 
       - name: Check if proto sources changed
         id: check_proto
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -267,6 +388,7 @@ jobs:
       # std halves of the suite.
       - name: Check if profiling ring code changed
         id: check_prof
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
@@ -290,6 +412,7 @@ jobs:
       # chance to run).
       - name: Check perf benchmark opt-in
         id: check_perf
+        if: steps.mq_fast_path.outputs.skip != 'true'
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -1029,6 +1152,9 @@ jobs:
   # This job exploits GitHub's behavior where skipped jobs report as "Success".
   # - When all tests pass (or are intentionally skipped): this job SKIPS → reports SUCCESS
   # - When any test fails or is cancelled: this job RUNS and FAILS → blocks merge
+  #
+  # On the merge-queue fast path every needed job is skipped, so this skips
+  # too and the merge group's required check reports success.
   #
   # Configure "CI - BAML Language / CI Failure Alert" as a required status check.
   ci-failure-alert:
