@@ -1898,6 +1898,7 @@ fn tir_type_error_to_diagnostic_id(
     match error {
         TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnresolvedName { .. } => DiagnosticId::UnknownVariable,
         TirTypeError::DeadCode { .. } => DiagnosticId::UnreachableCode,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,

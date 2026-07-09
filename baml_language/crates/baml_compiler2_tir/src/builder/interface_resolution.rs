@@ -580,8 +580,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             })
             .collect();
         let unresolved = || {
-            UnionMemberResolution::Unresolved(TirTypeError::UnresolvedMember {
-                base_type: union_ty.clone(),
+            // A union member is reachable only through an interface every arm shares. When
+            // none does, the arms may each declare `member` via *different* interfaces —
+            // those are distinct methods, so the union has no single one. Say so, rather
+            // than the bare "has no member" (which wrongly implies no arm declares it).
+            UnionMemberResolution::Unresolved(TirTypeError::UnionMemberNoCommonInterface {
+                union: union_ty.clone(),
                 member: member.clone(),
             })
         };

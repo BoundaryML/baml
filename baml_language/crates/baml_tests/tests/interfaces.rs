@@ -10497,9 +10497,12 @@ async fn wf3_union_of_implementors_assignable_to_interface_runtime() {
     );
 }
 
-/// wf3 #13 [medium]: calling `.speak()` on `Animal | Swimmer` must be rejected
-/// (a `Swimmer` need not be an `Animal`) — but the diagnostic must blame the arm
-/// that lacks `speak` (`Swimmer`), NOT falsely claim `Animal` has no `speak`.
+/// wf3 #13 [medium]: calling `.speak()` on `Animal | Swimmer` must be rejected.
+/// Union member access is valid only through a single interface that *every* arm
+/// shares and that declares the member. `Animal` declares `speak` but `Swimmer`
+/// does not, so the arms share no common interface that declares `speak`. The
+/// diagnostic must say exactly that — not falsely claim the `Animal` arm lacks
+/// `speak` (it declares it).
 /// `_plan/wf3/subtyping-optional-union-match/union_method_on_iface_union.baml`
 #[test]
 fn wf3_method_on_interface_union_blames_correct_member() {
@@ -10529,15 +10532,17 @@ fn wf3_method_on_interface_union_blames_correct_member() {
         "#,
     );
     assert!(
-        !errors.is_empty(),
-        "`.speak()` on `Animal | Swimmer` must be rejected"
+        errors
+            .iter()
+            .any(|e| e.contains("no common interface that declares")),
+        "`.speak()` on `Animal | Swimmer` must be rejected: the arms share no \
+         common interface that declares `speak`. Got:\n  {}",
+        errors.join("\n  ")
     );
     assert!(
-        !errors.iter().any(|e| e.contains("Animal")
-            && e.to_lowercase().contains("no member")
-            && e.contains("speak")),
-        "diagnostic must not claim `Animal` lacks `speak` — it declares it; \
-         should blame `Swimmer`. Got:\n  {}",
+        !errors.iter().any(|e| e.contains("`Animal` has no member")),
+        "diagnostic must not falsely claim the `Animal` arm lacks a member — it \
+         declares `speak`; the union simply shares no common interface. Got:\n  {}",
         errors.join("\n  ")
     );
 }
@@ -11128,13 +11133,15 @@ async fn wf3_blanket_implementor_identity_is_bare_class_pins() {
 // spurious-compile-error > missing-error > bad-diagnostic.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Regression guard (user-reported): a method present on every member of a
-/// *class-only* union (`A | B`, both declaring `execute`) dispatches on the
-/// runtime class. This already worked, but is pinned alongside the interface
-/// union fixes so the shared union-dispatch path stays green.
-#[tokio::test]
-async fn union_fuzz_class_only_union_method_dispatch() {
-    let output = baml_test!(
+/// A method present on every member of a *class-only* union (`A | B`, each
+/// declaring its own `execute` directly) is NOT callable on the union. Union
+/// member access is valid only through a single interface that *every* arm shares
+/// and that declares the member; each class declares its own `execute` (no shared
+/// interface at all), so the union shares no common interface that declares
+/// `execute` — a compile error.
+#[test]
+fn union_fuzz_class_only_union_method_is_rejected() {
+    assert_compile_error_contains(
         r#"
         class A {
           name: string
@@ -11148,11 +11155,8 @@ async fn union_fuzz_class_only_union_method_dispatch() {
         function main() -> string {
           return process(A { name: "Alice" }) + " | " + process(B { name: "Bob" })
         }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("A executes and gets Alice | B executes and gets Bob".into())
+        "#,
+        "no common interface that declares",
     );
 }
 
@@ -11313,13 +11317,14 @@ fn union_fuzz_pr_concrete_arm_not_callable_despite_recovery_arm() {
     );
 }
 
-/// Calling a method on a union of interfaces where some class implements two of
-/// them (the method declared by both) is ambiguous for that class — a value of
-/// the union could be that class — so reject with E0121 rather than silently
-/// dispatching to the first interface's default ("from-A").
+/// Calling `m` on a union of two *different* interfaces (`A | B`) that each
+/// declare their own `m` is rejected, even when one class implements both. Union
+/// member access is valid only through a single interface that *every* arm shares
+/// and that declares the member; `A.m` and `B.m` are distinct members, so the
+/// union shares no common interface that declares `m`.
 #[test]
-fn union_fuzz_pr_shared_implementor_method_in_iface_union_is_e0121() {
-    let errors = collect_compile_errors(
+fn union_fuzz_pr_shared_implementor_method_in_iface_union_has_no_common_interface() {
+    assert_compile_error_contains(
         r#"
         interface A { function m(self) -> string  throws never { return "from-A" } }
         interface B { function m(self) -> string  throws never { return "from-B" } }
@@ -11327,19 +11332,19 @@ fn union_fuzz_pr_shared_implementor_method_in_iface_union_is_e0121() {
         function call(x: A | B) -> string { return x.m() }
         function main() -> string { let c: A = C {}; return call(c) }
         "#,
-    );
-    assert!(
-        errors.iter().any(|e| e.starts_with("[E0121]")),
-        "a union of interfaces with a shared ambiguous implementor must be E0121; got:\n  {}",
-        errors.join("\n  ")
+        "no common interface that declares",
     );
 }
 
-/// A union with the *same* interface that is unambiguous (only one implementor
-/// per interface) must still compile and dispatch.
-#[tokio::test]
-async fn union_fuzz_pr_disjoint_implementors_iface_union_dispatches() {
-    let output = baml_test!(
+/// Calling `m` on a union of two *different* interfaces (`A | B`) that each
+/// declare their own `m`, with disjoint implementors (`Dog` is `A`, `Cat` is
+/// `B`), is still rejected. Union member access is valid only through a single
+/// interface that *every* arm shares and that declares the member; `A` and `B`
+/// are distinct interfaces, so their `m`s are distinct members and the union
+/// shares no common interface that declares `m`.
+#[test]
+fn union_fuzz_pr_disjoint_implementors_iface_union_is_rejected() {
+    assert_compile_error_contains(
         r#"
         interface A { function m(self) -> string  throws never { return "a" } }
         interface B { function m(self) -> string  throws never { return "b" } }
@@ -11351,11 +11356,8 @@ async fn union_fuzz_pr_disjoint_implementors_iface_union_dispatches() {
           let c: B = Cat {}
           return call(d) + call(c)
         }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("ab".into())
+        "#,
+        "no common interface that declares",
     );
 }
 
@@ -11449,16 +11451,17 @@ async fn union_fuzz_f02_generic_match_narrowing_ignores_type_arg_crash() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(0));
 }
 
-/// F3 [crash]: a same-named field with CONFLICTING types across two union
-/// interfaces (`Animal.id: string`, `Vehicle.id: int`) used to type-check
-/// against any target and then abort the VM (`expected map, got instance`).
-/// The sound result is that `u.id` has type `string | int` (the value is an
-/// Animal OR a Vehicle, not genuinely ambiguous), so reading it into a `string`
-/// must be a clean compile-time type error (E0001) — never a VM crash.
+/// F3 [crash]: a same-named field declared by two *different* union interfaces
+/// (`Animal.id: string`, `Vehicle.id: int`) used to type-check against any target
+/// and then abort the VM (`expected map, got instance`). Union member access is
+/// valid only through a single interface that *every* arm shares and that declares
+/// the member; `Animal.id` and `Vehicle.id` are distinct members, so the union
+/// shares no common interface that declares `id` — a clean compile error, never a
+/// VM crash.
 /// Repro: `cat_iface_iface_union/iface_iface_union_7_same_field_diff_type.baml`
 #[test]
-fn union_fuzz_f03_conflicting_union_field_is_ambiguous_error() {
-    assert_compile_error_code(
+fn union_fuzz_f03_conflicting_union_field_has_no_common_interface() {
+    assert_compile_error_contains(
         r#"
         interface Animal { id: string }
         interface Vehicle { id: int }
@@ -11473,7 +11476,7 @@ fn union_fuzz_f03_conflicting_union_field_is_ambiguous_error() {
           return v
         }
         "#,
-        "E0001",
+        "no common interface that declares",
     );
 }
 
@@ -11576,15 +11579,16 @@ async fn union_fuzz_f06_reflection_generic_union_arg_order_insensitive() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(111111));
 }
 
-/// F7 [spurious-compile-error]: a method present on EVERY member of a union that
-/// contains an interface is rejected as `` `unknown | unknown` is not a function ``
-/// (E0006) — the interface arm's method type resolves to the `Ty::Unknown`
-/// sentinel. SHOULD compile and dispatch on the runtime class -> "Woof".
-/// (Currently panics at compile until fixed.)
+/// F7: calling a method that both arms declare through *different* interfaces
+/// (`Animal.speak` / `Vehicle.speak`) on a union `Animal | Vehicle` is a compile
+/// error. Union member access is valid only through a single interface that
+/// *every* arm shares and that declares the member; `Animal.speak` and
+/// `Vehicle.speak` are distinct members, so the union shares no common interface
+/// that declares `speak`.
 /// Repro: `cat_collection_union/collection_union_9_union_direct_call.baml`
-#[tokio::test]
-async fn union_fuzz_f07_shared_method_on_iface_union_is_callable() {
-    let output = baml_test!(
+#[test]
+fn union_fuzz_f07_shared_method_on_iface_union_is_a_compile_error() {
+    assert_compile_error_contains(
         r#"
         interface Animal {
           function speak(self) -> string throws never
@@ -11606,11 +11610,8 @@ async fn union_fuzz_f07_shared_method_on_iface_union_is_callable() {
           let v: Animal | Vehicle = Dog {};
           return v.speak();
         }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("Woof".into())
+        "#,
+        "no common interface that declares",
     );
 }
 
@@ -11709,14 +11710,16 @@ async fn union_fuzz_f10_out_of_body_primitive_string_direct_call() {
     );
 }
 
-/// F11 [missing-error]: the soundness face of F3 — reading a conflicting
-/// union-interface field type-checks against ANY target, including `bool`
-/// (`Animal.id: string` / `Vehicle.id: int` read into `let v: bool`), so the
-/// field has no single well-defined type. SHOULD be rejected at compile time.
+/// F11 [missing-error]: the soundness face of F3 — reading a field declared by
+/// two *different* union interfaces (`Animal.id: string` / `Vehicle.id: int`)
+/// used to type-check against ANY target, including `bool`. Union member access
+/// is valid only through a single interface that *every* arm shares and that
+/// declares the member; `Animal.id` and `Vehicle.id` are distinct members, so the
+/// union shares no common interface that declares `id` — rejected at compile time.
 /// Repro: `cat_iface_iface_union/iface_iface_union_7_same_field_diff_type.baml`
 #[test]
 fn union_fuzz_f11_conflicting_union_field_read_is_rejected() {
-    let errors = collect_compile_errors(
+    assert_compile_error_contains(
         r#"
         interface Animal { id: string }
         interface Vehicle { id: int }
@@ -11728,15 +11731,7 @@ fn union_fuzz_f11_conflicting_union_field_read_is_rejected() {
         }
         function main() -> bool { return readBool(Dog { id: "x" }) }
         "#,
-    );
-    assert!(
-        errors
-            .iter()
-            .any(|e| e.starts_with("[E0001]") && e.contains("bool")),
-        "reading a field with conflicting types across union-interface members must be \
-         rejected with a type mismatch (E0001) against the `bool` target — it used to \
-         type-check unsoundly against any target; got:\n  {}",
-        errors.join("\n  ")
+        "no common interface that declares",
     );
 }
 

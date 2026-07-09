@@ -85,6 +85,11 @@ pub enum TirTypeError {
     /// - Class: "Class `X` has no member `y`"
     /// - Enum: "Enum `X` has no variant `y`"
     UnresolvedMember { base_type: Ty, member: Name },
+    /// A member (method or field) accessed on a union type is not reachable because
+    /// the union's arms implement no *common* interface that declares it. Each arm may
+    /// declare it independently (via distinct interfaces), but those are different
+    /// members — the union has no single agreed-upon one.
+    UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
     /// Unreachable code after a diverging statement (return/break/continue).
@@ -672,6 +677,14 @@ impl fmt::Display for TirTypeError {
                         base_type.render_user_facing()
                     )
                 }
+            }
+            TirTypeError::UnionMemberNoCommonInterface { union, member } => {
+                write!(
+                    f,
+                    "type `{}` has no member `{member}`: its members implement no common \
+                     interface that declares `{member}`",
+                    union.render_user_facing()
+                )
             }
             TirTypeError::UnresolvedName { name } => {
                 write!(f, "unresolved name: {name}")
