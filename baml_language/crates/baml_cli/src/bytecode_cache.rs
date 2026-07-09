@@ -54,6 +54,20 @@ const CLI_OPT_LEVEL: OptLevel = OptLevel::Two;
 /// `syntactic_type_names` token, or with anything `defined_names` produces.
 const LAYOUT_SENTINEL: &str = "\u{0}::any-type-layout::";
 
+/// Sentinel entry injected into a file's `referenced_names` when the file
+/// participates in interface-coherence checking (it declares an `impl`, an
+/// out-of-body `implements … for …`, or a class `implements` block). Paired
+/// with a matching sentinel added to `changed_names` whenever any dirty, added,
+/// or removed file carries such a construct, it re-checks every
+/// coherence-participating file together whenever the package's impl set moves.
+///
+/// This closes the `OverlappingImplements` (E0132) hole: a conflicting `impl`
+/// added in one file surfaces its other half in a *different* file whose name
+/// set never changed, so the name-based dirty propagation alone would leave that
+/// half stale. Coherence-free projects never store the sentinel and pay nothing.
+/// Same non-identifier shape as [`LAYOUT_SENTINEL`], so it can never collide.
+const IMPL_SENTINEL: &str = "\u{0}::any-impl-coherence::";
+
 /// An opened cache plus the keys for one resolved project + compile config.
 pub(crate) struct CacheContext {
     cache: BytecodeCache,
@@ -584,6 +598,17 @@ fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
         || !item_tree.type_aliases.is_empty()
 }
 
+/// Whether `file` declares any interface-`impl` construct — an `impl` block, an
+/// out-of-body `implements … for …`, or a class `implements` block. Gates the
+/// `IMPL_SENTINEL`: only a change to such a file can move the package's impl set
+/// (and thus a coherence verdict), so an impl-free edit never trips the fallback.
+fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    !item_tree.impls.is_empty()
+        || !item_tree.implements_for.is_empty()
+        || item_tree.classes.values().any(|c| !c.implements.is_empty())
+}
+
 /// Whether `function`'s bytecode bakes a type's layout through an operand that
 /// carries no recoverable type reference: a positional field offset
 /// (`LoadField`/`StoreField`/`InitField`/`InitSpread`/`InitInstance`), an enum
@@ -780,6 +805,10 @@ impl CacheContext {
         // the `LAYOUT_SENTINEL`: a layout can only move when a type-defining
         // file's signature changes, so a function-only edit leaves it false.
         let mut type_signature_changed = false;
+        // Did the package's interface-`impl` set change? Gates the
+        // `IMPL_SENTINEL`: a coherence verdict can only move when an
+        // impl-bearing file is added, edited, or removed.
+        let mut impl_set_changed = false;
 
         for (sf, rel) in &current {
             match prev_files.get(rel.as_str()) {
@@ -791,12 +820,31 @@ impl CacheContext {
                     if file_defines_type(db, *sf) {
                         type_signature_changed = true;
                     }
+                    if file_has_impl_construct(db, *sf) {
+                        impl_set_changed = true;
+                    }
                 }
                 Some(entry) => {
                     if entry.content_hash == content_hash(sf.text(db)) {
                         continue;
                     }
                     dirty.insert(rel.clone());
+                    // Throws propagation (Risk 1): `throws` is body-inferred but
+                    // interface-visible. A body-only edit that grows this file's
+                    // inferred throws leaves its `signature_hash` unchanged, so a
+                    // caller's throws-contract (E0096/E0097) and catch-exhaustiveness
+                    // (E0094/E0095) diagnostics would be served stale. Compare fresh
+                    // facts to the stored ones; on any change treat this file's names
+                    // as changed so referencing files are re-checked. Free: a dirty
+                    // file is body-walked anyway, and the query is salsa-memoized.
+                    if baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, *sf).0
+                        != entry.throw_facts
+                    {
+                        changed_names.extend(defined_names(db, *sf));
+                    }
+                    if file_has_impl_construct(db, *sf) {
+                        impl_set_changed = true;
+                    }
                     if entry.signature_hash != file_signature_hash(db, *sf) {
                         changed_names.extend(entry.defined_names.iter().cloned());
                         changed_names.extend(defined_names(db, *sf));
@@ -817,6 +865,11 @@ impl CacheContext {
                 // a type (and thus a layout) may have vanished.
                 changed_names.extend(entry.defined_names.iter().cloned());
                 type_signature_changed = true;
+                // A removed impl file (its stored refs carry the sentinel)
+                // changes the package's impl set — re-check coherence peers.
+                if entry.referenced_names.iter().any(|n| n == IMPL_SENTINEL) {
+                    impl_set_changed = true;
+                }
             }
         }
         // Conservative fallback for layout dependencies whose receiver type is
@@ -824,6 +877,11 @@ impl CacheContext {
         // every file whose bytecode baked a layout (`LAYOUT_SENTINEL`).
         if type_signature_changed {
             changed_names.insert(LAYOUT_SENTINEL.to_string());
+        }
+        // Conservative fallback for whole-package coherence: any impl-set change
+        // re-checks every coherence-participating file (`IMPL_SENTINEL`).
+        if impl_set_changed {
+            changed_names.insert(IMPL_SENTINEL.to_string());
         }
 
         // Propagate: unchanged files referencing a changed name are dirty.
@@ -930,6 +988,11 @@ impl CacheContext {
                     .into_iter()
                     .collect();
                 set.extend(syntactic_type_names(db, sf));
+                // Tag coherence-participating files so any package-wide impl-set
+                // change re-checks every one of them together (IMPL_SENTINEL).
+                if file_has_impl_construct(db, sf) {
+                    set.insert(IMPL_SENTINEL.to_string());
+                }
                 let mut referenced_names: Vec<String> = set.into_iter().collect();
                 referenced_names.sort_unstable();
                 ManifestFile {
@@ -1192,6 +1255,91 @@ mod tests {
         assert!(
             dirty.contains("b.baml"),
             "type-alias consumer must be dirtied when the alias RHS changes; dirty = {dirty:?}"
+        );
+    }
+
+    // ── Risk 1: inferred-throws change dirties the caller ────────────────────
+
+    #[test]
+    fn plan_reuse_dirties_caller_on_callee_inferred_throws_change() {
+        // A body-only edit to `risky` grows its inferred throws (none -> MyErr)
+        // without touching its signature, so its `signature_hash` is unchanged
+        // and the name-based dirty set alone would leave the caller clean. Only
+        // the throws-change propagation (Risk 1) dirties `caller`, whose
+        // throws-contract / catch diagnostics depend on `risky`'s throws.
+        let err = "class MyErr {\n  msg string\n}\n";
+        let risky_v1 = "function risky(x: int) -> int {\n  x\n}\n";
+        let risky_v2 = "function risky(x: int) -> int {\n  throw MyErr { msg: \"boom\" }\n}\n";
+        let caller = "function caller(x: int) -> int {\n  risky(x)\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("err.baml", err),
+            ("risky.baml", risky_v1),
+            ("caller.baml", caller),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("err.baml", err),
+            ("risky.baml", risky_v2),
+            ("caller.baml", caller),
+            ("z.baml", unrelated),
+        ];
+        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            dirty.contains("caller.baml"),
+            "caller must be dirtied when the callee's inferred throws grow; dirty = {dirty:?}"
+        );
+        assert!(
+            !dirty.contains("z.baml"),
+            "an unrelated file must stay clean; dirty = {dirty:?}"
+        );
+    }
+
+    // ── Risk 2: impl edit dirties coherence peers ────────────────────────────
+
+    #[test]
+    fn plan_reuse_dirties_coherence_peer_on_impl_edit() {
+        // Editing one impl-bearing file's method body must re-check the OTHER
+        // impl-bearing file: an `OverlappingImplements` verdict spans both, and
+        // the peer names no symbol the edit changed — only `IMPL_SENTINEL`
+        // connects them. The method-body edit keeps the peer's signature intact,
+        // so no layout/name path can substitute for the sentinel.
+        let iface = "interface Speaker {\n  function speak(self) -> string\n}\n";
+        let a = "class Dog {\n  name string\n  implements Speaker {\n    \
+                 function speak(self) -> string {\n      \"woof\"\n    }\n  }\n}\n";
+        let b_v1 = "class Cat {\n  name string\n  implements Speaker {\n    \
+                    function speak(self) -> string {\n      \"meow\"\n    }\n  }\n}\n";
+        let b_v2 = "class Cat {\n  name string\n  implements Speaker {\n    \
+                    function speak(self) -> string {\n      \"MEOW\"\n    }\n  }\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("iface.baml", iface),
+            ("a.baml", a),
+            ("b.baml", b_v1),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("iface.baml", iface),
+            ("a.baml", a),
+            ("b.baml", b_v2),
+            ("z.baml", unrelated),
+        ];
+        let Some(dirty) = dirty_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            dirty.contains("b.baml"),
+            "the edited impl file must be dirty; dirty = {dirty:?}"
+        );
+        assert!(
+            dirty.contains("a.baml"),
+            "a coherence peer must be re-checked via IMPL_SENTINEL; dirty = {dirty:?}"
+        );
+        assert!(
+            !dirty.contains("z.baml"),
+            "an impl-free file must stay clean; dirty = {dirty:?}"
         );
     }
 
