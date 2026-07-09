@@ -287,7 +287,7 @@ const SPIKE_1B_SCAFFOLD: &str = r#"
     }
 
     interface FirstNamed {
-        function first_name(self) -> string
+        function first_name(self) -> string throws never
     }
 
     implements<T extends Named> FirstNamed for T[] {
@@ -360,7 +360,7 @@ async fn spike_1b_blanket_interface_method_wins_over_array_class_method() {
     let output = baml_test!(
         r#"
         interface Countable {
-            function count(self) -> int
+            function count(self) -> int throws never
         }
 
         implements<T> Countable for T[] {
@@ -385,7 +385,7 @@ async fn spike_1c_two_self_method_through_bounded_typevar_runs() {
     let output = baml_test!(
         r#"
         interface Cmp {
-            function compare(self, other: Self) -> int
+            function compare(self, other: Self) -> int throws never
         }
 
         class Num {
@@ -416,7 +416,7 @@ fn spike_1c_interface_typed_values_cannot_call_two_self_method() {
     assert_compile_error_contains(
         r#"
         interface Cmp {
-            function compare(self, other: Self) -> int
+            function compare(self, other: Self) -> int throws never
         }
 
         function bad(a: Cmp, b: Cmp) -> bool {

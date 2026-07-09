@@ -798,7 +798,7 @@ fn class_generic_bound_is_enforced_in_required_interface_method_annotations() {
         }
 
         interface Bad {
-            function f(self, value: Box<int>) -> Box<int>
+            function f(self, value: Box<int>) -> Box<int> throws never
         }
         "#,
         "Named",
@@ -813,7 +813,7 @@ fn class_generic_bound_is_enforced_in_required_interface_method_annotations() {
 fn method_generic_bound_referencing_class_param_is_satisfied() {
     assert_no_compile_errors(
         r#"
-        interface Eq<T> { function equal(self, other: T) -> bool }
+        interface Eq<T> { function equal(self, other: T) -> bool throws never }
         class Wrapper<C> {
             inner: C
             function compare_with<U extends Eq<C>>(self, u: U) -> bool { return true }
@@ -836,7 +836,7 @@ fn method_generic_bound_referencing_class_param_is_enforced() {
     // `Eq<int>` via the receiver, so `StrEq` does not satisfy it.
     assert_compile_error_contains(
         r#"
-        interface Eq<T> { function equal(self, other: T) -> bool }
+        interface Eq<T> { function equal(self, other: T) -> bool throws never }
         class Wrapper<C> {
             inner: C
             function compare_with<U extends Eq<C>>(self, u: U) -> bool { return true }
