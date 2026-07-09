@@ -15904,6 +15904,32 @@ impl<'db> TypeInferenceBuilder<'db> {
         if resolved_sub != *sub || resolved_sup != *sup {
             return self.is_subtype(&resolved_sub, &resolved_sup);
         }
+        // Opaque associated-type forwarding (scenario-15 gap): allow an
+        // `unknown` value to flow INTO an opaque associated-type projection
+        // whose base is an existential interface value — e.g. `tp.Transcript`
+        // where `tp: Tools` was narrowed from a `Provider` field. A wrapper
+        // that forwards an interface carrying an opaque associated type
+        // (`type Transcript`) must expose its own binding as
+        // `type Transcript = unknown`; the transcript then leaves `begin` typed
+        // `unknown` (already sound — an opaque projection widens TO the top
+        // type) and must be accepted back into `step`/`submit`. That reverse
+        // direction — `unknown` back into the opaque slot — is the
+        // `parse<T>`-grade trust boundary: this is a dynamic VM where `unknown`
+        // flows are runtime-checked at use, and the projection is opaque
+        // precisely because its witness is existentially hidden behind the
+        // interface value. Statically this is unsound only if two DIFFERENT
+        // providers' transcripts are mixed; in the load-bearing wrapper pattern
+        // there is a single inner provider, and the VM checks the value at use.
+        // Only genuinely opaque projections qualify: `resolved_sup == *sup`
+        // holds here, so a projection over a CONCRETE base was already resolved
+        // to its witness above (and `unknown` still cannot coerce to a resolved
+        // `int`/class witness); an interface base is the existential case.
+        if matches!(sub, Ty::BuiltinUnknown { .. })
+            && let Ty::AssociatedTypeProjection { base, .. } = sup
+            && matches!(base.as_ref(), Ty::Interface(..))
+        {
+            return true;
+        }
         if let Ty::TypeVar(name, _) = sub
             && let Some(bound) = self.generic_param_bounds.get(name)
         {

@@ -4901,3 +4901,233 @@ fn interface_default_method_self_referencing_bound_is_emitted() {
          emitted metadata: {display_type_params:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Opaque associated-type forwarding through a wrapper (scenario-15 gap).
+//
+// A wrapper class forwards an interface that carries an opaque associated type
+// (`type Transcript`). It must expose its own binding as `type Transcript =
+// unknown` and forward `begin -> step -> submit` to an inner provider. The
+// transcript leaves `begin` typed `unknown` (sound: an opaque projection widens
+// TO the top type) and must be accepted BACK into `step`/`submit`, whose params
+// are the inner's opaque `Tools.Transcript`. That `unknown -> opaque
+// projection` direction is the fix — the parse<T>-grade trust boundary in this
+// dynamic, runtime-checked VM.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn wrapper_forwards_opaque_associated_type_via_existential_field() {
+    assert_zero_compile_errors(
+        r#"
+        class ToolCalls {}
+
+        interface Tools {
+            type Transcript
+
+            function begin(self, prompt: string) -> Transcript
+            function step(self, t: Transcript) -> string | ToolCalls
+            function submit(self, t: Transcript) -> Transcript
+        }
+
+        class Guarded {
+            inner: Tools
+
+            implements Tools {
+                type Transcript = unknown
+
+                function begin(self, prompt: string) -> unknown {
+                    return self.inner.begin(prompt)
+                }
+
+                function step(self, t: unknown) -> string | ToolCalls {
+                    return self.inner.step(t)
+                }
+
+                function submit(self, t: unknown) -> unknown {
+                    return self.inner.submit(t)
+                }
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn wrapper_forwards_opaque_associated_type_via_match_narrowed_existential() {
+    // The scenario-15 shape: `inner: Provider`, narrowed to `Tools` via `match`.
+    assert_zero_compile_errors(
+        r#"
+        class ToolCalls {}
+
+        interface Provider {
+            function name(self) -> string
+        }
+
+        interface Tools requires Provider {
+            type Transcript
+
+            function begin(self, prompt: string) -> Transcript
+            function step(self, t: Transcript) -> string | ToolCalls
+            function submit(self, t: Transcript) -> Transcript
+        }
+
+        class Guarded {
+            inner: Provider
+
+            implements Provider {
+                function name(self) -> string { return "guarded" }
+            }
+
+            implements Tools {
+                type Transcript = unknown
+
+                function begin(self, prompt: string) -> unknown {
+                    match (self.inner) {
+                        let tp: Tools => tp.begin(prompt),
+                        _ => "no",
+                    }
+                }
+
+                function step(self, t: unknown) -> string | ToolCalls {
+                    match (self.inner) {
+                        let tp: Tools => tp.step(t),
+                        _ => "no",
+                    }
+                }
+
+                function submit(self, t: unknown) -> unknown {
+                    match (self.inner) {
+                        let tp: Tools => tp.submit(t),
+                        _ => t,
+                    }
+                }
+            }
+        }
+        "#,
+    );
+}
+
+#[test]
+fn unknown_still_rejected_where_concrete_associated_witness_is_expected() {
+    // The fix is scoped to OPAQUE projections (existential interface base). A
+    // projection over a CONCRETE base resolves to its witness (`int` here), so
+    // `unknown` must still be rejected — otherwise the trust boundary would leak
+    // into ordinary concrete code.
+    assert_compile_error_code(
+        r#"
+        interface Tools {
+            type Transcript
+
+            function step(self, t: Transcript) -> string
+        }
+
+        class IntTools {
+            implements Tools {
+                type Transcript = int
+
+                function step(self, t: int) -> string {
+                    return "ok"
+                }
+            }
+        }
+
+        function bad(tools: IntTools, blob: unknown) -> string {
+            return tools.step(blob)
+        }
+        "#,
+        "E0001",
+    );
+}
+
+#[tokio::test]
+async fn wrapper_forwards_full_tool_loop_round_trip_through_scripted_fake() {
+    // End-to-end: a scripted `Tools` fake owns a real transcript
+    // (`FakeTranscript`, a struct); the `Guarded` wrapper forwards
+    // begin -> step -> submit -> step, threading the transcript as `unknown`
+    // across every method boundary. The driver runs the loop through the
+    // wrapper typed as an unbound `Tools` existential, proving the transcript
+    // survives the `unknown` trip and lands back in the fake as a real
+    // `FakeTranscript` at run time.
+    let output = baml_test!(
+        r#"
+        class ToolCalls {}
+
+        class FakeTranscript {
+            steps: int
+        }
+
+        interface Tools {
+            type Transcript
+
+            function begin(self, prompt: string) -> Transcript
+            function step(self, t: Transcript) -> string | ToolCalls
+            function submit(self, t: Transcript) -> Transcript
+        }
+
+        class FakeProvider {
+            implements Tools {
+                type Transcript = FakeTranscript
+
+                function begin(self, prompt: string) -> FakeTranscript {
+                    return FakeTranscript { steps: 0 }
+                }
+
+                function step(self, t: FakeTranscript) -> string | ToolCalls {
+                    if t.steps == 0 {
+                        return ToolCalls {}
+                    }
+                    return "final"
+                }
+
+                function submit(self, t: FakeTranscript) -> FakeTranscript {
+                    return FakeTranscript { steps: t.steps + 1 }
+                }
+            }
+        }
+
+        class Guarded {
+            inner: Tools
+
+            implements Tools {
+                type Transcript = unknown
+
+                function begin(self, prompt: string) -> unknown {
+                    return self.inner.begin(prompt)
+                }
+
+                function step(self, t: unknown) -> string | ToolCalls {
+                    return self.inner.step(t)
+                }
+
+                function submit(self, t: unknown) -> unknown {
+                    return self.inner.submit(t)
+                }
+            }
+        }
+
+        function drive(tools: Tools) -> string {
+            let t0 = tools.begin("hi")
+            return match (tools.step(t0)) {
+                let final0: string => "immediate:" + final0,
+                let calls: ToolCalls => {
+                    let t1 = tools.submit(t0)
+                    match (tools.step(t1)) {
+                        let final1: string => "via-tools:" + final1,
+                        let more: ToolCalls => "stuck",
+                    }
+                },
+            }
+        }
+
+        function main() -> string {
+            let g = Guarded { inner: FakeProvider {} }
+            return drive(g)
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("via-tools:final".into())
+    );
+}
