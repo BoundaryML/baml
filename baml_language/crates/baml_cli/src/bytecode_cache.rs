@@ -1732,6 +1732,70 @@ mod tests {
         );
     }
 
+    // ── Phase 2a: per-file interface-fragment fold equality oracle ───────────
+
+    #[test]
+    fn fragment_fold_matches_reference_for_stdlib_and_user_packages() {
+        use baml_db::{
+            Name,
+            baml_compiler2_hir::package::PackageId,
+            baml_compiler2_tir::package_interface::{
+                STDLIB_PACKAGE_NAMES, derive_package_interface_reference, package_interface,
+            },
+        };
+
+        // A multi-file, multi-namespace user package with a cross-file name
+        // conflict: both root files define `Widget`, so the path-sorted winner is
+        // `a.baml`. Exercises classes (fields + a method), enums, a type alias,
+        // free functions, and a second (`ns_util`) namespace — the surface the
+        // fold must reproduce, plus the winner-selection the plan flags as the
+        // fragment fold's one real risk.
+        let db = build_db(&[
+            (
+                "a.baml",
+                "class Widget {\n  \
+                 size int\n  \
+                 function area(self) -> int throws never {\n    self.size\n  }\n\
+                 }\n\
+                 enum Color {\n  Red\n  Green\n}\n\
+                 type Id = int\n\
+                 function alpha(w: Widget) -> int throws never {\n  w.size\n}\n",
+            ),
+            (
+                "b.baml",
+                "class Widget {\n  label string\n}\n\
+                 function beta() -> string throws never {\n  \"x\"\n}\n",
+            ),
+            (
+                "ns_util/util.baml",
+                "class Helper {\n  n int\n}\n\
+                 function help(h: Helper) -> int throws never {\n  h.n\n}\n",
+            ),
+        ]);
+
+        // The unseeded db never fires the stdlib short-circuit, so
+        // `package_interface` *is* the fragment fold. Compare its borsh bytes to
+        // the pre-refactor reference derivation for every package — the two must
+        // be byte-identical.
+        let mut package_names: Vec<String> = STDLIB_PACKAGE_NAMES
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        package_names.push("user".to_string());
+
+        for name in package_names {
+            let pkg_id = PackageId::new(&db, Name::new(&name));
+            let folded =
+                borsh::to_vec(package_interface(&db, pkg_id)).expect("serialize folded interface");
+            let reference = borsh::to_vec(&derive_package_interface_reference(&db, pkg_id))
+                .expect("serialize reference interface");
+            assert_eq!(
+                folded, reference,
+                "fragment-folded package_interface must equal the pre-refactor derivation for `{name}`",
+            );
+        }
+    }
+
     /// Bound the isolated cost of the stdlib interface derivation cluster
     /// (parse + type-lower + throw-infer over all six stdlib packages) that
     /// B-694 short-circuits. Run with:

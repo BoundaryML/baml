@@ -8,14 +8,17 @@
 //! `PackageResolutionContext` bundles a package's own `PackageItems` with its
 //! dependencies' `PackageInterface`s, providing unified lookup methods.
 
-use baml_base::Name;
+use std::collections::BTreeMap;
+
+use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::BuiltinKind;
 use baml_compiler2_hir::{
     contributions::Definition,
     file_package,
+    loc::{ClassLoc, EnumLoc, FunctionLoc, TypeAliasLoc},
     package::{PackageId, PackageItems, package_dependencies},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     infer_context::TirTypeError,
@@ -101,6 +104,36 @@ pub struct ExportedFunction {
     pub builtin_kind: Option<BuiltinKind>,
 }
 
+/// The typed export surface a single file contributes to its package, plus the
+/// exact `callable_throws` of every callable it defines (the Phase 2 seed
+/// projection).
+///
+/// `'db`-free and Borsh-serializable so it can ride in the file's
+/// `CompilationUnit` as opaque bytes and be projected into a `callable_throws`
+/// seed on a warm compile. Every leaf (`Ty`, `ExportedType`, `ExportedFunction`,
+/// `Name`) is Borsh-ready; the `FxHashMap`/`BTreeMap` members serialize
+/// deterministically (Borsh sorts map entries by key).
+///
+/// Structural entries are keyed by `Name` with keep-first semantics, exactly
+/// mirroring `namespace_items`' `contribs[0]` winner selection *within a file*,
+/// so folding these fragments (driven by the resolved `namespace_items`)
+/// reproduces the whole-package derivation byte-for-byte.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct FileInterfaceFragment {
+    /// The file's namespace path (`file_package(file).namespace_path`).
+    pub ns_path: Vec<Name>,
+    /// Types this file exports: name -> `ExportedType` (first contribution wins).
+    pub types: FxHashMap<Name, ExportedType>,
+    /// Free functions this file exports: name -> `ExportedFunction` (first wins).
+    pub functions: FxHashMap<Name, ExportedFunction>,
+    /// Every callable the file defines (free fn, method, interface default, or
+    /// `implements`-for method — all flattened into `item_tree.functions`),
+    /// keyed by its item-tree `LocalItemId::as_u32`, mapped to its exact
+    /// `callable_throws`. Process-independent for byte-identical files; the only
+    /// part a `SeededCallableThrows` seed reads.
+    pub callable_throws_by_id: BTreeMap<u32, Ty>,
+}
+
 /// Distinguishes own-package results from dependency results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolvedSource {
@@ -146,6 +179,24 @@ pub struct PackageResolutionContext<'db> {
 
 #[allow(unsafe_code)]
 unsafe impl salsa::Update for PackageInterface {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        let old_ref = unsafe { &*old_pointer };
+        if *old_ref == new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for FileInterfaceFragment {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         #[allow(unsafe_code)]
         let old_ref = unsafe { &*old_pointer };
@@ -331,6 +382,261 @@ fn lower_class_method_signature<'db>(
     }
 }
 
+// ── Per-item lowering helpers ──────────────────────────────────────────────
+//
+// Extracted verbatim from the pre-Phase-2 inline `package_interface` derivation
+// so the per-file `file_interface_fragment` query and the equality-oracle
+// reference share exactly one lowering. Only the *iteration structure* around
+// them differs between the fragment fold and the reference.
+
+/// Lower a class definition into its `ExportedType::Class`.
+fn lower_class_export<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    class_loc: ClassLoc<'db>,
+    name: &Name,
+) -> ExportedType {
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+    let class_data = &item_tree[class_loc.id(db)];
+    let class_ns = file_package::file_package(db, class_loc.file(db)).namespace_path;
+
+    // Lower fields
+    let mut fields = Vec::new();
+    let mut diags = Vec::new();
+    for field in &class_data.fields {
+        if let Some(te) = &field.type_expr {
+            let field_ty = lower_type_expr_in_ns(
+                db,
+                te,
+                pkg_items,
+                &class_ns,
+                &class_data.generic_params,
+                &mut diags,
+            );
+            fields.push((field.name.clone(), field_ty));
+        } else {
+            fields.push((
+                field.name.clone(),
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+            ));
+        }
+    }
+
+    // Lower methods
+    let mut methods = Vec::new();
+    for method_id in &class_data.methods {
+        let method_loc =
+            baml_compiler2_hir::loc::FunctionLoc::new(db, class_loc.file(db), *method_id);
+        let method_data = &item_tree[*method_id];
+        let lowered = lower_class_method_signature(
+            db, pkg_items, class_data, method_loc, &class_ns, &mut diags,
+        );
+
+        methods.push(ExportedFunction {
+            name: method_data.name.clone(),
+            params: lowered.params,
+            return_type: lowered.return_type,
+            declared_throws: lowered.declared_throws,
+            callable_throws: lowered.callable_throws,
+            generic_params: lowered.generic_params,
+            builtin_kind: lowered.builtin_kind,
+        });
+    }
+
+    let qtn = qualify_def(db, Definition::Class(class_loc), name);
+    ExportedType::Class {
+        qtn,
+        fields,
+        methods,
+        generic_params: class_data.generic_params.clone(),
+    }
+}
+
+/// Lower an enum definition into its `ExportedType::Enum`.
+fn lower_enum_export<'db>(
+    db: &'db dyn crate::Db,
+    enum_loc: EnumLoc<'db>,
+    name: &Name,
+) -> ExportedType {
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
+    let enum_data = &item_tree[enum_loc.id(db)];
+    let qtn = qualify_def(db, Definition::Enum(enum_loc), name);
+    ExportedType::Enum {
+        qtn,
+        variants: enum_data.variants.iter().map(|v| v.name.clone()).collect(),
+    }
+}
+
+/// Lower a type-alias definition into its `ExportedType::TypeAlias`.
+fn lower_alias_export<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    ta_loc: TypeAliasLoc<'db>,
+    name: &Name,
+) -> ExportedType {
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, ta_loc.file(db));
+    let ta_data = &item_tree[ta_loc.id(db)];
+    let ta_ns = file_package::file_package(db, ta_loc.file(db)).namespace_path;
+    let mut diags = Vec::new();
+    let resolved = ta_data
+        .type_expr
+        .as_ref()
+        .map(|te| lower_type_expr_in_ns(db, te, pkg_items, &ta_ns, &[], &mut diags))
+        .unwrap_or(Ty::Unknown {
+            attr: TyAttr::default(),
+        });
+    let qtn = qualify_def(db, Definition::TypeAlias(ta_loc), name);
+    ExportedType::TypeAlias { qtn, resolved }
+}
+
+/// Lower a free-function definition into its `ExportedFunction`.
+fn lower_function_export<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    func_loc: FunctionLoc<'db>,
+    name: &Name,
+) -> ExportedFunction {
+    let func_ns = file_package::file_package(db, func_loc.file(db)).namespace_path;
+    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
+    let mut diags = Vec::new();
+    let function_generic_params: Vec<Name> = sig
+        .user_generic_params
+        .iter()
+        .chain(sig.synthetic_effect_params.iter())
+        .cloned()
+        .collect();
+
+    let mut params = Vec::new();
+    for param in &sig.params {
+        let param_ty = lower_type_expr_in_ns(
+            db,
+            &param.ty,
+            pkg_items,
+            &func_ns,
+            &function_generic_params,
+            &mut diags,
+        );
+        params.push(exported_function_param(
+            param.name.clone(),
+            param_ty,
+            param.has_default,
+        ));
+    }
+
+    let return_type = sig.return_type.as_ref().map_or(
+        Ty::Unknown {
+            attr: TyAttr::default(),
+        },
+        |te| {
+            lower_type_expr_in_ns(
+                db,
+                te,
+                pkg_items,
+                &func_ns,
+                &function_generic_params,
+                &mut diags,
+            )
+        },
+    );
+
+    let declared_throws = sig.throws.as_ref().map(|te| {
+        lower_type_expr_in_ns(
+            db,
+            te,
+            pkg_items,
+            &func_ns,
+            &function_generic_params,
+            &mut diags,
+        )
+    });
+    let callable_throws = crate::callable::callable_throws(db, func_loc).clone();
+
+    let builtin_kind = match body.as_ref() {
+        baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
+        _ => None,
+    };
+
+    ExportedFunction {
+        name: name.clone(),
+        params,
+        return_type,
+        declared_throws,
+        callable_throws,
+        generic_params: function_generic_params,
+        builtin_kind,
+    }
+}
+
+// ── file_interface_fragment Salsa query ────────────────────────────────────
+
+#[salsa::tracked(returns(ref))]
+pub fn file_interface_fragment(db: &dyn crate::Db, file: SourceFile) -> FileInterfaceFragment {
+    let pkg_info = file_package::file_package(db, file);
+    let ns_path = pkg_info.namespace_path.clone();
+    let pkg_id = PackageId::new(db, pkg_info.package);
+    // Same resolution scope the pre-refactor inline lowering used.
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let contributions = baml_compiler2_ppir::file_symbol_contributions(db, file);
+
+    // Structural exports, keyed by `Name` with keep-first semantics. A file's
+    // *first* contribution of a name is the one `namespace_items` would elect as
+    // `contribs[0]` when this is the winning file, so this reproduces the
+    // resolver's within-file choice exactly. A first contribution that is not a
+    // Class/Enum/TypeAlias (e.g. an interface) still *claims* the name — leaving
+    // no structural export — matching the reference derivation's `_ => continue`.
+    let mut types: FxHashMap<Name, ExportedType> = FxHashMap::default();
+    let mut claimed_types: FxHashSet<Name> = FxHashSet::default();
+    for (name, contrib) in &contributions.types {
+        if !claimed_types.insert(name.clone()) {
+            continue;
+        }
+        let exported = match contrib.definition {
+            Definition::Class(class_loc) => lower_class_export(db, pkg_items, class_loc, name),
+            Definition::Enum(enum_loc) => lower_enum_export(db, enum_loc, name),
+            Definition::TypeAlias(ta_loc) => lower_alias_export(db, pkg_items, ta_loc, name),
+            _ => continue,
+        };
+        types.insert(name.clone(), exported);
+    }
+
+    let mut functions: FxHashMap<Name, ExportedFunction> = FxHashMap::default();
+    let mut claimed_values: FxHashSet<Name> = FxHashSet::default();
+    for (name, contrib) in &contributions.values {
+        if !claimed_values.insert(name.clone()) {
+            continue;
+        }
+        if let Definition::Function(func_loc) = contrib.definition {
+            functions.insert(
+                name.clone(),
+                lower_function_export(db, pkg_items, func_loc, name),
+            );
+        }
+    }
+
+    // Seed projection: exact `callable_throws` for every callable the file
+    // defines. `item_tree.functions` flattens free functions, class methods,
+    // interface default methods, and `implements`-for methods, so iterating its
+    // keys covers all of them. `LocalItemId::as_u32` is a content-derived,
+    // process-independent index — safe to serialize.
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let mut callable_throws_by_id: BTreeMap<u32, Ty> = BTreeMap::new();
+    for local_id in item_tree.functions.keys() {
+        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+        let throws = crate::callable::callable_throws(db, func_loc).clone();
+        callable_throws_by_id.insert(local_id.as_u32(), throws);
+    }
+
+    FileInterfaceFragment {
+        ns_path,
+        types,
+        functions,
+        callable_throws_by_id,
+    }
+}
+
 // ── package_interface Salsa query ──────────────────────────────────────────
 
 #[salsa::tracked(returns(ref))]
@@ -345,7 +651,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
     // user package never hits the seed and derives normally. Because the entire
     // stdlib derivation cluster (signature lowering, `callable_throws` /
     // body inference, throw-set solving) is reachable only through this query,
-    // short-circuiting here skips all of it.
+    // short-circuiting here skips all of it. This stays ABOVE the fragment fold.
     if let Some(seeds) = db.seeded_stdlib_interface() {
         if let Some(bytes) = seeds.by_package(db).get(pkg_name.as_str()) {
             return borsh::from_slice::<PackageInterface>(bytes)
@@ -359,6 +665,17 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
         STDLIB_HONEST_DERIVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
+    fold_package_interface(db, pkg_id)
+}
+
+/// Fold each file's `file_interface_fragment` into the whole-package interface.
+///
+/// Driven by the resolved `pkg_items.namespaces` so the deterministic
+/// `contribs[0]` winner selection is untouched — only the per-item *lowering*
+/// moved into `file_interface_fragment`. Byte-identical to
+/// `derive_package_interface_reference` by construction; the equality oracle
+/// pins it.
+fn fold_package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> PackageInterface {
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = FxHashMap::default();
@@ -366,95 +683,57 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
         FxHashMap::default();
 
     for (ns_path, ns_items) in &pkg_items.namespaces {
-        // Export types
+        for (name, def) in &ns_items.types {
+            let frag = file_interface_fragment(db, def.file(db));
+            if let Some(exported) = frag.types.get(name) {
+                types
+                    .entry(ns_path.clone())
+                    .or_default()
+                    .insert(name.clone(), exported.clone());
+            }
+        }
+        for (name, def) in &ns_items.values {
+            let Definition::Function(func_loc) = def else {
+                continue;
+            };
+            let frag = file_interface_fragment(db, func_loc.file(db));
+            if let Some(exported) = frag.functions.get(name) {
+                functions
+                    .entry(ns_path.clone())
+                    .or_default()
+                    .insert(name.clone(), exported.clone());
+            }
+        }
+    }
+
+    let throw_sets = function_throw_sets(db, pkg_id);
+    PackageInterface {
+        types,
+        functions,
+        throw_sets: throw_sets.clone(),
+    }
+}
+
+/// Equality-oracle reference: the pre-Phase-2 whole-package derivation, kept so
+/// tests can prove `fold_package_interface` reproduces it byte-for-byte. Shares
+/// the lowering helpers with the fold; only the iteration structure differs
+/// (branch on the resolved `def` kind here vs. a per-file fragment lookup).
+pub fn derive_package_interface_reference<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+) -> PackageInterface {
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+
+    let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = FxHashMap::default();
+    let mut functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>> =
+        FxHashMap::default();
+
+    for (ns_path, ns_items) in &pkg_items.namespaces {
         for (name, def) in &ns_items.types {
             let exported = match def {
-                Definition::Class(class_loc) => {
-                    let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-                    let class_data = &item_tree[class_loc.id(db)];
-                    let class_ns =
-                        file_package::file_package(db, class_loc.file(db)).namespace_path;
-
-                    // Lower fields
-                    let mut fields = Vec::new();
-                    let mut diags = Vec::new();
-                    for field in &class_data.fields {
-                        if let Some(te) = &field.type_expr {
-                            let field_ty = lower_type_expr_in_ns(
-                                db,
-                                te,
-                                pkg_items,
-                                &class_ns,
-                                &class_data.generic_params,
-                                &mut diags,
-                            );
-                            fields.push((field.name.clone(), field_ty));
-                        } else {
-                            fields.push((
-                                field.name.clone(),
-                                Ty::Unknown {
-                                    attr: TyAttr::default(),
-                                },
-                            ));
-                        }
-                    }
-
-                    // Lower methods
-                    let mut methods = Vec::new();
-                    for method_id in &class_data.methods {
-                        let method_loc = baml_compiler2_hir::loc::FunctionLoc::new(
-                            db,
-                            class_loc.file(db),
-                            *method_id,
-                        );
-                        let method_data = &item_tree[*method_id];
-                        let lowered = lower_class_method_signature(
-                            db, pkg_items, class_data, method_loc, &class_ns, &mut diags,
-                        );
-
-                        methods.push(ExportedFunction {
-                            name: method_data.name.clone(),
-                            params: lowered.params,
-                            return_type: lowered.return_type,
-                            declared_throws: lowered.declared_throws,
-                            callable_throws: lowered.callable_throws,
-                            generic_params: lowered.generic_params,
-                            builtin_kind: lowered.builtin_kind,
-                        });
-                    }
-
-                    let qtn = qualify_def(db, *def, name);
-                    ExportedType::Class {
-                        qtn,
-                        fields,
-                        methods,
-                        generic_params: class_data.generic_params.clone(),
-                    }
-                }
-                Definition::Enum(enum_loc) => {
-                    let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
-                    let enum_data = &item_tree[enum_loc.id(db)];
-                    let qtn = qualify_def(db, *def, name);
-                    ExportedType::Enum {
-                        qtn,
-                        variants: enum_data.variants.iter().map(|v| v.name.clone()).collect(),
-                    }
-                }
-                Definition::TypeAlias(ta_loc) => {
-                    let item_tree = baml_compiler2_ppir::file_item_tree(db, ta_loc.file(db));
-                    let ta_data = &item_tree[ta_loc.id(db)];
-                    let ta_ns = file_package::file_package(db, ta_loc.file(db)).namespace_path;
-                    let mut diags = Vec::new();
-                    let resolved = ta_data
-                        .type_expr
-                        .as_ref()
-                        .map(|te| lower_type_expr_in_ns(db, te, pkg_items, &ta_ns, &[], &mut diags))
-                        .unwrap_or(Ty::Unknown {
-                            attr: TyAttr::default(),
-                        });
-                    let qtn = qualify_def(db, *def, name);
-                    ExportedType::TypeAlias { qtn, resolved }
-                }
+                Definition::Class(class_loc) => lower_class_export(db, pkg_items, *class_loc, name),
+                Definition::Enum(enum_loc) => lower_enum_export(db, *enum_loc, name),
+                Definition::TypeAlias(ta_loc) => lower_alias_export(db, pkg_items, *ta_loc, name),
                 _ => continue,
             };
             types
@@ -462,91 +741,19 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                 .or_default()
                 .insert(name.clone(), exported);
         }
-
-        // Export free functions
         for (name, def) in &ns_items.values {
             let Definition::Function(func_loc) = def else {
                 continue;
             };
-            let func_ns = file_package::file_package(db, func_loc.file(db)).namespace_path;
-            let sig = baml_compiler2_ppir::elaborated_function_signature(db, *func_loc);
-            let body = baml_compiler2_ppir::function_body(db, *func_loc);
-            let mut diags = Vec::new();
-            let function_generic_params: Vec<Name> = sig
-                .user_generic_params
-                .iter()
-                .chain(sig.synthetic_effect_params.iter())
-                .cloned()
-                .collect();
-
-            let mut params = Vec::new();
-            for param in &sig.params {
-                let param_ty = lower_type_expr_in_ns(
-                    db,
-                    &param.ty,
-                    pkg_items,
-                    &func_ns,
-                    &function_generic_params,
-                    &mut diags,
-                );
-                params.push(exported_function_param(
-                    param.name.clone(),
-                    param_ty,
-                    param.has_default,
-                ));
-            }
-
-            let return_type = sig.return_type.as_ref().map_or(
-                Ty::Unknown {
-                    attr: TyAttr::default(),
-                },
-                |te| {
-                    lower_type_expr_in_ns(
-                        db,
-                        te,
-                        pkg_items,
-                        &func_ns,
-                        &function_generic_params,
-                        &mut diags,
-                    )
-                },
-            );
-
-            let declared_throws = sig.throws.as_ref().map(|te| {
-                lower_type_expr_in_ns(
-                    db,
-                    te,
-                    pkg_items,
-                    &func_ns,
-                    &function_generic_params,
-                    &mut diags,
-                )
-            });
-            let callable_throws = crate::callable::callable_throws(db, *func_loc).clone();
-
-            let builtin_kind = match body.as_ref() {
-                baml_compiler2_hir::body::FunctionBody::Builtin(kind) => Some(*kind),
-                _ => None,
-            };
-
-            functions.entry(ns_path.clone()).or_default().insert(
-                name.clone(),
-                ExportedFunction {
-                    name: name.clone(),
-                    params,
-                    return_type,
-                    declared_throws,
-                    callable_throws,
-                    generic_params: function_generic_params,
-                    builtin_kind,
-                },
-            );
+            let exported = lower_function_export(db, pkg_items, *func_loc, name);
+            functions
+                .entry(ns_path.clone())
+                .or_default()
+                .insert(name.clone(), exported);
         }
     }
 
-    // Compute throw sets for this package
     let throw_sets = function_throw_sets(db, pkg_id);
-
     PackageInterface {
         types,
         functions,
