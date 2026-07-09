@@ -568,12 +568,14 @@ fn vm_metadata_preserves_unresolved_generic_associated_projection_symbolically()
         "read_item",
     );
 
-    // `T` and the projection `T.Item` cannot be resolved statically here, but
-    // they are *not* erased: `RuntimeTy` carries the type variable and the
-    // symbolic projection so the runtime can resolve them from the receiver's
-    // actual type.
+    // `T` and its associated projection cannot be resolved statically here, but they
+    // are *not* erased: `RuntimeTy` carries the type variable and the symbolic
+    // projection so the runtime can resolve them from the receiver's actual type. The
+    // projection is carried in its resolved form `(T as BoxLike).Item` — the declaring
+    // interface is determined at lowering, which is strictly more precise than the
+    // bare `T.Item` for runtime resolution.
     assert_eq!(params, vec!["T"]);
-    assert_eq!(return_type, "T.Item");
+    assert_eq!(return_type, "(T as BoxLike).Item");
 }
 
 #[test]
@@ -1726,8 +1728,12 @@ fn explicit_associated_type_witness_can_reference_earlier_witness() {
 }
 
 #[test]
-fn dependent_associated_type_bound_uses_resolved_witness() {
-    assert_zero_compile_errors(
+fn dependent_associated_type_bound_bare_projection_is_not_an_interface() {
+    // Only interfaces can be bounds. A bare associated-type projection (`extends
+    // Self.Item`) is a non-interface bound, not a dependent bound. The valid way to
+    // express a Self-dependent bound is to wrap the projection as an interface's
+    // generic argument — see `..._through_interface_resolves_self` below.
+    assert_compile_error_contains(
         r#"
         interface Parser {
             type Item
@@ -1735,19 +1741,52 @@ fn dependent_associated_type_bound_uses_resolved_witness() {
 
             function parse(self) -> Self.Output throws never
         }
+        "#,
+        "is not an interface",
+    );
+}
 
-        class IntParser {
-            implements Parser {
-                type Item = int
-                type Output = int
+#[test]
+fn dependent_associated_type_bound_through_interface_resolves_self() {
+    // A Self-dependent bound goes through an interface: `type Output extends
+    // Producer<Self.Item>` requires the implementor's `Output` to implement
+    // `Producer<Item>`. `Self.Item` resolves inside the bound's generic argument and
+    // realizes at the impl's `Item` binding (`Producer<int>` for `IntParser`).
+    assert_zero_compile_errors(
+        r#"
+        interface Producer<T> {
+            function make(self) -> T throws never
+        }
 
-                function parse(self) -> int {
-                    return 1
+        interface Parser {
+            type Item
+            type Output extends Producer<Self.Item>
+
+            function parse(self) -> Self.Output throws never
+        }
+
+        class IntProducer {
+            value: int
+
+            implements Producer<int> {
+                function make(self) -> int {
+                    return self.value
                 }
             }
         }
 
-        function parse(parser: Parser<Item = int, Output = int>) -> int {
+        class IntParser {
+            implements Parser {
+                type Item = int
+                type Output = IntProducer
+
+                function parse(self) -> IntProducer {
+                    return IntProducer { value: 1 }
+                }
+            }
+        }
+
+        function parse(parser: Parser<Item = int, Output = IntProducer>) -> IntProducer {
             return parser.parse()
         }
         "#,
@@ -1755,19 +1794,28 @@ fn dependent_associated_type_bound_uses_resolved_witness() {
 }
 
 #[test]
-fn dependent_associated_type_bound_rejects_mismatched_interface_binding() {
+fn dependent_associated_type_bound_through_interface_rejects_non_implementor() {
+    // The wrapped Self-dependent bound is enforced: binding `Output` to a type that
+    // does NOT implement `Producer<Item>` is rejected at the impl site.
     assert_compile_error_contains(
         r#"
-        interface Parser {
-            type Item
-            type Output extends Self.Item
+        interface Producer<T> {
+            function make(self) -> T throws never
         }
 
-        function bad(parser: Parser<Item = int, Output = string>) -> null {
-            return null
+        interface Parser {
+            type Item
+            type Output extends Producer<Self.Item>
+        }
+
+        class IntParser {
+            implements Parser {
+                type Item = int
+                type Output = string
+            }
         }
         "#,
-        "does not satisfy bound",
+        "does not implement bound `Producer<int>`",
     );
 }
 
@@ -2055,43 +2103,18 @@ fn associated_type_union_defaults_can_reference_interface_generics() {
 }
 
 #[test]
-fn associated_type_bounds_can_be_union_types() {
-    assert_zero_compile_errors(
+fn associated_type_bounds_reject_union_types() {
+    // Bounds are interfaces only — an associated type's `extends` bound may not be a
+    // union (there is no `implements` relation to a union type).
+    assert_compile_error_contains(
         r#"
         interface Parser {
             type Output extends int | string
 
             function parse(self) -> Self.Output throws never
         }
-
-        class IntParser {
-            implements Parser {
-                type Output = int
-
-                function parse(self) -> int {
-                    return 42
-                }
-            }
-        }
-
-        class StringParser {
-            implements Parser {
-                type Output = string
-
-                function parse(self) -> string {
-                    return "ok"
-                }
-            }
-        }
-
-        function parse_int(parser: IntParser) -> IntParser.Output {
-            return parser.parse()
-        }
-
-        function parse_bound<P extends Parser>(parser: P) -> P.Output {
-            return parser.parse()
-        }
         "#,
+        "is not an interface",
     );
 }
 
@@ -2180,7 +2203,7 @@ fn union_associated_type_binding_in_generic_bound_preserves_outer_typevar() {
             }
         }
 
-        function score_bound<T extends int | string, S extends Source<Item = T>>(source: S) -> T {
+        function score_bound<T, S extends Source<Item = T>>(source: S) -> T {
             return source.get()
         }
 
@@ -2823,7 +2846,7 @@ fn associated_types_substitute_inside_function_type_positions() {
         interface Lifter {
             type Item
 
-            function lift(self) -> (Self.Item) -> Self.Item? throws never
+            function lift(self) -> ((Self.Item) -> Self.Item?) throws never
         }
 
         function lift_int(lifter: Lifter<Item = int>) -> (int) -> int? {
@@ -2897,8 +2920,11 @@ fn qualified_projection_works_in_local_type_annotations() {
 }
 
 #[test]
-fn unbound_interface_can_call_methods_that_do_not_mention_associated_types() {
-    assert_zero_compile_errors(
+fn unbound_interface_existential_requires_pins_even_for_non_associated_methods() {
+    // Strict existential-pin rule (§1.7): an interface used as a value type must pin
+    // every non-defaulted associated type, even when the code only calls methods that
+    // do not mention it (`size()` here). `SizedIterator` (unpinned) is rejected.
+    assert_compile_error_contains(
         r#"
         interface SizedIterator {
             type Item
@@ -2925,12 +2951,15 @@ fn unbound_interface_can_call_methods_that_do_not_mention_associated_types() {
             return it.size()
         }
         "#,
+        "must specify its associated type",
     );
 }
 
 #[test]
-fn unbound_interface_projection_can_remain_symbolic() {
-    assert_zero_compile_errors(
+fn unbound_interface_existential_projection_requires_pins() {
+    // A bare-existential parameter (`SizedIterator`, `Item` unpinned) is rejected
+    // regardless of how its associated projection is used downstream.
+    assert_compile_error_contains(
         r#"
         interface SizedIterator {
             type Item
@@ -2942,6 +2971,7 @@ fn unbound_interface_projection_can_remain_symbolic() {
             return it.next()
         }
         "#,
+        "must specify its associated type",
     );
 }
 
@@ -3008,7 +3038,7 @@ fn associated_function_type_projection_rejects_wrong_nested_type() {
         interface Lifter {
             type Item
 
-            function lift(self) -> (Self.Item) -> Self.Item? throws never
+            function lift(self) -> ((Self.Item) -> Self.Item?) throws never
         }
 
         function bad(lifter: Lifter<Item = int>) -> (string) -> string? {
@@ -3565,30 +3595,6 @@ async fn inferred_native_generic_type_arg_from_interface_associated_return_runs(
     );
 
     assert_eq!(output.result.unwrap(), BexExternalValue::String("7".into()));
-}
-
-#[test]
-fn associated_type_union_bound_failure_errors() {
-    assert_compile_error_code(
-        r#"
-        interface Parser {
-            type Output extends int | string
-
-            function parse(self) -> Self.Output throws never
-        }
-
-        class BadParser {
-            implements Parser {
-                type Output = bool
-
-                function parse(self) -> bool {
-                    return true
-                }
-            }
-        }
-        "#,
-        "E0001",
-    );
 }
 
 #[test]

@@ -3738,22 +3738,19 @@ fn required_interface_method_generic_bound_mismatch_is_error() {
 }
 
 #[test]
-fn generic_bounds_accept_compound_type_expressions() {
-    assert_zero_compile_errors(
+fn generic_bounds_reject_compound_type_expressions() {
+    // Bounds are interfaces only — a union, list, or optional type is not an interface,
+    // so none can be a function generic bound.
+    assert_compile_error_contains(
         r#"
         function keep_union<T extends int | string>(x: T) -> int {
             return 1
         }
-        function len_list<T extends int[]>(xs: T) -> int {
-            return 1
-        }
-        function keep_optional<T extends string?>(x: T) -> int {
-            return 1
-        }
         function main() -> int {
-            return keep_union<int>(1) + len_list<int[]>([1, 2, 3])
+            return 1
         }
         "#,
+        "is not an interface",
     );
 }
 
