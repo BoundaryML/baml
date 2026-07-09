@@ -136,13 +136,18 @@ impl TestArgs {
 
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
-            // and `baml generate` own the compile/count progress lines.
-            // Diagnostics always run over the full project: `collect_diagnostics`
-            // checks every file for soundness. Per-file diagnostics invalidation
-            // is not yet proven complete, so narrowing to the reuse plan's dirty
-            // files would risk stale errors from clean dependents.
+            // and `baml generate` own the compile/count progress lines. With a
+            // cache, gate through the incremental collector (narrow to the reuse
+            // plan's dirty files, serve clean files from their cached blobs, and
+            // carry the fresh per-file blobs into the manifest); without one,
+            // run the honest full check. The merged set is byte-identical.
             let source_files = db.get_source_files();
-            let diagnostics = baml_project::collect_diagnostics(&db);
+            let (diagnostics, fresh_diagnostics) = if let Some(ctx) = &cache {
+                let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+                (incremental.merged, Some(incremental.fresh_by_file))
+            } else {
+                (baml_project::collect_diagnostics(&db), None)
+            };
             let errors: Vec<_> = diagnostics
                 .iter()
                 .filter(|d| d.severity == Severity::Error)
@@ -187,7 +192,12 @@ impl TestArgs {
             if let Some(ctx) = &cache {
                 ctx.verify_against(&bytecode)?;
                 ctx.verify_stdlib_interface(&db)?;
-                if let Err(e) = ctx.store_with_manifest(&db, &bytecode) {
+                ctx.verify_diagnostics(&db)?;
+                let fresh = fresh_diagnostics
+                    .as_ref()
+                    .expect("a cache is present, so fresh diagnostics were computed");
+                if let Err(e) = ctx.store_with_manifest(&db, &bytecode, fresh, reuse_plan.as_ref())
+                {
                     crate::bytecode_cache::cache_debug(format_args!("store failed: {e}"));
                 }
                 // Materialize the stdlib interface blob on a miss (idempotent on
@@ -201,6 +211,12 @@ impl TestArgs {
             crate::bytecode_cache::cache_debug(format_args!(
                 "stdlib interface: {} honest derivation(s) this process",
                 baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+            ));
+            // Warm-incremental evidence: with the diagnostics cache serving clean
+            // files this counts only the dirty files' scopes.
+            crate::bytecode_cache::cache_debug(format_args!(
+                "scope inferences: {} this process",
+                baml_db::baml_compiler2_tir::inference::scope_inferences()
             ));
 
             let engine = Arc::new(

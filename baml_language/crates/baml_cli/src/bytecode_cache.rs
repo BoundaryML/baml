@@ -8,7 +8,11 @@
 //! - `BAML_CACHE_VERIFY=1` — tripwire mode: never serve from the cache;
 //!   compile, then hard-fail if the fresh bytecode differs from a cached
 //!   entry under the same key (catches emit nondeterminism and missing
-//!   cache-key inputs).
+//!   cache-key inputs). Also runs the stdlib-interface and per-file
+//!   diagnostics oracles.
+//! - `BAML_NO_DIAGNOSTICS_CACHE=1` — check every file instead of serving clean
+//!   files from the per-file diagnostics cache (reuse / throws-seed unaffected),
+//!   to isolate that feature's win.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -186,6 +190,15 @@ impl CacheContext {
         std::env::var_os("BAML_NO_STDLIB_INTERFACE_CACHE").is_some_and(|v| v == "1")
     }
 
+    /// Isolation toggle for measuring the per-file diagnostics cache's win:
+    /// `BAML_NO_DIAGNOSTICS_CACHE=1` drops the serve plan so every file is
+    /// re-checked (reuse / throws-seed still active), leaving `plan_reuse`
+    /// otherwise intact. `BAML_NO_BYTECODE_CACHE` already disables the whole
+    /// cache, so this is the finer-grained knob.
+    fn diagnostics_cache_disabled() -> bool {
+        std::env::var_os("BAML_NO_DIAGNOSTICS_CACHE").is_some_and(|v| v == "1")
+    }
+
     /// Load the cached stdlib typed-interface blob (B-694), if present:
     /// `load_raw` + borsh-decode into `package-name -> borsh(PackageInterface)`.
     /// `None` on a miss, a decode failure, or when the interface cache is
@@ -359,6 +372,10 @@ pub(crate) struct ReusePlan {
     /// re-walked by throw inference.
     pub(crate) seeded_throw_facts:
         std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+    /// Clean files' opaque diagnostics blobs carried from the previous manifest,
+    /// by rel_path. Rehydrated to serve those files' diagnostics without
+    /// re-checking, and copied verbatim into the next manifest.
+    pub(crate) clean_diagnostics: std::collections::BTreeMap<String, Vec<u8>>,
 }
 
 /// Cache diagnostics to stderr, gated on `BAML_CACHE_DEBUG=1`. For support
@@ -938,20 +955,38 @@ impl CacheContext {
             })
             .collect();
 
+        // Carry clean files' cached diagnostics blobs verbatim (already
+        // rel-path-keyed): the gate rehydrates them to serve those files without
+        // re-checking, and they are copied into the next manifest unchanged.
+        let clean_diagnostics = manifest
+            .files
+            .iter()
+            .filter(|entry| clean_files.contains(&entry.rel_path))
+            .map(|entry| (entry.rel_path.clone(), entry.diagnostics.clone()))
+            .collect();
+
         Some(ReusePlan {
             clean_files,
             dirty_files,
             prev_units,
             seeded_throw_facts,
+            clean_diagnostics,
         })
     }
 
     /// Write the Program blob plus the manifest describing it. Called after
     /// every successful compile; best-effort like all cache writes.
+    ///
+    /// `fresh_by_file` holds the diagnostics blob for every file the gate freshly
+    /// checked (dirty or degraded), by rel_path. Per file the manifest takes its
+    /// fresh blob if present, else the plan's carried clean blob, else an empty
+    /// blob — so a re-checked file always overwrites a stale/poison carry.
     pub(crate) fn store_with_manifest(
         &self,
         db: &ProjectDatabase,
         program: &Program,
+        fresh_by_file: &std::collections::BTreeMap<String, Vec<u8>>,
+        plan: Option<&ReusePlan>,
     ) -> std::io::Result<()> {
         self.store(program)?;
 
@@ -1007,9 +1042,14 @@ impl CacheContext {
                     )
                     .0
                     .clone(),
-                    // Populated by the per-file diagnostics cache (Phase 1);
-                    // an empty blob until that path is wired in.
-                    diagnostics: Vec::new(),
+                    // Fresh blob if the gate re-checked this file, else the
+                    // carried clean blob, else empty. A re-checked file always
+                    // wins so a stale/poison carry can't persist.
+                    diagnostics: fresh_by_file
+                        .get(&rel)
+                        .cloned()
+                        .or_else(|| plan.and_then(|p| p.clean_diagnostics.get(&rel).cloned()))
+                        .unwrap_or_else(crate::diagnostics_cache::empty_blob),
                     rel_path: rel,
                 }
             })
@@ -1024,6 +1064,177 @@ impl CacheContext {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         self.cache.store_raw(&self.manifest_key, &payload)
     }
+
+    /// Gate diagnostics on the warm path: run `check_file` only for the reuse
+    /// plan's dirty (plus degraded and builtin) files, serving clean files from
+    /// their cached blobs, and return the merged set plus the fresh per-file
+    /// blobs to persist. With `plan == None` (first compile / verify / all
+    /// dirty) this reduces to the honest full check, so the merged set always
+    /// equals the honest collector and the caller renders errors identically.
+    pub(crate) fn collect_diagnostics_incremental(
+        &self,
+        db: &ProjectDatabase,
+        plan: Option<&ReusePlan>,
+    ) -> IncrementalDiagnostics {
+        // Isolation toggle (mirrors `BAML_NO_STDLIB_INTERFACE_CACHE`): dropping
+        // the serve plan checks every file, so a with/without scope-inference
+        // comparison measures exactly the clean files this feature skips.
+        let plan = plan.filter(|_| !Self::diagnostics_cache_disabled());
+        let Some(root) = db.get_project().map(|p| p.root(db).clone()) else {
+            // No project context: fall back to the honest full check with no
+            // cacheable output (there are no user files to key by).
+            return IncrementalDiagnostics {
+                merged: baml_project::collect_compiler2_diagnostics(db),
+                fresh_by_file: std::collections::BTreeMap::new(),
+            };
+        };
+
+        // Rehydrate clean files' cached diagnostics; a file that fails to
+        // rehydrate degrades to a re-check (its blob is never served stale).
+        let mut precomputed: Vec<baml_db::baml_compiler_diagnostics::Diagnostic> = Vec::new();
+        let mut degrade: HashSet<String> = HashSet::new();
+        if let Some(plan) = plan {
+            for (rel, blob) in &plan.clean_diagnostics {
+                match crate::diagnostics_cache::rehydrate_file_blob(db, &root, blob) {
+                    Some(mut diags) => precomputed.append(&mut diags),
+                    None => {
+                        degrade.insert(rel.clone());
+                    }
+                }
+            }
+        }
+
+        let rel_of = |sf: SourceFile| -> Option<String> {
+            let path = sf.path(db);
+            if path.to_string_lossy().starts_with("<builtin>/") {
+                return None;
+            }
+            Some(
+                path.strip_prefix(&root)
+                    .unwrap_or(&path)
+                    .display()
+                    .to_string(),
+            )
+        };
+        let should_check = |sf: SourceFile| -> bool {
+            match rel_of(sf) {
+                // Builtins are never in the manifest / clean set — always check.
+                None => true,
+                Some(rel) => match plan {
+                    Some(plan) => !plan.clean_files.contains(&rel) || degrade.contains(&rel),
+                    None => true,
+                },
+            }
+        };
+
+        let narrowed =
+            baml_project::collect_compiler2_diagnostics_narrowed(db, &should_check, precomputed);
+
+        let mut fresh_by_file =
+            crate::diagnostics_cache::fresh_blobs_by_file(db, &root, &narrowed.fresh);
+        // Ensure every re-checked user file has an entry (empty if it produced
+        // no diagnostics) so `store_with_manifest` overwrites a stale/poison
+        // carry for a degraded-but-now-clean file rather than re-carrying it.
+        for (sf, rel) in user_files_with_rel_paths(db) {
+            if should_check(sf) {
+                fresh_by_file
+                    .entry(rel)
+                    .or_insert_with(crate::diagnostics_cache::empty_blob);
+            }
+        }
+
+        IncrementalDiagnostics {
+            merged: narrowed.merged,
+            fresh_by_file,
+        }
+    }
+
+    /// Localized diagnostics verify oracle (analog of `verify_stdlib_interface`):
+    /// under `BAML_CACHE_VERIFY` the reuse plan is disabled, so the compile runs
+    /// the honest full check; this compares every previous-manifest file that is
+    /// still content-clean (i.e. would have been served from cache) against a
+    /// fresh `check_file`. A mismatch means the cached diagnostics are a stale
+    /// substitute that would change what a warm incremental run reports — a hard
+    /// error, and a tighter signal than the whole-`Program` byte-compare.
+    pub(crate) fn verify_diagnostics(&self, db: &ProjectDatabase) -> anyhow::Result<()> {
+        if !Self::verify_enabled() {
+            return Ok(());
+        }
+        let Some(manifest) = self.load_prev_manifest_for_verify() else {
+            return Ok(());
+        };
+        let Some(root) = db.get_project().map(|p| p.root(db).clone()) else {
+            return Ok(());
+        };
+        for entry in &manifest.files {
+            let full = root.join(&entry.rel_path);
+            let Some(sf) = db.get_file(&full) else {
+                continue; // file removed — never served
+            };
+            if entry.content_hash != content_hash(sf.text(db)) {
+                continue; // changed — always re-checked, never served from cache
+            }
+            let Some(served) =
+                crate::diagnostics_cache::rehydrate_file_blob(db, &root, &entry.diagnostics)
+            else {
+                continue; // poison / undecodable — would degrade to a re-check
+            };
+            // What an honest run produces for this file: `check_file` output only
+            // (the package-level set is never cached, so it is excluded here too).
+            let fresh = db.check_file(sf);
+            if !diagnostic_sets_equal(&served, &fresh) {
+                anyhow::bail!(
+                    "BAML_CACHE_VERIFY: cached diagnostics for `{}` differ from a fresh check \
+                     ({} cached vs {} fresh). The cached per-file diagnostics are a stale \
+                     substitute — please report this.",
+                    entry.rel_path,
+                    served.len(),
+                    fresh.len(),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Load the previous manifest for the verify oracle, bypassing the
+    /// `plan_reuse` verify short-circuit (verify must still compare against
+    /// whatever manifest is on disk).
+    fn load_prev_manifest_for_verify(&self) -> Option<ProjectManifest> {
+        let bytes = self.cache.load_raw(&self.manifest_key)?;
+        borsh::from_slice::<ProjectManifest>(&bytes).ok()
+    }
+}
+
+/// The merged (gate/render) diagnostics plus the per-file blobs to persist,
+/// produced by [`CacheContext::collect_diagnostics_incremental`].
+pub(crate) struct IncrementalDiagnostics {
+    pub(crate) merged: Vec<baml_db::baml_compiler_diagnostics::Diagnostic>,
+    pub(crate) fresh_by_file: std::collections::BTreeMap<String, Vec<u8>>,
+}
+
+/// Order-independent equality of two diagnostic sets — the verify oracle
+/// compares cached vs freshly-checked, which agree as sets but may differ in
+/// vector order after a `FileId` remap.
+fn diagnostic_sets_equal(
+    a: &[baml_db::baml_compiler_diagnostics::Diagnostic],
+    b: &[baml_db::baml_compiler_diagnostics::Diagnostic],
+) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let key = |d: &baml_db::baml_compiler_diagnostics::Diagnostic| {
+        let span = d.primary_span();
+        (
+            d.code(),
+            d.message.clone(),
+            span.map(|s| (s.file_id.as_u32(), u32::from(s.range.start()))),
+        )
+    };
+    let mut a_sorted: Vec<_> = a.iter().collect();
+    let mut b_sorted: Vec<_> = b.iter().collect();
+    a_sorted.sort_by_key(|d| key(d));
+    b_sorted.sort_by_key(|d| key(d));
+    a_sorted.iter().zip(&b_sorted).all(|(x, y)| x == y)
 }
 
 #[cfg(test)]
@@ -1116,7 +1327,10 @@ mod tests {
         let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
         let program1 =
             compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile succeeds");
-        ctx1.store_with_manifest(&db1, &program1)
+        let fresh1 = ctx1
+            .collect_diagnostics_incremental(&db1, None)
+            .fresh_by_file;
+        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
             .expect("manifest stored");
 
         let r2 = resolved(&root, edited);

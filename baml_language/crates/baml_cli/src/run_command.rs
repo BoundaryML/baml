@@ -206,45 +206,47 @@ impl RunArgs {
         bail_context: &str,
         reporter: &Reporter,
     ) -> Result<()> {
-        // Diagnostics always run over the full project: `collect_diagnostics`
-        // checks every file for soundness. Per-file diagnostics invalidation is
-        // not yet proven complete, so passing only the reuse plan's dirty files
-        // as a filter would risk stale errors from clean dependents — the filter
-        // does not exist on the callee, and this must stay that way until the
-        // invalidation is sound.
-        let source_files = db.get_source_files();
+        // The honest full check: every file is re-diagnosed. Used on the
+        // no-cache path and for standalone/expression modes. The cached warm
+        // path narrows this through `collect_diagnostics_incremental`, whose
+        // merged set is byte-identical here.
         let diagnostics = baml_project::collect_diagnostics(db);
+        self.render_and_bail_on_errors(&diagnostics, db, bail_context, reporter)
+    }
 
+    /// Filter `diagnostics` to errors and, if any, render the full ariadne block
+    /// (sources/paths for all files, since an error may carry cross-file spans)
+    /// and bail with `bail_context`. Warnings are intentionally not surfaced.
+    fn render_and_bail_on_errors(
+        &self,
+        diagnostics: &[baml_db::baml_compiler_diagnostics::Diagnostic],
+        db: &ProjectDatabase,
+        bail_context: &str,
+        reporter: &Reporter,
+    ) -> Result<()> {
         let errors: Vec<_> = diagnostics
             .iter()
             .filter(|d| d.severity == Severity::Error)
             .collect();
-        let needs_sources = !errors.is_empty();
-        let (sources, file_paths) = if needs_sources {
-            let mut sources = HashMap::new();
-            let mut file_paths = HashMap::new();
-            for sf in &source_files {
-                let file_id = sf.file_id(db);
-                sources.insert(file_id, sf.text(db).to_string());
-                file_paths.insert(file_id, sf.path(db));
-            }
-            (sources, file_paths)
-        } else {
-            (HashMap::new(), HashMap::new())
-        };
-
-        if !errors.is_empty() {
-            let rendered = render::render_diagnostics(
-                &errors.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &render::RenderConfig::cli_auto(),
-            );
-            reporter.abandon();
-            eprintln!("{rendered}");
-            anyhow::bail!("{bail_context}");
+        if errors.is_empty() {
+            return Ok(());
         }
-        Ok(())
+        let mut sources = HashMap::new();
+        let mut file_paths = HashMap::new();
+        for sf in &db.get_source_files() {
+            let file_id = sf.file_id(db);
+            sources.insert(file_id, sf.text(db).to_string());
+            file_paths.insert(file_id, sf.path(db));
+        }
+        let rendered = render::render_diagnostics(
+            &errors.iter().copied().cloned().collect::<Vec<_>>(),
+            &sources,
+            &file_paths,
+            &render::RenderConfig::cli_auto(),
+        );
+        reporter.abandon();
+        eprintln!("{rendered}");
+        anyhow::bail!("{bail_context}");
     }
 
     /// Compile `db` to bytecode and build a `BexEngine`.
@@ -753,7 +755,24 @@ impl RunArgs {
 
         // `baml run` keeps the compile phase silent; the program's output is
         // the point. Compile/count progress belongs to `check` and `generate`.
-        self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
+        //
+        // With a cache, gate diagnostics through the incremental collector: it
+        // checks only the reuse plan's dirty files and serves clean files from
+        // their cached blobs, returning the fresh per-file blobs to persist.
+        // Without a cache, run the honest full check (no blobs to store).
+        let fresh_diagnostics = if let Some(ctx) = &cache {
+            let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+            self.render_and_bail_on_errors(
+                &incremental.merged,
+                &db,
+                "Cannot run: compilation errors found",
+                reporter,
+            )?;
+            Some(incremental.fresh_by_file)
+        } else {
+            self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
+            None
+        };
         self.vlog(format_args!("Compiling..."));
         let program = crate::bytecode_cache::compile_program(
             &db,
@@ -767,7 +786,11 @@ impl RunArgs {
         if let Some(ctx) = &cache {
             ctx.verify_against(&program)?;
             ctx.verify_stdlib_interface(&db)?;
-            if let Err(e) = ctx.store_with_manifest(&db, &program) {
+            ctx.verify_diagnostics(&db)?;
+            let fresh = fresh_diagnostics
+                .as_ref()
+                .expect("a cache is present, so fresh diagnostics were computed");
+            if let Err(e) = ctx.store_with_manifest(&db, &program, fresh, reuse_plan.as_ref()) {
                 self.vlog(format_args!("Bytecode cache write failed: {e}"));
             }
             // Materialize the stdlib interface blob on a miss (idempotent on a
@@ -776,6 +799,13 @@ impl RunArgs {
                 ctx.store_stdlib_interface(&db);
             }
         }
+        // Warm-incremental evidence: with the diagnostics cache serving clean
+        // files, this counts only the dirty files' scopes; a cold compile walks
+        // every scope.
+        crate::bytecode_cache::cache_debug(format_args!(
+            "scope inferences: {} this process",
+            baml_db::baml_compiler2_tir::inference::scope_inferences()
+        ));
         // Warm-run evidence: with the stdlib interface seeded, this is 0 (the
         // seed served every stdlib package); a cold run reports up to 6.
         crate::bytecode_cache::cache_debug(format_args!(
