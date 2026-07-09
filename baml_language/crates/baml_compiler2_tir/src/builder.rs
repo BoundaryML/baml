@@ -12012,6 +12012,23 @@ impl<'db> TypeInferenceBuilder<'db> {
         let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
 
+        // `class_data.methods` flattens every `implements I { … }` block's methods together
+        // with class-level ones. A name that matches more than one can only come from two
+        // distinct interfaces declaring it (coherence forbids two impls of one interface),
+        // so resolving it here would silently pick the first. Defer to
+        // `resolve_member_from_impls`, which dedups by realized interface and reports the
+        // ambiguity (E0121). A unique match keeps this fast path — correct static dispatch
+        // on a concrete receiver.
+        if class_data
+            .methods
+            .iter()
+            .filter(|&&mid| item_tree[mid].name == *method_name)
+            .count()
+            > 1
+        {
+            return None;
+        }
+
         for &method_id in &class_data.methods {
             let method_data = &item_tree[method_id];
             if method_data.name == *method_name {

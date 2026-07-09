@@ -862,6 +862,13 @@ fn simulate_rvalue_pull_stack(
         sim.push();
         return true;
     }
+    // MakeVirtualBoundMethod has a variable-arity stack effect (receiver + N method
+    // type args + interface type + method name). Rather than simulate it, opt out of
+    // the stack-carry optimization for it — `walk_rvalue_pull` panics on it, and it is
+    // materialized correctly through `emit_rvalue_pull`.
+    if matches!(rvalue, Rvalue::MakeVirtualBoundMethod { .. }) {
+        return false;
+    }
     let mut sink = StackCarryPullSink {
         sim,
         carried_local,
@@ -1181,7 +1188,10 @@ impl PullSink for StackCarryPullSink<'_> {
                     .get(&local)
                     .and_then(|du| du.def.as_ref())
                     .ok_or(())?;
-                if matches!(def.rvalue, Rvalue::MakeBoundMethod { .. }) {
+                if matches!(
+                    def.rvalue,
+                    Rvalue::MakeBoundMethod { .. } | Rvalue::MakeVirtualBoundMethod { .. }
+                ) {
                     return Err(());
                 }
                 if let Some(ok) = simulate_aggregate_operand_pull_stack(

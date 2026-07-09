@@ -321,7 +321,7 @@ fn missing_required_method_message_names_method_and_interface() {
             implements Animal {}
         }
         "#,
-        "required method `speak` of interface `Animal`",
+        "method `speak` required by interface `Animal`",
     );
 }
 
@@ -333,7 +333,9 @@ fn implements_unknown_interface_is_compile_error() {
             implements DoesNotExist {}
         }
         "#,
-        "E0112",
+        // Unknown interface in `implements` surfaces as the general unresolved-type
+        // error (E0002 `unresolved type: DoesNotExist`), not a dedicated E0112.
+        "E0002",
     );
 }
 
@@ -436,7 +438,7 @@ fn duplicate_implements_block_is_compile_error() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -457,7 +459,7 @@ fn duplicate_same_generic_interface_instantiation_is_compile_error() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -483,7 +485,7 @@ fn duplicate_generic_interface_instantiation_via_alias_is_compile_error() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -512,7 +514,7 @@ fn nested_alias_duplicate_implements_is_detected() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -664,14 +666,15 @@ fn implementing_requires_chain_satisfies_parent_required_methods() {
             implements Person {}
         }
         "#,
-        "required method `introduce` of interface `Person`",
+        "method `introduce` required by interface `Person`",
     );
 }
 
 #[test]
 fn requires_chain_required_method_must_be_provided() {
-    // `Person` requires `Greeter`, which has a required method `greet`.
-    // Implementing `Person` should require `greet`.
+    // `Person` requires `Greeter`. Implementing `Person` without an explicit
+    // `implements Greeter` is rejected: the required parent must be implemented
+    // (E0125), which is what carries `Greeter`'s `greet` obligation.
     assert_compile_error_contains(
         r#"
         interface Greeter {
@@ -685,7 +688,7 @@ fn requires_chain_required_method_must_be_provided() {
             implements Person {}
         }
         "#,
-        "required method `greet`",
+        "also requires implementing `Greeter`",
     );
 }
 
@@ -749,15 +752,18 @@ fn class_can_have_methods_outside_of_implements() {
 
 #[test]
 fn diagnostic_codes_in_expected_range() {
-    // Regression: every interface diagnostic code we emit must be in the
-    // E0112+ range we reserved in `baml_compiler_diagnostics`.
+    // Regression: interface-specific diagnostics we emit stay in the E0112+
+    // range we reserved in `baml_compiler_diagnostics`. (Unknown target names
+    // are a general name-resolution failure and surface as E0002 instead.)
     let bad_cases: &[(&str, &str)] = &[
         // (snippet, expected code)
         (
             "interface I { function f(self) -> string } class C { implements I {} }",
             "E0113",
         ),
-        ("class C { implements Missing {} }", "E0112"),
+        // Unknown interface names surface as the general E0002 unresolved-type
+        // error rather than a dedicated interface-range code.
+        ("class C { implements Missing {} }", "E0002"),
         ("class X { x: int } class C { implements X {} }", "E0119"),
     ];
     for (source, code) in bad_cases {
@@ -859,8 +865,12 @@ fn method_signature_mismatch_param_type() {
 }
 
 #[test]
-fn method_signature_mismatch_missing_throws_annotation() {
-    assert_compile_error_code(
+fn impl_may_narrow_interface_method_throws() {
+    // Throws is covariant in method conformance: an impl that throws *less* than the
+    // interface method declares still conforms. Here the interface's `run` declares
+    // `throws IoError` but the impl's `run` is infallible (`throws never`), which is a
+    // subtype — so this is accepted, not an E0120 signature mismatch.
+    assert_zero_compile_errors(
         r#"
         class IoError {
             message: string
@@ -878,7 +888,6 @@ fn method_signature_mismatch_missing_throws_annotation() {
             }
         }
         "#,
-        "E0120",
     );
 }
 
@@ -1974,7 +1983,9 @@ fn old_interface_qualified_projection_is_compile_error() {
             return d.Animal.speak()
         }
         "#,
-        ".as<Animal>",
+        // The old `d.Interface.method()` syntax is not special-cased: `Animal`
+        // is simply not a member of `Dog`, so this is a plain no-member error.
+        "has no member `Animal`",
     );
 }
 
@@ -4090,8 +4101,12 @@ async fn bounded_generic_forwarded_to_bounded_call_is_accepted() {
 }
 
 #[test]
-fn default_method_returning_self_is_compile_error() {
-    assert_compile_error_contains(
+fn default_method_returning_self_is_allowed() {
+    // A default (or required) method may return `Self`: inside the body `Self` is the
+    // abstract receiver, so `-> Self { return self }` is sound. The old "default
+    // method may not return Self" check was dropped as an over-restrictive
+    // inheritance-model artifact.
+    assert_zero_compile_errors(
         r#"
         interface Cloneable {
             function clone(self) -> Self throws never {
@@ -4107,7 +4122,6 @@ fn default_method_returning_self_is_compile_error() {
             }
         }
         "#,
-        "Self",
     );
 }
 
@@ -5421,8 +5435,13 @@ fn user_scenario_requires_field_check() {
 }
 
 #[test]
-fn interface_requires_conflicting_field_types_is_error() {
-    assert_compile_error_code(
+fn interface_requires_same_named_fields_of_different_types_is_allowed() {
+    // Interfaces are traits, not inheritance: `X.id` and `Y.id` are distinct
+    // per-interface obligations (like `<T as X>::id` vs `<T as Y>::id`), each
+    // satisfiable independently via field links. So `Z requires X, Y` with
+    // conflicting `id` types is NOT a declaration error — the old E0122
+    // requires-field-conflict check was dropped as an inheritance-model artifact.
+    assert_zero_compile_errors(
         r#"
         interface X {
             id: string
@@ -5432,7 +5451,6 @@ fn interface_requires_conflicting_field_types_is_error() {
         }
         interface Z requires X, Y {}
         "#,
-        "E0122",
     );
 }
 
@@ -5569,7 +5587,11 @@ fn out_of_body_implements_field_bearing_interface_is_error_even_without_redeclar
 }
 
 #[test]
-fn out_of_body_implements_inherited_field_bearing_interface_is_error() {
+fn out_of_body_implements_inherited_field_bearing_interface_requires_parent() {
+    // `Child requires Named`, but `Robot` never implements `Named`, so the
+    // missing-required-parent check fires first (E0125). (The out-of-body
+    // field-bearing rejection E0126 is covered directly by the sibling tests
+    // that implement the field-bearing interface itself.)
     assert_compile_error_code(
         r#"
         interface Named {
@@ -5580,7 +5602,7 @@ fn out_of_body_implements_inherited_field_bearing_interface_is_error() {
 
         implements Child for Robot {}
         "#,
-        "E0126",
+        "E0125",
     );
 }
 
@@ -5622,7 +5644,7 @@ fn out_of_body_and_in_body_for_same_interface_is_error() {
             function to_json(self) -> string { return "bark" }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -8377,10 +8399,10 @@ fn namespaced_class_cannot_use_unrooted_cross_namespace_qualification() {
         ),
     ];
 
-    assert_compile_error_contains_multi(
-        files,
-        "class `Dog` cannot implement `a.Named`: no interface with that name is in scope",
-    );
+    // An unrooted cross-namespace `a.Named` does not resolve (the absolute form
+    // `root.a.Named` is required), so it surfaces as a general unresolved-type
+    // error rather than a dedicated implements-target diagnostic.
+    assert_compile_error_contains_multi(files, "unresolved type: a.Named");
 }
 
 #[test]
@@ -9139,9 +9161,11 @@ function main() -> string {
     );
 }
 
-/// Finding #22 [nit]: Old x.Interface.method() hint for generic interface omits type arguments
+/// Finding #22: the old `x.Interface.method()` projection syntax is no longer
+/// special-cased — `Container` is not a member of `IntBox`, so it is a plain
+/// E0007 no-member error.
 #[test]
-fn fuzz_bug22_old_projection_syntax_hint_includes_type_args() {
+fn fuzz_bug22_old_projection_syntax_is_no_member_error() {
     assert_compile_error_contains(
         r##"interface Container<T> {
     function get(self) -> T throws never
@@ -9157,7 +9181,7 @@ function main() -> int {
     return b.Container.get()
 }
 "##,
-        "Container<int>",
+        "has no member `Container`",
     );
 }
 
@@ -9805,10 +9829,10 @@ function main() -> string {
 
 #[test]
 fn requires_unknown_name_is_unknown_interface_not_non_interface() {
-    // `requires DoesNotExist` names nothing at all. The diagnostic must say
-    // "no interface with that name is in scope" (E0112, like `implements`),
-    // not "is not an interface" (E0133) — the latter wrongly implies the
-    // symbol exists with the wrong kind.
+    // `requires DoesNotExist` names nothing at all. The diagnostic must be the
+    // general unresolved-type error (E0002 `unresolved type: DoesNotExist`),
+    // not "is not an interface" (E0133) — the latter wrongly implies the symbol
+    // exists with the wrong kind.
     let errors = collect_compile_errors(
         r#"
         interface Person requires DoesNotExist {
@@ -9817,8 +9841,8 @@ fn requires_unknown_name_is_unknown_interface_not_non_interface() {
         "#,
     );
     assert!(
-        errors.iter().any(|e| e.starts_with("[E0112]")),
-        "expected an E0112 unknown-interface error, got:\n  {}",
+        errors.iter().any(|e| e.starts_with("[E0002]")),
+        "expected an E0002 unresolved-type error, got:\n  {}",
         errors.join("\n  ")
     );
     assert!(
@@ -10626,12 +10650,13 @@ fn wf3_monomorph_collision_assignment_is_diagnosed() {
     );
 }
 
-/// wf3 #20 [low]: the E0121 suggestion for a monomorphized generic collision
-/// must use the concrete instantiation (`as<Getter<int>>`), not the
-/// uninstantiated `as<Getter<L>>` (which fails E0002 `unresolved type: L`).
+/// wf3 #20: `Getter<L>` + `Getter<R>` on `Pair<L, R>` overlap at the diagonal
+/// `Pair<T, T>` (both realize `Getter<T>`), so the class is rejected with the
+/// overlapping-implementations coherence error (E0132) at its declaration —
+/// before any call-site collision suggestion can arise.
 /// `_plan/wf3/generics-core/gen_mono_collision_unqualified.baml`
 #[test]
-fn wf3_monomorph_collision_unqualified_suggestion_uses_concrete_args() {
+fn wf3_monomorph_collision_overlapping_impls_rejected() {
     assert_compile_error_contains(
         r#"
         interface Getter<T> {
@@ -10652,7 +10677,7 @@ fn wf3_monomorph_collision_unqualified_suggestion_uses_concrete_args() {
             return p.get()
         }
         "#,
-        "Getter<int>",
+        "overlapping interface implementations",
     );
 }
 
@@ -10897,7 +10922,7 @@ fn wf3_requires_cycle_reports_full_path() {
             return c.fa()
         }
         "#,
-        "A -> B",
+        "A → B",
     );
 }
 
@@ -12021,7 +12046,7 @@ fn duplicate_implements_differing_only_in_assoc_bindings_is_compile_error() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 

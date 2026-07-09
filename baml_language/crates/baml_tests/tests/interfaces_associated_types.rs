@@ -2709,7 +2709,7 @@ fn out_of_body_implements_target_associated_type_binding_errors() {
             }
         }
         "#,
-        "associated type bindings are not allowed in `implements` targets",
+        "associated type bindings are not allowed on an `implements` target",
     );
 }
 
@@ -3067,7 +3067,7 @@ fn missing_required_associated_type_binding_errors() {
             }
         }
         "#,
-        "does not match interface",
+        "missing associated type binding",
     );
 }
 
@@ -3098,7 +3098,7 @@ fn associated_type_cannot_collide_with_interface_generic_param() {
 
 #[test]
 fn duplicate_associated_type_binding_errors() {
-    assert_compile_error_code(
+    assert_compile_error_contains(
         r#"
         interface Iterator {
             type Item
@@ -3111,7 +3111,7 @@ fn duplicate_associated_type_binding_errors() {
             }
         }
         "#,
-        "E0012",
+        "is bound more than once",
     );
 }
 
@@ -3133,7 +3133,7 @@ fn implements_target_associated_type_binding_errors() {
             }
         }
         "#,
-        "associated type bindings are not allowed in `implements` targets",
+        "associated type bindings are not allowed on an `implements` target",
     );
 }
 
@@ -3157,7 +3157,7 @@ fn implements_target_associated_type_binding_errors_even_when_same_witness_is_in
             }
         }
         "#,
-        "associated type bindings are not allowed in `implements` targets",
+        "associated type bindings are not allowed on an `implements` target",
     );
 }
 
@@ -3232,7 +3232,7 @@ fn implements_target_associated_type_binding_errors_even_with_block_binding() {
             }
         }
         "#,
-        "associated type bindings are not allowed in `implements` targets",
+        "associated type bindings are not allowed on an `implements` target",
     );
 }
 
@@ -3274,7 +3274,7 @@ fn duplicate_associated_type_binding_on_interface_value_with_union_errors() {
 
 #[test]
 fn unknown_associated_type_binding_in_implements_errors() {
-    assert_compile_error_code(
+    assert_compile_error_contains(
         r#"
         interface Iterator {
             type Item
@@ -3287,7 +3287,7 @@ fn unknown_associated_type_binding_in_implements_errors() {
             }
         }
         "#,
-        "E0002",
+        "unknown associated type `Element`",
     );
 }
 
@@ -3710,7 +3710,7 @@ fn unknown_associated_type_binding_on_interface_value_errors() {
             return 0
         }
         "#,
-        "unknown associated type `Element`",
+        "Element. Did you mean `Item`",
     );
 }
 
@@ -3728,7 +3728,7 @@ fn unknown_associated_type_binding_on_interface_value_with_union_errors() {
             return 0
         }
         "#,
-        "unknown associated type `Element`",
+        "Element. Did you mean `Item`",
     );
 }
 

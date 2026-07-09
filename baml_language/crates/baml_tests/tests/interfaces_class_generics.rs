@@ -116,8 +116,13 @@ async fn class_generic_bound_member_access_runs_in_class_method() {
 async fn function_class_generic_bound_member_access_runs() {
     let output = baml_test!(
         r#"
-        class Named {
+        interface Named {
             name: string
+        }
+
+        class Person {
+            name: string
+            implements Named {}
         }
 
         function get_name<T extends Named>(value: T) -> string {
@@ -125,7 +130,7 @@ async fn function_class_generic_bound_member_access_runs() {
         }
 
         function main() -> string {
-            return get_name(Named { name: "Ada" })
+            return get_name(Person { name: "Ada" })
         }
         "#
     );

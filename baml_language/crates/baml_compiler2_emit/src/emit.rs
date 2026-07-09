@@ -2999,8 +2999,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
                 // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
                 // is called rather than the generic `walk_rvalue_pull` inlining path.
-                // MakeBoundMethod must also be handled specially: it is not handled by
-                // `walk_rvalue_pull` (which panics on it), so route through `emit_rvalue_pull`.
+                // MakeBoundMethod / MakeVirtualBoundMethod must also be handled specially:
+                // neither is handled by `walk_rvalue_pull` (which panics on them), so route
+                // through `emit_rvalue_pull`.
                 // BinaryOp must be routed through `emit_rvalue_pull` so that the
                 // type-aware specialization in `try_specialize_binary_op` can fire
                 // (e.g. emitting `CmpBigintOp` instead of the generic `CmpOp`).
@@ -3010,6 +3011,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     rvalue,
                     Rvalue::MakeClosure { .. }
                         | Rvalue::MakeBoundMethod { .. }
+                        | Rvalue::MakeVirtualBoundMethod { .. }
                         | Rvalue::BinaryOp { .. }
                         | Rvalue::Aggregate {
                             kind: baml_compiler2_mir::AggregateKind::Class { .. },
