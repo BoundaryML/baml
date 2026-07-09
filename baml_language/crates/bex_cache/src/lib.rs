@@ -29,6 +29,15 @@ use sha2::{Digest, Sha256};
 /// Bump whenever the serialized `Program` layout or the entry header changes.
 /// Part of both the cache key and the entry header.
 ///
+/// This contract also covers the two auxiliary blobs stored under their own
+/// keys: bump whenever the [`LinkableImage`](bex_vm_types::LinkableImage) wire
+/// format changes, **or** whenever the stdlib-interface blob's wire format
+/// changes — i.e. any layout change to
+/// `PackageInterface`/`ExportedType`/`ExportedFunction`/`FunctionThrowSets`/
+/// `BuiltinKind` or a leaf of the `Ty` family. The compiler fingerprint already
+/// invalidates on any binary change, so the version bump is belt-and-braces: it
+/// also protects hand-copied blobs via the entry header's version check.
+///
 /// v4 (B-693 Stage 3): alongside the linked `Program` blob, a compile now also
 /// stores a symbolic [`LinkableImage`](bex_vm_types::LinkableImage) under
 /// [`image_key`] so an incremental compile can reuse clean files' units. The
@@ -216,6 +225,26 @@ pub fn stdlib_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
     h.update(MAGIC);
     h.update(FORMAT_VERSION.to_le_bytes());
     h.update(b"stdlib-slice");
+    h.update(compiler_fingerprint);
+    h.update([opt_level]);
+    CacheKey(h.finalize().into())
+}
+
+/// Key for the cached stdlib **typed interface** blob (B-694 "export data").
+///
+/// The stored value is `borsh(BTreeMap<package-name, borsh(PackageInterface)>)`
+/// for the six stdlib packages. Like [`stdlib_key`], it depends only on the
+/// compiler build + opt level: the stdlib is a build constant (no user file
+/// contributes to a stdlib package), so one entry per compiler build serves
+/// every project on the machine. The `b"stdlib-interface"` domain separator
+/// prevents collision with the stdlib bytecode slice ([`stdlib_key`]), which
+/// shares the same `(fingerprint, opt_level)` inputs. `opt_level` is included
+/// for parity even though the interface itself is opt-invariant.
+pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
+    let mut h = Sha256::new();
+    h.update(MAGIC);
+    h.update(FORMAT_VERSION.to_le_bytes());
+    h.update(b"stdlib-interface");
     h.update(compiler_fingerprint);
     h.update([opt_level]);
     CacheKey(h.finalize().into())
@@ -621,6 +650,44 @@ mod tests {
         std::fs::create_dir_all(other_path.parent().expect("parent")).expect("mkdir");
         std::fs::copy(&path, &other_path).expect("copy");
         assert!(cache.load(&other_key).is_none(), "renamed entry rejected");
+    }
+
+    #[test]
+    fn stdlib_interface_key_is_distinct_and_input_sensitive() {
+        let fp = [3u8; 32];
+        let base = stdlib_interface_key(&fp, 2);
+
+        // Never collides with the bytecode slice under the same inputs (distinct
+        // domain separator).
+        assert_ne!(
+            base,
+            stdlib_key(&fp, 2),
+            "interface key must not collide with the bytecode-slice key"
+        );
+        // Sensitive to both keying inputs.
+        assert_ne!(base, stdlib_interface_key(&[4u8; 32], 2), "fingerprint");
+        assert_ne!(base, stdlib_interface_key(&fp, 0), "opt level");
+    }
+
+    #[test]
+    fn stdlib_interface_blob_round_trips_through_store_raw() {
+        use std::collections::BTreeMap;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cache = BytecodeCache::open(dir.path().to_path_buf());
+        let key = stdlib_interface_key(&[5u8; 32], 2);
+
+        // Shape matches the CLI blob: package-name -> opaque per-package bytes.
+        let mut blob: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        blob.insert("baml".to_string(), vec![1, 2, 3, 4]);
+        blob.insert("log".to_string(), vec![9, 8, 7]);
+        let payload = borsh::to_vec(&blob).expect("serialize blob");
+
+        assert!(cache.load_raw(&key).is_none(), "miss on empty cache");
+        cache.store_raw(&key, &payload).expect("store");
+        let loaded = cache.load_raw(&key).expect("hit after store");
+        let decoded: BTreeMap<String, Vec<u8>> = borsh::from_slice(&loaded).expect("decode blob");
+        assert_eq!(decoded, blob, "interface blob survives the store/load path");
     }
 
     #[test]

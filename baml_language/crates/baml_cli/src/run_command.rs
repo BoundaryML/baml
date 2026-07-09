@@ -739,6 +739,18 @@ impl RunArgs {
             db.set_seeded_throw_facts(plan.seeded_throw_facts.clone());
         }
 
+        // Seed the stdlib typed interface (B-694) before the first typecheck
+        // query, so a fresh process skips re-deriving stdlib types. Applies to
+        // every compile (the stdlib is a build constant), independent of the
+        // per-file reuse plan, and gated off under verify so the oracle
+        // exercises the honest path.
+        let stdlib_interface_hit = !crate::bytecode_cache::CacheContext::verify_enabled()
+            && cache
+                .as_ref()
+                .and_then(|ctx| ctx.load_stdlib_interface())
+                .map(|by_package| db.set_seeded_stdlib_interface(by_package))
+                .is_some();
+
         // `baml run` keeps the compile phase silent; the program's output is
         // the point. Compile/count progress belongs to `check` and `generate`.
         self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
@@ -754,10 +766,22 @@ impl RunArgs {
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
         if let Some(ctx) = &cache {
             ctx.verify_against(&program)?;
+            ctx.verify_stdlib_interface(&db)?;
             if let Err(e) = ctx.store_with_manifest(&db, &program) {
                 self.vlog(format_args!("Bytecode cache write failed: {e}"));
             }
+            // Materialize the stdlib interface blob on a miss (idempotent on a
+            // hit, so only write when the seed was absent).
+            if !stdlib_interface_hit {
+                ctx.store_stdlib_interface(&db);
+            }
         }
+        // Warm-run evidence: with the stdlib interface seeded, this is 0 (the
+        // seed served every stdlib package); a cold run reports up to 6.
+        crate::bytecode_cache::cache_debug(format_args!(
+            "stdlib interface: {} honest derivation(s) this process",
+            baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+        ));
         let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
             .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
         self.vlog(format_args!(

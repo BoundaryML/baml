@@ -24,11 +24,41 @@ use crate::{
     ty::{FunctionParamMode, FunctionParamTy, QualifiedTypeName, Ty, TyAttr},
 };
 
+/// The six standard-library package names, in the fixed set from
+/// `package_dependencies`. Each is a compiler-build constant (no user file can
+/// contribute to a stdlib package), so each package's `PackageInterface` is a
+/// pure function of stdlib source + compiler code — the soundness foundation
+/// for caching it under the compiler fingerprint and seeding it back (B-694).
+pub const STDLIB_PACKAGE_NAMES: [&str; 6] =
+    ["baml", "boundary", "testing", "assert", "log", "reflect"];
+
+/// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
+/// packages, since process start. A warm compile that seeds the cached stdlib
+/// interface should leave this at zero; a cold compile bumps it up to six (once
+/// per stdlib package). Exposed for the `BAML_CACHE_DEBUG` warm-run counter and
+/// the seeding tests — not part of any compile result.
+static STDLIB_HONEST_DERIVATIONS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Number of stdlib `package_interface`s derived honestly (from source, not
+/// from a seed) since process start. Zero on a warm run whose stdlib interface
+/// seed served every stdlib package; up to six on a cold run.
+pub fn stdlib_honest_derivations() -> usize {
+    STDLIB_HONEST_DERIVATIONS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 // ── Data types ─────────────────────────────────────────────────────────────
 
 /// Fully-resolved typed interface for a package.
 /// Consumers never touch dependency `ItemTree` or raw `TypeExpr`.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// Serializes with Borsh so the six stdlib packages' interfaces can be cached
+/// once per compiler build (B-694 "export data") and seeded back into a fresh
+/// database, skipping the cold re-derivation. Every leaf (`Ty`,
+/// `QualifiedTypeName`, `Name`, `FunctionParamTy`, `BuiltinKind`,
+/// `FunctionThrowSets`) is Borsh-ready; the `FxHashMap` members serialize
+/// deterministically because Borsh sorts map entries by key.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct PackageInterface {
     /// All exported types: namespace path -> name -> `ExportedType`
     pub types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>>,
@@ -39,7 +69,7 @@ pub struct PackageInterface {
 }
 
 /// A type exported from a package.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ExportedType {
     Class {
         qtn: QualifiedTypeName,
@@ -58,7 +88,7 @@ pub enum ExportedType {
 }
 
 /// A function exported from a package (free function or method).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ExportedFunction {
     pub name: Name,
     pub params: Vec<FunctionParamTy>,
@@ -305,6 +335,30 @@ fn lower_class_method_signature<'db>(
 
 #[salsa::tracked(returns(ref))]
 pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> PackageInterface {
+    let pkg_name = pkg_id.name(db);
+
+    // Seed short-circuit (B-694). `seeds.by_package(db)` is a *tracked* read of
+    // the `SeededStdlibInterface` input: databases that seed (the CLI, the LSP)
+    // hold the input from construction (empty until seeded), so this memo records
+    // a dependency on the seed map and a later `set_seeded_stdlib_interface`
+    // reliably invalidates it. Only stdlib package names appear in the map, so a
+    // user package never hits the seed and derives normally. Because the entire
+    // stdlib derivation cluster (signature lowering, `callable_throws` /
+    // body inference, throw-set solving) is reachable only through this query,
+    // short-circuiting here skips all of it.
+    if let Some(seeds) = db.seeded_stdlib_interface() {
+        if let Some(bytes) = seeds.by_package(db).get(pkg_name.as_str()) {
+            return borsh::from_slice::<PackageInterface>(bytes)
+                .expect("seeded stdlib interface must deserialize");
+        }
+    }
+
+    // Honest derivation. Count stdlib-package derivations so a warm run can
+    // assert zero (the seed served every stdlib package).
+    if STDLIB_PACKAGE_NAMES.contains(&pkg_name.as_str()) {
+        STDLIB_HONEST_DERIVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = FxHashMap::default();
@@ -930,5 +984,150 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
         _ => Ty::Unknown {
             attr: TyAttr::default(),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use super::*;
+
+    /// Build a representative `PackageInterface` exercising every variant that
+    /// crosses the Borsh boundary (all `ExportedType` shapes, a function with a
+    /// declared+callable throws pair and a `builtin_kind`, a method with generic
+    /// params, and populated throw sets) so the round-trip test is a real
+    /// fidelity check, not a smoke test.
+    ///
+    /// `reverse_insertion` flips the order in which the multi-entry `FxHashMap`
+    /// is populated, so two calls yield logically-equal interfaces whose hash
+    /// maps may iterate differently — the input the order-independence test needs.
+    fn synthetic_interface(reverse_insertion: bool) -> PackageInterface {
+        let attr = TyAttr::default();
+        let pkg = Name::new("baml");
+        let ns = vec![Name::new("llm")];
+
+        let class_qtn = QualifiedTypeName::new(pkg.clone(), ns.clone(), Name::new("Client"));
+        let enum_qtn = QualifiedTypeName::new(pkg.clone(), ns.clone(), Name::new("Role"));
+        let alias_qtn = QualifiedTypeName::new(pkg, ns.clone(), Name::new("Id"));
+
+        let method = ExportedFunction {
+            name: Name::new("call"),
+            params: vec![
+                exported_function_param(
+                    Name::new("prompt"),
+                    Ty::String { attr: attr.clone() },
+                    false,
+                ),
+                exported_function_param(Name::new("retries"), Ty::Int { attr: attr.clone() }, true),
+            ],
+            return_type: Ty::TypeVar(Name::new("T"), attr.clone()),
+            declared_throws: Some(Ty::Class(class_qtn.clone(), vec![], attr.clone())),
+            callable_throws: Ty::Union(
+                vec![
+                    Ty::String { attr: attr.clone() },
+                    Ty::BuiltinUnknown { attr: attr.clone() },
+                ],
+                attr.clone(),
+            ),
+            generic_params: vec![Name::new("T")],
+            builtin_kind: Some(BuiltinKind::Io),
+        };
+
+        let class = ExportedType::Class {
+            qtn: class_qtn.clone(),
+            fields: vec![
+                (Name::new("model"), Ty::String { attr: attr.clone() }),
+                (Name::new("temperature"), Ty::Float { attr: attr.clone() }),
+            ],
+            methods: vec![method],
+            generic_params: vec![Name::new("T")],
+        };
+        let enum_ty = ExportedType::Enum {
+            qtn: enum_qtn,
+            variants: vec![Name::new("System"), Name::new("User")],
+        };
+        let alias = ExportedType::TypeAlias {
+            qtn: alias_qtn,
+            resolved: Ty::Int { attr: attr.clone() },
+        };
+
+        let mut ns_types = FxHashMap::default();
+        if reverse_insertion {
+            ns_types.insert(Name::new("Id"), alias);
+            ns_types.insert(Name::new("Role"), enum_ty);
+            ns_types.insert(Name::new("Client"), class);
+        } else {
+            ns_types.insert(Name::new("Client"), class);
+            ns_types.insert(Name::new("Role"), enum_ty);
+            ns_types.insert(Name::new("Id"), alias);
+        }
+        let mut types = FxHashMap::default();
+        types.insert(ns.clone(), ns_types);
+
+        let free_fn = ExportedFunction {
+            name: Name::new("info"),
+            params: vec![exported_function_param(
+                Name::new("msg"),
+                Ty::String { attr: attr.clone() },
+                false,
+            )],
+            return_type: Ty::Void { attr: attr.clone() },
+            declared_throws: None,
+            callable_throws: Ty::Never { attr: attr.clone() },
+            generic_params: vec![],
+            builtin_kind: None,
+        };
+        let mut ns_funcs = FxHashMap::default();
+        ns_funcs.insert(Name::new("info"), free_fn);
+        let mut functions = FxHashMap::default();
+        functions.insert(ns, ns_funcs);
+
+        let mut direct = BTreeMap::new();
+        direct.insert(
+            Name::new("llm.call"),
+            BTreeSet::from([Ty::Class(class_qtn, vec![], attr.clone())]),
+        );
+        let mut transitive = BTreeMap::new();
+        transitive.insert(
+            Name::new("llm.call"),
+            BTreeSet::from([
+                Ty::String { attr: attr.clone() },
+                Ty::BuiltinUnknown { attr },
+            ]),
+        );
+        let throw_sets = FunctionThrowSets { direct, transitive };
+
+        PackageInterface {
+            types,
+            functions,
+            throw_sets,
+        }
+    }
+
+    #[test]
+    fn borsh_round_trips() {
+        let iface = synthetic_interface(false);
+        let bytes = borsh::to_vec(&iface).expect("serialize");
+        let decoded: PackageInterface = borsh::from_slice(&bytes).expect("deserialize");
+        assert_eq!(
+            iface, decoded,
+            "PackageInterface must survive a Borsh round-trip"
+        );
+    }
+
+    #[test]
+    fn borsh_is_order_independent_for_maps() {
+        // Same logical interface, but its multi-entry `FxHashMap` is populated
+        // in opposite insertion orders, so the two maps may iterate differently.
+        // Borsh sorts map entries by key on serialization, so both must still
+        // produce identical bytes — the property that keeps the cached blob
+        // byte-stable across fresh databases regardless of iteration order.
+        let forward = synthetic_interface(false);
+        let reversed = synthetic_interface(true);
+        assert_eq!(
+            borsh::to_vec(&forward).expect("serialize forward"),
+            borsh::to_vec(&reversed).expect("serialize reversed"),
+        );
     }
 }

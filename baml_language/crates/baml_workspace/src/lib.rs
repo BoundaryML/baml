@@ -57,6 +57,21 @@ pub trait Db: salsa::Database {
     fn seeded_throw_facts(&self) -> Option<SeededThrowFacts> {
         None
     }
+
+    /// The stdlib packages' resolved typed interfaces from a previous compile
+    /// (B-694 "export data"), keyed by package name.
+    ///
+    /// When present, `package_interface::package_interface` returns the seeded
+    /// interface for a stdlib package instead of re-deriving it from source —
+    /// removing the cold-typecheck floor a fresh process otherwise pays to
+    /// re-normalize every stdlib signature/class/alias before it can typecheck
+    /// user code. The stdlib is a compiler-build constant (no user file can
+    /// contribute to a stdlib package), so the CLI caches this once per compiler
+    /// build under `bex_cache::stdlib_interface_key` and seeds it back on every
+    /// compile. Defaults to `None`: every other database compiles honestly.
+    fn seeded_stdlib_interface(&self) -> Option<SeededStdlibInterface> {
+        None
+    }
 }
 
 /// Input: per-file `FunctionThrowFacts` from a previous compile, keyed by
@@ -66,6 +81,22 @@ pub struct SeededThrowFacts {
     #[returns(ref)]
     pub by_path:
         std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+}
+
+/// Input: the stdlib packages' resolved `PackageInterface`s from a previous
+/// compile, keyed by package name; each value is `borsh(PackageInterface)`.
+///
+/// The value is opaque bytes rather than the typed interface because
+/// `PackageInterface` lives in `baml_compiler2_tir`, which depends on this
+/// crate — naming it here would be a dependency cycle. `baml_compiler2_tir`
+/// deserializes the relevant package's bytes on a seed hit. Per-package (not
+/// whole-map) bytes keep the short-circuit's deserialize cost to one package
+/// per query call. This mirrors [`SeededThrowFacts`], which holds a type its
+/// low crate can name; `PackageInterface` has no such low-crate home.
+#[salsa::input]
+pub struct SeededStdlibInterface {
+    #[returns(ref)]
+    pub by_package: std::collections::BTreeMap<String, Vec<u8>>,
 }
 
 /// Input: the project root configuration

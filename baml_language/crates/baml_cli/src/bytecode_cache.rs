@@ -27,7 +27,7 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 use bex_cache::{
     BytecodeCache, CacheKey, KeyInputs, ManifestFile, ProjectManifest, compiler_fingerprint,
-    compute_key, image_key, manifest_key,
+    compute_key, image_key, manifest_key, stdlib_interface_key,
 };
 use bex_vm_types::{CompilationUnit, LinkableImage, Object, Program, relink};
 use sha2::{Digest, Sha256};
@@ -64,6 +64,9 @@ pub(crate) struct CacheContext {
     image_key: CacheKey,
     /// Precompiled stdlib slice, keyed by compiler build + opt level only.
     stdlib_key: CacheKey,
+    /// Cached stdlib typed-interface blob (B-694), keyed by compiler build +
+    /// opt level only — like `stdlib_key`, the stdlib is a build constant.
+    stdlib_interface_key: CacheKey,
     /// Latest-compile manifest, fixed per (project root, options, build).
     manifest_key: CacheKey,
     /// Whether test cases are emitted — needed to decompose the compiled
@@ -107,6 +110,7 @@ impl CacheContext {
             key,
             image_key: image_key(key.as_bytes()),
             stdlib_key: bex_cache::stdlib_key(&fingerprint, CLI_OPT_LEVEL as u8),
+            stdlib_interface_key: stdlib_interface_key(&fingerprint, CLI_OPT_LEVEL as u8),
             manifest_key: manifest_key(
                 &fingerprint,
                 CLI_OPT_LEVEL as u8,
@@ -158,6 +162,119 @@ impl CacheContext {
         self.cache.maybe_trim();
         Ok(())
     }
+
+    /// Isolation toggle for measuring the stdlib-interface cache's win:
+    /// `BAML_NO_STDLIB_INTERFACE_CACHE=1` disables *only* the interface seed
+    /// (leaving the bytecode slice / per-file reuse intact) so a with/without
+    /// timing comparison isolates B-694. `BAML_NO_BYTECODE_CACHE` already
+    /// disables the whole cache, so this is the finer-grained knob.
+    fn stdlib_interface_cache_disabled() -> bool {
+        std::env::var_os("BAML_NO_STDLIB_INTERFACE_CACHE").is_some_and(|v| v == "1")
+    }
+
+    /// Load the cached stdlib typed-interface blob (B-694), if present:
+    /// `load_raw` + borsh-decode into `package-name -> borsh(PackageInterface)`.
+    /// `None` on a miss, a decode failure, or when the interface cache is
+    /// disabled — every case falls through to honest stdlib derivation.
+    pub(crate) fn load_stdlib_interface(
+        &self,
+    ) -> Option<std::collections::BTreeMap<String, Vec<u8>>> {
+        if Self::stdlib_interface_cache_disabled() {
+            return None;
+        }
+        let bytes = self.cache.load_raw(&self.stdlib_interface_key)?;
+        match borsh::from_slice::<std::collections::BTreeMap<String, Vec<u8>>>(&bytes) {
+            Ok(map) => Some(map),
+            Err(e) => {
+                cache_debug(format_args!("stdlib interface undecodable: {e}"));
+                None
+            }
+        }
+    }
+
+    /// Extract and store the stdlib typed-interface blob after a successful
+    /// (interface cache-miss) compile. Best-effort, like every cache write; a
+    /// failed write just means re-deriving next run. Skipped when the interface
+    /// cache is disabled.
+    pub(crate) fn store_stdlib_interface(&self, db: &ProjectDatabase) {
+        if Self::stdlib_interface_cache_disabled() {
+            return;
+        }
+        let blob = extract_stdlib_interface(db);
+        match borsh::to_vec(&blob) {
+            Ok(payload) => {
+                if let Err(e) = self.cache.store_raw(&self.stdlib_interface_key, &payload) {
+                    cache_debug(format_args!("stdlib interface store failed: {e}"));
+                }
+            }
+            Err(e) => cache_debug(format_args!("stdlib interface serialize failed: {e}")),
+        }
+    }
+
+    /// Localized B-694 verify oracle (analog of `gocacheverify`): under
+    /// `BAML_CACHE_VERIFY` the stdlib seed is *not* applied, so `db` derives every
+    /// stdlib interface honestly; this compares that derivation byte-for-byte
+    /// against any cached blob. A mismatch means the cached "export data" is a
+    /// stale substitute that would change typecheck results — a hard error, and a
+    /// tighter signal than the whole-`Program` byte-compare (it names the drifted
+    /// package).
+    pub(crate) fn verify_stdlib_interface(&self, db: &ProjectDatabase) -> anyhow::Result<()> {
+        if !Self::verify_enabled() {
+            return Ok(());
+        }
+        let Some(cached) = self.load_raw_stdlib_interface_for_verify() else {
+            return Ok(());
+        };
+        let derived = extract_stdlib_interface(db);
+        for (name, derived_bytes) in &derived {
+            if let Some(cached_bytes) = cached.get(name) {
+                if cached_bytes != derived_bytes {
+                    anyhow::bail!(
+                        "BAML_CACHE_VERIFY: cached stdlib interface for package `{name}` differs \
+                         from a fresh derivation ({} vs {} bytes). The cached typed interface is a \
+                         stale or incomplete substitute — please report this.",
+                        cached_bytes.len(),
+                        derived_bytes.len(),
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Read the cached interface blob for the verify oracle, bypassing the
+    /// `BAML_NO_STDLIB_INTERFACE_CACHE` disable (verify must still compare
+    /// against whatever is on disk).
+    fn load_raw_stdlib_interface_for_verify(
+        &self,
+    ) -> Option<std::collections::BTreeMap<String, Vec<u8>>> {
+        let bytes = self.cache.load_raw(&self.stdlib_interface_key)?;
+        borsh::from_slice::<std::collections::BTreeMap<String, Vec<u8>>>(&bytes).ok()
+    }
+}
+
+/// Derive and borsh-serialize each stdlib package's `PackageInterface` from a
+/// compiled database, keyed by package name. On a warm database the query
+/// returns the seed verbatim, so re-serializing reproduces the same bytes
+/// (idempotent); on a cold database it materializes the interface once.
+fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<String, Vec<u8>> {
+    use baml_db::{
+        Name,
+        baml_compiler2_hir::package::PackageId,
+        baml_compiler2_tir::package_interface::{STDLIB_PACKAGE_NAMES, package_interface},
+    };
+    let mut out = std::collections::BTreeMap::new();
+    for name in STDLIB_PACKAGE_NAMES {
+        let pkg_id = PackageId::new(db, Name::new(name));
+        let iface = package_interface(db, pkg_id);
+        match borsh::to_vec(iface) {
+            Ok(bytes) => {
+                out.insert(name.to_string(), bytes);
+            }
+            Err(e) => cache_debug(format_args!("stdlib interface serialize `{name}`: {e}")),
+        }
+    }
+    out
 }
 
 /// Compile the project, reusing (or materializing) the precompiled stdlib
@@ -1127,5 +1244,151 @@ mod tests {
             a.iter().any(|n| n == LAYOUT_SENTINEL),
             "a field reader's bytecode must carry the layout sentinel; got {a:?}"
         );
+    }
+
+    // ── B-694: stdlib typed-interface cache ("export data") ──────────────────
+
+    #[test]
+    fn stdlib_interface_is_deterministic_across_fresh_dbs() {
+        // The stdlib is a compiler-build constant, so its per-package
+        // `PackageInterface` must serialize byte-identically from two
+        // independently-built fresh databases — the soundness foundation for
+        // keying the blob by compiler fingerprint alone.
+        let db1 = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let db2 = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let blob1 = extract_stdlib_interface(&db1);
+        let blob2 = extract_stdlib_interface(&db2);
+        assert_eq!(
+            blob1, blob2,
+            "stdlib interface blobs must be byte-identical across fresh databases"
+        );
+        // Sanity: every stdlib package is present and non-trivially populated.
+        for name in baml_db::baml_compiler2_tir::package_interface::STDLIB_PACKAGE_NAMES {
+            let bytes = blob1.get(name).unwrap_or_else(|| panic!("{name} present"));
+            assert!(!bytes.is_empty(), "{name} interface is non-empty");
+        }
+    }
+
+    #[test]
+    fn seeded_stdlib_interface_is_a_faithful_substitute() {
+        // Deriving honestly, then seeding those exact bytes into a fresh db and
+        // re-deriving, must reproduce the identical blob — the invariant the
+        // `verify_stdlib_interface` oracle enforces (seeded == derived).
+        let cold = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let cold_blob = extract_stdlib_interface(&cold);
+
+        let mut warm = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        warm.set_seeded_stdlib_interface(cold_blob.clone());
+        let warm_blob = extract_stdlib_interface(&warm);
+        assert_eq!(
+            cold_blob, warm_blob,
+            "a seeded stdlib interface must reproduce the honest derivation exactly"
+        );
+    }
+
+    #[test]
+    fn seeded_stdlib_interface_short_circuits_derivation() {
+        use baml_db::{
+            Name,
+            baml_compiler2_hir::package::PackageId,
+            baml_compiler2_tir::{
+                package_interface::{PackageInterface, package_interface},
+                throw_inference::FunctionThrowSets,
+            },
+        };
+
+        // A fresh db derives a non-empty `log` interface (it exports log.info,
+        // etc.). Seed a deliberately EMPTY sentinel interface for `log`; if the
+        // query short-circuits on the seed it returns the empty sentinel, if it
+        // ignored the seed it would derive the real, non-empty one. This proves
+        // the seed is consulted (derivation skipped) without relying on the
+        // process-global honest-derivation counter (racy under parallel tests).
+        let mut db = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+
+        let sentinel = PackageInterface {
+            types: Default::default(),
+            functions: Default::default(),
+            throw_sets: FunctionThrowSets {
+                direct: Default::default(),
+                transitive: Default::default(),
+            },
+        };
+        let mut seed = std::collections::BTreeMap::new();
+        seed.insert(
+            "log".to_string(),
+            borsh::to_vec(&sentinel).expect("serialize sentinel"),
+        );
+        db.set_seeded_stdlib_interface(seed);
+
+        let log_id = PackageId::new(&db, Name::new("log"));
+        let iface = package_interface(&db, log_id);
+        assert!(
+            iface.functions.is_empty() && iface.types.is_empty(),
+            "seeded (empty) interface must be returned verbatim, not re-derived"
+        );
+
+        // A package that was NOT seeded still derives honestly and is non-empty.
+        let baml_id = PackageId::new(&db, Name::new("baml"));
+        let baml_iface = package_interface(&db, baml_id);
+        assert!(
+            !baml_iface.functions.is_empty() || !baml_iface.types.is_empty(),
+            "an unseeded stdlib package must still derive its real interface"
+        );
+    }
+
+    /// Bound the isolated cost of the stdlib interface derivation cluster
+    /// (parse + type-lower + throw-infer over all six stdlib packages) that
+    /// B-694 short-circuits. Run with:
+    ///   cargo test --release -p baml_cli -- --ignored --nocapture \
+    ///       stdlib_interface_derivation_cost
+    /// This is an *upper bound* on the wall-clock win: in a real compile the
+    /// stdlib parse happens regardless (via `package_items` for cross-package
+    /// value resolution), so the marginal win is smaller (see the incremental
+    /// with/without measurement).
+    #[test]
+    #[ignore = "timing harness; run explicitly in --release"]
+    fn stdlib_interface_derivation_cost() {
+        use baml_db::{
+            Name, baml_compiler2_hir::package::PackageId,
+            baml_compiler2_tir::package_interface::STDLIB_PACKAGE_NAMES,
+        };
+
+        // Parse-only: time `package_items` for the six stdlib packages on a
+        // fresh db (parse + symbol table). This work happens in a real compile
+        // regardless of the interface seed — B-694 does NOT cache it (design R4
+        // residual), so it is the shared floor, not part of the realized win.
+        let parse_db = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let tp = std::time::Instant::now();
+        for name in STDLIB_PACKAGE_NAMES {
+            let pkg_id = PackageId::new(&parse_db, Name::new(name));
+            let _ = baml_db::baml_compiler2_ppir::package_items(&parse_db, pkg_id);
+        }
+        let parse_ms = tp.elapsed().as_secs_f64() * 1000.0;
+
+        // Cold: a fresh db derives every stdlib interface from source
+        // (parse + type-lower + throw-infer).
+        let cold = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let t0 = std::time::Instant::now();
+        let cold_blob = extract_stdlib_interface(&cold);
+        let cold_ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        // Warm: a fresh db seeded with those bytes short-circuits all six.
+        let mut warm = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        warm.set_seeded_stdlib_interface(cold_blob);
+        let t1 = std::time::Instant::now();
+        let _ = extract_stdlib_interface(&warm);
+        let warm_ms = t1.elapsed().as_secs_f64() * 1000.0;
+
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!(
+                "stdlib interface: parse(package_items)={parse_ms:.1}ms (shared floor, not cached) \
+                 | cold_interface={cold_ms:.1}ms (parse+lower+throw) | warm_seeded={warm_ms:.3}ms | \
+                 isolated_upper_bound={:.1}ms | realized_win≈cold-parse={:.1}ms (lower+throw only, \
+                 since parse happens regardless)",
+                cold_ms - warm_ms,
+                cold_ms - parse_ms,
+            );
+        }
     }
 }

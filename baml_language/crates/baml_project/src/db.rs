@@ -138,6 +138,16 @@ pub struct ProjectDatabase {
     /// the memo. Mutating via the setter bumps the revision and correctly
     /// invalidates dependents.
     seeded_throw_facts: Option<baml_workspace::SeededThrowFacts>,
+    /// Stdlib packages' typed interfaces seeded from a previous compile
+    /// (B-694 "export data"; bytecode cache).
+    ///
+    /// Same present-from-construction discipline as `seeded_throw_facts` above: a
+    /// real `#[salsa::input]` handle created **once** (empty) in the constructors
+    /// and thereafter mutated in place via its Salsa setter, so it is always
+    /// `Some` and `package_interface::package_interface` reads the seed through a
+    /// **tracked** dependency (an absent-then-added handle would leave a stale
+    /// memo on a reused database, e.g. the LSP's long-lived `ProjectDatabase`).
+    seeded_stdlib_interface: Option<baml_workspace::SeededStdlibInterface>,
     /// Maps file paths to their `SourceFile` handles (user files only).
     file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps file paths to compiler2-only `SourceFile` handles.
@@ -164,6 +174,10 @@ impl baml_workspace::Db for ProjectDatabase {
 
     fn seeded_throw_facts(&self) -> Option<baml_workspace::SeededThrowFacts> {
         self.seeded_throw_facts
+    }
+
+    fn seeded_stdlib_interface(&self) -> Option<baml_workspace::SeededStdlibInterface> {
+        self.seeded_stdlib_interface
     }
 }
 
@@ -217,12 +231,14 @@ impl ProjectDatabase {
             project: None,
             compiler2_extra_files: None,
             seeded_throw_facts: None,
+            seeded_stdlib_interface: None,
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
             removed_file_tombstones: HashMap::new(),
         };
         db.seeded_throw_facts = Some(db.empty_seeded_throw_facts());
+        db.seeded_stdlib_interface = Some(db.empty_seeded_stdlib_interface());
         db
     }
 
@@ -236,6 +252,16 @@ impl ProjectDatabase {
     /// database. See the field docs on `seeded_throw_facts`.
     fn empty_seeded_throw_facts(&self) -> baml_workspace::SeededThrowFacts {
         baml_workspace::SeededThrowFacts::new(self, std::collections::BTreeMap::new())
+    }
+
+    /// Create the always-present, initially-empty `SeededStdlibInterface` Salsa
+    /// input. Same present-from-construction discipline as
+    /// `empty_seeded_throw_facts` so `package_interface::package_interface`
+    /// records a *tracked* dependency on the seed map: an empty map means "no
+    /// seeds" and every stdlib package derives its interface honestly, exactly
+    /// as an unseeded database. See the field docs on `seeded_stdlib_interface`.
+    fn empty_seeded_stdlib_interface(&self) -> baml_workspace::SeededStdlibInterface {
+        baml_workspace::SeededStdlibInterface::new(self, std::collections::BTreeMap::new())
     }
 
     /// Create a new database with an event callback for tracking query execution.
@@ -252,12 +278,14 @@ impl ProjectDatabase {
             project: None,
             compiler2_extra_files: None,
             seeded_throw_facts: None,
+            seeded_stdlib_interface: None,
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
             removed_file_tombstones: HashMap::new(),
         };
         db.seeded_throw_facts = Some(db.empty_seeded_throw_facts());
+        db.seeded_stdlib_interface = Some(db.empty_seeded_stdlib_interface());
         db
     }
 
@@ -310,6 +338,26 @@ impl ProjectDatabase {
             .seeded_throw_facts
             .expect("SeededThrowFacts input is created in ProjectDatabase::new");
         seeds.set_by_path(self).to(by_path);
+    }
+
+    /// Seed the stdlib packages' typed interfaces from a previous compile
+    /// (B-694 "export data"); keys are package names, values are
+    /// `borsh(PackageInterface)`.
+    ///
+    /// Mutates the always-present `SeededStdlibInterface` input (created in
+    /// `new`) through its Salsa setter, so it bumps the revision and correctly
+    /// invalidates any already-computed `package_interface` memo — it is safe to
+    /// call before *or* after queries have run. Only stdlib package names ever
+    /// appear in the map, so user packages are never seeded and always derive
+    /// their interface honestly.
+    pub fn set_seeded_stdlib_interface(
+        &mut self,
+        by_package: std::collections::BTreeMap<String, Vec<u8>>,
+    ) {
+        let seeds = self
+            .seeded_stdlib_interface
+            .expect("SeededStdlibInterface input is created in ProjectDatabase::new");
+        seeds.set_by_package(self).to(by_package);
     }
 
     pub fn get_source_files(&self) -> Vec<SourceFile> {
