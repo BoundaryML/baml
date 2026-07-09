@@ -800,6 +800,27 @@ function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst th
   $rust_io_function
 }
 
+/// BEP-049 §11. Coerce a tagged prompt's interpolated `values` for assembly so
+/// composites render the same as they do in an ordinary backtick string. The
+/// template desugaring pushes each `${expr}` into `values` *raw* (uncoerced),
+/// which is the right contract for a general tagged template — but the built-in
+/// `prompt` tag stringifies its content, so a class/array/map value reaching the
+/// assembler unrendered would silently produce an empty string (B-563). Route
+/// every value through `string.from` — BAML's implicit `to_string`, the exact
+/// conversion an ordinary `${expr}` applies (honoring `baml.ToString` overrides)
+/// — except a `Role` marker (from `${role(...)}`), which stays raw so
+/// `assemble_prompt_ast` can still use it to split the prompt into chat messages.
+function render_prompt_values(values: unknown[]) -> unknown[] throws never {
+  let rendered: unknown[] = []
+  for (let value in values) {
+    rendered.push(match (value) {
+      Role => value,
+      _ => string.from(value),
+    })
+  }
+  rendered
+}
+
 /// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
 /// string `ctx.output_format` exposes to a `prompt` body. The orchestrator
 /// calls this with the call's return type to populate `Context.output_format`,
@@ -853,7 +874,7 @@ function prompt(
 ) -> (Context) -> PromptAst throws never {
   let render = (ctx: Context) -> {
     let t = body(make_role, ctx)
-    assemble_prompt_ast(t.parts, t.values)
+    assemble_prompt_ast(t.parts, render_prompt_values(t.values))
   }
   render
 }
