@@ -33,6 +33,8 @@ class testing.TestCollector {
   prefix: string
   tests: testing.TestRegistration[]
   testsets: testing.TestSetRegistration[]
+  test_name_counts: map<string, int>
+  testset_name_counts: map<string, int>
 }
 class testing.TestRegistration {
   name: string
@@ -81,7 +83,7 @@ function testing.expand_set(self: ?, name: string) -> testing.SerializedTestDef[
   { for ts in self.collector.testsets {  } if (ts.name Eq name) { self.expand_testset_registry(ts); return self.serialize() }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "/")) { return sub.expand_set(name) }; throw "TestSet not found..." Add name }
 }
 function testing.expand_testset_registry(self: ?, ts: testing.TestSetRegistration) -> testing.TestRegistry  [expr] {
-  {  } match (self.expansions.get(ts.name)) { existing: testing.TestRegistry => existing, null => { let start = baml.sys.now_ms(); let sub_collector = testing.TestCollector { prefix: ts.name, tests: [], testsets: [] }; ts.collector(sub_collector); let elapsed = baml.sys.now_ms() Sub start; let sub_registry = testing.TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed }; self.expansions.set(ts.name, sub_registry) } sub_registry }
+  {  } match (self.expansions.get(ts.name)) { existing: testing.TestRegistry => existing, null => { let start = baml.sys.now_ms(); let sub_collector = testing.TestCollector { prefix: ts.name, tests: [], testsets: [], test_name_counts: map {  }, testset_name_counts: map {  } }; ts.collector(sub_collector); let elapsed = baml.sys.now_ms() Sub start; let sub_registry = testing.TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed }; self.expansions.set(ts.name, sub_registry) } sub_registry }
 }
 function testing.expansion_error_report(name: string) -> TestSetReport  [expr] {
   {  } TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name Add "/(testset error)"], results: [] }
@@ -111,16 +113,16 @@ function testing.new(collector: testing.TestCollector) -> testing.TestRegistry  
   {  } testing.TestRegistry { collector: collector, expansions: map {  }, loading_time_ms: 0 }
 }
 function testing.new(prefix: string) -> testing.TestCollector  [expr] {
-  {  } testing.TestCollector { prefix: prefix, tests: [], testsets: [] }
+  {  } testing.TestCollector { prefix: prefix, tests: [], testsets: [], test_name_counts: map {  }, testset_name_counts: map {  } }
 }
 function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[]  [expr] {
   { let out: testing.FilterPat[] = []; for s in raw {  } if let idx: int = s.index_of("::") {  } out.push(testing.FilterPat { func_pat: s.substring(0, idx), test_pat: s.substring(idx Add 2, s.length()) }) else { out.push(testing.FilterPat { func_pat: s, test_pat: "" }) } out.push(testing.FilterPat { func_pat: "", test_pat: s }) } out
 }
 function testing.register_test(self: ?, name: string, body: TestBody, runner: TestRunner?) -> void  [expr] {
-  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for t in self.tests {  } if (t.name Eq full_name Or t.name.starts_with(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add string.from(count Add 1) else {  } full_name; let _ = self.tests.push(testing.TestRegistration { name: final_name, body: body, runner: runner }) }
+  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = match (self.test_name_counts.get(full_name)) { c: int => c, null => 0 }; let final_name = if (count Gt 0) {  } full_name Add "#" Add string.from(count Add 1) else {  } full_name; self.test_name_counts.set(full_name, count Add 1); let _ = self.tests.push(testing.TestRegistration { name: final_name, body: body, runner: runner }) }
 }
 function testing.register_test_set(self: ?, name: string, collector: TestSetBody, runner: TestSetRunner?) -> void  [expr] {
-  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = 0; let hash_prefix = full_name Add "#"; for ts in self.testsets {  } if (ts.name Eq full_name Or ts.name.starts_with(hash_prefix)) { count Add= 1 } else {  } null; let final_name = if (count Gt 0) {  } full_name Add "#" Add string.from(count Add 1) else {  } full_name; let _ = self.testsets.push(testing.TestSetRegistration { name: final_name, collector: collector, runner: runner }) }
+  { let full_name = if (self.prefix Eq "") {  } name else {  } self.prefix Add "/" Add name; let count = match (self.testset_name_counts.get(full_name)) { c: int => c, null => 0 }; let final_name = if (count Gt 0) {  } full_name Add "#" Add string.from(count Add 1) else {  } full_name; self.testset_name_counts.set(full_name, count Add 1); let _ = self.testsets.push(testing.TestSetRegistration { name: final_name, collector: collector, runner: runner }) }
 }
 function testing.run_all(self: ?) -> TestSetReport  [expr] {
   {  } root.run_testset(root.testset_children(self), null)
@@ -138,7 +140,7 @@ function testing.run_test(self: ?, name: string) -> TestReport  [expr] {
   { for t in self.collector.tests {  } if (t.name Eq name) { return root.run_test(t.body, t.runner) }; for k in self.expansions.keys() { let sub = self.expansions[k] } if (name.starts_with(k Add "/")) { return sub.run_test(name) }; throw "Test not found: " Add name }
 }
 function testing.run_test(body: TestBody, runner: TestRunner?) -> TestReport  [expr] {
-  { let base_run: TestReportThunk = () -> TestReport { { let start = baml.sys.now_ms(); let result = { body() } RunReport { outcome: "pass", duration_ms: 0, message: null } catch_all (e) { p: baml.panics.UserPanic => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, p: baml.panics.AssertionFailed => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, baml.panics.Panic => {  } RunReport { outcome: "fail", duration_ms: 0, message: null }, _ => {  } RunReport { outcome: "fail", duration_ms: 0, message: null } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start, message: result.message }] } } } match (runner) { null => base_run(), r: TestRunner => { let wrapped: TestReportThunk = r(base_run) } wrapped() }
+  { let base_run: TestReportThunk = () -> TestReport { { let start = baml.sys.now_ms(); let timeout_ms = match (baml.env.get("BAML_TEST_TIMEOUT_MS") catch (e) { _ => null }) { t: string => int.parse(t) catch (e) { _ => 300000 }, _ => 300000 }; let work: baml.future.Future<RunReport, null> = spawn { () -> { {  } { body() } RunReport { outcome: "pass", duration_ms: 0, message: null } catch_all (e) { p: baml.panics.UserPanic => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, p: baml.panics.AssertionFailed => {  } RunReport { outcome: "fail", duration_ms: 0, message: p.message }, baml.panics.Panic => {  } RunReport { outcome: "fail", duration_ms: 0, message: null }, _ => {  } RunReport { outcome: "fail", duration_ms: 0, message: null } } } }; let timer: baml.future.Future<RunReport, null> = spawn { () -> { { baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms)) catch (e) { _ => null } } RunReport { outcome: "fail", duration_ms: 0, message: "test timed out af..." Add timeout_ms.to_string() Add "ms (override with..." } } }; let result = await baml.future.race([work, timer]) catch_all (e) { _ => RunReport { outcome: "fail", duration_ms: 0, message: "test task failed ..." } } } TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() Sub start, message: result.message }] } } } match (runner) { null => base_run(), r: TestRunner => { let wrapped: TestReportThunk = r(base_run) } wrapped() }
 }
 function testing.run_testset(children: TestSetChild[], runner: TestSetRunner?) -> TestSetReport  [expr] {
   {  } match (runner) { null => root.run_children_parallel(children), r: TestSetRunner => r(children) }
@@ -176,7 +178,8 @@ lambda () in test_child: captures [body, runner]
 lambda () in testset_child: captures [registry, ts]
 lambda () in testset_child_selected: captures [registry, ts, names]
 lambda () in ?: captures [child]
-lambda () in run_test: captures [body]
+lambda () in ?: captures [body]
+lambda () in ?: captures [timeout_ms]
 
 --- <builtin>/testing/runners.baml ---
 function testing.FailFast() -> TestSetRunner  [expr] {

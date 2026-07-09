@@ -36,20 +36,11 @@ function generic_match_subtype.$init_test_ns_generic_match_subtype_generic_match
     return
 }
 
-function generic_match_subtype.Sq$stream.Shape.area(self: generic_match_subtype.Sq$stream) -> int {
-    load_var self
-    load_field .0
-    load_var self
-    load_field .0
-    mul_int
-    return
-}
-
 function generic_match_subtype.Sq.Shape.area(self: generic_match_subtype.Sq) -> int {
     load_var self
-    load_field .0
+    load_field .s
     load_var self
-    load_field .0
+    load_field .s
     mul_int
     return
 }

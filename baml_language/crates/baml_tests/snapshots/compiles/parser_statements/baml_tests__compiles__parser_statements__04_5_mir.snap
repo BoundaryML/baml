@@ -557,27 +557,27 @@ fn user.iterator_style_for_loop() -> int {
     let _6: bool
     let _7: unknown
     let _8: bool
-    let _9: bool
+    let _9: type
     let _10: type
     let _11: bool
     let _12: type
-    let _13: type
-    let _14: bool
-    let _15: type
-    let _16: type
-    let _17: type
+    let _13: bool
+    let _14: unknown
+    let _15: bool
+    let _16: unknown
+    let _17: bool
     let _18: bool
     let _19: type
     let _20: bool
-    let _21: unknown
-    let _22: bool
+    let _21: type
+    let _22: type
     let _23: type
-    let _24: type
-    let _25: type
+    let _24: bool
+    let _25: unknown
     let _26: bool
-    let _27: unknown
-    let _28: bool
-    let _29: unknown
+    let _27: type
+    let _28: type
+    let _29: type
     let _30: bool
     let _31: type
     let _32: type
@@ -603,48 +603,48 @@ fn user.iterator_style_for_loop() -> int {
     }
 
     bb3: {
-        _8 = is_type(copy _3, baml.iter.Range);
+        _8 = is_type(copy _3, baml.iter.StepBy<int, never>);
         branch copy _8 -> [bb23, bb4];
     }
 
     bb4: {
-        _9 = is_type(copy _3, baml.iter.ArrayIterator<int>);
-        branch copy _9 -> [bb22, bb5];
+        _11 = is_type(copy _3, baml.iter.Repeat<int>);
+        branch copy _11 -> [bb22, bb5];
     }
 
     bb5: {
-        _11 = is_type(copy _3, baml.iter.StepBy<int, never>);
-        branch copy _11 -> [bb21, bb6];
+        _13 = is_type(copy _3, baml.iter.FlatMap<_, int, never, never, never>);
+        branch copy _13 -> [bb21, bb6];
     }
 
     bb6: {
-        _14 = is_type(copy _3, baml.iter.Chain<int, never, never>);
-        branch copy _14 -> [bb20, bb7];
+        _15 = is_type(copy _3, baml.iter.FilterMap<_, int, never, never>);
+        branch copy _15 -> [bb20, bb7];
     }
 
     bb7: {
-        _18 = is_type(copy _3, baml.iter.Repeat<int>);
-        branch copy _18 -> [bb19, bb8];
+        _17 = is_type(copy _3, baml.iter.Range);
+        branch copy _17 -> [bb19, bb8];
     }
 
     bb8: {
-        _20 = is_type(copy _3, baml.iter.Map<_, int, never, never>);
-        branch copy _20 -> [bb18, bb9];
+        _18 = is_type(copy _3, baml.iter.ArrayIterator<int>);
+        branch copy _18 -> [bb18, bb9];
     }
 
     bb9: {
-        _22 = is_type(copy _3, baml.iter.Filter<int, never, never>);
-        branch copy _22 -> [bb17, bb10];
+        _20 = is_type(copy _3, baml.iter.Chain<int, never, never>);
+        branch copy _20 -> [bb17, bb10];
     }
 
     bb10: {
-        _26 = is_type(copy _3, baml.iter.FilterMap<_, int, never, never>);
-        branch copy _26 -> [bb16, bb11];
+        _24 = is_type(copy _3, baml.iter.Map<_, int, never, never>);
+        branch copy _24 -> [bb16, bb11];
     }
 
     bb11: {
-        _28 = is_type(copy _3, baml.iter.FlatMap<_, int, never, never, never>);
-        branch copy _28 -> [bb15, bb12];
+        _26 = is_type(copy _3, baml.iter.Filter<int, never, never>);
+        branch copy _26 -> [bb15, bb12];
     }
 
     bb12: {
@@ -663,52 +663,52 @@ fn user.iterator_style_for_loop() -> int {
     }
 
     bb15: {
-        _29 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _3);
-        _5 = call copy _29() -> [bb25];
+        _27 = load_type(int);
+        _28 = load_type(never);
+        _29 = load_type(never);
+        _5 = call const fn baml.iter.Filter.Iterator.next<copy _27, copy _28, copy _29>(copy _3) -> [bb25];
     }
 
     bb16: {
-        _27 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _3);
-        _5 = call copy _27() -> [bb25];
+        _25 = make_bound_method baml.iter.Map.Iterator.next(copy _3);
+        _5 = call copy _25() -> [bb25];
     }
 
     bb17: {
-        _23 = load_type(int);
-        _24 = load_type(never);
-        _25 = load_type(never);
-        _5 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _3) -> [bb25];
+        _21 = load_type(int);
+        _22 = load_type(never);
+        _23 = load_type(never);
+        _5 = call const fn baml.iter.Chain.Iterator.next<copy _21, copy _22, copy _23>(copy _3) -> [bb25];
     }
 
     bb18: {
-        _21 = make_bound_method baml.iter.Map.Iterator.next(copy _3);
-        _5 = call copy _21() -> [bb25];
+        _19 = load_type(int);
+        _5 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _19>(copy _3) -> [bb25];
     }
 
     bb19: {
-        _19 = load_type(int);
-        _5 = call const fn baml.iter.Repeat.Iterator.next<copy _19>(copy _3) -> [bb25];
+        _5 = call const fn baml.iter.Range.Iterator.next(copy _3) -> [bb25];
     }
 
     bb20: {
-        _15 = load_type(int);
-        _16 = load_type(never);
-        _17 = load_type(never);
-        _5 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _3) -> [bb25];
+        _16 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _3);
+        _5 = call copy _16() -> [bb25];
     }
 
     bb21: {
-        _12 = load_type(int);
-        _13 = load_type(never);
-        _5 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _3) -> [bb25];
+        _14 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _3);
+        _5 = call copy _14() -> [bb25];
     }
 
     bb22: {
-        _10 = load_type(int);
-        _5 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _10>(copy _3) -> [bb25];
+        _12 = load_type(int);
+        _5 = call const fn baml.iter.Repeat.Iterator.next<copy _12>(copy _3) -> [bb25];
     }
 
     bb23: {
-        _5 = call const fn baml.iter.Range.Iterator.next(copy _3) -> [bb25];
+        _9 = load_type(int);
+        _10 = load_type(never);
+        _5 = call const fn baml.iter.StepBy.Iterator.next<copy _9, copy _10>(copy _3) -> [bb25];
     }
 
     bb24: {
@@ -751,27 +751,27 @@ fn user.nested_for_loop() -> int {
     let _6: bool
     let _7: unknown
     let _8: bool
-    let _9: bool
+    let _9: type
     let _10: type
     let _11: bool
     let _12: type
-    let _13: type
-    let _14: bool
-    let _15: type
-    let _16: type
-    let _17: type
+    let _13: bool
+    let _14: unknown
+    let _15: bool
+    let _16: unknown
+    let _17: bool
     let _18: bool
     let _19: type
     let _20: bool
-    let _21: unknown
-    let _22: bool
+    let _21: type
+    let _22: type
     let _23: type
-    let _24: type
-    let _25: type
+    let _24: bool
+    let _25: unknown
     let _26: bool
-    let _27: unknown
-    let _28: bool
-    let _29: unknown
+    let _27: type
+    let _28: type
+    let _29: type
     let _30: bool
     let _31: type
     let _32: type
@@ -785,27 +785,27 @@ fn user.nested_for_loop() -> int {
     let _40: bool
     let _41: unknown
     let _42: bool
-    let _43: bool
+    let _43: type
     let _44: type
     let _45: bool
     let _46: type
-    let _47: type
-    let _48: bool
-    let _49: type
-    let _50: type
-    let _51: type
+    let _47: bool
+    let _48: unknown
+    let _49: bool
+    let _50: unknown
+    let _51: bool
     let _52: bool
     let _53: type
     let _54: bool
-    let _55: unknown
-    let _56: bool
+    let _55: type
+    let _56: type
     let _57: type
-    let _58: type
-    let _59: type
+    let _58: bool
+    let _59: unknown
     let _60: bool
-    let _61: unknown
-    let _62: bool
-    let _63: unknown
+    let _61: type
+    let _62: type
+    let _63: type
     let _64: bool
     let _65: type
     let _66: type
@@ -833,48 +833,48 @@ fn user.nested_for_loop() -> int {
     }
 
     bb3: {
-        _8 = is_type(copy _3, baml.iter.Range);
+        _8 = is_type(copy _3, baml.iter.StepBy<int, never>);
         branch copy _8 -> [bb23, bb4];
     }
 
     bb4: {
-        _9 = is_type(copy _3, baml.iter.ArrayIterator<int>);
-        branch copy _9 -> [bb22, bb5];
+        _11 = is_type(copy _3, baml.iter.Repeat<int>);
+        branch copy _11 -> [bb22, bb5];
     }
 
     bb5: {
-        _11 = is_type(copy _3, baml.iter.StepBy<int, never>);
-        branch copy _11 -> [bb21, bb6];
+        _13 = is_type(copy _3, baml.iter.FlatMap<_, int, never, never, never>);
+        branch copy _13 -> [bb21, bb6];
     }
 
     bb6: {
-        _14 = is_type(copy _3, baml.iter.Chain<int, never, never>);
-        branch copy _14 -> [bb20, bb7];
+        _15 = is_type(copy _3, baml.iter.FilterMap<_, int, never, never>);
+        branch copy _15 -> [bb20, bb7];
     }
 
     bb7: {
-        _18 = is_type(copy _3, baml.iter.Repeat<int>);
-        branch copy _18 -> [bb19, bb8];
+        _17 = is_type(copy _3, baml.iter.Range);
+        branch copy _17 -> [bb19, bb8];
     }
 
     bb8: {
-        _20 = is_type(copy _3, baml.iter.Map<_, int, never, never>);
-        branch copy _20 -> [bb18, bb9];
+        _18 = is_type(copy _3, baml.iter.ArrayIterator<int>);
+        branch copy _18 -> [bb18, bb9];
     }
 
     bb9: {
-        _22 = is_type(copy _3, baml.iter.Filter<int, never, never>);
-        branch copy _22 -> [bb17, bb10];
+        _20 = is_type(copy _3, baml.iter.Chain<int, never, never>);
+        branch copy _20 -> [bb17, bb10];
     }
 
     bb10: {
-        _26 = is_type(copy _3, baml.iter.FilterMap<_, int, never, never>);
-        branch copy _26 -> [bb16, bb11];
+        _24 = is_type(copy _3, baml.iter.Map<_, int, never, never>);
+        branch copy _24 -> [bb16, bb11];
     }
 
     bb11: {
-        _28 = is_type(copy _3, baml.iter.FlatMap<_, int, never, never, never>);
-        branch copy _28 -> [bb15, bb12];
+        _26 = is_type(copy _3, baml.iter.Filter<int, never, never>);
+        branch copy _26 -> [bb15, bb12];
     }
 
     bb12: {
@@ -893,52 +893,52 @@ fn user.nested_for_loop() -> int {
     }
 
     bb15: {
-        _29 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _3);
-        _5 = call copy _29() -> [bb25];
+        _27 = load_type(int);
+        _28 = load_type(never);
+        _29 = load_type(never);
+        _5 = call const fn baml.iter.Filter.Iterator.next<copy _27, copy _28, copy _29>(copy _3) -> [bb25];
     }
 
     bb16: {
-        _27 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _3);
-        _5 = call copy _27() -> [bb25];
+        _25 = make_bound_method baml.iter.Map.Iterator.next(copy _3);
+        _5 = call copy _25() -> [bb25];
     }
 
     bb17: {
-        _23 = load_type(int);
-        _24 = load_type(never);
-        _25 = load_type(never);
-        _5 = call const fn baml.iter.Filter.Iterator.next<copy _23, copy _24, copy _25>(copy _3) -> [bb25];
+        _21 = load_type(int);
+        _22 = load_type(never);
+        _23 = load_type(never);
+        _5 = call const fn baml.iter.Chain.Iterator.next<copy _21, copy _22, copy _23>(copy _3) -> [bb25];
     }
 
     bb18: {
-        _21 = make_bound_method baml.iter.Map.Iterator.next(copy _3);
-        _5 = call copy _21() -> [bb25];
+        _19 = load_type(int);
+        _5 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _19>(copy _3) -> [bb25];
     }
 
     bb19: {
-        _19 = load_type(int);
-        _5 = call const fn baml.iter.Repeat.Iterator.next<copy _19>(copy _3) -> [bb25];
+        _5 = call const fn baml.iter.Range.Iterator.next(copy _3) -> [bb25];
     }
 
     bb20: {
-        _15 = load_type(int);
-        _16 = load_type(never);
-        _17 = load_type(never);
-        _5 = call const fn baml.iter.Chain.Iterator.next<copy _15, copy _16, copy _17>(copy _3) -> [bb25];
+        _16 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _3);
+        _5 = call copy _16() -> [bb25];
     }
 
     bb21: {
-        _12 = load_type(int);
-        _13 = load_type(never);
-        _5 = call const fn baml.iter.StepBy.Iterator.next<copy _12, copy _13>(copy _3) -> [bb25];
+        _14 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _3);
+        _5 = call copy _14() -> [bb25];
     }
 
     bb22: {
-        _10 = load_type(int);
-        _5 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _10>(copy _3) -> [bb25];
+        _12 = load_type(int);
+        _5 = call const fn baml.iter.Repeat.Iterator.next<copy _12>(copy _3) -> [bb25];
     }
 
     bb23: {
-        _5 = call const fn baml.iter.Range.Iterator.next(copy _3) -> [bb25];
+        _9 = load_type(int);
+        _10 = load_type(never);
+        _5 = call const fn baml.iter.StepBy.Iterator.next<copy _9, copy _10>(copy _3) -> [bb25];
     }
 
     bb24: {
@@ -970,48 +970,48 @@ fn user.nested_for_loop() -> int {
     }
 
     bb29: {
-        _42 = is_type(copy _37, baml.iter.Range);
+        _42 = is_type(copy _37, baml.iter.StepBy<int, never>);
         branch copy _42 -> [bb49, bb30];
     }
 
     bb30: {
-        _43 = is_type(copy _37, baml.iter.ArrayIterator<int>);
-        branch copy _43 -> [bb48, bb31];
+        _45 = is_type(copy _37, baml.iter.Repeat<int>);
+        branch copy _45 -> [bb48, bb31];
     }
 
     bb31: {
-        _45 = is_type(copy _37, baml.iter.StepBy<int, never>);
-        branch copy _45 -> [bb47, bb32];
+        _47 = is_type(copy _37, baml.iter.FlatMap<_, int, never, never, never>);
+        branch copy _47 -> [bb47, bb32];
     }
 
     bb32: {
-        _48 = is_type(copy _37, baml.iter.Chain<int, never, never>);
-        branch copy _48 -> [bb46, bb33];
+        _49 = is_type(copy _37, baml.iter.FilterMap<_, int, never, never>);
+        branch copy _49 -> [bb46, bb33];
     }
 
     bb33: {
-        _52 = is_type(copy _37, baml.iter.Repeat<int>);
-        branch copy _52 -> [bb45, bb34];
+        _51 = is_type(copy _37, baml.iter.Range);
+        branch copy _51 -> [bb45, bb34];
     }
 
     bb34: {
-        _54 = is_type(copy _37, baml.iter.Map<_, int, never, never>);
-        branch copy _54 -> [bb44, bb35];
+        _52 = is_type(copy _37, baml.iter.ArrayIterator<int>);
+        branch copy _52 -> [bb44, bb35];
     }
 
     bb35: {
-        _56 = is_type(copy _37, baml.iter.Filter<int, never, never>);
-        branch copy _56 -> [bb43, bb36];
+        _54 = is_type(copy _37, baml.iter.Chain<int, never, never>);
+        branch copy _54 -> [bb43, bb36];
     }
 
     bb36: {
-        _60 = is_type(copy _37, baml.iter.FilterMap<_, int, never, never>);
-        branch copy _60 -> [bb42, bb37];
+        _58 = is_type(copy _37, baml.iter.Map<_, int, never, never>);
+        branch copy _58 -> [bb42, bb37];
     }
 
     bb37: {
-        _62 = is_type(copy _37, baml.iter.FlatMap<_, int, never, never, never>);
-        branch copy _62 -> [bb41, bb38];
+        _60 = is_type(copy _37, baml.iter.Filter<int, never, never>);
+        branch copy _60 -> [bb41, bb38];
     }
 
     bb38: {
@@ -1030,52 +1030,52 @@ fn user.nested_for_loop() -> int {
     }
 
     bb41: {
-        _63 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _37);
-        _39 = call copy _63() -> [bb51];
+        _61 = load_type(int);
+        _62 = load_type(never);
+        _63 = load_type(never);
+        _39 = call const fn baml.iter.Filter.Iterator.next<copy _61, copy _62, copy _63>(copy _37) -> [bb51];
     }
 
     bb42: {
-        _61 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _37);
-        _39 = call copy _61() -> [bb51];
+        _59 = make_bound_method baml.iter.Map.Iterator.next(copy _37);
+        _39 = call copy _59() -> [bb51];
     }
 
     bb43: {
-        _57 = load_type(int);
-        _58 = load_type(never);
-        _59 = load_type(never);
-        _39 = call const fn baml.iter.Filter.Iterator.next<copy _57, copy _58, copy _59>(copy _37) -> [bb51];
+        _55 = load_type(int);
+        _56 = load_type(never);
+        _57 = load_type(never);
+        _39 = call const fn baml.iter.Chain.Iterator.next<copy _55, copy _56, copy _57>(copy _37) -> [bb51];
     }
 
     bb44: {
-        _55 = make_bound_method baml.iter.Map.Iterator.next(copy _37);
-        _39 = call copy _55() -> [bb51];
+        _53 = load_type(int);
+        _39 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _53>(copy _37) -> [bb51];
     }
 
     bb45: {
-        _53 = load_type(int);
-        _39 = call const fn baml.iter.Repeat.Iterator.next<copy _53>(copy _37) -> [bb51];
+        _39 = call const fn baml.iter.Range.Iterator.next(copy _37) -> [bb51];
     }
 
     bb46: {
-        _49 = load_type(int);
-        _50 = load_type(never);
-        _51 = load_type(never);
-        _39 = call const fn baml.iter.Chain.Iterator.next<copy _49, copy _50, copy _51>(copy _37) -> [bb51];
+        _50 = make_bound_method baml.iter.FilterMap.Iterator.next(copy _37);
+        _39 = call copy _50() -> [bb51];
     }
 
     bb47: {
-        _46 = load_type(int);
-        _47 = load_type(never);
-        _39 = call const fn baml.iter.StepBy.Iterator.next<copy _46, copy _47>(copy _37) -> [bb51];
+        _48 = make_bound_method baml.iter.FlatMap.Iterator.next(copy _37);
+        _39 = call copy _48() -> [bb51];
     }
 
     bb48: {
-        _44 = load_type(int);
-        _39 = call const fn baml.iter.ArrayIterator.Iterator.next<copy _44>(copy _37) -> [bb51];
+        _46 = load_type(int);
+        _39 = call const fn baml.iter.Repeat.Iterator.next<copy _46>(copy _37) -> [bb51];
     }
 
     bb49: {
-        _39 = call const fn baml.iter.Range.Iterator.next(copy _37) -> [bb51];
+        _43 = load_type(int);
+        _44 = load_type(never);
+        _39 = call const fn baml.iter.StepBy.Iterator.next<copy _43, copy _44>(copy _37) -> [bb51];
     }
 
     bb50: {

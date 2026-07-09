@@ -1451,7 +1451,13 @@ fn package_lowering_data<'db>(
     db: &'db dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> PackageLoweringData {
-    use baml_compiler2_hir::package::{package_dependencies, package_items};
+    use baml_compiler2_hir::package::package_dependencies;
+    // The canonical (PPIR-merged) package items, NOT HIR's: the field/enum
+    // schema maps must cover PPIR-synthesized `*$stream` classes, or a typed
+    // partial's field access (`part.title` on `Meeting$stream`) silently
+    // falls to the dynamic map path while the runtime materializes SAP
+    // partials as class instances → `expected map, got instance` in the VM.
+    use baml_compiler2_ppir::package_items;
 
     // Cloned out of the tracked query's cached value once per package: this
     // struct is itself a per-package Salsa value and owns its env.

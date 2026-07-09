@@ -233,6 +233,11 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 // round-trip through TIR as `Ty::TypeVar` instead of collapsing
                 // to `Ty::Unknown`.
                 stream_class.methods.clear();
+                // With no methods it also cannot satisfy any interface: keeping
+                // the source's `implements` would register the partial as an
+                // implementor and add dead `is_type T$stream` arms to every
+                // interface match over that interface.
+                stream_class.implements.clear();
                 // Use a dummy span so the synthetic class doesn't shadow the
                 // original in offset-based scope lookup (scope_at_offset
                 // iterates in reverse and would find this scope first if it
@@ -951,13 +956,19 @@ pub fn namespace_items<'db>(
 pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> PackageItems<'db> {
     let package_name = package_id.name(db);
 
-    let mut ns_paths: std::collections::HashSet<Vec<Name>> = std::collections::HashSet::new();
+    // Sorted + deduped (not `HashSet`, whose random seed varies per process):
+    // consumers iterate the resulting `namespaces` map, and its insertion order
+    // must be deterministic or downstream lowering (e.g. MIR's field/implementor
+    // schema maps) reorders temps between runs and breaks bytecode snapshots.
+    let mut ns_paths: Vec<Vec<Name>> = Vec::new();
     for file in baml_compiler2_hir::compiler2_all_files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         if pkg_info.package == *package_name {
-            ns_paths.insert(pkg_info.namespace_path.clone());
+            ns_paths.push(pkg_info.namespace_path.clone());
         }
     }
+    ns_paths.sort();
+    ns_paths.dedup();
 
     let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();

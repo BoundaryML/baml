@@ -816,49 +816,49 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
 
   L1:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _3
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _3
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _3
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _3
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _3
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _3
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _3
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -874,15 +874,17 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     jump L19
 
   L10:
+    load_type patterns_new_runtime.BoxT<int>
+    load_type never
+    load_type never
     load_var _3
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _5
     jump L19
 
   L11:
     load_var _3
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _5
     jump L19
@@ -892,45 +894,43 @@ function patterns_new_runtime.from_array_boxes(boxes: patterns_new_runtime.BoxT<
     load_type never
     load_type never
     load_var _3
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     store_var _5
     jump L19
 
   L13:
+    load_type patterns_new_runtime.BoxT<int>
     load_var _3
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _5
     jump L19
 
   L14:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L15:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L16:
     load_type patterns_new_runtime.BoxT<int>
     load_var _3
     call baml.iter.Repeat.Iterator.next
     store_var _5
     jump L19
 
-  L15:
-    load_type patterns_new_runtime.BoxT<int>
-    load_type never
-    load_type never
-    load_var _3
-    call baml.iter.Chain.Iterator.next
-    store_var _5
-    jump L19
-
-  L16:
+  L17:
     load_type patterns_new_runtime.BoxT<int>
     load_type never
     load_var _3
     call baml.iter.StepBy.Iterator.next
-    store_var _5
-    jump L19
-
-  L17:
-    load_type patterns_new_runtime.BoxT<int>
-    load_var _3
-    call baml.iter.ArrayIterator.Iterator.next
     store_var _5
     jump L19
 
@@ -3285,49 +3285,49 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
 
   L1:
     load_var _13
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _13
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _13
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _13
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _13
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _13
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _13
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _13
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -3343,15 +3343,17 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
     jump L19
 
   L10:
+    load_type patterns_new_runtime.UserCoord
+    load_type never
+    load_type never
     load_var _13
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _15
     jump L19
 
   L11:
     load_var _13
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _15
     jump L19
@@ -3361,45 +3363,43 @@ function patterns_new_runtime.test_for_class_binds_inner_zip() -> int {
     load_type never
     load_type never
     load_var _13
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     store_var _15
     jump L19
 
   L13:
+    load_type patterns_new_runtime.UserCoord
     load_var _13
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _15
     jump L19
 
   L14:
+    load_var _13
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _15
+    jump L19
+
+  L15:
+    load_var _13
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _15
+    jump L19
+
+  L16:
     load_type patterns_new_runtime.UserCoord
     load_var _13
     call baml.iter.Repeat.Iterator.next
     store_var _15
     jump L19
 
-  L15:
-    load_type patterns_new_runtime.UserCoord
-    load_type never
-    load_type never
-    load_var _13
-    call baml.iter.Chain.Iterator.next
-    store_var _15
-    jump L19
-
-  L16:
+  L17:
     load_type patterns_new_runtime.UserCoord
     load_type never
     load_var _13
     call baml.iter.StepBy.Iterator.next
-    store_var _15
-    jump L19
-
-  L17:
-    load_type patterns_new_runtime.UserCoord
-    load_var _13
-    call baml.iter.ArrayIterator.Iterator.next
     store_var _15
     jump L19
 
@@ -3465,49 +3465,49 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
 
   L1:
     load_var _13
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _13
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _13
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _13
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _13
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _13
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _13
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _13
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -3523,15 +3523,17 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     jump L19
 
   L10:
+    load_type patterns_new_runtime.UserCoord
+    load_type never
+    load_type never
     load_var _13
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _15
     jump L19
 
   L11:
     load_var _13
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _15
     jump L19
@@ -3541,45 +3543,43 @@ function patterns_new_runtime.test_for_deep_class_capture_fresh() -> int {
     load_type never
     load_type never
     load_var _13
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     store_var _15
     jump L19
 
   L13:
+    load_type patterns_new_runtime.UserCoord
     load_var _13
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _15
     jump L19
 
   L14:
+    load_var _13
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _15
+    jump L19
+
+  L15:
+    load_var _13
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _15
+    jump L19
+
+  L16:
     load_type patterns_new_runtime.UserCoord
     load_var _13
     call baml.iter.Repeat.Iterator.next
     store_var _15
     jump L19
 
-  L15:
-    load_type patterns_new_runtime.UserCoord
-    load_type never
-    load_type never
-    load_var _13
-    call baml.iter.Chain.Iterator.next
-    store_var _15
-    jump L19
-
-  L16:
+  L17:
     load_type patterns_new_runtime.UserCoord
     load_type never
     load_var _13
     call baml.iter.StepBy.Iterator.next
-    store_var _15
-    jump L19
-
-  L17:
-    load_type patterns_new_runtime.UserCoord
-    load_var _13
-    call baml.iter.ArrayIterator.Iterator.next
     store_var _15
     jump L19
 
@@ -3670,49 +3670,49 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
 
   L1:
     load_var _13
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _13
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _13
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _13
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _13
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _13
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _13
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _13
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -3728,15 +3728,17 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
     jump L19
 
   L10:
+    load_type patterns_new_runtime.UserCoord
+    load_type never
+    load_type never
     load_var _13
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _15
     jump L19
 
   L11:
     load_var _13
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _15
     jump L19
@@ -3746,45 +3748,43 @@ function patterns_new_runtime.test_for_deep_class_sums() -> int {
     load_type never
     load_type never
     load_var _13
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     store_var _15
     jump L19
 
   L13:
+    load_type patterns_new_runtime.UserCoord
     load_var _13
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _15
     jump L19
 
   L14:
+    load_var _13
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _15
+    jump L19
+
+  L15:
+    load_var _13
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _15
+    jump L19
+
+  L16:
     load_type patterns_new_runtime.UserCoord
     load_var _13
     call baml.iter.Repeat.Iterator.next
     store_var _15
     jump L19
 
-  L15:
-    load_type patterns_new_runtime.UserCoord
-    load_type never
-    load_type never
-    load_var _13
-    call baml.iter.Chain.Iterator.next
-    store_var _15
-    jump L19
-
-  L16:
+  L17:
     load_type patterns_new_runtime.UserCoord
     load_type never
     load_var _13
     call baml.iter.StepBy.Iterator.next
-    store_var _15
-    jump L19
-
-  L17:
-    load_type patterns_new_runtime.UserCoord
-    load_var _13
-    call baml.iter.ArrayIterator.Iterator.next
     store_var _15
     jump L19
 
@@ -3846,49 +3846,49 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
 
   L1:
     load_var _10
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _10
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _10
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _10
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _10
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _10
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _10
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _10
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -3904,15 +3904,17 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     jump L19
 
   L10:
+    load_type patterns_new_runtime.Team1
+    load_type never
+    load_type never
     load_var _10
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _12
     jump L19
 
   L11:
     load_var _10
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _12
     jump L19
@@ -3922,45 +3924,43 @@ function patterns_new_runtime.test_for_inside_class_destruct() -> int {
     load_type never
     load_type never
     load_var _10
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     store_var _12
     jump L19
 
   L13:
+    load_type patterns_new_runtime.Team1
     load_var _10
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _12
     jump L19
 
   L14:
+    load_var _10
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _12
+    jump L19
+
+  L15:
+    load_var _10
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _12
+    jump L19
+
+  L16:
     load_type patterns_new_runtime.Team1
     load_var _10
     call baml.iter.Repeat.Iterator.next
     store_var _12
     jump L19
 
-  L15:
-    load_type patterns_new_runtime.Team1
-    load_type never
-    load_type never
-    load_var _10
-    call baml.iter.Chain.Iterator.next
-    store_var _12
-    jump L19
-
-  L16:
+  L17:
     load_type patterns_new_runtime.Team1
     load_type never
     load_var _10
     call baml.iter.StepBy.Iterator.next
-    store_var _12
-    jump L19
-
-  L17:
-    load_type patterns_new_runtime.Team1
-    load_var _10
-    call baml.iter.ArrayIterator.Iterator.next
     store_var _12
     jump L19
 
@@ -4018,55 +4018,55 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
 
   L1:
     load_var _3
-    is_type baml.iter.Range
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L19
 
   L2:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var _3
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var _3
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var _3
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.Range
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var _3
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var _3
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var _3
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var _3
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L10
     jump L11
 
@@ -4082,15 +4082,17 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     jump L21
 
   L11:
+    load_type int
+    load_type never
+    load_type never
     load_var _3
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _5
     jump L21
 
   L12:
     load_var _3
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _5
     jump L21
@@ -4100,51 +4102,49 @@ function patterns_new_runtime.test_for_let_chain_alias_capture() -> int {
     load_type never
     load_type never
     load_var _3
-    call baml.iter.Filter.Iterator.next
-    store_var _5
-    jump L21
-
-  L14:
-    load_var _3
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L15:
-    load_type int
-    load_var _3
-    call baml.iter.Repeat.Iterator.next
-    store_var _5
-    jump L21
-
-  L16:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
     jump L21
 
-  L17:
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.StepBy.Iterator.next
-    store_var _5
-    jump L21
-
-  L18:
+  L14:
     load_type int
     load_var _3
     call baml.iter.ArrayIterator.Iterator.next
     store_var _5
     jump L21
 
-  L19:
+  L15:
     load_var _3
     call baml.iter.Range.Iterator.next
+    store_var _5
+    jump L21
+
+  L16:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L17:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L18:
+    load_type int
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L21
+
+  L19:
+    load_type int
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
     store_var _5
     jump L21
 
@@ -4227,55 +4227,55 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
 
   L1:
     load_var _3
-    is_type baml.iter.Range
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L19
 
   L2:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var _3
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var _3
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var _3
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.Range
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var _3
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var _3
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var _3
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var _3
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L10
     jump L11
 
@@ -4291,15 +4291,17 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
     jump L21
 
   L11:
+    load_type int
+    load_type never
+    load_type never
     load_var _3
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _5
     jump L21
 
   L12:
     load_var _3
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _5
     jump L21
@@ -4309,51 +4311,49 @@ function patterns_new_runtime.test_for_let_chain_of_bindings() -> int {
     load_type never
     load_type never
     load_var _3
-    call baml.iter.Filter.Iterator.next
-    store_var _5
-    jump L21
-
-  L14:
-    load_var _3
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L15:
-    load_type int
-    load_var _3
-    call baml.iter.Repeat.Iterator.next
-    store_var _5
-    jump L21
-
-  L16:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
     jump L21
 
-  L17:
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.StepBy.Iterator.next
-    store_var _5
-    jump L21
-
-  L18:
+  L14:
     load_type int
     load_var _3
     call baml.iter.ArrayIterator.Iterator.next
     store_var _5
     jump L21
 
-  L19:
+  L15:
     load_var _3
     call baml.iter.Range.Iterator.next
+    store_var _5
+    jump L21
+
+  L16:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L17:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L18:
+    load_type int
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L21
+
+  L19:
+    load_type int
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
     store_var _5
     jump L21
 
@@ -4413,49 +4413,49 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
 
   L1:
     load_var _5
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _5
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _5
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _5
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _5
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _5
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _5
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _5
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -4471,15 +4471,17 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     jump L19
 
   L10:
+    load_type int[]
+    load_type never
+    load_type never
     load_var _5
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _7
     jump L19
 
   L11:
     load_var _5
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _7
     jump L19
@@ -4489,45 +4491,43 @@ function patterns_new_runtime.test_for_let_chain_trailing_type() -> int {
     load_type never
     load_type never
     load_var _5
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     store_var _7
     jump L19
 
   L13:
+    load_type int[]
     load_var _5
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _7
     jump L19
 
   L14:
+    load_var _5
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _7
+    jump L19
+
+  L15:
+    load_var _5
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _7
+    jump L19
+
+  L16:
     load_type int[]
     load_var _5
     call baml.iter.Repeat.Iterator.next
     store_var _7
     jump L19
 
-  L15:
-    load_type int[]
-    load_type never
-    load_type never
-    load_var _5
-    call baml.iter.Chain.Iterator.next
-    store_var _7
-    jump L19
-
-  L16:
+  L17:
     load_type int[]
     load_type never
     load_var _5
     call baml.iter.StepBy.Iterator.next
-    store_var _7
-    jump L19
-
-  L17:
-    load_type int[]
-    load_var _5
-    call baml.iter.ArrayIterator.Iterator.next
     store_var _7
     jump L19
 
@@ -4596,55 +4596,55 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
 
   L1:
     load_var _3
-    is_type baml.iter.Range
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L19
 
   L2:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var _3
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var _3
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var _3
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.Range
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var _3
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var _3
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var _3
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var _3
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L10
     jump L11
 
@@ -4660,15 +4660,17 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
     jump L21
 
   L11:
+    load_type int
+    load_type never
+    load_type never
     load_var _3
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _5
     jump L21
 
   L12:
     load_var _3
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _5
     jump L21
@@ -4678,51 +4680,49 @@ function patterns_new_runtime.test_for_let_or_same_binding() -> int {
     load_type never
     load_type never
     load_var _3
-    call baml.iter.Filter.Iterator.next
-    store_var _5
-    jump L21
-
-  L14:
-    load_var _3
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L15:
-    load_type int
-    load_var _3
-    call baml.iter.Repeat.Iterator.next
-    store_var _5
-    jump L21
-
-  L16:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
     jump L21
 
-  L17:
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.StepBy.Iterator.next
-    store_var _5
-    jump L21
-
-  L18:
+  L14:
     load_type int
     load_var _3
     call baml.iter.ArrayIterator.Iterator.next
     store_var _5
     jump L21
 
-  L19:
+  L15:
     load_var _3
     call baml.iter.Range.Iterator.next
+    store_var _5
+    jump L21
+
+  L16:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L17:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L18:
+    load_type int
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L21
+
+  L19:
+    load_type int
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
     store_var _5
     jump L21
 
@@ -4774,55 +4774,55 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
 
   L1:
     load_var _3
-    is_type baml.iter.Range
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L19
 
   L2:
     load_var _3
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L18
 
   L3:
     load_var _3
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L17
 
   L4:
     load_var _3
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L16
 
   L5:
     load_var _3
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.Range
     pop_jump_if_false L6
     jump L15
 
   L6:
     load_var _3
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L7
     jump L14
 
   L7:
     load_var _3
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L8
     jump L13
 
   L8:
     load_var _3
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L9
     jump L12
 
   L9:
     load_var _3
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L10
     jump L11
 
@@ -4838,15 +4838,17 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
     jump L21
 
   L11:
+    load_type int
+    load_type never
+    load_type never
     load_var _3
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _5
     jump L21
 
   L12:
     load_var _3
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _5
     jump L21
@@ -4856,51 +4858,49 @@ function patterns_new_runtime.test_for_let_or_six_bindings() -> int {
     load_type never
     load_type never
     load_var _3
-    call baml.iter.Filter.Iterator.next
-    store_var _5
-    jump L21
-
-  L14:
-    load_var _3
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
-    store_var _5
-    jump L21
-
-  L15:
-    load_type int
-    load_var _3
-    call baml.iter.Repeat.Iterator.next
-    store_var _5
-    jump L21
-
-  L16:
-    load_type int
-    load_type never
-    load_type never
-    load_var _3
     call baml.iter.Chain.Iterator.next
     store_var _5
     jump L21
 
-  L17:
-    load_type int
-    load_type never
-    load_var _3
-    call baml.iter.StepBy.Iterator.next
-    store_var _5
-    jump L21
-
-  L18:
+  L14:
     load_type int
     load_var _3
     call baml.iter.ArrayIterator.Iterator.next
     store_var _5
     jump L21
 
-  L19:
+  L15:
     load_var _3
     call baml.iter.Range.Iterator.next
+    store_var _5
+    jump L21
+
+  L16:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L17:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L21
+
+  L18:
+    load_type int
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L21
+
+  L19:
+    load_type int
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
     store_var _5
     jump L21
 
@@ -4958,49 +4958,49 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
 
   L1:
     load_var _6
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _6
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _6
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _6
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _6
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _6
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _6
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _6
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -5015,14 +5015,16 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     jump L19
 
   L10:
+    load_type int[] | never[]
+    load_type never
+    load_type never
     load_var _6
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     jump L19
 
   L11:
     load_var _6
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     jump L19
 
@@ -5031,40 +5033,38 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     load_type never
     load_type never
     load_var _6
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     jump L19
 
   L13:
+    load_type int[] | never[]
     load_var _6
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     jump L19
 
   L14:
+    load_var _6
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    jump L19
+
+  L15:
+    load_var _6
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    jump L19
+
+  L16:
     load_type int[] | never[]
     load_var _6
     call baml.iter.Repeat.Iterator.next
     jump L19
 
-  L15:
-    load_type int[] | never[]
-    load_type never
-    load_type never
-    load_var _6
-    call baml.iter.Chain.Iterator.next
-    jump L19
-
-  L16:
+  L17:
     load_type int[] | never[]
     load_type never
     load_var _6
     call baml.iter.StepBy.Iterator.next
-    jump L19
-
-  L17:
-    load_type int[] | never[]
-    load_var _6
-    call baml.iter.ArrayIterator.Iterator.next
     jump L19
 
   L18:
@@ -5125,49 +5125,49 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
 
   L1:
     load_var _7
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _7
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _7
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _7
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _7
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _7
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _7
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _7
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -5183,15 +5183,17 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     jump L19
 
   L10:
+    load_type int[]
+    load_type never
+    load_type never
     load_var _7
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _9
     jump L19
 
   L11:
     load_var _7
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _9
     jump L19
@@ -5201,45 +5203,43 @@ function patterns_new_runtime.test_for_rest_capture_fresh_cell() -> int {
     load_type never
     load_type never
     load_var _7
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     store_var _9
     jump L19
 
   L13:
+    load_type int[]
     load_var _7
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _9
     jump L19
 
   L14:
+    load_var _7
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _9
+    jump L19
+
+  L15:
+    load_var _7
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _9
+    jump L19
+
+  L16:
     load_type int[]
     load_var _7
     call baml.iter.Repeat.Iterator.next
     store_var _9
     jump L19
 
-  L15:
-    load_type int[]
-    load_type never
-    load_type never
-    load_var _7
-    call baml.iter.Chain.Iterator.next
-    store_var _9
-    jump L19
-
-  L16:
+  L17:
     load_type int[]
     load_type never
     load_var _7
     call baml.iter.StepBy.Iterator.next
-    store_var _9
-    jump L19
-
-  L17:
-    load_type int[]
-    load_var _7
-    call baml.iter.ArrayIterator.Iterator.next
     store_var _9
     jump L19
 
@@ -5325,49 +5325,49 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
 
   L1:
     load_var _7
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _7
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _7
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _7
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _7
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _7
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _7
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _7
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -5383,15 +5383,17 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     jump L19
 
   L10:
+    load_type int[]
+    load_type never
+    load_type never
     load_var _7
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     store_var _9
     jump L19
 
   L11:
     load_var _7
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     store_var _9
     jump L19
@@ -5401,45 +5403,43 @@ function patterns_new_runtime.test_for_rest_sums_rows() -> int {
     load_type never
     load_type never
     load_var _7
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     store_var _9
     jump L19
 
   L13:
+    load_type int[]
     load_var _7
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     store_var _9
     jump L19
 
   L14:
+    load_var _7
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _9
+    jump L19
+
+  L15:
+    load_var _7
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _9
+    jump L19
+
+  L16:
     load_type int[]
     load_var _7
     call baml.iter.Repeat.Iterator.next
     store_var _9
     jump L19
 
-  L15:
-    load_type int[]
-    load_type never
-    load_type never
-    load_var _7
-    call baml.iter.Chain.Iterator.next
-    store_var _9
-    jump L19
-
-  L16:
+  L17:
     load_type int[]
     load_type never
     load_var _7
     call baml.iter.StepBy.Iterator.next
-    store_var _9
-    jump L19
-
-  L17:
-    load_type int[]
-    load_var _7
-    call baml.iter.ArrayIterator.Iterator.next
     store_var _9
     jump L19
 
@@ -5498,49 +5498,49 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
 
   L1:
     load_var _7
-    is_type baml.iter.ArrayIterator<...>
+    is_type baml.iter.StepBy<...>
     pop_jump_if_false L2
     jump L17
 
   L2:
     load_var _7
-    is_type baml.iter.StepBy<...>
+    is_type baml.iter.Repeat<...>
     pop_jump_if_false L3
     jump L16
 
   L3:
     load_var _7
-    is_type baml.iter.Chain<...>
+    is_type baml.iter.FlatMap<...>
     pop_jump_if_false L4
     jump L15
 
   L4:
     load_var _7
-    is_type baml.iter.Repeat<...>
+    is_type baml.iter.FilterMap<...>
     pop_jump_if_false L5
     jump L14
 
   L5:
     load_var _7
-    is_type baml.iter.Map<...>
+    is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L6
     jump L13
 
   L6:
     load_var _7
-    is_type baml.iter.Filter<...>
+    is_type baml.iter.Chain<...>
     pop_jump_if_false L7
     jump L12
 
   L7:
     load_var _7
-    is_type baml.iter.FilterMap<...>
+    is_type baml.iter.Map<...>
     pop_jump_if_false L8
     jump L11
 
   L8:
     load_var _7
-    is_type baml.iter.FlatMap<...>
+    is_type baml.iter.Filter<...>
     pop_jump_if_false L9
     jump L10
 
@@ -5555,14 +5555,16 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
     jump L19
 
   L10:
+    load_type int[]
+    load_type never
+    load_type never
     load_var _7
-    make_bound_method baml.iter.FlatMap.Iterator.next
-    call_indirect
+    call baml.iter.Filter.Iterator.next
     jump L19
 
   L11:
     load_var _7
-    make_bound_method baml.iter.FilterMap.Iterator.next
+    make_bound_method baml.iter.Map.Iterator.next
     call_indirect
     jump L19
 
@@ -5571,40 +5573,38 @@ function patterns_new_runtime.test_for_rest_wildcard_irrefutable() -> int {
     load_type never
     load_type never
     load_var _7
-    call baml.iter.Filter.Iterator.next
+    call baml.iter.Chain.Iterator.next
     jump L19
 
   L13:
+    load_type int[]
     load_var _7
-    make_bound_method baml.iter.Map.Iterator.next
-    call_indirect
+    call baml.iter.ArrayIterator.Iterator.next
     jump L19
 
   L14:
+    load_var _7
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    jump L19
+
+  L15:
+    load_var _7
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    jump L19
+
+  L16:
     load_type int[]
     load_var _7
     call baml.iter.Repeat.Iterator.next
     jump L19
 
-  L15:
-    load_type int[]
-    load_type never
-    load_type never
-    load_var _7
-    call baml.iter.Chain.Iterator.next
-    jump L19
-
-  L16:
+  L17:
     load_type int[]
     load_type never
     load_var _7
     call baml.iter.StepBy.Iterator.next
-    jump L19
-
-  L17:
-    load_type int[]
-    load_var _7
-    call baml.iter.ArrayIterator.Iterator.next
     jump L19
 
   L18:

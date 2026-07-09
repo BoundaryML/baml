@@ -20,10 +20,12 @@ class testing.TestCollector {
   prefix: string
   tests: testing.TestRegistration[]
   testsets: testing.TestSetRegistration[]
+  test_name_counts: map<string, int>
+  testset_name_counts: map<string, int>
 }
 function testing.TestCollector.new(prefix: string) -> testing.TestCollector throws never {
   { : testing.TestCollector
-    TestCollector { prefix: prefix, tests: [], testsets: [] } : testing.TestCollector
+    TestCollector { prefix: prefix, tests: [], testsets: [], test_name_counts: map {  }, testset_name_counts: map {  } } : testing.TestCollector
   }
 }
 function testing.TestCollector.register_test(self: testing.TestCollector, name: string, body: testing.TestBody, runner: testing.TestRunner | null) -> void throws never {
@@ -37,19 +39,12 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
         { : string
           self.prefix + "/" + name : string
         }
-    let count = 0 : 0 -> int
-    let hash_prefix = full_name + "#" : string
-    for t in self.tests
-      { : void
-        if (t.name == full_name || t.name.starts_with(hash_prefix) : bool) : void
-          { : void
-            count Add= 1 : int
-          }
-        else
-          { : null
-            null : null
-          }
-      }
+    let count = : int | 0 -> int
+      match (self.test_name_counts.get(full_name) : int | null) : int | 0
+        c: int =>
+          c : int
+        null =>
+          0 : 0
     let final_name = : string
       if (count > 0 : bool) : string
         { : string
@@ -59,6 +54,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
         { : string
           full_name : string
         }
+    self.test_name_counts.set(full_name, count + 1) : int | null
     let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner }) : int
   }
 }
@@ -73,19 +69,12 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
         { : string
           self.prefix + "/" + name : string
         }
-    let count = 0 : 0 -> int
-    let hash_prefix = full_name + "#" : string
-    for ts in self.testsets
-      { : void
-        if (ts.name == full_name || ts.name.starts_with(hash_prefix) : bool) : void
-          { : void
-            count Add= 1 : int
-          }
-        else
-          { : null
-            null : null
-          }
-      }
+    let count = : int | 0 -> int
+      match (self.testset_name_counts.get(full_name) : int | null) : int | 0
+        c: int =>
+          c : int
+        null =>
+          0 : 0
     let final_name = : string
       if (count > 0 : bool) : string
         { : string
@@ -95,6 +84,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
         { : string
           full_name : string
         }
+    self.testset_name_counts.set(full_name, count + 1) : int | null
     let _ = self.testsets.push(TestSetRegistration { name: final_name, collector: collector, runner: runner }) : int
   }
 }
@@ -268,7 +258,7 @@ function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry
       null =>
         { : testing.TestRegistry
           let start = baml.sys.now_ms() : int
-          let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] } : testing.TestCollector
+          let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [], test_name_counts: map {  }, testset_name_counts: map {  } } : testing.TestCollector
           ts.collector(sub_collector) : void
           let elapsed = baml.sys.now_ms() - start : int
           let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
@@ -464,8 +454,12 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | n
       () -> TestReport { ... } : () -> testing.TestReport throws never
         {
           let start = baml.sys.now_ms()
+          let timeout_ms = ...
+            match (baml.env.get("BAML_TEST_TIMEOUT_MS") catch (e) { _ => null }) { t: string => int.parse(t) catch (e) { _ => 300000 }, _ => 300000 }
+          let work: baml.future.Future<RunReport, null> = spawn { () -> { ... } }
+          let timer: baml.future.Future<RunReport, null> = spawn { () -> { ... } }
           let result = ...
-            { 1 stmts + tail } catch_all (e) { p: baml.panics.UserPanic => { 0 stmts + tail }, p: baml.panics.AssertionFailed => { 0 stmts + tail }, baml.panics.Panic => { 0 stmts + tail }, _ => { 0 stmts + tail } }
+            await baml.future.race([work, timer]) catch_all (e) { _ => RunReport { outcome: "fail", duration_ms: 0, message: "test task failed ..." } }
           TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start, message: result.message }] }
         }
     match (runner : testing.TestRunner | null) : testing.TestReport
@@ -477,6 +471,10 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | n
           wrapped() : testing.TestReport
         }
   }
+}
+lambda testing.run_test {
+}
+lambda testing.run_test {
 }
 lambda testing.run_test {
 }
@@ -751,6 +749,8 @@ class testing.TestCollector$stream {
   prefix: string | null
   tests: testing.TestRegistration$stream[]
   testsets: testing.TestSetRegistration$stream[]
+  test_name_counts: map<string, int>
+  testset_name_counts: map<string, int>
 }
 class testing.SerializedTest$stream {
   type: string | null

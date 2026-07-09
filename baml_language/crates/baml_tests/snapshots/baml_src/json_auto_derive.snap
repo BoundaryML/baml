@@ -258,20 +258,9 @@ function json_auto_derive.$init_test_ns_json_auto_derive_json_auto_derive(regist
     return
 }
 
-function json_auto_derive.BAliasFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BAliasFrom$stream {
-    load_const 99
-    init_instance user.json_auto_derive.BAliasFrom .y
-    return
-}
-
 function json_auto_derive.BAliasFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BAliasFrom {
     load_const 99
     init_instance user.json_auto_derive.BAliasFrom .y
-    return
-}
-
-function json_auto_derive.BAliasTo$stream.baml.ToJson.to_json(self: json_auto_derive.BAliasTo$stream) -> baml.json.json {
-    load_const 42
     return
 }
 
@@ -280,19 +269,8 @@ function json_auto_derive.BAliasTo.baml.ToJson.to_json(self: json_auto_derive.BA
     return
 }
 
-function json_auto_derive.BArr$stream.baml.ToJson.to_json(self: json_auto_derive.BArr$stream) -> baml.json.json {
-    load_const 99
-    return
-}
-
 function json_auto_derive.BArr.baml.ToJson.to_json(self: json_auto_derive.BArr) -> baml.json.json {
     load_const 99
-    return
-}
-
-function json_auto_derive.BMapFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BMapFrom$stream {
-    load_const 0
-    init_instance user.json_auto_derive.BMapFrom .v
     return
 }
 
@@ -302,31 +280,14 @@ function json_auto_derive.BMapFrom.baml.FromJson.from_json(j: baml.json.json) ->
     return
 }
 
-function json_auto_derive.BOnlyFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOnlyFrom$stream {
-    load_const 99
-    init_instance user.json_auto_derive.BOnlyFrom .y
-    return
-}
-
 function json_auto_derive.BOnlyFrom.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOnlyFrom {
     load_const 99
     init_instance user.json_auto_derive.BOnlyFrom .y
     return
 }
 
-function json_auto_derive.BOnlyTo$stream.baml.ToJson.to_json(self: json_auto_derive.BOnlyTo$stream) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
 function json_auto_derive.BOnlyTo.baml.ToJson.to_json(self: json_auto_derive.BOnlyTo) -> baml.json.json {
     load_const "[redacted]"
-    return
-}
-
-function json_auto_derive.BOptFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOptFrom$stream {
-    load_const 99
-    init_instance user.json_auto_derive.BOptFrom .y
     return
 }
 
@@ -336,20 +297,9 @@ function json_auto_derive.BOptFrom.baml.FromJson.from_json(j: baml.json.json) ->
     return
 }
 
-function json_auto_derive.BOverride$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOverride$stream {
-    load_const 99
-    init_instance user.json_auto_derive.BOverride .y
-    return
-}
-
 function json_auto_derive.BOverride.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BOverride {
     load_const 99
     init_instance user.json_auto_derive.BOverride .y
-    return
-}
-
-function json_auto_derive.BSecret$stream.baml.ToJson.to_json(self: json_auto_derive.BSecret$stream) -> baml.json.json {
-    load_const "[secret]"
     return
 }
 
@@ -358,29 +308,13 @@ function json_auto_derive.BSecret.baml.ToJson.to_json(self: json_auto_derive.BSe
     return
 }
 
-function json_auto_derive.BStr$stream.baml.ToJson.to_json(self: json_auto_derive.BStr$stream) -> baml.json.json {
-    load_const "B"
-    return
-}
-
 function json_auto_derive.BStr.baml.ToJson.to_json(self: json_auto_derive.BStr) -> baml.json.json {
     load_const "B"
     return
 }
 
-function json_auto_derive.BZero$stream.baml.ToJson.to_json(self: json_auto_derive.BZero$stream) -> baml.json.json {
-    load_const 0
-    return
-}
-
 function json_auto_derive.BZero.baml.ToJson.to_json(self: json_auto_derive.BZero) -> baml.json.json {
     load_const 0
-    return
-}
-
-function json_auto_derive.BZeroFrom$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.BZeroFrom$stream {
-    load_const 0
-    init_instance user.json_auto_derive.BZeroFrom .y
     return
 }
 
@@ -402,23 +336,7 @@ function json_auto_derive.G.f(self: json_auto_derive.G<T>) -> baml.json.json[] {
     return
 }
 
-function json_auto_derive.Secret$stream.baml.ToJson.to_json(self: json_auto_derive.Secret$stream) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
 function json_auto_derive.Secret.baml.ToJson.to_json(self: json_auto_derive.Secret) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
-function json_auto_derive.SecretBoth$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretBoth$stream {
-    load_const "[reset]"
-    init_instance user.json_auto_derive.SecretBoth .data
-    return
-}
-
-function json_auto_derive.SecretBoth$stream.baml.ToJson.to_json(self: json_auto_derive.SecretBoth$stream) -> baml.json.json {
     load_const "[redacted]"
     return
 }
@@ -434,29 +352,13 @@ function json_auto_derive.SecretBoth.baml.ToJson.to_json(self: json_auto_derive.
     return
 }
 
-function json_auto_derive.SecretRedact$stream.baml.ToJson.to_json(self: json_auto_derive.SecretRedact$stream) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
 function json_auto_derive.SecretRedact.baml.ToJson.to_json(self: json_auto_derive.SecretRedact) -> baml.json.json {
-    load_const "[redacted]"
-    return
-}
-
-function json_auto_derive.SecretRedact2$stream.baml.ToJson.to_json(self: json_auto_derive.SecretRedact2$stream) -> baml.json.json {
     load_const "[redacted]"
     return
 }
 
 function json_auto_derive.SecretRedact2.baml.ToJson.to_json(self: json_auto_derive.SecretRedact2) -> baml.json.json {
     load_const "[redacted]"
-    return
-}
-
-function json_auto_derive.SecretReset$stream.baml.FromJson.from_json(j: baml.json.json) -> json_auto_derive.SecretReset$stream {
-    load_const "[reset]"
-    init_instance user.json_auto_derive.SecretReset .data
     return
 }
 
@@ -490,25 +392,25 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L1:
     load_var b
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L2
     jump L59
 
   L2:
     load_var b
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L3
     jump L58
 
   L3:
     load_var b
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L4
     jump L57
 
   L4:
     load_var b
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L5
     jump L56
 
@@ -526,13 +428,13 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L7:
     load_var b
-    is_type baml.time.PlainDate
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L8
     jump L53
 
   L8:
     load_var b
-    is_type baml.time.PlainDate
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L9
     jump L52
 
@@ -562,85 +464,85 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L13:
     load_var b
-    is_type json_auto_derive.Secret
+    is_type json_auto_derive.BSecret
     pop_jump_if_false L14
     jump L47
 
   L14:
     load_var b
-    is_type json_auto_derive.Secret
+    is_type json_auto_derive.BSecret
     pop_jump_if_false L15
     jump L46
 
   L15:
     load_var b
-    is_type json_auto_derive.BSecret
+    is_type json_auto_derive.BArr
     pop_jump_if_false L16
     jump L45
 
   L16:
     load_var b
-    is_type json_auto_derive.BSecret
+    is_type json_auto_derive.BArr
     pop_jump_if_false L17
     jump L44
 
   L17:
     load_var b
-    is_type json_auto_derive.SecretRedact2
+    is_type json_auto_derive.BAliasTo
     pop_jump_if_false L18
     jump L43
 
   L18:
     load_var b
-    is_type json_auto_derive.SecretRedact2
+    is_type json_auto_derive.BAliasTo
     pop_jump_if_false L19
     jump L42
 
   L19:
     load_var b
-    is_type json_auto_derive.BArr
+    is_type json_auto_derive.BStr
     pop_jump_if_false L20
     jump L41
 
   L20:
     load_var b
-    is_type json_auto_derive.BArr
+    is_type json_auto_derive.BStr
     pop_jump_if_false L21
     jump L40
 
   L21:
     load_var b
-    is_type json_auto_derive.BAliasTo
+    is_type json_auto_derive.SecretRedact
     pop_jump_if_false L22
     jump L39
 
   L22:
     load_var b
-    is_type json_auto_derive.BAliasTo
+    is_type json_auto_derive.SecretRedact
     pop_jump_if_false L23
     jump L38
 
   L23:
     load_var b
-    is_type json_auto_derive.BStr
+    is_type json_auto_derive.Secret
     pop_jump_if_false L24
     jump L37
 
   L24:
     load_var b
-    is_type json_auto_derive.BStr
+    is_type json_auto_derive.Secret
     pop_jump_if_false L25
     jump L36
 
   L25:
     load_var b
-    is_type json_auto_derive.SecretRedact
+    is_type json_auto_derive.SecretRedact2
     pop_jump_if_false L26
     jump L35
 
   L26:
     load_var b
-    is_type json_auto_derive.SecretRedact
+    is_type json_auto_derive.SecretRedact2
     pop_jump_if_false L27
     jump L34
 
@@ -697,7 +599,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L35:
     load_var b
-    call user.json_auto_derive.SecretRedact.baml.ToJson.to_json
+    call user.json_auto_derive.SecretRedact2.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -709,7 +611,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L37:
     load_var b
-    call user.json_auto_derive.BStr.baml.ToJson.to_json
+    call user.json_auto_derive.Secret.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -721,7 +623,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L39:
     load_var b
-    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
+    call user.json_auto_derive.SecretRedact.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -733,7 +635,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L41:
     load_var b
-    call user.json_auto_derive.BArr.baml.ToJson.to_json
+    call user.json_auto_derive.BStr.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -745,7 +647,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L43:
     load_var b
-    call user.json_auto_derive.SecretRedact2.baml.ToJson.to_json
+    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -757,7 +659,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L45:
     load_var b
-    call user.json_auto_derive.BSecret.baml.ToJson.to_json
+    call user.json_auto_derive.BArr.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -769,7 +671,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L47:
     load_var b
-    call user.json_auto_derive.Secret.baml.ToJson.to_json
+    call user.json_auto_derive.BSecret.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -805,7 +707,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L53:
     load_var b
-    call baml.time.PlainDate.baml.ToJson.to_json
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -829,7 +731,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L57:
     load_var b
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    call baml.time.PlainTime.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -841,7 +743,7 @@ function json_auto_derive.alias_chain_dispatch_to_json_val() -> int {
 
   L59:
     load_var b
-    call baml.time.PlainTime.baml.ToJson.to_json
+    call baml.time.PlainDate.baml.ToJson.to_json
     store_var j
     jump L62
 
@@ -1452,25 +1354,25 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L1:
     load_var s
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L2
     jump L59
 
   L2:
     load_var s
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L3
     jump L58
 
   L3:
     load_var s
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L4
     jump L57
 
   L4:
     load_var s
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L5
     jump L56
 
@@ -1488,13 +1390,13 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L7:
     load_var s
-    is_type baml.time.PlainDate
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L8
     jump L53
 
   L8:
     load_var s
-    is_type baml.time.PlainDate
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L9
     jump L52
 
@@ -1524,85 +1426,85 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L13:
     load_var s
-    is_type json_auto_derive.Secret
+    is_type json_auto_derive.BSecret
     pop_jump_if_false L14
     jump L47
 
   L14:
     load_var s
-    is_type json_auto_derive.Secret
+    is_type json_auto_derive.BSecret
     pop_jump_if_false L15
     jump L46
 
   L15:
     load_var s
-    is_type json_auto_derive.BSecret
+    is_type json_auto_derive.BArr
     pop_jump_if_false L16
     jump L45
 
   L16:
     load_var s
-    is_type json_auto_derive.BSecret
+    is_type json_auto_derive.BArr
     pop_jump_if_false L17
     jump L44
 
   L17:
     load_var s
-    is_type json_auto_derive.SecretRedact2
+    is_type json_auto_derive.BAliasTo
     pop_jump_if_false L18
     jump L43
 
   L18:
     load_var s
-    is_type json_auto_derive.SecretRedact2
+    is_type json_auto_derive.BAliasTo
     pop_jump_if_false L19
     jump L42
 
   L19:
     load_var s
-    is_type json_auto_derive.BArr
+    is_type json_auto_derive.BStr
     pop_jump_if_false L20
     jump L41
 
   L20:
     load_var s
-    is_type json_auto_derive.BArr
+    is_type json_auto_derive.BStr
     pop_jump_if_false L21
     jump L40
 
   L21:
     load_var s
-    is_type json_auto_derive.BAliasTo
+    is_type json_auto_derive.SecretRedact
     pop_jump_if_false L22
     jump L39
 
   L22:
     load_var s
-    is_type json_auto_derive.BAliasTo
+    is_type json_auto_derive.SecretRedact
     pop_jump_if_false L23
     jump L38
 
   L23:
     load_var s
-    is_type json_auto_derive.BStr
+    is_type json_auto_derive.Secret
     pop_jump_if_false L24
     jump L37
 
   L24:
     load_var s
-    is_type json_auto_derive.BStr
+    is_type json_auto_derive.Secret
     pop_jump_if_false L25
     jump L36
 
   L25:
     load_var s
-    is_type json_auto_derive.SecretRedact
+    is_type json_auto_derive.SecretRedact2
     pop_jump_if_false L26
     jump L35
 
   L26:
     load_var s
-    is_type json_auto_derive.SecretRedact
+    is_type json_auto_derive.SecretRedact2
     pop_jump_if_false L27
     jump L34
 
@@ -1654,7 +1556,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L35:
     load_var s
-    call user.json_auto_derive.SecretRedact.baml.ToJson.to_json
+    call user.json_auto_derive.SecretRedact2.baml.ToJson.to_json
     jump L62
 
   L36:
@@ -1664,7 +1566,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L37:
     load_var s
-    call user.json_auto_derive.BStr.baml.ToJson.to_json
+    call user.json_auto_derive.Secret.baml.ToJson.to_json
     jump L62
 
   L38:
@@ -1674,7 +1576,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L39:
     load_var s
-    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
+    call user.json_auto_derive.SecretRedact.baml.ToJson.to_json
     jump L62
 
   L40:
@@ -1684,7 +1586,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L41:
     load_var s
-    call user.json_auto_derive.BArr.baml.ToJson.to_json
+    call user.json_auto_derive.BStr.baml.ToJson.to_json
     jump L62
 
   L42:
@@ -1694,7 +1596,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L43:
     load_var s
-    call user.json_auto_derive.SecretRedact2.baml.ToJson.to_json
+    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
     jump L62
 
   L44:
@@ -1704,7 +1606,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L45:
     load_var s
-    call user.json_auto_derive.BSecret.baml.ToJson.to_json
+    call user.json_auto_derive.BArr.baml.ToJson.to_json
     jump L62
 
   L46:
@@ -1714,7 +1616,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L47:
     load_var s
-    call user.json_auto_derive.Secret.baml.ToJson.to_json
+    call user.json_auto_derive.BSecret.baml.ToJson.to_json
     jump L62
 
   L48:
@@ -1744,7 +1646,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L53:
     load_var s
-    call baml.time.PlainDate.baml.ToJson.to_json
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
     jump L62
 
   L54:
@@ -1764,7 +1666,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L57:
     load_var s
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    call baml.time.PlainTime.baml.ToJson.to_json
     jump L62
 
   L58:
@@ -1774,7 +1676,7 @@ function json_auto_derive.round_trip_with_overrides_both_directions_val() -> str
 
   L59:
     load_var s
-    call baml.time.PlainTime.baml.ToJson.to_json
+    call baml.time.PlainDate.baml.ToJson.to_json
     jump L62
 
   L60:
@@ -1848,25 +1750,25 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L1:
     load_var s
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L2
     jump L59
 
   L2:
     load_var s
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L3
     jump L58
 
   L3:
     load_var s
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L4
     jump L57
 
   L4:
     load_var s
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L5
     jump L56
 
@@ -1884,13 +1786,13 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L7:
     load_var s
-    is_type baml.time.PlainDate
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L8
     jump L53
 
   L8:
     load_var s
-    is_type baml.time.PlainDate
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L9
     jump L52
 
@@ -1920,85 +1822,85 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L13:
     load_var s
-    is_type json_auto_derive.Secret
+    is_type json_auto_derive.BSecret
     pop_jump_if_false L14
     jump L47
 
   L14:
     load_var s
-    is_type json_auto_derive.Secret
+    is_type json_auto_derive.BSecret
     pop_jump_if_false L15
     jump L46
 
   L15:
     load_var s
-    is_type json_auto_derive.BSecret
+    is_type json_auto_derive.BArr
     pop_jump_if_false L16
     jump L45
 
   L16:
     load_var s
-    is_type json_auto_derive.BSecret
+    is_type json_auto_derive.BArr
     pop_jump_if_false L17
     jump L44
 
   L17:
     load_var s
-    is_type json_auto_derive.SecretRedact2
+    is_type json_auto_derive.BAliasTo
     pop_jump_if_false L18
     jump L43
 
   L18:
     load_var s
-    is_type json_auto_derive.SecretRedact2
+    is_type json_auto_derive.BAliasTo
     pop_jump_if_false L19
     jump L42
 
   L19:
     load_var s
-    is_type json_auto_derive.BArr
+    is_type json_auto_derive.BStr
     pop_jump_if_false L20
     jump L41
 
   L20:
     load_var s
-    is_type json_auto_derive.BArr
+    is_type json_auto_derive.BStr
     pop_jump_if_false L21
     jump L40
 
   L21:
     load_var s
-    is_type json_auto_derive.BAliasTo
+    is_type json_auto_derive.SecretRedact
     pop_jump_if_false L22
     jump L39
 
   L22:
     load_var s
-    is_type json_auto_derive.BAliasTo
+    is_type json_auto_derive.SecretRedact
     pop_jump_if_false L23
     jump L38
 
   L23:
     load_var s
-    is_type json_auto_derive.BStr
+    is_type json_auto_derive.Secret
     pop_jump_if_false L24
     jump L37
 
   L24:
     load_var s
-    is_type json_auto_derive.BStr
+    is_type json_auto_derive.Secret
     pop_jump_if_false L25
     jump L36
 
   L25:
     load_var s
-    is_type json_auto_derive.SecretRedact
+    is_type json_auto_derive.SecretRedact2
     pop_jump_if_false L26
     jump L35
 
   L26:
     load_var s
-    is_type json_auto_derive.SecretRedact
+    is_type json_auto_derive.SecretRedact2
     pop_jump_if_false L27
     jump L34
 
@@ -2050,7 +1952,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L35:
     load_var s
-    call user.json_auto_derive.SecretRedact.baml.ToJson.to_json
+    call user.json_auto_derive.SecretRedact2.baml.ToJson.to_json
     jump L62
 
   L36:
@@ -2060,7 +1962,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L37:
     load_var s
-    call user.json_auto_derive.BStr.baml.ToJson.to_json
+    call user.json_auto_derive.Secret.baml.ToJson.to_json
     jump L62
 
   L38:
@@ -2070,7 +1972,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L39:
     load_var s
-    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
+    call user.json_auto_derive.SecretRedact.baml.ToJson.to_json
     jump L62
 
   L40:
@@ -2080,7 +1982,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L41:
     load_var s
-    call user.json_auto_derive.BArr.baml.ToJson.to_json
+    call user.json_auto_derive.BStr.baml.ToJson.to_json
     jump L62
 
   L42:
@@ -2090,7 +1992,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L43:
     load_var s
-    call user.json_auto_derive.SecretRedact2.baml.ToJson.to_json
+    call user.json_auto_derive.BAliasTo.baml.ToJson.to_json
     jump L62
 
   L44:
@@ -2100,7 +2002,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L45:
     load_var s
-    call user.json_auto_derive.BSecret.baml.ToJson.to_json
+    call user.json_auto_derive.BArr.baml.ToJson.to_json
     jump L62
 
   L46:
@@ -2110,7 +2012,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L47:
     load_var s
-    call user.json_auto_derive.Secret.baml.ToJson.to_json
+    call user.json_auto_derive.BSecret.baml.ToJson.to_json
     jump L62
 
   L48:
@@ -2140,7 +2042,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L53:
     load_var s
-    call baml.time.PlainDate.baml.ToJson.to_json
+    call baml.time.ZonedDateTime.baml.ToJson.to_json
     jump L62
 
   L54:
@@ -2160,7 +2062,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L57:
     load_var s
-    call baml.time.ZonedDateTime.baml.ToJson.to_json
+    call baml.time.PlainTime.baml.ToJson.to_json
     jump L62
 
   L58:
@@ -2170,7 +2072,7 @@ function json_auto_derive.user_to_json_override_result() -> baml.json.json {
 
   L59:
     load_var s
-    call baml.time.PlainTime.baml.ToJson.to_json
+    call baml.time.PlainDate.baml.ToJson.to_json
     jump L62
 
   L60:

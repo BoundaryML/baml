@@ -272,31 +272,6 @@ function ai_custom_capability.DeadModerated$new() -> null {
     return
 }
 
-function ai_custom_capability.GuardedEcho$stream.Moderated.call_moderated(self: ai_custom_capability.GuardedEcho$stream, messages: baml.ai.ChatMessage[], policy: string) -> T {
-    load_type #0
-    load_const "["
-    load_var policy
-    bin_op +
-    load_const "] "
-    bin_op +
-    load_var self
-    load_field .0
-    bin_op +
-    call baml.sap.parse
-    jump L0
-    load_var e
-    throw_if_panic
-    load_var e
-    load_const "moderated parse failed"
-    load_type string
-    alloc_array 1
-    init_instance baml.errors.UnknownError .data, .message
-    throw
-
-  L0:
-    return
-}
-
 function ai_custom_capability.GuardedEcho.Moderated.call_moderated(self: ai_custom_capability.GuardedEcho, messages: baml.ai.ChatMessage[], policy: string) -> T {
     load_type #0
     load_const "["
@@ -305,7 +280,7 @@ function ai_custom_capability.GuardedEcho.Moderated.call_moderated(self: ai_cust
     load_const "] "
     bin_op +
     load_var self
-    load_field .0
+    load_field .reply
     bin_op +
     call baml.sap.parse
     jump L0

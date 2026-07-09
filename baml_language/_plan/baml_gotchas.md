@@ -199,3 +199,25 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
   interface in a match arm binds `never` and the arm is dead.
 - **Spawn-in-`.map`-closure + await deadlocks the VM** (0% CPU) — keep spawn/await at the
   top level of a function body until the scheduler bug is fixed (see checklist bug queue).
+
+## $stream-partial typed-match round (04 live crash)
+
+- **Field access on `T$stream` classes silently compiled to MAP access** — MIR's
+  `package_lowering_data` built `class_fields` from HIR `package_items`, which lack the
+  PPIR-synthesized `*$stream` classes, so `part.title` fell to the dynamic-map lowering
+  while the runtime materializes SAP partials as class instances → live-only
+  `VM internal error: type error: expected map, got instance`. Fixed by switching the
+  builder to `baml_compiler2_ppir::package_items` (the canonical item universe).
+- **wiremock cannot exercise streaming partials** — it writes the whole SSE body in one
+  chunk, so `Stream.next()` sees the finish event on the first accumulator feed and no
+  partial ever reaches the consumer: a `$stream` test that passes over wiremock may be
+  vacuous. Use a raw tokio socket that writes each event with a flush + delay (see
+  `crates/baml_tests/tests/stream_partial_typed_match.rs`) and ASSERT the partial arm ran
+  (e.g. a `steps >= 1` marker in the returned string).
+- **`Stream<TStream, TFinal>.next()` returns `TStream | StreamFinished` where TStream is
+  nullable** (`T$stream | null`) — a typed match over `next()` needs THREE arms:
+  `let part: T$stream`, `null`, `StreamFinished`, or E0062 non-exhaustive.
+- **`$stream` clones used to inherit `implements`** — every provider-ish class's partial
+  registered as an interface implementor with zero methods, emitting dead monomorphizations
+  and a dead `is_type T$stream` arm per interface match (~27% of ai_scenarios bytecode).
+  PPIR now clears `implements` on the synthetic class; a partial is data, not a capability.

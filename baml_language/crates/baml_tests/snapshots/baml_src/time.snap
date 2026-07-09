@@ -292,25 +292,25 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L5:
     load_var _3
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L6
     jump L27
 
   L6:
     load_var _3
-    is_type baml.time.PlainTime
+    is_type baml.time.PlainDate
     pop_jump_if_false L7
     jump L26
 
   L7:
     load_var _3
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L8
     jump L25
 
   L8:
     load_var _3
-    is_type baml.time.ZonedDateTime
+    is_type baml.time.PlainTime
     pop_jump_if_false L9
     jump L24
 
@@ -328,13 +328,13 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L11:
     load_var _3
-    is_type baml.time.PlainDate
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L12
     jump L21
 
   L12:
     load_var _3
-    is_type baml.time.PlainDate
+    is_type baml.time.ZonedDateTime
     pop_jump_if_false L13
     jump L20
 
@@ -386,7 +386,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L21:
     load_var _3
-    call baml.time.PlainDate.baml.ToString.to_string
+    call baml.time.ZonedDateTime.baml.ToString.to_string
     jump L34
 
   L22:
@@ -406,7 +406,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L25:
     load_var _3
-    call baml.time.ZonedDateTime.baml.ToString.to_string
+    call baml.time.PlainTime.baml.ToString.to_string
     jump L34
 
   L26:
@@ -416,7 +416,7 @@ function time.plain_date_to_plain_datetime_with_time() -> string {
 
   L27:
     load_var _3
-    call baml.time.PlainTime.baml.ToString.to_string
+    call baml.time.PlainDate.baml.ToString.to_string
     jump L34
 
   L28:

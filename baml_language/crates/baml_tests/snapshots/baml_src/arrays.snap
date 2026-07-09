@@ -964,33 +964,9 @@ function arrays.$init_test_ns_arrays_sum(registry: testing.TestCollector) -> nul
     return
 }
 
-function arrays.ComparableFlaky$stream.baml.Comparable.compare(self: arrays.ComparableFlaky$stream, other: arrays.ComparableFlaky$stream) -> int {
-    load_var self
-    load_field .0
-    store_var_load_var _3
-    is_type int
-    pop_jump_if_false L0
-    load_var other
-    load_field .0
-    store_var_load_var _6
-    is_type int
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "cannot compare null"
-    init_instance user.arrays.ComparableCompareError .message
-    throw
-
-  L1:
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
 function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableFlaky, other: arrays.ComparableFlaky) -> int {
     load_var self
-    load_field .0
+    load_field .value
     store_var_load_var _3
     is_type int
     pop_jump_if_false L0
@@ -1007,18 +983,6 @@ function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableF
     throw
 
   L1:
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
-function arrays.ComparableScore$stream.baml.Comparable.compare(self: arrays.ComparableScore$stream, other: arrays.ComparableScore$stream) -> int {
-    load_var self
-    load_field .0
-    store_var _3
-    load_var other
-    load_field .0
-    store_var _4
     load_var2 3 4
     call baml.Comparable$for$int.compare
     return
@@ -1026,19 +990,7 @@ function arrays.ComparableScore$stream.baml.Comparable.compare(self: arrays.Comp
 
 function arrays.ComparableScore.baml.Comparable.compare(self: arrays.ComparableScore, other: arrays.ComparableScore) -> int {
     load_var self
-    load_field .0
-    store_var _3
-    load_var other
-    load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
-function arrays.OutOfBodyScore$stream.baml.Comparable.compare(self: arrays.OutOfBodyScore$stream, other: arrays.OutOfBodyScore$stream) -> int {
-    load_var self
-    load_field .0
+    load_field .points
     store_var _3
     load_var other
     load_field .0
@@ -1050,19 +1002,7 @@ function arrays.OutOfBodyScore$stream.baml.Comparable.compare(self: arrays.OutOf
 
 function arrays.OutOfBodyScore.baml.Comparable.compare(self: arrays.OutOfBodyScore, other: arrays.OutOfBodyScore) -> int {
     load_var self
-    load_field .0
-    store_var _3
-    load_var other
-    load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
-function arrays.SortableItem$stream.baml.Comparable.compare(self: arrays.SortableItem$stream, other: arrays.SortableItem$stream) -> int {
-    load_var self
-    load_field .0
+    load_field .points
     store_var _3
     load_var other
     load_field .0
@@ -1074,7 +1014,7 @@ function arrays.SortableItem$stream.baml.Comparable.compare(self: arrays.Sortabl
 
 function arrays.SortableItem.baml.Comparable.compare(self: arrays.SortableItem, other: arrays.SortableItem) -> int {
     load_var self
-    load_field .0
+    load_field .rank
     store_var _3
     load_var other
     load_field .0
