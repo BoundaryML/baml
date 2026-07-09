@@ -200,6 +200,11 @@ fn lower_interface_associated_bindings(
         .collect()
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "threads the full lowering context (interface, args, bindings, package, \
+              namespace) plus the fill-defaults flag and a diagnostics sink"
+)]
 fn complete_interface_associated_bindings_from_tys(
     db: &dyn crate::Db,
     iface: &baml_compiler2_hir::item_tree::Interface,

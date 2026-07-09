@@ -1662,8 +1662,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         span: TextRange,
         warn_extraneous: bool,
     ) {
-        let declared = crate::throw_inference::flatten_ty_to_facts(throws_ty);
-        let effective = self.collect_effective_throws(body);
+        // Normalize both sides before comparing so a concrete-base associated
+        // projection reduces to its binding: `(int as Comparable).CompareError`
+        // becomes `never` (int pins it) and drops out, instead of being flagged as
+        // an extra throw the declaration doesn't cover. A *symbolic* projection
+        // (`(T as Comparable).CompareError` in a generic body) does not reduce and
+        // stays a fact — correctly, since the body genuinely throws it.
+        let declared = crate::throw_inference::flatten_ty_to_facts(&self.normalize(throws_ty));
+        let effective: BTreeSet<Ty> = self
+            .collect_effective_throws(body)
+            .iter()
+            .flat_map(|fact| crate::throw_inference::flatten_ty_to_facts(&self.normalize(fact)))
+            .collect();
         let has_open_slot = Self::throws_surface_has_open_slot(&declared);
 
         // Throws tracking is otherwise *exact* (so e.g. enum-variant throws stay
@@ -14681,8 +14691,7 @@ impl TypeInferenceBuilder<'_> {
             && !Self::ty_contains_recovery_unknown(&scrut_for_check)
             && !crate::generics::contains_typevar(&pat_natural)
             && !crate::generics::contains_typevar(&scrut_for_check)
-            && !self.is_subtype(&pat_natural, &scrut_for_check)
-            && !self.is_subtype(&scrut_for_check, &pat_natural)
+            && !self.pattern_matchable(&pat_natural, &scrut_for_check)
             && !self.pattern_overlaps_scrut_member(&pat_natural, &scrut_for_check)
         {
             let err = TirTypeError::TypeMismatch {
@@ -14690,6 +14699,38 @@ impl TypeInferenceBuilder<'_> {
                 got: pat_natural,
             };
             self.report_at_pat_or_expr(err, pat_id, at_expr);
+        }
+    }
+
+    /// Whether a pattern of natural type `pat` can match a value of scrutinee type
+    /// `scrut`. A pattern *destructures* (reads) rather than stores, so containers
+    /// are checked **covariantly**: an empty or prefix array pattern (`[]`,
+    /// `[first, ..]`) has element type `never` and matches any `T[]`, and
+    /// `map {}` matches any `map<K, V>` — unlike an invariant store, where
+    /// `never[] </: int[]`. A concretely-typed element pattern still constrains:
+    /// `[x: string]` does not match `int[]`. Non-container pairs fall back to
+    /// bidirectional subtyping (either direction is a possible match — `Dog`
+    /// matches an `Animal` scrutinee, and vice-versa).
+    fn pattern_matchable(&self, pat: &Ty, scrut: &Ty) -> bool {
+        let pat = self.expand_alias_chains(pat.clone());
+        let scrut = self.expand_alias_chains(scrut.clone());
+        match (&pat, &scrut) {
+            // An unconstrained pattern leaf (`never`) matches any scrutinee — the
+            // bind takes its type from the scrutinee, so the leaf places no
+            // constraint. (`never <: T` covariantly.)
+            (Ty::Never { .. }, _) => true,
+            (Ty::List(a, _) | Ty::EvolvingList(a, _), Ty::List(b, _) | Ty::EvolvingList(b, _)) => {
+                self.pattern_matchable(a, b)
+            }
+            (
+                Ty::Map {
+                    key: ka, value: va, ..
+                },
+                Ty::Map {
+                    key: kb, value: vb, ..
+                },
+            ) => self.pattern_matchable(ka, kb) && self.pattern_matchable(va, vb),
+            _ => self.is_subtype(&pat, &scrut) || self.is_subtype(&scrut, &pat),
         }
     }
 

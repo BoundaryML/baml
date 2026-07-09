@@ -1875,6 +1875,76 @@ mod tests {
         );
     }
 
+    #[test]
+    fn concrete_projection_root_wins_over_required_interface() {
+        // A concrete type implementing both `Base` and `Derived` (which requires
+        // `Base`), where both declare `Assoc`. An unqualified `C.Assoc` must resolve
+        // through the most-derived interface (`Derived`) via requires-aware
+        // root-wins — NOT report ambiguity — mirroring the symbolic type-variable
+        // path. Both bind `Assoc = string`, so the field collapses to `string`.
+        let db = compile(concat!(
+            "interface Base {\n  type Assoc\n}\n",
+            "interface Derived requires Base {\n  type Assoc\n}\n",
+            "class C {\n  n: int\n  \
+             implements Base {\n    type Assoc = string\n  }\n  \
+             implements Derived {\n    type Assoc = string\n  }\n}\n",
+            "class Holder {\n  x: C.Assoc\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let Some(baml_compiler2_hir::contributions::Definition::Class(holder)) =
+            items.lookup_type(&[], &Name::new("Holder"))
+        else {
+            panic!("Holder class should resolve");
+        };
+        let resolved = crate::inference::resolve_class_fields(&db, holder);
+        let (_, ty, _) = resolved
+            .fields
+            .iter()
+            .find(|(name, _, _)| name.as_str() == "x")
+            .expect("field x resolved");
+        assert!(
+            matches!(ty, Ty::String { .. }),
+            "`C.Assoc` should root-win to `Derived` and collapse to `string`, got {ty:?}"
+        );
+        assert!(
+            resolved.diagnostics.is_empty(),
+            "requires-chain declarers must not report ambiguity: {:?}",
+            resolved.diagnostics
+        );
+    }
+
+    #[test]
+    fn concrete_projection_incomparable_declarers_stay_ambiguous() {
+        // Two *unrelated* interfaces both declaring `Out` on one class: root-wins
+        // does not apply (neither requires the other), so `C.Out` is genuinely
+        // ambiguous and must still error.
+        let db = compile(concat!(
+            "interface A {\n  type Out\n}\n",
+            "interface B {\n  type Out\n}\n",
+            "class C {\n  n: int\n  \
+             implements A {\n    type Out = string\n  }\n  \
+             implements B {\n    type Out = int\n  }\n}\n",
+            "class Holder {\n  x: C.Out\n}\n",
+        ));
+        let user = PackageId::new(&db, Name::new("user"));
+        let items = baml_compiler2_ppir::package_items(&db, user);
+        let Some(baml_compiler2_hir::contributions::Definition::Class(holder)) =
+            items.lookup_type(&[], &Name::new("Holder"))
+        else {
+            panic!("Holder class should resolve");
+        };
+        let resolved = crate::inference::resolve_class_fields(&db, holder);
+        assert!(
+            resolved
+                .diagnostics
+                .iter()
+                .any(|(d, _)| matches!(d, TirTypeError::AmbiguousAssociatedTypeProjection { .. })),
+            "incomparable declarers must report ambiguity, got: {:?}",
+            resolved.diagnostics
+        );
+    }
+
     /// Drive `infer_scope_types` on the scope named `scope_name` in the file that
     /// declares `anchor` (any package-level type or value), returning the type
     /// errors it raised. `anchor` locates the file; `scope_name` may be a nested

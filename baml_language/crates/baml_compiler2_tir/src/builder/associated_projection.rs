@@ -770,6 +770,38 @@ pub(crate) fn resolve_concrete_projection(
         }
     }
 
+    // Requires-aware root-wins: when the base implements interfaces that form a
+    // `requires` chain (e.g. `Iterator requires Iterable`, both declaring `Item`),
+    // the most-derived one wins — drop any declarer that another declarer
+    // transitively requires. This mirrors the symbolic `resolve_through_roots`
+    // root-wins rule so a concrete base and a type variable agree; two genuinely
+    // *incomparable* declarers still remain and report ambiguous.
+    if declarers.len() > 1 {
+        // The `requires` relation is between interface *heads* (name + generic
+        // args); associated types are outputs, not part of it — so compare with
+        // the realized assoc pins stripped, or a bare `requires Base` (which pins
+        // nothing) would never match a declarer realized as `Base<Assoc = …>`.
+        let head = |i: &baml_type::Interface| {
+            baml_type::Interface::new(i.name.clone(), i.generics.clone(), Vec::new())
+        };
+        declarers = declarers
+            .iter()
+            .filter(|d| {
+                !declarers.iter().any(|other| {
+                    other.name != d.name
+                        && crate::interfaces::interface_requires(
+                            db,
+                            res_ctx,
+                            &head(other),
+                            &head(d),
+                            |a, b| baml_type::normalize::equivalent(a, b, &gctx),
+                        )
+                })
+            })
+            .cloned()
+            .collect();
+    }
+
     match declarers.len() {
         0 => ConcreteProjection::Undeclared,
         1 => ConcreteProjection::Determined(
