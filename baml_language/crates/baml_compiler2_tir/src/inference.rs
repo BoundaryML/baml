@@ -2999,7 +2999,29 @@ pub fn resolve_class_fields<'db>(
 /// Salsa query: resolved type alias body.
 ///
 /// Cached per `TypeAliasLoc` — re-runs only when the alias definition changes.
-#[salsa::tracked(returns(ref))]
+/// Cycle-recovery seed for [`resolve_type_alias`].
+///
+/// A type alias whose body is an associated-type projection (`type A = T.Member`)
+/// makes `resolve_type_alias` a Salsa cycle head: lowering the projection consults
+/// the package's impls and its alias map — to find and realize the declaring
+/// interface — and building that alias map resolves every alias in the package,
+/// this one included. The projection's resolution never depends on this alias's own
+/// value, so the fixpoint converges in a single step; this seeds it with the
+/// "still inferring" sentinel and no diagnostics (the converged iteration owns them).
+fn resolve_type_alias_cycle_initial<'db>(
+    _db: &'db dyn crate::Db,
+    _id: salsa::Id,
+    _alias_loc: TypeAliasLoc<'db>,
+) -> Arc<ResolvedTypeAlias> {
+    Arc::new(ResolvedTypeAlias {
+        ty: Ty::Unknown {
+            attr: TyAttr::default(),
+        },
+        diagnostics: Vec::new(),
+    })
+}
+
+#[salsa::tracked(returns(ref), cycle_initial = resolve_type_alias_cycle_initial)]
 pub fn resolve_type_alias<'db>(
     db: &'db dyn crate::Db,
     alias_loc: TypeAliasLoc<'db>,
