@@ -1010,9 +1010,41 @@ fn make_user_drive_companion(
     driver_path.extend(driver.namespace_path.iter().cloned());
     driver_path.push(driver.function.clone());
 
+    // The extras' TypeExprs are read from the driver's item tree, so any bare
+    // (relative) type path they carry is written relative to the DRIVER's
+    // namespace. Splicing them verbatim into a companion generated in a FOREIGN
+    // namespace mis-resolves — a bare user-class name either fails to resolve
+    // (→ `Unknown` → runtime-lowering crash) or resolves to the wrong type. Same
+    // hazard the driver call path already dodges: rewrite each relative path to
+    // its `root.`-absolute form in the driver's namespace. Generic-param slots
+    // (`T`/`TPartial`/passthrough) and cross-package (`baml.*`) / already-`root.`
+    // paths are left untouched.
+    let generic_names: FxHashSet<&str> =
+        dfn.generic_params.iter().map(|g| g.as_str()).collect();
+    let mut package_names: FxHashSet<String> = baml_compiler2_hir::package::package_dependency_closure(
+        db,
+        PackageId::new(db, driver.package.clone()),
+    )
+    .iter()
+    .map(|p| p.name(db).as_str().to_string())
+    .collect();
+    package_names.insert(driver.package.as_str().to_string());
+
     let extras: Option<Vec<(Name, ast::TypeExpr)>> = dfn.params[2..]
         .iter()
-        .map(|p| p.type_expr.clone().map(|ty| (p.name.clone(), ty)))
+        .map(|p| {
+            p.type_expr.clone().map(|ty| {
+                (
+                    p.name.clone(),
+                    absolutize_type_paths(
+                        &ty,
+                        &driver.namespace_path,
+                        &generic_names,
+                        &package_names,
+                    ),
+                )
+            })
+        })
         .collect();
     let extras = extras?;
 
@@ -1056,6 +1088,95 @@ fn make_user_drive_companion(
             return_type,
         },
     )
+}
+
+/// Rewrite the relative (in-driver-namespace) type paths of a driver's extra
+/// param into their `root.`-absolute form, so the companion resolves the same
+/// types from any namespace it is generated into (DCP §1.4). A `Path`'s head
+/// segment is left untouched when it is `root` (already absolute), a
+/// generic-param name (single-segment slot — `T`/`TPartial`/passthrough), or a
+/// package name (`baml.*` and other deps, which resolve package-first from any
+/// namespace); every other head is a driver-relative user path and gets
+/// `[root, <driver ns…>, …]` prepended. Recurses through generic args and the
+/// composite type shapes; non-`Path` leaves clone through.
+fn absolutize_type_paths(
+    te: &ast::TypeExpr,
+    driver_ns: &[Name],
+    generic_names: &FxHashSet<&str>,
+    package_names: &FxHashSet<String>,
+) -> ast::TypeExpr {
+    use ast::TypeExprKind as K;
+    let recur =
+        |inner: &ast::TypeExpr| absolutize_type_paths(inner, driver_ns, generic_names, package_names);
+    let kind = match &te.kind {
+        K::Path {
+            segments,
+            generic_args,
+            associated_type_bindings,
+            attrs,
+        } => {
+            let generic_args = generic_args.iter().map(&recur).collect();
+            let leave_untouched = segments.first().is_none_or(|head| {
+                head.as_str() == "root"
+                    || (segments.len() == 1 && generic_names.contains(head.as_str()))
+                    || package_names.contains(head.as_str())
+            });
+            let segments = if leave_untouched {
+                segments.clone()
+            } else {
+                let mut abs = vec![Name::new("root")];
+                abs.extend(driver_ns.iter().cloned());
+                abs.extend(segments.iter().cloned());
+                abs
+            };
+            K::Path {
+                segments,
+                generic_args,
+                associated_type_bindings: associated_type_bindings.clone(),
+                attrs: attrs.clone(),
+            }
+        }
+        K::Optional { inner, attrs } => K::Optional {
+            inner: Box::new(recur(inner)),
+            attrs: attrs.clone(),
+        },
+        K::List { inner, attrs } => K::List {
+            inner: Box::new(recur(inner)),
+            attrs: attrs.clone(),
+        },
+        K::Map { key, value, attrs } => K::Map {
+            key: Box::new(recur(key)),
+            value: Box::new(recur(value)),
+            attrs: attrs.clone(),
+        },
+        K::Union { variants, attrs } => K::Union {
+            variants: variants.iter().map(&recur).collect(),
+            attrs: attrs.clone(),
+        },
+        K::Function {
+            params,
+            ret,
+            throws,
+            attrs,
+        } => K::Function {
+            params: params
+                .iter()
+                .map(|p| ast::FunctionTypeParam {
+                    name: p.name.clone(),
+                    optional: p.optional,
+                    ty: recur(&p.ty),
+                })
+                .collect(),
+            ret: Box::new(recur(ret)),
+            throws: throws.as_ref().map(|t| Box::new(recur(t))),
+            attrs: attrs.clone(),
+        },
+        _ => return te.clone(),
+    };
+    ast::TypeExpr {
+        span: te.span,
+        ..kind.at(te.span)
+    }
 }
 
 /// Replace bare single-segment `Path` references (e.g. the driver's `T` /
