@@ -293,6 +293,9 @@ function user.FunctionWithComments$stream(a: string, b: int, client: baml.llm.Cl
 }
 
 function user.TestClient$new(lenient: bool) -> null {
+    load_const "OPENAI_API_KEY"
+    sys_op baml.env.get
+    store_var _3
     load_const "TestClient"
     load_const "openai"
     load_const null
@@ -304,7 +307,7 @@ function user.TestClient$new(lenient: bool) -> null {
     load_const null
     load_const null
     load_const null
-    load_const null
+    load_var _3
     load_const null
     load_const null
     load_type string

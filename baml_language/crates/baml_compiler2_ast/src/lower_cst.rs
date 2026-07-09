@@ -2720,6 +2720,9 @@ fn synthesize_client_new_companion(
         .unwrap_or(span);
 
     let mut has_base_url = false;
+    // Whether the user wrote an `api_key` option (even `api_key null`). If so,
+    // the provider env-var default below is suppressed so user config wins.
+    let mut api_key_set_by_user = false;
     let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
     // Track which provider fields have been set to non-null values by the user.
     // No compile-time defaults, so this starts empty.
@@ -2744,6 +2747,10 @@ fn synthesize_client_new_companion(
                 );
                 let is_null = opt_item.value_str().as_deref() == Some("null");
 
+                if k == "api_key" {
+                    api_key_set_by_user = true;
+                }
+
                 if values.contains_key(k) || provider_field_set.contains(k) {
                     // Known field. Provider fields skip null to preserve defaults.
                     if !provider_field_set.contains(k) || !is_null {
@@ -2762,6 +2769,36 @@ fn synthesize_client_new_companion(
                 }
             }
         }
+    }
+
+    // ── 2b. Default api_key from the provider env var (B-489) ───
+    //
+    // A named `client<llm>` with no explicit `api_key` mirrors the inline
+    // `"openai/model"` shorthand (see `from_shorthand` in the `sys_ops` crate):
+    // default the key to the provider's conventional env var. The read is soft
+    // — `baml.env.get` yields `null` when the var is unset rather than panicking
+    // — exactly like the shorthand, which leaves `api_key` unset when the var is
+    // absent (the request then goes out unauthenticated, as before). This keeps
+    // the offline `render_prompt` path working without the var set (B-626) and
+    // never eagerly *requires* the key. An explicit `api_key` (including
+    // `api_key null`) suppresses this default so user config always wins.
+    if !api_key_set_by_user
+        && let Some(env_var) = provider
+            .map(String::as_str)
+            .and_then(default_api_key_env_var)
+    {
+        let arg = alloc(Expr::Literal(Literal::String(env_var.to_string())));
+        let callee = alloc(Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("env"),
+            Name::new("get"),
+        ]));
+        let call = alloc(Expr::Call {
+            callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(arg)],
+        });
+        values.insert("api_key".to_string(), call);
     }
 
     // ── 3. Validate ─────────────────────────────────────────────
@@ -2934,6 +2971,20 @@ fn is_valid_provider(provider: &str) -> bool {
     PROVIDER_CONFIGS
         .iter()
         .any(|c| c.providers.contains(&provider))
+}
+
+/// Conventional `api_key` env var for a provider, or `None` if the provider
+/// needs explicit credentials.
+///
+/// Mirrors the mapping the inline `"openai/model"` shorthand applies in
+/// `sys_ops` (`from_shorthand`): only the two providers whose env-var
+/// convention is ubiquitous enough to assume default their key here.
+fn default_api_key_env_var(provider: &str) -> Option<&'static str> {
+    match provider {
+        "openai" | "openai-responses" => Some("OPENAI_API_KEY"),
+        "anthropic" => Some("ANTHROPIC_API_KEY"),
+        _ => None,
+    }
 }
 
 /// Validate provider-specific option constraints at compile time.
