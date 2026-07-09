@@ -1562,8 +1562,8 @@ fn decompose_program_into_units(
     for unit in &mut units {
         unit.exports
             .objects
-            .sort_by(|a, b| local_ref_sort_key(a.1).cmp(&local_ref_sort_key(b.1)));
-        unit.exports.globals.sort_by(|a, b| a.1.cmp(&b.1));
+            .sort_by_key(|a| local_ref_sort_key(a.1));
+        unit.exports.globals.sort_by_key(|a| a.1);
     }
 
     // ---- $init / $init_test tail extraction (design §9 R2) ------------------
@@ -1593,10 +1593,7 @@ fn decompose_program_into_units(
     }
     for (pkg_name, pkg) in &program.packages {
         let frag = build_package_fragment(program, pkg, &fn_obj_name)?;
-        let carrier = package_first_unit
-            .get(pkg_name)
-            .copied()
-            .unwrap_or(0usize.min(n_files.saturating_sub(1)));
+        let carrier = package_first_unit.get(pkg_name).copied().unwrap_or(0);
         units[carrier].package_fragment = frag;
     }
 
@@ -1941,7 +1938,7 @@ fn build_init_tail(
             ));
         }
     }
-    named.sort_by(|a, b| a.1.cmp(&b.1));
+    named.sort_by_key(|a| a.1);
 
     // Encode each tail object's operands.
     let mut obj_import_idx: HashMap<String, usize> = HashMap::new();
