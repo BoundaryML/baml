@@ -252,3 +252,64 @@ async fn user_provider_error_is_typed_and_triaged() {
         BexExternalValue::String("status=429|retryable=true|ratelimit=true".into())
     );
 }
+
+/// REGRESSION (pkg-alias-query perf merge): an interface `match` compiled in
+/// the BUILTINS package (stdlib `drive_call`'s negotiation) must see USER-package
+/// implementors — `package_lowering_data` unions implementor relations across
+/// every session package, not just the package + its deps. When this breaks,
+/// every LLM function called with a user-authored provider throws
+/// `Unsupported: "client's provider supports neither HttpProvider nor Streaming"`.
+#[tokio::test]
+async fn stdlib_match_sees_user_package_implementors() {
+    let output = baml_test!(
+        r##"
+        class InlineEcho {
+            reply: string,
+
+            implements baml.ai.Provider {}
+
+            implements baml.ai.HttpProvider {
+                type Body = string
+                function build_request<T>(self, messages: baml.ai.ChatMessage[]) -> baml.http.Request throws baml.errors.UnknownError {
+                    throw baml.errors.UnknownError { data: null, message: ["no"] }
+                }
+                function send(self, request: baml.http.Request) -> string throws baml.errors.UnknownError {
+                    throw baml.errors.UnknownError { data: null, message: ["no"] }
+                }
+                function parse<T>(self, from: string) -> T throws baml.errors.UnknownError {
+                    baml.sap.parse<T>(from) catch (e) { _ => throw baml.errors.UnknownError { data: e, message: ["p"] } }
+                }
+                function parse_meta(self, from: string) -> baml.ai.ResponseMeta throws never {
+                    baml.ai.LegacyMeta {}
+                }
+                function call_messages_with<T, V, E2>(
+                    self,
+                    messages: baml.ai.ChatMessage[],
+                    project: (baml.ai.ResponseMeta) -> V throws E2,
+                ) -> baml.ai.CallResult<T, V> throws baml.errors.CallError | baml.errors.UnknownError | E2 {
+                    let value: T = baml.sap.parse<T>(self.reply) catch (e) {
+                        _ => throw baml.errors.UnknownError { data: e, message: ["p"] },
+                    };
+                    baml.ai.CallResult<T, V> { value: value, meta: project(baml.ai.LegacyMeta {}) }
+                }
+            }
+        }
+
+        function Greet(name: string) -> string {
+            client "openai/gpt-4o"
+            prompt #"Say hi to {{ name }}"#
+        }
+
+        function main() -> string {
+            Greet("world", client = InlineEcho { reply: "hi from echo" }) catch (e) {
+                let u: baml.errors.Unsupported => "UNSUPPORTED: " + u.message,
+                _ => "OTHER_ERR",
+            }
+        }
+        "##
+    );
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("hi from echo".into())
+    );
+}

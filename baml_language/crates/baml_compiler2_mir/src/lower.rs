@@ -1496,6 +1496,55 @@ fn package_lowering_data<'db>(
         );
     }
 
+    // Open-world implementors: an interface `match` compiled inside a
+    // DEPENDENCY package (e.g. a `baml.ai` capability driver negotiating
+    // `Tools` against a user-authored provider) expands to the static
+    // implementor set in `emit_is_type_branch` — which must therefore span
+    // every package in the session, not just this package + its own deps,
+    // or downstream classes are silently invisible to stdlib matches. Only
+    // the implementor relations are unioned (push-unique); the field/enum
+    // schema maps stay package-scoped via scratch outputs. (Restored after
+    // the pkg-alias-query perf merge dropped it — regression surfaced as
+    // stdlib `drive_call` throwing Unsupported for user HttpProviders.)
+    {
+        let mut covered: Vec<Name> = package_dependencies(db, pkg_id)
+            .iter()
+            .map(|dep| dep.name(db))
+            .collect();
+        covered.push(pkg_id.name(db));
+
+        let mut session_pkgs: Vec<Name> = Vec::new();
+        for file in baml_compiler2_hir::compiler2_all_files(db) {
+            let pkg = baml_compiler2_hir::file_package::file_package(db, file).package;
+            if !covered.contains(&pkg) && !session_pkgs.contains(&pkg) {
+                session_pkgs.push(pkg);
+            }
+        }
+        session_pkgs.sort();
+
+        let mut scratch_class_fields = ClassFieldIndices::default();
+        let mut scratch_class_field_types = ClassFieldTypes::default();
+        let mut scratch_enum_variants = EnumVariantIndices::default();
+        for extra_pkg in session_pkgs {
+            let extra_id = baml_compiler2_hir::package::PackageId::new(db, extra_pkg.clone());
+            let extra_items = package_items(db, extra_id);
+            let mut population = PackagePopulation {
+                class_fields: &mut scratch_class_fields,
+                class_field_types: &mut scratch_class_field_types,
+                enum_variants: &mut scratch_enum_variants,
+                interface_implementors: &mut interface_implementors,
+                interface_type_implementors: &mut interface_type_implementors,
+            };
+            LoweringContext::populate_from_package(
+                db,
+                extra_items,
+                &extra_pkg,
+                &mut population,
+                &resolved_aliases,
+            );
+        }
+    }
+
     PackageLoweringData {
         class_fields,
         class_field_types,
