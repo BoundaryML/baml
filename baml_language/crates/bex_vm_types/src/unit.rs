@@ -237,6 +237,14 @@ pub struct CompilationUnit {
     /// Per-function throw facts, carried for the seeded-throws dirty-set path.
     /// Not folded into `Program` — consumed by the cache/manifest layer.
     pub throw_facts: Vec<FunctionThrowFacts>,
+    /// `borsh(FileInterfaceFragment)` for this file (Phase 2). Opaque bytes
+    /// because `bex_vm_types` sits below `baml_compiler2_tir`, which owns the
+    /// typed fragment — the same decoupling as the stdlib-interface blob. Empty
+    /// for builtins (their interface rides in the stdlib blob) and for any file
+    /// whose fragment failed to serialize. Populated by `decompose_units`;
+    /// consumed by the cache layer to project a `callable_throws` seed. Not
+    /// folded into `Program`, carries no absolute paths (design §9 R7).
+    pub interface_fragment: Vec<u8>,
 
     /// The whole-*group* `$init` / `$init_test` tail (design §9 R2), carried on
     /// one unit of the group that produces it (empty on every other unit). The
@@ -396,6 +404,7 @@ mod tests {
             template_macros: Vec::new(),
             test_cases: Vec::new(),
             throw_facts: Vec::new(),
+            interface_fragment: Vec::new(),
             init_tail: None,
         }
     }
@@ -435,5 +444,73 @@ mod tests {
         let bytes = borsh::to_vec(&exports).expect("serialize exports");
         let round_tripped: ExportTable = borsh::from_slice(&bytes).expect("deserialize exports");
         assert_eq!(exports, round_tripped);
+    }
+
+    /// Phase 2b: the opaque `interface_fragment` blob survives a borsh round-trip
+    /// on the unit (the field `bex_vm_types` never interprets).
+    #[test]
+    fn compilation_unit_carries_interface_fragment_through_borsh() {
+        let mut unit = sample_unit();
+        unit.interface_fragment = vec![1, 2, 3, 4, 5];
+        let bytes = borsh::to_vec(&unit).expect("serialize unit");
+        let round_tripped: CompilationUnit = borsh::from_slice(&bytes).expect("deserialize unit");
+        assert_eq!(
+            round_tripped.interface_fragment, unit.interface_fragment,
+            "the opaque interface-fragment blob must survive a borsh round-trip",
+        );
+    }
+
+    /// Phase 2b version migration: a unit serialized in the pre-v6 layout (no
+    /// `interface_fragment` between `throw_facts` and `init_tail`) must fail to
+    /// decode into the current `CompilationUnit`. Borsh is positional, so the
+    /// decoder reads the old trailing `init_tail` bytes as the new
+    /// `interface_fragment` length and runs off the end — forcing `plan_reuse`
+    /// to full-compile rather than mis-project a seed. (The `FORMAT_VERSION` 5→6
+    /// bump also re-keys the image, an independent guard.)
+    #[test]
+    fn pre_v6_unit_payload_is_a_miss() {
+        #[derive(borsh::BorshSerialize)]
+        struct LegacyUnit {
+            source_file: String,
+            package: Name,
+            classes: Vec<Object>,
+            enums: Vec<Object>,
+            interfaces: Vec<Object>,
+            code: Vec<Object>,
+            object_imports: Vec<Symbol>,
+            global_imports: Vec<Symbol>,
+            exports: ExportTable,
+            lets: Vec<LetDef>,
+            package_fragment: ProgramPackageFrag,
+            template_macros: Vec<String>,
+            test_cases: Vec<TestCase>,
+            throw_facts: Vec<FunctionThrowFacts>,
+            init_tail: Option<InitTail>,
+        }
+        let legacy = LegacyUnit {
+            source_file: "a.baml".to_string(),
+            package: Name::new("user"),
+            classes: Vec::new(),
+            enums: Vec::new(),
+            interfaces: Vec::new(),
+            code: Vec::new(),
+            object_imports: Vec::new(),
+            global_imports: Vec::new(),
+            exports: ExportTable {
+                objects: Vec::new(),
+                globals: Vec::new(),
+            },
+            lets: Vec::new(),
+            package_fragment: ProgramPackageFrag::default(),
+            template_macros: Vec::new(),
+            test_cases: Vec::new(),
+            throw_facts: Vec::new(),
+            init_tail: None,
+        };
+        let bytes = borsh::to_vec(&legacy).expect("serialize legacy unit");
+        assert!(
+            borsh::from_slice::<CompilationUnit>(&bytes).is_err(),
+            "a pre-v6 unit layout must fail to decode into the v6 CompilationUnit",
+        );
     }
 }

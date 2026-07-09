@@ -800,6 +800,7 @@ mod tests {
             template_macros: Vec::new(),
             test_cases: Vec::new(),
             throw_facts: Vec::new(),
+            interface_fragment: Vec::new(),
             init_tail: None,
         }
     }
@@ -938,6 +939,7 @@ mod tests {
             template_macros: Vec::new(),
             test_cases: Vec::new(),
             throw_facts: Vec::new(),
+            interface_fragment: Vec::new(),
             init_tail: None,
         };
         // Unit B: defines class b.D and function b.g.
@@ -962,6 +964,7 @@ mod tests {
             template_macros: Vec::new(),
             test_cases: Vec::new(),
             throw_facts: Vec::new(),
+            interface_fragment: Vec::new(),
             init_tail: None,
         };
 

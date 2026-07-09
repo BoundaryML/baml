@@ -49,7 +49,16 @@ use sha2::{Digest, Sha256};
 /// an incremental compile can serve a clean file's diagnostics without
 /// re-checking it. The bump turns every pre-v5 manifest into a miss (the blob
 /// did not exist), so `plan_reuse` never reads a manifest lacking the field.
-pub const FORMAT_VERSION: u32 = 5;
+///
+/// v6 (Phase 2 interface fragments): every
+/// [`CompilationUnit`](bex_vm_types::CompilationUnit) in the
+/// [`LinkableImage`](bex_vm_types::LinkableImage) now carries an opaque
+/// borsh `interface_fragment` blob (a `FileInterfaceFragment`) beside its
+/// `throw_facts`, so a warm compile can project a per-file `callable_throws`
+/// seed. The added field changes the image wire format, making every pre-v6
+/// image undecodable (`plan_reuse`'s `LinkableImage` decode fails → `None` →
+/// full compile), so no pre-v6 entry is ever reused. No hand migration.
+pub const FORMAT_VERSION: u32 = 6;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

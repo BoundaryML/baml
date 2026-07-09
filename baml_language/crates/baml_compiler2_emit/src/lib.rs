@@ -1630,6 +1630,25 @@ fn decompose_program_into_units(
         }
     }
 
+    // ---- Interface fragments (Phase 2b, per user file) ----------------------
+    // Carry each user file's typed interface fragment (opaque borsh) beside its
+    // bytecode so a warm compile can project a `callable_throws` seed from clean
+    // files' units. Builtins (empty or `<builtin>/…` source paths) are covered
+    // by the B-694 stdlib interface blob and only user files appear in the
+    // manifest the seed reads, so they carry no fragment — matching
+    // `user_files_with_rel_paths`' predicate. The fragment holds no absolute
+    // paths (design §9 R7). Best-effort: a fragment that fails to serialize stays
+    // empty (the file is then treated as unseeded on load).
+    for (fi, file) in all_files.iter().enumerate() {
+        if units[fi].source_file.is_empty() || units[fi].source_file.starts_with("<builtin>/") {
+            continue;
+        }
+        let fragment = baml_compiler2_tir::package_interface::file_interface_fragment(db, *file);
+        if let Ok(bytes) = borsh::to_vec(fragment) {
+            units[fi].interface_fragment = bytes;
+        }
+    }
+
     Ok(units)
 }
 

@@ -801,6 +801,7 @@ dependencies = [
  "baml_type",
  "baml_workspace",
  "bex_vm_types",
+ "borsh",
  "indexmap",
  "log",
  "rustc-hash 2.1.2",

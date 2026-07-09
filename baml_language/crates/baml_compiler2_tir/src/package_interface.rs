@@ -1337,4 +1337,118 @@ mod tests {
             borsh::to_vec(&reversed).expect("serialize reversed"),
         );
     }
+
+    /// Build a representative `FileInterfaceFragment` exercising every field
+    /// (a class with a method, an enum, an alias, a free function, and a
+    /// populated `callable_throws_by_id`). `reverse_insertion` flips the map
+    /// population order so the order-independence test has divergent iteration.
+    fn synthetic_fragment(reverse_insertion: bool) -> FileInterfaceFragment {
+        let attr = TyAttr::default();
+        let pkg = Name::new("user");
+        let ns = vec![Name::new("llm")];
+
+        let class_qtn = QualifiedTypeName::new(pkg.clone(), ns.clone(), Name::new("Client"));
+        let enum_qtn = QualifiedTypeName::new(pkg.clone(), ns.clone(), Name::new("Role"));
+        let alias_qtn = QualifiedTypeName::new(pkg, ns, Name::new("Id"));
+
+        let method = ExportedFunction {
+            name: Name::new("call"),
+            params: vec![exported_function_param(
+                Name::new("prompt"),
+                Ty::String { attr: attr.clone() },
+                false,
+            )],
+            return_type: Ty::TypeVar(Name::new("T"), attr.clone()),
+            declared_throws: None,
+            callable_throws: Ty::Never { attr: attr.clone() },
+            generic_params: vec![Name::new("T")],
+            builtin_kind: Some(BuiltinKind::Io),
+        };
+        let class = ExportedType::Class {
+            qtn: class_qtn,
+            fields: vec![(Name::new("model"), Ty::String { attr: attr.clone() })],
+            methods: vec![method],
+            generic_params: vec![Name::new("T")],
+        };
+        let enum_ty = ExportedType::Enum {
+            qtn: enum_qtn,
+            variants: vec![Name::new("System"), Name::new("User")],
+        };
+        let alias = ExportedType::TypeAlias {
+            qtn: alias_qtn,
+            resolved: Ty::Int { attr: attr.clone() },
+        };
+
+        let mut types = FxHashMap::default();
+        if reverse_insertion {
+            types.insert(Name::new("Id"), alias);
+            types.insert(Name::new("Role"), enum_ty);
+            types.insert(Name::new("Client"), class);
+        } else {
+            types.insert(Name::new("Client"), class);
+            types.insert(Name::new("Role"), enum_ty);
+            types.insert(Name::new("Id"), alias);
+        }
+
+        let free_fn = ExportedFunction {
+            name: Name::new("info"),
+            params: vec![exported_function_param(
+                Name::new("msg"),
+                Ty::String { attr: attr.clone() },
+                false,
+            )],
+            return_type: Ty::Void { attr: attr.clone() },
+            declared_throws: None,
+            callable_throws: Ty::Never { attr: attr.clone() },
+            generic_params: vec![],
+            builtin_kind: None,
+        };
+        let mut functions = FxHashMap::default();
+        functions.insert(Name::new("info"), free_fn);
+
+        let mut callable_throws_by_id = BTreeMap::new();
+        callable_throws_by_id.insert(7u32, Ty::Never { attr: attr.clone() });
+        callable_throws_by_id.insert(
+            3u32,
+            Ty::Union(
+                vec![
+                    Ty::String { attr: attr.clone() },
+                    Ty::BuiltinUnknown { attr },
+                ],
+                TyAttr::default(),
+            ),
+        );
+
+        FileInterfaceFragment {
+            ns_path: vec![Name::new("llm")],
+            types,
+            functions,
+            callable_throws_by_id,
+        }
+    }
+
+    #[test]
+    fn fragment_borsh_round_trips() {
+        let frag = synthetic_fragment(false);
+        let bytes = borsh::to_vec(&frag).expect("serialize");
+        let decoded: FileInterfaceFragment = borsh::from_slice(&bytes).expect("deserialize");
+        assert_eq!(
+            frag, decoded,
+            "FileInterfaceFragment must survive a Borsh round-trip"
+        );
+    }
+
+    #[test]
+    fn fragment_borsh_is_order_independent_for_maps() {
+        // Two fresh databases may populate a fragment's `FxHashMap`s in different
+        // orders; Borsh sorts map entries by key, so the persisted blob must be
+        // byte-identical regardless — the determinism the content-addressed unit
+        // key relies on.
+        let forward = synthetic_fragment(false);
+        let reversed = synthetic_fragment(true);
+        assert_eq!(
+            borsh::to_vec(&forward).expect("serialize forward"),
+            borsh::to_vec(&reversed).expect("serialize reversed"),
+        );
+    }
 }
