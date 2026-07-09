@@ -2799,6 +2799,15 @@ fn synthesize_client_new_companion(
             args: vec![CallArg::positional(arg)],
         });
         values.insert("api_key".to_string(), call);
+        // Surface the synthesized dependency to LSP env-var tooling
+        // (`file_env_var_refs`, which feeds the playground's env panel), the
+        // same as an explicit `env.X` read. There is no user-written token to
+        // point at, so anchor the reference at the `options` block where an
+        // explicit `api_key` would otherwise go.
+        env_var_refs.push(crate::EnvVarRef {
+            name: env_var.to_string(),
+            range: options_span,
+        });
     }
 
     // ── 3. Validate ─────────────────────────────────────────────
