@@ -1248,6 +1248,7 @@ fn register_class_for_interface_closure<'db>(
             root_iface_loc,
             root_iface_args,
             &[],
+            true,
         )
     {
         if let Some(iface_tn) = interface_type_name_from_loc(db, iface_loc) {
@@ -10295,6 +10296,7 @@ impl<'db> LoweringContext<'db> {
                 requested_root_loc,
                 iface_type_args,
                 iface_assoc,
+                true,
             )
             .into_iter()
             .filter_map(|(loc, args, assoc)| {

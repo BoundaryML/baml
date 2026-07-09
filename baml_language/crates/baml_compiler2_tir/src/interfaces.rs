@@ -207,6 +207,11 @@ fn complete_interface_associated_bindings_from_tys(
     associated_bindings: &[(Name, Ty)],
     pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     iface_namespace_path: &[Name],
+    // When false, an unbound associated type is left absent rather than filled
+    // with its declared default. Callers resolving through a *rigid* `Self` pass
+    // false: the eventual implementor may override the default, so `Self.X` must
+    // stay a symbolic projection instead of collapsing to the interface's default.
+    fill_defaults: bool,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<(Name, Ty)> {
     let mut bindings = generics::bind_type_vars(&iface.generic_params, interface_args);
@@ -234,6 +239,9 @@ fn complete_interface_associated_bindings_from_tys(
                 let ty = generics::substitute_ty(ty, &bindings);
                 bindings.insert(assoc.name.clone(), ty.clone());
                 return Some((assoc.name.clone(), ty));
+            }
+            if !fill_defaults {
+                return None;
             }
             assoc.default.as_ref().map(|default| {
                 let ty = {
@@ -738,6 +746,12 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
     root_iface: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     root_args: &[Ty],
     root_associated_bindings: &[(Name, Ty)],
+    // Whether to fill an unbound associated type with its declared default. Callers
+    // resolving through a *rigid* `Self` (an interface's own default body) pass false
+    // so an overridable associated type stays a symbolic `(Self as I).X` projection
+    // rather than collapsing to the interface's default (see
+    // `complete_interface_associated_bindings_from_tys`).
+    fill_associated_defaults: bool,
 ) -> Vec<InterfaceClosureEntry<'db>> {
     let mut out: Vec<InterfaceClosureEntry<'db>> = Vec::new();
     let mut seen: FxHashSet<InterfaceClosureEntry<'db>> = FxHashSet::default();
@@ -769,6 +783,7 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
             &associated_bindings,
             parent_pkg_items,
             &pkg_info.namespace_path,
+            fill_associated_defaults,
             &mut diags,
         );
         if !seen.insert((loc, args.clone(), associated_bindings.clone())) {
@@ -913,6 +928,7 @@ pub fn interface_requires<'db>(
         sub_loc,
         &sub.generics,
         &sub.associated_types,
+        true,
     ) {
         let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
         let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {

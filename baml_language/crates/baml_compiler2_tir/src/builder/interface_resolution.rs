@@ -269,11 +269,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         // qualified (`recv.as<I>.member`). So resolve through the root when it declares
         // `member`; otherwise collect the closure interfaces that declare it — one
         // resolves, ≥2 are ambiguous, none is unresolved.
+        // A rigid `Self` receiver resolves associated types symbolically — do NOT fill
+        // an unbound associated type with its interface default (the implementor may
+        // override it); the default is applied for concrete/existential receivers by
+        // `associated_type_pin`. Existential/exact receivers reach the same closure but
+        // get their defaults there, so passing `false` here is correct for all receivers.
         let closure = crate::interfaces::interface_closure_locs_with_args_and_assoc(
             db,
             root_loc,
             bound.type_args,
             bound.associated_bindings,
+            false,
         );
         let mut declarers: Vec<InterfaceView<'db>> = Vec::new();
         if self
@@ -667,7 +673,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     return Vec::new();
                 };
                 crate::interfaces::interface_closure_locs_with_args_and_assoc(
-                    db, root_loc, args, assoc,
+                    db, root_loc, args, assoc, true,
                 )
                 .into_iter()
                 .filter_map(|(iface_loc, type_args, associated_bindings)| {

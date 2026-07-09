@@ -372,6 +372,7 @@ fn realize_qualifier_through_roots(
             root_loc,
             &root.generics,
             &root.associated_types,
+            true,
         ) {
             if let Some(qtn) = crate::interfaces::interface_loc_qtn(db, loc)
                 && qtn == qualifier.name
@@ -659,6 +660,7 @@ fn closure_declarers(
         root_loc,
         &root.generics,
         &root.associated_types,
+        true,
     );
 
     let mut declarers: Vec<baml_type::Interface> = Vec::new();

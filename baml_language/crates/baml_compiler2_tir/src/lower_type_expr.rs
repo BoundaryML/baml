@@ -1588,6 +1588,7 @@ mod tests {
             iterator,
             &[],
             &[(Name::new("Item"), int_ty.clone())],
+            true,
         );
         let iterable_entry = closure
             .iter()
@@ -1626,6 +1627,7 @@ mod tests {
             iterator,
             &[],
             &[(Name::new("Item"), int_ty.clone())],
+            true,
         );
         let iterable_entry = closure
             .iter()
@@ -1665,6 +1667,7 @@ mod tests {
                 attr: TyAttr::default(),
             }],
             &[],
+            true,
         );
         let wrapper_entry = closure
             .iter()
@@ -1706,6 +1709,7 @@ mod tests {
             wrapper,
             std::slice::from_ref(&string_ty),
             &[],
+            true,
         );
         let wrapper_entry = closure
             .iter()

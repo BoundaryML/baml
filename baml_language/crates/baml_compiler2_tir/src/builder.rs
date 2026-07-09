@@ -10836,6 +10836,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             iface_loc,
             &iface_args,
             &associated_bindings,
+            true,
         )
         .into_iter()
         .next()
@@ -10866,6 +10867,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 root_loc,
                 root_args,
                 root_associated_bindings,
+                true,
             )
         {
             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
@@ -11718,6 +11720,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 root_loc,
                 iface_type_args,
                 associated_bindings,
+                true,
             )
         {
             let file = iface_loc.file(db);
