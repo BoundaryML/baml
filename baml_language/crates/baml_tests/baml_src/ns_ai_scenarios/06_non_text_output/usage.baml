@@ -428,7 +428,13 @@ testset "integ-test-06-non-text-output" {
             api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
             size: "1024x1024",
             partial_images: 0,
-        }) catch (e) { _ => s06_Media { mime: "live failed", data: null, url: null } };
+        }) catch (e) {
+            _ => {
+                log.warn(e);
+                s06_Media { mime: "live failed", data: null, url: null }
+            },
+        };
+        log.info("06 image mime: " + m.mime);
         assert.is_true(m.mime.starts_with("image/"))
     }
 }

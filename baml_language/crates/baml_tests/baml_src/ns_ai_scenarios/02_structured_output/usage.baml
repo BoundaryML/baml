@@ -266,7 +266,7 @@ testset "integ-test-02-structured" {
     test "02 live: the same type through the Gemini responseSchema encoding" {
         let e = ExtractEvent_Gemini("Ada and Bob meet for Launch on 2026-01-01.", client = baml.ai.Gemini {
             model: "gemini-2.5-flash",
-            api_key: baml.env.get_or_panic("GEMINI_API_KEY"),
+            api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
             base_url: null,
             extra_headers: null,
             extra_body: null,

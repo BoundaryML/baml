@@ -268,7 +268,8 @@ class s06_GptImage {
                 "model": self.model,
                 "prompt": s06_messages_text(messages),   // image endpoint takes raw text, no roles
                 "size": self.size,
-                "response_format": "b64_json",
+                // NB: no `response_format` — gpt-image-1 rejects the param
+                // (DALL-E-only knob) and always returns b64_json anyway.
             };
             baml.http.Request {
                 method: "POST",
