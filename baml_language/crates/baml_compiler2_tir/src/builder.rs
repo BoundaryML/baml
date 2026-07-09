@@ -69,10 +69,11 @@ fn format_interface_display(name: &Name, args: &[Ty]) -> String {
 
 #[derive(Clone)]
 struct InterfaceBindingInputs<'a, 'db> {
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     iface_data: &'a baml_compiler2_hir::item_tree::Interface,
     associated_bindings: &'a [(Name, Ty)],
-    pkg_items: &'a PackageItems<'db>,
-    iface_ns: &'a [Name],
+    /// The receiver an omitted default is filled at (`Self`).
+    receiver: &'a Ty,
     prefer_symbolic_projections: bool,
 }
 
@@ -11408,17 +11409,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         inputs: &InterfaceBindingInputs<'_, '_>,
         bindings: &mut FxHashMap<Name, Ty>,
-        diagnostics: &mut Vec<TirTypeError>,
     ) {
-        // The interface's declared parameter bounds, so a `T.member` projection
-        // in an associated-type default resolves `T`'s declaring interface.
-        let iface_bounds = crate::lower_type_expr::lower_decl_generic_param_bounds(
-            self.context.db(),
-            inputs.pkg_items,
-            inputs.iface_ns,
-            &inputs.iface_data.generic_params,
-            &inputs.iface_data.generic_param_bounds,
-        );
+        let db = self.context.db();
         for assoc in &inputs.iface_data.associated_types {
             if let Some((_, ty)) = inputs
                 .associated_bindings
@@ -11429,28 +11421,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             }
             // A usable default only applies when we aren't preferring symbolic projections
-            // (the rigid-var receiver keeps `Self.Assoc` visible to generic resolution).
+            // (the rigid-var receiver keeps `Self.Assoc` visible to generic resolution). Fill it
+            // at the receiver: `Self` is that receiver, so a Self-referencing default reduces
+            // through it. The default is lowered once (symbolic `Self`) by the shared query.
             if !inputs.prefer_symbolic_projections
-                && let Some(default) = &assoc.default
-            {
-                let ty = {
-                    let generic_params: Vec<_> = (bindings).keys().cloned().collect();
-                    crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_expr(
-                            default,
-                            &crate::lower_type_expr::ScopeCtx {
-                                db: self.context.db(),
-                                package_items: inputs.pkg_items,
-                                ns_context: inputs.iface_ns,
-                                generic_params: &generic_params,
-                                bounds: &iface_bounds,
-                                self_ty: None,
-                            },
-                            diagnostics,
-                        ),
-                        bindings,
+                && let Some((default, _diags)) =
+                    crate::interfaces::interface_associated_type_default(
+                        db,
+                        inputs.iface_loc,
+                        assoc.name.clone(),
                     )
-                };
+            {
+                let realized = crate::interfaces::realize_associated_default(
+                    &default,
+                    &[],
+                    &[],
+                    inputs.receiver,
+                );
+                let ty = crate::generics::substitute_ty(&realized, bindings);
                 bindings.insert(assoc.name.clone(), ty);
                 continue;
             }
@@ -11738,17 +11726,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .entry(generic_param.clone())
                     .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
             }
-            let mut diags = Vec::new();
             self.add_interface_associated_type_bindings(
                 &InterfaceBindingInputs {
+                    iface_loc,
                     iface_data,
                     associated_bindings: &closure_assoc,
-                    pkg_items,
-                    iface_ns: &iface_ns,
+                    receiver: iface_ty,
                     prefer_symbolic_projections: false,
                 },
                 &mut bindings,
-                &mut diags,
             );
 
             // The declaring interface's parameter bounds, so a `T.member`
@@ -11757,6 +11743,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc);
             // `bindings` is complete before the field loop — snapshot its keys once.
             let generic_params: Vec<_> = bindings.keys().cloned().collect();
+            // This matrix view is side-effect-free — field-type lowering diagnostics are
+            // surfaced where the field is declared, so drop them into a local sink here.
+            let mut diags = Vec::new();
             for field in &iface_data.fields {
                 if !seen.insert(field.name.clone()) {
                     continue;
@@ -12100,9 +12089,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let iface_file = iface_loc.file(db);
                     let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
                     if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
-                        let iface_ns =
-                            baml_compiler2_hir::file_package::file_package(db, iface_file)
-                                .namespace_path;
                         if let baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } =
                             &target.kind
                         {
@@ -12136,33 +12122,29 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .get(&method_id)
                             .cloned()
                             .unwrap_or_default();
-                        // Defaults are written in the interface's own scope; its
-                        // declared parameter bounds resolve any `T.member` in them.
-                        let iface_bounds =
-                            crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc);
                         for assoc in &iface_data.associated_types {
                             if explicit_bindings.iter().any(|b| b.name == assoc.name) {
                                 continue;
                             }
-                            if let Some(default) = &assoc.default {
-                                let ty = {
-                                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
-                                    crate::generics::substitute_ty(
-                                        &crate::lower_type_expr::lower_type_expr(
-                                            default,
-                                            &crate::lower_type_expr::ScopeCtx {
-                                                db,
-                                                package_items: pkg_items_for_class,
-                                                ns_context: &iface_ns,
-                                                generic_params: &generic_params,
-                                                bounds: iface_bounds,
-                                                self_ty: None,
-                                            },
-                                            &mut diags,
-                                        ),
-                                        &bindings,
-                                    )
-                                };
+                            if let Some((default, _diags)) =
+                                crate::interfaces::interface_associated_type_default(
+                                    db,
+                                    iface_loc,
+                                    assoc.name.clone(),
+                                )
+                            {
+                                // Fill the default at this class receiver: `Self` is the class,
+                                // so a Self-referencing default (`type Items = Self.Item[]`)
+                                // reduces through its impl. The default is lowered once (symbolic
+                                // `Self`) by the shared query; substitute the class for `Self`
+                                // then the accumulated generic / associated-type bindings.
+                                let realized = crate::interfaces::realize_associated_default(
+                                    &default,
+                                    &[],
+                                    &[],
+                                    &class_ty,
+                                );
+                                let ty = crate::generics::substitute_ty(&realized, &bindings);
                                 bindings.insert(assoc.name.clone(), ty);
                             }
                         }

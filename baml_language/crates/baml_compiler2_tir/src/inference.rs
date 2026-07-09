@@ -1659,9 +1659,6 @@ pub fn infer_scope_types<'db>(
                             let iface_file = iface_loc.file(db);
                             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
                             if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
-                                let iface_ns =
-                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
-                                        .namespace_path;
                                 let mut iface_type_bindings = type_bindings.clone();
                                 if let baml_compiler2_ast::TypeExprKind::Path {
                                     generic_args, ..
@@ -1736,35 +1733,23 @@ pub fn infer_scope_types<'db>(
                                         iface_type_bindings.insert(assoc.name.clone(), ty);
                                         continue;
                                     }
-                                    if let Some(default) = &assoc.default {
-                                        let mut default_diags = Vec::new();
-                                        let ty = {
-                                            let generic_params: Vec<_> =
-                                                iface_type_bindings.keys().cloned().collect();
-                                            crate::generics::substitute_ty(
-                                                &crate::lower_type_expr::lower_type_expr(
-                                                    default,
-                                                    &crate::lower_type_expr::ScopeCtx {
-                                                        db,
-                                                        package_items: pkg_items,
-                                                        ns_context: &iface_ns,
-                                                        generic_params: &generic_params,
-                                                        // Defaults are the interface's own
-                                                        // exprs — its declared param bounds apply.
-                                                        bounds:
-                                                            crate::lower_type_expr::interface_generic_param_bounds(
-                                                                db, iface_loc,
-                                                            ),
-                                                        self_ty: None,
-                                                    },
-                                                    &mut default_diags,
-                                                ),
-                                                &iface_type_bindings,
-                                            )
-                                        };
-                                        for diag in default_diags {
-                                            builder.report_at_span(diag, default.span);
-                                        }
+                                    if let Some((default_ty, _diags)) =
+                                        crate::interfaces::interface_associated_type_default(
+                                            db,
+                                            iface_loc,
+                                            assoc.name.clone(),
+                                        )
+                                    {
+                                        // The default is lowered once (symbolic `Self`) by the
+                                        // shared query; substitute the generics / associated
+                                        // types accumulated so far. `Self` stays symbolic here
+                                        // (an interface method body's receiver is rigid), so a
+                                        // Self-referencing default resolves to `(Self as I).X`.
+                                        // Diagnostics surface at the interface declaration.
+                                        let ty = crate::generics::substitute_ty(
+                                            &default_ty,
+                                            &iface_type_bindings,
+                                        );
                                         type_bindings.insert(assoc.name.clone(), ty.clone());
                                         iface_type_bindings.insert(assoc.name.clone(), ty);
                                     }
@@ -1807,36 +1792,10 @@ pub fn infer_scope_types<'db>(
                                         attr: TyAttr::default(),
                                     };
                                 for assoc in &iface_data.associated_types {
-                                    if let Some(default) = &assoc.default {
-                                        let mut default_diags = Vec::new();
-                                        let _ = {
-                                            let generic_params: Vec<_> =
-                                                type_bindings.keys().cloned().collect();
-                                            crate::generics::substitute_ty(
-                                                &crate::lower_type_expr::lower_type_expr(
-                                                    default,
-                                                    &crate::lower_type_expr::ScopeCtx {
-                                                        db,
-                                                        package_items: pkg_items,
-                                                        ns_context: &iface_ns,
-                                                        generic_params: &generic_params,
-                                                        // Defaults are the interface's own
-                                                        // exprs — its declared param bounds apply.
-                                                        bounds:
-                                                            crate::lower_type_expr::interface_generic_param_bounds(
-                                                                db, iface_loc,
-                                                            ),
-                                                        self_ty: None,
-                                                    },
-                                                    &mut default_diags,
-                                                ),
-                                                &type_bindings,
-                                            )
-                                        };
-                                        for diag in default_diags {
-                                            builder.report_at_span(diag, default.span);
-                                        }
-                                    }
+                                    // The default's own lowering diagnostics are surfaced once at
+                                    // the interface declaration (`interface_associated_type_default`),
+                                    // not here.
+                                    //
                                     // Inside the interface's own (default) method, `Self` is the
                                     // rigid type variable bound by the interface, not an existential
                                     // interface value. Associated types therefore project onto `Self`
@@ -2625,26 +2584,30 @@ pub fn infer_scope_types<'db>(
                         .collect(),
                     Vec::new(),
                 );
-                let iface_generic_bounds =
-                    crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc);
-                let default_scope = crate::lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: pkg_items,
-                    ns_context: &pkg_info.namespace_path,
-                    generic_params: &iface_data.generic_params,
-                    bounds: iface_generic_bounds,
-                    self_ty: Some(self_ty),
-                };
                 for assoc in &iface_data.associated_types {
-                    let (Some(_), Some(default_te)) = (&assoc.bound, &assoc.default) else {
+                    let Some(default_te) = &assoc.default else {
                         continue;
                     };
-                    let mut default_diags = Vec::new();
-                    let default_ty = crate::lower_type_expr::lower_type_expr(
-                        default_te,
-                        &default_scope,
-                        &mut default_diags,
-                    );
+                    // The default is lowered once — with a symbolic `Self` — by the shared
+                    // query; its lowering diagnostics surface here, at the interface
+                    // declaration, the single reporting site, so no referencing site (value
+                    // type, projection reducer, method body) re-reports them.
+                    let Some((default_ty, default_diags)) =
+                        crate::interfaces::interface_associated_type_default(
+                            db,
+                            iface_loc,
+                            assoc.name.clone(),
+                        )
+                    else {
+                        continue;
+                    };
+                    for diag in default_diags {
+                        builder.report_at_span(diag, default_te.span);
+                    }
+                    // A bounded default (`type Item extends J = V`) must implement its bound.
+                    if assoc.bound.is_none() {
+                        continue;
+                    }
                     let normalized = baml_type::normalize::normalize(&default_ty, &builder);
                     for bound in
                         crate::builder::associated_projection::associated_type_declared_bound(

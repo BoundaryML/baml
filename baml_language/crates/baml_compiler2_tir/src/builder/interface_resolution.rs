@@ -830,13 +830,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // not yet rebuilt — the member path resolves them symbolically).
                     for assoc in &iface_data.associated_types {
                         let value = self
-                            .associated_type_pin(
-                                view,
-                                assoc,
-                                prefer_symbolic,
-                                &bindings,
-                                &mut diags,
-                            )
+                            .associated_type_pin(view, assoc, prefer_symbolic, &bindings)
                             .unwrap_or_else(|| Ty::Error {
                                 attr: TyAttr::default(),
                             });
@@ -914,7 +908,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         assoc: &baml_compiler2_ast::AssociatedTypeDef,
         prefer_symbolic: bool,
         prior: &rustc_hash::FxHashMap<Name, Ty>,
-        diags: &mut Vec<TirTypeError>,
     ) -> Option<Ty> {
         if let Some((_, ty)) = view
             .realized
@@ -924,30 +917,36 @@ impl<'db> TypeInferenceBuilder<'db> {
         {
             return Some(ty.clone());
         }
-        if !prefer_symbolic && let Some(default) = &assoc.default {
-            let db = self.context.db();
-            return Some({
-                let generic_params: Vec<_> = (prior).keys().cloned().collect();
-                crate::generics::substitute_ty(
-                    &crate::lower_type_expr::lower_type_expr(
-                        default,
-                        &crate::lower_type_expr::ScopeCtx {
-                            db,
-                            package_items: view.pkg_items(db),
-                            ns_context: &view.namespace(db),
-                            generic_params: &generic_params,
-                            bounds: crate::lower_type_expr::interface_generic_param_bounds(
-                                db, view.loc,
-                            ),
-                            self_ty: None,
-                        },
-                        diags,
-                    ),
-                    prior,
-                )
-            });
+        // A rigid `Self` (an interface's own default body) keeps `Self.Assoc` symbolic — an
+        // implementor may override the default — so the caller supplies the projection.
+        if prefer_symbolic {
+            return None;
         }
-        None
+        let db = self.context.db();
+        let (default, _diags) =
+            crate::interfaces::interface_associated_type_default(db, view.loc, assoc.name.clone())?;
+        // Fill the default eagerly at the receiver: `Self` is this interface realized on it (its
+        // pins resolved so far), so a Self-referencing default (`type Items = Self.Item[]`)
+        // reduces against them. The default was lowered once (symbolic `Self`) by the shared
+        // query; realize substitutes this receiver for `Self` and the realized generic args.
+        let iface_generic_params = baml_compiler2_hir::file_item_tree(db, view.loc.file(db))
+            .interfaces
+            .get(&view.loc.id(db))
+            .map(|iface| iface.generic_params.clone())
+            .unwrap_or_default();
+        let self_ty = Ty::Interface(
+            view.realized.name.clone(),
+            view.realized.generics.clone(),
+            view.realized.associated_types.clone(),
+            TyAttr::default(),
+        );
+        let realized = crate::interfaces::realize_associated_default(
+            &default,
+            &iface_generic_params,
+            &view.realized.generics,
+            &self_ty,
+        );
+        Some(crate::generics::substitute_ty(&realized, prior))
     }
 
     /// Build the `Ty::Function` for an interface method from its normalized
@@ -1011,9 +1010,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         for assoc in &data.associated_types {
             let mut prior = base_bindings.clone();
             prior.extend(pins.iter().cloned());
-            if let Some(ty) =
-                self.associated_type_pin(view, assoc, prefer_symbolic, &prior, &mut diags)
-            {
+            if let Some(ty) = self.associated_type_pin(view, assoc, prefer_symbolic, &prior) {
                 pins.push((assoc.name.clone(), ty));
             }
         }

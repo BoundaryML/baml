@@ -122,6 +122,28 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
                 }
             }
         }
+        // An interface *existential* base fixes an omitted, defaulted associated type to its
+        // default: `Boxed<string>` (with `type Item = T`) has `Item = string`, so
+        // `(Boxed<string> as Boxed).Item` reduces to `string`. An explicit pin on the base is
+        // used directly; otherwise the interface's own default is realized at the base's args,
+        // with `Self` = the base so a Self-referencing default (`type Items = Self.Item[]`)
+        // resolves against the base's pins. (A *bound* — the type-var arm above — never fills a
+        // default, because its implementor may override it.)
+        if let Ty::Interface(qtn, args, pins, _) = base {
+            if let Some((_, ty)) = pins.iter().find(|(name, _)| name == member) {
+                return ProjectionStep::Reduced(ty.clone());
+            }
+            if let Some(default) = crate::interfaces::existential_associated_default(
+                self.db,
+                self.res_ctx,
+                qtn,
+                args,
+                base,
+                member,
+            ) {
+                return ProjectionStep::Reduced(default);
+            }
+        }
         // A concrete-headed base determines the member through its `implements` block for
         // the written qualifier interface — `(int as Foo).Assoc` is int's `type Assoc = …`,
         // read off the realized interface the impl provides. Rigid type variables in the

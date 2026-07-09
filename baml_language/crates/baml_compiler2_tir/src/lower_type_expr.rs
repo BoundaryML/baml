@@ -605,10 +605,59 @@ pub fn lower_type_expr(
                                         )
                                     })
                                     .collect();
+                            let iface_qtn = qualify_def(db, def, short);
+                            // §1.7(a): eagerly fill each omitted, defaulted associated type at
+                            // this existential. `Self` is the existential itself (its explicit
+                            // pins plus the defaults filled so far), so a Self-referencing
+                            // default (`type Items = Self.Item[]`) reduces against them. The
+                            // default is lowered once — with a symbolic `Self` — by
+                            // `interface_associated_type_default`, and substituted here.
+                            let (iface_generic_params, iface_assoc_names): (Vec<_>, Vec<_>) =
+                                iface_tree
+                                    .interfaces
+                                    .get(&iface_loc.id(db))
+                                    .map(|iface| {
+                                        (
+                                            iface.generic_params.clone(),
+                                            iface
+                                                .associated_types
+                                                .iter()
+                                                .map(|assoc| assoc.name.clone())
+                                                .collect(),
+                                        )
+                                    })
+                                    .unwrap_or_default();
+                            let mut associated_bindings = lowered_associated_bindings;
+                            for assoc_name in iface_assoc_names {
+                                if associated_bindings.iter().any(|(n, _)| *n == assoc_name) {
+                                    continue;
+                                }
+                                if let Some((default, _)) =
+                                    crate::interfaces::interface_associated_type_default(
+                                        db,
+                                        iface_loc,
+                                        assoc_name.clone(),
+                                    )
+                                {
+                                    let self_ty = Ty::Interface(
+                                        iface_qtn.clone(),
+                                        lowered_args.clone(),
+                                        associated_bindings.clone(),
+                                        TyAttr::default(),
+                                    );
+                                    let filled = crate::interfaces::realize_associated_default(
+                                        &default,
+                                        &iface_generic_params,
+                                        &lowered_args,
+                                        &self_ty,
+                                    );
+                                    associated_bindings.push((assoc_name, filled));
+                                }
+                            }
                             Ty::Interface(
-                                qualify_def(db, def, short),
+                                iface_qtn,
                                 lowered_args,
-                                lowered_associated_bindings,
+                                associated_bindings,
                                 TyAttr::default(),
                             )
                         }

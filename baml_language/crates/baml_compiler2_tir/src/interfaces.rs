@@ -39,6 +39,7 @@ type InterfaceClosureQueueEntry<'db> = (
 
 struct InterfaceTypeAssocLowering<'a, 'db> {
     db: &'db dyn crate::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     iface: &'a baml_compiler2_hir::item_tree::Interface,
     interface_args: &'a [Ty],
     explicit_associated_bindings: &'a [baml_compiler2_ast::AssociatedTypeBinding],
@@ -139,43 +140,30 @@ fn carried_bound_satisfies(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn lower_interface_associated_bindings(
-    db: &dyn crate::Db,
+fn lower_interface_associated_bindings<'db>(
+    db: &'db dyn crate::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     iface: &baml_compiler2_hir::item_tree::Interface,
     interface_args: &[Ty],
+    self_ty: &Ty,
     block_associated_bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
-    iface_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     binding_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    iface_namespace_path: &[Name],
     binding_namespace_path: &[Name],
     generic_params: &[Name],
     caller_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<(Name, Ty)> {
-    // Each expression resolves names in the scope it was *written* in — never the
-    // other declaration's. A binding value (impl-block source) sees the impl's own
-    // generics; an associated-type default (interface source) sees the interface's.
-    // Resolved associated types join both as they resolve (a later binding may
-    // reference an earlier sibling). Each scope carries its own substitution map,
-    // so a name collision between an impl generic and an interface parameter
-    // resolves each expression to its own scope's meaning.
+    // A binding value (impl-block source) resolves names in the impl's own scope; an
+    // associated-type default (interface source) is lowered once — with a symbolic `Self` —
+    // by `interface_associated_type_default` and realized here at the impl's `self_ty`.
+    // Resolved associated types join the value scope as they resolve (a later binding may
+    // reference an earlier sibling).
     let mut value_scope: Vec<Name> = generic_params.to_vec();
     let mut value_bindings: rustc_hash::FxHashMap<Name, Ty> = generic_params
         .iter()
         .map(|param| (param.clone(), Ty::TypeVar(param.clone(), TyAttr::default())))
         .collect();
-    let mut default_scope: Vec<Name> = iface.generic_params.clone();
     let mut default_bindings = generics::bind_type_vars(&iface.generic_params, interface_args);
-    // The interface's declared parameter bounds, so a `T.member` projection in an
-    // associated-type *default* resolves `T`'s declaring interface; a binding
-    // *value*'s type variables project through the impl's own `caller_bounds`.
-    let iface_bounds = crate::lower_type_expr::lower_decl_generic_param_bounds(
-        db,
-        iface_pkg_items,
-        iface_namespace_path,
-        &iface.generic_params,
-        &iface.generic_param_bounds,
-    );
 
     iface
         .associated_types
@@ -202,64 +190,42 @@ fn lower_interface_associated_bindings(
                     &value_bindings,
                 )
             } else {
-                let default = assoc.default.as_ref()?;
-                crate::generics::substitute_ty(
-                    &crate::lower_type_expr::lower_type_expr(
-                        default,
-                        &crate::lower_type_expr::ScopeCtx {
-                            db,
-                            package_items: iface_pkg_items,
-                            ns_context: iface_namespace_path,
-                            generic_params: &default_scope,
-                            bounds: &iface_bounds,
-                            self_ty: None,
-                        },
-                        diagnostics,
-                    ),
-                    &default_bindings,
-                )
+                // Fill the omitted default at the impl's receiver: `Self` is the for-type, so a
+                // Self-referencing default (`type Items = Self.Item[]`) reduces through the impl.
+                let (default, _diags) =
+                    interface_associated_type_default(db, iface_loc, assoc.name.clone())?;
+                let realized = realize_associated_default(
+                    &default,
+                    &iface.generic_params,
+                    interface_args,
+                    self_ty,
+                );
+                crate::generics::substitute_ty(&realized, &default_bindings)
             };
             value_scope.push(assoc.name.clone());
             value_bindings.insert(assoc.name.clone(), ty.clone());
-            default_scope.push(assoc.name.clone());
             default_bindings.insert(assoc.name.clone(), ty.clone());
             Some((assoc.name.clone(), ty))
         })
         .collect()
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "threads the full lowering context (interface, args, bindings, package, \
-              namespace) plus the fill-defaults flag and a diagnostics sink"
-)]
-fn complete_interface_associated_bindings_from_tys(
-    db: &dyn crate::Db,
+fn complete_interface_associated_bindings_from_tys<'db>(
+    db: &'db dyn crate::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     iface: &baml_compiler2_hir::item_tree::Interface,
     interface_args: &[Ty],
     associated_bindings: &[(Name, Ty)],
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
-    iface_namespace_path: &[Name],
     // When false, an unbound associated type is left absent rather than filled
     // with its declared default. Callers resolving through a *rigid* `Self` pass
     // false: the eventual implementor may override the default, so `Self.X` must
     // stay a symbolic projection instead of collapsing to the interface's default.
     fill_defaults: bool,
-    diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Vec<(Name, Ty)> {
     let mut bindings = generics::bind_type_vars(&iface.generic_params, interface_args);
     for (name, ty) in associated_bindings {
         bindings.insert(name.clone(), ty.clone());
     }
-    // The interface's declared parameter bounds, so a `T.member` projection in
-    // an associated-type default resolves `T`'s declaring interface.
-    let iface_bounds = crate::lower_type_expr::lower_decl_generic_param_bounds(
-        db,
-        pkg_items,
-        iface_namespace_path,
-        &iface.generic_params,
-        &iface.generic_param_bounds,
-    );
 
     iface
         .associated_types
@@ -276,30 +242,154 @@ fn complete_interface_associated_bindings_from_tys(
             if !fill_defaults {
                 return None;
             }
-            assoc.default.as_ref().map(|default| {
-                let ty = {
-                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
-                    crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_expr(
-                            default,
-                            &crate::lower_type_expr::ScopeCtx {
-                                db,
-                                package_items: pkg_items,
-                                ns_context: iface_namespace_path,
-                                generic_params: &generic_params,
-                                bounds: &iface_bounds,
-                                self_ty: None,
-                            },
-                            diagnostics,
-                        ),
-                        &bindings,
-                    )
-                };
-                bindings.insert(assoc.name.clone(), ty.clone());
-                (assoc.name.clone(), ty)
-            })
+            // Fill the default eagerly at this interface realized on the receiver: `Self` is
+            // that existential (its generic args plus the bindings resolved so far), so a
+            // Self-referencing default (`type Items = Self.Item[]`) reduces against them. The
+            // default is lowered once (symbolic `Self`) by the shared query.
+            let (default, _diags) =
+                interface_associated_type_default(db, iface_loc, assoc.name.clone())?;
+            let self_pins: Vec<(Name, Ty)> = iface
+                .associated_types
+                .iter()
+                .filter_map(|a| bindings.get(&a.name).map(|t| (a.name.clone(), t.clone())))
+                .collect();
+            let self_ty = Ty::Interface(
+                interface_loc_qtn(db, iface_loc)?,
+                interface_args.to_vec(),
+                self_pins,
+                TyAttr::default(),
+            );
+            let realized = realize_associated_default(
+                &default,
+                &iface.generic_params,
+                interface_args,
+                &self_ty,
+            );
+            let ty = crate::generics::substitute_ty(&realized, &bindings);
+            bindings.insert(assoc.name.clone(), ty.clone());
+            Some((assoc.name.clone(), ty))
         })
         .collect()
+}
+
+/// An associated type's `default` type, lowered ONCE against the interface's own scope.
+///
+/// The default is lowered with the interface's generic parameters as rigid type variables
+/// and a symbolic `Self` — a rigid `Self` type variable bounded by this interface at those
+/// parameters — so a Self-referencing default (`type Items = Self.Item[]`) lowers to a
+/// projection over that symbolic `Self` (`(Self as I).Item[]`) instead of erroring for want
+/// of a receiver. A referencing site realizes the default by substituting its own `Self` and
+/// the interface's actual generic arguments into the returned type (see
+/// [`realize_associated_default`]) — that substitution is the single path that fills a
+/// defaulted associated type everywhere, replacing the former per-site re-lowering.
+///
+/// The lowering diagnostics travel with the type so the interface-declaration checker
+/// surfaces them exactly once (`infer_scope_types`' interface arm); every referencing site
+/// reuses the type and drops the diagnostics. `None` when the associated type has no default
+/// (or the interface / associated type is absent).
+// `name` is passed by value because a salsa tracked-query key must be owned; `#[allow]`
+// (not `#[expect]`) because the salsa macro emits the argument in two places and only one
+// trips `needless_pass_by_value`, so an expectation would read as unfulfilled.
+#[allow(clippy::needless_pass_by_value)]
+#[salsa::tracked]
+pub(crate) fn interface_associated_type_default<'db>(
+    db: &'db dyn crate::Db,
+    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
+    name: Name,
+) -> Option<(Ty, Vec<crate::infer_context::TirTypeError>)> {
+    let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+    let iface = item_tree.interfaces.get(&iface_loc.id(db))?;
+    let assoc = iface.associated_types.iter().find(|a| a.name == name)?;
+    let default = assoc.default.as_ref()?;
+
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+    let pkg_items =
+        baml_compiler2_ppir::package_items(db, PackageId::new(db, pkg_info.package.clone()));
+
+    // A symbolic `Self`: a rigid type variable bounded by this interface at its own generic
+    // parameters, so a `Self.Other` projection in the default resolves through the bound.
+    let self_name = Name::new("Self");
+    let self_constraint = baml_type::Interface::new(
+        crate::lower_type_expr::qualify_def(db, Definition::Interface(iface_loc), &iface.name),
+        iface
+            .generic_params
+            .iter()
+            .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+            .collect(),
+        Vec::new(),
+    );
+    let mut bounds = crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc).clone();
+    bounds.insert(self_name.clone(), vec![self_constraint]);
+    let generic_params: Vec<Name> = iface
+        .generic_params
+        .iter()
+        .cloned()
+        .chain(std::iter::once(self_name.clone()))
+        .collect();
+
+    let mut diagnostics = Vec::new();
+    let lowered = crate::lower_type_expr::lower_type_expr(
+        default,
+        &crate::lower_type_expr::ScopeCtx {
+            db,
+            package_items: pkg_items,
+            ns_context: &pkg_info.namespace_path,
+            generic_params: &generic_params,
+            bounds: &bounds,
+            self_ty: Some(Ty::TypeVar(self_name, TyAttr::default())),
+        },
+        &mut diagnostics,
+    );
+    Some((lowered, diagnostics))
+}
+
+/// Realize an interface associated type's default (from [`interface_associated_type_default`])
+/// at a concrete receiver: substitute `self_ty` for the symbolic `Self` and `interface_args`
+/// for the interface's `generic_params`. This is how a defaulted associated type is *filled*
+/// eagerly wherever the interface is used.
+pub(crate) fn realize_associated_default(
+    default: &Ty,
+    generic_params: &[Name],
+    interface_args: &[Ty],
+    self_ty: &Ty,
+) -> Ty {
+    let mut bindings = generics::bind_type_vars(generic_params, interface_args);
+    bindings.insert(Name::new("Self"), self_ty.clone());
+    generics::substitute_ty(default, &bindings)
+}
+
+/// The realized type of a *defaulted* associated `member` for an interface existential
+/// `Ty::Interface(qtn, args, …)`, or `None` when `member` is not a defaulted associated
+/// type of that interface.
+///
+/// An existential fixes an omitted defaulted associated type to its default: `Boxed<string>`
+/// (with `type Item = T`) has `Item = string`. The default (lowered once by
+/// [`interface_associated_type_default`]) is realized with `self_ty` — the existential
+/// itself — as `Self`, so a Self-referencing default (`type Items = Self.Item[]`) resolves
+/// against the existential's own pins. A *bound* never fills a default this way — its
+/// implementor may override it — which is why this is keyed on the interface-existential
+/// base, not the type-variable one.
+pub(crate) fn existential_associated_default(
+    db: &dyn crate::Db,
+    res_ctx: &crate::package_interface::PackageResolutionContext<'_>,
+    qtn: &QualifiedTypeName,
+    args: &[Ty],
+    self_ty: &Ty,
+    member: &Name,
+) -> Option<Ty> {
+    let items = res_ctx.items_for_package(db, qtn.package())?;
+    let Definition::Interface(iface_loc) = items.lookup_type(qtn.namespace(), qtn.name())? else {
+        return None;
+    };
+    let (default, _diagnostics) = interface_associated_type_default(db, iface_loc, member.clone())?;
+    let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+    let iface = item_tree.interfaces.get(&iface_loc.id(db))?;
+    Some(realize_associated_default(
+        &default,
+        &iface.generic_params,
+        args,
+        self_ty,
+    ))
 }
 
 fn lower_interface_type_associated_bindings(
@@ -373,28 +463,33 @@ fn lower_interface_type_associated_bindings(
                 bindings.insert(assoc.name.clone(), ty.clone());
                 return Some((assoc.name.clone(), ty));
             }
-            assoc.default.as_ref().map(|default| {
-                let ty = {
-                    let generic_params: Vec<_> = bindings.keys().cloned().collect();
-                    crate::generics::substitute_ty(
-                        &crate::lower_type_expr::lower_type_expr(
-                            default,
-                            &crate::lower_type_expr::ScopeCtx {
-                                db: ctx.db,
-                                package_items: ctx.iface_pkg_items,
-                                ns_context: ctx.iface_namespace_path,
-                                generic_params: &generic_params,
-                                bounds: &iface_bounds,
-                                self_ty: None,
-                            },
-                            diagnostics,
-                        ),
-                        &bindings,
-                    )
-                };
-                bindings.insert(assoc.name.clone(), ty.clone());
-                (assoc.name.clone(), ty)
-            })
+            // Fill the omitted default eagerly at this interface realized on the receiver:
+            // `Self` is that existential (its generic args plus the bindings resolved so far),
+            // so a Self-referencing default (`type Items = Self.Item[]`) reduces against them.
+            // The default is lowered once (symbolic `Self`) by the shared query.
+            let (default, _diags) =
+                interface_associated_type_default(ctx.db, ctx.iface_loc, assoc.name.clone())?;
+            let self_pins: Vec<(Name, Ty)> = ctx
+                .iface
+                .associated_types
+                .iter()
+                .filter_map(|a| bindings.get(&a.name).map(|t| (a.name.clone(), t.clone())))
+                .collect();
+            let self_ty = Ty::Interface(
+                interface_loc_qtn(ctx.db, ctx.iface_loc)?,
+                ctx.interface_args.to_vec(),
+                self_pins,
+                TyAttr::default(),
+            );
+            let realized = realize_associated_default(
+                &default,
+                &ctx.iface.generic_params,
+                ctx.interface_args,
+                &self_ty,
+            );
+            let ty = crate::generics::substitute_ty(&realized, &bindings);
+            bindings.insert(assoc.name.clone(), ty.clone());
+            Some((assoc.name.clone(), ty))
         })
         .collect()
 }
@@ -811,13 +906,11 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
         let mut diags = Vec::new();
         let associated_bindings = complete_interface_associated_bindings_from_tys(
             db,
+            loc,
             iface,
             &args,
             &associated_bindings,
-            parent_pkg_items,
-            &pkg_info.namespace_path,
             fill_associated_defaults,
-            &mut diags,
         );
         if !seen.insert((loc, args.clone(), associated_bindings.clone())) {
             continue;
@@ -898,6 +991,7 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
             let parent_assoc = lower_interface_type_associated_bindings(
                 &InterfaceTypeAssocLowering {
                     db,
+                    iface_loc: parent_loc,
                     iface: parent_iface,
                     interface_args: &parent_args,
                     explicit_associated_bindings: parent_explicit_assoc,

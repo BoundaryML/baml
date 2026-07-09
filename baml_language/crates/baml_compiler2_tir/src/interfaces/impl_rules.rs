@@ -487,9 +487,6 @@ pub fn impl_data<'db>(
         .get(&iface_loc.id(db))
         .ok_or(ImplDataError::Malformed)?;
 
-    let iface_pkg_info = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
-    let iface_pkg_id = PackageId::new(db, iface_pkg_info.package.clone());
-    let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_id);
     let mut assoc_diags = Vec::new();
     // The impl's own generic bounds, so a `T.member` projection in a binding value
     // (`type Item = T.Elem`) resolves through the impl generic's declared bound.
@@ -497,12 +494,12 @@ pub fn impl_data<'db>(
         generic_params.iter().cloned().collect();
     let associated_types = lower_interface_associated_bindings(
         db,
+        iface_loc,
         iface_data,
         &interface_args,
+        &for_ty_pattern,
         &block.associated_type_bindings,
-        iface_pkg_items,
         pkg_items,
-        &iface_pkg_info.namespace_path,
         ns,
         &generic_param_names,
         &impl_bounds,
