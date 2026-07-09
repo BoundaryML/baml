@@ -120,6 +120,10 @@ pub(crate) fn lower_projection(
             error_ty()
         }
         Determination::Ambiguous(candidates) => {
+            // BUG: dropping the generics here renders two distinct declarers of the
+            // same interface (`Codec<TextFormat>` and `Codec<CodeFormat>`) as an
+            // indistinguishable `(Codec, Codec)`. The full `Interface`s are in hand;
+            // carrying them (not just the QTN) would let the diagnostic show the args.
             diagnostics.push(TirTypeError::AmbiguousAssociatedTypeProjection {
                 member,
                 candidates: candidates.into_iter().map(|iface| iface.name).collect(),

@@ -375,14 +375,14 @@ fn associated_type_adapter_class_with_never_error_coerces_to_iterator() {
             type Item
             type Error = never
 
-            function iter(self) -> Iterator<Item = Item, Error = Error> throws never
+            function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never
         }
 
         interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
             type Item
             type Error = never
 
-            function next(self) -> Item | Done throws Error
+            function next(self) -> Self.Item | Done throws Self.Error
         }
 
         class Map<T, R, E, E2> {
@@ -3832,7 +3832,7 @@ fn ambiguous_unqualified_projection_type_alias_errors() {
 
         type Ambiguous = Document.Output
         "#,
-        "ambiguous associated type projection",
+        "ambiguous associated type `Output`",
     );
 }
 

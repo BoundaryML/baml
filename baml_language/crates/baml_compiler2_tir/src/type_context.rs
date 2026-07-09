@@ -102,6 +102,26 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
         {
             return ProjectionStep::Reduced(pin.clone());
         }
+        // A type variable projects through its own interface bound: `(P as Parser).Output`
+        // with `P extends Parser<Output = int>` reduces to `int`, because the bound pins the
+        // member. Match the qualifier against a carried bound by head — name and generic
+        // args — and read its pin for `member`. (A bound reached only through the qualifier's
+        // `requires` closure stays opaque here; the direct bound is the common case.)
+        if let Ty::TypeVar(name, _) = base {
+            for have in self.type_var_bound(name) {
+                if have.name == interface.name
+                    && have.generics.len() == interface.generics.len()
+                    && have
+                        .generics
+                        .iter()
+                        .zip(&interface.generics)
+                        .all(|(h, i)| self.equivalent(h, i))
+                    && let Some((_, pin)) = have.associated_types.iter().find(|(n, _)| n == member)
+                {
+                    return ProjectionStep::Reduced(pin.clone());
+                }
+            }
+        }
         // A concrete-headed base determines the member through its `implements` block for
         // the written qualifier interface — `(int as Foo).Assoc` is int's `type Assoc = …`,
         // read off the realized interface the impl provides. Rigid type variables in the

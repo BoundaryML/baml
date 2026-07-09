@@ -106,8 +106,36 @@ pub(crate) fn normalized_arg_implements_bound(
         _ => return ctx.implements_interface(arg, bound),
     };
     carried_bounds.iter().any(|have| {
-        ctx.equivalent(&have.to_ty(), &bound.to_ty()) || ctx.interface_requires(have, bound)
+        carried_bound_satisfies(ctx, have, bound) || ctx.interface_requires(have, bound)
     })
+}
+
+/// Whether a bound `have` carried by a type variable (or projection) discharges a
+/// required `bound`.
+///
+/// The two are the same interface — same name and generic args — and `have` pins
+/// every associated type `bound` pins, to the same type. `have` may pin *more*: a
+/// more-specific carried bound like `Parser<Output = int>` still discharges the
+/// bare `Parser` requirement, so a `<P extends Parser<Output = int>>` argument
+/// satisfies a `<P extends Parser>` parameter. It may not *conflict* — a differing
+/// pin fails — and a bare `have` does not satisfy a pinned requirement.
+fn carried_bound_satisfies(
+    ctx: &impl baml_type::normalize::TypeContext,
+    have: &baml_type::Interface,
+    bound: &baml_type::Interface,
+) -> bool {
+    have.name == bound.name
+        && have.generics.len() == bound.generics.len()
+        && have
+            .generics
+            .iter()
+            .zip(&bound.generics)
+            .all(|(h, b)| ctx.equivalent(h, b))
+        && bound.associated_types.iter().all(|(bound_name, bound_ty)| {
+            have.associated_types.iter().any(|(have_name, have_ty)| {
+                have_name == bound_name && ctx.equivalent(have_ty, bound_ty)
+            })
+        })
 }
 
 #[allow(clippy::too_many_arguments)]

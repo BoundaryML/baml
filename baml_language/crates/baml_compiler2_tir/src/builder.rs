@@ -4900,8 +4900,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     expr_id,
                 );
             }
+            return target_ty;
         }
-        target_ty
+        // A concrete (or otherwise-implementing) base carries its realized associated
+        // bindings into the view: `doc.as<Codec<TextFormat>>` types as
+        // `Codec<TextFormat, Output = string>`, not the bare existential — so a
+        // subsequent `(… as I).member` or a method returning `Self.member` reduces
+        // through the pin. Fall back to the written interface when no single realized
+        // view exists (an `unknown`/error base, or an unpinnable existential).
+        self.actual_interface_view_for_formal(&target_ty, &base_ty)
+            .unwrap_or(target_ty)
     }
 
     #[inline(never)]
@@ -10855,10 +10863,26 @@ impl<'db> TypeInferenceBuilder<'db> {
         Ty::Interface(iface_qtn, iface_args, completed, attr)
     }
 
+    /// Whether a realized interface view's args are consistent with the formal
+    /// the caller asked for. A formal arg that mentions a type variable is a
+    /// wildcard — the caller's binding inference resolves it — while a ground
+    /// formal arg must match exactly. This is what lets a concrete
+    /// `Codec<TextFormat>` formal select only the `Codec<TextFormat>` view when
+    /// the receiver also implements `Codec<CodeFormat>`, instead of matching both
+    /// on the shared `Codec` head and collapsing to an ambiguous None.
+    fn interface_view_args_match_formal(&self, formal_args: &[Ty], view_args: &[Ty]) -> bool {
+        formal_args.len() == view_args.len()
+            && formal_args
+                .iter()
+                .zip(view_args)
+                .all(|(f, v)| crate::generics::contains_typevar(f) || self.equivalent(f, v))
+    }
+
     fn interface_view_in_requires_closure(
         &self,
         root_interface_ty: &Ty,
         target_qtn: &crate::ty::QualifiedTypeName,
+        target_args: &[Ty],
     ) -> Option<Ty> {
         let Ty::Interface(root_qtn, root_args, root_associated_bindings, _) = root_interface_ty
         else {
@@ -10889,7 +10913,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Definition::Interface(iface_loc),
                 &iface_data.name,
             );
-            if &iface_qtn == target_qtn {
+            if &iface_qtn == target_qtn
+                && self.interface_view_args_match_formal(target_args, &iface_args)
+            {
                 return Some(Ty::Interface(
                     iface_qtn,
                     iface_args,
@@ -10923,7 +10949,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let formal_ty = self.interface_type_with_default_associated_bindings(
             self.expand_alias_chains(formal_ty.clone()),
         );
-        let Ty::Interface(formal_qtn, _, _, _) = &formal_ty else {
+        let Ty::Interface(formal_qtn, formal_args, _, _) = &formal_ty else {
             return None;
         };
         let actual_ty = self.expand_alias_chains(actual_ty.clone());
@@ -10931,7 +10957,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // The actual may itself be an interface / type-var whose `requires` closure reaches the
         // formal interface.
-        if let Some(view) = self.interface_view_in_requires_closure(&actual_ty, formal_qtn)
+        if let Some(view) =
+            self.interface_view_in_requires_closure(&actual_ty, formal_qtn, formal_args)
             && !self.merge_interface_inference_candidate(&mut candidate, view)
         {
             return None;
@@ -10945,7 +10972,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         for resolved_impl in self.type_impls(&actual_ty) {
             let implemented = resolved_impl.implemented_interface(db).to_ty();
-            let Some(view) = self.interface_view_in_requires_closure(&implemented, formal_qtn)
+            let Some(view) =
+                self.interface_view_in_requires_closure(&implemented, formal_qtn, formal_args)
             else {
                 continue;
             };
