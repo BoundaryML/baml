@@ -131,7 +131,7 @@ test "28: proxy / gateway / local runtime are all OpenAiCompatible, differing on
 test "28: the registry constructs the intended concrete provider per prefix" {
     let openai = s28_resolve("openai/gpt-4o") catch (e) { _ => NoCapProvider {} };
     let anthropic = s28_resolve("anthropic/claude-sonnet-4-5") catch (e) { _ => NoCapProvider {} };
-    let gemini = s28_resolve("gemini/gemini-2.5-flash") catch (e) { _ => NoCapProvider {} };
+    let gemini = s28_resolve("gemini/gemini-flash-latest") catch (e) { _ => NoCapProvider {} };
     let brand_of = (p: baml.ai.Provider) -> string throws never {
         match (p) {
             let o: baml.ai.OpenAi     => "openai",
@@ -279,13 +279,13 @@ testset "integ-test-28-provider-diversity" {
         let r = s28_Extract(
             "Grace Hopper is a compiler pioneer with 30 years of experience.",
             client = baml.ai.Gemini {
-                model: "gemini-2.5-flash",
+                model: "gemini-flash-latest",
                 api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
                 base_url: null,
                 extra_headers: null,
                 extra_body: null,
                 append_output_schema: null,
-            },
+            }.with_retry(2),
         ) catch (e) {
             _ => {
                 log.warn(e);

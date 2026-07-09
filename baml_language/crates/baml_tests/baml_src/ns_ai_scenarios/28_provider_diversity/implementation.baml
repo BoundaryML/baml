@@ -74,7 +74,7 @@ function s28_env(name: string) -> string throws never {
 //
 //   "openai/gpt-4o"          -> OpenAi              (Bearer, api.openai.com)
 //   "anthropic/claude-…"     -> Anthropic          (x-api-key + version header)
-//   "gemini/gemini-2.5-flash"-> Gemini             (?key= query param)
+//   "gemini/gemini-flash-latest"-> Gemini             (?key= query param)
 //   "groq/llama-3.3-70b"     -> OpenAiCompatible    (Bearer, groq base_url)
 //   "together/…"             -> OpenAiCompatible    (Bearer, together base_url)
 //   "ollama/qwen2.5"         -> OpenAiCompatible    (NoAuth, localhost runtime)

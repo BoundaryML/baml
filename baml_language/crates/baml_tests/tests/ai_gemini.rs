@@ -310,7 +310,7 @@ async fn gemini_live_call() {
             // (reqwest's initial connection to generativelanguage.googleapis.com can
             // fail where curl's happy-eyeballs succeeds; the retry lands).
             let p = baml.ai.Gemini {
-                model: "gemini-2.5-flash",
+                model: "gemini-flash-latest",
                 api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
                 base_url: null,
             }.with_retry(2);
@@ -345,7 +345,7 @@ async fn gemini_structured_live_call() {
         class Person { name string, age int }
         function main() -> string {
             let p = baml.ai.Gemini {
-                model: "gemini-2.5-flash",
+                model: "gemini-flash-latest",
                 api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
                 base_url: null,
             }.with_retry(2);
@@ -422,7 +422,7 @@ async fn gemini_stream_live() {
         r#"
         function main() -> string {
             let p = baml.ai.Gemini {
-                model: "gemini-2.5-flash",
+                model: "gemini-flash-latest",
                 api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
                 base_url: null,
             };

@@ -23539,7 +23539,7 @@ function baml.ai.native_provider_for(primitive: baml.llm.PrimitiveClient) -> bam
     load_const null
     cmp_op ==
     pop_jump_if_false L18
-    load_const "gemini-2.5-flash"
+    load_const "gemini-flash-latest"
     store_var _34
 
   L18:
@@ -26088,7 +26088,7 @@ function baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint 
     jump L2
 
   L1:
-    load_const 0n
+    load_const 300000000000n
 
   L2:
     return

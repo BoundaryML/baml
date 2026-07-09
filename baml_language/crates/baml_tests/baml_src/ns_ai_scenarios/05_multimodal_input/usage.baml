@@ -39,7 +39,7 @@ function s05_claude() -> baml.ai.Provider {
 }
 function s05_flash() -> baml.ai.Provider {
     baml.ai.Gemini {
-        model: "gemini-2.5-flash", api_key: baml.env.get_or_panic("GOOGLE_API_KEY"), base_url: null,
+        model: "gemini-flash-latest", api_key: baml.env.get_or_panic("GOOGLE_API_KEY"), base_url: null,
         extra_headers: null, extra_body: null, append_output_schema: null,
     }
 }
@@ -209,7 +209,7 @@ test "05: the same image resolves to each provider's own wire encoding" {
 
     // Gemini → inline_data (no remote-URL fetch: bytes are inlined).
     let gem: baml.ai.Provider = baml.ai.Gemini {
-        model: "gemini-2.5-flash", api_key: "offline-dummy", base_url: null,
+        model: "gemini-flash-latest", api_key: "offline-dummy", base_url: null,
         extra_headers: null, extra_body: null, append_output_schema: null,
     };
     let gem_body = s05_built_body(gem, msgs);
@@ -261,7 +261,7 @@ test "05: audio rides Gemini inline (inline_data)" {
         ] },
     ];
     let gem: baml.ai.Provider = baml.ai.Gemini {
-        model: "gemini-2.5-flash", api_key: "offline-dummy", base_url: null,
+        model: "gemini-flash-latest", api_key: "offline-dummy", base_url: null,
         extra_headers: null, extra_body: null, append_output_schema: null,
     };
     assert.is_true(s05_built_body(gem, msgs).includes("inline_data"))
@@ -315,7 +315,7 @@ test "05: video is a runtime gap; the app degrades to a keyframe image" {
     let keyframe = baml.media.Image.from_url("https://example.com/frame.png", "image/png");
 
     let r = s05_DescribeVideoSafe(clip, client = baml.ai.Gemini {
-        model: "gemini-2.5-flash", api_key: "offline-dummy", base_url: null,
+        model: "gemini-flash-latest", api_key: "offline-dummy", base_url: null,
         extra_headers: null, extra_body: null, append_output_schema: null,
     }) catch (e) {
         // The gap throws; degrade to describing the keyframe with an echo client.

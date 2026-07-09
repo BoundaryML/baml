@@ -7268,7 +7268,7 @@ fn baml.ai.native_provider_for(primitive: baml.llm.PrimitiveClient) -> baml.ai.P
     }
 
     bb21: {
-        _34 = const "gemini-2.5-flash";
+        _34 = const "gemini-flash-latest";
         goto -> bb22;
     }
 
@@ -25558,7 +25558,7 @@ fn baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
     }
 
     bb2: {
-        _0 = const 0n;
+        _0 = const 300000000000n;
         goto -> bb3;
     }
 

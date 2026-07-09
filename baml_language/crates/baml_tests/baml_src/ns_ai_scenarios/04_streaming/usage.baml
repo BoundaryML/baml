@@ -251,7 +251,7 @@ testset "integ-test-04-streaming" {
     let m = s04_stream_meeting(
       "Lunch with Alice and Bob on Friday to plan Q3.",
       client = baml.ai.Gemini {
-        model: "gemini-2.5-flash",
+        model: "gemini-flash-latest",
         api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
         base_url: null,
         extra_headers: null,
@@ -273,7 +273,7 @@ testset "integ-test-04-streaming" {
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
         base_url: null,
       }.with_retry(2).fallback_to(baml.ai.Gemini {
-        model: "gemini-2.5-flash",
+        model: "gemini-flash-latest",
         api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
         base_url: null,
         extra_headers: null,

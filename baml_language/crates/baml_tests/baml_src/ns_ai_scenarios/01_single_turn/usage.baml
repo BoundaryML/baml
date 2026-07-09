@@ -209,14 +209,16 @@ testset "integ-test-01-single-turn" {
     }
 
     test "01 live: the same body through a native Gemini override" {
+        // .with_retry(2): live Gemini transiently 429s/empties under the
+        // concurrent sweep — the reliability combinator IS the honest answer.
         let r = s01_Summarize("Reply with exactly the lowercase word: pong", client = baml.ai.Gemini {
-            model: "gemini-2.5-flash",
+            model: "gemini-flash-latest",
             api_key: baml.env.get_or_panic("GOOGLE_API_KEY"),
             base_url: null,
             extra_headers: null,
             extra_body: null,
             append_output_schema: null,
-        }) catch (e) {
+        }.with_retry(2)) catch (e) {
             _ => "live call failed",
         };
         assert.is_true(r.includes("pong") || r.includes("Pong"))

@@ -225,7 +225,7 @@ function native_provider_for(primitive: root.llm.PrimitiveClient) -> Provider | 
     }
     if (primitive.provider == "google-ai") {
         return Gemini {
-            model: primitive.options.model ?? "gemini-2.5-flash",
+            model: primitive.options.model ?? "gemini-flash-latest",
             api_key: primitive.options.api_key,
             base_url: primitive.options.base_url,
             extra_headers: primitive.options.headers,

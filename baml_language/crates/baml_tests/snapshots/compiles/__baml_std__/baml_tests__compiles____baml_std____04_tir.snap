@@ -1687,7 +1687,7 @@ function baml.ai.native_provider_for(primitive: baml.llm.PrimitiveClient) -> bam
       }
     if (primitive.provider == "google-ai" : bool) : void
       { : never
-        return Gemini { model: primitive.options.model ?? "gemini-2.5-flash", api_key: primitive.options.api_key, base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } : baml.ai.Gemini
+        return Gemini { model: primitive.options.model ?? "gemini-flash-latest", api_key: primitive.options.api_key, base_url: primitive.options.base_url, extra_headers: primitive.options.headers, extra_body: primitive.options.request_body, append_output_schema: false } : baml.ai.Gemini
       }
     if (primitive.provider == "openai-generic" : bool) : void
       { : never
@@ -7107,10 +7107,10 @@ class baml.http.SseStream {
   _handle: $rust_type
 }
 function baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint throws never {
-  { : 0n | bigint
-    match (timeout : baml.time.Duration | null) : 0n | bigint
+  { : 300000000000n | bigint
+    match (timeout : baml.time.Duration | null) : 300000000000n | bigint
       null =>
-        0n : 0n
+        300000000000n : 300000000000n
       t: root.time.Duration =>
         t.to_nanoseconds() : bigint
   }
