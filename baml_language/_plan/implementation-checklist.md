@@ -105,3 +105,10 @@ TDD; **BAML-native tests preferred** (Rust only for wiremock/compiler-phase/runn
 stdlib via `baml-cli run --file`; run affected suites + regen snapshots before commit; commit per ✅;
 log divergences in `deviations.md`, findings in `baml_gotchas.md`; keep `E2E_TESTS.md`/`REALIZED.md`
 current as the verified surface grows.
+
+## Post-C bugs found by the alignment sweep (fix queue)
+
+- [x] **Perf-merge regression #1**: session-wide implementor union dropped from `package_lowering_data` — stdlib capability negotiation blind to user providers (54 corpus failures). Fixed e64d825c5 + `stdlib_match_sees_user_package_implementors` regression test.
+- [x] **Perf-merge regression #2**: out-of-body class-implements registration dropped from the `implements_for` loop — cross-file `implements Iface for Class` invisible to interface match/catch (broke catch-by-channel triage; `Unsupported` missing from `StreamError`'s implementor set). Fixed 7f95b8d23 + 3 regression tests in interfaces.rs.
+- [ ] **User-package companion driver with user-class extras crashes lowering** (07 agent finding): a `//baml:llm_companion` driver whose extra param type is a user class generates companions in FOREIGN namespaces where the bare type path doesn't resolve → corpus-wide runtime-lowering crash. `make_user_drive_companion` must root-absolutize extra-param TypeExprs (same family as the "driver call paths are root.-absolute" gotcha). E0151 should probably also flag non-absolutizable extras.
+- [x] **SaveTo full-vs-filtered anomaly** (06): resolved by the two perf-merge fixes — full corpus 2204/2204 green post-7f95b8d23 (and 4min -> 50s: the perf merge's win is real once correct).
