@@ -79,6 +79,15 @@ pub trait TypeExprContext<'db> {
         base: &Ty,
         interface: &baml_type::Interface,
     ) -> Option<baml_type::Interface>;
+
+    /// The associated-type names an enclosing interface's `Self` bound declares
+    /// (its own and every one inherited through `requires`). A bare single-segment
+    /// path naming one of these is the illegal spelling of `Self.<name>`, reported
+    /// specially. Empty in the common case (`Self` is not an interface, or there is
+    /// no `Self`), so most scopes inherit this no-op default.
+    fn self_associated_type_names(&self) -> Box<[baml_base::Name]> {
+        Box::new([])
+    }
 }
 
 /// "Did you mean" candidates for an unresolved single-segment name: every namespace in
@@ -183,6 +192,25 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
             base,
             interface,
         )
+    }
+
+    fn self_associated_type_names(&self) -> Box<[baml_base::Name]> {
+        // Only interfaces contribute associated types, and only where `Self` is in
+        // scope. `Self`'s interface bound(s) live in `bounds` under "Self".
+        if self.self_ty.is_none() {
+            return Box::new([]);
+        }
+        let Some(self_bounds) = self.bounds.get(&baml_base::Name::new("Self")) else {
+            return Box::new([]);
+        };
+        let mut names: rustc_hash::FxHashSet<baml_base::Name> = rustc_hash::FxHashSet::default();
+        for iface in self_bounds {
+            names.extend(crate::inference::interface_associated_type_names_for_qtn(
+                self.db,
+                &iface.name,
+            ));
+        }
+        names.into_iter().collect()
     }
 }
 
@@ -689,6 +717,23 @@ pub fn lower_type_expr(
                         .map(smol_str::SmolStr::as_str)
                         .collect::<Vec<_>>()
                         .join(".");
+                    // If this otherwise-unresolved single-segment name is an associated
+                    // type of the enclosing interface's `Self`, the user almost certainly
+                    // meant the projection `Self.<name>` (bare associated-type names are
+                    // illegal). Surface that as the leading "did you mean" on the ordinary
+                    // unresolved-type error — a real in-scope type of the same name resolves
+                    // in the `Ok` branch above and never reaches here.
+                    let suggestions = if segments.len() == 1
+                        && generic_args.is_empty()
+                        && associated_type_bindings.is_empty()
+                        && ctx.self_associated_type_names().contains(&segments[0])
+                    {
+                        std::iter::once(baml_base::Name::new(format!("Self.{name_str}")))
+                            .chain(suggestions.iter().cloned())
+                            .collect()
+                    } else {
+                        suggestions
+                    };
                     diagnostics.push(TirTypeError::UnresolvedType {
                         name: baml_base::Name::new(&name_str),
                         suggestions,

@@ -11501,51 +11501,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    pub(crate) fn type_expr_contains_self(ty: &TypeExpr) -> bool {
-        match &ty.kind {
-            TypeExprKind::Path {
-                segments,
-                generic_args,
-                ..
-            } => {
-                segments.iter().any(|segment| segment.as_str() == "Self")
-                    || generic_args.iter().any(Self::type_expr_contains_self)
-            }
-            TypeExprKind::List { inner, .. } | TypeExprKind::Optional { inner, .. } => {
-                Self::type_expr_contains_self(inner)
-            }
-            TypeExprKind::Map { key, value, .. } => {
-                Self::type_expr_contains_self(key) || Self::type_expr_contains_self(value)
-            }
-            TypeExprKind::Union { variants, .. } => {
-                variants.iter().any(Self::type_expr_contains_self)
-            }
-            TypeExprKind::Function {
-                params,
-                ret,
-                throws,
-                ..
-            } => {
-                params
-                    .iter()
-                    .any(|param| Self::type_expr_contains_self(&param.ty))
-                    || Self::type_expr_contains_self(ret)
-                    || throws
-                        .as_ref()
-                        .is_some_and(|throws| Self::type_expr_contains_self(throws))
-            }
-            _ => false,
-        }
-    }
-
     /// Whether `ty` references the *bare* `Self` type anywhere — a path of exactly
     /// `[Self]`, recursing structurally. A `Self.Assoc` projection is NOT bare `Self`:
     /// on an existential receiver every associated type is pinned (or defaulted), so the
     /// projection denotes one type shared by every member of the existential — none of
-    /// the `Self`-identity problems apply. Object safety keys on this predicate;
-    /// [`Self::type_expr_contains_self`] (any `Self` reference, projections included)
-    /// remains for checks that ban `Self` outright (e.g. interface field types, where a
-    /// projection is equally unresolvable).
+    /// the `Self`-identity problems apply. Both object safety and the interface-field
+    /// ban (E0136) key on this: a `value: Self.Item` field is legal (it denotes the
+    /// implementor's bound associated type), a `value: Self` field is not.
     pub(crate) fn type_expr_contains_bare_self(ty: &TypeExpr) -> bool {
         match &ty.kind {
             TypeExprKind::Path {

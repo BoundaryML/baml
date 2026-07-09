@@ -197,9 +197,9 @@ fn associated_type_declaration_forms_compile() {
             type Weight = int
             type LabelType extends Named = Label
 
-            function neighbors(self, node: Node) -> Node[] throws never
-            function edge_label(self, edge: Edge) -> LabelType throws never
-            function weight(self, edge: Edge) -> Weight throws never
+            function neighbors(self, node: Self.Node) -> Self.Node[] throws never
+            function edge_label(self, edge: Self.Edge) -> Self.LabelType throws never
+            function weight(self, edge: Self.Edge) -> Self.Weight throws never
         }
 
         class CityMap {
@@ -236,14 +236,14 @@ fn implementor_self_coerces_to_interface_with_associated_bindings_in_return_cont
             type Item
             type Error = never
 
-            function iter(self) -> Iterator<Item = Item, Error = Error> throws never
+            function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never
         }
 
         interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
             type Item
             type Error = never
 
-            function next(self) -> Item | Done throws Error
+            function next(self) -> Self.Item | Done throws Self.Error
         }
 
         class ArrayIterator<T> {
@@ -289,9 +289,9 @@ async fn associated_type_projection_in_throws_position_runs() {
         interface Fallible {
             type Error
 
-            function value(self) -> int throws Error
+            function value(self) -> int throws Self.Error
 
-            function value_plus_one(self) -> int throws Error {
+            function value_plus_one(self) -> int throws Self.Error {
                 return self.value() + 1
             }
         }
@@ -338,10 +338,10 @@ fn default_interface_method_can_thread_associated_error_through_callback() {
             type Item
             type Error = never
 
-            function next(self) -> Item | Done throws Error
+            function next(self) -> Self.Item | Done throws Self.Error
 
-            function map<R, E2>(self, f: (Item) -> R throws E2) -> Mapper<Item, R, Error, E2> throws never {
-                return Mapper<Item, R, Error, E2> { inner: self, f: f }
+            function map<R, E2>(self, f: (Self.Item) -> R throws E2) -> Mapper<Self.Item, R, Self.Error, E2> throws never {
+                return Mapper<Self.Item, R, Self.Error, E2> { inner: self, f: f }
             }
         }
 
@@ -453,17 +453,17 @@ fn default_iterator_adapter_method_returns_adapter_with_symbolic_error_projectio
             type Item
             type Error = never
 
-            function iter(self) -> Iterator<Item = Item, Error = Error> throws never
+            function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never
         }
 
         interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
             type Item
             type Error = never
 
-            function next(self) -> Item | Done throws Error
+            function next(self) -> Self.Item | Done throws Self.Error
 
-            function map<R, E2>(self, f: (Item) -> R throws E2) -> Iterator<Item = R, Error = Error | E2> throws never {
-                Map<Item, R, Error, E2> { iter: self, f: f }
+            function map<R, E2>(self, f: (Self.Item) -> R throws E2) -> Iterator<Item = R, Error = Self.Error | E2> throws never {
+                Map<Self.Item, R, Self.Error, E2> { iter: self, f: f }
             }
         }
 
@@ -499,7 +499,7 @@ fn vm_metadata_resolves_concrete_associated_type_projection_return() {
         r#"
         interface PublicIdentity {
             type Key
-            key: Key
+            key: Self.Key
         }
 
         class AccountRecord {
@@ -613,9 +613,9 @@ fn associated_type_bindings_substitute_inside_implements_blocks() {
         interface Stack {
             type Item
 
-            function push(self, value: Item) -> null throws never
+            function push(self, value: Self.Item) -> null throws never
             function peek(self) -> Self.Item? throws never
-            function pair(self, value: Item) -> Self.Item[] throws never {
+            function pair(self, value: Self.Item) -> Self.Item[] throws never {
                 return [value, value]
             }
         }
@@ -813,7 +813,7 @@ fn fully_bound_associated_type_interface_values_expose_projected_methods() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
             function size(self) -> int throws never
         }
 
@@ -851,7 +851,7 @@ fn concrete_class_must_match_interface_associated_type_binding() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -880,7 +880,7 @@ fn generic_constructor_result_checked_against_interface_associated_binding() {
         interface Value {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class Box<T> {
@@ -922,7 +922,7 @@ fn generic_bound_enforces_associated_type_binding() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -954,7 +954,7 @@ fn as_upcast_enforces_associated_type_binding() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -982,7 +982,7 @@ fn associated_type_projection_from_generic_interface_bound_compiles() {
         interface Parser {
             type Output
 
-            function parse(self, input: string) -> Output throws never
+            function parse(self, input: string) -> Self.Output throws never
         }
 
         class IntParser {
@@ -1232,7 +1232,7 @@ fn required_parent_associated_type_threads_into_child_interface() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         interface Sorted requires Iterator {
@@ -1267,13 +1267,13 @@ fn qualified_typevar_projection_disambiguates_required_interfaces() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         interface Reader {
             type Item
 
-            function read(self) -> Item throws never
+            function read(self) -> Self.Item throws never
         }
 
         interface Stream requires Iterator, Reader {}
@@ -1292,13 +1292,13 @@ fn ambiguous_typevar_projection_across_required_interfaces_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         interface Reader {
             type Item
 
-            function read(self) -> Item throws never
+            function read(self) -> Self.Item throws never
         }
 
         interface Stream requires Iterator, Reader {}
@@ -1320,7 +1320,7 @@ fn selected_projection_rejects_mismatched_associated_type_binding() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -1476,8 +1476,8 @@ fn generic_interface_associated_type_bindings_compile() {
         interface Cache<K> {
             type Value
 
-            function get(self, key: K) -> Value? throws never
-            function put(self, key: K, value: Value) -> null throws never
+            function get(self, key: K) -> Self.Value? throws never
+            function put(self, key: K, value: Self.Value) -> null throws never
         }
 
         class StringIntCache {
@@ -1512,7 +1512,7 @@ fn generic_associated_type_bindings_infer_through_params_and_lets() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         function take_one<T>(it: Iterator<Item = T>) -> T? {
@@ -1537,7 +1537,7 @@ fn qualified_associated_type_projection_disambiguates_generic_interfaces() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -1578,7 +1578,7 @@ fn associated_type_default_can_reference_interface_generic() {
         interface Boxed<T> {
             type Item = T
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class StringBox {
@@ -1604,9 +1604,9 @@ fn associated_type_default_can_reference_explicit_witness() {
         r#"
         interface Batch {
             type Item
-            type Items = Item[]
+            type Items = Self.Item[]
 
-            function all(self) -> Items throws never
+            function all(self) -> Self.Items throws never
         }
 
         class IntBatch {
@@ -1641,7 +1641,7 @@ fn associated_type_default_from_qualified_interface_resolves_declaring_namespace
             interface Cache {
                 type Value = DefaultValue
 
-                function get(self) -> Value throws never
+                function get(self) -> Self.Value throws never
             }
             "#,
         ),
@@ -1669,7 +1669,7 @@ fn associated_type_default_can_reference_declaring_namespace_type_from_implement
             interface Serializable {
                 type Format = Payload
 
-                function serialize(self) -> Format throws never
+                function serialize(self) -> Self.Format throws never
             }
 
             class Payload {
@@ -1702,7 +1702,7 @@ fn explicit_associated_type_witness_can_reference_earlier_witness() {
             type Item
             type Items
 
-            function all(self) -> Items throws never
+            function all(self) -> Self.Items throws never
         }
 
         class IntBatch {
@@ -1731,9 +1731,9 @@ fn dependent_associated_type_bound_uses_resolved_witness() {
         r#"
         interface Parser {
             type Item
-            type Output extends Item
+            type Output extends Self.Item
 
-            function parse(self) -> Output throws never
+            function parse(self) -> Self.Output throws never
         }
 
         class IntParser {
@@ -1760,7 +1760,7 @@ fn dependent_associated_type_bound_rejects_mismatched_interface_binding() {
         r#"
         interface Parser {
             type Item
-            type Output extends Item
+            type Output extends Self.Item
         }
 
         function bad(parser: Parser<Item = int, Output = string>) -> null {
@@ -1794,7 +1794,7 @@ fn associated_type_binding_overrides_default_on_interface_value() {
         interface Decoder {
             type Output = string
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class StatusDecoder {
@@ -1823,7 +1823,7 @@ fn mixed_generic_args_and_associated_type_bindings_compile() {
         interface Codec<Format> {
             type Output = string
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -1891,7 +1891,7 @@ fn associated_type_bindings_allow_trailing_commas_in_type_args() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -1991,9 +1991,9 @@ fn associated_type_bindings_can_be_union_types() {
         interface Source {
             type Item
 
-            function get(self) -> Item throws never
-            function maybe(self) -> Item? throws never
-            function either(self) -> Item | bool throws never
+            function get(self) -> Self.Item throws never
+            function maybe(self) -> Self.Item? throws never
+            function either(self) -> Self.Item | bool throws never
         }
 
         class MixedSource {
@@ -2036,7 +2036,7 @@ fn associated_type_union_defaults_can_reference_interface_generics() {
         interface Response<T> {
             type Payload = T | null
 
-            function payload(self) -> Payload throws never
+            function payload(self) -> Self.Payload throws never
         }
 
         class StringResponse {
@@ -2061,7 +2061,7 @@ fn associated_type_bounds_can_be_union_types() {
         interface Parser {
             type Output extends int | string
 
-            function parse(self) -> Output throws never
+            function parse(self) -> Self.Output throws never
         }
 
         class IntParser {
@@ -2102,7 +2102,7 @@ fn union_associated_type_bindings_work_in_generic_bounds() {
         interface Source {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class MixedSource {
@@ -2133,7 +2133,7 @@ fn associated_type_binding_in_generic_bound_preserves_outer_typevar() {
         interface Source {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class IntSource {
@@ -2167,7 +2167,7 @@ fn union_associated_type_binding_in_generic_bound_preserves_outer_typevar() {
         interface Source {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class MixedSource {
@@ -2198,7 +2198,7 @@ fn nested_associated_type_bindings_in_generic_bounds_preserve_outer_typevar() {
         interface Source {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class OptionalIntSource {
@@ -2298,7 +2298,7 @@ fn qualified_projections_disambiguate_union_outputs() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -2346,7 +2346,7 @@ fn aliased_qualified_projection_unions_resolve_like_inline_unions() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -2391,7 +2391,7 @@ fn selected_union_associated_output_rejects_incompatible_return() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -2421,7 +2421,7 @@ fn match_narrowing_distinguishes_interface_associated_bindings_in_union() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item throws never
+            function next(self) -> Self.Item throws never
         }
 
         class IntIterator {
@@ -2461,7 +2461,7 @@ fn match_narrowing_partitions_interface_associated_bindings_in_union() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item throws never
+            function next(self) -> Self.Item throws never
         }
 
         class IntIterator {
@@ -2501,7 +2501,7 @@ fn narrowed_associated_interface_pattern_does_not_exhaust_unbound_interface() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item throws never
+            function next(self) -> Self.Item throws never
         }
 
         function label(it: Iterator) -> string {
@@ -2521,7 +2521,7 @@ fn interface_destructure_substitutes_associated_field_type() {
         interface Source {
             type Item
 
-            value: Item
+            value: Self.Item
         }
 
         class IntSource {
@@ -2548,8 +2548,8 @@ fn associated_type_union_substitutes_inside_nested_containers() {
         interface Source {
             type Item
 
-            function list(self) -> Item[] throws never
-            function table(self) -> map<string, Item | null> throws never
+            function list(self) -> Self.Item[] throws never
+            function table(self) -> map<string, Self.Item | null> throws never
         }
 
         class MixedSource {
@@ -2588,7 +2588,7 @@ fn formatter_accepts_associated_type_syntax() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -2608,7 +2608,7 @@ fn formatter_accepts_associated_type_syntax() {
         interface Source {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         type TrailingSource = Source<Item = int,>
@@ -2644,7 +2644,7 @@ fn out_of_body_implements_can_bind_associated_types() {
         interface Showable {
             type Repr
 
-            function repr(self) -> Repr throws never
+            function repr(self) -> Self.Repr throws never
         }
 
         class Meter {
@@ -2673,7 +2673,7 @@ fn out_of_body_implements_target_associated_type_binding_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {}
@@ -2697,7 +2697,7 @@ fn concrete_class_associated_projection_accepts_bound_type() {
         interface Carrier {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class IntCarrier {
@@ -2725,7 +2725,7 @@ fn associated_type_projection_expands_class_type_alias_base() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -2754,7 +2754,7 @@ fn associated_type_projection_expands_fully_bound_interface_alias_base() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -2783,9 +2783,9 @@ fn associated_types_substitute_inside_nested_type_positions() {
         interface Mapper {
             type Item
 
-            function list(self) -> Item[] throws never
-            function table(self) -> map<string, Item?> throws never
-            function choose(self) -> Item? throws never
+            function list(self) -> Self.Item[] throws never
+            function table(self) -> map<string, Self.Item?> throws never
+            function choose(self) -> Self.Item? throws never
         }
 
         class IntMapper {
@@ -2823,7 +2823,7 @@ fn associated_types_substitute_inside_function_type_positions() {
         interface Lifter {
             type Item
 
-            function lift(self) -> (Item) -> Item? throws never
+            function lift(self) -> (Self.Item) -> Self.Item? throws never
         }
 
         function lift_int(lifter: Lifter<Item = int>) -> (int) -> int? {
@@ -2842,7 +2842,7 @@ fn qualified_projection_works_in_nested_types() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -2873,7 +2873,7 @@ fn qualified_projection_works_in_local_type_annotations() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -2904,7 +2904,7 @@ fn unbound_interface_can_call_methods_that_do_not_mention_associated_types() {
             type Item
 
             function size(self) -> int throws never
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -2935,7 +2935,7 @@ fn unbound_interface_projection_can_remain_symbolic() {
         interface SizedIterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         function next(it: SizedIterator) -> SizedIterator.Item? {
@@ -2952,7 +2952,7 @@ fn unbound_interface_method_that_returns_associated_type_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -2980,7 +2980,7 @@ fn concrete_class_associated_projection_rejects_wrong_type() {
         interface Carrier {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class IntCarrier {
@@ -3008,7 +3008,7 @@ fn associated_function_type_projection_rejects_wrong_nested_type() {
         interface Lifter {
             type Item
 
-            function lift(self) -> (Item) -> Item? throws never
+            function lift(self) -> (Self.Item) -> Self.Item? throws never
         }
 
         function bad(lifter: Lifter<Item = int>) -> (string) -> string? {
@@ -3026,7 +3026,7 @@ fn missing_required_associated_type_binding_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class BadIterator {
@@ -3058,7 +3058,7 @@ fn duplicate_associated_type_declaration_errors() {
 fn associated_type_cannot_collide_with_interface_generic_param() {
     assert_compile_error_contains(
         r#"
-        interface Container<Item> {
+        interface Container<Self.Item> {
             type Item
         }
         "#,
@@ -3092,7 +3092,7 @@ fn implements_target_associated_type_binding_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -3114,7 +3114,7 @@ fn implements_target_associated_type_binding_errors_even_when_same_witness_is_in
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -3138,7 +3138,7 @@ fn impl_associated_type_witness_rejects_extends_bound() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -3162,7 +3162,7 @@ fn implements_block_associated_type_binding_is_honored() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class IntIterator {
@@ -3189,7 +3189,7 @@ fn implements_target_associated_type_binding_errors_even_with_block_binding() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         class BadIterator {
@@ -3213,7 +3213,7 @@ fn duplicate_associated_type_binding_on_interface_value_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         function bad(it: Iterator<Item = int, Item = string>) -> int {
@@ -3231,7 +3231,7 @@ fn duplicate_associated_type_binding_on_interface_value_with_union_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item throws never
+            function next(self) -> Self.Item throws never
         }
 
         function bad(it: Iterator<Item = int | string, Item = string>) -> int {
@@ -3272,7 +3272,7 @@ fn associated_type_bound_failure_errors() {
         interface Parser {
             type Output extends Named
 
-            function parse(self) -> Output throws never
+            function parse(self) -> Self.Output throws never
         }
 
         class BadParser {
@@ -3574,7 +3574,7 @@ fn associated_type_union_bound_failure_errors() {
         interface Parser {
             type Output extends int | string
 
-            function parse(self) -> Output throws never
+            function parse(self) -> Self.Output throws never
         }
 
         class BadParser {
@@ -3598,7 +3598,7 @@ fn associated_union_projection_rejects_narrow_interface_return() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item throws never
+            function next(self) -> Self.Item throws never
         }
 
         function bad(it: Iterator<Item = int | string>) -> int {
@@ -3616,7 +3616,7 @@ fn associated_union_projection_rejects_narrow_class_return() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item throws never
+            function next(self) -> Self.Item throws never
         }
 
         class MixedIterator {
@@ -3646,7 +3646,7 @@ fn associated_union_required_method_impl_must_match_interface_signature() {
         interface Producer {
             type Item
 
-            function produce(self) -> Item | string throws never
+            function produce(self) -> Self.Item | string throws never
         }
 
         class IntProducer {
@@ -3679,7 +3679,7 @@ fn associated_union_binding_must_satisfy_extends_bound_in_generic_bound() {
         interface Parser {
             type Output extends Named
 
-            function parse(self) -> Output throws never
+            function parse(self) -> Self.Output throws never
         }
 
         function bad<P extends Parser<Output = Label | int>>(parser: P) -> P.Output {
@@ -3697,7 +3697,7 @@ fn unknown_associated_type_binding_on_interface_value_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         function bad(it: Iterator<Element = int>) -> int {
@@ -3715,7 +3715,7 @@ fn unknown_associated_type_binding_on_interface_value_with_union_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item throws never
+            function next(self) -> Self.Item throws never
         }
 
         function bad(it: Iterator<Element = int | string, Item = int>) -> int {
@@ -3733,13 +3733,13 @@ fn ambiguous_unqualified_associated_type_projection_errors() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         interface Reader {
             type Item
 
-            function read(self) -> Item throws never
+            function read(self) -> Self.Item throws never
         }
 
         class File {
@@ -3778,7 +3778,7 @@ fn ambiguous_unqualified_projection_across_generic_instantiations_errors() {
         interface Codec<Format> {
             type Output
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class Document {
@@ -3855,7 +3855,7 @@ fn bare_default_associated_interface_enforces_default_on_assignment() {
         interface Decoder {
             type Output = string
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class StatusDecoder {
@@ -3884,7 +3884,7 @@ fn default_associated_interface_omission_is_positive_for_default_witness() {
         interface Decoder {
             type Output = string
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class TextDecoder {
@@ -3913,7 +3913,7 @@ fn bare_default_associated_generic_bound_enforces_default() {
         interface Decoder {
             type Output = string
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class StatusDecoder {
@@ -3945,7 +3945,7 @@ fn bare_default_associated_union_member_enforces_default() {
         interface Decoder {
             type Output = string
 
-            function decode(self, input: string) -> Output throws never
+            function decode(self, input: string) -> Self.Output throws never
         }
 
         class StatusDecoder {
@@ -3973,7 +3973,7 @@ fn required_parent_associated_binding_controls_member_type() {
         interface Parent {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         interface Child requires Parent<Item = int> {}
@@ -4004,7 +4004,7 @@ fn class_required_parent_must_match_associated_binding() {
         interface Parent {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         interface Child requires Parent<Item = int> {}
@@ -4051,7 +4051,7 @@ fn unique_inherited_typevar_projection_unifies_with_parent_slot() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         interface Sorted requires Iterator {}
@@ -4148,7 +4148,7 @@ fn interface_destructure_head_accepts_associated_bindings() {
         interface Source {
             type Item
 
-            value: Item
+            value: Self.Item
         }
 
         class IntSource {
@@ -4175,7 +4175,7 @@ fn interface_destructure_head_associated_binding_controls_field_type() {
         interface Source {
             type Item
 
-            value: Item
+            value: Self.Item
         }
 
         function read(source: Source<Item = int> | Source<Item = string>) -> int {
@@ -4196,7 +4196,7 @@ fn associated_interface_alias_projection_compiles() {
         interface Source {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         type IntSource = Source<Item = int>
@@ -4215,7 +4215,7 @@ fn associated_interface_optional_match_requires_null_arm() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item? throws never
+            function next(self) -> Self.Item? throws never
         }
 
         function label(it: Iterator<Item = int>?) -> string {
@@ -4235,7 +4235,7 @@ fn associated_union_pattern_does_not_exhaust_wider_associated_binding() {
         interface Iterator {
             type Item
 
-            function next(self) -> Item throws never
+            function next(self) -> Self.Item throws never
         }
 
         function label(it: Iterator<Item = int | string>) -> string {
@@ -4285,7 +4285,7 @@ async fn runtime_dispatch_substitutes_class_typevar_in_associated_type_binding()
         interface Container {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class Box<T> {
@@ -4319,13 +4319,13 @@ async fn runtime_dispatch_substitutes_class_typevar_inside_nested_associated_bin
         interface Source {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         interface Outer {
             type Inner
 
-            function inner(self) -> Inner throws never
+            function inner(self) -> Self.Inner throws never
         }
 
         class Box<T> {
@@ -4371,7 +4371,7 @@ async fn runtime_match_filters_by_associated_type_binding() {
         interface Source {
             type Item
 
-            function get(self) -> Item throws never
+            function get(self) -> Self.Item throws never
         }
 
         class IntSource {
@@ -4420,7 +4420,7 @@ async fn runtime_destructure_filters_by_associated_type_binding() {
         interface Source {
             type Item
 
-            value: Item
+            value: Self.Item
         }
 
         class IntSource {

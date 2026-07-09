@@ -1042,6 +1042,11 @@ pub fn validate_impl_signatures<'db>(
         // Realize the interface's declared field types at the impl's interface args.
         let iface_bindings =
             crate::generics::bind_type_vars(&iface_data.generic_params, &data.interface_args);
+        // A field type may name `Self.Item` (an associated-type field); realize it symbolically
+        // and substitute `Self -> for-type` last, so `(for-type as I).Item` reduces to the impl's
+        // binding — exactly as the method-signature conformance below does.
+        let self_bound =
+            baml_type::Interface::new(iface_qtn.clone(), data.interface_args.clone(), vec![]);
         for iface_field in &iface_data.fields {
             let Some(iface_field_te) = &iface_field.type_expr else {
                 continue;
@@ -1060,19 +1065,19 @@ pub fn validate_impl_signatures<'db>(
                 continue;
             };
             let mut lower_diags = Vec::new();
-            let declared = crate::lower_type_expr::lower_type_expr(
-                iface_field_te,
-                &crate::lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: iface_pkg_items,
-                    ns_context: &iface_pkg_info.namespace_path,
-                    generic_params: &iface_data.generic_params,
-                    bounds: iface_field_bounds,
-                    self_ty: None,
+            let declared = realize_with_symbolic_self(
+                db,
+                iface_pkg_items,
+                &iface_pkg_info.namespace_path,
+                &iface_data.generic_params,
+                iface_field_bounds,
+                &self_bound,
+                &data.for_ty_pattern,
+                &iface_bindings,
+                |scope| {
+                    crate::lower_type_expr::lower_type_expr(iface_field_te, scope, &mut lower_diags)
                 },
-                &mut lower_diags,
             );
-            let declared = crate::generics::substitute_ty(&declared, &iface_bindings);
             // Field types are invariant — the class field must be the same type.
             if !baml_type::normalize::equivalent(&declared, class_field_ty, &ctx) {
                 diags.push((

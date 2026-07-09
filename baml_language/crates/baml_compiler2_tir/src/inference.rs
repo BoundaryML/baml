@@ -161,11 +161,7 @@ pub(crate) fn inference_owner_scope(
 }
 
 fn enclosing_type_generics(
-    db: &dyn crate::Db,
-    file: SourceFile,
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
-    pkg_items: &PackageItems<'_>,
-    ns_context: &[Name],
     type_name: &Name,
 ) -> Option<(Vec<Name>, Vec<Option<ast::TypeExpr>>)> {
     for class_data in item_tree.classes.values() {
@@ -177,11 +173,15 @@ fn enclosing_type_generics(
         }
     }
 
-    for (local_id, iface_data) in &item_tree.interfaces {
+    for iface_data in item_tree.interfaces.values() {
         if iface_data.name == *type_name {
-            let iface_loc = InterfaceLoc::new(db, file, *local_id);
-            return Some(interface_type_level_params_and_bounds(
-                db, iface_loc, iface_data, pkg_items, ns_context,
+            // Associated types are NOT type-level parameters: a bare associated-type
+            // name (`Item`) is illegal and must be written `Self.Item`, so it never
+            // resolves as an in-scope type variable. Only the interface's declared
+            // generics are.
+            return Some((
+                iface_data.generic_params.clone(),
+                iface_data.generic_param_bounds.clone(),
             ));
         }
     }
@@ -189,50 +189,36 @@ fn enclosing_type_generics(
     None
 }
 
-fn interface_type_level_params_and_bounds(
+/// Every associated-type name the interface named `qtn` declares — its own plus
+/// each one transitively inherited through `requires`. Empty if `qtn` does not
+/// resolve to an interface. Used to recognise a bare associated-type reference
+/// (illegal: it must be written `Self.<name>`) so lowering can suggest the fix.
+pub(crate) fn interface_associated_type_names_for_qtn(
     db: &dyn crate::Db,
-    iface_loc: InterfaceLoc<'_>,
-    iface_data: &baml_compiler2_hir::item_tree::Interface,
-    pkg_items: &PackageItems<'_>,
-    ns_context: &[Name],
-) -> (Vec<Name>, Vec<Option<ast::TypeExpr>>) {
-    let mut params = iface_data.generic_params.clone();
-    params.extend(
-        iface_data
-            .associated_types
-            .iter()
-            .map(|assoc| assoc.name.clone()),
-    );
+    qtn: &crate::ty::QualifiedTypeName,
+) -> FxHashSet<Name> {
+    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let Some(Definition::Interface(iface_loc)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
+    else {
+        return FxHashSet::default();
+    };
+    let iface_pkg = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+    let iface_pkg_id = PackageId::new(db, iface_pkg.package.clone());
+    let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_id);
 
-    let mut bounds = iface_data.generic_param_bounds.clone();
-    bounds.extend(
-        iface_data
-            .associated_types
-            .iter()
-            .map(|assoc| assoc.bound.clone()),
-    );
-
-    let own_associated: FxHashSet<Name> = iface_data
-        .associated_types
-        .iter()
-        .map(|assoc| assoc.name.clone())
-        .collect();
-    let inherited = inherited_interface_associated_type_names(db, iface_loc, pkg_items, ns_context);
-    let mut counts: FxHashMap<Name, usize> = FxHashMap::default();
-    for name in &inherited {
-        *counts.entry(name.clone()).or_default() += 1;
+    let mut names: FxHashSet<Name> = FxHashSet::default();
+    let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+    if let Some(iface_data) = item_tree.interfaces.get(&iface_loc.id(db)) {
+        names.extend(iface_data.associated_types.iter().map(|a| a.name.clone()));
     }
-    for name in inherited {
-        if counts.get(&name).copied().unwrap_or_default() == 1
-            && !own_associated.contains(&name)
-            && !params.contains(&name)
-        {
-            params.push(name);
-            bounds.push(None);
-        }
-    }
-
-    (params, bounds)
+    names.extend(inherited_interface_associated_type_names(
+        db,
+        iface_loc,
+        iface_pkg_items,
+        &iface_pkg.namespace_path,
+    ));
+    names
 }
 
 fn inherited_interface_associated_type_names(
@@ -404,6 +390,81 @@ pub(crate) fn interface_declared_generic_arity(
     Some(tree.interfaces.get(&loc.id(db))?.generic_params.len())
 }
 
+/// Lower one declared interface bound — from a generic parameter's or an
+/// associated type's `extends` clause — to its interface constraint(s), in
+/// `params` scope. A bound *is* an interface conjunction; the intermediate `Ty`
+/// is used only to classify it for diagnostics. When `report` is true (the owning
+/// declaration's scope), emits its lowering diagnostics plus a bare-generic arity
+/// error (`extends Outer` where `interface Outer<X>` — a bound cannot infer the
+/// missing argument, unlike a value position where the bare form is a wildcard)
+/// and a non-interface bound error (a sibling type variable or an associated-type
+/// projection); an inherited bound passes `false`, since the owner already
+/// reported them.
+#[expect(clippy::too_many_arguments)]
+fn lower_declared_interface_bound(
+    db: &dyn crate::Db,
+    builder: &mut TypeInferenceBuilder<'_>,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    params: &[Name],
+    bounds: &crate::lower_type_expr::TypeVarBoundsMap,
+    self_ty: Option<&Ty>,
+    bound_te: &ast::TypeExpr,
+    span: TextRange,
+    report: bool,
+) -> Box<[baml_type::Interface]> {
+    // `Self` and the scope's bounds are threaded so a projection bound
+    // (`extends Self.Item`, `extends T.Item`) resolves to an `AssociatedTypeProjection`
+    // — which is then correctly rejected as a non-interface bound below, rather than
+    // failing to resolve and masquerading as an "unresolved type".
+    let mut diags = Vec::new();
+    let bound_ty = crate::lower_type_expr::lower_type_expr(
+        bound_te,
+        &crate::lower_type_expr::ScopeCtx {
+            db,
+            package_items: pkg_items,
+            ns_context,
+            generic_params: params,
+            bounds,
+            self_ty: self_ty.cloned(),
+        },
+        &mut diags,
+    );
+    if report {
+        for diag in diags {
+            builder.report_at_span(diag, span);
+        }
+        match &bound_ty {
+            Ty::Interface(qtn, generics, _, _) => {
+                if generics.is_empty()
+                    && let Some(arity) = interface_declared_generic_arity(db, qtn)
+                    && arity > 0
+                {
+                    builder.report_at_span(
+                        crate::infer_context::TirTypeError::WrongNumberOfTypeArgs {
+                            type_name: qtn.name().clone(),
+                            expected: arity,
+                            got: 0,
+                        },
+                        span,
+                    );
+                }
+            }
+            // Already diagnosed by lowering the bound expression itself — a second
+            // "not an interface" here would be redundant.
+            Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
+            // Mirrors the impl-bound check in `lower_generic_param_interface_bounds`.
+            other => builder.report_at_span(
+                crate::infer_context::TirTypeError::GenericBoundNotInterface {
+                    bound: other.clone(),
+                },
+                span,
+            ),
+        }
+    }
+    bound_ty.as_interface().into_iter().collect()
+}
+
 fn install_generic_param_bounds(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
@@ -423,58 +484,23 @@ fn install_generic_param_bounds(
         let Some(bound_te) = bound else {
             continue;
         };
-        let mut diags = Vec::new();
-        let bound_ty =
-            lower_env_generic_bound(db, pkg_items, ns_context, &env.params, bound_te, &mut diags);
         // Inherited bounds (an enclosing declaration's) are lowered for the
         // enforcement table but their diagnostics belong to — and were already
-        // reported by — the owning declaration's scope.
-        if !owned {
-            bounds.insert(name.clone(), bound_ty.as_interface().into_iter().collect());
-            continue;
-        }
-        for diag in diags {
-            builder.report_at_span(diag, span);
-        }
-        match &bound_ty {
-            // A generic interface used as a bare bound (`T extends Outer` where
-            // `interface Outer<X>`) under-instantiates it: a bound, unlike a value
-            // position, has no way to infer the missing argument, so it is an arity
-            // error. The with-arguments mismatch (`Outer<int, int>`) is already
-            // reported by `lower_type_expr`, which deliberately skips the bare form
-            // (it is a valid wildcard in value positions).
-            Ty::Interface(qtn, generics, _, _) => {
-                if generics.is_empty()
-                    && let Some(arity) = interface_declared_generic_arity(db, qtn)
-                    && arity > 0
-                {
-                    builder.report_at_span(
-                        crate::infer_context::TirTypeError::WrongNumberOfTypeArgs {
-                            type_name: qtn.name().clone(),
-                            expected: arity,
-                            got: 0,
-                        },
-                        span,
-                    );
-                }
-            }
-            // Already diagnosed by lowering the bound expression itself — a second
-            // "not an interface" here would be redundant.
-            Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
-            // BEP-044 requires bounds to be interfaces (E0142). A sibling type
-            // variable (`<T, U extends T>`) or an associated-type projection is not
-            // an interface either — bounds constrain by interface contract, never
-            // by subtyping against another parameter. Mirrors the impl-bound check
-            // in `lower_generic_param_interface_bounds`.
-            other => builder.report_at_span(
-                crate::infer_context::TirTypeError::GenericBoundNotInterface {
-                    bound: other.clone(),
-                },
-                span,
-            ),
-        }
-        // A non-interface bound (already diagnosed above) contributes no constraint.
-        bounds.insert(name.clone(), bound_ty.as_interface().into_iter().collect());
+        // reported by — the owning declaration's scope. Generic-parameter bounds
+        // carry no `Self` and see no sibling bounds (matching the prior behaviour).
+        let constraint = lower_declared_interface_bound(
+            db,
+            builder,
+            pkg_items,
+            ns_context,
+            &env.params,
+            &crate::lower_type_expr::TypeVarBoundsMap::default(),
+            None,
+            bound_te,
+            span,
+            owned,
+        );
+        bounds.insert(name.clone(), constraint.into_vec());
     }
     bounds.extend(
         env.concrete_bounds
@@ -498,12 +524,8 @@ fn apply_generic_env(
 
 #[derive(Clone, Copy)]
 struct GenericLookupContext<'a, 'db> {
-    db: &'a dyn crate::Db,
-    file: SourceFile,
     index: &'a baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
     item_tree: &'a baml_compiler2_hir::item_tree::ItemTree,
-    pkg_items: &'a PackageItems<'db>,
-    ns_context: &'a [Name],
 }
 
 fn parent_type_generic_env(
@@ -515,14 +537,7 @@ fn parent_type_generic_env(
         return None;
     }
     let type_name = parent.name.clone()?;
-    let (params, bounds) = enclosing_type_generics(
-        ctx.db,
-        ctx.file,
-        ctx.item_tree,
-        ctx.pkg_items,
-        ctx.ns_context,
-        &type_name,
-    )?;
+    let (params, bounds) = enclosing_type_generics(ctx.item_tree, &type_name)?;
     Some((type_name, params, bounds))
 }
 
@@ -1455,12 +1470,8 @@ pub fn infer_scope_types<'db>(
                     } else if let Some((type_name, parent_generics, parent_bounds)) =
                         parent_type_generic_env(
                             GenericLookupContext {
-                                db,
-                                file,
                                 index,
                                 item_tree: &item_tree,
-                                pkg_items,
-                                ns_context: &pkg_info.namespace_path,
                             },
                             scope.parent,
                         )
@@ -2150,12 +2161,8 @@ pub fn infer_scope_types<'db>(
                                     let env = extend_env_with_lambda_generics(
                                         generic_env_for_function_data(
                                             GenericLookupContext {
-                                                db,
-                                                file,
                                                 index,
                                                 item_tree: &item_tree,
-                                                pkg_items,
-                                                ns_context: &pkg_info.namespace_path,
                                             },
                                             ancestor_scope,
                                             func_data,
@@ -2230,12 +2237,8 @@ pub fn infer_scope_types<'db>(
                                     let env = extend_env_with_lambda_generics(
                                         enclosing_function_generic_env_from_let(
                                             GenericLookupContext {
-                                                db,
-                                                file,
                                                 index,
                                                 item_tree: &item_tree,
-                                                pkg_items,
-                                                ns_context: &pkg_info.namespace_path,
                                             },
                                             ancestor_scope,
                                         )
@@ -2361,11 +2364,15 @@ pub fn infer_scope_types<'db>(
                         iface_data.span,
                     );
                 }
-                // E0136: `Self` is only meaningful in method signatures; a field type may not use
-                // it (a recursive field must name the interface itself).
+                // E0136: a field type may not name the *bare* `Self` type (a recursive field
+                // must name the interface itself). A `Self.Assoc` projection is allowed —
+                // once the implementor binds the associated type it denotes a concrete field
+                // type (`value: Self.Item` with `type Item = int` is an `int` field).
                 for field in &iface_data.fields {
                     if let Some(type_expr) = &field.type_expr
-                        && crate::builder::TypeInferenceBuilder::type_expr_contains_self(type_expr)
+                        && crate::builder::TypeInferenceBuilder::type_expr_contains_bare_self(
+                            type_expr,
+                        )
                     {
                         builder.report_at_span(
                             crate::infer_context::TirTypeError::SelfInInterfaceField {
@@ -2444,13 +2451,17 @@ pub fn infer_scope_types<'db>(
                         );
                     }
                 }
-                let (iface_params, iface_bounds) = interface_type_level_params_and_bounds(
-                    db,
-                    iface_loc,
-                    iface_data,
-                    pkg_items,
-                    &pkg_info.namespace_path,
-                );
+                // Associated types are NOT type-level parameters — a bare associated-type
+                // name is illegal (`Self.X` required), so only the interface's declared
+                // generics enter the signature-lowering env. The associated-type names are
+                // still collected below, for the method-generic shadowing check.
+                let iface_params = iface_data.generic_params.clone();
+                let iface_bounds = iface_data.generic_param_bounds.clone();
+                let iface_assoc_names: Vec<Name> = iface_data
+                    .associated_types
+                    .iter()
+                    .map(|assoc| assoc.name.clone())
+                    .collect();
                 let mut iface_env = GenericEnv::from_params(iface_params.clone());
                 iface_env.add_bounds_for_declared_params(&iface_params, &iface_bounds);
                 // `Self` in an interface's own signatures is its rigid `Self` type variable,
@@ -2489,6 +2500,28 @@ pub fn infer_scope_types<'db>(
                 // Computed once per env — every signature type expr below shares it.
                 let iface_env_bounds =
                     env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &iface_env);
+                // Each associated type's `extends` bound must be a well-formed interface (same
+                // arity / non-interface checks as a generic-param bound). Lowered in the
+                // interface's env with `Self` in scope so a projection bound (`extends
+                // Self.Item`) forms and is rejected as non-interface. Only checked for
+                // diagnostics — associated types are not type-level params, so nothing is
+                // threaded into the enforcement table.
+                for assoc in &iface_data.associated_types {
+                    if let Some(bound_te) = &assoc.bound {
+                        let _ = lower_declared_interface_bound(
+                            db,
+                            &mut builder,
+                            pkg_items,
+                            &pkg_info.namespace_path,
+                            &iface_env.params,
+                            &iface_env_bounds,
+                            Some(&self_ty),
+                            bound_te,
+                            bound_te.span,
+                            true,
+                        );
+                    }
+                }
                 for field in &iface_data.fields {
                     if let Some(type_expr) = &field.type_expr {
                         validate_spanned_type_expr_generic_bounds(
@@ -2510,7 +2543,8 @@ pub fn infer_scope_types<'db>(
                     // type-level parameters (generics and associated types alike).
                     report_duplicate_generic_params(&builder, &sig.generic_params, sig.span);
                     for mp in &sig.generic_params {
-                        if iface_params.iter().any(|ip| ip == mp) {
+                        if iface_params.iter().any(|ip| ip == mp) || iface_assoc_names.contains(mp)
+                        {
                             builder.report_at_span(
                                 crate::infer_context::TirTypeError::TypeParamShadowed {
                                     param_name: mp.clone(),

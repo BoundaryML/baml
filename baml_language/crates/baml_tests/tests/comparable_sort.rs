@@ -74,12 +74,12 @@ fn assert_compile_error_contains(source: &str, needle: &str) {
 const SPIKE_1A_SCAFFOLD: &str = r#"
     interface HasErr {
         type E
-        function f(self) -> int throws E
+        function f(self) -> int throws Self.E
     }
 
     interface Wrap {
         type WE
-        function g(self) -> int throws WE
+        function g(self) -> int throws Self.WE
     }
 
     implements<T extends HasErr> Wrap for T[] {
@@ -543,12 +543,12 @@ async fn phase2_user_class_compare_direct_call_mir_optimized() {
 const PHASE3_SCAFFOLD: &str = r#"
     interface Cmp2 {
         type CE
-        function comp(self, other: Self) -> int throws CE
+        function comp(self, other: Self) -> int throws Self.CE
     }
 
     interface Srt2 {
         type SE
-        function srt(self) -> Self throws SE
+        function srt(self) -> Self throws Self.SE
     }
 
     implements<T extends Cmp2> Srt2 for T[] {
@@ -673,12 +673,12 @@ fn phase3_defaulted_assoc_error_over_constrains_bound() {
         r#"
         interface CmpD {
             type CE = never
-            function comp(self, other: Self) -> int throws CE
+            function comp(self, other: Self) -> int throws Self.CE
         }
 
         interface SrtD {
             type SE
-            function srt(self) -> Self throws SE
+            function srt(self) -> Self throws Self.SE
         }
 
         implements<T extends CmpD> SrtD for T[] {
