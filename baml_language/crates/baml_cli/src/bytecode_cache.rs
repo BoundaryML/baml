@@ -383,9 +383,11 @@ pub(crate) struct ReusePlan {
     /// The previous compile's symbolic units (B-693 Stage 3): clean files' units
     /// are reused verbatim, the rest re-emitted, then linked.
     pub(crate) prev_units: Vec<CompilationUnit>,
-    /// Per-file throw facts for the clean files (full path → facts), to be
-    /// seeded into the database before compiling so their bodies are never
-    /// re-walked by throw inference.
+    /// Per-file throw facts (full path → facts), to be seeded into the database
+    /// before compiling. Clean files' facts come from the manifest (their bodies
+    /// are never re-walked); dirty/added files' facts are the ones the dirty-set
+    /// pass already walked, folded in so the downstream demand hits the seed
+    /// instead of re-walking those bodies a second time.
     pub(crate) seeded_throw_facts:
         std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
     /// Per-function `callable_throws` seeds projected from the clean files'
@@ -788,6 +790,12 @@ struct DirtyPartition {
     clean_files: HashSet<String>,
     /// Current `SourceFile`s that must be re-derived (dirty).
     dirty_files: Vec<SourceFile>,
+    /// Freshly-walked throw facts for the dirty/added files, keyed by absolute
+    /// path. Seeded so the downstream `file_throw_facts` demand hits the seed
+    /// instead of re-walking each body a second time (the partition already
+    /// walked them, and the facts are content-derived so the value is honest).
+    fresh_throw_facts:
+        std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
 }
 
 /// Partition the current user files into clean (reusable) and dirty against a
@@ -834,6 +842,15 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
     // seed of the transitive throws-taint closure. Last-segment form, matched
     // against `referenced_names` (the reverse-call-edge over-approximation).
     let mut throws_taint: HashSet<String> = HashSet::new();
+    // Freshly-extracted throw facts for the dirty/added files this pass already
+    // walked. Seeded (beside the clean files' manifest facts) so the downstream
+    // `file_throw_facts` demand hits the seed instead of re-walking each body —
+    // the facts are content-derived, so this fresh value is exactly the honest
+    // one the recompute would produce. Keyed by absolute path, like the seed.
+    let mut fresh_throw_facts: std::collections::BTreeMap<
+        String,
+        Vec<baml_type::throw_facts::FunctionThrowFacts>,
+    > = std::collections::BTreeMap::new();
 
     let throw_fn_names = |facts: &[baml_type::throw_facts::FunctionThrowFacts]| -> Vec<String> {
         facts
@@ -862,6 +879,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                 // transitive throws can move — seed the taint closure.
                 let fresh = baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(db, *sf);
                 throws_taint.extend(throw_fn_names(&fresh.0));
+                fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh.0.clone());
             }
             Some(entry) => {
                 if entry.content_hash == content_hash(sf.text(db)) {
@@ -879,6 +897,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
                     throws_taint.extend(throw_fn_names(&fresh.0));
                     throws_taint.extend(throw_fn_names(&entry.throw_facts));
                 }
+                fresh_throw_facts.insert(sf.path(db).display().to_string(), fresh.0.clone());
                 if file_has_impl_construct(db, *sf) {
                     impl_set_changed = true;
                 }
@@ -921,23 +940,51 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
         changed_names.insert(IMPL_SENTINEL.to_string());
     }
 
-    // One-hop propagation for signature/layout/impl changes: an unchanged file
-    // referencing a changed name is dirty. A layout dependency surfaces in the
-    // referencing file directly, so one hop suffices; only *throws* are
-    // transitive (the closure below).
-    for (_, rel) in &current {
-        if dirty.contains(rel) {
-            continue;
+    // Signature-meaning cascade + one-hop propagation, run jointly to a
+    // fixpoint. A file whose *full* `referenced_names` intersect the change set
+    // is dirty — a layout or name dependency surfaces one hop away. A file whose
+    // *signature* surface names a changed type has, in addition, its own resolved
+    // signature meaning changed, so its defined names join the change set
+    // (cascading to its callers) and its functions seed the throws closure —
+    // `callable_throws` can move when a signature type is re-targeted.
+    //
+    // A purely body-level reference to a changed name is dirtied but does NOT
+    // cascade: a body reference can only move the file's *throws* (the transitive
+    // closure below covers that), never its signature, so growing the change set
+    // from it would needlessly dirty the whole call graph. This is what closes
+    // the alias-re-target hole — a caller that names neither the re-targeted alias
+    // nor the changed type, only a content-unchanged callee whose signature now
+    // resolves differently — while a body-only caller stops the cascade.
+    let mut cascaded: HashSet<String> = HashSet::new();
+    loop {
+        let mut grew = false;
+        for (_, rel) in &current {
+            let Some(entry) = prev_files.get(rel.as_str()) else {
+                continue; // added file: already dirty, its names already in Δ
+            };
+            let sig_hit = entry
+                .sig_referenced_names
+                .iter()
+                .any(|name| changed_names.contains(name));
+            if sig_hit
+                || entry
+                    .referenced_names
+                    .iter()
+                    .any(|name| changed_names.contains(name))
+            {
+                dirty.insert(rel.clone());
+            }
+            if sig_hit && cascaded.insert(rel.clone()) {
+                for name in &entry.defined_names {
+                    if changed_names.insert(name.clone()) {
+                        grew = true;
+                    }
+                }
+                throws_taint.extend(throw_fn_names(&entry.throw_facts));
+            }
         }
-        let Some(entry) = prev_files.get(rel.as_str()) else {
-            continue;
-        };
-        if entry
-            .referenced_names
-            .iter()
-            .any(|name| changed_names.contains(name))
-        {
-            dirty.insert(rel.clone());
+        if !grew {
+            break;
         }
     }
 
@@ -998,6 +1045,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
     DirtyPartition {
         clean_files,
         dirty_files,
+        fresh_throw_facts,
     }
 }
 
@@ -1088,6 +1136,7 @@ impl CacheContext {
         let DirtyPartition {
             clean_files,
             dirty_files,
+            fresh_throw_facts,
         } = partition;
         cache_debug(format_args!(
             "reuse plan: {} clean, {} dirty",
@@ -1095,11 +1144,18 @@ impl CacheContext {
             dirty_files.len()
         ));
 
-        // Seed throw facts for clean files only: a clean file's content is
-        // unchanged (facts are content-derived) and nothing it references
-        // changed signature (resolution-derived parts are stable too).
+        // Seed throw facts for every file. Clean files' facts come from the
+        // manifest (their content is unchanged, and nothing they reference
+        // changed signature). Dirty/added files' facts are the ones the partition
+        // already walked (`fresh_throw_facts`) — folding them in lets the
+        // downstream `file_throw_facts` demand hit the seed rather than re-walking
+        // each body a second time (the seed-after-query invalidation the taint
+        // closure would otherwise cause). Every value is the honest one.
         let root = db.get_project().map(|p| p.root(db));
-        let seeded_throw_facts = manifest
+        let mut seeded_throw_facts: std::collections::BTreeMap<
+            String,
+            Vec<baml_type::throw_facts::FunctionThrowFacts>,
+        > = manifest
             .files
             .iter()
             .filter(|entry| clean_files.contains(&entry.rel_path))
@@ -1111,6 +1167,7 @@ impl CacheContext {
                 (full, entry.throw_facts.clone())
             })
             .collect();
+        seeded_throw_facts.extend(fresh_throw_facts);
 
         // Project clean files' cached interface fragments into a per-function
         // `callable_throws` seed (Phase 2): a clean function's throws — and hence
@@ -1188,7 +1245,13 @@ impl CacheContext {
                     .unwrap_or_default()
                     .into_iter()
                     .collect();
-                set.extend(syntactic_type_names(db, sf));
+                // The signature-surface names, kept both as their own manifest
+                // field (the cascade's meaning-propagation input) and folded into
+                // the full referenced set (the one-hop layout/name dependency).
+                let sig_names = syntactic_type_names(db, sf);
+                let mut sig_referenced_names: Vec<String> = sig_names.iter().cloned().collect();
+                sig_referenced_names.sort_unstable();
+                set.extend(sig_names);
                 // Tag coherence-participating files so any package-wide impl-set
                 // change re-checks every one of them together (IMPL_SENTINEL).
                 if file_has_impl_construct(db, sf) {
@@ -1202,6 +1265,7 @@ impl CacheContext {
                     layout_hash: file_layout_hash(db, sf),
                     defined_names: defined_names(db, sf),
                     referenced_names,
+                    sig_referenced_names,
                     // Free: seeded files return their seeds verbatim, dirty
                     // files were extracted (and memoized) during the compile.
                     throw_facts: baml_db::baml_compiler2_tir::throw_inference::file_throw_facts(
@@ -1318,11 +1382,12 @@ impl CacheContext {
 
     /// Localized diagnostics verify oracle (analog of `verify_stdlib_interface`):
     /// under `BAML_CACHE_VERIFY` the reuse plan is disabled, so the compile runs
-    /// the honest full check; this compares every previous-manifest file that is
-    /// still content-clean (i.e. would have been served from cache) against a
-    /// fresh `check_file`. A mismatch means the cached diagnostics are a stale
-    /// substitute that would change what a warm incremental run reports — a hard
-    /// error, and a tighter signal than the whole-`Program` byte-compare.
+    /// the honest full check; this compares every file the reuse plan would have
+    /// served from cache (the dirty-partition clean set — not merely the
+    /// content-unchanged files) against a fresh `check_file`. A mismatch means the
+    /// cached diagnostics are a stale substitute that would change what a warm
+    /// incremental run reports — a hard error, and a tighter signal than the
+    /// whole-`Program` byte-compare.
     pub(crate) fn verify_diagnostics(&self, db: &ProjectDatabase) -> anyhow::Result<()> {
         if !Self::verify_enabled() {
             return Ok(());
@@ -1343,14 +1408,22 @@ impl CacheContext {
         let Some(root) = db.get_project().map(|p| p.root(db).clone()) else {
             return Ok(());
         };
+        // Exactly the files a served warm compile would serve from cache — the
+        // throws-taint-closure / signature-cascade clean set, not merely the
+        // content-unchanged files. A content-unchanged file dirtied by a changed
+        // referenced name (or a sentinel, or the cascade) is re-checked, never
+        // served stale, so comparing its stored blob against a fresh check would
+        // bail spuriously on ordinary cross-file edits. Mirrors the sibling
+        // fragment oracle's gating.
+        let clean_files = compute_dirty_partition(db, &manifest).clean_files;
         for entry in &manifest.files {
+            if !clean_files.contains(&entry.rel_path) {
+                continue; // dirty — always re-checked, never served from cache
+            }
             let full = root.join(&entry.rel_path);
             let Some(sf) = db.get_file(&full) else {
                 continue; // file removed — never served
             };
-            if entry.content_hash != content_hash(sf.text(db)) {
-                continue; // changed — always re-checked, never served from cache
-            }
             let Some(served) =
                 crate::diagnostics_cache::rehydrate_file_blob(db, &root, &entry.diagnostics)
             else {
@@ -1547,12 +1620,21 @@ fn diagnostic_sets_equal(
 
 #[cfg(test)]
 mod tests {
-    //! Soundness of the dirty-set computation for the layout dependencies the
-    //! bytecode-operand set alone misses (field reorder, enum variant reorder,
-    //! type-alias change, and inferred-receiver field access). Each `plan_reuse`
-    //! test caches an initial compile, edits one type, and asserts the affected
-    //! consumer is dirtied while an unrelated file stays clean — the exact
-    //! verdicts that were wrong before the fix.
+    //! Soundness of the dirty-set computation and the Phase 2 seeding path.
+    //! Covers, in layers:
+    //!   - the layout dependencies the bytecode-operand set alone misses (field
+    //!     reorder, enum variant reorder, type-alias change, inferred-receiver
+    //!     field access) — a `plan_reuse` test caches a compile, edits one type,
+    //!     and asserts the affected consumer is dirtied while an unrelated file
+    //!     stays clean;
+    //!   - the transitive throws-taint closure and the signature-meaning cascade
+    //!     (direct / clean-intermediary / firewall / body-only-reference cases),
+    //!     asserted on the dirty/clean/seeded partition and on served==honest
+    //!     diagnostics and byte-identity;
+    //!   - the stdlib typed-interface cache and the per-file interface-fragment
+    //!     fold equality oracle;
+    //!   - the fragment and diagnostics `BAML_CACHE_VERIFY` oracles (a faithful
+    //!     cache passes, a poisoned one bails).
 
     use std::{
         path::{Path, PathBuf},
@@ -1790,6 +1872,78 @@ mod tests {
         };
         let _ = std::fs::remove_dir_all(&root);
         Some((summary, byte_identical))
+    }
+
+    /// Like [`plan_and_relink_after_edit`], but additionally asserts diagnostics
+    /// parity: the warm *served* diagnostics (reuse plan honored — clean files
+    /// served from cache, dirty files re-checked) must equal what an honest full
+    /// check of the seeded database reports. Both are collected on the same `db2`,
+    /// so their `FileId`s coincide and [`diagnostic_sets_equal`] compares cleanly;
+    /// the honest side (`plan = None`) re-checks every file, its clean-file seeds
+    /// being faithful, so it reproduces a cold compile's diagnostics. Returns the
+    /// plan summary, whether served == honest, and whether relink == full.
+    fn plan_diags_and_relink_after_edit(
+        initial: &[(&str, &str)],
+        edited: &[(&str, &str)],
+    ) -> Option<(PlanSummary, bool, bool)> {
+        if cache_disabled() || !cfg!(target_os = "linux") {
+            return None;
+        }
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+
+        let r1 = resolved(&root, initial);
+        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
+        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
+        let program1 =
+            compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile succeeds");
+        let fresh1 = ctx1
+            .collect_diagnostics_incremental(&db1, None)
+            .fresh_by_file;
+        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
+            .expect("manifest stored");
+
+        let r2 = resolved(&root, edited);
+        let mut db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let plan = ctx2.plan_reuse(&db2).expect("reuse plan available");
+        db2.set_seeded_throw_facts(plan.seeded_throw_facts.clone());
+        db2.set_seeded_callable_throws(plan.seeded_callable_throws.clone());
+
+        // Warm served diagnostics (plan honored) vs an honest full check of the
+        // same seeded db (no plan → every file re-checked, clean seeds faithful).
+        let served = ctx2
+            .collect_diagnostics_incremental(&db2, Some(&plan))
+            .merged;
+        let honest = ctx2.collect_diagnostics_incremental(&db2, None).merged;
+        let diags_match = diagnostic_sets_equal(&served, &honest);
+
+        let relinked =
+            compile_program(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("relink compile");
+        let db_full = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let full = compile_program(&db_full, &opts(), Some(&ctx2), None).expect("full compile");
+        let byte_identical = borsh::to_vec(&relinked).expect("ser relink")
+            == borsh::to_vec(&full).expect("ser full");
+
+        let summary = PlanSummary {
+            dirty: plan
+                .dirty_files
+                .iter()
+                .filter_map(|sf| {
+                    sf.path(&db2)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                })
+                .collect(),
+            clean: plan.clean_files.iter().map(|r| basename(r)).collect(),
+            seeded: plan
+                .seeded_callable_throws
+                .keys()
+                .map(|p| basename(p))
+                .collect(),
+        };
+        let _ = std::fs::remove_dir_all(&root);
+        Some((summary, diags_match, byte_identical))
     }
 
     // ── Phase 2 follow-up: layout-scoped sentinel (mixed class+function files) ─
@@ -2259,6 +2413,248 @@ mod tests {
         assert!(
             p.clean.contains("z.baml") && p.seeded.contains("z.baml"),
             "an unrelated file stays clean and seeded; {p:?}"
+        );
+    }
+
+    // ── Transitive signature-meaning cascade (alias re-target) ───────────────
+
+    #[test]
+    fn plan_reuse_cascades_signature_meaning_through_clean_callee() {
+        // The soundness repro. `alias.baml` re-targets `type AppErr` from `Boom`
+        // to `Kaboom`. `sink` is content-unchanged but names `AppErr` in its
+        // signature, so its resolved parameter type moves — the signature-meaning
+        // cascade dirties it AND joins its name to the change set. `boundary` is
+        // content-unchanged and names neither `AppErr` nor `Kaboom`; it only calls
+        // `sink` in its body, so the one-hop propagation reaches it only *after*
+        // the cascade adds `sink` to the change set. Without the cascade, boundary
+        // stays clean and its cached no-error diagnostics are served, hiding the
+        // arg-type mismatch (Boom passed where sink now expects Kaboom) — a
+        // program the honest compiler rejects. With it, served == honest and the
+        // relink is byte-identical to a full compile.
+        let alias_v1 = "type AppErr = Boom\n";
+        let alias_v2 = "type AppErr = Kaboom\n";
+        let errs = "class Boom {\n  b int\n}\nclass Kaboom {\n  k int\n}\n";
+        let sink = "function sink(e: AppErr) -> int throws AppErr {\n  throw e\n}\n";
+        let boundary = "function boundary(e: Boom) -> int {\n  sink(e)\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("alias.baml", alias_v1),
+            ("errs.baml", errs),
+            ("sink.baml", sink),
+            ("boundary.baml", boundary),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("alias.baml", alias_v2),
+            ("errs.baml", errs),
+            ("sink.baml", sink),
+            ("boundary.baml", boundary),
+            ("z.baml", unrelated),
+        ];
+        let Some((p, diags_match, byte_identical)) =
+            plan_diags_and_relink_after_edit(&initial, &edited)
+        else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("alias.baml"),
+            "the re-targeted alias file must be dirty; {p:?}"
+        );
+        assert!(
+            p.dirty.contains("sink.baml"),
+            "the content-unchanged callee whose signature names the alias must be \
+             dirtied by the cascade; {p:?}"
+        );
+        assert!(
+            p.dirty.contains("boundary.baml"),
+            "the transitive caller — naming neither the alias nor the changed type, \
+             only the clean callee `sink` in its body — must be dirtied so its stale \
+             no-error diagnostics are never served; dirty = {:?}",
+            p.dirty
+        );
+        assert!(
+            diags_match,
+            "warm served diagnostics must equal the honest full check — the arg-type \
+             mismatch at boundary's call site must not be hidden; {p:?}"
+        );
+        assert!(
+            byte_identical,
+            "the relink must reproduce a full compile byte-for-byte; {p:?}"
+        );
+    }
+
+    #[test]
+    fn plan_reuse_signature_cascade_stops_at_body_only_reference() {
+        // The cascade must NOT over-fire: a file that references a changed name
+        // only in its *body* is dirtied but does not propagate its own defined
+        // names further. `types.baml` re-targets `type Alias` from `A` to `B`.
+        // `mid` names `Alias` in its signature and has a closed `throws never`
+        // contract, so it cascades (its defined name joins the change set) but is a
+        // throws firewall. `bodyref` calls `mid` in its body and constructs `A`, so
+        // it is dirtied — but its signature names no changed type, so it must NOT
+        // cascade. `topcaller` calls only `bodyref` (behind the firewall), names no
+        // changed type, and must therefore stay clean and seeded: proof the cascade
+        // stopped at the body-only reference rather than dirtying the whole graph.
+        let types_v1 = "type Alias = A\nclass A {\n  a int\n}\nclass B {\n  b int\n}\n";
+        let types_v2 = "type Alias = B\nclass A {\n  a int\n}\nclass B {\n  b int\n}\n";
+        let mid = "function mid(x: Alias) -> int throws never {\n  0\n}\n";
+        let bodyref = "function bodyref() -> int throws never {\n  mid(A { a: 1 })\n}\n";
+        let topcaller = "function topcaller() -> int throws never {\n  bodyref()\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("types.baml", types_v1),
+            ("mid.baml", mid),
+            ("bodyref.baml", bodyref),
+            ("topcaller.baml", topcaller),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("types.baml", types_v2),
+            ("mid.baml", mid),
+            ("bodyref.baml", bodyref),
+            ("topcaller.baml", topcaller),
+            ("z.baml", unrelated),
+        ];
+        let Some(p) = plan_after_edit(&initial, &edited) else {
+            return;
+        };
+        assert!(
+            p.dirty.contains("mid.baml"),
+            "the callee whose signature names the alias must cascade (be dirty); {p:?}"
+        );
+        assert!(
+            p.dirty.contains("bodyref.baml"),
+            "the body-only caller of `mid` must be dirtied (re-checked); {p:?}"
+        );
+        assert!(
+            p.clean.contains("topcaller.baml") && p.seeded.contains("topcaller.baml"),
+            "the cascade must STOP at the body-only reference — a caller of the \
+             body-only referencer stays clean and seeded; dirty = {:?}",
+            p.dirty
+        );
+    }
+
+    #[test]
+    fn verify_diagnostics_passes_when_dependent_dirtied_by_cross_file_edit() {
+        // Fix for the over-strict diagnostics oracle: it must gate on the served
+        // (clean) set, not the content-unchanged set. Reusing the alias repro, the
+        // content-UNCHANGED `boundary` is dirtied by the cascade and would report a
+        // NEW error on a fresh check. Because it is dirty it is re-checked, never
+        // served, so the oracle must skip it. Gating on `content_hash` instead
+        // would compare boundary's stored (clean) blob against its fresh (erroring)
+        // check and bail spuriously on this ordinary cross-file edit.
+        if cache_disabled() || !cfg!(target_os = "linux") {
+            return;
+        }
+        let errs = "class Boom {\n  b int\n}\nclass Kaboom {\n  k int\n}\n";
+        let sink = "function sink(e: AppErr) -> int throws AppErr {\n  throw e\n}\n";
+        let boundary = "function boundary(e: Boom) -> int {\n  sink(e)\n}\n";
+        let unrelated = "function unrelated() -> int {\n  42\n}\n";
+        let initial = [
+            ("alias.baml", "type AppErr = Boom\n"),
+            ("errs.baml", errs),
+            ("sink.baml", sink),
+            ("boundary.baml", boundary),
+            ("z.baml", unrelated),
+        ];
+        let edited = [
+            ("alias.baml", "type AppErr = Kaboom\n"),
+            ("errs.baml", errs),
+            ("sink.baml", sink),
+            ("boundary.baml", boundary),
+            ("z.baml", unrelated),
+        ];
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+
+        let r1 = resolved(&root, &initial);
+        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
+        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
+        let program1 =
+            compile_program(&db1, &opts(), Some(&ctx1), None).expect("v1 compile succeeds");
+        let fresh1 = ctx1
+            .collect_diagnostics_incremental(&db1, None)
+            .fresh_by_file;
+        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
+            .expect("v1 manifest stored");
+
+        // v2 sources; the diagnostics oracle (env-independent core) must pass:
+        // boundary is dirty (skipped), the truly-clean files are unchanged.
+        let r2 = resolved(&root, &edited);
+        let db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        ctx2.check_cached_diagnostics_against_fresh(&db2).expect(
+            "the diagnostics oracle must not bail on a content-unchanged file that \
+             the cascade dirtied (it is re-checked, never served stale)",
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn seeded_callable_throws_is_consulted_on_path_key_hit() {
+        // Guards the (abs-path, LocalItemId) seed key match end-to-end: seed one
+        // function's key with a deliberately-wrong `Ty` and prove `callable_throws`
+        // returns it (short-circuiting honest inference), while an unseeded
+        // function still infers. If either key format drifted (rel vs abs, a
+        // separator change) the seed would silently never apply and this fails.
+        use baml_compiler2_hir::loc::FunctionLoc;
+        use baml_db::baml_compiler2_tir::callable::callable_throws;
+
+        let mut db = build_db(&[(
+            "a.baml",
+            "class MyErr {\n  msg string\n}\n\
+             function f() -> int {\n  1\n}\n\
+             function g() -> int {\n  throw MyErr { msg: \"x\" }\n}\n",
+        )]);
+        let file = file_named(&db, "a.baml");
+        let (f_id, g_id) = {
+            let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
+            let mut f_id = None;
+            let mut g_id = None;
+            for (lid, func) in &item_tree.functions {
+                match func.name.as_str() {
+                    "f" => f_id = Some(*lid),
+                    "g" => g_id = Some(*lid),
+                    _ => {}
+                }
+            }
+            (f_id.expect("f present"), g_id.expect("g present"))
+        };
+
+        // Honest values (seed empty at construction): f throws nothing, g throws
+        // MyErr, so the two differ — g's throws is a distinguishable sentinel.
+        let (f_honest, g_throws) = {
+            let f_loc = FunctionLoc::new(&db, file, f_id);
+            let g_loc = FunctionLoc::new(&db, file, g_id);
+            (
+                callable_throws(&db, f_loc).clone(),
+                callable_throws(&db, g_loc).clone(),
+            )
+        };
+        assert_ne!(
+            f_honest, g_throws,
+            "f (no throw) and g (throws MyErr) must differ honestly"
+        );
+
+        // Seed f's key with g's throw `Ty`, keyed by (abs path, f's LocalItemId).
+        let abs_path = file.path(&db).display().to_string();
+        let mut by_id = std::collections::BTreeMap::new();
+        by_id.insert(f_id.as_u32(), g_throws.clone());
+        let mut by_path = std::collections::BTreeMap::new();
+        by_path.insert(abs_path, by_id);
+        db.set_seeded_callable_throws(by_path);
+
+        let f_loc = FunctionLoc::new(&db, file, f_id);
+        let g_loc = FunctionLoc::new(&db, file, g_id);
+        assert_eq!(
+            *callable_throws(&db, f_loc),
+            g_throws,
+            "the seed must short-circuit: f returns the path-keyed seeded value"
+        );
+        assert_eq!(
+            *callable_throws(&db, g_loc),
+            g_throws,
+            "an unseeded function still infers honestly"
         );
     }
 

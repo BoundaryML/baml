@@ -68,7 +68,18 @@ use sha2::{Digest, Sha256};
 /// every pre-v7 manifest fail to decode (borsh runs off the end), so
 /// `plan_reuse` falls back to a full compile rather than reading a manifest
 /// lacking the field. No hand migration.
-pub const FORMAT_VERSION: u32 = 7;
+///
+/// v8 (transitive signature-meaning cascade): each [`ManifestFile`] now carries
+/// `sig_referenced_names` — the type names named in exactly the file's
+/// *signature* surface (the bodies-blanked source `signature_hash` covers),
+/// separated out from the full `referenced_names` (which also folds in
+/// body-level bytecode references). The dirty-set computation uses it to cascade
+/// a type-identity change (e.g. an alias re-target) through a *content-unchanged*
+/// callee whose resolved signature moved, dirtying its callers — a hole the
+/// one-hop propagation left open. The added trailing field makes every pre-v8
+/// manifest fail to decode (borsh runs off the end), so `plan_reuse` falls back
+/// to a full compile. No hand migration.
+pub const FORMAT_VERSION: u32 = 8;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -189,6 +200,18 @@ pub struct ManifestFile {
     pub defined_names: Vec<String>,
     /// Last-segment names this file's compiled bytecode references.
     pub referenced_names: Vec<String>,
+    /// Last-segment type names named in this file's *signature* surface only —
+    /// function/method params, returns, `throws`, generic bounds; class/interface
+    /// field types; `implements`/`requires`/`for` targets; type-alias RHS — i.e.
+    /// exactly the bodies-blanked source `signature_hash` hashes. A strict subset
+    /// of `referenced_names` (which also folds in body-level bytecode references).
+    /// The dirty-set pass uses it to cascade a type-identity change through a
+    /// content-unchanged callee whose resolved signature moved: a file whose
+    /// *signature* names a changed type has its own resolved signature meaning
+    /// changed, so its defined names propagate to its callers, whereas a purely
+    /// body-level reference does not (that can only move the file's throws, which
+    /// the transitive throws-taint closure already covers).
+    pub sig_referenced_names: Vec<String>,
     /// Throw-analysis facts for every function the file defines, exactly as
     /// `baml_compiler2_tir::throw_inference::file_throw_facts` extracted
     /// them. Re-seeded into the next compile's database so unchanged files
@@ -746,6 +769,7 @@ mod tests {
                 layout_hash: [4u8; 32],
                 defined_names: vec!["foo".to_string()],
                 referenced_names: vec!["Bar".to_string()],
+                sig_referenced_names: vec!["Bar".to_string()],
                 throw_facts: Vec::new(),
                 // Opaque bytes: bex_cache never interprets this blob.
                 diagnostics: vec![9, 8, 7, 6],
