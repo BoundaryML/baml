@@ -464,3 +464,43 @@ default, allocated into the cloned `FunctionDefaults` arena (the
 
 Breaking surface change by design (plan D5): every `run_tools`/`$run_tools` caller now
 matches the sum — 8 corpus call sites migrated.
+
+## Scenario design-alignment sweep (batches 1–6, scenarios 01–18) — systemic deviations
+
+Per-scenario detail accumulates in `align_reports/*.json` (synthesized into
+`llm-provider/ALIGNMENT.md` at the end); the recurring divergences from the original
+design corpus, and the compiler/VM findings the sweep forced, are:
+
+**Recurring design→real-surface remappings** (each noted per scenario in the reports):
+- `Supported<T>` → `T | baml.ai.Unavailable`; `(T,U)` tuple → `CallResult<T,V>`;
+  `.call_with(...)` → the `$with` companion; `meta_of` → `parse_meta`.
+- Net-new capability interfaces the corpus invented (SearchableTools, GatedContext,
+  Dispatcher/ExecutionContext, CompactionError, …) collapse onto the real seams:
+  dispatch closures, wrapper providers over `inner: Provider`, and the Tools loop.
+- The corpus's `Handoff` Tools-combinator is deliberately NOT reproduced (plan D5 rejected
+  it): scenario 14 tells both stories — delegation-in-dispatch AND the honest
+  `Tool{handoff:true}` → `HandoffRequest` arm with a caller-side router/roster.
+- Provider-executed tools, durable stores, MCP federation, media persistence: shape +
+  negotiation + `// BLOCKED: P8` only.
+
+**Compiler/VM findings forced by the sweep** (bug queue in the checklist):
+- Two perf-merge regressions found & fixed (session-wide implementor union e64d825c5;
+  out-of-body class-implements registration 7f95b8d23).
+- OPEN: user-package companion driver with a user-class extra param crashes lowering
+  corpus-wide (needs root-absolutized extras in `make_user_drive_companion`).
+- OPEN: spawn-in-`.map`-closure + await deadlocks the VM (0% CPU) — scenario 15 ships a
+  sequential guard phase instead of the design's concurrent race.
+- OPEN: a wrapper class cannot forward a provider's opaque associated type
+  (`inner.Transcript`, E0001) — Tools-forwarding wrappers must be drivers.
+- Confirmed design-OQ5: user interfaces don't runtime-negotiate off the `Provider`
+  existential without the full `//baml:llm_capability` registry route (16's Provenance
+  degrades to a statically-typed interface).
+
+**Testing infrastructure added en route** (user direction):
+- Per-test timeout in the stdlib runner (default 5min, `BAML_TEST_TIMEOUT_MS` override;
+  our runs use 60000). `baml.future.race` cancels the loser, so timed-out bodies are
+  actively cancelled.
+- Live tiers are now VALIDATED WITH REAL KEYS at every batch gate (first full sweep found
+  3 authored-blind bugs: template-vs-obedience assert in 01, GEMINI_API_KEY naming in 02,
+  `response_format` sent to gpt-image-1 in 06). Scenario code carries `log.info`
+  instrumentation so runs are observable.
