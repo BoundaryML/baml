@@ -1496,3 +1496,90 @@ async fn host_callable_with_generic_return_is_rejected() {
     );
     drop(arc);
 }
+
+// ============================================================================
+// Regression: a spawned child that AWAITS a future which settles to an
+// `InternalError` must not leak its own future as `Pending` forever.
+// ============================================================================
+
+// Root cause (engine-shutdown wedge, reproduced from the live `baml test`
+// sweep): when a spawned awaiter is PARKED on a future and that future settles
+// to `InternalError`, the engine's `Await`/`AwaitAny` arm resolves the
+// awaiter's `SetOnce` wait with an `Err(EngineError)` and propagates it via
+// `AwaitOutcome::Done(r) => r?`. That bubbles the error out of
+// `run_thread_event_loop` WITHOUT any `settle_child_*` running, so
+// `spawn_thread_inner` used to only *log* it — leaving the awaiter's heap
+// `Future` `Pending`. Its `ready` wake never fires, so ITS awaiter (and,
+// transitively, the root's B-650 end-of-run wait) parks forever: the VM did all
+// its work but the engine never observes quiescence and the process wedges.
+//
+// The live trigger was a VM `TracedVmInternalError` surfaced on live data (its
+// `Display` renders with a Python-style `Traceback (most recent call last):`
+// header — BAML's own internal-error formatter, not an actual Python
+// exception). Here we seed the SAME leak deterministically and offline with a
+// host-bridge fault (`FakeReturn::BridgeFailure`), which the engine surfaces as
+// an uncatchable `EngineError::VmInternalError { BridgeFailure }` — a permanent
+// host surface, so this regression test does not rot when unrelated language
+// features change (unlike a type-soundness-hole seed; see Linear B-797).
+//
+// The 50ms sleep forces the "awaiter parked first" ordering the leak needs.
+// The load-bearing assertion is COMPLETION, not a value: before the fix
+// `call_function` never resolves (the wedge), so the test hangs and the
+// `timeout` fires.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn spawned_awaiter_of_internal_error_future_does_not_wedge() {
+    let source = r#"
+        function main(boom: () -> string) -> string {
+            // `f` yields (so its awaiter parks) then hits an uncatchable
+            // host-bridge internal error.
+            let f = spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+                boom()
+            };
+            // `g` is a SPAWN that awaits `f`: its `r?`-propagated engine error
+            // is what used to leak. Nesting under a spawn is essential — a plain
+            // root `await` surfaces the error fine.
+            let g = spawn { await f };
+            await g
+        }
+    "#;
+
+    // The host callable faults with a fatal BridgeFailure → uncatchable
+    // `EngineError::VmInternalError` in whichever thread invokes it (here, `f`).
+    let arc = register_host_callable(|_items| FakeReturn::BridgeFailure {
+        message: "boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let call = engine.call_function(
+        "main",
+        vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        true,
+    );
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(10), call).await;
+
+    // Load-bearing: the engine future RESOLVED (no wedge).
+    let result =
+        outcome.expect("engine wedged: call_function never resolved (the spawn-leak regressed)");
+    // With the fix the uncatchable internal error propagates deterministically
+    // up the await chain, so `main` returns an internal error rather than hanging.
+    assert!(
+        matches!(
+            result,
+            Err(EngineError::VmInternalError(
+                sys_types::VmInternalError::BridgeFailure { .. }
+            )) | Err(EngineError::TracedVmInternalError {
+                source: sys_types::VmInternalError::BridgeFailure { .. },
+                ..
+            })
+        ),
+        "expected the BridgeFailure internal error to surface after the fix, got {result:?}"
+    );
+    drop(arc);
+}

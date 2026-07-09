@@ -3365,6 +3365,29 @@ impl BexEngine {
         Ok(())
     }
 
+    /// Settle a spawned child's still-`Pending` future after its event loop
+    /// bubbled an [`EngineError`] out of `run_thread_event_loop` (the `Err` /
+    /// invariant-violating `RootValue` arms in [`Self::spawn_thread_inner`]).
+    ///
+    /// The child task has already fully unwound here — its `ActiveHeapPermit`
+    /// was consumed by (and dropped inside) `run_thread_event_loop` — so we own
+    /// no permit. Acquire a fresh COLD permit (the `active_future_count`
+    /// pattern) purely to reach the `FutureManager`, and settle the future as an
+    /// internal error IF it is still `Pending` (tolerating a racing cancel).
+    /// This fires the `ready` wake and routes the error to any awaiter, so the
+    /// await chain resumes instead of parking forever and wedging shutdown.
+    async fn settle_spawn_engine_error(self: &Arc<Self>, future_id: FutureId, err: EngineError) {
+        let active = self.heap_permit_manager.new_permit(()).await.acquire().await;
+        let mut guard = self.futures.acquire(active.proof()).await;
+        if let Err(settle_err) = guard.settle_internal_error_if_pending(future_id, err) {
+            tracing::error!(
+                ?settle_err,
+                ?future_id,
+                "failed to settle a spawned child's leaked future after an engine error"
+            );
+        }
+    }
+
     /// Transition the child future settled by `thread` to `Error(value)`,
     /// fire its cancel token, and push our settled future ptr onto our
     /// parent's fire-and-forget error queue per BEP-034 — without this,
@@ -4027,11 +4050,35 @@ impl BexEngine {
                 // The abnormal arms close any spans the event loop left open
                 // before the thread ends — the ring EndThread (emitted by the
                 // run_thread_event_loop wrapper) must never strand open spans.
+                //
+                // Both arms MUST also settle the child's heap `Future`. A child
+                // event loop reaches here with its future still `Pending`: the
+                // normal terminal transitions (`Complete`/throw/cancel) return
+                // `Ok(SettledChild)` after settling, so `Ok(RootValue)` is an
+                // invariant violation and `Err` is an `EngineError` that bubbled
+                // out past every `settle_child_*` (notably the InternalError
+                // reproduced by the live testset: a child awaited a future that
+                // produced an `InternalError`, and `AwaitOutcome::Done(r) => r?`
+                // propagated it here). Left `Pending`, the child's `ready` wake
+                // never fires, its awaiter parks forever, and the stall cascades
+                // to the root's B-650 end-of-run wait — the engine never observes
+                // quiescence and `baml test` wedges after finishing all work.
+                // Settling as an internal error fires the wake and re-propagates
+                // the error deterministically up the await chain.
                 Ok(ThreadOutcome::RootValue(_)) => {
                     tracing::error!(
                         ?future_id,
                         "spawn thread returned a root value instead of settling its future"
                     );
+                    engine
+                        .settle_spawn_engine_error(
+                            future_id,
+                            EngineError::Other(
+                                "spawn thread returned a root value instead of settling its future"
+                                    .to_string(),
+                            ),
+                        )
+                        .await;
                 }
                 Err(err) => {
                     tracing::error!(
@@ -4039,6 +4086,7 @@ impl BexEngine {
                         ?future_id,
                         "spawn thread terminated with engine error"
                     );
+                    engine.settle_spawn_engine_error(future_id, err).await;
                 }
             }
         };

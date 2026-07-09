@@ -258,6 +258,36 @@ impl FutureManagerGuard<'_> {
         Ok(())
     }
 
+    /// Settle `id` to `InternalError` **only if it is still `Pending`**, a no-op
+    /// otherwise. Unlike [`Self::internal_error_future`] this tolerates an
+    /// already-settled future (e.g. a racing `f.cancel()`) without asserting.
+    ///
+    /// Used by `spawn_thread_inner` when a spawned child's event loop bubbled an
+    /// `EngineError` out WITHOUT settling its own future — the child awaited a
+    /// future that produced an `InternalError`, and `AwaitOutcome::Done(r) => r?`
+    /// propagated the error past every `settle_child_*`. Left `Pending`, the
+    /// child's `ready` wake never fires, so its awaiter parks forever and the
+    /// stall cascades up to the root's B-650 end-of-run wait, wedging shutdown.
+    /// Settling here fires the `ready` wake and routes the error through
+    /// `future_ready`, so the awaiter resumes and re-propagates it — the same
+    /// deterministic surfacing a non-spawned `Await` gets.
+    pub fn settle_internal_error_if_pending(
+        &mut self,
+        id: FutureId,
+        err: EngineError,
+    ) -> Result<(), EngineError> {
+        let Some(entry) = self.holder().active_futures.get(&id) else {
+            // Already settled and cleaned up out-of-band — nothing to do.
+            return Ok(());
+        };
+        // SAFETY: caller holds the heap permit via `self.proof`.
+        let fut = unsafe { entry.future_ref() }?;
+        if matches!(fut.read(), FutureRead::Pending(_)) {
+            self.internal_error_future(id, err)?;
+        }
+        Ok(())
+    }
+
     /// Sets the future to `InternalError` and notifies the waiter.
     ///
     /// Unlike the other terminal-transition helpers, this does **not** remove
@@ -496,6 +526,7 @@ impl FutureManagerGuard<'_> {
             })
             .collect()
     }
+
 }
 impl TlabHolder for FutureManagerGuard<'_> {
     fn tlab(&self) -> &Tlab {
