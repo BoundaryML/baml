@@ -108,11 +108,13 @@ class SseStream {
 }
 
 /// Converts an optional timeout into the nanosecond count carried across the
-/// sys-op boundary. `null` (no deadline) becomes `0n`, which the native layer
-/// treats as unbounded. Modeled on Rust's `Option<Duration>`.
+/// sys-op boundary. `null` becomes the DEFAULT deadline (5 minutes) — a plain
+/// `http.send(request)` can no longer wedge a program forever on a stalled
+/// socket. Pass an explicit `Duration` for a longer (or shorter) deadline;
+/// there is deliberately no "unbounded" spelling.
 function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
   match (timeout) {
-    null => 0n,
+    null => 300000000000n, // 5 minutes
     let t: root.time.Duration => t.to_nanoseconds(),
   }
 }
@@ -120,7 +122,7 @@ function _timeout_nanos(timeout: root.time.Duration?) -> bigint throws never {
 /// Sends a GET request to `url` and returns the response.
 ///
 /// `timeout` is the total deadline for the request (connection + response
-/// headers + body). `null` (the default) imposes no deadline. On expiry this
+/// headers + body). `null` (the default) means 5 minutes. On expiry this
 /// throws `root.errors.Timeout`.
 function fetch(url: string, timeout: root.time.Duration? = null) -> Response throws root.errors.Io | root.errors.Timeout {
   // Thin wrapper resolving the default: `$rust_io_function` sys-ops don't fill
@@ -135,7 +137,7 @@ function _fetch(url: string, timeout_nanos: bigint) -> Response throws root.erro
 /// Sends an HTTP request and returns the response.
 ///
 /// `timeout` is the total deadline for the request, as in `fetch`. `null` (the
-/// default) imposes no deadline.
+/// default) means 5 minutes.
 function send(request: Request, timeout: root.time.Duration? = null) -> Response throws root.errors.Io | root.errors.Timeout {
   _send(request, _timeout_nanos(timeout))
 }
