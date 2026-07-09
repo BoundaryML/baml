@@ -1,95 +1,85 @@
-// scenario 10 — agentic loop: ../../../../../llm-provider/ideas/scenarios/10-agentic-loop/README.md
-// Offline tests for `baml.ai.ToolLoop` (DCP §1.2): the agentic loop as a
-// provider — a plain HttpProvider call on a ToolLoop client drives
-// begin/step/submit over the Tools-capable inner and returns the final value.
+// scenario 10 — agentic loop + stop: ../../../../../llm-provider/ideas/scenarios/10-agentic-loop/README.md
+//   usage.baml — APPLICATION-author code. End-user surface + runnable tests.
+//
+// The design's promise (background 02 §2 "the tool loop / agentic loop"): the
+// multi-turn tool loop is FREE (the `Tools.run_tools` default method), stop policy
+// (a numeric step cap, a `stopWhen` predicate, ORed predicates) lives in a
+// `Bounded` combinator that overrides only the loop and never touches the wire,
+// the budget hit returns a best-effort partial (`Budget<T>`, `step`'s `Item|Done`
+// one level up), and swapping the client changes the provider with NOTHING else.
+//
+// On the real surface the design's `Bounded` IS `baml.ai.ToolLoop { inner, tools,
+// dispatch, stop_when }`. Per the explicit "prefer LLM functions" directive the
+// loop is spelled the design-true way — a plain LLM function called with a ToolLoop
+// CLIENT (the loop is IMPLIED by the provider, not a call-site mode):
+//     ResearchIt(q, client = baml.ai.ToolLoop { … })
+// The budget-aware surface (`T | Budget<T> | HandoffRequest`) and the
+// `Foo$run_tools` companion are the two explicit-control forms where the plain
+// call's `-> T` return has no room for the extra arms.
+//
+// Live tier = testset "integ-test-10-agentic-loop" (native OpenAi tools + a cap).
+//
+// Fixtures live in implementation.baml (shared, read-only across scenarios):
+// ScriptedTools / ScriptedNotTools / echo_dispatch / lookup_tools; NoCapProvider
+// is common/fakes.baml. Preserves every D5 behavior: plain-call ToolLoop path,
+// LoopBudgetExceeded typed throw, run_to_budget Budget arm, step_count_is /
+// has_tool_call / any_of, $run_tools swapped-client + Unsupported + stop_when.
 
-/// Scripted transcript: demand `turns_wanted` tool turns, then produce
-/// `final_json` as the value (SAP-parsed into the caller's `T`).
-class ScriptState {
-    turns_wanted: int,
-    turns_done: int,
-    final_json: string,
+
+// ── (1) The trivial case: inherit the loop, drive it by handing a ToolLoop as
+// the CLIENT of an ordinary LLM function. Zero loop code at the call site. ──────
+
+// A dead declared client: never actually reached — every call below overrides it
+// with `client = <ToolLoop>`. (`ResearchIt` + `DeadDeclared` are referenced from
+// scenario 14; keep both names stable.)
+client<llm> DeadDeclared {
+  provider "openai"
+  options { model "gpt-4o" api_key "unused" base_url "http://127.0.0.1:9" }
 }
 
-/// An offline Tools-capable provider (no network): requests one `lookup` tool
-/// call per turn until the script is exhausted, then answers.
-class ScriptedTools {
-    turns_wanted: int,
-    final_json: string,
-
-    implements baml.ai.Provider {}
-
-    implements baml.ai.Tools {
-        type Transcript = ScriptState
-
-        function begin<T>(self, prompt: string, tools: baml.ai.Tool[]) -> ScriptState throws never {
-            ScriptState {
-                turns_wanted: self.turns_wanted,
-                turns_done: 0,
-                final_json: self.final_json,
-            }
-        }
-        function step<T>(self, t: ScriptState) -> T | baml.ai.ToolCalls
-            throws baml.errors.UnknownError {
-            if (t.turns_done < t.turns_wanted) {
-                return baml.ai.ToolCalls {
-                    calls: [baml.ai.ToolCall { id: "call_1", name: "lookup", args: "{}" }],
-                };
-            }
-            baml.sap.parse<T>(t.final_json) catch (e) {
-                _ => throw baml.errors.UnknownError { data: e, message: ["script final parse failed"] },
-            }
-        }
-        function submit(self, t: ScriptState, results: baml.ai.ToolResult[]) -> ScriptState throws never {
-            ScriptState {
-                turns_wanted: t.turns_wanted,
-                turns_done: t.turns_done + 1,
-                final_json: t.final_json,
-            }
-        }
-    }
+function ResearchIt(q: string) -> string {
+  client DeadDeclared
+  prompt #"Answer with tools: {{ q }}"#
 }
 
-function echo_dispatch(calls: baml.ai.ToolCall[]) -> baml.ai.ToolResult[] {
-    let out: baml.ai.ToolResult[] = [];
-    for (let c in calls) {
-        out.push(baml.ai.ToolResult { id: c.id, output: "looked-up" });
-    }
-    out
-}
-
-function lookup_tools() -> baml.ai.Tool[] {
-    [baml.ai.Tool { name: "lookup", description: "Look something up.", parameters: "{}" }]
-}
-
-test "tool loop runs to completion through the plain call path" {
-    let agent = baml.ai.ToolLoop {
+test "10: a plain LLM-function call drives the ToolLoop to completion" {
+    // The design's usage (1): the app writes NOTHING about the loop; the ToolLoop
+    // client implies begin/step/dispatch/submit until a value falls out.
+    let r = ResearchIt("go", client = baml.ai.ToolLoop {
         inner: ScriptedTools { turns_wanted: 2, final_json: "final answer" },
         tools: lookup_tools(),
         dispatch: echo_dispatch,
         stop_when: null,
-    };
-    let r = agent.call<string>("go") catch (e) {
+    }) catch (e) {
         _ => "call failed",
     };
     assert.equal(r, "final answer")
 }
 
-test "step_count_is halts the plain path with a typed LoopBudgetExceeded" {
-    let agent = baml.ai.ToolLoop {
+
+// ── (2) Step cap. The design's `Bounded + step_count_is(n)`. On the plain call
+// path the `-> T` return has no partial arm, so the budget hit is the typed
+// `LoopBudgetExceeded` (use run_to_budget below to receive the value arm). ──────
+
+test "10: step_count_is halts the plain path with a typed LoopBudgetExceeded" {
+    let outcome = ResearchIt("go", client = baml.ai.ToolLoop {
         inner: ScriptedTools { turns_wanted: 5, final_json: "never reached" },
         tools: lookup_tools(),
         dispatch: echo_dispatch,
         stop_when: baml.ai.step_count_is(2),
-    };
-    let outcome = agent.call<string>("go") catch (e) {
+    }) catch (e) {
         let b: baml.errors.LoopBudgetExceeded => "budget:" + b.steps_taken.to_string(),
         _ => "wrong error",
     };
     assert.equal(outcome, "budget:2")
 }
 
-test "run_to_budget returns the Budget sum arm instead of throwing" {
+
+// ── (3) Partial result at the budget. The design's "the limit signal must carry
+// the last partial result": call the explicit `run_to_budget`, getting the honest
+// SUM `T | Budget<T> | HandoffRequest` instead of a throw. ─────────────────────
+
+test "10: run_to_budget returns the Budget sum arm instead of throwing" {
     let agent = baml.ai.ToolLoop {
         inner: ScriptedTools { turns_wanted: 5, final_json: "never reached" },
         tools: lookup_tools(),
@@ -107,7 +97,12 @@ test "run_to_budget returns the Budget sum arm instead of throwing" {
     assert.equal(label, "stopped at 1")
 }
 
-test "has_tool_call stops when the named tool is requested" {
+
+// ── (4) stopWhen predicate, ORed. The design's
+//     stopWhen: [ stepCountIs(99), hasToolCall("lookup") ]
+// — `any_of` short-circuits on the model requesting the named tool. ────────────
+
+test "10: has_tool_call inside any_of stops when the named tool is requested" {
     let agent = baml.ai.ToolLoop {
         inner: ScriptedTools { turns_wanted: 3, final_json: "never reached" },
         tools: lookup_tools(),
@@ -128,54 +123,53 @@ test "has_tool_call stops when the named tool is requested" {
     assert.equal(label, "stopped at 1")
 }
 
-test "non-Tools inner is a typed Unsupported" {
-    let agent = baml.ai.ToolLoop {
+
+// ── (5) Capability negotiation. A ToolLoop whose `inner` is not Tools-capable
+// has no honest loop to drive -> a typed `Unsupported`, surfaced on the plain
+// LLM-function call path. ──────────────────────────────────────────────────────
+
+test "10: a non-Tools inner surfaces a typed Unsupported" {
+    let outcome = ResearchIt("go", client = baml.ai.ToolLoop {
         inner: ScriptedNotTools {},
         tools: lookup_tools(),
         dispatch: echo_dispatch,
         stop_when: null,
-    };
-    let outcome = agent.call<string>("go") catch (e) {
+    }) catch (e) {
         let u: baml.errors.Unsupported => "unsupported",
         _ => "wrong error",
     };
     assert.equal(outcome, "unsupported")
 }
 
-test "retry refuses to wrap the effectful loop" {
-    let agent = baml.ai.ToolLoop {
+
+// ── (6) Combinator chain, semantically checked. The design's `Bounded{…}
+// .with_retry(2)`: `with_retry` is a Provider-marker factory inherited by the
+// ToolLoop, but a re-driven loop replays every tool side effect, so `Retry`
+// REFUSES to wrap an effectful provider — a typed `CannotRetry`, not a silent
+// re-drive (the design's evaluation (c) "retry around a Tools loop is dubious",
+// now enforced). Spelled the design-true way through the LLM function. ─────────
+
+test "10: with_retry refuses to wrap the effectful loop (CannotRetry)" {
+    let outcome = ResearchIt("go", client = baml.ai.ToolLoop {
         inner: ScriptedTools { turns_wanted: 1, final_json: "fine" },
         tools: lookup_tools(),
         dispatch: echo_dispatch,
         stop_when: null,
-    };
-    let outcome = agent.with_retry(2).call<string>("go") catch (e) {
+    }.with_retry(2)) catch (e) {
         let c: baml.errors.CannotRetry => "refused",
         _ => "wrong error",
     };
     assert.equal(outcome, "refused")
 }
 
-/// A provider with no Tools capability, for the negotiation-failure test.
-class ScriptedNotTools {
-    implements baml.ai.Provider {}
-}
 
-// ── The $run_tools companion (DCP §1.3): explicit-control agentic form ──────
+// ── (7) The $run_tools companion (DCP §1.3): the explicit-control agentic form.
+// Where the plain call implies the loop via a ToolLoop client, `Foo$run_tools`
+// keeps the app's own provider client and swaps a Tools provider in per call —
+// returning the honest sum `T | Budget<T> | HandoffRequest`. ───────────────────
 
-client<llm> DeadDeclared {
-  provider "openai"
-  options { model "gpt-4o" api_key "unused" base_url "http://127.0.0.1:9" }
-}
-
-function ResearchIt(q: string) -> string {
-  client DeadDeclared
-  prompt #"Answer with tools: {{ q }}"#
-}
-
-test "Foo$run_tools drives the loop through a swapped-in Tools provider" {
+test "10: Foo$run_tools drives the loop through a swapped-in Tools provider" {
     let agent = ScriptedTools { turns_wanted: 2, final_json: "companion answer" };
-    // D5: the companion returns the honest sum `string | Budget<string>`.
     let outcome = ResearchIt$run_tools("q", lookup_tools(), echo_dispatch, client = agent) catch (e) {
         _ => "companion failed",
     };
@@ -187,7 +181,7 @@ test "Foo$run_tools drives the loop through a swapped-in Tools provider" {
     assert.equal(r, "companion answer")
 }
 
-test "Foo$run_tools on a capability-less client is a typed Unsupported" {
+test "10: Foo$run_tools on a capability-less client is a typed Unsupported" {
     let outcome = ResearchIt$run_tools("q", lookup_tools(), echo_dispatch, client = NoCapProvider {}) catch (e) {
         let u: baml.errors.Unsupported => "unsupported",
         _ => "wrong error",
@@ -199,7 +193,7 @@ test "Foo$run_tools on a capability-less client is a typed Unsupported" {
     assert.equal(r, "unsupported")
 }
 
-test "Foo$run_tools with stop_when surfaces the Budget arm (D5)" {
+test "10: Foo$run_tools with stop_when surfaces the Budget arm (D5)" {
     let agent = ScriptedTools { turns_wanted: 5, final_json: "never reached" };
     let outcome = ResearchIt$run_tools(
         "q",
