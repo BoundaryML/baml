@@ -1277,6 +1277,11 @@ impl LoweringContext {
         let mut op = None;
         let mut operand = None;
         let mut double_op = false;
+        // Set when the prefix operator is `~` (bitwise NOT). Desugared below
+        // into `-x - 1` (two's-complement complement) rather than a dedicated
+        // `UnaryOp` variant, so it reuses the existing, correct `Neg`/`Sub`
+        // type rules and VM opcodes without a new operator in the pipeline.
+        let mut bit_not = false;
         // Value of an `INTEGER_LITERAL` token seen *directly* in this
         // `UNARY_EXPR` (not via a child node like a parenthesized expr).
         let mut direct_int_lit: Option<i64> = None;
@@ -1290,6 +1295,7 @@ impl LoweringContext {
                     let span = token.text_range();
                     match token.kind() {
                         SyntaxKind::NOT => op = Some(UnaryOp::Not),
+                        SyntaxKind::TILDE => bit_not = true,
                         SyntaxKind::MINUS => op = Some(UnaryOp::Neg),
                         SyntaxKind::MINUS_MINUS => {
                             op = Some(UnaryOp::Neg);
@@ -1331,6 +1337,35 @@ impl LoweringContext {
         }
 
         let expr = operand.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+
+        // Bitwise NOT: desugar `~x` into `-x - 1`. Two's-complement complement
+        // is `~x == -x - 1`, correct for every BAML int (63-bit signed) whose
+        // negation is representable. Lowering to existing `Neg`/`Sub` keeps `~`
+        // out of the type checker and VM as a distinct operator while producing
+        // the correct value; the operand is evaluated exactly once. The lone
+        // corner is `~INT_MIN`: its result (`INT_MAX`) is representable, but the
+        // intermediate `-INT_MIN` overflows the range, so it throws/errors like
+        // any other `-INT_MIN` — an inherent limitation of negating INT_MIN
+        // here, not a silent wrong answer (the bug this fix removes).
+        if bit_not {
+            let span = node.span_range();
+            let neg = self.alloc_expr(
+                Expr::Unary {
+                    op: UnaryOp::Neg,
+                    expr,
+                },
+                span,
+            );
+            let one = self.alloc_expr(Expr::Literal(Literal::Int(1)), span);
+            return self.alloc_expr(
+                Expr::Binary {
+                    op: BinaryOp::Sub,
+                    lhs: neg,
+                    rhs: one,
+                },
+                span,
+            );
+        }
 
         let Some(op) = op else {
             return expr;
