@@ -489,7 +489,7 @@ impl ProjectDatabase {
     /// Load compiler2 builtin BAML source files into the database.
     ///
     /// Returns the list of compiler2 builtin stub files (Array<T>, Map<K,V>, String,
-    /// Media, baml.env, baml.http, baml.math, baml.sys namespaces, etc.).
+    /// Media, baml.env, baml.http, baml.sys namespaces, etc.).
     ///
     /// These are stored in `compiler2_file_map` (NOT `file_map`) so that
     /// `get_source_files()` does NOT return them.

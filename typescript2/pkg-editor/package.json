@@ -13,6 +13,10 @@
       "types": "./src/remote-backend.ts",
       "default": "./src/remote-backend.ts"
     },
+    "./token": {
+      "types": "./src/playground-token.ts",
+      "default": "./src/playground-token.ts"
+    },
     "./views-workbench.css": "./src/views-workbench.css"
   },
   "files": [

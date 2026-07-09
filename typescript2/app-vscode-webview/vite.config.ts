@@ -83,6 +83,10 @@ export default defineConfig({
       // path so every importer shares a single instance.
       react: resolve(projectRoot, 'node_modules/react'),
       'react-dom': resolve(projectRoot, 'node_modules/react-dom'),
+      // Must precede the bare '@b/pkg-editor' alias: source-dir aliasing
+      // bypasses the package's `exports` map, so subpaths need explicit
+      // entries (with extension — alias results skip extension resolution).
+      '@b/pkg-editor/token': resolve(projectRoot, '../pkg-editor/src/playground-token.ts'),
       '@b/pkg-editor': resolve(projectRoot, '../pkg-editor/src'),
       '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src'),
       '@b/pkg-proto': resolve(projectRoot, '../pkg-proto/src'),

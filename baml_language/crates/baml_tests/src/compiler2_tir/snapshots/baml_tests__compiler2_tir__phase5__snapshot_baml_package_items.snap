@@ -8,6 +8,7 @@ namespace baml:
   class Bool { methods: [] }
   type Comparable
   class Float { methods: [is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf] }
+  type FloatStats
   type FromJson
   class Int { methods: [abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, delete, get_or_insert, clear] }
@@ -25,11 +26,16 @@ namespace baml:
   function _float_total_cmp
   function _from_json_shim<T>
   function _is_primitive_array<T>
+  function _mean_float
+  function _median_float
   function _rust_sort<A>
+  function _sum_float
+  function _sum_int
   function _to_json_default<T>
   function _to_json_shim<T>
   function _to_string_default<T>
   function _to_string_shim<T>
+  function _trunc_to_int
   function deep_copy<T>
   function deep_equals<T>
 namespace baml.csv:
@@ -224,12 +230,6 @@ namespace baml.llm:
   function render_output_format
   function render_prompt
   function stream_llm_function<TStream, TFinal>
-namespace baml.math:
-  function _sum_int
-  function mean
-  function median
-  function sum
-  function trunc
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }

@@ -440,6 +440,29 @@ pub async fn pick_port(base_port: u16, max_attempts: u16) -> anyhow::Result<(Tcp
     )
 }
 
+/// Resolve the given env var names against `lookup`, keeping only those set.
+/// Pure so tests never have to mutate the process environment.
+fn collect_referenced_env_vars(
+    names: &[String],
+    lookup: impl Fn(&str) -> Option<String>,
+) -> std::collections::HashMap<String, String> {
+    names
+        .iter()
+        .filter_map(|n| lookup(n).map(|v| (n.clone(), v)))
+        .collect()
+}
+
+/// Bind exactly `port` on loopback, with an actionable error when taken.
+pub async fn bind_exact_port(port: u16) -> anyhow::Result<TcpListener> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    TcpListener::bind(addr).await.map_err(|e| {
+        anyhow::anyhow!(
+            "Could not bind playground port {port}: {e}. Another process may be \
+             using it; pass a different --port or omit it to auto-pick from 4265."
+        )
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Shared state for Axum handlers
 // ---------------------------------------------------------------------------
@@ -806,19 +829,25 @@ fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
 
 #[derive(Clone, Debug)]
 struct PlaygroundAccessGuard {
-    allowed_origins: Arc<Vec<String>>,
+    /// When set (browser mode), every /api request must present it as `?token=`.
+    session_token: Option<Arc<str>>,
 }
 
 impl PlaygroundAccessGuard {
-    fn for_listener_addr(addr: SocketAddr) -> Self {
-        let port = addr.port();
-        Self {
-            allowed_origins: Arc::new(vec![
-                format!("http://localhost:{port}"),
-                format!("http://127.0.0.1:{port}"),
-                format!("http://[::1]:{port}"),
-            ]),
-        }
+    fn new(session_token: Option<Arc<str>>) -> Self {
+        Self { session_token }
+    }
+
+    /// True when the request may use the API: either no session token is
+    /// required (LSP/editor mode — origin-only, as before the token existed)
+    /// or the request's `?token=` matches. Covers Origin-less clients too
+    /// (curl/websocat), which the origin check alone deliberately allows.
+    fn is_authorized(&self, uri: &Uri) -> bool {
+        let Some(expected) = &self.session_token else {
+            return true;
+        };
+        query_param(uri.query(), "token")
+            .is_some_and(|got| constant_time_eq(got.as_bytes(), expected.as_bytes()))
     }
 
     fn is_allowed_origin(&self, origin: Option<&HeaderValue>) -> bool {
@@ -828,10 +857,7 @@ impl PlaygroundAccessGuard {
         let Ok(origin) = origin.to_str() else {
             return false;
         };
-        self.allowed_origins
-            .iter()
-            .any(|allowed| origin.eq_ignore_ascii_case(allowed))
-            || is_vscode_webview_origin(origin)
+        is_loopback_origin(origin) || is_vscode_webview_origin(origin)
     }
 
     fn cors_origin(&self, origin: Option<&HeaderValue>) -> Option<HeaderValue> {
@@ -842,6 +868,46 @@ impl PlaygroundAccessGuard {
             None
         }
     }
+}
+
+/// Extract a raw query parameter value (no percent-decoding — the session
+/// token is plain `[0-9a-f]{32}`, so none is needed).
+fn query_param<'a>(query: Option<&'a str>, key: &str) -> Option<&'a str> {
+    query?.split('&').find_map(|pair| {
+        let (k, v) = pair.split_once('=')?;
+        (k == key).then_some(v)
+    })
+}
+
+/// Length-safe constant-time comparison; the token is low-value enough that a
+/// dependency like `subtle` isn't warranted for a loopback timing channel.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+/// True when `origin` is an http(s) origin whose host is loopback
+/// (`localhost`, a 127.0.0.0/8 address, or `[::1]`), on any port.
+///
+/// Through an `ssh -L` tunnel the page's origin is the local tunnel endpoint:
+/// loopback host, arbitrary port. The host, not the port, is the trust signal;
+/// a hostile web page's fetch/WS still carries its real remote origin -> denied.
+fn is_loopback_origin(origin: &str) -> bool {
+    let Ok(uri) = origin.parse::<Uri>() else {
+        return false;
+    };
+    if !matches!(uri.scheme_str(), Some("http") | Some("https")) {
+        return false;
+    }
+    let Some(host) = uri.host() else {
+        return false;
+    };
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|ip| ip.is_loopback())
 }
 
 fn is_vscode_webview_origin(origin: &str) -> bool {
@@ -902,9 +968,10 @@ pub async fn run(
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
     doc_mirror: DocMirror,
     workspace_roots: Vec<PathBuf>,
+    session_token: Option<Arc<str>>,
 ) -> anyhow::Result<()> {
     let local_addr = listener.local_addr()?;
-    let access_guard = PlaygroundAccessGuard::for_listener_addr(local_addr);
+    let access_guard = PlaygroundAccessGuard::new(session_token);
     let app = build_router(
         bex,
         broadcast_tx,
@@ -1484,19 +1551,19 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
 
     let mut broadcast_rx = state.broadcast_tx.subscribe();
 
-    // Send all process env vars so the UI can display them immediately.
+    // Send the env vars the project actually references (names from BAML
+    // source, values from the server process env). The full process
+    // environment is deliberately NOT sent — it contains unrelated secrets.
+    // Dynamically-computed keys still resolve lazily via the EnvVarRequest
+    // round-trip (playground_env.rs).
     {
-        let vars: std::collections::HashMap<String, String> = std::env::vars().collect();
+        let names = state.bex.all_env_var_names();
+        let vars = collect_referenced_env_vars(&names, |name| std::env::var(name).ok());
         if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
             && sink.send(msg).await.is_err()
         {
             return;
         }
-    }
-
-    // Send env var names referenced in BAML source code.
-    {
-        let names = state.bex.all_env_var_names();
         if let Some(msg) = to_ws_text(&WsOutMessage::KnownEnvVarNames { names })
             && sink.send(msg).await.is_err()
         {
@@ -2376,6 +2443,16 @@ async fn api_guard_middleware(
         return response;
     }
 
+    // After the OPTIONS branch: CORS preflights carry no credentials by design.
+    if !access_guard.is_authorized(req.uri()) {
+        return text_response(
+            StatusCode::UNAUTHORIZED,
+            "Missing or invalid playground session token. Open the exact URL \
+             (including ?token=...) printed by `baml playground`."
+                .to_string(),
+        );
+    }
+
     let mut resp = next.run(req).await;
     apply_api_response_headers(&access_guard, origin.as_ref(), &mut resp);
     resp
@@ -2933,21 +3010,100 @@ mod tests {
     }
 
     #[test]
-    fn playground_access_guard_accepts_localhost_and_vscode_origins_only() {
-        let guard =
-            PlaygroundAccessGuard::for_listener_addr(SocketAddr::from(([127, 0, 0, 1], 3700)));
+    fn playground_access_guard_accepts_any_loopback_port_and_vscode_origins() {
+        let guard = PlaygroundAccessGuard::new(None);
         assert!(guard.is_allowed_origin(None));
-        assert!(guard.is_allowed_origin(Some(&HeaderValue::from_static("http://localhost:3700"))));
-        assert!(
-            guard.is_allowed_origin(Some(&HeaderValue::from_static("vscode-webview://abc123")))
+        for allowed in [
+            "http://localhost:4265",
+            "http://localhost:8000", // ssh -L remapped tunnel port
+            "http://127.0.0.1:9999",
+            "http://[::1]:4000",
+            "https://localhost:8443",
+            "vscode-webview://abc123",
+            "https://abc123.vscode-cdn.net",
+        ] {
+            assert!(
+                guard.is_allowed_origin(Some(&HeaderValue::from_static(allowed))),
+                "{allowed}"
+            );
+        }
+        for denied in [
+            "https://example.com",
+            "http://localhost.evil.com", // suffix trick
+            "http://10.0.0.5:4265",      // non-loopback IP
+            "http://127.0.0.1.evil.com:4265",
+            "null",
+            "https://vscode-cdn.net.example.com",
+        ] {
+            assert!(
+                !guard.is_allowed_origin(Some(&HeaderValue::from_static(denied))),
+                "{denied}"
+            );
+        }
+    }
+
+    #[test]
+    fn session_token_required_when_set() {
+        let token = "a3f9c2e8b1d04567a3f9c2e8b1d04567";
+        let guard = PlaygroundAccessGuard::new(Some(token.into()));
+        let uri = |s: &str| s.parse::<Uri>().unwrap();
+
+        assert!(guard.is_authorized(&uri(&format!("/api/ws?token={token}"))));
+        assert!(guard.is_authorized(&uri(&format!("/api/source-files?project=x&token={token}"))));
+        assert!(!guard.is_authorized(&uri("/api/ws")));
+        assert!(!guard.is_authorized(&uri("/api/ws?token=wrong")));
+        assert!(!guard.is_authorized(&uri("/api/ws?token=")));
+        assert!(!guard.is_authorized(&uri("/api/ws?project=x")));
+
+        // No token minted (LSP/editor mode): every URI is authorized.
+        let open_guard = PlaygroundAccessGuard::new(None);
+        assert!(open_guard.is_authorized(&uri("/api/ws")));
+        assert!(open_guard.is_authorized(&uri("/api/ws?token=whatever")));
+    }
+
+    #[test]
+    fn query_param_extracts_token() {
+        assert_eq!(query_param(Some("token=abc"), "token"), Some("abc"));
+        assert_eq!(query_param(Some("token=abc&x=1"), "token"), Some("abc"));
+        assert_eq!(
+            query_param(Some("project=p&token=abc"), "token"),
+            Some("abc")
         );
-        assert!(guard.is_allowed_origin(Some(&HeaderValue::from_static(
-            "https://abc123.vscode-cdn.net"
-        ))));
-        assert!(!guard.is_allowed_origin(Some(&HeaderValue::from_static("https://example.com"))));
-        assert!(!guard.is_allowed_origin(Some(&HeaderValue::from_static(
-            "https://vscode-cdn.net.example.com"
-        ))));
+        assert_eq!(query_param(Some("project=p"), "token"), None);
+        assert_eq!(query_param(Some("token"), "token"), None);
+        assert_eq!(query_param(None, "token"), None);
+    }
+
+    #[test]
+    fn collect_referenced_env_vars_filters_unset() {
+        let names = vec![
+            "OPENAI_API_KEY".to_string(),
+            "UNSET_VAR".to_string(),
+            "ANTHROPIC_API_KEY".to_string(),
+        ];
+        let vars = collect_referenced_env_vars(&names, |name| match name {
+            "OPENAI_API_KEY" => Some("sk-1".to_string()),
+            "ANTHROPIC_API_KEY" => Some("sk-2".to_string()),
+            _ => None,
+        });
+        assert_eq!(vars.len(), 2);
+        assert_eq!(vars["OPENAI_API_KEY"], "sk-1");
+        assert_eq!(vars["ANTHROPIC_API_KEY"], "sk-2");
+        assert!(!vars.contains_key("UNSET_VAR"));
+    }
+
+    #[tokio::test]
+    async fn bind_exact_port_reports_conflict_with_actionable_error() {
+        let (occupied, port) = pick_port(4265, 100).await.expect("a free port to occupy");
+
+        let err = bind_exact_port(port)
+            .await
+            .expect_err("second bind of the same port should fail");
+        let message = format!("{err}");
+        assert!(message.contains(&port.to_string()), "{message}");
+        assert!(message.contains("--port"), "{message}");
+
+        drop(occupied);
     }
 
     #[test]

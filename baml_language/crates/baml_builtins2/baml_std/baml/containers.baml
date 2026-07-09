@@ -636,8 +636,8 @@ class Map<K, V> {
 /// types, and there is deliberately no `int[] -> float` sum. To sum integer
 /// data as floats, map first: `ints.map((x: int) -> float { x * 1.0 }).sum()`.
 ///
-/// The method form (`xs.sum()`) is the canonical surface; the free function
-/// `baml.math.sum` (over `float[]`) remains for a functional call style.
+/// The method form `xs.sum()` is the only public surface; it delegates to the
+/// private native `_sum_int` / `_sum_float` helpers declared below.
 interface Summable {
   type Sum
 
@@ -660,7 +660,7 @@ implements Summable for int[] {
   type Sum = int
 
   function sum(self) -> int throws never {
-    root.math._sum_int(self)
+    root._sum_int(self)
   }
 }
 
@@ -678,6 +678,90 @@ implements Summable for float[] {
   type Sum = float
 
   function sum(self) -> float throws never {
-    root.math.sum(self)
+    root._sum_float(self)
   }
+}
+
+/// Statistical reductions for `float[]`.
+///
+/// `mean` and `median` are defined only for `float[]` (both return `float`),
+/// so — unlike `Summable`, which also covers `int[]` — this interface has a
+/// single implementor. It exists so the reductions attach as methods
+/// (`xs.mean()`, `xs.median()`) on the structural `float[]` type; the backing
+/// natives are the private `_mean_float` / `_median_float` helpers below.
+interface FloatStats {
+  function mean(self) -> float throws root.errors.InvalidArgument
+  function median(self) -> float throws root.errors.InvalidArgument
+}
+
+/// Statistical reductions over a `float[]` — see `FloatStats`.
+implements FloatStats for float[] {
+  /// Returns the arithmetic mean (average) of `self`.
+  ///
+  /// Computed as `self.sum() / self.length()`. Throws
+  /// `root.errors.InvalidArgument` when `self` is empty, because the mean of
+  /// no elements is undefined.
+  ///
+  /// # Examples
+  /// ```
+  /// [1.0, 2.0, 3.0, 4.0].mean()   // 2.5
+  /// [5.0].mean()                  // 5.0
+  /// [].mean()                     // throws InvalidArgument
+  /// ```
+  function mean(self) -> float throws root.errors.InvalidArgument {
+    root._mean_float(self)
+  }
+
+  /// Returns the median (the middle value) of `self`.
+  ///
+  /// The elements are copied and sorted ascending (IEEE 754 `totalOrder`,
+  /// matching `float[].sort()`) before the middle is taken, so the caller's
+  /// array is left untouched. With an odd element count the single middle
+  /// element is returned; with an even count the arithmetic mean of the two
+  /// middle elements is returned. Throws `root.errors.InvalidArgument` when
+  /// `self` is empty.
+  ///
+  /// # Examples
+  /// ```
+  /// [3.0, 1.0, 2.0].median()        // 2.0  (odd count)
+  /// [1.0, 2.0, 3.0, 4.0].median()   // 2.5  (mean of the two middles)
+  /// [].median()                     // throws InvalidArgument
+  /// ```
+  function median(self) -> float throws root.errors.InvalidArgument {
+    root._median_float(self)
+  }
+}
+
+// ─── Native backings for the numeric-array reductions ─────────────────────────
+// Private helpers (leading `_`) that were formerly the public `baml.math.*`
+// aggregation builtins. The method forms above and `Summable.sum` are now the
+// only public surface; these are the thin native shims they delegate to.
+
+/// Native backing for `int[].sum()`. Adds every element left-to-right starting
+/// from `0`; a running total that leaves the `int` range raises
+/// `baml.panics.IntegerOverflow`. The empty array sums to `0`.
+//baml:fallible
+function _sum_int(values: int[]) -> int throws never {
+  $rust_function
+}
+
+/// Native backing for `float[].sum()`. Adds every element left-to-right
+/// starting from `0.0`; the empty array sums to `0.0`. Never throws.
+//baml:vm
+function _sum_float(values: float[]) -> float throws never {
+  $rust_function
+}
+
+/// Native backing for `float[].mean()`. Throws `root.errors.InvalidArgument`
+/// when `values` is empty.
+//baml:vm
+function _mean_float(values: float[]) -> float throws root.errors.InvalidArgument {
+  $rust_function
+}
+
+/// Native backing for `float[].median()`. Throws `root.errors.InvalidArgument`
+/// when `values` is empty.
+//baml:vm
+function _median_float(values: float[]) -> float throws root.errors.InvalidArgument {
+  $rust_function
 }

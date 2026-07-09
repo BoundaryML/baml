@@ -97,17 +97,42 @@ fn build_playground_sys_ops(
 /// 4. Starts the playground HTTP/WS server
 /// 5. Runs the stdio LSP event loop
 pub fn run_server(workspace_roots: Vec<PathBuf>) -> anyhow::Result<()> {
-    run_server_inner(PlaygroundOpenTarget::LspClient, workspace_roots, None)
+    run_server_inner(
+        PlaygroundOpenTarget::LspClient,
+        workspace_roots,
+        None,
+        PlaygroundServerOptions::default(),
+    )
+}
+
+/// Options for `run_playground_server` (browser mode only; LSP mode ignores them).
+#[derive(Debug, Clone)]
+pub struct PlaygroundServerOptions {
+    /// Bind exactly this port; error if unavailable. `None` = scan from 4265.
+    pub port: Option<u16>,
+    /// Open the local browser once the server is up.
+    pub open_browser: bool,
+}
+
+impl Default for PlaygroundServerOptions {
+    fn default() -> Self {
+        Self {
+            port: None,
+            open_browser: true,
+        }
+    }
 }
 
 pub fn run_playground_server(
     workspace_roots: Vec<PathBuf>,
     playground_dir_override: Option<PathBuf>,
+    options: PlaygroundServerOptions,
 ) -> anyhow::Result<()> {
     run_server_inner(
         PlaygroundOpenTarget::Browser,
         workspace_roots,
         playground_dir_override,
+        options,
     )
 }
 
@@ -121,6 +146,7 @@ fn run_server_inner(
     playground_open_target: PlaygroundOpenTarget,
     workspace_roots: Vec<PathBuf>,
     playground_dir_override: Option<PathBuf>,
+    options: PlaygroundServerOptions,
 ) -> anyhow::Result<()> {
     let workspace_roots = absolutize_workspace_roots(workspace_roots)?;
 
@@ -208,15 +234,35 @@ fn run_server_inner(
     let doc_mirror: playground_server::DocMirror =
         Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
 
+    // Per-session bearer token for /api, browser mode only. In LSP/editor
+    // mode no token is minted and the guard behaves exactly as before (D6).
+    let session_token: Option<Arc<str>> =
+        matches!(playground_open_target, PlaygroundOpenTarget::Browser)
+            .then(|| uuid::Uuid::new_v4().simple().to_string().into());
+
     // Pick the playground port early so we can pass it to the sender.
-    let (playground_listener, playground_port): (Option<TcpListener>, u16) =
-        match tokio_runtime.block_on(playground_server::pick_port(3700, 100)) {
+    let (playground_listener, playground_port): (Option<TcpListener>, u16) = {
+        let bind_result = match options.port {
+            Some(port) => tokio_runtime
+                .block_on(playground_server::bind_exact_port(port))
+                .map(|listener| (listener, port)),
+            None => tokio_runtime.block_on(playground_server::pick_port(4265, 100)),
+        };
+        match bind_result {
             Ok((listener, port)) => (Some(listener), port),
             Err(e) => {
+                if matches!(playground_open_target, PlaygroundOpenTarget::Browser) {
+                    return Err(e); // browser mode is useless without the server
+                }
                 tracing::error!("Could not find playground port: {e}");
-                (None, 0)
+                (None, 0) // LSP mode continues serving stdio
             }
-        };
+        }
+    };
+
+    if matches!(playground_open_target, PlaygroundOpenTarget::Browser) {
+        print_playground_banner(playground_port, &workspace_roots, session_token.as_deref());
+    }
 
     // Playground sender (needs port + lsp_sender for OpenPlayground)
     let playground_sender: Arc<dyn bex_project::PlaygroundSender> =
@@ -225,6 +271,7 @@ fn run_server_inner(
             lsp_sender.clone(),
             playground_port,
             matches!(playground_open_target, PlaygroundOpenTarget::Browser),
+            session_token.clone(),
         ));
 
     // Create the BexLsp (multi-project LSP)
@@ -255,14 +302,16 @@ fn run_server_inner(
 
     if matches!(playground_open_target, PlaygroundOpenTarget::Browser) && playground_port != 0 {
         if let Some(project) = explicit_projects.first() {
-            playground_sender.send_playground_notification(
-                bex_project::PlaygroundNotification::OpenPlayground {
-                    project: project.clone(),
-                    function_name: None,
-                    test_name: None,
-                    testset_name: None,
-                },
-            );
+            if options.open_browser {
+                playground_sender.send_playground_notification(
+                    bex_project::PlaygroundNotification::OpenPlayground {
+                        project: project.clone(),
+                        function_name: None,
+                        test_name: None,
+                        testset_name: None,
+                    },
+                );
+            }
         } else if has_explicit_workspace_roots {
             tracing::warn!("No BAML projects discovered for explicit workspace roots");
         }
@@ -313,6 +362,7 @@ fn run_server_inner(
                 lsp_out_tx,
                 doc_mirror,
                 workspace_roots.clone(),
+                session_token,
             ));
         }
 
@@ -329,6 +379,7 @@ fn run_server_inner(
                 lsp_out_tx,
                 doc_mirror,
                 workspace_roots_for_server,
+                session_token,
             )
             .await
             {
@@ -397,6 +448,28 @@ fn run_server_inner(
 
     tracing::info!("LSP server shutting down");
     Ok(())
+}
+
+#[allow(clippy::print_stdout)] // user-facing banner; browser mode has no stdio LSP client
+fn print_playground_banner(port: u16, roots: &[PathBuf], token: Option<&str>) {
+    println!("{}", format_playground_banner(port, roots, token));
+}
+
+fn format_playground_banner(port: u16, roots: &[PathBuf], token: Option<&str>) -> String {
+    let root = roots
+        .first()
+        .map(|r| r.display().to_string())
+        .unwrap_or_else(|| "(no workspace roots)".to_string());
+    // The token rides the URL, not the tunnel, so the ssh hint doesn't carry it.
+    let url = match token {
+        Some(token) => format!("http://localhost:{port}/?token={token}"),
+        None => format!("http://localhost:{port}/"),
+    };
+    format!(
+        "\n  Playground:  {url}\n  Project:     {root}\n\n  \
+         Remote machine? Forward the port, then open the URL locally:\n    \
+         ssh -L {port}:localhost:{port} <user@host>\n\n  Press Ctrl-C to stop.\n"
+    )
 }
 
 fn absolutize_workspace_roots(workspace_roots: Vec<PathBuf>) -> anyhow::Result<Vec<PathBuf>> {
@@ -544,6 +617,39 @@ fn file_signature(metadata: &fs::Metadata) -> FileSignature {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn playground_banner_shows_url_project_root_and_ssh_hint() {
+        let banner = format_playground_banner(4265, &[PathBuf::from("/home/dev/my-app")], None);
+        assert!(banner.contains("http://localhost:4265/"), "{banner}");
+        assert!(!banner.contains("?token="), "{banner}");
+        assert!(banner.contains("/home/dev/my-app"), "{banner}");
+        assert!(
+            banner.contains("ssh -L 4265:localhost:4265 <user@host>"),
+            "{banner}"
+        );
+        assert!(banner.contains("Press Ctrl-C to stop."), "{banner}");
+
+        let no_roots = format_playground_banner(4270, &[], None);
+        assert!(no_roots.contains("(no workspace roots)"), "{no_roots}");
+        assert!(no_roots.contains("http://localhost:4270/"), "{no_roots}");
+    }
+
+    #[test]
+    fn playground_banner_carries_the_session_token_on_the_url_only() {
+        let banner =
+            format_playground_banner(4265, &[PathBuf::from("/home/dev/my-app")], Some("abc123"));
+        assert!(
+            banner.contains("http://localhost:4265/?token=abc123"),
+            "{banner}"
+        );
+        // The token rides the URL, not the tunnel: the ssh hint stays bare.
+        assert!(
+            banner.contains("ssh -L 4265:localhost:4265 <user@host>"),
+            "{banner}"
+        );
+        assert_eq!(banner.matches("token").count(), 1, "{banner}");
+    }
 
     #[test]
     fn absolutize_workspace_roots_makes_relative_paths_absolute() {

@@ -14,6 +14,16 @@ pub struct PlaygroundArgs {
     /// Project search starting point. Ignored when `--file` is set.
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
+
+    /// Listen on exactly this port (errors if unavailable).
+    /// Default: the first free port from 4265.
+    #[arg(long, value_name = "PORT")]
+    pub port: Option<u16>,
+
+    /// Do not open a browser. Opening is also skipped automatically in
+    /// headless sessions (SSH, or no display on Linux).
+    #[arg(long)]
+    pub no_open: bool,
 }
 
 impl PlaygroundArgs {
@@ -21,9 +31,28 @@ impl PlaygroundArgs {
         let playground_dir = resolve_playground_assets()?;
 
         let roots = workspace_roots(self.from.as_deref(), self.file.as_deref())?;
-        baml_lsp_server::run_playground_server(roots, playground_dir)?;
+        let options = baml_lsp_server::PlaygroundServerOptions {
+            port: self.port,
+            open_browser: !self.no_open
+                && !is_headless_session(|key| std::env::var_os(key).is_some()),
+        };
+        baml_lsp_server::run_playground_server(roots, playground_dir, options)?;
         Ok(crate::ExitCode::Success)
     }
+}
+
+/// A browser can't usefully open here: an SSH session, or a Linux/BSD session
+/// with no display server. `webbrowser` would fall back to text-mode browsers
+/// (lynx/w3m) that hijack the terminal. macOS/Windows sessions are never
+/// display-less in practice, so only the SSH signal applies there.
+fn is_headless_session(has_env: impl Fn(&str) -> bool) -> bool {
+    if has_env("SSH_CONNECTION") || has_env("SSH_TTY") {
+        return true;
+    }
+    if cfg!(all(unix, not(target_os = "macos"))) {
+        return !has_env("DISPLAY") && !has_env("WAYLAND_DISPLAY");
+    }
+    false
 }
 
 fn workspace_roots(from: Option<&Path>, file: Option<&Path>) -> Result<Vec<PathBuf>> {
@@ -100,6 +129,37 @@ mod tests {
 
     fn valid_manifest() -> &'static str {
         "[package]\nname = \"test-project\"\n"
+    }
+
+    fn env_with(present: &'static [&'static str]) -> impl Fn(&str) -> bool {
+        move |key| present.contains(&key)
+    }
+
+    #[test]
+    fn ssh_connection_implies_headless() {
+        assert!(is_headless_session(env_with(&[
+            "SSH_CONNECTION",
+            "DISPLAY"
+        ])));
+    }
+
+    #[test]
+    fn ssh_tty_implies_headless() {
+        assert!(is_headless_session(env_with(&["SSH_TTY", "DISPLAY"])));
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn display_present_is_not_headless() {
+        assert!(!is_headless_session(env_with(&["DISPLAY"])));
+        assert!(!is_headless_session(env_with(&["WAYLAND_DISPLAY"])));
+        assert!(is_headless_session(env_with(&[])));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn no_signals_is_not_headless_on_macos() {
+        assert!(!is_headless_session(env_with(&[])));
     }
 
     #[test]

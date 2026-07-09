@@ -214,6 +214,14 @@ fn .<lambda(sort, 0)>(a: T, b: T) -> null {
     }
 }
 
+fn baml._mean_float = builtin(vm)
+
+fn baml._median_float = builtin(vm)
+
+fn baml._sum_float = builtin(vm)
+
+fn baml._sum_int = builtin(vm)
+
 fn baml.Array.at = builtin(vm)
 
 fn baml.Map.clear = builtin(vm)
@@ -731,6 +739,34 @@ fn baml.Map.length = builtin(vm)
 fn baml.Array.length = builtin(vm)
 
 fn baml.Array.map = builtin(vm)
+
+fn baml.FloatStats$for$float[].mean(self: float[]) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: float[] // self // param
+
+    bb0: {
+        _0 = call const fn baml._mean_float(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn baml.FloatStats$for$float[].median(self: float[]) -> float {
+    // Locals:
+    let _0: float // _0 // return
+    let _1: float[] // self // param
+
+    bb0: {
+        _0 = call const fn baml._median_float(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        return;
+    }
+}
 
 fn baml.Array.pop = builtin(vm)
 
@@ -1470,7 +1506,7 @@ fn baml.Summable$for$float[].sum(self: float[]) -> float {
     let _1: float[] // self // param
 
     bb0: {
-        _0 = call const fn baml.math.sum(copy _1) -> [bb1];
+        _0 = call const fn baml._sum_float(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1484,7 +1520,7 @@ fn baml.Summable$for$int[].sum(self: int[]) -> int {
     let _1: int[] // self // param
 
     bb0: {
-        _0 = call const fn baml.math._sum_int(copy _1) -> [bb1];
+        _0 = call const fn baml._sum_int(copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1539,6 +1575,8 @@ fn baml.ToString.to_string(self: baml.ToString) -> string {
 fn baml.deep_copy = builtin(vm)
 
 fn baml.deep_equals = builtin(vm)
+
+fn baml._trunc_to_int = builtin(vm)
 
 fn baml.Float.abs = builtin(vm)
 
@@ -8537,7 +8575,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
 
     bb7: {
         _16 = copy _7;
-        _13 = call const fn baml.math.trunc(copy _16) -> [bb8];
+        _13 = call const fn baml._trunc_to_int(copy _16) -> [bb8];
     }
 
     bb8: {
@@ -9596,7 +9634,7 @@ fn baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.llm.Exec
 
     bb9: {
         _16 = copy _7;
-        _13 = call const fn baml.math.trunc(copy _16) -> [bb10];
+        _13 = call const fn baml._trunc_to_int(copy _16) -> [bb10];
     }
 
     bb10: {
@@ -9744,7 +9782,7 @@ fn baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm.Execu
 
     bb9: {
         _16 = copy _7;
-        _13 = call const fn baml.math.trunc(copy _16) -> [bb10];
+        _13 = call const fn baml._trunc_to_int(copy _16) -> [bb10];
     }
 
     bb10: {
@@ -10238,16 +10276,6 @@ fn baml.llm.PromptAst.baml.ToString.to_string(self: null) -> string {
 }
 
 fn baml.llm.PrimitiveClient.validate_finish_reason = builtin(io)
-
-fn baml.math._sum_int = builtin(vm)
-
-fn baml.math.mean = builtin(vm)
-
-fn baml.math.median = builtin(vm)
-
-fn baml.math.sum = builtin(vm)
-
-fn baml.math.trunc = builtin(vm)
 
 fn baml.media.Video.base64 = builtin(vm)
 
