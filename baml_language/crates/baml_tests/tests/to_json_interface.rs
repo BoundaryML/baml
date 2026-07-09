@@ -254,3 +254,65 @@ async fn enum_renders_as_variant_name() {
     let out = expect_json(&program("enum Color { Red  Green  Blue }", "Color.Green")).await;
     assert_eq!(out, r#""Green""#);
 }
+
+// ─── B-728: enum & string-literal-union fields in the value→JSON dispatch ──────
+//
+// A class field of `enum` type or a string-literal union (`"X" | "Y"`) must
+// serialize to a plain JSON string — the variant name / the string — through
+// both the structural `baml.json.from` / `.to_json()` path and the typed
+// `baml.json.to_string<T>` path. The regression these lock in: a field whose
+// declared type is a *union containing an enum* (including the optional enum
+// `E?` == `E | null`) serialized as `null` through the typed walker, whose
+// `RuntimeTy::Union` arm delegates to the untyped `value_to_serde`, which
+// mapped enum variants to `null` instead of the variant-name string.
+
+#[tokio::test]
+async fn enum_field_serializes_as_variant_name() {
+    // Primary ticket case: `class C { e E }` round-trips through `.to_json()`.
+    let out = expect_json(&program("enum E { A  B }  class C { e E }", "C { e: E.A }")).await;
+    assert_eq!(out, r#"{"e":"A"}"#);
+}
+
+#[tokio::test]
+async fn string_literal_union_field_serializes_as_string() {
+    // Primary ticket case: a `"X" | "Y"` field round-trips through `.to_json()`
+    // as the plain string.
+    let out = expect_json(&program(r#"class D { f "X" | "Y" }"#, r#"D { f: "X" }"#)).await;
+    assert_eq!(out, r#"{"f":"X"}"#);
+}
+
+#[tokio::test]
+async fn optional_enum_field_serializes_via_typed_to_string() {
+    // Regression: `E?` == `E | null` is a union, so the typed `to_string<T>`
+    // walker rendered it via the untyped converter, which produced `null` for
+    // the enum variant. It must be the variant name.
+    let out = expect_json(
+        r#"
+        enum E { A  B }
+        class OptEnum { e E? }
+        function main() -> string {
+            return baml.json.to_string(OptEnum { e: E.A })
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(out, r#"{"e":"A"}"#);
+}
+
+#[tokio::test]
+async fn enum_union_field_serializes_via_typed_to_string() {
+    // Regression: a field typed as a union of two enums (`E | F`) serialized the
+    // held variant as `null` through the typed walker. It must be the name.
+    let out = expect_json(
+        r#"
+        enum E { A  B }
+        enum F { X  Y }
+        class EnumUnion { v E | F }
+        function main() -> string {
+            return baml.json.to_string(EnumUnion { v: F.Y })
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(out, r#"{"v":"Y"}"#);
+}

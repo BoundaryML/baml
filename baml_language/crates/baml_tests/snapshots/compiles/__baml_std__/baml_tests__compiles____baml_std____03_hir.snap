@@ -1017,9 +1017,9 @@ class baml.llm.PromptMessage {
 }
 class baml.llm.RetryPolicy {
   max_retries: int
-  initial_delay_ms: int
-  multiplier: float
-  max_delay_ms: int
+  initial_delay_ms: int?
+  multiplier: float?
+  max_delay_ms: int?
 }
 class baml.llm.Role {
   name: string
@@ -1062,7 +1062,7 @@ function baml.llm.build_plan(self: ?) -> OrchestrationStep[]  [expr] {
   { let planner_state = PlannerState { rr_client_names: [] } } self.build_plan_with_state(planner_state)
 }
 function baml.llm.build_plan_with_state(self: ?, planner_state: PlannerState) -> OrchestrationStep[]  [expr] {
-  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let result: OrchestrationStep[] = []; let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let delay = 0; if (attempt Gt 0) { delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; let inner = self.build_attempt_with_state(planner_state); for step in inner { result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) } } } } result, null => self.build_attempt_with_state(planner_state) }
+  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let result: OrchestrationStep[] = []; let current_delay = r.initial_delay_or_default(); { let attempt = 0; while attempt Le r.max_retries { let delay = 0; if (attempt Gt 0) { delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier_or_default() } if (next Gt r.max_delay_or_default()) { current_delay = r.max_delay_or_default() } else { current_delay = next }; let inner = self.build_attempt_with_state(planner_state); for step in inner { result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) } } } } result, null => self.build_attempt_with_state(planner_state) }
 }
 function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, return_type: type) -> baml.llm.Context  [expr] {
   {  } baml.llm.Context { client: baml.llm.ContextClient { name: primitive.name, provider: primitive.provider, default_role: primitive.options.default_role NullCoalesce "system", allowed_roles: primitive.options.allowed_roles NullCoalesce [] }, tags: map {  }, output_format: render_output_format(return_type), _output_format: build_output_format(return_type) }
@@ -1077,10 +1077,10 @@ function baml.llm.execute_once_stream(self: ?, context: ExecutionContext, active
   {  } match (self.client_type) { baml.llm.ClientType.Primitive => { let primitive = self.to_primitive_client(); let return_type = get_return_type(context.function_name); let specialized = primitive.render_specialized_prompt(context.jinja_string, context.args, return_type, context.prompt_closure); let http_request = primitive.build_request_stream(specialized, return_type); let sse = root.http.fetch_sse(http_request); let stream: baml.llm.Stream<TStream, TFinal> = self.__make_stream(sse); return stream }, baml.llm.ClientType.Fallback => { for sub in self.sub_clients { let result2: baml.llm.Stream<TStream, TFinal> = sub.execute_stream(context, active_delay_ms) catch (e) { _ => { continue } }; return result2 }; throw root.errors.DevOther { message: "All orchestration..." } }, baml.llm.ClientType.RoundRobin => { if (self.sub_clients.length() Eq 0) { throw root.errors.DevOther { message: "RoundRobin client..." } }; let idx = self.counter Mod self.sub_clients.length(); self.counter Add= 1; let result3: baml.llm.Stream<TStream, TFinal> = self.sub_clients[idx].execute_stream(context, active_delay_ms); return result3 } }
 }
 function baml.llm.execute_oneshot(self: ?, context: ExecutionContext, inherited_delay_ms: int) -> T  [expr] {
-  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: T = self.execute_once_oneshot(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: T = self.execute_once_oneshot(context, inherited_delay_ms); return result } }
+  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_or_default(); { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier_or_default() } if (next Gt r.max_delay_or_default()) { current_delay = r.max_delay_or_default() } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: T = self.execute_once_oneshot(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: T = self.execute_once_oneshot(context, inherited_delay_ms); return result } }
 }
 function baml.llm.execute_stream(self: ?, context: ExecutionContext, inherited_delay_ms: int) -> baml.llm.Stream<TStream, TFinal>  [expr] {
-  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_ms Add 0.0; { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier } if (next Gt r.max_delay_ms Add 0.0) { current_delay = r.max_delay_ms Add 0.0 } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, inherited_delay_ms); return result } }
+  {  } match (self.retry) { r: baml.llm.RetryPolicy => { let current_delay = r.initial_delay_or_default(); { let attempt = 0; while attempt Le r.max_retries { let attempt_delay = inherited_delay_ms; if (attempt Gt 0) { attempt_delay = root._trunc_to_int(current_delay); let next = current_delay Mul r.multiplier_or_default() } if (next Gt r.max_delay_or_default()) { current_delay = r.max_delay_or_default() } else { current_delay = next }; if (attempt Eq r.max_retries) { attempt_delay = inherited_delay_ms }; let result2: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, attempt_delay) catch (e) { _ => { continue } }; return result2 } }; throw root.errors.DevOther { message: "All orchestration..." } }, null => { let result: baml.llm.Stream<TStream, TFinal> = self.execute_once_stream(context, inherited_delay_ms); return result } }
 }
 function baml.llm.final(self: ?) -> TFinal  [expr] {
   { while Not self._acc.is_done() { let next = match (self._sse.next()) { null => { break }, next: string => next }; self._acc.add_events(next) } if (self._acc.is_done()) { self._sse.close(); break }; match (self._acc.finish_reason()) { null => { throw root.errors.LlmClient { message: "Streaming finishe..." } }, reason: string => self._client.validate_finish_reason(reason) }; let content = self._acc.content() } __sap_parse_final(content, self._cache)
@@ -1090,13 +1090,22 @@ function baml.llm.from_shorthand(shorthand: string) -> baml.llm.PrimitiveClient 
 function baml.llm.get_constructor(self: ?) -> (bool) -> baml.llm.PrimitiveClient throws root.errors.InvalidArgument  [builtin]
 function baml.llm.get_jinja_template(function_name: string) -> string  [builtin]
 function baml.llm.get_return_type(function_name: string) -> type  [builtin]
+function baml.llm.initial_delay_or_default(self: ?) -> float  [expr] {
+  {  } self.initial_delay_ms NullCoalesce 200 Add 0.0
+}
 function baml.llm.input_tokens(self: ?) -> int?  [builtin]
 function baml.llm.is_done(self: ?) -> bool  [builtin]
 function baml.llm.make_role(name: string) -> baml.llm.Role  [expr] {
   {  } baml.llm.Role { name: name, metadata: map {  } }
 }
+function baml.llm.max_delay_or_default(self: ?) -> float  [expr] {
+  {  } self.max_delay_ms NullCoalesce 10000 Add 0.0
+}
 function baml.llm.messages(self: ?) -> baml.llm.PromptMessage[]  [builtin]
 function baml.llm.model(self: ?) -> string?  [builtin]
+function baml.llm.multiplier_or_default(self: ?) -> float  [expr] {
+  {  } self.multiplier NullCoalesce 1.5
+}
 function baml.llm.new(t_stream: type, t_final: type) -> baml.llm.StreamCache<TStream, TFinal>  [builtin]
 function baml.llm.new_stream_accumulator(self: ?) -> baml.llm.StreamAccumulator  [builtin]
 function baml.llm.next(self: ?) -> TStream | root.stream.StreamFinished  [expr] {
@@ -1106,10 +1115,13 @@ function baml.llm.output_format_with(self: ?, prefix: string? = null, or_splitte
 function baml.llm.output_tokens(self: ?) -> int?  [builtin]
 function baml.llm.parse(self: ?, http_response_body: string) -> T  [builtin]
 function baml.llm.prompt(body: (role: (string) -> baml.llm.Role, ctx: baml.llm.Context) -> baml.TaggedString throws never) -> (baml.llm.Context) -> baml.llm.PromptAst throws never  [expr] {
-  { let render = (ctx: baml.llm.Context) -> { { let t = body(make_role, ctx) } assemble_prompt_ast(t.parts, t.values) } } render
+  { let render = (ctx: baml.llm.Context) -> { { let t = body(make_role, ctx) } assemble_prompt_ast(t.parts, render_prompt_values(t.values)) } } render
 }
 function baml.llm.render_output_format(return_type: type) -> string  [builtin]
 function baml.llm.render_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type) -> baml.llm.PromptAst  [builtin]
+function baml.llm.render_prompt_values(values: unknown[]) -> unknown[]  [expr] {
+  { let rendered: unknown[] = []; for value in values {  } rendered.push(match (value) { baml.llm.Role => value, _ => string.from(value) }) } rendered
+}
 function baml.llm.render_specialized_prompt(self: ?, template: string, args: map<string, unknown>, return_type: type, prompt_closure: (baml.llm.Context) -> baml.llm.PromptAst?) -> baml.llm.PromptAst  [expr] {
   { let prompt = match (prompt_closure) { null => self.render_prompt(template, args, return_type), closure: (baml.llm.Context) -> baml.llm.PromptAst => closure(build_prompt_context(self, return_type)) } } self.specialize_prompt(prompt)
 }

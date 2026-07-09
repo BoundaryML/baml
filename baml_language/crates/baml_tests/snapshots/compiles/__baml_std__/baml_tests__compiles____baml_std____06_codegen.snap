@@ -7767,9 +7767,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     alloc_array 0
     store_var result
     load_var r
-    load_field .initial_delay_ms
-    load_const 0.0
-    bin_op +
+    call baml.llm.RetryPolicy.initial_delay_or_default
     store_var current_delay
     load_const 0
     store_var attempt
@@ -7797,14 +7795,17 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     load_var current_delay
     call baml._trunc_to_int
     store_var delay
-    load_var2 6 4
-    load_field .multiplier
-    mul_float
-    store_var_load_var next
+    load_var current_delay
+    store_var _17
     load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
+    call baml.llm.RetryPolicy.multiplier_or_default
+    load_var _17
+    mul_float
+    store_var next
+    load_var r
+    call baml.llm.RetryPolicy.max_delay_or_default
+    store_var _21
+    load_var2 9 11
     cmp_float_op >
     pop_jump_if_false L6
     jump L7
@@ -7816,9 +7817,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
 
   L7:
     load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
+    call baml.llm.RetryPolicy.max_delay_or_default
     store_var current_delay
 
   L8:
@@ -7828,148 +7827,148 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
     load_type baml.llm.OrchestrationStep
     load_var inner
     call baml.iter.Iterable$for$T[].iter
-    store_var _27
+    store_var _24
 
   L9:
-    load_var _27
+    load_var _24
     is_type baml.iter.Flatten<...>
     pop_jump_if_false L10
     jump L27
 
   L10:
-    load_var _27
+    load_var _24
     is_type baml.iter.ArrayIterator<...>
     pop_jump_if_false L11
     jump L26
 
   L11:
-    load_var _27
+    load_var _24
     is_type baml.iter.StepBy<...>
     pop_jump_if_false L12
     jump L25
 
   L12:
-    load_var _27
+    load_var _24
     is_type baml.iter.Chain<...>
     pop_jump_if_false L13
     jump L24
 
   L13:
-    load_var _27
+    load_var _24
     is_type baml.iter.Repeat<...>
     pop_jump_if_false L14
     jump L23
 
   L14:
-    load_var _27
+    load_var _24
     is_type baml.iter.Map<...>
     pop_jump_if_false L15
     jump L22
 
   L15:
-    load_var _27
+    load_var _24
     is_type baml.iter.Filter<...>
     pop_jump_if_false L16
     jump L21
 
   L16:
-    load_var _27
+    load_var _24
     is_type baml.iter.FilterMap<...>
     pop_jump_if_false L17
     jump L20
 
   L17:
-    load_var _27
+    load_var _24
     is_type baml.iter.FlatMap<...>
     pop_jump_if_false L18
     jump L19
 
   L18:
-    load_var _27
+    load_var _24
     is_type baml.iter.Peekable<...>
     pop_jump_if_false L31
     load_type baml.llm.OrchestrationStep
     load_type never
-    load_var _27
+    load_var _24
     call baml.iter.Peekable.Iterator.next
-    store_var _29
+    store_var _26
     jump L28
 
   L19:
-    load_var _27
+    load_var _24
     make_bound_method baml.iter.FlatMap.Iterator.next
     call_indirect
-    store_var _29
+    store_var _26
     jump L28
 
   L20:
-    load_var _27
+    load_var _24
     make_bound_method baml.iter.FilterMap.Iterator.next
     call_indirect
-    store_var _29
+    store_var _26
     jump L28
 
   L21:
     load_type baml.llm.OrchestrationStep
     load_type never
     load_type never
-    load_var _27
+    load_var _24
     call baml.iter.Filter.Iterator.next
-    store_var _29
+    store_var _26
     jump L28
 
   L22:
-    load_var _27
+    load_var _24
     make_bound_method baml.iter.Map.Iterator.next
     call_indirect
-    store_var _29
+    store_var _26
     jump L28
 
   L23:
     load_type baml.llm.OrchestrationStep
-    load_var _27
+    load_var _24
     call baml.iter.Repeat.Iterator.next
-    store_var _29
+    store_var _26
     jump L28
 
   L24:
     load_type baml.llm.OrchestrationStep
     load_type never
     load_type never
-    load_var _27
+    load_var _24
     call baml.iter.Chain.Iterator.next
-    store_var _29
+    store_var _26
     jump L28
 
   L25:
     load_type baml.llm.OrchestrationStep
     load_type never
-    load_var _27
+    load_var _24
     call baml.iter.StepBy.Iterator.next
-    store_var _29
+    store_var _26
     jump L28
 
   L26:
     load_type baml.llm.OrchestrationStep
-    load_var _27
+    load_var _24
     call baml.iter.ArrayIterator.Iterator.next
-    store_var _29
+    store_var _26
     jump L28
 
   L27:
-    load_var _27
+    load_var _24
     make_bound_method baml.iter.Flatten.Iterator.next
     call_indirect
-    store_var _29
+    store_var _26
 
   L28:
-    load_var _29
+    load_var _26
     is_type baml.iter.Done
     pop_jump_if_false L29
     jump L30
 
   L29:
-    load_var2 5 12
+    load_var2 5 14
     load_field .primitive_client
     load_var delay
     init_instance baml.llm.OrchestrationStep .primitive_client, .delay_ms
@@ -8574,10 +8573,9 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
 
   L1:
     load_var _4
-    store_var_load_var r
-    load_field .initial_delay_ms
-    load_const 0.0
-    bin_op +
+    store_var r
+    load_var r
+    call baml.llm.RetryPolicy.initial_delay_or_default
     store_var current_delay
     load_const 0
     store_var attempt
@@ -8604,14 +8602,17 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
     load_var current_delay
     call baml._trunc_to_int
     store_var attempt_delay
-    load_var2 6 5
-    load_field .multiplier
-    mul_float
-    store_var_load_var next
+    load_var current_delay
+    store_var _17
     load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
+    call baml.llm.RetryPolicy.multiplier_or_default
+    load_var _17
+    mul_float
+    store_var next
+    load_var r
+    call baml.llm.RetryPolicy.max_delay_or_default
+    store_var _21
+    load_var2 9 11
     cmp_float_op >
     pop_jump_if_false L5
     jump L6
@@ -8623,9 +8624,7 @@ function baml.llm.Client.execute_oneshot(self: baml.llm.Client, context: baml.ll
 
   L6:
     load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
+    call baml.llm.RetryPolicy.max_delay_or_default
     store_var current_delay
 
   L7:
@@ -8672,10 +8671,9 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
 
   L1:
     load_var _4
-    store_var_load_var r
-    load_field .initial_delay_ms
-    load_const 0.0
-    bin_op +
+    store_var r
+    load_var r
+    call baml.llm.RetryPolicy.initial_delay_or_default
     store_var current_delay
     load_const 0
     store_var attempt
@@ -8702,14 +8700,17 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
     load_var current_delay
     call baml._trunc_to_int
     store_var attempt_delay
-    load_var2 6 5
-    load_field .multiplier
-    mul_float
-    store_var_load_var next
+    load_var current_delay
+    store_var _17
     load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
+    call baml.llm.RetryPolicy.multiplier_or_default
+    load_var _17
+    mul_float
+    store_var next
+    load_var r
+    call baml.llm.RetryPolicy.max_delay_or_default
+    store_var _21
+    load_var2 9 11
     cmp_float_op >
     pop_jump_if_false L5
     jump L6
@@ -8721,9 +8722,7 @@ function baml.llm.Client.execute_stream(self: baml.llm.Client, context: baml.llm
 
   L6:
     load_var r
-    load_field .max_delay_ms
-    load_const 0.0
-    bin_op +
+    call baml.llm.RetryPolicy.max_delay_or_default
     store_var current_delay
 
   L7:
@@ -9040,6 +9039,64 @@ function baml.llm.PromptAst.messages(self: baml.llm.PromptAst) -> baml.llm.Promp
 }
 
 function baml.llm.PromptAst.text(self: baml.llm.PromptAst) -> string {
+}
+
+function baml.llm.RetryPolicy.initial_delay_or_default(self: baml.llm.RetryPolicy) -> float {
+    load_var self
+    load_field .initial_delay_ms
+    store_var _3
+    load_var _3
+    store_var _2
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 200
+    store_var _2
+
+  L0:
+    load_var _2
+    load_const 0.0
+    bin_op +
+    return
+}
+
+function baml.llm.RetryPolicy.max_delay_or_default(self: baml.llm.RetryPolicy) -> float {
+    load_var self
+    load_field .max_delay_ms
+    store_var _3
+    load_var _3
+    store_var _2
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 10000
+    store_var _2
+
+  L0:
+    load_var _2
+    load_const 0.0
+    bin_op +
+    return
+}
+
+function baml.llm.RetryPolicy.multiplier_or_default(self: baml.llm.RetryPolicy) -> float {
+    load_var self
+    load_field .multiplier
+    store_var _2
+    load_var _2
+    store_var _0
+    load_var _2
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    load_const 1.5
+    store_var _0
+
+  L0:
+    load_var _0
+    return
 }
 
 function baml.llm.Stream.final(self: baml.llm.Stream<TStream, TFinal>) -> TFinal {
@@ -9464,6 +9521,184 @@ function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, 
     load_var prompt_closure
     call baml.llm.PrimitiveClient.render_specialized_prompt
     return
+}
+
+function baml.llm.render_prompt_values(values: unknown[]) -> unknown[] {
+    load_type unknown
+    alloc_array 0
+    store_var rendered
+    load_type unknown
+    load_var values
+    call baml.iter.Iterable$for$T[].iter
+    store_var _3
+
+  L0:
+    load_var _3
+    is_type baml.iter.Flatten<...>
+    pop_jump_if_false L1
+    jump L18
+
+  L1:
+    load_var _3
+    is_type baml.iter.ArrayIterator<...>
+    pop_jump_if_false L2
+    jump L17
+
+  L2:
+    load_var _3
+    is_type baml.iter.StepBy<...>
+    pop_jump_if_false L3
+    jump L16
+
+  L3:
+    load_var _3
+    is_type baml.iter.Chain<...>
+    pop_jump_if_false L4
+    jump L15
+
+  L4:
+    load_var _3
+    is_type baml.iter.Repeat<...>
+    pop_jump_if_false L5
+    jump L14
+
+  L5:
+    load_var _3
+    is_type baml.iter.Map<...>
+    pop_jump_if_false L6
+    jump L13
+
+  L6:
+    load_var _3
+    is_type baml.iter.Filter<...>
+    pop_jump_if_false L7
+    jump L12
+
+  L7:
+    load_var _3
+    is_type baml.iter.FilterMap<...>
+    pop_jump_if_false L8
+    jump L11
+
+  L8:
+    load_var _3
+    is_type baml.iter.FlatMap<...>
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var _3
+    is_type baml.iter.Peekable<...>
+    pop_jump_if_false L25
+    load_type unknown
+    load_type never
+    load_var _3
+    call baml.iter.Peekable.Iterator.next
+    store_var _5
+    jump L19
+
+  L10:
+    load_var _3
+    make_bound_method baml.iter.FlatMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L11:
+    load_var _3
+    make_bound_method baml.iter.FilterMap.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L12:
+    load_type unknown
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Filter.Iterator.next
+    store_var _5
+    jump L19
+
+  L13:
+    load_var _3
+    make_bound_method baml.iter.Map.Iterator.next
+    call_indirect
+    store_var _5
+    jump L19
+
+  L14:
+    load_type unknown
+    load_var _3
+    call baml.iter.Repeat.Iterator.next
+    store_var _5
+    jump L19
+
+  L15:
+    load_type unknown
+    load_type never
+    load_type never
+    load_var _3
+    call baml.iter.Chain.Iterator.next
+    store_var _5
+    jump L19
+
+  L16:
+    load_type unknown
+    load_type never
+    load_var _3
+    call baml.iter.StepBy.Iterator.next
+    store_var _5
+    jump L19
+
+  L17:
+    load_type unknown
+    load_var _3
+    call baml.iter.ArrayIterator.Iterator.next
+    store_var _5
+    jump L19
+
+  L18:
+    load_var _3
+    make_bound_method baml.iter.Flatten.Iterator.next
+    call_indirect
+    store_var _5
+
+  L19:
+    load_var _5
+    is_type baml.iter.Done
+    pop_jump_if_false L20
+    jump L24
+
+  L20:
+    load_var _5
+    store_var_load_var value
+    is_type baml.llm.Role
+    pop_jump_if_false L21
+    jump L22
+
+  L21:
+    load_var value
+    call baml.String.from
+    store_var _36
+    jump L23
+
+  L22:
+    load_var value
+    store_var _36
+
+  L23:
+    load_var2 2 6
+    call baml.Array.push
+    pop 1
+    jump L0
+
+  L24:
+    load_var rendered
+    return
+
+  L25:
+    unreachable
 }
 
 function baml.llm.stream_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> baml.llm.Stream<TStream, TFinal> {

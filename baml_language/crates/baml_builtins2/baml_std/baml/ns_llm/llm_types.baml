@@ -124,9 +124,31 @@ enum ClientType {
 /// Configures automatic retry behavior for an LLM client.
 class RetryPolicy {
   max_retries int
-  initial_delay_ms int
-  multiplier float
-  max_delay_ms int
+  // Delay fields are optional: a `retry_policy` block may omit them (or use a
+  // `strategy { ... }` sub-block the config lowering does not yet expand into
+  // these fields), in which case they arrive as `null` at runtime. Reading a
+  // `null` in the backoff arithmetic below (`null + 0.0`) is a VM type error,
+  // so the `*_or_default` accessors substitute the canonical defaults —
+  // 200ms / 1.5x / 10000ms, matching the legacy engine — and return `float`,
+  // keeping the retry-delay math well-typed. See B-488.
+  initial_delay_ms int?
+  multiplier float?
+  max_delay_ms int?
+
+  /// Initial backoff delay (ms) as a float; defaults to 200 when unset.
+  function initial_delay_or_default(self) -> float throws never {
+    (self.initial_delay_ms ?? 200) + 0.0
+  }
+
+  /// Backoff growth multiplier; defaults to 1.5 when unset.
+  function multiplier_or_default(self) -> float throws never {
+    self.multiplier ?? 1.5
+  }
+
+  /// Maximum backoff delay (ms) as a float; defaults to 10000 when unset.
+  function max_delay_or_default(self) -> float throws never {
+    (self.max_delay_ms ?? 10000) + 0.0
+  }
 }
 
 /// An LLM client (primitive, fallback, or round-robin).
@@ -212,15 +234,15 @@ class Client {
     match (self.retry) {
       let r: RetryPolicy => {
         let result: OrchestrationStep[] = [];
-        let current_delay = r.initial_delay_ms + 0.0;
+        let current_delay = r.initial_delay_or_default();
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let delay = 0;
           if (attempt > 0) {
             delay = root._trunc_to_int(current_delay)
-            let next = current_delay * r.multiplier;
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0;
+            let next = current_delay * r.multiplier_or_default();
+            if (next > r.max_delay_or_default()) {
+              current_delay = r.max_delay_or_default();
             } else {
               current_delay = next;
             }
@@ -248,15 +270,15 @@ class Client {
   ) -> Stream<TStream, TFinal> {
     match (self.retry) {
       let r: RetryPolicy => {
-        let current_delay = r.initial_delay_ms + 0.0
+        let current_delay = r.initial_delay_or_default()
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let attempt_delay = inherited_delay_ms
           if (attempt > 0) {
             attempt_delay = root._trunc_to_int(current_delay)
-            let next = current_delay * r.multiplier
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
+            let next = current_delay * r.multiplier_or_default()
+            if (next > r.max_delay_or_default()) {
+              current_delay = r.max_delay_or_default()
             } else {
               current_delay = next
             }
@@ -363,15 +385,15 @@ class Client {
   ) -> T {
     match (self.retry) {
       let r: RetryPolicy => {
-        let current_delay = r.initial_delay_ms + 0.0
+        let current_delay = r.initial_delay_or_default()
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let attempt_delay = inherited_delay_ms
           if (attempt > 0) {
             attempt_delay = root._trunc_to_int(current_delay)
-            let next = current_delay * r.multiplier
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
+            let next = current_delay * r.multiplier_or_default()
+            if (next > r.max_delay_or_default()) {
+              current_delay = r.max_delay_or_default()
             } else {
               current_delay = next
             }
@@ -778,6 +800,27 @@ function assemble_prompt_ast(parts: string[], values: unknown[]) -> PromptAst th
   $rust_io_function
 }
 
+/// BEP-049 §11. Coerce a tagged prompt's interpolated `values` for assembly so
+/// composites render the same as they do in an ordinary backtick string. The
+/// template desugaring pushes each `${expr}` into `values` *raw* (uncoerced),
+/// which is the right contract for a general tagged template — but the built-in
+/// `prompt` tag stringifies its content, so a class/array/map value reaching the
+/// assembler unrendered would silently produce an empty string (B-563). Route
+/// every value through `string.from` — BAML's implicit `to_string`, the exact
+/// conversion an ordinary `${expr}` applies (honoring `baml.ToString` overrides)
+/// — except a `Role` marker (from `${role(...)}`), which stays raw so
+/// `assemble_prompt_ast` can still use it to split the prompt into chat messages.
+function render_prompt_values(values: unknown[]) -> unknown[] throws never {
+  let rendered: unknown[] = []
+  for (let value in values) {
+    rendered.push(match (value) {
+      Role => value,
+      _ => string.from(value),
+    })
+  }
+  rendered
+}
+
 /// BEP-049 §10 (M5b). Render `return_type`'s schema with default options — the
 /// string `ctx.output_format` exposes to a `prompt` body. The orchestrator
 /// calls this with the call's return type to populate `Context.output_format`,
@@ -831,7 +874,7 @@ function prompt(
 ) -> (Context) -> PromptAst throws never {
   let render = (ctx: Context) -> {
     let t = body(make_role, ctx)
-    assemble_prompt_ast(t.parts, t.values)
+    assemble_prompt_ast(t.parts, render_prompt_values(t.values))
   }
   render
 }
