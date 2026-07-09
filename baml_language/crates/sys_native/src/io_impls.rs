@@ -2210,6 +2210,13 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body.clone());
             }
 
+            // Default 5-minute total deadline (connect + the whole stream): a
+            // stalled SSE socket must surface as a Timeout instead of wedging
+            // the VM in a read that never yields. Mirrors `_send`/`_fetch`'s
+            // stdlib-level default. Legitimately longer-lived streams need a
+            // dedicated timeout parameter on `fetch_sse` (not yet plumbed).
+            builder = builder.timeout(std::time::Duration::from_secs(300));
+
             let response = builder
                 .send()
                 .await
