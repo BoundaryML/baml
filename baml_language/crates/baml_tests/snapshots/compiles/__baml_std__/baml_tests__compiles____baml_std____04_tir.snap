@@ -2339,9 +2339,24 @@ class baml.llm.Context {
 enum baml.llm.ClientType
 class baml.llm.RetryPolicy {
   max_retries: int
-  initial_delay_ms: int
-  multiplier: float
-  max_delay_ms: int
+  initial_delay_ms: int | null
+  multiplier: float | null
+  max_delay_ms: int | null
+}
+function baml.llm.RetryPolicy.initial_delay_or_default(self: baml.llm.RetryPolicy) -> float throws never {
+  { : float
+    self.initial_delay_ms ?? 200 + 0.0 : float
+  }
+}
+function baml.llm.RetryPolicy.multiplier_or_default(self: baml.llm.RetryPolicy) -> float throws never {
+  { : float
+    self.multiplier ?? 1.5 : float
+  }
+}
+function baml.llm.RetryPolicy.max_delay_or_default(self: baml.llm.RetryPolicy) -> float throws never {
+  { : float
+    self.max_delay_ms ?? 10000 + 0.0 : float
+  }
 }
 class baml.llm.Client {
   name: string
@@ -2414,7 +2429,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
       r: RetryPolicy =>
         { : baml.llm.OrchestrationStep[]
           let result: OrchestrationStep[] = [] : baml.llm.OrchestrationStep[]
-          let current_delay = r.initial_delay_ms + 0.0 : float
+          let current_delay = r.initial_delay_or_default() : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt <= r.max_retries
@@ -2423,10 +2438,10 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
                 if (attempt > 0 : bool) : void
                   { : void
                     delay = root._trunc_to_int(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                    let next = current_delay * r.multiplier_or_default() : float
+                    if (next > r.max_delay_or_default() : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
+                        current_delay = r.max_delay_or_default() : float
                       }
                     else
                       { : void
@@ -2451,7 +2466,7 @@ function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, 
     match (self.retry : baml.llm.RetryPolicy | null) : never
       r: RetryPolicy =>
         { : never
-          let current_delay = r.initial_delay_ms + 0.0 : float
+          let current_delay = r.initial_delay_or_default() : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt <= r.max_retries
@@ -2460,10 +2475,10 @@ function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, 
                 if (attempt > 0 : bool) : void
                   { : void
                     attempt_delay = root._trunc_to_int(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                    let next = current_delay * r.multiplier_or_default() : float
+                    if (next > r.max_delay_or_default() : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
+                        current_delay = r.max_delay_or_default() : float
                       }
                     else
                       { : void
@@ -2547,7 +2562,7 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
     match (self.retry : baml.llm.RetryPolicy | null) : never
       r: RetryPolicy =>
         { : never
-          let current_delay = r.initial_delay_ms + 0.0 : float
+          let current_delay = r.initial_delay_or_default() : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt <= r.max_retries
@@ -2556,10 +2571,10 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
                 if (attempt > 0 : bool) : void
                   { : void
                     attempt_delay = root._trunc_to_int(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                    let next = current_delay * r.multiplier_or_default() : float
+                    if (next > r.max_delay_or_default() : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
+                        current_delay = r.max_delay_or_default() : float
                       }
                     else
                       { : void

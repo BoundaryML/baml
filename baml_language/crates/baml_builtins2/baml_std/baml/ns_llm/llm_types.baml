@@ -124,9 +124,31 @@ enum ClientType {
 /// Configures automatic retry behavior for an LLM client.
 class RetryPolicy {
   max_retries int
-  initial_delay_ms int
-  multiplier float
-  max_delay_ms int
+  // Delay fields are optional: a `retry_policy` block may omit them (or use a
+  // `strategy { ... }` sub-block the config lowering does not yet expand into
+  // these fields), in which case they arrive as `null` at runtime. Reading a
+  // `null` in the backoff arithmetic below (`null + 0.0`) is a VM type error,
+  // so the `*_or_default` accessors substitute the canonical defaults —
+  // 200ms / 1.5x / 10000ms, matching the legacy engine — and return `float`,
+  // keeping the retry-delay math well-typed. See B-488.
+  initial_delay_ms int?
+  multiplier float?
+  max_delay_ms int?
+
+  /// Initial backoff delay (ms) as a float; defaults to 200 when unset.
+  function initial_delay_or_default(self) -> float throws never {
+    (self.initial_delay_ms ?? 200) + 0.0
+  }
+
+  /// Backoff growth multiplier; defaults to 1.5 when unset.
+  function multiplier_or_default(self) -> float throws never {
+    self.multiplier ?? 1.5
+  }
+
+  /// Maximum backoff delay (ms) as a float; defaults to 10000 when unset.
+  function max_delay_or_default(self) -> float throws never {
+    (self.max_delay_ms ?? 10000) + 0.0
+  }
 }
 
 /// An LLM client (primitive, fallback, or round-robin).
@@ -212,15 +234,15 @@ class Client {
     match (self.retry) {
       let r: RetryPolicy => {
         let result: OrchestrationStep[] = [];
-        let current_delay = r.initial_delay_ms + 0.0;
+        let current_delay = r.initial_delay_or_default();
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let delay = 0;
           if (attempt > 0) {
             delay = root._trunc_to_int(current_delay)
-            let next = current_delay * r.multiplier;
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0;
+            let next = current_delay * r.multiplier_or_default();
+            if (next > r.max_delay_or_default()) {
+              current_delay = r.max_delay_or_default();
             } else {
               current_delay = next;
             }
@@ -248,15 +270,15 @@ class Client {
   ) -> Stream<TStream, TFinal> {
     match (self.retry) {
       let r: RetryPolicy => {
-        let current_delay = r.initial_delay_ms + 0.0
+        let current_delay = r.initial_delay_or_default()
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let attempt_delay = inherited_delay_ms
           if (attempt > 0) {
             attempt_delay = root._trunc_to_int(current_delay)
-            let next = current_delay * r.multiplier
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
+            let next = current_delay * r.multiplier_or_default()
+            if (next > r.max_delay_or_default()) {
+              current_delay = r.max_delay_or_default()
             } else {
               current_delay = next
             }
@@ -363,15 +385,15 @@ class Client {
   ) -> T {
     match (self.retry) {
       let r: RetryPolicy => {
-        let current_delay = r.initial_delay_ms + 0.0
+        let current_delay = r.initial_delay_or_default()
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let attempt_delay = inherited_delay_ms
           if (attempt > 0) {
             attempt_delay = root._trunc_to_int(current_delay)
-            let next = current_delay * r.multiplier
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
+            let next = current_delay * r.multiplier_or_default()
+            if (next > r.max_delay_or_default()) {
+              current_delay = r.max_delay_or_default()
             } else {
               current_delay = next
             }
