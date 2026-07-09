@@ -286,7 +286,12 @@ testset "integ-test-28-provider-diversity" {
                 extra_body: null,
                 append_output_schema: null,
             },
-        ) catch (e) { _ => s28_Profile { name: "LIVE FAILED", title: "", years: -1 } };
+        ) catch (e) {
+            _ => {
+                log.warn(e);
+                s28_Profile { name: "LIVE FAILED", title: "", years: -1 }
+            },
+        };
         log.info("28 live gemini: " + r.name + " / " + r.title + " / " + r.years.to_string());
         assert.is_true(r.name.length() > 0 && r.name != "LIVE FAILED")
     }
