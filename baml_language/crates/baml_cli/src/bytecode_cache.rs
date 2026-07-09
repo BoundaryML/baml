@@ -944,6 +944,9 @@ impl CacheContext {
                     )
                     .0
                     .clone(),
+                    // Populated by the per-file diagnostics cache (Phase 1);
+                    // an empty blob until that path is wired in.
+                    diagnostics: Vec::new(),
                     rel_path: rel,
                 }
             })

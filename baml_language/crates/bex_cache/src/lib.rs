@@ -43,7 +43,13 @@ use sha2::{Digest, Sha256};
 /// [`image_key`] so an incremental compile can reuse clean files' units. The
 /// bump turns every pre-v4 entry into a universal miss (no image blob existed),
 /// so `plan_reuse` never finds a manifest without a matching image.
-pub const FORMAT_VERSION: u32 = 4;
+///
+/// v5 (per-file diagnostics cache): each [`ManifestFile`] now carries the
+/// opaque borsh blob of the diagnostics `check_file` produced for that file, so
+/// an incremental compile can serve a clean file's diagnostics without
+/// re-checking it. The bump turns every pre-v5 manifest into a miss (the blob
+/// did not exist), so `plan_reuse` never reads a manifest lacking the field.
+pub const FORMAT_VERSION: u32 = 5;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -161,6 +167,13 @@ pub struct ManifestFile {
     /// never re-walk their bodies just to answer "what does the package
     /// throw" — the package-level solve then runs from facts alone.
     pub throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
+    /// Opaque borsh blob of the diagnostics `check_file` produced for this
+    /// file on the compile that wrote the manifest (`borsh(Vec<CachedDiagnostic>)`,
+    /// the typed form living in the CLI). Kept opaque here so `bex_cache` does
+    /// not depend on the diagnostics crate — same pattern as the stdlib
+    /// interface blob. Because the manifest is written only after a passing
+    /// error gate, a clean file's blob holds warnings / info only.
+    pub diagnostics: Vec<u8>,
 }
 
 /// Fixed per-project key for the [`ProjectManifest`].
@@ -688,6 +701,76 @@ mod tests {
         let loaded = cache.load_raw(&key).expect("hit after store");
         let decoded: BTreeMap<String, Vec<u8>> = borsh::from_slice(&loaded).expect("decode blob");
         assert_eq!(decoded, blob, "interface blob survives the store/load path");
+    }
+
+    #[test]
+    fn manifest_with_diagnostics_blob_round_trips_through_store_raw() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cache = BytecodeCache::open(dir.path().to_path_buf());
+        let key = manifest_key(&[6u8; 32], 2, false, Path::new("/proj"), None);
+
+        let manifest = ProjectManifest {
+            program_key: [1u8; 32],
+            files: vec![ManifestFile {
+                rel_path: "a.baml".to_string(),
+                content_hash: [2u8; 32],
+                signature_hash: [3u8; 32],
+                defined_names: vec!["foo".to_string()],
+                referenced_names: vec!["Bar".to_string()],
+                throw_facts: Vec::new(),
+                // Opaque bytes: bex_cache never interprets this blob.
+                diagnostics: vec![9, 8, 7, 6],
+            }],
+        };
+        let payload = borsh::to_vec(&manifest).expect("serialize manifest");
+
+        cache.store_raw(&key, &payload).expect("store");
+        let loaded = cache.load_raw(&key).expect("hit after store");
+        let decoded: ProjectManifest = borsh::from_slice(&loaded).expect("decode manifest");
+        assert_eq!(decoded.files.len(), 1);
+        assert_eq!(decoded.files[0].diagnostics, vec![9, 8, 7, 6]);
+        assert_eq!(decoded.files[0].rel_path, "a.baml");
+    }
+
+    #[test]
+    fn pre_v5_manifest_payload_is_a_miss() {
+        // A manifest serialized without the `diagnostics` field (the pre-v5
+        // layout) must not decode into the current `ProjectManifest`, so an old
+        // cache degrades to a full compile rather than a stale-diagnostics
+        // serve. Emulate the old layout by borsh-encoding a struct missing the
+        // trailing field and confirming it fails to round-trip.
+        #[derive(borsh::BorshSerialize)]
+        struct LegacyManifestFile {
+            rel_path: String,
+            content_hash: [u8; 32],
+            signature_hash: [u8; 32],
+            defined_names: Vec<String>,
+            referenced_names: Vec<String>,
+            throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
+        }
+        #[derive(borsh::BorshSerialize)]
+        struct LegacyManifest {
+            program_key: [u8; 32],
+            files: Vec<LegacyManifestFile>,
+        }
+        let legacy = LegacyManifest {
+            program_key: [0u8; 32],
+            files: vec![LegacyManifestFile {
+                rel_path: "a.baml".to_string(),
+                content_hash: [0u8; 32],
+                signature_hash: [0u8; 32],
+                defined_names: Vec::new(),
+                referenced_names: Vec::new(),
+                throw_facts: Vec::new(),
+            }],
+        };
+        let bytes = borsh::to_vec(&legacy).expect("serialize legacy");
+        // Borsh is not self-describing: the missing trailing `diagnostics` Vec
+        // makes the decode run off the end of the buffer.
+        assert!(
+            borsh::from_slice::<ProjectManifest>(&bytes).is_err(),
+            "a pre-v5 manifest layout must fail to decode into the v5 struct"
+        );
     }
 
     #[test]
