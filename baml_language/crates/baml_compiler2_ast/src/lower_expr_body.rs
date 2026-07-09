@@ -1349,6 +1349,14 @@ impl LoweringContext {
         // here, not a silent wrong answer (the bug this fix removes).
         if bit_not {
             let span = node.span_range();
+            // Every node built here is compiler-generated: the user wrote `~`,
+            // which desugars away entirely, so — unlike the backtick/tagged
+            // desugarings, whose outer `Template` still maps 1:1 to user syntax
+            // — no surviving node corresponds to the source. Mark all of them
+            // synthetic (so tooling like inlay hints skips them) and restore the
+            // flag afterward. Only the operand `x`, lowered above, is user code
+            // and keeps its real, non-synthetic id.
+            let prev_synth = std::mem::replace(&mut self.synthesizing, true);
             let neg = self.alloc_expr(
                 Expr::Unary {
                     op: UnaryOp::Neg,
@@ -1357,7 +1365,7 @@ impl LoweringContext {
                 span,
             );
             let one = self.alloc_expr(Expr::Literal(Literal::Int(1)), span);
-            return self.alloc_expr(
+            let result = self.alloc_expr(
                 Expr::Binary {
                     op: BinaryOp::Sub,
                     lhs: neg,
@@ -1365,6 +1373,8 @@ impl LoweringContext {
                 },
                 span,
             );
+            self.synthesizing = prev_synth;
+            return result;
         }
 
         let Some(op) = op else {
