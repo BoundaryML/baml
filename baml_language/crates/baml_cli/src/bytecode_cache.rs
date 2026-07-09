@@ -1160,6 +1160,16 @@ impl CacheContext {
         if !Self::verify_enabled() {
             return Ok(());
         }
+        self.check_cached_diagnostics_against_fresh(db)
+    }
+
+    /// The env-independent core of [`Self::verify_diagnostics`], so the oracle's
+    /// discriminating power (pass on a faithful cache, bail on a stale one) is
+    /// unit-testable without mutating the process environment.
+    pub(crate) fn check_cached_diagnostics_against_fresh(
+        &self,
+        db: &ProjectDatabase,
+    ) -> anyhow::Result<()> {
         let Some(manifest) = self.load_prev_manifest_for_verify() else {
             return Ok(());
         };
@@ -1202,6 +1212,27 @@ impl CacheContext {
     fn load_prev_manifest_for_verify(&self) -> Option<ProjectManifest> {
         let bytes = self.cache.load_raw(&self.manifest_key)?;
         borsh::from_slice::<ProjectManifest>(&bytes).ok()
+    }
+
+    /// Test hook: overwrite one file's cached diagnostics with an empty blob,
+    /// simulating a stale cache that dropped a diagnostic. Used by the verify
+    /// oracle's negative test.
+    #[cfg(test)]
+    pub(crate) fn poison_manifest_diagnostics_for_test(&self, rel_path: &str) {
+        let bytes = self
+            .cache
+            .load_raw(&self.manifest_key)
+            .expect("manifest present");
+        let mut manifest: ProjectManifest = borsh::from_slice(&bytes).expect("manifest decodes");
+        for f in &mut manifest.files {
+            if f.rel_path == rel_path {
+                f.diagnostics = crate::diagnostics_cache::empty_blob();
+            }
+        }
+        let payload = borsh::to_vec(&manifest).expect("manifest serializes");
+        self.cache
+            .store_raw(&self.manifest_key, &payload)
+            .expect("manifest re-stored");
     }
 }
 
