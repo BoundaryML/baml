@@ -283,7 +283,31 @@ mod tests {
             honest, narrowed.merged,
             "narrowed all-true must equal honest"
         );
-        // `fresh` excludes the package-level set, so it is a subset of merged.
-        assert!(narrowed.fresh.len() <= narrowed.merged.len());
+        // `fresh` is exactly `merged` minus the always-recomputed package-level
+        // set (with `precomputed` empty here): removing the package-level
+        // diagnostics from the merged set must leave precisely the fresh set.
+        // This pins that the narrowed collector neither double-counts a
+        // check_file diagnostic into `fresh` nor leaks a package-level one there.
+        let source_files = baml_compiler2_hir::compiler2_all_files(&db);
+        let package_level = package_level_diagnostics(&db, &source_files);
+        assert_eq!(
+            narrowed.merged.len(),
+            narrowed.fresh.len() + package_level.len(),
+            "merged = fresh + package-level (precomputed empty)"
+        );
+        let mut fresh_sorted = narrowed.fresh;
+        sort_diagnostics(&mut fresh_sorted);
+        let mut merged_minus_pkg = narrowed.merged;
+        for pkg in &package_level {
+            let pos = merged_minus_pkg
+                .iter()
+                .position(|d| d == pkg)
+                .expect("each package-level diagnostic appears in merged");
+            merged_minus_pkg.remove(pos);
+        }
+        assert_eq!(
+            fresh_sorted, merged_minus_pkg,
+            "fresh must equal merged with the package-level diagnostics removed"
+        );
     }
 }

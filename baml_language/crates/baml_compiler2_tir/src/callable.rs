@@ -388,13 +388,20 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
     // seeded, so a converged fixpoint value is returned without re-entering the
     // callee body; a dirty function is never in the map and infers below.
     if let Some(seeds) = db.seeded_callable_throws() {
-        let path = function.file(db).path(db).display().to_string();
-        if let Some(ty) = seeds
-            .by_path(db)
-            .get(&path)
-            .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
-        {
-            return ty.clone();
+        // `by_path(db)` is the tracked read (kept unconditional so a later seed
+        // still invalidates this memo), but the path-display allocation and the
+        // lookup are skipped whenever no seeds were injected — the LSP and every
+        // cold CLI compile hold the empty map, so this guard avoids a per-eval
+        // `String` allocation on the hot `callable_throws` path.
+        let by_path = seeds.by_path(db);
+        if !by_path.is_empty() {
+            let path = function.file(db).path(db).display().to_string();
+            if let Some(ty) = by_path
+                .get(&path)
+                .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
+            {
+                return ty.clone();
+            }
         }
     }
 
