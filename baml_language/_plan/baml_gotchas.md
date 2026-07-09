@@ -190,3 +190,12 @@ Each entry: the symptom, the rule, the workaround. Compiler-bug candidates are m
   fn was needed (the plan's P8 hedge was unnecessary here).
 - **`let v = expr catch { _ => null }` can collapse the binding's type** so a later
   class-match arm is "unreachable" (E0063) — annotate (`let v: unknown = …`).
+
+## Alignment-sweep round
+
+- **`defer` is a reserved keyword** (BEP-042) — can't be used as a field/param name; rename
+  (e.g. `deferred`).
+- **Dimension/meta interfaces must `requires baml.ai.ResponseMeta`** (or their base) — a bare
+  interface in a match arm binds `never` and the arm is dead.
+- **Spawn-in-`.map`-closure + await deadlocks the VM** (0% CPU) — keep spawn/await at the
+  top level of a function body until the scheduler bug is fixed (see checklist bug queue).
