@@ -1,5 +1,6 @@
 ---
 title: Connection Pooling
+subtitle: Reuse HTTP connections across requests
 ---
 
 BAML disables HTTP connection pooling by default. This preserves compatibility
@@ -31,6 +32,9 @@ client through `fork()`. Create the BAML runtime inside each child process, or
 use the `spawn` start method instead.
 </Warning>
 
-Connection pooling is not available for fallback or round-robin clients. Set it
-on their leaf clients instead. It is also not available for AWS Bedrock clients,
-whose HTTP transport is managed by the AWS SDK.
+Connection pooling is not available for
+[fallback](/reference/baml/clients/strategy/fallback) or
+[round-robin](/reference/baml/clients/strategy/round-robin) clients. Set it on
+their leaf clients instead. It is also not available for
+[AWS Bedrock](/reference/baml/clients/providers/aws-bedrock) clients, whose HTTP
+transport is managed by the AWS SDK.
