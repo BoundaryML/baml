@@ -10854,9 +10854,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.resolve_member(&expanded, member, at, bound)
                 }
             }
-            Ty::Unknown { .. } => {
-                // Base type unknown — can't resolve member, but don't emit error
-                // (the base type error was already reported upstream)
+            Ty::Unknown { .. } | Ty::Error { .. } => {
+                // Base type unknown or already errored — can't resolve the
+                // member, but don't emit an error: the base type's own failure
+                // was already reported upstream, and a `!error` receiver must
+                // not cascade a second "has no member" diagnostic on top of it.
                 Ty::Unknown {
                     attr: TyAttr::default(),
                 }

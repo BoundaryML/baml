@@ -4383,4 +4383,26 @@ function needs<T extends Marker>(x: T) -> int throws never {
             "a type-variable map key should be rejected (E0067), got {errors:?}"
         );
     }
+
+    #[test]
+    fn member_access_on_errored_receiver_does_not_cascade() {
+        // `Nonexistent` fails to resolve (its own error); member access on the
+        // resulting `!error` receiver must not add a second "has no member"
+        // diagnostic on top of it.
+        let errors = all_type_errors(
+            "function f(x: Nonexistent) -> string throws never {\n  return x.key\n}\n",
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, TirTypeError::UnresolvedType { .. })),
+            "the unresolved receiver type should be reported, got {errors:?}"
+        );
+        assert!(
+            !errors
+                .iter()
+                .any(|e| matches!(e, TirTypeError::UnresolvedMember { .. })),
+            "an errored receiver must not cascade a member-access error, got {errors:?}"
+        );
+    }
 }
