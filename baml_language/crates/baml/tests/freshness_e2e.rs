@@ -8,6 +8,8 @@
 
 use std::{
     fs,
+    io::{Read, Write},
+    net::TcpListener,
     path::{Path, PathBuf},
     process::{Command, Output},
 };
@@ -216,6 +218,60 @@ fn project_skills_without_provenance_prompt_upgrade() {
     let stderr = stderr_of(&home.run_from(project.path(), &[]));
     assert!(stderr.contains(SKILL_OUTDATED_WARNING), "{stderr}");
     assert!(!stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
+}
+
+/// Serve GitHub-commit-shaped JSON (`{"sha": ...}`) for every request.
+/// Returns the server's base URL.
+fn spawn_stub_commits_server(sha: &str) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let body = format!(r#"{{"sha":"{sha}"}}"#);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+            let _ = stream.write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            );
+        }
+    });
+    base
+}
+
+#[test]
+fn lazy_refresh_discovers_outdated_skill_after_the_command() {
+    let home = TestHome::new();
+    home.enable_auto_check();
+    home.write_state(Some("aaa"));
+    // No skill cache: pre-command there is nothing to compare against, so no
+    // warning prints up front; the background refresh (stubbed to return a
+    // newer commit) must surface the warning after the command instead.
+    let server = spawn_stub_commits_server("bbb");
+    let env = [("BAML_AGENT_SKILLS_COMMITS_URL", server.as_str())];
+    let cwd = project_with_skills();
+
+    let output = home.run_from(cwd.path(), &env);
+    let stderr = stderr_of(&output);
+    assert!(stderr.contains(SKILL_OUTDATED_WARNING), "{stderr}");
+    assert_eq!(
+        fs::read_to_string(home.root.join("manifest-cache/skills/latest-commit.json")).unwrap(),
+        r#"{"sha":"bbb"}"#,
+        "background refresh did not persist the cache"
+    );
+
+    // Next command: cache is fresh, no refresh spawns, and the warning now
+    // prints from cache (up front) exactly once.
+    let stderr = stderr_of(&home.run_from(cwd.path(), &env));
+    assert_eq!(
+        stderr.matches(SKILL_OUTDATED_WARNING).count(),
+        1,
+        "{stderr}"
+    );
 }
 
 #[test]

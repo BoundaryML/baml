@@ -379,26 +379,55 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
         return Err(missing_toolchain_error(&selector, &version));
     }
     verify_toolchain_version_file(&version)?;
-    auto_refresh_caches(&selector);
-    warn_if_channel_outdated(&selector, &version);
-    warn_if_skill_outdated();
+
+    // Warnings from the existing caches print immediately (no network).
+    let channel_warned = warn_if_channel_outdated(&selector, &version);
+    let skill_warned = warn_if_skill_outdated();
+    // A cache refresh (due at most once per TTL window) runs in the
+    // background while the command itself runs, instead of stalling it.
+    let refresh = start_lazy_refresh(&selector);
 
     let mut command = Command::new(cli);
     command.args(args);
     command.env("BAML_WRAPPER_EXEC", "1");
     command.env("BAML_WRAPPER_RESOLVED_TOOLCHAIN", &version);
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let err = command.exec();
-        Err(anyhow!("failed to exec baml-cli: {err}"))
+    let Some(refresh) = refresh else {
+        // Common case: nothing to refresh, so the wrapper can hand the
+        // process over entirely.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            let err = command.exec();
+            return Err(anyhow!("failed to exec baml-cli: {err}"));
+        }
+        #[cfg(not(unix))]
+        {
+            let status = command.status().context("failed to run baml-cli")?;
+            return Ok(status.code().unwrap_or(1));
+        }
+    };
+
+    // Refresh in flight: run the command as a child (exec would kill the
+    // refresh thread), then give the refresh whatever remains of its budget
+    // and surface any warnings the fresh caches newly justify.
+    let status = command.status().context("failed to run baml-cli")?;
+    refresh.wait();
+    if !channel_warned {
+        warn_if_channel_outdated(&selector, &version);
     }
-    #[cfg(not(unix))]
-    {
-        let status = command.status().context("failed to run baml-cli")?;
-        Ok(status.code().unwrap_or(1))
+    let latest = baml_release::skills::read_cached_latest_skill_commit(
+        &baml_release::skills::latest_skill_commit_cache_path(),
+    );
+    let state = baml_release::skills::read_skills_state(&state_path());
+    let skill_message =
+        skill_warning_message(project_has_baml_skills(), state.as_ref(), latest.as_deref());
+    if let Some(message) = skill_message {
+        if skill_warned != Some(message) {
+            eprintln!("{}: {message}", warning_prefix());
+        }
     }
+    Ok(status.code().unwrap_or(1))
 }
 
 fn active_selector() -> Result<ResolvedSelector> {
@@ -557,42 +586,71 @@ fn warning_prefix() -> impl std::fmt::Display {
         .apply_to("warning")
 }
 
-/// Refresh the freshness caches (channel manifest and latest skill commit)
-/// over the network when they're older than the TTL, at most one attempt per
-/// TTL window. Runs before normal commands, so failures are silent and both
-/// refreshes share a single [`AUTO_CHECK_TIMEOUT`] wall-clock budget (a
-/// command never stalls longer than that, even with both caches due);
-/// disable entirely with `[update] auto_check = false`.
-fn auto_refresh_caches(selector: &ResolvedSelector) {
-    if !read_config().update.auto_check_enabled() {
-        return;
-    }
-    let deadline = std::time::Instant::now() + AUTO_CHECK_TIMEOUT;
+/// An in-flight background refresh of the freshness caches (channel manifest
+/// and/or latest skill commit). Started before the main command runs and
+/// joined after it finishes, so the network latency hides behind the
+/// command's own runtime instead of stalling it up front.
+struct LazyRefresh {
+    done: std::sync::mpsc::Receiver<()>,
+    deadline: std::time::Instant,
+}
 
-    if is_channel(&selector.selector) {
-        let cache = manifest_cache_dir(&baml_release::manifest_base_url())
-            .join(format!("{}.json", selector.selector));
-        if should_attempt_refresh(&cache) {
+impl LazyRefresh {
+    /// Wait for the refresh to finish, but never past the shared
+    /// [`AUTO_CHECK_TIMEOUT`] deadline (anchored at refresh start, so a
+    /// command that ran 3s only waits up to 2s more). On timeout the thread
+    /// is abandoned; cache writes are atomic, so dying mid-write is safe.
+    fn wait(self) {
+        let remaining = self
+            .deadline
+            .saturating_duration_since(std::time::Instant::now());
+        let _ = self.done.recv_timeout(remaining);
+    }
+}
+
+/// Kick off a background refresh of any freshness cache older than the TTL,
+/// at most one attempt per TTL window (failures are silent; the marker in
+/// [`should_attempt_refresh`] throttles retries). Returns `None` when
+/// nothing is due or `[update] auto_check = false` — the common case, which
+/// costs only a few mtime checks and lets the caller keep the exec fast path.
+fn start_lazy_refresh(selector: &ResolvedSelector) -> Option<LazyRefresh> {
+    if !read_config().update.auto_check_enabled() {
+        return None;
+    }
+
+    let manifest_due = is_channel(&selector.selector)
+        && should_attempt_refresh(
+            &manifest_cache_dir(&baml_release::manifest_base_url())
+                .join(format!("{}.json", selector.selector)),
+        );
+    let skill_due = should_attempt_refresh(&baml_release::skills::latest_skill_commit_cache_path());
+    if !manifest_due && !skill_due {
+        return None;
+    }
+
+    let deadline = std::time::Instant::now() + AUTO_CHECK_TIMEOUT;
+    let channel = selector.selector.clone();
+    let (sender, done) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        if manifest_due {
             let _ = fetch_manifest_with_timeout(
-                &selector.selector,
+                &channel,
                 None,
                 FetchPolicy::ForceRemote,
                 AUTO_CHECK_TIMEOUT,
             );
         }
-    }
-
-    // The skill refresh gets whatever budget the manifest refresh left over.
-    // When nothing remains, skip without touching the attempt marker so the
-    // next command retries instead of waiting out the full TTL window.
-    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-    if remaining.is_zero() {
-        return;
-    }
-    let cache = baml_release::skills::latest_skill_commit_cache_path();
-    if should_attempt_refresh(&cache) {
-        let _ = refresh_latest_skill_commit(remaining);
-    }
+        if skill_due {
+            // The skill refresh gets whatever budget the manifest refresh
+            // left over.
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if !remaining.is_zero() {
+                let _ = refresh_latest_skill_commit(remaining);
+            }
+        }
+        let _ = sender.send(());
+    });
+    Some(LazyRefresh { done, deadline })
 }
 
 /// A cache file is due for a refresh attempt when both the file itself and
@@ -629,16 +687,17 @@ fn file_older_than(path: &Path, ttl: Duration) -> bool {
 
 /// Passive check of the agent-skill situation, printed on every pass-through
 /// invocation; never touches the network (see [`skill_warning_message`]).
-fn warn_if_skill_outdated() {
+/// Returns the message it printed (if any) so a post-refresh re-check can
+/// avoid printing the same warning twice in one invocation.
+fn warn_if_skill_outdated() -> Option<&'static str> {
     let latest = baml_release::skills::read_cached_latest_skill_commit(
         &baml_release::skills::latest_skill_commit_cache_path(),
     );
     let state = baml_release::skills::read_skills_state(&state_path());
-    if let Some(message) =
-        skill_warning_message(project_has_baml_skills(), state.as_ref(), latest.as_deref())
-    {
-        eprintln!("{}: {message}", warning_prefix());
-    }
+    let message =
+        skill_warning_message(project_has_baml_skills(), state.as_ref(), latest.as_deref())?;
+    eprintln!("{}: {message}", warning_prefix());
+    Some(message)
 }
 
 /// Decide which skill warning (if any) applies:
@@ -700,21 +759,25 @@ fn dir_contains_baml_skill(skills_dir: &Path) -> bool {
 
 /// Passive freshness check for channel selectors, run on every pass-through
 /// invocation. Reads only the locally cached channel manifest (written by
-/// explicit toolchain commands such as `install`, `use`, `update`, `status`);
-/// it never touches the network, and stays silent if no cache exists yet.
-fn warn_if_channel_outdated(selector: &ResolvedSelector, active_version: &str) {
+/// explicit toolchain commands and the background auto-refresh); it never
+/// touches the network, and stays silent if no cache exists yet. Returns
+/// whether it printed, so a post-refresh re-check can avoid duplicating the
+/// warning within one invocation.
+fn warn_if_channel_outdated(selector: &ResolvedSelector, active_version: &str) -> bool {
     if !is_channel(&selector.selector) {
-        return;
+        return false;
     }
     let cache_path = manifest_cache_dir(&baml_release::manifest_base_url())
         .join(format!("{}.json", selector.selector));
-    if cached_manifest_is_newer(&cache_path, active_version) {
-        eprintln!(
-            "{}: Your version of baml for toolchain: {} is outdated. Update it with baml toolchain update.",
-            warning_prefix(),
-            selector.selector
-        );
+    if !cached_manifest_is_newer(&cache_path, active_version) {
+        return false;
     }
+    eprintln!(
+        "{}: Your version of baml for toolchain: {} is outdated. Update it with baml toolchain update.",
+        warning_prefix(),
+        selector.selector
+    );
+    true
 }
 
 fn cached_manifest_is_newer(cache_path: &Path, active_version: &str) -> bool {
@@ -983,7 +1046,7 @@ fn print_skill_status() {
 /// if the installed skill is behind. Best-effort: silent on network failure.
 fn check_skill_freshness_after_toolchain_change() {
     if refresh_latest_skill_commit(AUTO_CHECK_TIMEOUT).is_ok() {
-        warn_if_skill_outdated();
+        let _ = warn_if_skill_outdated();
     }
 }
 
