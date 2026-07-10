@@ -5357,6 +5357,10 @@ impl BexVm {
     /// is the VM's lifetime backstop for non-local exits (for example, a native
     /// panic unwinding the frame before its explicit `Unwatch` executes).
     fn unregister_frame_watches(&mut self, locals_offset: StackIndex) {
+        if self.watched_vars.is_empty() {
+            return;
+        }
+
         let locals_offset = locals_offset.raw();
         let frame_watches: Vec<StackIndex> = self
             .watched_vars
@@ -5365,11 +5369,15 @@ impl BexVm {
             .filter(|index| index.raw() >= locals_offset)
             .collect();
 
-        for local_var_index in frame_watches {
-            self.watched_vars.remove(&local_var_index);
-            self.watch
-                .unregister_root(NodeId::LocalVar(local_var_index));
+        if frame_watches.is_empty() {
+            return;
         }
+
+        for &local_var_index in &frame_watches {
+            self.watched_vars.remove(&local_var_index);
+        }
+        self.watch
+            .unregister_roots(frame_watches.into_iter().map(NodeId::LocalVar));
     }
 
     /// Load the function object for the given frame.

@@ -391,8 +391,22 @@ impl Watch {
     /// teardown operation: callers do not need to unlink the root's binding
     /// separately.
     pub fn unregister_root(&mut self, root: NodeId) {
-        self.roots.remove(&root);
-        self.rebuild_reachability_and_prune();
+        self.unregister_roots([root]);
+    }
+
+    /// Unregisters multiple emittable roots with a single graph rebuild.
+    ///
+    /// Frame teardown can remove several watched locals at once. Removing all
+    /// of their root states before recomputing avoids rebuilding the same
+    /// surviving graph once per local.
+    pub fn unregister_roots(&mut self, roots: impl IntoIterator<Item = NodeId>) {
+        let mut removed_any = false;
+        for root in roots {
+            removed_any |= self.roots.remove(&root).is_some();
+        }
+        if removed_any {
+            self.rebuild_reachability_and_prune();
+        }
     }
 
     /// Unlinks parent.path -> child from the graph.
@@ -982,6 +996,44 @@ mod tests {
         assert_graph_invariants(&watch);
 
         watch.unregister_root(root_b);
+        assert!(watch.children.is_empty());
+        assert!(watch.parents.is_empty());
+        assert!(watch.reachable_from_root.is_empty());
+        assert!(watch.roots_reaching_node.is_empty());
+    }
+
+    #[test]
+    fn unregister_roots_batches_shared_graph_teardown() {
+        let mut watch = Watch::new();
+        let root_a = NodeId::LocalVar(StackIndex::from_raw(0));
+        let root_b = NodeId::LocalVar(StackIndex::from_raw(1));
+        let root_c = NodeId::LocalVar(StackIndex::from_raw(2));
+        let class_ptr = leaf();
+        let shared = leaf();
+        let parent_a = instance(class_ptr, vec![Value::object(shared)]);
+        let parent_b = instance(class_ptr, vec![Value::object(shared)]);
+        let parent_c = instance(class_ptr, vec![Value::object(shared)]);
+
+        for (root, parent) in [(root_a, parent_a), (root_b, parent_b), (root_c, parent_c)] {
+            watch.register_root(root, test_root_state());
+            track_watch_dependencies(&mut watch, root, Path::Binding, parent);
+        }
+
+        watch.unregister_roots([root_a, root_b]);
+
+        assert!(!watch.is_watched(root_a));
+        assert!(!watch.is_watched(root_b));
+        assert!(!watch.is_watched(NodeId::HeapObject(parent_a)));
+        assert!(!watch.is_watched(NodeId::HeapObject(parent_b)));
+        assert!(watch.is_watched(root_c));
+        assert!(watch.is_watched(NodeId::HeapObject(parent_c)));
+        assert_eq!(
+            watch.copy_roots_reaching(NodeId::HeapObject(shared)),
+            vec![root_c]
+        );
+        assert_graph_invariants(&watch);
+
+        watch.unregister_roots([root_c]);
         assert!(watch.children.is_empty());
         assert!(watch.parents.is_empty());
         assert!(watch.reachable_from_root.is_empty());
