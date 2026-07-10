@@ -133,9 +133,7 @@ function Code({ children }: { children: React.ReactNode }) {
 }
 
 function Highlight({ children }: { children: React.ReactNode }) {
-  return (
-    <strong style={{ color: INK, fontWeight: 700 }}>{children}</strong>
-  );
+  return <strong style={{ color: INK, fontWeight: 700 }}>{children}</strong>;
 }
 
 function Aside({ children }: { children: React.ReactNode }) {
@@ -203,13 +201,7 @@ function H3({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Mono({
-  children,
-  caption,
-}: {
-  children: string;
-  caption: string;
-}) {
+function Mono({ children, caption }: { children: string; caption: string }) {
   return (
     <figure style={{ margin: '18px 0 12px' }}>
       <pre
@@ -287,7 +279,7 @@ export function BenchmarkingClient() {
             textTransform: 'uppercase',
           }}
         >
-          Benchmarking · Boundary ML · 2026
+          Benchmarking · Boundary · 2026
         </p>
 
         <h1
@@ -316,11 +308,11 @@ export function BenchmarkingClient() {
         <H2>What is quality code?</H2>
 
         <Aside>
-          At BAML, we have the unique ability to create a specific definition
-          of what “high-quality” BAML code looks like, since we designed BAML.
-          This gives us the insights needed to steer agents toward a quality
-          BAML codebase. Humans tend to avoid writing quality code. Agents
-          aren’t trained on quality code. The problem is the same.
+          At BAML, we have the unique ability to create a specific definition of
+          what “high-quality” BAML code looks like, since we designed BAML. This
+          gives us the insights needed to steer agents toward a quality BAML
+          codebase. Humans tend to avoid writing quality code. Agents aren’t
+          trained on quality code. The problem is the same.
         </Aside>
 
         <P>
@@ -329,11 +321,10 @@ export function BenchmarkingClient() {
             experience.
           </Highlight>{' '}
           Examining <em>how</em> code gets written is an excellent way to
-          understand <em>why</em> certain codebases become slop. Are there
-          weird loopholes? Is it hard to create abstractions? Is code
-          readable? If the language makes the right thing awkward, both humans
-          and agents route around it, and those workarounds accumulate into
-          slop.
+          understand <em>why</em> certain codebases become slop. Are there weird
+          loopholes? Is it hard to create abstractions? Is code readable? If the
+          language makes the right thing awkward, both humans and agents route
+          around it, and those workarounds accumulate into slop.
         </P>
 
         <P>
@@ -349,16 +340,16 @@ export function BenchmarkingClient() {
           <a className="benchmarking-link" href="/atb">
             agent-tries-baml
           </a>{' '}
-          is that we can <Highlight>co-design our language with agents</Highlight>;
-          many of our decisions are <em>data driven</em>. We actively observe
-          the agent developer experience and iterate on the language to make it
-          better.
+          is that we can{' '}
+          <Highlight>co-design our language with agents</Highlight>; many of our
+          decisions are <em>data driven</em>. We actively observe the agent
+          developer experience and iterate on the language to make it better.
         </P>
 
         <P>
           Concretely, it’s an event-driven pipeline that repeatedly turns loose
-          coding agents on hard benchmark tasks (algorithms to be solved in
-          pure BAML, with the latest canary <Code>baml</Code> CLI on{' '}
+          coding agents on hard benchmark tasks (algorithms to be solved in pure
+          BAML, with the latest canary <Code>baml</Code> CLI on{' '}
           <Code>PATH</Code>) and treats every point of friction as a finding:
         </P>
 
@@ -368,25 +359,26 @@ export function BenchmarkingClient() {
 
         <UL>
           <li>
-            <Highlight>The task set is self-generating and deliberately
-            hard.</Highlight>{' '}
+            <Highlight>
+              The task set is self-generating and deliberately hard.
+            </Highlight>{' '}
             An LLM invents fresh algorithm tasks (exact signatures, edge cases,
             concrete input→output expectations) that exercise BAML’s
             general-purpose side: expression functions, classes, the stdlib,
             recursion, control flow.
           </li>
           <li>
-            <Highlight>Self-reports are verified.</Highlight> Each run ends
-            with a <Code>trophy.json</Code>: what worked, what failed, every
-            non-zero <Code>baml</Code> command, every confusing message. Every
-            language finding must include a minimal repro the agent actually
-            ran, and every open bug is independently re-checked against each
-            new nightly build.
+            <Highlight>Self-reports are verified.</Highlight> Each run ends with
+            a <Code>trophy.json</Code>: what worked, what failed, every non-zero{' '}
+            <Code>baml</Code> command, every confusing message. Every language
+            finding must include a minimal repro the agent actually ran, and
+            every open bug is independently re-checked against each new nightly
+            build.
           </li>
           <li>
-            <Highlight>Cold starts are part of the benchmark.</Highlight>{' '}
-            Some runs give the agent nothing installed at all, so the run
-            also measures the onboarding and quickstart experience.
+            <Highlight>Cold starts are part of the benchmark.</Highlight> Some
+            runs give the agent nothing installed at all, so the run also
+            measures the onboarding and quickstart experience.
           </li>
           <li>
             <Highlight>Findings close the loop.</Highlight> Reports from many
@@ -428,10 +420,10 @@ export function BenchmarkingClient() {
         <P>
           What makes things slop? Is it just understandability? Is it “taste”?
           How can we translate that feeling into a set of qualitative and
-          quantitative stats to examine a BAML codebase? We already
-          semi-achieve this by building certain principles into the language
-          itself. But we’re in a unique position: having built BAML, we have
-          a specific eye for what quality BAML code is. Simply, we can ask:
+          quantitative stats to examine a BAML codebase? We already semi-achieve
+          this by building certain principles into the language itself. But
+          we’re in a unique position: having built BAML, we have a specific eye
+          for what quality BAML code is. Simply, we can ask:
         </P>
 
         <Aside>
@@ -442,31 +434,30 @@ export function BenchmarkingClient() {
 
         <P>
           Every language feature we ship comes with a design document (a BEP)
-          that records{' '}
-          <em>why the feature exists and what it was for</em>, including the
-          alternatives we rejected. Adherence to that recorded intent is our
-          definition of quality. We distilled all 50 BEPs into a catalog of
-          144 <Highlight>principle cards</Highlight>: each one states the
-          design intent, the shape adherent code takes, the concrete
+          that records <em>why the feature exists and what it was for</em>,
+          including the alternatives we rejected. Adherence to that recorded
+          intent is our definition of quality. We distilled all 50 BEPs into a
+          catalog of 144 <Highlight>principle cards</Highlight>: each one states
+          the design intent, the shape adherent code takes, the concrete
           anti-patterns, and a routing predicate for which chunks of code it
           applies to.
         </P>
 
         <P>
           Each card is weighted by its BEP’s status. Implemented principles
-          carry full weight; drafts are flagged but never scored; and
-          rejected BEPs are <em>inverted</em>: the rejected design showing up
-          in your code is itself the anti-pattern. 127 of the 144 cards carry
-          scoring weight, and a card can only be violated by code that had
-          the primitive available on its pinned toolchain.
+          carry full weight; drafts are flagged but never scored; and rejected
+          BEPs are <em>inverted</em>: the rejected design showing up in your
+          code is itself the anti-pattern. 127 of the 144 cards carry scoring
+          weight, and a card can only be violated by code that had the primitive
+          available on its pinned toolchain.
         </P>
 
         <H3>The seven cross-cutting themes</H3>
 
         <P>
-          Nearly every card instantiates one of seven themes. Together they
-          are the language’s definition of quality, and the highest-level
-          answer to “what is slop”:
+          Nearly every card instantiates one of seven themes. Together they are
+          the language’s definition of quality, and the highest-level answer to
+          “what is slop”:
         </P>
 
         <OL>
@@ -479,8 +470,9 @@ export function BenchmarkingClient() {
             Slop = simulating an excluded feature with weaker parts.
           </li>
           <li>
-            <Highlight>Policy lives at the caller/config layer, not
-            inline.</Highlight>{' '}
+            <Highlight>
+              Policy lives at the caller/config layer, not inline.
+            </Highlight>{' '}
             Slop = hand-rolled retry loops and per-function hardcoded policy.
           </li>
           <li>
@@ -492,8 +484,9 @@ export function BenchmarkingClient() {
             Slop = ambient behavior and action at a distance.
           </li>
           <li>
-            <Highlight>Strict by default; every relaxation is a named
-            opt-in.</Highlight>{' '}
+            <Highlight>
+              Strict by default; every relaxation is a named opt-in.
+            </Highlight>{' '}
             Slop = broad catch-and-ignore and silent lossy defaults.
           </li>
           <li>
@@ -505,12 +498,11 @@ export function BenchmarkingClient() {
         <H2>Dynamic analysis: the adherence score</H2>
 
         <P>
-          Using the principle catalog, we dynamically analyze BAML codebases
-          for quality. The pipeline is a working, deterministic
-          implementation, written in BAML and packed into a standalone CLI
-          that takes a target project and writes a scored report. It avoids
-          a single giant “review the repo” prompt, because that’s how you get
-          vibes back out:
+          Using the principle catalog, we dynamically analyze BAML codebases for
+          quality. The pipeline is a working, deterministic implementation,
+          written in BAML and packed into a standalone CLI that takes a target
+          project and writes a scored report. It avoids a single giant “review
+          the repo” prompt, because that’s how you get vibes back out:
         </P>
 
         <Mono caption="The adherence pipeline: static analysis where possible, small parallel LLM judgments where not.">
@@ -521,22 +513,21 @@ export function BenchmarkingClient() {
           <li>
             <Highlight>Chunk the codebase</Highlight> into functions, types,
             tests, and files, using the compiler’s AST for exact symbol
-            boundaries. Chunks may
-            overlap on purpose: some principles are about expressions, some
-            about organization.
+            boundaries. Chunks may overlap on purpose: some principles are about
+            expressions, some about organization.
           </li>
           <li>
-            <Highlight>Keep two tables.</Highlight> An interaction table of
-            how chunks relate (<Code>calls</Code>, <Code>returns</Code>,{' '}
-            <Code>contains</Code>, <Code>exercises</Code>…), because most
-            misuse is only visible relationally. And an intention table: one
-            inference per chunk of what the author is trying to achieve, and
-            the mechanism they chose.
+            <Highlight>Keep two tables.</Highlight> An interaction table of how
+            chunks relate (<Code>calls</Code>, <Code>returns</Code>,{' '}
+            <Code>contains</Code>, <Code>exercises</Code>…), because most misuse
+            is only visible relationally. And an intention table: one inference
+            per chunk of what the author is trying to achieve, and the mechanism
+            they chose.
           </li>
           <li>
             <Highlight>Route principles to chunks</Highlight> with a static
-            prefilter plus a semantic gate, producing a worklist of
-            (chunk, principle) pairs.
+            prefilter plus a semantic gate, producing a worklist of (chunk,
+            principle) pairs.
           </li>
           <li>
             <Highlight>Grade each pair on an anchored 1–10 scale</Highlight>,
@@ -545,19 +536,19 @@ export function BenchmarkingClient() {
             evidence quote is missing from the source is neutralized.
           </li>
           <li>
-            <Highlight>Aggregate</Highlight> into a weighted adherence score,
-            a commission score (how well the code does where the design has
-            an opinion), an omission score, a coverage stat, per-principle
-            and per-file tables, and a slop report.
+            <Highlight>Aggregate</Highlight> into a weighted adherence score, a
+            commission score (how well the code does where the design has an
+            opinion), an omission score, a coverage stat, per-principle and
+            per-file tables, and a slop report.
           </li>
         </OL>
 
         <H3>What we mean by intention</H3>
 
         <P>
-          A short description of what the author (usually an agent) is
-          intending to achieve with a decision, kept separate from the
-          mechanism they chose to achieve it:
+          A short description of what the author (usually an agent) is intending
+          to achieve with a decision, kept separate from the mechanism they
+          chose to achieve it:
         </P>
 
         <Mono caption="One row of the intention table. The goal routes principles; the mechanism gets graded.">
@@ -573,43 +564,40 @@ export function BenchmarkingClient() {
         <P>
           Two extra passes keep the number honest. Every low grade gets an
           independent <Highlight>skeptic pass</Highlight>: a second judgment
-          prompted to <em>refute</em> the finding (is there a legitimate
-          reason this chunk can’t use the primitive?), because false
-          accusations of slop destroy the metric’s credibility faster than
-          missed slop does. And a codebase-level{' '}
-          <Highlight>omission scan</Highlight> catches what chunk grading
-          structurally misses: the codebase that never writes a test block,
-          never streams, hand-rolls every enum as string constants. No chunk
-          triggers those principles because the primitive never appears, and
-          those are often the strongest slop signals.
+          prompted to <em>refute</em> the finding (is there a legitimate reason
+          this chunk can’t use the primitive?), because false accusations of
+          slop destroy the metric’s credibility faster than missed slop does.
+          And a codebase-level <Highlight>omission scan</Highlight> catches what
+          chunk grading structurally misses: the codebase that never writes a
+          test block, never streams, hand-rolls every enum as string constants.
+          No chunk triggers those principles because the primitive never
+          appears, and those are often the strongest slop signals.
         </P>
 
         <P>
           Runs are <Highlight>reproducible</Highlight>. The static stages are
-          pure code, and
-          every LLM judgment is stored in a content-addressed cache keyed by
-          the prompt version, the stage, the model tier, and the exact
-          inputs. A completed run replays byte-for-byte; re-running after an
-          edit only re-judges the chunks that changed. Cheap, high-volume
-          stages (intention and routing) run on a fast model tier while
-          grading, refutation, and the omission scan run on a stronger one,
-          and swapping either tier invalidates exactly the affected
-          judgments.
+          pure code, and every LLM judgment is stored in a content-addressed
+          cache keyed by the prompt version, the stage, the model tier, and the
+          exact inputs. A completed run replays byte-for-byte; re-running after
+          an edit only re-judges the chunks that changed. Cheap, high-volume
+          stages (intention and routing) run on a fast model tier while grading,
+          refutation, and the omission scan run on a stronger one, and swapping
+          either tier invalidates exactly the affected judgments.
         </P>
 
         <P>
           The headline number tracks the benchmark over time. The{' '}
           <Highlight>slop report</Highlight> carries the detail: each entry
-          points to a line, names the design principle it ignores, and shows
-          the intended form. That turns the score into a feedback loop for
-          agents, for humans, and for the language design itself.
+          points to a line, names the design principle it ignores, and shows the
+          intended form. That turns the score into a feedback loop for agents,
+          for humans, and for the language design itself.
         </P>
 
         <H2>Closing the loop</H2>
 
         <P>
-          Run the adherence pipeline on every agent-tries-baml solution and
-          the score becomes a per-run metric next to pass/fail; diffs in
+          Run the adherence pipeline on every agent-tries-baml solution and the
+          score becomes a per-run metric next to pass/fail; diffs in
           per-principle scores across model versions show <em>which</em>{' '}
           primitives agents fight. Run it on bamlcode submissions and the
           human-vs-agent delta quantifies “humans and agents want different
@@ -618,9 +606,9 @@ export function BenchmarkingClient() {
         </P>
 
         <P>
-          Ideally, from this score, we demystify what “slop” is. Instead of
-          some feeling of incompleteness, or an incomplete metric like lines
-          of code, it becomes, simply:{' '}
+          Ideally, from this score, we demystify what “slop” is. Instead of some
+          feeling of incompleteness, or an incomplete metric like lines of code,
+          it becomes, simply:{' '}
           <Highlight>
             are we using the tools of a language the way they were intended to
             be used?

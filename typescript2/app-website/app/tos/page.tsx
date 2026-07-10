@@ -1,11 +1,10 @@
-import { Navbar } from '@/components/navbar';
-import { FooterSection } from '@/components/footer-section';
 import Link from 'next/link';
 import { createMetadata } from '@/app/_lib/metadata';
+import { FooterSection } from '@/components/footer-section';
+import { Navbar } from '@/components/navbar';
 
 export const metadata = createMetadata({
-  description:
-    'The terms governing your use of BAML and Boundary ML services.',
+  description: 'The terms governing your use of BAML and Boundary services.',
   eyebrow: 'Legal',
   path: '/tos',
   title: 'Terms of Service',
@@ -27,7 +26,7 @@ export default function TermsOfServicePage() {
               <h2>1. Agreement to Terms</h2>
               <p>
                 By accessing or using the BAML platform and services provided by
-                Boundary ML, Inc. ("Boundary," "we," "us," or "our"), you agree
+                Gloo Chat, Inc. ("Boundary," "we," "us," or "our"), you agree
                 to be bound by these Terms of Service ("Terms"). If you disagree
                 with any part of these terms, you may not access our services.
               </p>
@@ -170,14 +169,14 @@ export default function TermsOfServicePage() {
               <p>For questions about these Terms, please contact us at:</p>
               <ul>
                 <li>Email: legal@boundaryml.com</li>
-                <li>Address: Boundary ML, Inc., San Francisco, CA</li>
+                <li>Address: Gloo Chat, Inc., Seattle, WA</li>
               </ul>
             </div>
 
             <div className="mt-12 pt-8 border-t">
               <p className="text-sm text-muted-foreground">
                 For legal inquiries, please contact us at{' '}
-                <Link href="mailto:legal@boundaryml.com" className="underline">
+                <Link className="underline" href="mailto:legal@boundaryml.com">
                   legal@boundaryml.com
                 </Link>
               </p>

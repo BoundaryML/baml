@@ -25,9 +25,12 @@ export async function GET(request: NextRequest) {
   const slug = params.get('slug');
 
   let eyebrow = params.get('eyebrow') || 'BAML';
-  let title = params.get('title') || 'First-class LLM functions';
+  let title = params.get('title') || 'The programming language for agents';
   let description = params.get('desc') || '';
   let footer = params.get('footer') || 'boundaryml.com';
+  const timeline = params.get('timeline') === '1';
+  // The timeline (homepage) card drops the kicker for a cleaner top.
+  if (timeline) eyebrow = '';
 
   // Blog posts derive their card from the post's frontmatter.
   if (slug) {
@@ -52,8 +55,11 @@ export async function GET(request: NextRequest) {
       eyebrow: clamp(eyebrow, 42),
       footer,
       lamb: lambDataUri(),
+      timeline,
       title: clamp(title, 90),
-      titleFontSize: titleFontSize(title),
+      titleFontSize: timeline
+        ? Math.min(titleFontSize(title), 60)
+        : titleFontSize(title),
     }),
     { ...OG_SIZE, fonts: ogFonts() },
   );

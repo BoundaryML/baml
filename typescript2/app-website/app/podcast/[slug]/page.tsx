@@ -1,15 +1,15 @@
-import { notFound } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
-import { Calendar, Code, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Calendar, Code } from 'lucide-react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { notFound } from 'next/navigation';
+import { ogImagePath, TWITTER_HANDLE } from '@/app/_lib/metadata';
+import { FooterSection } from '@/components/footer-section';
 import { Markdown } from '@/components/magicui/markdown';
 import { Navbar } from '@/components/navbar';
-import { FooterSection } from '@/components/footer-section';
+import { Button } from '@/components/ui/button';
 import { EpisodesCarousel } from '../_components/episodes-carousel';
 import { fetchPodcastEpisodes } from '../podcast-data';
-import type { Metadata } from 'next';
-import { ogImagePath, TWITTER_HANDLE } from '@/app/_lib/metadata';
 
 // Pre-render every episode page at build time so each is served as static HTML
 // from the CDN, never as a serverless function. Dynamic rendering hit this
@@ -146,53 +146,53 @@ export async function generateMetadata({
   });
 
   return {
-    title: fullTitle,
-    description: fullDescription,
     alternates: {
       canonical: episodeUrl,
     },
+    description: fullDescription,
     keywords: [
       ...episode.topics,
       'AI',
       'LLM',
       'BAML',
-      'Boundary ML',
+      'Boundary',
       'Podcast',
     ].join(', '),
     openGraph: {
-      title: cardTitle,
       description: fullDescription,
-      url: episodeUrl,
-      siteName: 'BAML',
-      type: 'article',
-      publishedTime: episode.date,
       images: [
         {
+          alt: `${episode.title} — ai that works`,
+          height: 630,
           url: ogImage,
           width: 1200,
-          height: 630,
-          alt: `${episode.title} — ai that works`,
         },
       ],
+      publishedTime: episode.date,
+      siteName: 'BAML',
+      title: cardTitle,
+      type: 'article',
+      url: episodeUrl,
       videos: videoId
         ? [
             {
-              url: `https://www.youtube.com/watch?v=${videoId}`,
+              height: 720,
               secureUrl: `https://www.youtube.com/watch?v=${videoId}`,
               type: 'text/html',
+              url: `https://www.youtube.com/watch?v=${videoId}`,
               width: 1280,
-              height: 720,
             },
           ]
         : undefined,
     },
+    title: fullTitle,
     twitter: {
       card: 'summary_large_image',
-      title: cardTitle,
+      creator: TWITTER_HANDLE,
       description: fullDescription,
       images: [ogImage],
-      creator: TWITTER_HANDLE,
       site: TWITTER_HANDLE,
+      title: cardTitle,
     },
   };
 }
@@ -228,8 +228,8 @@ export default async function EpisodePage({
       <main className="min-h-screen w-full">
         {/* Back Button */}
         <div className="px-4 sm:px-6 py-4">
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/podcast" className="flex items-center gap-2">
+          <Button asChild size="sm" variant="ghost">
+            <Link className="flex items-center gap-2" href="/podcast">
               <ArrowLeft className="h-4 w-4" />
               Back to Episodes
             </Link>
@@ -266,11 +266,11 @@ export default async function EpisodePage({
               <div className="mb-8">
                 <div className="aspect-video w-full">
                   <iframe
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
                     className="w-full h-full rounded-lg"
                     src={`https://www.youtube.com/embed/${videoId}`}
                     title={episode.title}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
                   />
                 </div>
               </div>
@@ -296,7 +296,7 @@ export default async function EpisodePage({
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-semibold">Project Details</h2>
                   {episode.codeUrl && (
-                    <Button asChild variant="outline" size="sm">
+                    <Button asChild size="sm" variant="outline">
                       <Link href={episode.codeUrl} target="_blank">
                         <Code className="h-4 w-4 mr-2" />
                         Open in GitHub
@@ -310,10 +310,10 @@ export default async function EpisodePage({
                     components={{
                       img: ({ src, alt, ...props }) => (
                         <img
-                          src={src}
                           alt={alt}
                           className="max-w-full h-auto rounded-lg my-6"
                           loading="lazy"
+                          src={src}
                           {...props}
                         />
                       ),
@@ -332,8 +332,8 @@ export default async function EpisodePage({
                 <div className="flex flex-wrap gap-3">
                   {episode.topics.map((topic) => (
                     <span
-                      key={topic}
                       className="text-sm bg-muted px-4 py-2 rounded-full"
+                      key={topic}
                     >
                       {topic}
                     </span>
@@ -345,7 +345,7 @@ export default async function EpisodePage({
             {/* Actions */}
             <div className="flex items-center gap-4 pt-8 border-t">
               {episode.codeUrl && !isUpcoming && (
-                <Button asChild variant="outline" size="lg">
+                <Button asChild size="lg" variant="outline">
                   <Link href={episode.codeUrl} target="_blank">
                     <Code className="h-5 w-5 mr-2" />
                     Demo Code
@@ -361,7 +361,7 @@ export default async function EpisodePage({
                 </Button>
               )}
               {episode.youtubeUrl && !isUpcoming && (
-                <Button asChild variant="outline" size="lg">
+                <Button asChild size="lg" variant="outline">
                   <Link href={episode.youtubeUrl} target="_blank">
                     Watch on YouTube
                   </Link>
@@ -374,7 +374,7 @@ export default async function EpisodePage({
         {/* Episodes Carousel */}
         <div className="px-4 sm:px-6 py-12 bg-muted/30">
           <div className="max-w-4xl mx-auto">
-            <EpisodesCarousel episodes={episodes} currentSlug={episode.slug} />
+            <EpisodesCarousel currentSlug={episode.slug} episodes={episodes} />
           </div>
         </div>
       </main>

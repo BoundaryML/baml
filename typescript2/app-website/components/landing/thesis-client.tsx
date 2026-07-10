@@ -328,7 +328,7 @@ export function ThesisClient() {
             textTransform: 'uppercase',
           }}
         >
-          Thesis · Boundary ML · 2026
+          Thesis · Boundary · 2026
         </p>
 
         <h1

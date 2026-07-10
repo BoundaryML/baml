@@ -4,7 +4,7 @@ import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 
 export const metadata = createMetadata({
-  description: 'How Boundary ML collects, uses, and protects your data.',
+  description: 'How Boundary collects, uses, and protects your data.',
   eyebrow: 'Legal',
   path: '/privacy-policy',
   title: 'Privacy Policy',
@@ -25,7 +25,7 @@ export default function PrivacyPolicyPage() {
             <div className="prose prose-gray dark:prose-invert max-w-none">
               <h2>1. Introduction</h2>
               <p>
-                Boundary ML, Inc. ("Boundary," "we," "us," or "our") is
+                Gloo Chat, Inc. ("Boundary," "we," "us," or "our") is
                 committed to protecting your privacy. This Privacy Policy
                 explains how we collect, use, disclose, and safeguard your
                 information when you use our BAML platform, website, and
@@ -137,7 +137,7 @@ export default function PrivacyPolicyPage() {
               </p>
               <ul>
                 <li>Email: privacy@boundaryml.com</li>
-                <li>Address: Boundary ML, Inc., San Francisco, CA</li>
+                <li>Address: Gloo Chat, Inc., Seattle, WA</li>
               </ul>
 
               <h2>11. Additional Rights for Specific Regions</h2>

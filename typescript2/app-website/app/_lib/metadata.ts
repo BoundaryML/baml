@@ -21,11 +21,14 @@ export function ogImagePath(opts: {
   title: string;
   eyebrow?: string;
   description?: string;
+  /** Render the horizontal computing-eras timeline (homepage card). */
+  timeline?: boolean;
 }): string {
   const search = new URLSearchParams();
   search.set('title', opts.title);
   if (opts.eyebrow) search.set('eyebrow', opts.eyebrow);
   if (opts.description) search.set('desc', opts.description);
+  if (opts.timeline) search.set('timeline', '1');
   return `/api/og?${search.toString()}`;
 }
 

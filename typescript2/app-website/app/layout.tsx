@@ -39,11 +39,13 @@ const baseUrl =
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : 'http://localhost:3000');
 const homeDescription =
-  'BAML is a statically-typed, expression-oriented language with first-class LLM functions.';
+  'BAML is a programming language for agents. Python and TypeScript were built for human productivity. BAML was designed with a different goal in mind.';
+// The homepage card shows the eras timeline with its own short subtitle; the
+// meta description above does the selling in search results and link unfurls.
 const homeOgImage = ogImagePath({
-  description: homeDescription,
-  eyebrow: 'Boundary ML',
-  title: 'First-class LLM functions',
+  description: 'New paradigm, new language.',
+  timeline: true,
+  title: 'The programming language for agents',
 });
 
 export const metadata: Metadata = {
@@ -62,7 +64,7 @@ export const metadata: Metadata = {
     description: homeDescription,
     images: [
       {
-        alt: 'BAML — First-class LLM functions',
+        alt: 'BAML — the programming language for agents',
         height: 630,
         url: homeOgImage,
         width: 1200,
@@ -70,12 +72,12 @@ export const metadata: Metadata = {
     ],
     locale: 'en_US',
     siteName: 'BAML',
-    title: 'BAML — First-class LLM functions',
+    title: 'BAML — the programming language for agents',
     type: 'website',
     url: baseUrl,
   },
   title: {
-    default: 'BAML — First-class LLM functions',
+    default: 'BAML — the programming language for agents',
     template: '%s | BAML',
   },
   twitter: {
@@ -84,7 +86,7 @@ export const metadata: Metadata = {
     description: homeDescription,
     images: [homeOgImage],
     site: TWITTER_HANDLE,
-    title: 'BAML — First-class LLM functions',
+    title: 'BAML — the programming language for agents',
   },
 };
 
