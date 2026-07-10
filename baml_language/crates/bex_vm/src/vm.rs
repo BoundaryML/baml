@@ -568,6 +568,39 @@ mod tests {
     }
 
     #[test]
+    fn init_spread_without_watch_does_not_populate_watch_graph() {
+        let mut vm = test_vm(vec![test_class(1)]);
+        let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        let old_value = vm.tlab.alloc_string("old".to_string());
+        let new_value = vm.tlab.alloc_string("new".to_string());
+        let source_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::object(new_value)],
+        )));
+        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::object(old_value)],
+        )));
+
+        let result = vm
+            .init_spread(
+                Value::object(dest_ptr),
+                Value::object(source_ptr),
+                &FieldCopySet {
+                    fields: vec![FieldCopy { source: 0, dest: 0 }],
+                },
+            )
+            .expect("spread should succeed");
+
+        assert!(result.is_none());
+        let mut watch_roots = Vec::new();
+        vm.watch.collect_roots(&mut watch_roots);
+        assert!(watch_roots.is_empty());
+    }
+
+    #[test]
     fn trampoline_function_survives_gc_while_frame_is_active() {
         let (mut vm, native_ptr) = vm_with_native_entry();
 
@@ -2464,6 +2497,8 @@ impl BexVm {
         // stack and call stack should be empty.
         self.stack.clear();
         self.frames.clear();
+        self.watched_vars.clear();
+        self.watch = Watch::new();
         self.pending_call_captures.clear();
         self.seen_throw_values.clear();
         self.thrown_value_causes.clear();
@@ -3779,6 +3814,7 @@ impl BexVm {
             let popped = self.frames.pop().expect("frame stack is not empty");
             match popped {
                 Frame::Bytecode(bf) => {
+                    self.unregister_frame_watches(bf.locals_offset);
                     self.stack.drain(bf.locals_offset..);
                     // Unwound frames close with the unwind status (Errored /
                     // Cancelled / Exited by thrown class); native frames emit
@@ -5070,6 +5106,10 @@ impl BexVm {
         old_value: Value,
         new_value: Value,
     ) {
+        if !self.watch.is_watched(watched_node) {
+            return;
+        }
+
         // Deep-copy previous root values so the notification filter can diff
         // old vs new. Two-pass because `baml_deep_copy` needs `&mut self`,
         // which conflicts with borrowing `self.watch` for root_state.
@@ -5099,6 +5139,10 @@ impl BexVm {
         old_value: Value,
         new_value: Value,
     ) {
+        if !self.watch.is_watched(watched_node) {
+            return;
+        }
+
         if let Some(old) = old_value.as_object_ptr() {
             self.watch
                 .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
@@ -5106,6 +5150,28 @@ impl BexVm {
 
         if let Some(new) = new_value.as_object_ptr() {
             watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
+        }
+    }
+
+    /// Removes Watch roots owned by the bytecode frame whose locals begin at
+    /// `locals_offset`.
+    ///
+    /// MIR normally emits `Unwatch` before a watched local leaves scope. This
+    /// is the VM's lifetime backstop for non-local exits (for example, a native
+    /// panic unwinding the frame before its explicit `Unwatch` executes).
+    fn unregister_frame_watches(&mut self, locals_offset: StackIndex) {
+        let locals_offset = locals_offset.raw();
+        let frame_watches: Vec<StackIndex> = self
+            .watched_vars
+            .keys()
+            .copied()
+            .filter(|index| index.raw() >= locals_offset)
+            .collect();
+
+        for local_var_index in frame_watches {
+            self.watched_vars.remove(&local_var_index);
+            self.watch
+                .unregister_root(NodeId::LocalVar(local_var_index));
         }
     }
 
@@ -6455,14 +6521,6 @@ impl BexVm {
                     if self.watched_vars.remove(&local_var_index).is_some() {
                         let var_node = NodeId::LocalVar(local_var_index);
                         self.watch.unregister_root(var_node);
-                        let value = self.stack[local_var_index];
-                        if let Some(object_index) = value.as_object_ptr() {
-                            self.watch.unlink_edge(
-                                var_node,
-                                watch::Path::Binding,
-                                NodeId::HeapObject(object_index),
-                            );
-                        }
                     }
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
@@ -6849,6 +6907,7 @@ impl BexVm {
                         capture_mask,
                         result,
                     );
+                    self.unregister_frame_watches(locals_offset);
                     self.stack.drain(locals_offset..);
                     self.stack.push(result);
                     self.frames.pop();
@@ -7697,42 +7756,31 @@ impl BexVm {
                     };
                     let new_value_u8: Option<u8> =
                         new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
-                    // Acquire the array's write lock for bounds-check + old
-                    // read + new write atomically. Guard drops at end of
-                    // inner scope before any `&mut self` ops. A negative index
-                    // counts from the end; the resolved offset flows out for the
-                    // watch path below, while an out-of-range index reports the
-                    // original index in the panic.
+                    // Resolve the index and copy the old value before mutating.
+                    // Watch must snapshot affected roots while the container
+                    // still has its pre-assignment value.
                     let store_result: Result<(Value, usize), (i64, usize)> = {
                         match self.get_object(array_object_index) {
                             Object::Array(arr) => {
-                                let mut guard = arr.lock_mut();
+                                let guard = arr.lock();
                                 let len = guard.len();
                                 match crate::array_index::resolve_index(i, len) {
-                                    Some(idx) => {
-                                        let old = guard[idx];
-                                        guard[idx] = new_value;
-                                        Ok((old, idx))
-                                    }
+                                    Some(idx) => Ok((guard[idx], idx)),
                                     None => Err((i, len)),
                                 }
                             }
                             Object::Uint8Array(bytes) => {
-                                let Some(byte_v) = new_value_u8 else {
+                                let Some(_byte_v) = new_value_u8 else {
                                     return Err(VmInternalError::TypeError {
                                         expected: bex_vm_types::types::Type::Int,
                                         got: self.type_of(&new_value),
                                     }
                                     .into());
                                 };
-                                let mut guard = bytes.lock_mut();
+                                let guard = bytes.lock();
                                 let len = guard.len();
                                 match crate::array_index::resolve_index(i, len) {
-                                    Some(idx) => {
-                                        let old = Value::int(i64::from(guard[idx]));
-                                        guard[idx] = byte_v;
-                                        Ok((old, idx))
-                                    }
+                                    Some(idx) => Ok((Value::int(i64::from(guard[idx])), idx)),
                                     None => Err((i, len)),
                                 }
                             }
@@ -7764,6 +7812,14 @@ impl BexVm {
                         new_value,
                     );
                     self.heap.write_barrier(array_object_index, new_value);
+                    match self.get_object(array_object_index) {
+                        Object::Array(arr) => arr.lock_mut()[index] = new_value,
+                        Object::Uint8Array(bytes) => {
+                            bytes.lock_mut()[index] =
+                                new_value_u8.expect("Uint8Array value validated above");
+                        }
+                        _ => unreachable!("array object already type-checked above"),
+                    }
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
                         return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
@@ -7779,15 +7835,13 @@ impl BexVm {
                     let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?.clone();
                     let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                    // Take the map's write lock for capture-old + insert-new
-                    // atomically. Guard drops before any `&mut self` ops.
+                    // Copy the old value before mutating so Watch snapshots the
+                    // pre-assignment root value.
                     let store_result: Result<Value, ObjectType> = {
                         match self.get_object(map_index) {
                             Object::Map(map) => {
-                                let mut guard = map.lock_mut();
-                                let old = guard.get(&key).copied().unwrap_or(Value::NULL);
-                                guard.insert(key.clone(), new_value);
-                                Ok(old)
+                                let guard = map.lock();
+                                Ok(guard.get(&key).copied().unwrap_or(Value::NULL))
                             }
                             other => Err(ObjectType::of(other)),
                         }
@@ -7810,6 +7864,10 @@ impl BexVm {
                         new_value,
                     );
                     self.heap.write_barrier(map_index, new_value);
+                    let Object::Map(map) = self.get_object(map_index) else {
+                        unreachable!("map object already type-checked above");
+                    };
+                    map.lock_mut().insert(key, new_value);
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
                         return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
