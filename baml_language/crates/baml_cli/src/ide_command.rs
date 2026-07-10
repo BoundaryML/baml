@@ -1,7 +1,7 @@
 use std::{
     env,
     ffi::OsString,
-    io::Write,
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -29,8 +29,11 @@ pub(crate) struct IdeInstallArgs {
     #[arg(long)]
     pub cursor: bool,
     /// Install the active toolchain's BAML VSIX into VS Code.
-    #[arg(long, conflicts_with = "cursor")]
+    #[arg(long)]
     pub code: bool,
+    /// Copy the active toolchain's BAML VSIX into a directory for manual install.
+    #[arg(long, value_name = "PATH")]
+    pub path: Option<PathBuf>,
 }
 
 impl IdeArgs {
@@ -44,6 +47,20 @@ impl IdeArgs {
 impl IdeInstallArgs {
     pub fn run(&self) -> Result<ExitCode> {
         let vsix = active_toolchain_vsix()?;
+        if let Some(dir) = &self.path {
+            fs::create_dir_all(dir)
+                .with_context(|| format!("failed to create {}", dir.display()))?;
+            let dest = dir.join("baml-vscode.vsix");
+            fs::copy(&vsix, &dest).with_context(|| {
+                format!("failed to copy {} to {}", vsix.display(), dest.display())
+            })?;
+            #[allow(clippy::print_stdout)]
+            {
+                println!("extracted BAML IDE extension to {}", dest.display());
+            }
+            return Ok(ExitCode::Success);
+        }
+
         let editor = self.resolve_editor()?;
         let status = Command::new(&editor)
             .arg("--install-extension")
@@ -59,20 +76,21 @@ impl IdeInstallArgs {
             );
         }
 
-        writeln!(
-            std::io::stdout(),
-            "installed BAML IDE extension from {}",
-            vsix.display()
-        )?;
+        #[allow(clippy::print_stdout)]
+        {
+            println!("installed BAML IDE extension from {}", vsix.display());
+        }
         Ok(ExitCode::Success)
     }
 
     fn resolve_editor(&self) -> Result<OsString> {
         if self.cursor {
-            return Ok(OsString::from("cursor"));
+            return command_on_path("cursor")
+                .ok_or_else(|| anyhow!("Cursor CLI `cursor` was not found on PATH"));
         }
         if self.code {
-            return Ok(OsString::from("code"));
+            return command_on_path("code")
+                .ok_or_else(|| anyhow!("VS Code CLI `code` was not found on PATH"));
         }
 
         let cursor = command_on_path("cursor");
@@ -111,16 +129,16 @@ fn active_toolchain_vsix() -> Result<PathBuf> {
 fn command_on_path(command: &str) -> Option<OsString> {
     let path = env::var_os("PATH")?;
     for dir in env::split_paths(&path) {
-        let candidate = dir.join(command);
-        if candidate.exists() {
-            return Some(OsString::from(command));
-        }
         #[cfg(windows)]
         {
             let candidate = dir.join(format!("{command}.cmd"));
             if candidate.exists() {
                 return Some(OsString::from(format!("{command}.cmd")));
             }
+        }
+        let candidate = dir.join(command);
+        if candidate.exists() {
+            return Some(OsString::from(command));
         }
     }
     None

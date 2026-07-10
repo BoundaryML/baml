@@ -687,13 +687,30 @@ pub fn value_to_serde(vm: &BexVm, v: Value) -> serde_json::Value {
                 serde_json::Value::Object(entries)
             }
             Object::Bigint(bi) => serde_json::Value::String(bi.to_string()),
+            // An enum variant renders as its variant-name string, matching the
+            // typed (`ty_value_to_serde`) and structural (`render_to_serde`)
+            // walkers. This is reached when a variant flows through an arm that
+            // delegates to the untyped converter — e.g. `ty_value_to_serde`'s
+            // `RuntimeTy::Union` arm for a field typed `E | ...` (including the
+            // optional enum `E?` == `E | null`). Without this, such fields
+            // serialized as `null` (B-728).
+            Object::Variant(var) => {
+                let (enm, index) = (var.enm, var.index);
+                match vm.get_object(enm) {
+                    Object::Enum(e) => e
+                        .variants
+                        .get(index)
+                        .map(|v| serde_json::Value::String(v.name.clone()))
+                        .unwrap_or(serde_json::Value::Null),
+                    _ => serde_json::Value::Null,
+                }
+            }
             Object::Instance(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
             | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Variant(_)
             | Object::Function(_)
             | Object::Future(_)
             | Object::UnscheduledFuture(_)

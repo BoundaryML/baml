@@ -63,158 +63,164 @@ function operators.$init_test_ns_operators_operators(registry: testing.TestColle
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "unary_negate"
+    load_const "bitwise_not"
     make_closure .<lambda($init_test_ns_operators_operators, 10)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "unary_not"
+    load_const "unary_negate"
     make_closure .<lambda($init_test_ns_operators_operators, 11)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "negative_int_in_let"
+    load_const "unary_not"
     make_closure .<lambda($init_test_ns_operators_operators, 12)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "negative_int_arithmetic"
+    load_const "negative_int_in_let"
     make_closure .<lambda($init_test_ns_operators_operators, 13)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "negative_int_comparison"
+    load_const "negative_int_arithmetic"
     make_closure .<lambda($init_test_ns_operators_operators, 14)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "negative_float_in_let"
+    load_const "negative_int_comparison"
     make_closure .<lambda($init_test_ns_operators_operators, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "double_negation"
+    load_const "negative_float_in_let"
     make_closure .<lambda($init_test_ns_operators_operators, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "double_negation_variable"
+    load_const "double_negation"
     make_closure .<lambda($init_test_ns_operators_operators, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "equal"
+    load_const "double_negation_variable"
     make_closure .<lambda($init_test_ns_operators_operators, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "not_equal"
+    load_const "equal"
     make_closure .<lambda($init_test_ns_operators_operators, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "greater_than"
+    load_const "not_equal"
     make_closure .<lambda($init_test_ns_operators_operators, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "greater_than_or_equal"
+    load_const "greater_than"
     make_closure .<lambda($init_test_ns_operators_operators, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "less_than"
+    load_const "greater_than_or_equal"
     make_closure .<lambda($init_test_ns_operators_operators, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "less_than_or_equal"
+    load_const "less_than"
     make_closure .<lambda($init_test_ns_operators_operators, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "logical_and"
+    load_const "less_than_or_equal"
     make_closure .<lambda($init_test_ns_operators_operators, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "logical_or"
+    load_const "logical_and"
     make_closure .<lambda($init_test_ns_operators_operators, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "short_circuit_and"
+    load_const "logical_or"
     make_closure .<lambda($init_test_ns_operators_operators, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "short_circuit_or"
+    load_const "short_circuit_and"
     make_closure .<lambda($init_test_ns_operators_operators, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "assign_add"
+    load_const "short_circuit_or"
     make_closure .<lambda($init_test_ns_operators_operators, 28)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "assign_subtract"
+    load_const "assign_add"
     make_closure .<lambda($init_test_ns_operators_operators, 29)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "assign_multiply"
+    load_const "assign_subtract"
     make_closure .<lambda($init_test_ns_operators_operators, 30)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "assign_divide"
+    load_const "assign_multiply"
     make_closure .<lambda($init_test_ns_operators_operators, 31)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "assign_modulo"
+    load_const "assign_divide"
     make_closure .<lambda($init_test_ns_operators_operators, 32)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "assign_bitwise_and"
+    load_const "assign_modulo"
     make_closure .<lambda($init_test_ns_operators_operators, 33)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "assign_bitwise_or"
+    load_const "assign_bitwise_and"
     make_closure .<lambda($init_test_ns_operators_operators, 34)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "assign_bitwise_xor"
+    load_const "assign_bitwise_or"
     make_closure .<lambda($init_test_ns_operators_operators, 35)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "assign_bitwise_xor"
+    make_closure .<lambda($init_test_ns_operators_operators, 36)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

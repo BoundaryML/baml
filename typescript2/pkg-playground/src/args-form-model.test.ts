@@ -7,7 +7,7 @@ import {
   enumVariantOf,
   isEnumMarkerValue,
   isRawJsonSchema,
-  normalizeArgs,
+  reconcileArgs,
   resolveRef,
   schemaLabel,
   typeLookupFrom,
@@ -37,6 +37,16 @@ const types: Record<string, TypeSchema> = {
       {
         name: 'children',
         schema: { type: 'list', item: { type: 'ref', name: 'user.Tree' } },
+      },
+    ],
+  },
+  'user.RequiredNode': {
+    kind: 'class',
+    fields: [
+      { name: 'value', schema: { type: 'int' } },
+      {
+        name: 'next',
+        schema: { type: 'ref', name: 'user.RequiredNode' },
       },
     ],
   },
@@ -121,13 +131,13 @@ describe('defaultValueForSchema', () => {
     ).toEqual({});
   });
 
-  it('seeds a class one level deep: marker + field defaults, nested class refs marker-only', () => {
+  it('seeds required nested classes with every displayed field default', () => {
     expect(defaultValueForSchema(personRef, lookup)).toEqual({
       $baml: { type: 'user.Person' },
       name: '',
       age: null,
       color: { $baml: { enum: 'user.Color', value: 'Red' } },
-      nested: { $baml: { type: 'user.Nested' } },
+      nested: { $baml: { type: 'user.Nested' }, x: 0 },
     });
   });
 
@@ -308,7 +318,7 @@ describe('isRawJsonSchema', () => {
   });
 });
 
-describe('normalizeArgs', () => {
+describe('reconcileArgs', () => {
   const params: ParamSchema[] = [
     { name: 'c', hasDefault: false, schema: colorRef },
     { name: 'p', hasDefault: false, schema: personRef },
@@ -320,28 +330,34 @@ describe('normalizeArgs', () => {
   ];
 
   it('rewrites bare enum strings that name a valid variant', () => {
-    expect(normalizeArgs({ c: 'Red' }, params, lookup)).toEqual({
+    expect(reconcileArgs({ c: 'Red' }, [params[0]], lookup)).toEqual({
       c: enumValue('user.Color', 'Red'),
     });
     // Inside containers too.
-    expect(normalizeArgs({ list: ['Red', 'Blue'] }, params, lookup)).toEqual({
-      list: [enumValue('user.Color', 'Red'), enumValue('user.Color', 'Blue')],
+    expect(reconcileArgs({ list: ['Red', 'Blue'] }, [params[2]], lookup))
+      .toEqual({
+        list: [enumValue('user.Color', 'Red'), enumValue('user.Color', 'Blue')],
+      });
+    // An incompatible stale value resets to the schema default.
+    expect(reconcileArgs({ c: 'Magenta' }, [params[0]], lookup)).toEqual({
+      c: enumValue('user.Color', 'Red'),
     });
-    // Not when the string is not a variant.
-    const invalid = { c: 'Magenta' };
-    expect(normalizeArgs(invalid, params, lookup)).toBe(invalid);
   });
 
   it('injects marker and missing-field defaults into markerless class objects', () => {
     expect(
-      normalizeArgs({ p: { name: 'Ada', color: 'Green' } }, params, lookup),
+      reconcileArgs(
+        { p: { name: 'Ada', color: 'Green' } },
+        [params[1]],
+        lookup,
+      ),
     ).toEqual({
       p: {
         $baml: { type: 'user.Person' },
         name: 'Ada',
         color: enumValue('user.Color', 'Green'),
         age: null,
-        nested: { $baml: { type: 'user.Nested' } },
+        nested: { $baml: { type: 'user.Nested' }, x: 0 },
       },
     });
   });
@@ -350,29 +366,118 @@ describe('normalizeArgs', () => {
     // Raw editing can leave `$baml: 5` behind; spreading it over the marker
     // would silently keep the value untyped while widgets render it typed.
     expect(
-      normalizeArgs({ p: { $baml: 5, name: 'x' } }, params, lookup),
+      reconcileArgs(
+        { p: { $baml: 5, name: 'x' } },
+        [params[1]],
+        lookup,
+      ),
     ).toMatchObject({
       p: { $baml: { type: 'user.Person' }, name: 'x' },
     });
   });
 
-  it('leaves marker-carrying objects structurally alone (normalizes present fields only)', () => {
+  it('fills marker-carrying objects and is idempotent once complete', () => {
     const args = {
       p: { $baml: { type: 'user.Person' }, color: 'Blue' },
     };
-    expect(normalizeArgs(args, params, lookup)).toEqual({
-      p: { $baml: { type: 'user.Person' }, color: enumValue('user.Color', 'Blue') },
+    expect(reconcileArgs(args, [params[1]], lookup)).toEqual({
+      p: {
+        $baml: { type: 'user.Person' },
+        name: '',
+        age: null,
+        color: enumValue('user.Color', 'Blue'),
+        nested: { $baml: { type: 'user.Nested' }, x: 0 },
+      },
     });
     // Idempotent: already-typed input comes back by reference.
     const typed = {
-      c: enumValue('user.Color', 'Red'),
-      p: { $baml: { type: 'user.Person' }, name: 'Ada' },
+      p: {
+        $baml: { type: 'user.Person' },
+        name: 'Ada',
+        age: null,
+        color: enumValue('user.Color', 'Red'),
+        nested: { $baml: { type: 'user.Nested' }, x: 0 },
+      },
     };
-    expect(normalizeArgs(typed, params, lookup)).toBe(typed);
+    expect(reconcileArgs(typed, [params[1]], lookup)).toBe(typed);
   });
 
   it('preserves surplus keys and values without schemas', () => {
     const args = { c: enumValue('user.Color', 'Red'), extra: { a: 1 } };
-    expect(normalizeArgs(args, params, lookup)).toBe(args);
+    expect(reconcileArgs(args, [params[0]], lookup)).toBe(args);
+  });
+
+  it('adds required params while leaving declared defaults omitted', () => {
+    const requiredAndDefaulted: ParamSchema[] = [
+      { name: 'required', hasDefault: false, schema: { type: 'int' } },
+      { name: 'declared', hasDefault: true, schema: { type: 'bool' } },
+    ];
+    expect(reconcileArgs({}, requiredAndDefaulted, lookup)).toEqual({
+      required: 0,
+    });
+  });
+
+  it('migrates compatible values when a class gains a required field', () => {
+    const migratedLookup = typeLookupFrom({
+      'user.Person': {
+        kind: 'class',
+        fields: [
+          { name: 'name', schema: { type: 'string' } },
+          { name: 'active', schema: { type: 'bool' } },
+          { name: 'age', schema: { type: 'int' } },
+        ],
+      },
+    });
+    expect(
+      reconcileArgs(
+        {
+          p: {
+            $baml: { type: 'user.Person' },
+            name: 'Ada',
+            active: false,
+          },
+        },
+        [{ name: 'p', hasDefault: false, schema: personRef }],
+        migratedLookup,
+      ),
+    ).toEqual({
+      p: {
+        $baml: { type: 'user.Person' },
+        name: 'Ada',
+        active: false,
+        age: 0,
+      },
+    });
+  });
+
+  it('resets a value that no longer matches the parameter type', () => {
+    expect(
+      reconcileArgs(
+        { p: { $baml: { type: 'user.Person' }, name: 'Ada' } },
+        [{ name: 'p', hasDefault: false, schema: { type: 'int' } }],
+        lookup,
+      ),
+    ).toEqual({ p: 0 });
+  });
+
+  it('does not grow a required recursive cut point on repeated reconciliation', () => {
+    const node = defaultValueForSchema(
+      { type: 'ref', name: 'user.RequiredNode' },
+      lookup,
+    );
+    const args = { node };
+    expect(
+      reconcileArgs(
+        args,
+        [
+          {
+            name: 'node',
+            hasDefault: false,
+            schema: { type: 'ref', name: 'user.RequiredNode' },
+          },
+        ],
+        lookup,
+      ),
+    ).toBe(args);
   });
 });
