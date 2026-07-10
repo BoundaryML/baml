@@ -22,12 +22,21 @@ class Bad {
 
 //----
 //- diagnostics
-// error: class `Bad` implements `Person`, which requires `Named`, `Aged`, but `Bad` does not implement them
+// error: implementing `Person` also requires implementing `Named`
 //     ╭─[ interface_error_missing_required_interface.baml:19:16 ]
 //     │
 //  19 │     implements Person {
 //     │                ───┬──
-//     │                   ╰──── requires `Named`, `Aged`
+//     │                   ╰──── implementing `Person` also requires implementing `Named`
+//     │
+//     │ Note: Error code: E0125
+// ────╯
+// error: implementing `Person` also requires implementing `Aged`
+//     ╭─[ interface_error_missing_required_interface.baml:19:16 ]
+//     │
+//  19 │     implements Person {
+//     │                ───┬──
+//     │                   ╰──── implementing `Person` also requires implementing `Aged`
 //     │
 //     │ Note: Error code: E0125
 // ────╯

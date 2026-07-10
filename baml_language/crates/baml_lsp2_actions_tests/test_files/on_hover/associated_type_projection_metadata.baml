@@ -1,6 +1,6 @@
 interface PublicIdentity {
   type Key
-  key: Key
+  key: Self.Key
 }
 
 class AccountRecord {
@@ -14,7 +14,7 @@ class AccountRecord {
 
 interface Repository {
   type Record
-  function find(self) -> Self.Record
+  function find(self) -> Self.Record throws never
 }
 
 class UserRecord {

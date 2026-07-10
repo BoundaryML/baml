@@ -11,4 +11,12 @@ function OrPatternBindsCommon(r: Ok | Warn | Err) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// error: type `Ok | Warn` has no member `value`: its members implement no common interface that declares `value`
+//    ╭─[ let_else_let_else_or_pattern.baml:9:5 ]
+//    │
+//  9 │   s.value
+//    │     ──┬──
+//    │       ╰──── type `Ok | Warn` has no member `value`: its members implement no common interface that declares `value`
+//    │
+//    │ Note: Error code: E0007
+// ───╯

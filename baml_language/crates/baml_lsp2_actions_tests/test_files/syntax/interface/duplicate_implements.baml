@@ -1,7 +1,7 @@
 // Two `implements Animal` blocks on the same class — only one is allowed.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {
@@ -20,16 +20,18 @@ class Dog {
 
 //----
 //- diagnostics
-// error: class `Dog` has multiple `implements Animal` blocks; a class may implement each interface at most once
+// error: overlapping interface implementations for the same receiver/interface
 //     ╭─[ interface_duplicate_implements.baml:14:14 ]
-//     │
-//   8 │   implements Animal {
-//     │              ───┬──
-//     │                 ╰──── first `implements` block here
 //     │
 //  14 │   implements Animal {
 //     │              ───┬──
-//     │                 ╰──── duplicate `implements` block
+//     │                 ╰──── overlapping interface implementations for the same receiver/interface
 //     │
-//     │ Note: Error code: E0114
+//     ├─[ interface_duplicate_implements.baml:14:14 ]
+//     │
+//   8 │   implements Animal {
+//     │              ───┬──
+//     │                 ╰──── conflicting implementation is here
+//     │
+//     │ Note: Error code: E0132
 // ────╯

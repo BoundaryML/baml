@@ -47,12 +47,12 @@ function wrong_error_binding() -> baml.iter.Iterator<Item = int, Error = string>
 //     │
 //     │ Note: Error code: E0001
 // ────╯
-// error: type mismatch: expected baml.iter.Iterable<Item = int, Error = E3>, got int
+// error: type mismatch: expected baml.iter.Iterable<Error = E3, Item = int>, got int
 //     ╭─[ iterator_stdlib_iterator_errors.baml:14:3 ]
 //     │
 //  14 │   baml.iter.flatten(baml.iter.ArrayIterator.new([1, 2, 3]))
 //     │   ────────────────────────────┬────────────────────────────
-//     │                               ╰────────────────────────────── type mismatch: expected baml.iter.Iterable<Item = int, Error = E3>, got int
+//     │                               ╰────────────────────────────── type mismatch: expected baml.iter.Iterable<Error = E3, Item = int>, got int
 //     │
 //     │ Note: Error code: E0001
 // ────╯
