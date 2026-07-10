@@ -1081,7 +1081,7 @@ class AccountRecord {
 
 function get_public_key() -> (AccountRecord as PublicIdentity).Key {
   let account = AccountRecord { public_key: "visible-key" }
-  return account.as<PublicIdentity>.key
+  return account.as<PublicIdentity<Key = string>>.key
 }
 "#,
     );
@@ -1165,7 +1165,7 @@ interface BoxLike {
 }
 
 function get_public_key(account: AccountRecord) -> (AccountRecord as PublicIdentity).Key {
-  return account.as<PublicIdentity>.key
+  return account.as<PublicIdentity<Key = string>>.key
 }
 
 function read_item<T extends BoxLike>(box: T) -> T.Item {

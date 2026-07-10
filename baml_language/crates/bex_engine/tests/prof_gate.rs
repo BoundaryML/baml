@@ -645,6 +645,7 @@ async fn call_output_capture_attributes_repeated_enabled_calls() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "Exercises call-site `$id = ...`, which is now a compile error (settled ruling, covered by the runtime_id_misuse diagnostic fixture). The call-site `$id` VM/MIR machinery is unreachable from source pending retirement. Un-ignore only if call-site `$id` is re-enabled."]
 async fn call_input_capture_uses_explicit_local_id_and_snapshots_before_mutation() {
     let _guard = test_lock().await;
     init_prof_env();
@@ -766,6 +767,7 @@ async fn call_input_capture_uses_explicit_local_id_and_snapshots_before_mutation
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "Exercises call-site `$id = ...`, which is now a compile error (settled ruling, covered by the runtime_id_misuse diagnostic fixture). The call-site `$id` VM/MIR machinery is unreachable from source pending retirement. Un-ignore only if call-site `$id` is re-enabled."]
 async fn explicit_local_id_reuse_is_catchable_invalid_argument() {
     let _guard = test_lock().await;
     init_prof_env();
@@ -800,6 +802,7 @@ async fn explicit_local_id_reuse_is_catchable_invalid_argument() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "Exercises call-site `$id = ...`, which is now a compile error (settled ruling, covered by the runtime_id_misuse diagnostic fixture). The call-site `$id` VM/MIR machinery is unreachable from source pending retirement. Un-ignore only if call-site `$id` is re-enabled."]
 async fn explicit_local_id_rejects_native_builtin_calls() {
     let _guard = test_lock().await;
     init_prof_env();
