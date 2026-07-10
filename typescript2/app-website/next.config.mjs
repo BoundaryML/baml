@@ -54,7 +54,7 @@ const nextConfig = {
       },
       {
         source: '/learn6',
-        destination: '/baml-intro',
+        destination: '/',
         permanent: true,
       },
       {
@@ -76,6 +76,22 @@ const nextConfig = {
         source: '/jobs',
         destination: 'https://github.com/BoundaryML/baml/tree/canary/jobs',
         permanent: false,
+      },
+      // Retired pages fold into their live successors.
+      {
+        source: '/thesis',
+        destination: '/explore',
+        permanent: true,
+      },
+      {
+        source: '/baml',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/baml-intro',
+        destination: '/',
+        permanent: true,
       },
     ];
   },

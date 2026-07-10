@@ -50,7 +50,7 @@ export function TestimonialSection() {
           <Github className="h-4 w-4" />
           Share your story
         </a>
-        <a className="editorial-btn thesis-btn" href="/thesis">
+        <a className="editorial-btn thesis-btn" href="/explore">
           Read our thesis
           <ArrowRight className="h-4 w-4 thesis-arrow" />
         </a>

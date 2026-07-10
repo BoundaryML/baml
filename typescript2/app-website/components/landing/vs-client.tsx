@@ -1559,7 +1559,7 @@ function ClosingCta() {
               >
                 Star on GitHub
               </a>
-              <a className="editorial-btn editorial-btn--ghost" href="/thesis">
+              <a className="editorial-btn editorial-btn--ghost" href="/explore">
                 Read the thesis
                 <span aria-hidden>→</span>
               </a>
