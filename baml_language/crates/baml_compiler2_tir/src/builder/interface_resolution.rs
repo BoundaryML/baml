@@ -48,6 +48,30 @@ impl<'db> InterfaceView<'db> {
     }
 }
 
+/// The lowering environment for one interface member (field or method) resolved on a
+/// receiver, built by [`TypeInferenceBuilder::interface_member_lowering_env`]: the scope a
+/// member's declared type expression(s) lower in, and the substitution that specializes the
+/// result to the receiver.
+struct MemberLoweringEnv {
+    /// Type-variable names in scope for the lowering: the interface's params, the caller's
+    /// extra names (method generics), `Self`'s bound name (when symbolic), and the
+    /// associated-type names.
+    all_generic_params: Vec<Name>,
+    /// The lowering scope's bounds — the enclosing scope's (shadowed by this member's own
+    /// names), the interface's declared param bounds, and `Self`'s interface bound.
+    bounds: crate::lower_type_expr::TypeVarBoundsMap,
+    /// What `Self` lowers to for this receiver.
+    self_ty: Ty,
+    /// The realized interface with only its *explicit* associated bindings — the constraint
+    /// recorded for a fresh receiver generic's call-site enforcement.
+    iface_ty: Ty,
+    /// Substitution applied to the lowered type: interface generics at their realized args,
+    /// extra generics to themselves, each associated type to its pin or symbolic projection.
+    bindings: rustc_hash::FxHashMap<Name, Ty>,
+    /// Diagnostics produced while resolving pins/projections; the caller reports them.
+    diags: Vec<TirTypeError>,
+}
+
 /// A positional or keyword interface-method parameter. The `self` receiver is an ordinary
 /// positional `arg`, desugared to `self: Self` (its `ty` is the `Self` path).
 struct InterfaceMethodParam {
@@ -806,7 +830,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         let file = view.loc.file(db);
         let iface_tree = baml_compiler2_hir::file_item_tree(db, file);
         let iface_data = iface_tree.interfaces.get(&view.loc.id(db))?;
-        let prefer_symbolic = matches!(recv, SelfReceiver::RigidVar(_));
 
         // Field lookup: this interface's own fields (no closure).
         for field in &iface_data.fields {
@@ -829,47 +852,28 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .type_expr
                 .as_ref()
                 .map(|te| {
-                    let mut diags = Vec::new();
-                    let mut bindings = crate::generics::bind_type_vars(
-                        &iface_data.generic_params,
-                        &view.realized.generics,
+                    // A field lowers in the same environment as a method signature — so
+                    // `key: Self.Key` resolves through the receiver's pins/impls exactly
+                    // as a `-> Self.Key` return would. Fields require a bound receiver
+                    // (checked above), so no fresh receiver generic is ever needed.
+                    let env = self.interface_member_lowering_env(view, recv, &[], None);
+                    let mut diags = env.diags;
+                    let ns = view.namespace(db);
+                    let ty = crate::generics::substitute_ty(
+                        &crate::lower_type_expr::lower_type_expr(
+                            te,
+                            &crate::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: view.pkg_items(db),
+                                ns_context: &ns,
+                                generic_params: &env.all_generic_params,
+                                bounds: &env.bounds,
+                                self_ty: Some(env.self_ty.clone()),
+                            },
+                            &mut diags,
+                        ),
+                        &env.bindings,
                     );
-                    for generic_param in &iface_data.generic_params {
-                        bindings.entry(generic_param.clone()).or_insert_with(|| {
-                            Ty::TypeVar(generic_param.clone(), TyAttr::default())
-                        });
-                    }
-                    // A bare associated-type reference in a field type resolves to its pin, or an
-                    // error placeholder when unpinned (interface-field associated projections are
-                    // not yet rebuilt — the member path resolves them symbolically).
-                    for assoc in &iface_data.associated_types {
-                        let value = self
-                            .associated_type_pin(view, assoc, prefer_symbolic, &bindings)
-                            .unwrap_or_else(|| Ty::Error {
-                                attr: TyAttr::default(),
-                            });
-                        bindings.insert(assoc.name.clone(), value);
-                    }
-                    let ty = {
-                        let generic_params: Vec<_> = bindings.keys().cloned().collect();
-                        crate::generics::substitute_ty(
-                            &crate::lower_type_expr::lower_type_expr(
-                                te,
-                                &crate::lower_type_expr::ScopeCtx {
-                                    db,
-                                    package_items: view.pkg_items(db),
-                                    ns_context: &view.namespace(db),
-                                    generic_params: &generic_params,
-                                    bounds: crate::lower_type_expr::interface_generic_param_bounds(
-                                        db, view.loc,
-                                    ),
-                                    self_ty: None,
-                                },
-                                &mut diags,
-                            ),
-                            &bindings,
-                        )
-                    };
                     for diag in diags {
                         self.context.report_at_span(diag, te.span);
                     }
@@ -908,6 +912,167 @@ impl<'db> TypeInferenceBuilder<'db> {
             return Some(self.build_interface_method_ty(view, recv, &spec, access));
         }
         None
+    }
+
+    /// Build the lowering environment for one interface member (field or method) resolved on
+    /// a receiver — everything the member's declared type expression(s) need to lower: the
+    /// in-scope type-variable names, their bounds, what `Self` lowers to, and the final
+    /// substitution map. One construction shared by the field and method paths, so a field's
+    /// `Self.Assoc` type resolves exactly as a method signature's.
+    fn interface_member_lowering_env(
+        &self,
+        view: &InterfaceView<'db>,
+        recv: SelfReceiver<'_>,
+        extra_generic_names: &[Name],
+        receiver_generic: Option<&Name>,
+    ) -> MemberLoweringEnv {
+        let db = self.context.db();
+        let iface_tree = baml_compiler2_hir::file_item_tree(db, view.loc.file(db));
+        let data = iface_tree
+            .interfaces
+            .get(&view.loc.id(db))
+            .unwrap_or_else(|| unreachable!("the caller resolved this member in the view's data"));
+        let prefer_symbolic = matches!(recv, SelfReceiver::RigidVar(_));
+        let mut diags = Vec::new();
+
+        // Interface generic args bound to their params; an unbound param stays its own type
+        // variable. Extra (method) generics likewise. Associated types are resolved below.
+        let iface_args: Vec<Ty> = if view.realized.generics.is_empty() {
+            data.generic_params
+                .iter()
+                .map(|gp| Ty::TypeVar(gp.clone(), TyAttr::default()))
+                .collect()
+        } else {
+            view.realized.generics.clone()
+        };
+        let mut base_bindings = crate::generics::bind_type_vars(&data.generic_params, &iface_args);
+        for generic_param in data.generic_params.iter().chain(extra_generic_names) {
+            base_bindings
+                .entry(generic_param.clone())
+                .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
+        }
+
+        // Resolve each associated type to a pin (explicit binding or usable default); unpinned
+        // associated types have no pin and lower to a symbolic projection below. The interface
+        // bound carries the pins so a pinned `Self.Assoc` collapses to its concrete type.
+        let mut pins: Vec<(Name, Ty)> = Vec::new();
+        for assoc in &data.associated_types {
+            let mut prior = base_bindings.clone();
+            prior.extend(pins.iter().cloned());
+            if let Some(ty) = self.associated_type_pin(view, assoc, prefer_symbolic, &prior) {
+                pins.push((assoc.name.clone(), ty));
+            }
+        }
+        // The realized interface with only its *explicit* associated bindings — the constraint
+        // recorded for the receiver generic's call-site enforcement. Defaults are deliberately
+        // omitted: `Self: Iterator` must admit implementors that override an associated type, so
+        // pinning `Error = never` (a default) here would wrongly reject them.
+        let iface_ty = baml_type::Interface::new(
+            view.realized.name.clone(),
+            iface_args.clone(),
+            view.realized.associated_types.clone(),
+        )
+        .to_ty();
+        // The interface *constraint* that `Self.Assoc` projections resolve through — carrying
+        // the resolved pins (explicit bindings plus usable defaults) so a pinned projection
+        // collapses to its concrete type. A `baml_type::Interface` constraint, never a
+        // `Ty::Interface` existential: it pins only what's known, which the all-or-nothing
+        // existential could not represent.
+        let iface_bound =
+            baml_type::Interface::new(view.realized.name.clone(), iface_args, pins.clone());
+
+        // `Self` for this receiver, plus the type-variable name (if any) whose bound is the
+        // interface: a rigid or unbound-existential `Self` is a type variable resolving
+        // `Self.Assoc` through its bound; an exact or union `Self` is the receiver type itself;
+        // a bound-existential `Self` is the receiver's own (complete) interface existential.
+        let (self_ty, self_bound_name) = match recv {
+            SelfReceiver::RigidVar(name) => (
+                Ty::TypeVar(name.clone(), TyAttr::default()),
+                Some(name.clone()),
+            ),
+            SelfReceiver::ExactTy(ty) | SelfReceiver::Union(ty) => (ty.clone(), None),
+            SelfReceiver::Existential(existential_ty) => match receiver_generic {
+                Some(fresh) => (
+                    Ty::TypeVar(fresh.clone(), TyAttr::default()),
+                    Some(fresh.clone()),
+                ),
+                None => (existential_ty.clone(), None),
+            },
+        };
+
+        let mut all_generic_params = data.generic_params.clone();
+        all_generic_params.extend(extra_generic_names.iter().cloned());
+        if let Some(name) = &self_bound_name
+            && !all_generic_params.contains(name)
+        {
+            all_generic_params.push(name.clone());
+        }
+        // Associated type names are in-scope type variables: a bare `Assoc` reference lowers
+        // to `Ty::TypeVar(Assoc)` and is substituted to its pin / symbolic projection below.
+        all_generic_params.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
+
+        // The lowering scope's bounds, innermost binding wins:
+        //   1. the *enclosing* scope's — the receiver type may carry the caller's rigid type
+        //      variables (`us: U[]` with `U extends HasErr`), whose bounds must be visible to
+        //      discharge a blanket impl's constraint (`implement<T extends HasErr> Wrap for
+        //      T[]`) when a `Self.Assoc` projection resolves through the receiver's impls;
+        //   2. shadowed by the member's own scope names (the signature is written in the
+        //      interface's scope — a caller variable sharing a name must not leak a bound in);
+        //   3. the interface's own declared param bounds, and `Self`'s interface bound.
+        let mut bounds = self.generic_param_bounds.clone();
+        bounds.remove(&Name::new("Self"));
+        for name in &all_generic_params {
+            bounds.remove(name);
+        }
+        for (name, param_bounds) in
+            crate::lower_type_expr::interface_generic_param_bounds(db, view.loc)
+        {
+            bounds.insert(name.clone(), param_bounds.clone());
+        }
+        if let Some(name) = &self_bound_name {
+            bounds.insert(name.clone(), vec![iface_bound]);
+        }
+
+        // Final substitution map: interface args, extra generics, and each associated type
+        // resolved to its pin or its symbolic `Self.Assoc` projection — so a bare `Assoc`
+        // reference specializes identically to `Self.Assoc`.
+        let mut bindings = base_bindings;
+        {
+            let ns = view.namespace(db);
+            let ctx = crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items: view.pkg_items(db),
+                ns_context: &ns,
+                generic_params: &all_generic_params,
+                bounds: &bounds,
+                self_ty: Some(self_ty.clone()),
+            };
+            for assoc in &data.associated_types {
+                let value = if let Some((_, ty)) = pins.iter().find(|(name, _)| name == &assoc.name)
+                {
+                    ty.clone()
+                } else {
+                    let lowered = crate::builder::associated_projection::lower_projection(
+                        &ctx,
+                        self_ty.clone(),
+                        None,
+                        assoc.name.clone(),
+                    );
+                    diags.extend(lowered.diagnostics);
+                    lowered.ty
+                };
+                bindings.insert(assoc.name.clone(), value);
+            }
+        }
+
+        MemberLoweringEnv {
+            all_generic_params,
+            bounds,
+            self_ty,
+            iface_ty,
+            bindings,
+            diags,
+        }
     }
 
     /// The pinned type for associated type `assoc` on `view`: its explicit binding (from the
@@ -984,7 +1149,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             .unwrap_or_else(|| unreachable!("the caller resolved this method in the view's data"));
         let ns = view.namespace(db);
         let pkg_items = view.pkg_items(db);
-        let prefer_symbolic = matches!(recv, SelfReceiver::RigidVar(_));
 
         let rigid_pin: Option<Name> = match recv {
             SelfReceiver::RigidVar(pin) => Some(pin.clone()),
@@ -998,91 +1162,19 @@ impl<'db> TypeInferenceBuilder<'db> {
             && !matches!(recv, SelfReceiver::ExactTy(_) | SelfReceiver::Union(_)))
         .then(|| self.fresh_interface_method_receiver_generic(data, &generic_names));
 
-        let mut diags = Vec::new();
-
-        // Interface generic args bound to their params; an unbound param stays its own type
-        // variable. Method generics likewise. Associated types are resolved separately below.
-        let iface_args: Vec<Ty> = if view.realized.generics.is_empty() {
-            data.generic_params
-                .iter()
-                .map(|gp| Ty::TypeVar(gp.clone(), TyAttr::default()))
-                .collect()
-        } else {
-            view.realized.generics.clone()
-        };
-        let mut base_bindings = crate::generics::bind_type_vars(&data.generic_params, &iface_args);
-        for generic_param in data.generic_params.iter().chain(&generic_names) {
-            base_bindings
-                .entry(generic_param.clone())
-                .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
-        }
-
-        // Resolve each associated type to a pin (explicit binding or usable default); unpinned
-        // associated types have no pin and lower to a symbolic projection below. The interface
-        // bound carries the pins so a pinned `Self.Assoc` collapses to its concrete type.
-        let mut pins: Vec<(Name, Ty)> = Vec::new();
-        for assoc in &data.associated_types {
-            let mut prior = base_bindings.clone();
-            prior.extend(pins.iter().cloned());
-            if let Some(ty) = self.associated_type_pin(view, assoc, prefer_symbolic, &prior) {
-                pins.push((assoc.name.clone(), ty));
-            }
-        }
-        // The realized interface with only its *explicit* associated bindings — the constraint
-        // recorded for the receiver generic's call-site enforcement. Defaults are deliberately
-        // omitted: `Self: Iterator` must admit implementors that override an associated type, so
-        // pinning `Error = never` (a default) here would wrongly reject them.
-        let iface_ty = baml_type::Interface::new(
-            view.realized.name.clone(),
-            iface_args.clone(),
-            view.realized.associated_types.clone(),
-        )
-        .to_ty();
-        // The interface *constraint* that `Self.Assoc` projections resolve through — carrying
-        // the resolved pins (explicit bindings plus usable defaults) so a pinned projection
-        // collapses to its concrete type. A `baml_type::Interface` constraint, never a
-        // `Ty::Interface` existential: it pins only what's known, which the all-or-nothing
-        // existential could not represent.
-        let iface_bound =
-            baml_type::Interface::new(view.realized.name.clone(), iface_args, pins.clone());
-
-        // `Self` for this receiver, plus the type-variable name (if any) whose bound is the
-        // interface: a rigid or unbound-existential `Self` is a type variable resolving
-        // `Self.Assoc` through its bound; an exact or union `Self` is the receiver type itself;
-        // a bound-existential `Self` is the receiver's own (complete) interface existential.
-        let (self_ty, self_bound_name) = match recv {
-            SelfReceiver::RigidVar(name) => (
-                Ty::TypeVar(name.clone(), TyAttr::default()),
-                Some(name.clone()),
-            ),
-            SelfReceiver::ExactTy(ty) | SelfReceiver::Union(ty) => (ty.clone(), None),
-            SelfReceiver::Existential(existential_ty) => match &receiver_generic {
-                Some(fresh) => (
-                    Ty::TypeVar(fresh.clone(), TyAttr::default()),
-                    Some(fresh.clone()),
-                ),
-                None => ((*existential_ty).clone(), None),
-            },
-        };
-
-        let mut all_generic_params = data.generic_params.clone();
-        all_generic_params.extend(generic_names.iter().cloned());
-        if let Some(name) = &self_bound_name
-            && !all_generic_params.contains(name)
-        {
-            all_generic_params.push(name.clone());
-        }
-        // Associated type names are in-scope type variables: a bare `Assoc` reference lowers
-        // to `Ty::TypeVar(Assoc)` and is substituted to its pin / symbolic projection below.
-        all_generic_params.extend(data.associated_types.iter().map(|assoc| assoc.name.clone()));
-
-        // Only `Self`'s bound feeds `Self.Assoc` projection resolution; the method's own
-        // generic bounds are recorded separately on the builder (below).
-        let bounds: crate::lower_type_expr::TypeVarBoundsMap = self_bound_name
-            .as_ref()
-            .map(|name| (name.clone(), vec![iface_bound]))
-            .into_iter()
-            .collect();
+        let MemberLoweringEnv {
+            all_generic_params,
+            bounds,
+            self_ty,
+            iface_ty,
+            bindings,
+            mut diags,
+        } = self.interface_member_lowering_env(
+            view,
+            recv,
+            &generic_names,
+            receiver_generic.as_ref(),
+        );
 
         let ctx = crate::lower_type_expr::ScopeCtx {
             db,
@@ -1090,28 +1182,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             ns_context: &ns,
             generic_params: &all_generic_params,
             bounds: &bounds,
-            self_ty: Some(self_ty.clone()),
+            self_ty: Some(self_ty),
         };
-
-        // Final substitution map: interface args, method generics, and each associated type
-        // resolved to its pin or its symbolic `Self.Assoc` projection — so a bare `Assoc`
-        // reference specializes identically to `Self.Assoc`.
-        let mut bindings = base_bindings;
-        for assoc in &data.associated_types {
-            let value = if let Some((_, ty)) = pins.iter().find(|(name, _)| name == &assoc.name) {
-                ty.clone()
-            } else {
-                let lowered = crate::builder::associated_projection::lower_projection(
-                    &ctx,
-                    self_ty.clone(),
-                    None,
-                    assoc.name.clone(),
-                );
-                diags.extend(lowered.diagnostics);
-                lowered.ty
-            };
-            bindings.insert(assoc.name.clone(), value);
-        }
 
         // Object safety only applies to a bare existential / union receiver (a pinned or
         // rigid `Self` is a single concrete type, so all `Self` usage is sound there). A

@@ -8975,6 +8975,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         let substituted = crate::generics::substitute_ty(&throws, &bindings);
+        // Post-substitution collapse: a projection whose base just became concrete
+        // reduces to its realization (`(T as HasErr).E` at `T = Risky` IS `Kaboom`),
+        // so the throw facts — and everything downstream of them: catch narrowing,
+        // exhaustiveness, the runtime pattern tests MIR lowers — see the real type.
+        // Gated so types without such a projection are left exactly as written.
+        if crate::generics::contains_concrete_base_projection(&substituted) {
+            return Some(self.normalize(&substituted));
+        }
         Some(substituted)
     }
 
@@ -10843,6 +10851,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 member: assoc,
                 ..
             } if member.as_str() != "from_json" => {
+                // A projection over a determinable base IS its realization (`(Risky as
+                // HasErr).E` with `type E = Kaboom` *is* `Kaboom`) — reduce first and
+                // resolve the member on the reduced type. Only a still-opaque
+                // (symbolic-base) projection dispatches through its declared bound
+                // below. Terminates: `normalize` is idempotent, so a second visit
+                // compares equal and falls through.
+                let reduced = self.normalize(base_ty);
+                if reduced != *base_ty && !matches!(reduced, Ty::Error { .. } | Ty::Unknown { .. })
+                {
+                    return self.resolve_member(&reduced, member, at, bound);
+                }
                 // A value of an associated-type projection type (`(base as I).Assoc`)
                 // is rigid but abstract, like a bounded type variable: it dispatches
                 // members through the projection's declared bound (`type Assoc extends

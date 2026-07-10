@@ -4453,6 +4453,104 @@ function needs<T extends Marker>(x: T) -> int throws never {
             "an errored receiver must not cascade a member-access error, got {errors:?}"
         );
     }
+    /// The spike-1a blanket-impl scaffold: `Wrap` binds its associated error to a
+    /// projection off the impl's type variable (`type WE = T.E`) for every `T[]`.
+    const BLANKET_PROJECTION_SCAFFOLD: &str = "interface HasErr {\n\
+           type E\n\
+           function f(self) -> int throws Self.E\n\
+         }\n\
+         interface Wrap {\n\
+           type WE\n\
+           function g(self) -> int throws Self.WE\n\
+         }\n\
+         implement<T extends HasErr> Wrap for T[] {\n\
+           type WE = T.E\n\
+           function g(self) -> int throws T.E {\n\
+             return self[0].f()\n\
+           }\n\
+         }\n";
+
+    #[test]
+    fn blanket_impl_projection_resolves_on_symbolic_array_receiver() {
+        // `us.g()` on `U[]` reaches `Wrap.g` through the blanket impl: matching its
+        // `T extends HasErr` bound at `T = U` needs the *enclosing scope's* bound on
+        // `U` — so the member-lowering environment must carry the scope's bounds, not
+        // just `Self`'s. The throws then realizes to `(U as HasErr).E`, exactly the
+        // declared `U.E` — no unknown-associated-type or throws-contract error.
+        let errors = all_type_errors(&format!(
+            "{BLANKET_PROJECTION_SCAFFOLD}\
+             function call_g<U extends HasErr>(us: U[]) -> int throws U.E {{\n\
+               return us.g()\n\
+             }}\n",
+        ));
+        assert!(
+            !errors.iter().any(|e| matches!(
+                e,
+                TirTypeError::UnknownAssociatedType { .. }
+                    | TirTypeError::ThrowsContractViolation { .. }
+                    | TirTypeError::ExtraneousThrowsDeclaration { .. }
+            )),
+            "the blanket impl's projection must realize at the symbolic receiver, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn concrete_projection_receiver_reduces_before_member_access() {
+        // A value typed as a concrete-base projection IS its realization: `(Risky as
+        // HasErr).E` with `type E = Kaboom` reduces to `Kaboom`, so `.message`
+        // resolves on it rather than failing on an opaque projection.
+        let errors = all_type_errors(
+            "interface HasErr {\n\
+               type E\n\
+               function f(self) -> int throws Self.E\n\
+             }\n\
+             class Kaboom {\n  message: string\n}\n\
+             class Risky {\n\
+               v: int\n\
+               implements HasErr {\n\
+                 type E = Kaboom\n\
+                 function f(self) -> int throws Kaboom {\n\
+                   throw Kaboom { message: \"kaboom\" }\n\
+                 }\n\
+               }\n\
+             }\n\
+             function m(e: (Risky as HasErr).E) -> string throws never {\n\
+               return e.message\n\
+             }\n",
+        );
+        assert!(
+            errors.is_empty(),
+            "the projection should reduce to Kaboom and resolve `.message`, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn interface_field_self_projection_realizes_at_receiver() {
+        // `key: Self.Key` in an interface *field* lowers in the same environment as a
+        // method signature — through the receiver's pins — so accessing it on an
+        // implementor realizes `string`, not an unresolved `Self.Key`.
+        let errors = all_type_errors(
+            "interface PublicIdentity {\n\
+               type Key\n\
+               key: Self.Key\n\
+             }\n\
+             class AccountRecord {\n\
+               public_key: string\n\
+               implements PublicIdentity {\n\
+                 type Key = string\n\
+                 key as public_key\n\
+               }\n\
+             }\n\
+             function f(a: AccountRecord) -> string throws never {\n\
+               return a.as<PublicIdentity>.key\n\
+             }\n",
+        );
+        assert!(
+            errors.is_empty(),
+            "the Self.Key field should realize to string at the receiver, got {errors:?}"
+        );
+    }
+
     /// Shared two-file fixture: a nested-namespace iterator core with a generic
     /// concrete implementor (`Repeat<T> implements Iterator<T, never>`) and a
     /// union-typed impl head (`MapIter implements Iterator<R, E | E2>`).

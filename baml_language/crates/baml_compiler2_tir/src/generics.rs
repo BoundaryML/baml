@@ -209,6 +209,50 @@ pub fn contains_typevar(ty: &Ty) -> bool {
     }
 }
 
+/// Whether `ty` contains an associated-type projection whose base carries no
+/// type variables — one that substitution has made concrete, so the canonical
+/// algebra can reduce it to its realization (`(Risky as HasErr).E` → `Kaboom`).
+/// Used to gate a post-substitution `normalize`: types without such a
+/// projection are left exactly as written.
+pub fn contains_concrete_base_projection(ty: &Ty) -> bool {
+    match ty {
+        Ty::AssociatedTypeProjection { base, .. } => {
+            !contains_typevar(base) || contains_concrete_base_projection(base)
+        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_concrete_base_projection(inner),
+        Ty::Map {
+            key: k, value: v, ..
+        }
+        | Ty::EvolvingMap(k, v, _) => {
+            contains_concrete_base_projection(k) || contains_concrete_base_projection(v)
+        }
+        Ty::Union(tys, _) => tys.iter().any(contains_concrete_base_projection),
+        Ty::Future(value, error, _) => {
+            contains_concrete_base_projection(value) || contains_concrete_base_projection(error)
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            params
+                .iter()
+                .any(|param| contains_concrete_base_projection(&param.ty))
+                || contains_concrete_base_projection(ret)
+                || contains_concrete_base_projection(throws)
+        }
+        Ty::Class(_, type_args, _) => type_args.iter().any(contains_concrete_base_projection),
+        Ty::Interface(_, type_args, associated_bindings, _) => {
+            type_args.iter().any(contains_concrete_base_projection)
+                || associated_bindings
+                    .iter()
+                    .any(|(_, ty)| contains_concrete_base_projection(ty))
+        }
+        _ => false,
+    }
+}
+
 /// Whether `name` is an *inferable* type var for a value call: either one of the
 /// callee's declared `generic_params`, or a synthetic effect-polymorphism param
 /// (`__effect_param_N`). Anything else is a *rigid ambient* var (the caller's
