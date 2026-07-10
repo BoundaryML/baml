@@ -432,6 +432,199 @@ describe('ExecutionPanel args form', () => {
     });
   });
 
+  it('reconciles cached form values when a same-name function schema changes', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'EchoPerson',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'person',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Person' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.Person': {
+                kind: 'class',
+                fields: [
+                  { name: 'name', schema: { type: 'string' } },
+                  { name: 'active', schema: { type: 'bool' } },
+                ],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'EchoPerson' }));
+    fireEvent.change(await screen.findByPlaceholderText('text'), {
+      target: { value: 'Ada' },
+    });
+
+    // Hot-reload the same function name with a new required class field.
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'EchoPerson',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'person',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Person' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.Person': {
+                kind: 'class',
+                fields: [
+                  { name: 'name', schema: { type: 'string' } },
+                  { name: 'active', schema: { type: 'bool' } },
+                  { name: 'age', schema: { type: 'int' } },
+                ],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    const ageInput = await screen.findByPlaceholderText('0');
+    await waitFor(() => {
+      expect(ageInput).toHaveValue('0');
+      expect(screen.getByPlaceholderText('text')).toHaveValue('Ada');
+    });
+    fireEvent.change(screen.getByPlaceholderText('text'), {
+      target: { value: 'Ada Lovelace' },
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    await waitFor(() => {
+      expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+        person: {
+          $baml: { type: 'user.Person' },
+          name: 'Ada Lovelace',
+          active: false,
+          age: 0,
+        },
+      });
+    });
+  });
+
+  it('serializes untouched defaults inside a required nested class', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'EchoEnvelope',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'envelope',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Envelope' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.Flag': {
+                kind: 'class',
+                fields: [{ name: 'active', schema: { type: 'bool' } }],
+              },
+              'user.Envelope': {
+                kind: 'class',
+                fields: [
+                  {
+                    name: 'flag',
+                    schema: { type: 'ref', name: 'user.Flag' },
+                  },
+                ],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'EchoEnvelope' }),
+    );
+
+    // The switch is untouched and visually false; raw state must already
+    // contain that same false value rather than a marker-only nested class.
+    expect(await screen.findByRole('switch')).not.toBeChecked();
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    await waitFor(() => {
+      expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+        envelope: {
+          $baml: { type: 'user.Envelope' },
+          flag: {
+            $baml: { type: 'user.Flag' },
+            active: false,
+          },
+        },
+      });
+    });
+  });
+
   it('keeps an explicitly chosen union variant selected when values overlap', async () => {
     const port = new FakeRuntimePort();
 

@@ -53,9 +53,8 @@ import {
 import type { ResultRendererProps } from './result-renderers';
 import { ArgsForm } from './ArgsForm';
 import {
-  defaultValueForSchema,
   isPlainObject,
-  normalizeArgs,
+  reconcileArgs,
   typeLookupFrom,
 } from './args-form-model';
 import { ResultDisplay } from './ResultDisplay';
@@ -1788,43 +1787,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     [logsPanelHeight],
   );
 
-  const onRunFunction = useCallback(async () => {
-    if (!selectedFn || !selectedProject || isRunning) return;
-
-    // Don't force the 'run' tab — running keeps the user on whatever tab
-    // they're viewing (graph, trace, prompt, etc.).
-    setExpandedLogId(null);
-    setRunValidationError(null);
-
-    requestAnimationFrame(() => {
-      outputRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-
-    try {
-      const parsed = JSON.parse(argsJson);
-      if (
-        typeof parsed !== 'object' ||
-        parsed === null ||
-        Array.isArray(parsed)
-      ) {
-        throw new Error(
-          'Arguments must be a JSON object, e.g. {"arr": [3,1,2]}',
-        );
-      }
-      const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
-
-      const boundaryId = await executionStore.startRun({
-        project: selectedProject,
-        functionName: selectedFn,
-        argsBytes: new Uint8Array(argsBytes),
-      });
-      setArgsJsonByBoundaryId((prev) => ({ ...prev, [boundaryId]: argsJson }));
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      setRunValidationError(errMsg);
-    }
-  }, [selectedFn, selectedProject, argsJson, isRunning, executionStore]);
-
   const handleRefreshTests = useCallback(() => {
     if (!selectedProject) return;
     port.postMessage({ type: 'requestCollectTests', project: selectedProject });
@@ -2087,6 +2049,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     () => typeLookupFrom(projectTypes),
     [projectTypes],
   );
+  const argsSchemaKey = JSON.stringify([
+    paramSchemas ?? null,
+    projectTypes ?? null,
+  ]);
   // The form can only render args that parse to a plain JSON object; anything
   // else (mid-edit raw JSON, array) falls back to the raw input with a notice
   // instead of destroying the user's text.
@@ -2101,66 +2067,36 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     }
     return null;
   }, [argsJson]);
+  const reconciledFormArgs = useMemo(() => {
+    if (parsedArgs === null || paramSchemas === undefined) return null;
+    return reconcileArgs(parsedArgs, paramSchemas, typeLookup);
+  }, [parsedArgs, paramSchemas, typeLookup]);
   const showArgsForm =
     argsMode === 'form' && paramSchemas !== undefined && parsedArgs !== null;
   const argsFormUnavailable =
     argsMode === 'form' && paramSchemas !== undefined && parsedArgs === null;
 
-  // Seed empty args with schema defaults, once per function per session. This
-  // is what injects `$baml` class markers and required keys without the user
-  // touching every field. Skipped when the function already has typed args or
-  // a host seed. Deliberately does NOT read `argsJson`/`parsedArgs` — on the
-  // render where `selectedFn` changes those still reflect the previous
-  // function (the swap effect's setState lands next render), and reading them
-  // here used to clobber just-restored host seeds with machine defaults.
-  const seededFnsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!selectedFn || !paramSchemas || paramSchemas.length === 0) return;
-    if (seededFnsRef.current.has(selectedFn)) return;
-    if (typedArgsByFnRef.current[selectedFn] !== undefined) return;
-    try {
-      const base: unknown = JSON.parse(baseArgsFor(selectedFn));
-      if (!isPlainObject(base) || Object.keys(base).length > 0) {
-        return; // a host seed exists — never overwrite it
-      }
-    } catch {
-      return; // leave an unparseable host seed for the user to see and fix
-    }
-    seededFnsRef.current.add(selectedFn);
-    const seeded: Record<string, unknown> = {};
-    for (const param of paramSchemas) {
-      if (!param.hasDefault) {
-        seeded[param.name] = defaultValueForSchema(param.schema, typeLookup);
-      }
-    }
-    // Write through the shared setter so the seed also lands in
-    // typedArgsByFnRef — otherwise switching away and back restores '{}' and
-    // the seeded defaults/markers are lost.
-    updateArgsJson(JSON.stringify(seeded));
-  }, [selectedFn, paramSchemas, typeLookup, baseArgsFor, updateArgsJson]);
-
-  // Normalize wire markers once per function while form mode is active: bare
-  // enum strings (hand-edited raw JSON, host seeds, pre-marker session
-  // memory) and markerless class objects render as typed widgets but would
-  // encode untyped (string / mapValue) — no String→Enum coercion exists on
-  // the args path. Rewriting through the shared setter keeps argsJson
-  // matching what the widgets display. Reads the authoritative args via
-  // baseArgsFor, never argsJson state (stale on the selection-change
-  // commit). Raw mode re-arms it, so hand edits get re-normalized on the
-  // way back into form mode.
-  const normalizeStateRef = useRef<{ fn: string | null; done: boolean }>({
-    fn: null,
+  // Reconcile once for each project/function/schema combination while form
+  // mode is active. This replaces the old function-only seed and normalize
+  // guards, which never re-ran when a same-name function changed type.
+  const argsSchemaScope = selectedFn
+    ? JSON.stringify([selectedProject ?? null, selectedFn, argsSchemaKey])
+    : null;
+  const reconcileStateRef = useRef<{ scope: string | null; done: boolean }>({
+    scope: null,
     done: false,
   });
   useEffect(() => {
-    const state = normalizeStateRef.current;
+    const state = reconcileStateRef.current;
     if (argsMode === 'raw') {
       state.done = false;
       return;
     }
-    if (!selectedFn || !paramSchemas) return;
-    if (state.fn === selectedFn && state.done) return;
-    normalizeStateRef.current = { fn: selectedFn, done: true };
+    if (!selectedFn || paramSchemas === undefined || argsSchemaScope === null) {
+      return;
+    }
+    if (state.scope === argsSchemaScope && state.done) return;
+    reconcileStateRef.current = { scope: argsSchemaScope, done: true };
     let args: unknown;
     try {
       args = JSON.parse(baseArgsFor(selectedFn));
@@ -2168,16 +2104,73 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       return; // not form-renderable; the raw fallback shows it as-is
     }
     if (!isPlainObject(args)) return;
-    const normalized = normalizeArgs(args, paramSchemas, typeLookup);
-    if (normalized !== args) {
-      updateArgsJson(JSON.stringify(normalized));
+    const reconciled = reconcileArgs(args, paramSchemas, typeLookup);
+    if (reconciled !== args) {
+      updateArgsJson(JSON.stringify(reconciled));
     }
   }, [
     argsMode,
     selectedFn,
     paramSchemas,
     typeLookup,
+    argsSchemaScope,
     baseArgsFor,
+    updateArgsJson,
+  ]);
+
+  const onRunFunction = useCallback(async () => {
+    if (!selectedFn || !selectedProject || isRunning) return;
+
+    // Don't force the 'run' tab — running keeps the user on whatever tab
+    // they're viewing (graph, trace, prompt, etc.).
+    setExpandedLogId(null);
+    setRunValidationError(null);
+
+    requestAnimationFrame(() => {
+      outputRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    try {
+      const parsed: unknown = JSON.parse(argsJson);
+      if (!isPlainObject(parsed)) {
+        throw new Error(
+          'Arguments must be a JSON object, e.g. {"arr": [3,1,2]}',
+        );
+      }
+      // Effects normally keep form state canonical, but Run must also close
+      // the same-commit race after a project/schema update. Raw mode remains
+      // an exact escape hatch and is intentionally not reconciled here.
+      const runArgs =
+        argsMode === 'form' && paramSchemas !== undefined
+          ? reconcileArgs(parsed, paramSchemas, typeLookup)
+          : parsed;
+      const runArgsJson =
+        runArgs === parsed ? argsJson : JSON.stringify(runArgs);
+      if (runArgs !== parsed) updateArgsJson(runArgsJson);
+      const argsBytes = encodeRunArgs(runArgs);
+
+      const boundaryId = await executionStore.startRun({
+        project: selectedProject,
+        functionName: selectedFn,
+        argsBytes: new Uint8Array(argsBytes),
+      });
+      setArgsJsonByBoundaryId((prev) => ({
+        ...prev,
+        [boundaryId]: runArgsJson,
+      }));
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      setRunValidationError(errMsg);
+    }
+  }, [
+    selectedFn,
+    selectedProject,
+    argsJson,
+    argsMode,
+    paramSchemas,
+    typeLookup,
+    isRunning,
+    executionStore,
     updateArgsJson,
   ]);
   // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
@@ -3235,16 +3228,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                         )}
                       </Button>
                     </div>
-                    {showArgsForm && paramSchemas && parsedArgs && (
+                    {showArgsForm && paramSchemas && reconciledFormArgs && (
                       <div className="max-h-56 overflow-y-auto px-2 py-1.5 border-t border-vsc-border">
-                        {/* Key by function: the swap effect replaces argsJson
-                            externally on selection change; remounting resets
-                            widget drafts/collapse state with it. */}
+                        {/* Remount on function or schema changes so local widget
+                            drafts cannot outlive the schema they represent. */}
                         <ArgsForm
-                          key={selectedFn ?? ''}
+                          key={`${selectedProject ?? ''}:${selectedFn ?? ''}:${argsSchemaKey}`}
                           params={paramSchemas}
                           types={projectTypes}
-                          value={parsedArgs}
+                          value={reconciledFormArgs}
                           onChange={onArgsFormChange}
                         />
                       </div>
