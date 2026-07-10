@@ -461,6 +461,52 @@ test "passes" {
     common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
 }
 
+/// BAML log events stay silent by default and become raw stdout lines only
+/// when the caller opts into a threshold with `--logs`.
+#[test]
+fn test_logs_flag_routes_filtered_baml_logs_to_stdout() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "logs" {
+  log.debug("debug-detail");
+  log.info("info-detail");
+  log.warn("warn-detail");
+  log.error("error-detail");
+  assert.is_true(true)
+}
+"#,
+    );
+
+    let quiet = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    assert!(quiet.status.success());
+    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
+    assert!(!quiet_stdout.contains("info-detail"));
+    assert!(!quiet_stdout.contains("error-detail"));
+
+    // Uppercase is intentional: this is the documented shell spelling and
+    // guards clap's case-insensitive value parsing.
+    let info = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "--logs", "INFO"],
+    );
+    assert!(
+        info.status.success(),
+        "expected --logs INFO to pass; stdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&info.stdout),
+        String::from_utf8_lossy(&info.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&info.stdout);
+    assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
+    assert!(stdout.contains("[WARN] warn-detail"), "stdout: {stdout}");
+    assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
+    assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
+}
+
 /// Failing `assert.equal` should surface both operand values and keep stack
 /// traces user-facing (no internal `Span`/`FileId` debug structs).
 #[test]

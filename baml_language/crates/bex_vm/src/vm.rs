@@ -16,6 +16,9 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+#[cfg(feature = "heap_debug")]
+use std::collections::HashSet;
+
 use baml_type::Name;
 use smallvec::SmallVec;
 
@@ -173,6 +176,22 @@ use crate::{
     types::ObjectTrait,
     watch::{self, NodeId, RootState, Watch, WatchFilter},
 };
+
+#[cfg(feature = "heap_debug")]
+fn debug_assert_forwarded_roots(
+    category: &str,
+    roots: Vec<HeapPtr>,
+    forwarding: &HashMap<HeapPtr, HeapPtr>,
+) {
+    let forwarded_values: HashSet<HeapPtr> = forwarding.values().copied().collect();
+    for (offset, root) in roots.into_iter().enumerate() {
+        assert!(
+            forwarded_values.contains(&root),
+            "heap_debug: BexVm category={category} root offset={offset} \
+             ptr={root:?} was not forwarded",
+        );
+    }
+}
 
 /// Max call stack size.
 pub const MAX_FRAMES: usize = 256;
@@ -8248,6 +8267,41 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // Frame function pointers (needed once closures are heap-allocated)
         for frame in &mut self.frames {
             frame.forward_roots(roots);
+        }
+
+        #[cfg(feature = "heap_debug")]
+        {
+            debug_assert_forwarded_roots(
+                "stack",
+                self.stack.iter().filter_map(Value::as_object_ptr).collect(),
+                roots,
+            );
+            let mut watch_roots = Vec::new();
+            self.watch.collect_roots(&mut watch_roots);
+            debug_assert_forwarded_roots("watch", watch_roots, roots);
+            debug_assert_forwarded_roots(
+                "pending_call_captures",
+                self.pending_call_captures
+                    .iter()
+                    .filter_map(|event| event.value.as_object_ptr())
+                    .collect(),
+                roots,
+            );
+            debug_assert_forwarded_roots(
+                "seen_throw_values",
+                self.seen_throw_values
+                    .iter()
+                    .filter_map(Value::as_object_ptr)
+                    .collect(),
+                roots,
+            );
+            let mut thrown_roots = Vec::new();
+            for (value, cause) in &self.thrown_value_causes {
+                thrown_roots.extend(value.as_object_ptr());
+                thrown_roots.extend(cause.as_object_ptr());
+            }
+            debug_assert_forwarded_roots("thrown_value_causes", thrown_roots, roots);
+            debug_assert_forwarded_roots("frames", self.collect_frame_roots(), roots);
         }
     }
 }

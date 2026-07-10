@@ -21,6 +21,8 @@ use ::std::{
     collections::HashMap,
     sync::{Arc, Weak},
 };
+#[cfg(feature = "heap_debug")]
+use ::std::collections::HashSet;
 
 /// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
 const MAX_PERMITS: u32 = {
@@ -216,6 +218,12 @@ impl HeapPermitManager {
         let mut guard = self.holders.lock().await;
         debug_assert!(guard.len() < MAX_PERMITS as usize);
         let holder = Arc::new(PermitCell::new(with_roots));
+        #[cfg(feature = "heap_debug")]
+        eprintln!(
+            "[BEX_HEAP_DEBUG] permit registered holder={:p} type={}",
+            Arc::as_ptr(&holder),
+            std::any::type_name::<T>(),
+        );
         guard.push(Arc::downgrade(&holder) as Weak<PermitCell<dyn RootHaver>>);
         let permit = InactiveHeapPermit {
             active: self.active.clone(),
@@ -266,12 +274,29 @@ impl RootHaver for HeapGuard<'_> {
         }
     }
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        for permit_holder in self.guard.iter() {
+        #[cfg(feature = "heap_debug")]
+        let forwarded_values: HashSet<HeapPtr> = roots.values().copied().collect();
+
+        for (_holder_index, permit_holder) in self.guard.iter().enumerate() {
             if let Some(permit_holder) = permit_holder.upgrade() {
                 let ptr = permit_holder.get();
                 // SAFETY: permit holders must be parked during root forwarding
                 let root_haver = unsafe { &mut *ptr };
                 root_haver.forward_roots(roots);
+
+                #[cfg(feature = "heap_debug")]
+                {
+                    let mut roots_after = Vec::new();
+                    root_haver.collect_roots(&mut roots_after);
+                    for (root_offset, root) in roots_after.into_iter().enumerate() {
+                        assert!(
+                            forwarded_values.contains(&root),
+                            "heap_debug: permit holder index={_holder_index} addr={:p} \
+                             root offset={root_offset} ptr={root:?} was not forwarded",
+                            ptr,
+                        );
+                    }
+                }
             }
         }
     }

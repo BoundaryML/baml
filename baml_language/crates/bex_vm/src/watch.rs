@@ -646,7 +646,7 @@ impl RootHaver for Watch {
     /// `debug_assert!(remap_was_traced(...))` calls below verify the
     /// invariant on every patched node.
     fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if forwarding.is_empty() || self.roots.is_empty() {
+        if forwarding.is_empty() {
             return;
         }
 
@@ -934,5 +934,29 @@ mod tests {
                 "collect_roots missing pointer that forward_roots would patch: {needed:?}"
             );
         }
+    }
+
+    #[test]
+    fn forward_roots_remaps_orphaned_graph_after_last_root_is_unregistered() {
+        let mut watch = Watch::new();
+        let root = NodeId::LocalVar(StackIndex::from_raw(0));
+        let old_child = leaf();
+        let new_child = leaf();
+
+        watch.register_root(root, test_root_state());
+        track_watch_dependencies(&mut watch, root, Path::Binding, old_child);
+        watch.unregister_root(root);
+
+        assert!(watch.roots.is_empty());
+        let mut before = Vec::new();
+        watch.collect_roots(&mut before);
+        assert!(before.contains(&old_child));
+
+        watch.forward_roots(&HashMap::from([(old_child, new_child)]));
+
+        let mut after = Vec::new();
+        watch.collect_roots(&mut after);
+        assert!(!after.contains(&old_child));
+        assert!(after.contains(&new_child));
     }
 }

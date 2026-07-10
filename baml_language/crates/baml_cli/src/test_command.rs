@@ -1,16 +1,22 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{path::PathBuf, sync::Arc};
+use std::{future::Future, io::Write as _, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use baml_type::RuntimeTy;
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CancellationToken, FunctionCallContextBuilder,
-    test_arg_to_external,
+    BexCallArg, BexEngine, BexExternalValue, CancellationToken, CaptureDefaults,
+    FunctionCallContext, FunctionCallContextBuilder, test_arg_to_external,
+    value_capture::{TraceCaptureConfig, TraceCaptureProducer},
 };
-use clap::Args;
+use bex_events::value::{ValueCodec, ValueRef, ValueWriteOutcome};
+use bridge_ctypes::baml_core::cffi::{
+    BamlOutboundValue, baml_outbound_value::Value as OutboundValue,
+};
+use clap::{Args, ValueEnum};
+use prost::Message;
 use sys_native::{CallId, SysOpsExt};
 
 use crate::{project_load::load_project_for_build, reporter::Reporter, test_filter::TestFilter};
@@ -50,6 +56,49 @@ pub struct TestArgs {
     ///
     /// Uses the same "Testset::TestName" syntax as --include.
     pub exclude: Vec<String>,
+
+    /// Print BAML `log.*` events to stdout at or above this level.
+    ///
+    /// Logs are off by default. Because logs use stdout, callers can retain
+    /// the raw stream with `baml test --logs INFO > baml-test.log`.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = TestLogLevel::Off,
+        ignore_case = true,
+        value_name = "LEVEL"
+    )]
+    pub logs: TestLogLevel,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, ValueEnum)]
+pub enum TestLogLevel {
+    #[default]
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+}
+
+impl TestLogLevel {
+    fn allows(self, event_level: Option<&str>) -> bool {
+        let threshold = match self {
+            Self::Off => return false,
+            Self::Error => 1,
+            Self::Warn => 2,
+            Self::Info => 3,
+            Self::Debug => 4,
+        };
+        let event = match event_level.unwrap_or("info").to_ascii_lowercase().as_str() {
+            "error" => 1,
+            "warn" | "warning" => 2,
+            "info" => 3,
+            "debug" => 4,
+            _ => 3,
+        };
+        event <= threshold
+    }
 }
 
 /// A legacy `test "name" { functions [Foo] args {…} }` attached to an LLM
@@ -70,6 +119,100 @@ struct RunCtx<'a> {
     engine: &'a Arc<BexEngine>,
     rt: &'a tokio::runtime::Runtime,
     cancel: &'a CancellationToken,
+    logs: TestLogLevel,
+}
+
+impl RunCtx<'_> {
+    fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceCaptureProducer>) {
+        let builder =
+            FunctionCallContextBuilder::new(call_id).with_cancel_token(self.cancel.clone());
+        if self.logs == TestLogLevel::Off {
+            return (builder.build(), None);
+        }
+
+        // Test logs are drained after each selected invocation. Keep value
+        // capture disabled and reserve a generous log-only queue so ordinary
+        // suites do not silently lose events while their test bodies run.
+        let producer =
+            TraceCaptureProducer::new(TraceCaptureConfig::enabled_with_budgets(0, 100_000));
+        let context = builder
+            .with_capture_defaults(CaptureDefaults {
+                values_enabled: false,
+                logs_enabled: true,
+            })
+            .with_value_capture(producer.clone())
+            .build();
+        (context, Some(producer))
+    }
+
+    fn print_logs(&self, producer: Option<&TraceCaptureProducer>) {
+        let Some(producer) = producer else {
+            return;
+        };
+        let mut next_id = 0usize;
+        let report = producer.drain_to_value_recorder_report(|draft, body| {
+            next_id += 1;
+            if let Some(log) = &draft.log
+                && self.logs.allows(log.level.as_deref())
+            {
+                let level = log.level.as_deref().unwrap_or("info").to_ascii_uppercase();
+                println!("[{level}] {}", render_log_body(&body));
+            }
+            Ok(ValueWriteOutcome {
+                value_ref: ValueRef::available(
+                    format!("test_log_{next_id}"),
+                    ValueCodec::BamlOutboundValue,
+                    body.len(),
+                    body.len(),
+                ),
+            })
+        });
+        for failure in report.failures {
+            eprintln!("WARN test log capture failed: {}", failure.diagnostic);
+        }
+        // A redirected stdout is not necessarily line-buffered. Explicitly
+        // flush each drained batch so `tail -f` observes test logs live.
+        let _ = std::io::stdout().flush();
+    }
+
+    fn block_on_with_logs<T>(
+        &self,
+        future: impl Future<Output = T>,
+        producer: Option<&TraceCaptureProducer>,
+    ) -> T {
+        let Some(producer) = producer else {
+            return self.rt.block_on(future);
+        };
+        self.rt.block_on(async {
+            tokio::pin!(future);
+            let mut interval = tokio::time::interval(Duration::from_millis(50));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                tokio::select! {
+                    result = &mut future => {
+                        self.print_logs(Some(producer));
+                        break result;
+                    }
+                    _ = interval.tick() => self.print_logs(Some(producer)),
+                }
+            }
+        })
+    }
+}
+
+fn render_log_body(body: &[u8]) -> String {
+    let Ok(value) = BamlOutboundValue::decode(body) else {
+        return format!("<undecodable BAML log: {} bytes>", body.len());
+    };
+    match value.value.as_ref() {
+        None | Some(OutboundValue::NullValue(_)) => "null".to_string(),
+        Some(OutboundValue::StringValue(value)) => value.clone(),
+        Some(OutboundValue::IntValue(value)) => value.to_string(),
+        Some(OutboundValue::FloatValue(value)) => value.to_string(),
+        Some(OutboundValue::BoolValue(value)) => value.to_string(),
+        Some(OutboundValue::BigintValue(value)) => value.clone(),
+        Some(_) => format!("{value:?}"),
+    }
 }
 
 impl TestArgs {
@@ -180,6 +323,7 @@ impl TestArgs {
             engine: &engine,
             rt: &rt,
             cancel: &cancel,
+            logs: self.logs,
         };
 
         // ── 7. List mode ───────────────────────────────────────────────────
@@ -363,16 +507,13 @@ fn run_legacy_test(ctx: &RunCtx, t: &LegacyTest, passed: &mut usize, failed: &mu
         }
     };
 
-    match ctx.rt.block_on(
-        ctx.engine.call_function_bound_args(
-            &t.function_name,
-            ordered_args,
-            FunctionCallContextBuilder::new(CallId::next())
-                .with_cancel_token(ctx.cancel.clone())
-                .build(),
-            true,
-        ),
-    ) {
+    let (call_ctx, logs) = ctx.call_context(CallId::next());
+    let result = ctx.block_on_with_logs(
+        ctx.engine
+            .call_function_bound_args(&t.function_name, ordered_args, call_ctx, true),
+        logs.as_ref(),
+    );
+    match result {
         Ok(result) => {
             println!("PASS {}::{}", t.function_name, t.test_name);
             println!("  => {result:?}");
@@ -429,11 +570,9 @@ fn run_filtered_report(
     include: &[String],
     exclude: &[String],
 ) -> Result<BexExternalValue> {
-    let call_ctx = FunctionCallContextBuilder::new(CallId::next())
-        .with_cancel_token(ctx.cancel.clone())
-        .build();
-    ctx.rt
-        .block_on(ctx.engine.call_function(
+    let (call_ctx, logs) = ctx.call_context(CallId::next());
+    let result = ctx.block_on_with_logs(
+        ctx.engine.call_function(
             "testing.TestRegistry.run_filtered",
             vec![
                 registry.clone(),
@@ -442,8 +581,10 @@ fn run_filtered_report(
             ],
             call_ctx,
             true,
-        ))
-        .map_err(|e| anyhow!("run_filtered failed: {e}"))
+        ),
+        logs.as_ref(),
+    );
+    result.map_err(|e| anyhow!("run_filtered failed: {e}"))
 }
 
 fn list_selected_testset_names(
@@ -827,6 +968,16 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(consume(&parsed), (1, 1, 1, 3, true));
+    }
+
+    #[test]
+    fn test_log_level_filters_at_or_above_threshold() {
+        assert!(!TestLogLevel::Off.allows(Some("error")));
+        assert!(TestLogLevel::Info.allows(Some("error")));
+        assert!(TestLogLevel::Info.allows(Some("warn")));
+        assert!(TestLogLevel::Info.allows(Some("info")));
+        assert!(!TestLogLevel::Info.allows(Some("debug")));
+        assert!(TestLogLevel::Debug.allows(Some("debug")));
     }
 
     #[test]

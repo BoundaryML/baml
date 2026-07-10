@@ -646,7 +646,10 @@ impl BexHeap {
     /// call this for spaces that grow exclusively at GC safepoints (Gen1/Gen2),
     /// or while holding exclusive access to the space being scanned.
     #[inline]
-    unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
+    pub(crate) unsafe fn ptr_in_chunked_vec(
+        vec: &ChunkedVec<Object>,
+        raw_ptr: *const Object,
+    ) -> bool {
         // `num_chunks` and `chunk_start_ptr` now serialize on the
         // ChunkedVec's internal RwLock, so the brief window is safe even
         // under a concurrent grower. `chunk_start_ptr` is still `unsafe`

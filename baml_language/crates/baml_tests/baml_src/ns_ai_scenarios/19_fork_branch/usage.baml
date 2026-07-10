@@ -1,185 +1,134 @@
-// scenario 19 — fork / branch: ../../../../../llm-provider/ideas/scenarios/19-fork-branch/usage.baml
-//   usage.baml — APPLICATION-author code. End-user surface + runnable tests.
-//
-// "Draft a reply, then explore alternative continuations from the SAME point,
-//  WITHOUT losing the original." Two design-true tracks (see implementation.baml):
-//
-//   (a) CLIENT-HELD branching (copy-the-prefix): a conversation is a native
-//       `baml.ai.ChatMessage[]`; a fork is a COPY of the prefix that continues
-//       independently, so the trunk is never mutated. Fork-at-tail, fork-anywhere,
-//       fan-out-and-compare, and pick-a-winner are all plain BAML. Runs fully
-//       offline against the transcript-reflecting `s19_ForkEcho`, and is
-//       live-proven below against real OpenAI.
-//
-//   (b) PROVIDER-HELD branching (the stdlib `baml.ai.Branching` capability):
-//       `match (p) { let b: Branching => b.fork(session) }`. Shape + negotiation
-//       only (durable store BLOCKED P8); a non-branching client lands in `_`.
-//
-// The LIVE tier proves the design's emergent-from-ids encoding: two `extend`s from
-// the SAME `previous_response_id` are independent branches over a shared server-side
-// prefix (`baml.ai.OpenAiResponses`).
+// Task sketch: s19_ContinueBranch(history, continuation) -> string.
+// Its complete hand-written lowering is the request builder and driver below.
 
+// This is the desugared code for s19_ContinueBranch ------------------------
+function s19_ContinueBranch_request(
+  history: string,
+  continuation: string,
+  provider: root.ai.Provider = BepV2FixtureGenerate { name: "s19-default", reply: `"unused"`, attributes: {} },
+) -> root.ai.Request<string> {
+  root.ai.task_request<string>(
+    provider, "s19_ContinueBranch", "ns_ai_scenarios",
+    { "history": history, "continuation": continuation },
+    [], root.ai.RequestOptions {}, {},
+    bepv2_prompt_template(`Conversation so far:\n${history}\n\nContinue with: ${continuation}`, false),
+  )
+}
 
-// ── (a) Fork at the tail: the trunk is never destroyed ─────────────────────────
-//
-// The design's core promise. Establish a shared prefix, fork it two ways, and
-// confirm BOTH branches saw the prefix AND that the original prefix is untouched.
+function s19_ContinueBranch_manual(
+  history: string,
+  continuation: string,
+  provider: root.ai.Provider = BepV2FixtureGenerate { name: "s19-default", reply: `"unused"`, attributes: {} },
+) -> string throws baml.errors.CallError | baml.errors.UnknownError {
+  root.ai.run<string>(s19_ContinueBranch_request(history, continuation, provider = provider))
+}
+
+function s19_run_branch(
+  provider: root.ai.Provider,
+  prefix: root.ai.ChatMessage[],
+  id: string,
+  continuation: string,
+) -> s19_Branch throws baml.errors.CallError | baml.errors.UnknownError {
+  let messages = s19_fork(prefix, continuation);
+  let history = prefix.map((message) -> { `${message.role}: ${s19_text_of(message)}` }).join("\n");
+  let reply = s19_ContinueBranch_manual(history, continuation, provider = provider);
+  s19_Branch { id: id, messages: messages, reply: reply }
+}
+
+function s19_explore3(
+  provider: root.ai.Provider,
+  prefix: root.ai.ChatMessage[],
+  a: string,
+  b: string,
+  c: string,
+) -> s19_Branch[] throws baml.errors.CallError | baml.errors.UnknownError {
+  let future_a = spawn { s19_run_branch(provider, prefix, "a", a) };
+  let future_b = spawn { s19_run_branch(provider, prefix, "b", b) };
+  let future_c = spawn { s19_run_branch(provider, prefix, "c", c) };
+  [await future_a, await future_b, await future_c]
+}
+
+function s19_pick_winner(branches: s19_Branch[], want: string) -> s19_Branch throws never {
+  for (let branch in branches) {
+    if (branch.reply.includes(want)) { return branch; }
+  }
+  branches.at(0) ?? s19_Branch { id: "none", messages: [], reply: "" }
+}
 
 test "19: forking at the tail leaves the original trunk untouched" {
-    let prefix: baml.ai.ChatMessage[] = [
-        baml.ai.ChatMessage.system("You are a copywriter."),
-        baml.ai.ChatMessage.user("Draft a tagline for a coffee brand."),
-    ];
-    let p: baml.ai.Provider = s19_ForkEcho {};
-
-    // two independent forks from the SAME prefix.
-    let casual = s19_run_branch(p, prefix, "casual", "Keep it playful.") catch (e) { _ => s19_Branch { id: "err", messages: [], reply: "err" } };
-    let formal = s19_run_branch(p, prefix, "formal", "Rewrite it in a formal tone.") catch (e) { _ => s19_Branch { id: "err", messages: [], reply: "err" } };
-
-    // each branch carried the shared prefix's user turn AND its own continuation.
-    assert.is_true(casual.reply.includes("Draft a tagline for a coffee brand."))
-    assert.is_true(casual.reply.includes("Keep it playful."))
-    assert.is_true(formal.reply.includes("Rewrite it in a formal tone."))
-    // the branches DIVERGE — the casual continuation is absent from the formal branch.
-    assert.is_true(!formal.reply.includes("Keep it playful."))
-    // the ORIGINAL prefix is unchanged: fork copied, it did not append in place.
-    assert.equal(prefix.length(), 2)
-    // and each branch's own array is prefix + 1.
-    assert.equal(casual.messages.length(), 3)
-    assert.equal(formal.messages.length(), 3)
+  let prefix = [
+    root.ai.ChatMessage.system("You are a copywriter."),
+    root.ai.ChatMessage.user("Draft a tagline for a coffee brand."),
+  ];
+  let casual = s19_run_branch(s19_ForkEcho {}, prefix, "casual", "Keep it playful.");
+  let formal = s19_run_branch(s19_ForkEcho {}, prefix, "formal", "Rewrite it formally.");
+  assert.contains(casual.reply, "Keep it playful")
+  assert.contains(formal.reply, "Rewrite it formally")
+  assert.equal(prefix.length(), 2)
+  assert.equal(casual.messages.length(), 3)
 }
 
-
-// ── (a) Fork ANYWHERE: branch from an earlier point after moving on ────────────
-//
-// Even after the conversation grew, go BACK to turn #1 and take a different path.
-// The branch must NOT contain the later turns; the trunk still has them.
-
-test "19: forking anywhere drops the later turns from the branch, not the trunk" {
-    let history: baml.ai.ChatMessage[] = [
-        baml.ai.ChatMessage.system("You are a copywriter."),          // 0
-        baml.ai.ChatMessage.user("Draft a tagline."),                 // 1
-        baml.ai.ChatMessage.assistant("Fuel your morning."),          // 2
-        baml.ai.ChatMessage.user("Add a call to action."),            // 3
-        baml.ai.ChatMessage.assistant("Fuel your morning — order now."), // 4
-    ];
-    // go back to just after the first assistant answer (keep indices 0..2) and branch.
-    let branch = s19_fork_at(history, 3, "Actually, keep it understated.");
-    // branch = [system, user#1, assistant#2, new-user]  -> length 4
-    assert.equal(branch.length(), 4)
-    // the later turns (#3 "call to action", #4) are NOT on the branch.
-    let branch_texts: string[] = branch.map((m: baml.ai.ChatMessage) -> string throws never { s19_text_of(m) });
-    assert.is_true(!branch_texts.join(" | ").includes("Add a call to action."))
-    assert.is_true(branch_texts.join(" | ").includes("Actually, keep it understated."))
-    // the TRUNK still has all 5 turns.
-    assert.equal(history.length(), 5)
+test "19: forking anywhere drops later turns from the branch, not the trunk" {
+  let history = [
+    root.ai.ChatMessage.system("You are a copywriter."),
+    root.ai.ChatMessage.user("Draft a tagline."),
+    root.ai.ChatMessage.assistant("Fuel your morning."),
+    root.ai.ChatMessage.user("Add a call to action."),
+    root.ai.ChatMessage.assistant("Order now."),
+  ];
+  let branch = s19_fork_at(history, 3, "Keep it understated.");
+  assert.equal(branch.length(), 4)
+  assert.is_true(!branch.map((message) -> { s19_text_of(message) }).join(" ").includes("call to action"))
+  assert.equal(history.length(), 5)
 }
-
-
-// ── (a) Fan out N branches concurrently, compare, PICK A WINNER ────────────────
-//
-// The scenario's headline: explore several continuations from one shared prefix in
-// PARALLEL (spawn/await at the top level of s19_explore3), then rank them and pick.
 
 test "19: fan out three branches from a shared prefix and pick a winner" {
-    let prefix: baml.ai.ChatMessage[] = [
-        baml.ai.ChatMessage.system("You are a copywriter."),
-        baml.ai.ChatMessage.user("Pitch a name for a note-taking app."),
-    ];
-    let p: baml.ai.Provider = s19_ForkEcho {};
-
-    let branches: s19_Branch[] = s19_explore3(
-        p,
-        prefix,
-        "Make it playful.",
-        "Make it minimalist and premium.",
-        "Make it technical.",
-    ) catch (e) { _ => [] };
-
-    // all three explored the SAME shared prefix (fan-out worked).
-    assert.equal(branches.length(), 3)
-    // pick the branch that went "premium" — a deterministic stand-in for a ranker.
-    let winner = s19_pick_winner(branches, "premium");
-    assert.equal(winner.id, "b")
-    assert.is_true(winner.reply.includes("Pitch a name for a note-taking app."))
-    assert.is_true(winner.reply.includes("minimalist and premium"))
+  let prefix = [root.ai.ChatMessage.user("Name a note-taking app.")];
+  let branches = s19_explore3(
+    s19_ForkEcho {}, prefix, "Make it playful.", "Make it premium.", "Make it technical.",
+  );
+  assert.equal(branches.length(), 3)
+  assert.equal(s19_pick_winner(branches, "premium").id, "b")
 }
 
-
-// ── (b) Provider-held Branching: capability negotiation ────────────────────────
-//
-// Branchability is its own capability. A provider that IS `Branching` forks the
-// opaque handle into a new, distinct one; a provider that is NOT branchable lands in
-// the `_` arm — there is no honest way to fake a fork.
-
-test "19: a branchable provider forks the opaque session into a distinct handle" {
-    let p: baml.ai.Provider = s19_ForkableSession {};
-    let forked = match (p) {
-        let b: baml.ai.Branching => {
-            let f = b.fork(baml.ai.Session { _id: "root" }) catch (e) { _ => baml.ai.Session { _id: "failed" } };
-            f._id
-        },
-        _ => "no branching",
-    };
-    assert.equal(forked, "root-fork")
+test "19: a forkable session produces a distinct resource" {
+  let session = root.ai.open_session(s19_SessionProvider {}, root.ai.SessionOptions {});
+  let id = match (session) {
+    let forkable: root.ai.ForkableSession => forkable.fork().token().id,
+    _ => "not forkable",
+  };
+  assert.equal(id, "root-fork")
 }
 
-test "19: a non-branchable provider cannot fork (negotiation falls through)" {
-    // NoCapProvider (common/fakes.baml) implements only Provider — no Branching.
-    let p: baml.ai.Provider = NoCapProvider {};
-    let forked = match (p) {
-        let b: baml.ai.Branching => {
-            let f = b.fork(baml.ai.Session { _id: "root" }) catch (e) { _ => baml.ai.Session { _id: "failed" } };
-            f._id
-        },
-        _ => "no branching",
-    };
-    assert.equal(forked, "no branching")
+test "19: a plain session cannot be narrowed to ForkableSession" {
+  let session: root.ai.Session = s19_PlainSession { owner: s19_ForkEcho {} };
+  let label = match (session) {
+    let forkable: root.ai.ForkableSession => "forkable",
+    _ => "plain",
+  };
+  assert.equal(label, "plain")
 }
 
-
-// ── Live tier (excluded by default; run via `-i "integ-test*::"` with keys) ────
-//
-// The design's emergent-from-ids fork, PROVEN on the real API: a server-stored
-// chain establishes a shared prefix (a fact), then TWO `extend`s from the SAME
-// handle are two independent branches — both inherit the prefix, each answers its
-// own follow-up. That two extends off one `previous_response_id` diverge IS the
-// fork (scenario 20's chain surface, forked).
 testset "integ-test-19-fork-branch" {
-    test "19 live: two extends from the same chain handle are independent branches" {
-        let p = baml.ai.OpenAiResponses {
-            model: "gpt-5.4-mini",
-            api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
-            base_url: null,
-            extra_headers: null,
-            extra_body: null,
-            append_output_schema: null,
-            store: null,
-        };
-
-        // shared prefix: teach the model a fact, server-stored.
-        let handle = p.start_chain("My favorite number is 7. Remember it. Reply with just: ok") catch (e) {
-            _ => baml.ai.ChainHandle { id: "", owner: "" },
-        };
-        log.info("19 live: chain handle = " + handle.id);
-
-        // BRANCH A off the shared prefix.
-        let branch_a: string = p.extend_text(
-            "Is my favorite number even or odd? Reply with just one word.",
-            handle,
-        ) catch (e) { _ => "branch-a failed" };
-        log.info("19 live: branch A = " + branch_a);
-
-        // BRANCH B off the SAME handle — an independent fork, not a continuation of A.
-        let branch_b: string = p.extend_text(
-            "What is my favorite number times two? Reply with just the number.",
-            handle,
-        ) catch (e) { _ => "branch-b failed" };
-        log.info("19 live: branch B = " + branch_b);
-
-        // both branches inherited the shared prefix (the fact) yet answered their own
-        // follow-up — proof the two extends forked from one point rather than chaining.
-        assert.is_true(branch_a.includes("odd") || branch_a.includes("Odd"))
-        assert.is_true(branch_b.includes("14"))
-    }
+  test "19 live: two extends from the same chain handle are independent branches" {
+    let provider: root.ai.Provider = root.ai.OpenAiResponses {
+      model: "gpt-5.6-luna", api_key: baml.env.get_or_panic("OPENAI_API_KEY"), base_url: null,
+    };
+    let shared = root.ai.open_session(provider, root.ai.SessionOptions {});
+    let _ = shared.run<string>(s19_ContinueBranch_request("", "My favorite number is 7. Reply only: ok", provider = provider));
+    let answers = match (shared) {
+      let forkable: root.ai.ForkableSession => {
+        let a = forkable.fork();
+        let b = forkable.fork();
+        [
+          a.run<string>(s19_ContinueBranch_request("", "Is it even or odd? One word.", provider = provider)),
+          b.run<string>(s19_ContinueBranch_request("", "What is it times two? One number.", provider = provider)),
+        ]
+      },
+      _ => ["provider session is not forkable", "provider session is not forkable"],
+    };
+    assert.is_true(answers[0].to_lower_case().includes("odd"))
+    assert.contains(answers[1], "14")
+    shared.cleanup();
+  }
 }

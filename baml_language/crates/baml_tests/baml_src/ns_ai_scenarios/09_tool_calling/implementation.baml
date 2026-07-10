@@ -1,37 +1,79 @@
-// scenario 09 — tool calling: ../../../../../llm-provider/ideas/scenarios/09-tool-calling/implement.baml
-//   implementation.baml — LIBRARY-author code.
-//
-// The design's implement.baml hand-rolled three providers (OpenAI/Anthropic/
-// Gemini) each `implements HttpProvider + Tools`, plus a `ToolFallback`
-// combinator and net-new host surface (`ExecutionContext.dispatch`/`deps`,
-// `reflect.type_to_json_schema`/`type_to_gemini_openapi`). On the REAL surface
-// all of that already ships in `baml.ai`:
-//   - `Tool { name, description, parameters, params_type?, handoff? }` + `Tool.from_type`
-//     (one BAML `type` -> the wire schema; the three dialects live inside each
-//     native provider's `begin`, below the seam — REALIZED.md #09),
-//   - the `Tools` interface (`begin`/`step`/`submit` + the default `run_tools`),
-//   - `OpenAi`/`Anthropic`/`Gemini` each `implements Tools` natively,
-//   - `ToolLoop` (the agentic loop AS a provider — the design's `.run_tools`
-//     companion, now a plain `HttpProvider` call on a ToolLoop client).
-// So the only genuinely library-author code THIS scenario still owns is the one
-// concrete typed error it raises on purpose: the app-policy denial of a tool
-// call (the design's `ToolCallDenied`, an approval-gate `ToolError`).
+class BepV2ScriptedTranscript {
+  turn: int,
+  call_name: string?,
+  call_args: string,
+  final_json: string,
+}
 
-// App-policy denial of a tool call (the design's ApprovedSupport approval gate).
-// Surfaces mid-loop, so it is a `ToolError` the app catches concretely — most-
-// specific first, before any interface arm. `implements Failure` answers the
-// uniform decision axis (a policy refusal, not retryable/network/rate-limit).
-class s09_ToolCallDenied {
-    tool_name: string,
+// Shared deterministic Tools provider for scenarios 09–14.
+class BepV2ScriptedTools {
+  call_name: string?,
+  call_args: string,
+  final_json: string,
 
-    implements baml.errors.Failure {
-        function is_retryable(self) -> bool { false }
-        function is_effectful(self) -> bool { false }
-        function is_policy_refusal(self) -> bool { true }
-        function is_resumable(self) -> bool { false }
-        function is_unsupported(self) -> bool { false }
+  implements root.ai.Provider {}
+
+  implements root.ai.Tools {
+    type Transcript = BepV2ScriptedTranscript
+
+    function begin<T>(self, request: root.ai.Request<T>) -> BepV2ScriptedTranscript
+        throws baml.errors.ToolError | baml.errors.UnknownError {
+      BepV2ScriptedTranscript {
+        turn: 0,
+        call_name: self.call_name,
+        call_args: self.call_args,
+        final_json: self.final_json,
+      }
     }
-    implements baml.errors.ToolError {
-        function is_network_error(self) -> bool { false }
+
+    function step<T>(self, transcript: BepV2ScriptedTranscript) -> T | root.ai.ToolCalls
+        throws baml.errors.ToolError | baml.errors.UnknownError {
+      match (transcript.call_name) {
+        let name: string => {
+          if (transcript.turn == 0) {
+            return root.ai.ToolCalls {
+              calls: [root.ai.ToolCall { id: "call-1", name: name, args: transcript.call_args }],
+            };
+          }
+        },
+        null => {},
+      }
+      baml.sap.parse<T>(transcript.final_json) catch (e) {
+        _ => throw baml.errors.UnknownError { data: e, message: ["scripted final value parse failed"] },
+      }
     }
+
+    function submit(
+      self,
+      transcript: BepV2ScriptedTranscript,
+      results: root.ai.ToolResult[],
+    ) -> BepV2ScriptedTranscript throws baml.errors.ToolError | baml.errors.UnknownError {
+      BepV2ScriptedTranscript {
+        turn: transcript.turn + 1,
+        call_name: transcript.call_name,
+        call_args: transcript.call_args,
+        final_json: transcript.final_json,
+      }
+    }
+  }
+}
+
+class S09WeatherArgs {
+  city: string,
+}
+
+function s09_weather_tool() -> root.ai.Tool throws baml.errors.Unsupported {
+  root.ai.Tool.from_type(
+    "get_weather",
+    "Get the current weather for a city.",
+    reflect.type_of<S09WeatherArgs>(),
+  )
+}
+
+function s09_weather_dispatch(calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {
+  calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
+    root.ai.invoke_tool<S09WeatherArgs>(call, (args: S09WeatherArgs) -> string {
+      `cloudy, 18 C in ${args.city}`
+    })
+  })
 }

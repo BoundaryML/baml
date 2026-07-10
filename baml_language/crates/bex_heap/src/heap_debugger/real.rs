@@ -218,8 +218,8 @@ impl BexHeap {
                 ptr_addr != 0,
                 "handle has null pointer: handle_key={handle_key}"
             );
-            // Note: With HeapPtr, we can't easily do bounds checking since we have raw pointers
-            // The epoch check in debug_assert_valid_index provides safety guarantees
+            // Full pointer membership is checked by debug_assert_valid_index
+            // when the handle is inspected below.
             let _ = ptr_addr; // Silence unused warning - we verified it's not null
         }
 
@@ -250,7 +250,10 @@ impl BexHeap {
 
         let handles = self.handles.read().expect("handles lock poisoned");
         for (handle_key, idx) in handles.iter() {
-            self.debug_assert_valid_index(*idx);
+            self.debug_assert_valid_index_with_context(
+                *idx,
+                &format!("handle table entry key={handle_key}"),
+            );
             let obj = unsafe { self.get_object(*idx) };
             if let Object::Sentinel(_) = obj {
                 panic!("handle points to sentinel: handle_key={handle_key} idx={idx:?}");
@@ -394,21 +397,46 @@ impl BexHeap {
     }
 
     pub fn debug_assert_valid_index(&self, idx: HeapPtr) {
+        self.debug_assert_valid_index_with_context(idx, "heap pointer");
+    }
+
+    pub fn debug_assert_valid_index_with_context(&self, idx: HeapPtr, context: &str) {
         let debug = self.debug_state().config();
         if !debug.enabled {
             return;
         }
 
         // Check the pointer is not null
-        assert!(!idx.as_ptr().is_null(), "heap pointer is null");
+        assert!(!idx.as_ptr().is_null(), "{context} is null");
 
-        // Check epoch matches
-        let current_epoch = self.heap_epoch();
-        let idx_epoch = idx.epoch();
+        // Compile-time objects are permanent and never move.
+        if self.is_compile_time_ptr(idx) {
+            return;
+        }
+
+        // `Value` is a packed u64 and cannot retain HeapPtr's debug epoch;
+        // Value::as_object_ptr therefore reconstructs pointers with epoch 0.
+        // Address membership is the reliable validity check. Chunk metadata is
+        // internally synchronized, so this is safe both at a GC safepoint and
+        // on the debug get_object path while Gen0 may be growing.
+        let raw = idx.as_ptr() as *const Object;
+        let (in_gen0, in_gen1, in_gen2, in_inactive) = unsafe {
+            (
+                Self::ptr_in_chunked_vec(&*self.gen0.get(), raw),
+                Self::ptr_in_chunked_vec(&*self.gen1.get(), raw),
+                Self::ptr_in_chunked_vec(&*self.gen2.get(), raw),
+                Self::ptr_in_chunked_vec(&*self.inactive.get(), raw),
+            )
+        };
         assert!(
-            idx_epoch == current_epoch,
-            "heap pointer epoch mismatch: idx_epoch={idx_epoch} heap_epoch={current_epoch} ptr={:?}",
-            idx.as_ptr()
+            !in_inactive,
+            "{context} points into inactive/from-space memory: ptr={:?}",
+            idx.as_ptr(),
+        );
+        assert!(
+            in_gen0 || in_gen1 || in_gen2,
+            "{context} is outside every live heap space: ptr={:?}",
+            idx.as_ptr(),
         );
     }
 

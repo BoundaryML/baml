@@ -1888,8 +1888,26 @@ impl BexEngine {
 
         // Collect roots from handles (objects returned to external code)
         let mut all_roots = self.heap.collect_handle_roots();
+        #[cfg(feature = "heap_debug")]
+        let handle_root_count = all_roots.len();
 
         heap_guard.collect_roots(&mut all_roots);
+
+        // Validate roots before the collector dereferences them. Without this,
+        // a stale pointer falls through `generation_of` as Gen0 and can turn a
+        // root-forwarding bug into an opaque SIGSEGV in `Object::clone`.
+        #[cfg(feature = "heap_debug")]
+        for (root_index, &ptr) in all_roots.iter().enumerate() {
+            let source = if root_index < handle_root_count {
+                "handle"
+            } else {
+                "parked-vm"
+            };
+            self.heap.debug_assert_valid_index_with_context(
+                ptr,
+                &format!("pre-GC root index={root_index} source={source}"),
+            );
+        }
 
         tracing::debug!(
             "GC: {} total roots from {} handles and {} parked heap permits",
@@ -1930,11 +1948,27 @@ impl BexEngine {
         #[cfg(feature = "heap_debug")]
         {
             let mut roots_after = self.heap.collect_handle_roots();
+            let handle_root_count = roots_after.len();
             heap_guard.collect_roots(&mut roots_after);
-            for &ptr in &roots_after {
+            for (root_index, &ptr) in roots_after.iter().enumerate() {
+                let source = if root_index < handle_root_count {
+                    "handle"
+                } else {
+                    "parked-vm"
+                };
+                let generation = self.heap.generation_of(ptr);
+                let in_inactive = self.heap.debug_ptr_in_inactive(ptr);
+                self.heap.debug_assert_valid_index_with_context(
+                    ptr,
+                    &format!(
+                        "post-GC root index={root_index} source={source} \
+                         generation={generation:?} in_inactive={in_inactive}"
+                    ),
+                );
                 assert!(
                     !self.heap.debug_ptr_in_inactive(ptr),
-                    "heap_debug: post-forward_roots — root {ptr:?} still points \
+                    "heap_debug: post-forward_roots — root index={root_index} \
+                     source={source} ptr={ptr:?} still points \
                      into the inactive space (forward_roots missed it)"
                 );
             }

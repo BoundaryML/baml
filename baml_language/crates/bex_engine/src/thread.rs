@@ -11,6 +11,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[cfg(feature = "heap_debug")]
+use std::collections::HashSet;
+
 use ::bex_heap::{Tlab, TlabHolder};
 use ::bex_vm_types::{HeapPtr, RootHaver, types::FutureId};
 use bex_vm::BexVm;
@@ -288,6 +291,21 @@ impl RootHaver for BexThread {
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.vm.forward_roots(roots);
         self.pending_child_errors.forward_roots(roots);
+
+        #[cfg(feature = "heap_debug")]
+        {
+            let forwarded_values: HashSet<HeapPtr> = roots.values().copied().collect();
+            let mut pending_roots = Vec::new();
+            self.pending_child_errors.collect_roots(&mut pending_roots);
+            for (offset, root) in pending_roots.into_iter().enumerate() {
+                assert!(
+                    forwarded_values.contains(&root),
+                    "heap_debug: BexThread name={:?} pending_child_errors \
+                     root offset={offset} ptr={root:?} was not forwarded",
+                    self.name,
+                );
+            }
+        }
     }
 }
 

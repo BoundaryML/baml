@@ -29,7 +29,9 @@ baml_type = { workspace = true }
 baml_version = { workspace = true }
 baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
+bex_events = { workspace = true }
 bex_vm_types = { workspace = true }
+bridge_ctypes = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
 sdkgen_typescript_node = { workspace = true }
 sys_native = { workspace = true }
@@ -43,6 +45,7 @@ indexmap = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }
 object = { workspace = true }
+prost = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }
 serde = { workspace = true }
