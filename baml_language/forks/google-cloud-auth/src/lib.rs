@@ -20,6 +20,11 @@
 //!   federation and GDCH are rejected with [`AuthError::Unsupported`].
 //! - **Token caching**: minted tokens are cached process-wide and reused
 //!   until shortly before expiry (google-auth's 3m45s refresh threshold).
+//! - **Project resolution**: [`project_id`] follows `GOOGLE_CLOUD_PROJECT` /
+//!   legacy `GCLOUD_PROJECT`, the credential file, the active gcloud
+//!   configuration's `core.project`, the ADC file's quota project, then the
+//!   metadata server. [`quota_project_id`] backs the `x-goog-user-project`
+//!   header (google-auth's `Credentials.apply`).
 //!
 //! Deliberately NOT supported (BAML policy): inline-JSON env vars and
 //! `gcloud` CLI shell-outs.
@@ -49,6 +54,8 @@ const DEFAULT_TOKEN_URI: &str = "https://oauth2.googleapis.com/token";
 const DEFAULT_STS_TOKEN_URL: &str = "https://sts.googleapis.com/v1/token";
 const METADATA_TOKEN_URL: &str =
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
+const METADATA_PROJECT_URL: &str =
+    "http://metadata.google.internal/computeMetadata/v1/project/project-id";
 
 /// Re-mint when a cached token is within this window of its expiry. Matches
 /// google-auth's `REFRESH_THRESHOLD` (3m45s).
@@ -259,6 +266,90 @@ pub async fn token_from_adc(io: &dyn TokenIo, scope: &str) -> Result<String, Aut
     let token = mint_metadata(io, scope).await?;
     store_token(key, &token);
     Ok(token.access_token)
+}
+
+/// Resolve the active project id the way `google-auth` does:
+/// `GOOGLE_CLOUD_PROJECT` (legacy `GCLOUD_PROJECT`) → the
+/// `GOOGLE_APPLICATION_CREDENTIALS` file → the active gcloud configuration's
+/// `core.project` → the well-known ADC file's quota/project id → the GCE
+/// metadata server.
+pub async fn project_id(io: &dyn TokenIo) -> Option<String> {
+    for env_key in ["GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT"] {
+        if let Some(val) = io.env(env_key).await {
+            let val = val.trim().to_string();
+            // Ignore unexpanded `$VAR` placeholders from .env files.
+            if !val.is_empty() && !val.starts_with('$') {
+                return Some(val);
+            }
+        }
+    }
+
+    if let Some(path) = gac_path(io).await {
+        if let Some(contents) = io.read_file(&path).await {
+            if let Some(pid) = project_id_from_json(&contents) {
+                return Some(pid);
+            }
+        }
+    }
+
+    if let Some(pid) = gcloud_config_project(io).await {
+        return Some(pid);
+    }
+
+    if let Some(path) = adc_config_path(io).await {
+        if let Some(contents) = io.read_file(&path).await {
+            if let Some(pid) = project_id_from_json(&contents) {
+                return Some(pid);
+            }
+        }
+    }
+
+    metadata_project_id(io).await
+}
+
+/// Extract a project id from a credential JSON document (`project_id`, falling
+/// back to `quota_project_id` for `authorized_user` documents).
+pub fn project_id_from_json(json_str: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
+    ["project_id", "quota_project_id"]
+        .iter()
+        .find_map(|k| value.get(k)?.as_str())
+        .map(String::from)
+}
+
+/// Resolve the quota project (billing/quota attribution for user credentials):
+/// `GOOGLE_CLOUD_QUOTA_PROJECT` → the `GOOGLE_APPLICATION_CREDENTIALS` file →
+/// the well-known ADC config file. Backs the `x-goog-user-project` header,
+/// like google-auth's `Credentials.apply`.
+pub async fn quota_project_id(io: &dyn TokenIo) -> Option<String> {
+    if let Some(val) = io.env("GOOGLE_CLOUD_QUOTA_PROJECT").await {
+        let val = val.trim().to_string();
+        if !val.is_empty() {
+            return Some(val);
+        }
+    }
+    if let Some(path) = gac_path(io).await {
+        if let Some(contents) = io.read_file(&path).await {
+            if let Some(qp) = quota_project_id_from_json(&contents) {
+                return Some(qp);
+            }
+        }
+    }
+    if let Some(path) = adc_config_path(io).await {
+        if let Some(contents) = io.read_file(&path).await {
+            if let Some(qp) = quota_project_id_from_json(&contents) {
+                return Some(qp);
+            }
+        }
+    }
+    None
+}
+
+/// Extract `quota_project_id` from a credential JSON document.
+pub fn quota_project_id_from_json(json_str: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(json_str)
+        .ok()
+        .and_then(|v| v.get("quota_project_id")?.as_str().map(String::from))
 }
 
 // ---------------------------------------------------------------------------
@@ -661,6 +752,19 @@ async fn mint_metadata(io: &dyn TokenIo, scope: &str) -> Result<Token, AuthError
     parse_token_response(&resp.body)
 }
 
+async fn metadata_project_id(io: &dyn TokenIo) -> Option<String> {
+    let headers = vec![("Metadata-Flavor".to_string(), "Google".to_string())];
+    let resp = io
+        .http("GET", METADATA_PROJECT_URL, &headers, "")
+        .await
+        .ok()?;
+    if !(200..300).contains(&resp.status) {
+        return None;
+    }
+    let pid = resp.body.trim().to_string();
+    (!pid.is_empty()).then_some(pid)
+}
+
 // ---------------------------------------------------------------------------
 // Token endpoint helpers
 // ---------------------------------------------------------------------------
@@ -739,6 +843,54 @@ async fn adc_config_path(io: &dyn TokenIo) -> Option<String> {
         "{}/application_default_credentials.json",
         gcloud_config_dir(io).await?
     ))
+}
+
+/// `core.project` from the active gcloud configuration file — the same value
+/// google-auth reports for gcloud-user ADC, but read from disk instead of
+/// shelling out to `gcloud config get-value project`.
+async fn gcloud_config_project(io: &dyn TokenIo) -> Option<String> {
+    let dir = gcloud_config_dir(io).await?;
+    let config_name = match io
+        .env("CLOUDSDK_ACTIVE_CONFIG_NAME")
+        .await
+        .filter(|s| !s.is_empty())
+    {
+        Some(name) => name,
+        None => io
+            .read_file(&format!("{dir}/active_config"))
+            .await
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "default".to_string()),
+    };
+    let contents = io
+        .read_file(&format!("{dir}/configurations/config_{config_name}"))
+        .await?;
+    parse_gcloud_config_project(&contents)
+}
+
+/// Extract `project` from the `[core]` section of a gcloud config file.
+fn parse_gcloud_config_project(contents: &str) -> Option<String> {
+    let mut in_core = false;
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_core = line == "[core]";
+            continue;
+        }
+        if !in_core {
+            continue;
+        }
+        if let Some((key, val)) = line.split_once('=') {
+            if key.trim() == "project" {
+                let val = val.trim();
+                if !val.is_empty() {
+                    return Some(val.to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -826,10 +978,7 @@ mod tests {
         // Cross-checked with Python `datetime.timestamp()`.
         assert_eq!(rfc3339_to_unix("1970-01-01T00:00:00Z"), Some(0));
         assert_eq!(rfc3339_to_unix("2026-07-09T00:00:00Z"), Some(1_783_555_200));
-        assert_eq!(
-            rfc3339_to_unix("2024-02-29T23:59:59Z"),
-            Some(1_709_251_199)
-        );
+        assert_eq!(rfc3339_to_unix("2024-02-29T23:59:59Z"), Some(1_709_251_199));
         // Fractional seconds (IAM Credentials emits these).
         assert_eq!(
             rfc3339_to_unix("2026-07-09T00:00:00.123456Z"),
@@ -838,6 +987,34 @@ mod tests {
         // Non-UTC offsets are not Google API output; refuse rather than guess.
         assert_eq!(rfc3339_to_unix("2026-07-09T00:00:00+02:00"), None);
         assert_eq!(rfc3339_to_unix("garbage"), None);
+    }
+
+    #[test]
+    fn gcloud_config_project_parses_core_section_only() {
+        let config = "\
+[compute]
+zone = us-central1-c
+project = wrong-project
+
+[core]
+account = dev@example.com
+project = right-project
+";
+        assert_eq!(
+            parse_gcloud_config_project(config),
+            Some("right-project".to_string())
+        );
+        assert_eq!(parse_gcloud_config_project("[core]\naccount = x\n"), None);
+    }
+
+    #[test]
+    fn project_id_from_json_prefers_project_id() {
+        let sa = r#"{"type":"service_account","project_id":"p1","quota_project_id":"q1"}"#;
+        assert_eq!(project_id_from_json(sa), Some("p1".to_string()));
+        let user = r#"{"type":"authorized_user","quota_project_id":"q1"}"#;
+        assert_eq!(project_id_from_json(user), Some("q1".to_string()));
+        assert_eq!(project_id_from_json("{}"), None);
+        assert_eq!(quota_project_id_from_json(sa), Some("q1".to_string()));
     }
 
     #[test]
