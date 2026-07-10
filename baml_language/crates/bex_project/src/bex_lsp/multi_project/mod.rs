@@ -5,7 +5,7 @@
 //!
 //! - **Refresh (I1):** every editor/watcher/playground event becomes one
 //!   [`crate::project::SourceBatch`] applied atomically with document
-//!   versions; the source revision advances only when text actually changed.
+//!   versions; the source revision advances with every applied batch.
 //! - **Diagnostics (0B/I6):** each project owns a latest-revision dirty
 //!   fence. Publication converts an owned revision-tagged candidate; `Busy`
 //!   retains the last publication and schedules a trailing retry; stale
@@ -83,6 +83,11 @@ struct OverlayDocument {
 /// Busy                      → publish nothing; trailing retry with backoff
 /// Poisoned                  → publish nothing; surface internal failure
 /// ```
+///
+/// Staleness is decided against the authoritative source revision (I1), not
+/// only the dirty mark: an unsolicited candidate (e.g. a superseded
+/// rebuild's) and a candidate racing `mark_dirty` are both discarded once a
+/// newer revision exists, so they can never regress newer markers.
 #[derive(Default)]
 struct DiagnosticsFence {
     /// Newest revision requiring publication. Compare-and-clear only.
@@ -104,8 +109,17 @@ impl DiagnosticsFence {
 
     /// Decide a computed candidate's fate. `true` compare-and-clears the
     /// dirty revision and admits publication; `false` discards a stale
-    /// candidate (a newer mutation is dirty and owns the next publication).
-    fn admit(&mut self, candidate_revision: SourceRevision) -> bool {
+    /// candidate — a newer mutation owns the next publication, whether or
+    /// not its dirty mark has landed yet (`refresh_project` always
+    /// schedules a tail for it).
+    fn admit(
+        &mut self,
+        candidate_revision: SourceRevision,
+        current_revision: SourceRevision,
+    ) -> bool {
+        if candidate_revision < current_revision {
+            return false;
+        }
         if let Some(dirty) = self.dirty {
             if candidate_revision < dirty {
                 return false;
@@ -899,10 +913,16 @@ impl BexMulitProject {
         let encoding = self.encoding_for_publication();
         let documents = candidate_to_publishable(candidate, encoding);
 
+        // The current revision is read under the fence lock: publications
+        // serialize on it, so a candidate admitted here can never regress
+        // one already admitted for a newer revision.
         let mut fence = project.diagnostics_fence.lock().unwrap();
-        if !fence.admit(candidate.source_revision) {
-            // A newer mutation is already dirty; its own attempt is
-            // scheduled. Publishing this would regress markers.
+        if !fence.admit(
+            candidate.source_revision,
+            project.project.current_revision(),
+        ) {
+            // A newer mutation owns the next publication; its tail is
+            // already scheduled. Publishing this would regress markers.
             return;
         }
 
@@ -2104,29 +2124,56 @@ mod tests {
 
         // r1 dirty, candidate at r1: publish and clear.
         fence.mark_dirty(SourceRevision(1));
-        assert!(fence.admit(SourceRevision(1)));
+        assert!(fence.admit(SourceRevision(1), SourceRevision(1)));
         assert_eq!(fence.dirty, None);
 
         // r2 and r3 dirty (newest wins), candidate from r2 arrives after r3
         // was marked: discard, r3 stays dirty for its own attempt.
         fence.mark_dirty(SourceRevision(2));
         fence.mark_dirty(SourceRevision(3));
-        assert!(!fence.admit(SourceRevision(2)));
+        assert!(!fence.admit(SourceRevision(2), SourceRevision(3)));
         assert_eq!(fence.dirty, Some(SourceRevision(3)));
 
         // The r3 candidate publishes and clears.
-        assert!(fence.admit(SourceRevision(3)));
+        assert!(fence.admit(SourceRevision(3), SourceRevision(3)));
         assert_eq!(fence.dirty, None);
 
         // A candidate *newer* than the dirty mark also publishes (the fence
         // only rejects candidates older than the newest known mutation).
         fence.mark_dirty(SourceRevision(4));
-        assert!(fence.admit(SourceRevision(5)));
+        assert!(fence.admit(SourceRevision(5), SourceRevision(5)));
         assert_eq!(fence.dirty, None);
 
-        // With nothing dirty, an unsolicited (e.g. rebuild-tail) candidate
-        // still publishes.
-        assert!(fence.admit(SourceRevision(5)));
+        // With nothing dirty, an unsolicited current candidate (e.g. a
+        // winning rebuild's) still publishes.
+        assert!(fence.admit(SourceRevision(5), SourceRevision(5)));
+    }
+
+    /// Candidates older than the authoritative revision are discarded even
+    /// when nothing is dirty: a superseded rebuild's diagnostics (computed
+    /// before a newer edit) and a candidate racing `mark_dirty` must never
+    /// regress markers a newer revision already owns (design 0B: "complete
+    /// v7 diagnostics after v8 arrives and observe no v7 publication").
+    #[test]
+    fn diagnostics_fence_discards_stale_unsolicited_candidates() {
+        let mut fence = DiagnosticsFence::default();
+
+        // r5 published normally; dirty is clear.
+        fence.mark_dirty(SourceRevision(5));
+        assert!(fence.admit(SourceRevision(5), SourceRevision(5)));
+
+        // A superseded rebuild finishes late with r4 diagnostics: discarded.
+        assert!(!fence.admit(SourceRevision(4), SourceRevision(5)));
+
+        // An edit advanced the revision to r6 but its dirty mark has not
+        // landed yet (`mark_dirty` runs after `mutate_sources` returns): an
+        // in-flight r5 candidate is already stale.
+        assert!(!fence.admit(SourceRevision(5), SourceRevision(6)));
+
+        // The r6 tail publishes normally.
+        fence.mark_dirty(SourceRevision(6));
+        assert!(fence.admit(SourceRevision(6), SourceRevision(6)));
+        assert_eq!(fence.dirty, None);
     }
 
     #[test]

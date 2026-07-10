@@ -34,7 +34,9 @@
 //!   ([`BexProject::mark_broken`]), never treated as recoverable contention.
 //!
 //! Lock order (I8): source gate → runtime state → caches. The `run_cfgs`
-//! cache is only locked while no source/runtime guard is held.
+//! cache is a leaf mutex: it may be taken while the source gate is held
+//! ([`BexProject::prepare_function_run`]'s cached-graph fast path), and no
+//! source or runtime lock is ever acquired while holding it.
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -594,7 +596,7 @@ impl BexProject {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let revision_at_start = self.observed_revision.load(Ordering::Acquire);
+            let revision_at_start = self.current_revision();
             let started = std::time::Instant::now();
             loop {
                 match self.source.try_lock() {
@@ -610,14 +612,13 @@ impl BexProject {
                     }
                     Err(std::sync::TryLockError::WouldBlock) => {
                         if started.elapsed() >= REQUEST_DB_DEADLINE {
-                            let revision_changed =
-                                self.observed_revision.load(Ordering::Acquire) != revision_at_start;
+                            let busy = self.classify_request_timeout(revision_at_start);
                             log::warn!(
                                 "request timed out after {}ms waiting for the source gate \
-                                 (revision_changed={revision_changed})",
+                                 ({busy:?})",
                                 started.elapsed().as_millis()
                             );
-                            return Err(DbReadError::Busy { revision_changed });
+                            return Err(busy);
                         }
                         std::thread::sleep(REQUEST_DB_RETRY_INTERVAL);
                     }
@@ -627,6 +628,17 @@ impl BexProject {
                     }
                 }
             }
+        }
+    }
+
+    /// Classify a request-lane timeout (Phase 0C): a revision that moved
+    /// while the request waited means the result would have been stale
+    /// anyway (`ContentModified` at the LSP boundary); an unchanged revision
+    /// is plain congestion (`RequestFailed`).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn classify_request_timeout(&self, revision_at_start: SourceRevision) -> DbReadError {
+        DbReadError::Busy {
+            revision_changed: self.current_revision() != revision_at_start,
         }
     }
 
@@ -713,6 +725,11 @@ impl BexProject {
         Ok(revision)
     }
 
+    /// Latest committed source revision, readable without any lock (I1).
+    pub(crate) fn current_revision(&self) -> SourceRevision {
+        SourceRevision(self.observed_revision.load(Ordering::Acquire))
+    }
+
     // ── Candidate construction (I2) ──────────────────────────────────────
 
     /// Capture the current revision and compile an owned
@@ -790,7 +807,22 @@ impl BexProject {
         &self,
         candidate: EngineCandidate,
     ) -> Result<CommitOutcome, ProjectBroken> {
+        self.commit_engine_if_current_with_hook(candidate, || {})
+    }
+
+    /// Internal seam for proving the commit/source-mutation serialization
+    /// boundary. The hook runs after the authoritative source gate is held
+    /// but before the revision comparison; production callers use the no-op
+    /// wrapper above, tests use the hook to place an edit exactly against
+    /// the conditional commit without sleeps or scheduler timing
+    /// assumptions.
+    fn commit_engine_if_current_with_hook(
+        &self,
+        candidate: EngineCandidate,
+        after_source_lock: impl FnOnce(),
+    ) -> Result<CommitOutcome, ProjectBroken> {
         let source = self.lock_source_blocking()?;
+        after_source_lock();
         if source.revision != candidate.source_revision {
             return Ok(CommitOutcome::Superseded {
                 current_revision: source.revision,
@@ -1119,9 +1151,11 @@ impl BexProject {
     /// and — when `overlay_function` is set — obtains the pinned
     /// control-flow graph for that generation.
     ///
-    /// Graph building holds only the serialized source gate (never runtime,
-    /// active-run, or cache locks); the generation-keyed CFG cache is
-    /// populated after all guards are released (I5 ordering).
+    /// Graph building holds only the serialized source gate (never runtime
+    /// or active-run locks); the cached-graph fast path briefly takes the
+    /// leaf `run_cfgs` mutex while the source gate is held, and the
+    /// generation-keyed CFG cache is populated only after all guards are
+    /// released (I5 ordering).
     pub(crate) fn prepare_function_run(
         &self,
         overlay_function: Option<&str>,
@@ -1390,6 +1424,128 @@ mod tests {
             _ => panic!("rebuild of valid source should commit"),
         }
         assert!(project.is_bex_current());
+    }
+
+    /// An edit that lands while the commit holds the source gate is
+    /// serialized after it: the commit installs its (immediately
+    /// last-known-good) engine, and the queued edit makes it non-current.
+    /// The rendezvous hook places the edit exactly at the commit boundary —
+    /// no sleeps or scheduler timing assumptions.
+    #[test]
+    fn edit_at_commit_boundary_never_leaves_a_false_current_engine() {
+        let project = test_project();
+        project
+            .mutate_sources(batch(&[("/p/a.baml", VALID_SOURCE)], &[]))
+            .unwrap();
+        let CompilationOutcome::Ready(compiled, _) = project.compile_outcome().unwrap() else {
+            panic!("trivial source should compile");
+        };
+        let candidate = project.construct_engine_candidate(*compiled).unwrap();
+
+        let rendezvous = std::sync::Barrier::new(2);
+        let (gate_observation_tx, gate_observation_rx) = std::sync::mpsc::sync_channel(1);
+
+        std::thread::scope(|scope| {
+            let edit = scope.spawn(|| {
+                rendezvous.wait();
+                let commit_holds_source_gate = matches!(
+                    project.source.try_lock(),
+                    Err(std::sync::TryLockError::WouldBlock)
+                );
+                gate_observation_tx
+                    .send(commit_holds_source_gate)
+                    .expect("commit test receiver should stay alive");
+                project
+                    .mutate_sources(batch(
+                        &[("/p/a.baml", "function main() -> int {\n    2\n}\n")],
+                        &[],
+                    ))
+                    .unwrap()
+            });
+
+            let outcome = project
+                .commit_engine_if_current_with_hook(candidate, || {
+                    rendezvous.wait();
+                    assert!(
+                        gate_observation_rx
+                            .recv()
+                            .expect("edit thread should report the gate state"),
+                        "commit must hold the same source gate required by edits"
+                    );
+                })
+                .unwrap();
+
+            let CommitOutcome::Committed(receipt) = outcome else {
+                panic!("commit holding the gate must finish before the queued edit");
+            };
+            let r2 = edit.join().expect("edit thread should finish");
+            assert_eq!(receipt.source_revision, SourceRevision(1));
+            assert_eq!(r2, SourceRevision(2));
+        });
+
+        // The installed engine remains last-known-good but is not current,
+        // so run admission refuses it (D7).
+        assert_eq!(project.current_generation(), 1);
+        assert!(!project.is_bex_current());
+        assert!(matches!(
+            project.prepare_function_run(None),
+            Err(PrepareRunError::NeedsCurrentBuild)
+        ));
+    }
+
+    /// The request lane's bounded wait times out with a typed busy error
+    /// whose classification depends on whether the source revision moved
+    /// while waiting. The writer releases the gate only after the timeout
+    /// result is asserted, so the test never races the deadline.
+    #[test]
+    fn bounded_request_wait_classifies_timeout_by_revision_change() {
+        let project = test_project();
+        project
+            .mutate_sources(batch(&[("/p/a.baml", VALID_SOURCE)], &[]))
+            .unwrap();
+
+        // Gate held with no mutation: the timeout is plain congestion
+        // (RequestFailed at the LSP boundary, never -32001).
+        std::thread::scope(|scope| {
+            let (held_tx, held_rx) = std::sync::mpsc::sync_channel::<()>(0);
+            let (release_tx, release_rx) = std::sync::mpsc::sync_channel::<()>(0);
+            let project = &project;
+            scope.spawn(move || {
+                let _guard = project.read_source_nowait().unwrap().unwrap();
+                held_tx.send(()).expect("test thread should be waiting");
+                release_rx.recv().expect("main thread should release us");
+            });
+            held_rx.recv().expect("holder should signal");
+            assert!(matches!(
+                project.read_source_for_request(),
+                Err(DbReadError::Busy {
+                    revision_changed: false
+                })
+            ));
+            release_tx.send(()).expect("holder should be waiting");
+        });
+
+        // A revision that moved during the wait marks the timeout stale
+        // (ContentModified) rather than congested.
+        let revision_at_start = project.current_revision();
+        project
+            .mutate_sources(batch(
+                &[("/p/a.baml", "function main() -> int {\n    2\n}\n")],
+                &[],
+            ))
+            .unwrap();
+        assert!(matches!(
+            project.classify_request_timeout(revision_at_start),
+            DbReadError::Busy {
+                revision_changed: true
+            }
+        ));
+        assert!(matches!(
+            project.classify_request_timeout(project.current_revision()),
+            DbReadError::Busy {
+                revision_changed: false
+            }
+        ));
     }
 
     #[test]

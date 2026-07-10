@@ -1960,11 +1960,14 @@ async fn handle_ws_in_message(
                     state.env_state.cancel_for_host_call(&host_call_id);
                     match (host_call_id, run_identity) {
                         (HostCallId::Native(call_id), Some((project_id, generation))) => {
-                            // Cancel targets the engine the run launched on
-                            // (design D8): the run's call lives in that
-                            // engine's table even after newer engines were
-                            // installed. Fall back to the current engine for
-                            // runs whose generation is no longer retained.
+                            // Best-effort cancel: `engine_for_generation`
+                            // resolves only while the run's generation is
+                            // still the installed one (only one engine is
+                            // retained), so a run pinned to a superseded
+                            // engine is not reachable from here — the
+                            // current-engine fallback cannot find its call
+                            // and the run keeps executing. Full D8 run
+                            // registration is deferred.
                             let engine = state
                                 .bex
                                 .engine_for_generation(&project_id, generation)
