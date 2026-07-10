@@ -140,7 +140,7 @@ function getModel(provider: string) {
   switch(provider) {
     case 'openai': return openai('gpt-4o');
     case 'anthropic': return anthropic('claude-3-opus-20240229');
-    case 'google': return google('gemini-pro');
+    case 'google': return google('gemini-3.1-pro-preview');
     // Don't forget to handle errors...
   }
 }
@@ -288,9 +288,9 @@ client<llm> Claude {
 }
 
 client<llm> Gemini {
-  provider google
+  provider google-ai
   options {
-    model "gemini-pro"
+    model "gemini-3.1-pro-preview"
   }
 }
 
