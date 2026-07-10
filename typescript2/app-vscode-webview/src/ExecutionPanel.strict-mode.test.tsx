@@ -176,6 +176,75 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
   });
 });
 
+describe('ExecutionPanel test previews', () => {
+  it('hydrates function args when a legacy test is selected without running it', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'ClassifySentiment',
+                kind: 'llm',
+                origin: 'userDefined',
+                capabilities: {
+                  renderPrompt: true,
+                  buildRequest: true,
+                  clientName: 'Gpt5',
+                },
+                params: [
+                  {
+                    name: 'text',
+                    hasDefault: false,
+                    schema: { type: 'string' },
+                  },
+                ],
+              },
+            ],
+            tests: [
+              {
+                name: 'HappySentiment',
+                functionName: 'ClassifySentiment',
+                argsJson: '{"text":"I absolutely love this feature"}',
+              },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByTitle(
+        'Use HappySentiment args for ClassifySentiment',
+      ),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+      text: 'I absolutely love this feature',
+    });
+    expect(
+      screen.getByText('ClassifySentiment()'),
+    ).toBeInTheDocument();
+    expect(port.sent.some((message) => message.type === 'startRun')).toBe(false);
+    expect(port.sent.some((message) => message.type === 'startTestRun')).toBe(false);
+  });
+});
+
 describe('ExecutionPanel args form', () => {
   it('renders the args form from param schemas and serializes edits into argsJson', async () => {
     const port = new FakeRuntimePort();

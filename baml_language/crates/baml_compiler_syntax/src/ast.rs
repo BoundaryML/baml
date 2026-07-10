@@ -2736,7 +2736,7 @@ impl TestDef {
         self.syntax
             .descendants()
             .filter_map(ConfigItem::cast)
-            .find(|item| item.matches_key("functions"))
+            .find(|item| item.matches_key("functions") || item.matches_key("function"))
             .and_then(|item| {
                 // Find the CONFIG_VALUE child (excludes attributes which are siblings)
                 item.syntax()
@@ -2751,6 +2751,38 @@ impl TestDef {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// Get complete function references from the legacy `function(s)` config.
+    ///
+    /// Unlike [`Self::function_names`], this preserves qualified references
+    /// such as `workflows.Classify` as one value.
+    pub fn function_reference_names(&self) -> Vec<String> {
+        let Some(value) = self
+            .syntax
+            .descendants()
+            .filter_map(ConfigItem::cast)
+            .find(|item| item.matches_key("functions") || item.matches_key("function"))
+            .and_then(|item| item.config_value_node())
+        else {
+            return Vec::new();
+        };
+
+        let Some(text) = ConfigValue::cast(value).and_then(|value| value.scalar_text()) else {
+            return Vec::new();
+        };
+        let contents = text
+            .strip_prefix('[')
+            .and_then(|value| value.strip_suffix(']'))
+            .unwrap_or(&text);
+
+        contents
+            .split(',')
+            .map(str::trim)
+            .map(|name| name.trim_matches('"'))
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect()
     }
 
     /// Get the config block.

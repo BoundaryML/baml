@@ -27,7 +27,7 @@ import type {
   SerializedTestDef,
   SerializedTestSet,
 } from './serialized-test-tree';
-import type { FunctionInfo } from './worker-protocol';
+import type { FunctionInfo, TestInfo } from './worker-protocol';
 
 // ---------------------------------------------------------------------------
 // TestTreeNode — recursive tree renderer for SerializedTestDef items
@@ -193,6 +193,9 @@ export interface FunctionSidebarProps {
   internalFunctionCount: number;
   isLoadingProject?: boolean;
   testTree?: SerializedTestDef[] | null;
+  previewTests?: TestInfo[];
+  selectedPreviewTestKey?: string | null;
+  onSelectPreviewTest?: (test: TestInfo) => void;
   selectedFn: string | null;
   onSelectFn: (name: string | null) => void;
   onRefreshTests: () => void;
@@ -315,6 +318,9 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   internalFunctionCount,
   isLoadingProject = false,
   testTree,
+  previewTests = [],
+  selectedPreviewTestKey,
+  onSelectPreviewTest,
   selectedFn,
   onSelectFn,
   onRefreshTests,
@@ -347,6 +353,13 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   };
 
   const treeItems = testTree ?? [];
+  const previewNameCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const test of previewTests) {
+      counts.set(test.name, (counts.get(test.name) ?? 0) + 1);
+    }
+    return counts;
+  }, [previewTests]);
   let emptyFunctionMessage = 'No matches';
   if (isLoadingProject) {
     emptyFunctionMessage = 'Loading project...';
@@ -458,17 +471,46 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
             </div>
 
             <CollapsibleContent>
-              {!testTree && (
+              {!testTree && previewTests.length === 0 && (
                 <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
                   No test data yet
                 </div>
               )}
 
-              {testTree && treeItems.length === 0 && (
+              {testTree && treeItems.length === 0 && previewTests.length === 0 && (
                 <div className="px-4 py-2 text-[10px] text-vsc-text-faint italic">
                   No tests found
                 </div>
               )}
+
+              {previewTests.map((test) => {
+                const key = `${test.functionName}\u0000${test.name}`;
+                const duplicateName = (previewNameCounts.get(test.name) ?? 0) > 1;
+                return (
+                  <button
+                    type="button"
+                    key={key}
+                    className={cn(
+                      'flex items-center gap-1.5 w-full pr-2 py-0.5 text-[10px] font-vsc-mono text-left',
+                      selectedPreviewTestKey === key
+                        ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
+                        : 'text-vsc-text-muted hover:bg-vsc-hover',
+                    )}
+                    style={{ paddingLeft: 8 }}
+                    onClick={() => onSelectPreviewTest?.(test)}
+                    title={`Use ${test.name} args for ${test.functionName}`}
+                  >
+                    <FlaskConical size={12} className="text-vsc-text-faint shrink-0" />
+                    <span className="truncate text-[11px]">
+                      {test.name}
+                      {duplicateName ? ` → ${test.functionName}` : ''}
+                    </span>
+                    <span className="ml-auto text-[9px] text-vsc-text-faint shrink-0">
+                      preview
+                    </span>
+                  </button>
+                );
+              })}
 
               {treeItems.map((def, i) => (
                 <TestTreeNode

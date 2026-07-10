@@ -42,6 +42,7 @@ import type {
   FetchLogEntry,
   FunctionInfo,
   ProjectUpdate,
+  TestInfo,
   Run,
   BoundaryId,
   RunStatus,
@@ -172,6 +173,10 @@ function testTargetMatches(candidate: string, target: string): boolean {
     candidate.endsWith(`/${target}`) ||
     candidate.split('/').pop() === target
   );
+}
+
+function previewTestKey(test: TestInfo): string {
+  return `${test.functionName}\u0000${test.name}`;
 }
 
 function isExpandedTestSet(def: SerializedTestDef): def is SerializedTestSet {
@@ -756,6 +761,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     useState<PendingTestTarget | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
+  const [selectedPreviewTestKey, setSelectedPreviewTestKey] = useState<
+    string | null
+  >(null);
   const [showInternalFunctions, setShowInternalFunctions] = useState(false);
   const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
   // Args editor mode. 'form' renders the schema-driven ArgsForm when the
@@ -1679,6 +1687,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // `typedArgsByFnRef` — an edit that misses either silently desyncs them.
   const updateArgsJson = useCallback(
     (next: string) => {
+      setSelectedPreviewTestKey(null);
       setArgsJson(next);
       if (selectedFn) typedArgsByFnRef.current[selectedFn] = next;
     },
@@ -2027,6 +2036,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     : undefined;
   const isLoadingProject = selectedProject != null && currentUpdate == null;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
+  const previewTests = currentUpdate?.tests ?? [];
   const internalFunctionCount = functions.filter(isInternalFunction).length;
   const visibleFunctions = showInternalFunctions
     ? functions
@@ -2038,6 +2048,34 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
+
+  const handleSelectPreviewTest = useCallback((test: TestInfo) => {
+    const key = previewTestKey(test);
+    typedArgsByFnRef.current[test.functionName] = test.argsJson;
+    setArgsJson(test.argsJson);
+    setSelectedPreviewTestKey(key);
+    setSelectedFn(test.functionName);
+    setViewingCollection(false);
+    setViewingTestRun(false);
+    setHighlightedNodeId(null);
+    setWorkflowContext(null);
+  }, []);
+
+  // Keep a selected preview case synchronized with source edits. If the test
+  // is deleted, retain the current function/args as an ordinary manual draft.
+  useEffect(() => {
+    if (!selectedPreviewTestKey) return;
+    const test = previewTests.find(
+      (candidate) => previewTestKey(candidate) === selectedPreviewTestKey,
+    );
+    if (!test) {
+      setSelectedPreviewTestKey(null);
+      return;
+    }
+    typedArgsByFnRef.current[test.functionName] = test.argsJson;
+    setArgsJson(test.argsJson);
+    setSelectedFn(test.functionName);
+  }, [previewTests, selectedPreviewTestKey]);
 
   // ── Args form wiring ─────────────────────────────────────────────────────
   // `undefined` = no schema shipped (old engine / extraction miss) → raw-only.
@@ -2750,8 +2788,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   internalFunctionCount={internalFunctionCount}
                   isLoadingProject={isLoadingProject}
                   testTree={testTree}
+                  previewTests={previewTests}
+                  selectedPreviewTestKey={selectedPreviewTestKey}
+                  onSelectPreviewTest={handleSelectPreviewTest}
                   selectedFn={selectedFn}
                   onSelectFn={(fn) => {
+                    setSelectedPreviewTestKey(null);
                     setViewingCollection(false);
                     setViewingTestRun(false);
                     setHighlightedNodeId(null);

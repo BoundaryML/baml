@@ -128,9 +128,18 @@ export interface FunctionInfo {
   params?: ParamSchema[];
 }
 
+/** A statically declared legacy test that can seed function previews. */
+export interface TestInfo {
+  name: string;
+  functionName: string;
+  argsJson: string;
+}
+
 export interface ProjectUpdate {
   isBexCurrent: boolean;
   functions: FunctionInfo[];
+  /** Omitted by older runtimes; the UI treats that as no previewable tests. */
+  tests?: TestInfo[];
   /** Shared type table for `FunctionInfo.params` refs. `undefined` = binary
    *  predates the args form (refs, if any, degrade to raw JSON); may be an
    *  empty object when no function references named types. */
