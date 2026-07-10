@@ -4884,6 +4884,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         for diag in diags {
             self.context.report_simple(diag, expr_id);
         }
+        // The upcast target is an interface-existential value type, so it must pin every
+        // non-defaulted associated type (`MissingAssociatedTypeBindings`) — a bare
+        // `x.as<HasKey>` where `HasKey` has an unpinned `Key` is ill-formed exactly as a
+        // `let y: HasKey` annotation would be. The pin makes the existential a single
+        // concrete-enough type, so its `Self.Key` members reduce instead of staying symbolic.
+        self.validate_type_generic_bounds(expr_id, &target_ty);
         let valid_target = matches!(target_ty, Ty::Interface(_, _, _, _));
         if !valid_target && !matches!(target_ty, Ty::Unknown { .. } | Ty::Error { .. }) {
             self.context.report_simple(

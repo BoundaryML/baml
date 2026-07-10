@@ -34,7 +34,7 @@ class UserRepository {
 }
 
 function example(account: AccountRecord, repo: UserRepository) -> void {
-  let publicKey<[CURSOR] = account.as<PublicIdentity>.key
+  let publicKey<[CURSOR] = account.as<PublicIdentity<Key = string>>.key
   let found<[CURSOR] = repo.find()
 }
 

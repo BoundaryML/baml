@@ -512,7 +512,7 @@ fn vm_metadata_resolves_concrete_associated_type_projection_return() {
         }
 
         function get_public_key(account: AccountRecord) -> (AccountRecord as PublicIdentity).Key {
-            return account.as<PublicIdentity>.key
+            return account.as<PublicIdentity<Key = string>>.key
         }
         "#,
         "get_public_key",
@@ -1093,7 +1093,7 @@ async fn blanket_impl_self_associated_projection_uses_bounded_typevar() {
             let source = TextSource { name: "sample", text: "ok" }
             let wrapped = Wrapped<TextSource> { inner: source }
 
-            return take_source(source) + ":" + wrapped.as<Renderable>.render()
+            return take_source(source) + ":" + wrapped.as<Renderable<Output = string>>.render()
         }
         "#
     );
@@ -1201,7 +1201,7 @@ async fn upcast_of_bounded_typevar_preserves_associated_bindings() {
             type Key = (T as HasKey).Key
 
             function key(self) -> Self.Key {
-                return self.value.as<HasKey>.key
+                return self.value.as<HasKey<Key = string>>.key
             }
 
             function summary(self) -> string {
@@ -1210,7 +1210,7 @@ async fn upcast_of_bounded_typevar_preserves_associated_bindings() {
         }
 
         function entity_key<T extends Entity>(value: T) -> (T as HasKey).Key {
-            return value.as<HasKey>.key
+            return value.as<HasKey<Key = string>>.key
         }
 
         function main() -> string {
@@ -1338,7 +1338,7 @@ fn selected_projection_rejects_mismatched_associated_type_binding() {
         }
 
         function bad(doc: Document) -> (Document as Codec<TextFormat, Output = int>).Output {
-            return doc.as<Codec<TextFormat>>.decode("")
+            return doc.as<Codec<TextFormat, Output = string>>.decode("")
         }
         "#,
         "E0001",
@@ -1563,11 +1563,11 @@ fn qualified_associated_type_projection_disambiguates_generic_interfaces() {
         }
 
         function decode_text(doc: Document) -> (Document as Codec<TextFormat>).Output {
-            return doc.as<Codec<TextFormat>>.decode("")
+            return doc.as<Codec<TextFormat, Output = string>>.decode("")
         }
 
         function decode_code(doc: Document) -> (Document as Codec<CodeFormat>).Output {
-            return doc.as<Codec<CodeFormat>>.decode("")
+            return doc.as<Codec<CodeFormat, Output = int>>.decode("")
         }
         "#,
     );
@@ -2348,12 +2348,12 @@ fn qualified_projections_disambiguate_union_outputs() {
             (Document as Codec<TextFormat>).Output | (Document as Codec<CodeFormat>).Output
 
         function decode_text(doc: Document) -> (Document as Codec<TextFormat>).Output {
-            return doc.as<Codec<TextFormat>>.decode("")
+            return doc.as<Codec<TextFormat, Output = string | null>>.decode("")
         }
 
         function decode_any(doc: Document) ->
             (Document as Codec<TextFormat>).Output | (Document as Codec<CodeFormat>).Output {
-            return doc.as<Codec<CodeFormat>>.decode("")
+            return doc.as<Codec<CodeFormat, Output = int | bool>>.decode("")
         }
         "#,
     );
@@ -2397,9 +2397,9 @@ fn aliased_qualified_projection_unions_resolve_like_inline_unions() {
 
         function decode_union(doc: Document, text: bool) -> DecodeOutput {
             if text {
-                return doc.as<Codec<TextFormat>>.decode("")
+                return doc.as<Codec<TextFormat, Output = string | int>>.decode("")
             }
-            return doc.as<Codec<CodeFormat>>.decode("")
+            return doc.as<Codec<CodeFormat, Output = int | bool>>.decode("")
         }
         "#,
     );
@@ -2430,7 +2430,7 @@ fn selected_union_associated_output_rejects_incompatible_return() {
         }
 
         function bad(doc: Document) -> bool {
-            return doc.as<Codec<TextFormat>>.decode("")
+            return doc.as<Codec<TextFormat, Output = string | int>>.decode("")
         }
         "#,
         "E0001",
@@ -2881,7 +2881,7 @@ fn qualified_projection_works_in_nested_types() {
         }
 
         function decode_many(doc: Document) -> (Document as Codec<TextFormat>).Output[] {
-            return [doc.as<Codec<TextFormat>>.decode("")]
+            return [doc.as<Codec<TextFormat, Output = string>>.decode("")]
         }
         "#,
     );
@@ -2912,7 +2912,7 @@ fn qualified_projection_works_in_local_type_annotations() {
         }
 
         function decode(doc: Document) -> string {
-            let output: (Document as Codec<TextFormat>).Output = doc.as<Codec<TextFormat>>.decode("")
+            let output: (Document as Codec<TextFormat>).Output = doc.as<Codec<TextFormat, Output = string>>.decode("")
             return output
         }
         "#,
@@ -3812,7 +3812,7 @@ fn ambiguous_unqualified_projection_across_generic_instantiations_errors() {
         }
 
         function bad(doc: Document) -> Document.Output {
-            return doc.as<Codec<TextFormat>>.decode("")
+            return doc.as<Codec<TextFormat, Output = string>>.decode("")
         }
         "#,
         "E0001",

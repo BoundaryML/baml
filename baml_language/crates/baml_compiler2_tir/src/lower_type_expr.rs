@@ -4452,6 +4452,39 @@ function needs<T extends Marker>(x: T) -> int throws never {
     }
 
     #[test]
+    fn upcast_to_interface_existential_requires_pinned_associated_types() {
+        // `.as<I>` produces an interface-existential value, so its target must pin every
+        // non-defaulted associated type — a bare `HasKey` (unpinned `Key`) is ill-formed
+        // exactly as a `let y: HasKey` annotation would be.
+        let bare = all_type_errors(
+            "interface HasKey {\n  type Key\n  key: Self.Key\n}\n\
+             interface Entity requires HasKey<Key = string> {}\n\
+             function f<T extends Entity>(v: T) -> string throws never {\n\
+               return v.as<HasKey>.key\n\
+             }\n",
+        );
+        assert!(
+            bare.iter()
+                .any(|e| matches!(e, TirTypeError::MissingAssociatedTypeBindings { .. })),
+            "a bare `.as<HasKey>` must require `Key` be pinned, got {bare:?}"
+        );
+
+        // With the pin written, the existential is `HasKey<Key = string>`, so `.key`
+        // reduces to `string` and the upcast is well-formed.
+        let pinned = all_type_errors(
+            "interface HasKey {\n  type Key\n  key: Self.Key\n}\n\
+             interface Entity requires HasKey<Key = string> {}\n\
+             function f<T extends Entity>(v: T) -> string throws never {\n\
+               return v.as<HasKey<Key = string>>.key\n\
+             }\n",
+        );
+        assert!(
+            pinned.is_empty(),
+            "a pinned `.as<HasKey<Key = string>>` should type `.key` as string, got {pinned:?}"
+        );
+    }
+
+    #[test]
     fn impl_override_plus_other_interface_default_same_name_is_ambiguous() {
         // A class overrides `process` for one interface while another implemented
         // interface provides `process` as an un-overridden default. The override
@@ -4584,7 +4617,7 @@ function needs<T extends Marker>(x: T) -> int throws never {
                }\n\
              }\n\
              function f(a: AccountRecord) -> string throws never {\n\
-               return a.as<PublicIdentity>.key\n\
+               return a.as<PublicIdentity<Key = string>>.key\n\
              }\n",
         );
         assert!(
