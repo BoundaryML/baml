@@ -1067,7 +1067,7 @@ fn run_prints_concrete_associated_type_projection_return() {
         r#"
 interface PublicIdentity {
   type Key
-  key: Key
+  key: Self.Key
 }
 
 class AccountRecord {
@@ -1118,7 +1118,7 @@ fn run_list_prints_resolved_associated_projection_metadata() {
         r#"
 interface PublicIdentity {
   type Key
-  key: Key
+  key: Self.Key
 }
 
 class AccountRecord {

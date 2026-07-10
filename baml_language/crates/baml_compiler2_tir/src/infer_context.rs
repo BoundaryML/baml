@@ -113,6 +113,10 @@ pub enum TirTypeError {
     NotIterable { ty: Ty },
     /// Expression is not indexable (e.g. `true[0]`).
     NotIndexable { ty: Ty },
+    /// A `map` type expression whose key type is not `string` (e.g. `map<int, V>`).
+    /// Map keys are strings at runtime, so the key type must denote `string` or a
+    /// subset of it.
+    InvalidMapKeyType { key: Ty },
     /// Invalid operand types for a binary operator (e.g. `true + false`).
     InvalidBinaryOp {
         op: baml_compiler2_ast::BinaryOp,
@@ -738,6 +742,14 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::NotIndexable { ty } => {
                 write!(f, "type `{}` is not indexable", ty.render_user_facing())
+            }
+            TirTypeError::InvalidMapKeyType { key } => {
+                write!(
+                    f,
+                    "map keys must be `string`; got `{}`. Declare the map as `map<string, V>`; \
+                     convert non-string keys with `.to_string()` before `.set()` or `.get()`",
+                    key.render_user_facing()
+                )
             }
             TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
                 write!(

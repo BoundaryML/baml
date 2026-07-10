@@ -441,6 +441,37 @@ pub(crate) fn resolve_type_in<'db>(
     })
 }
 
+/// Whether `ty` is usable as a `map` key (E0067). Map keys are strings at runtime, so the
+/// key type must denote `string` or a subset of it: `string` itself, a string literal, or a
+/// union of supported keys. A type alias expands (cycle-guarded — a cyclic alias is its own
+/// error, reported at the alias). The error-recovery sentinels and `never` pass (already
+/// diagnosed / uninhabited). Everything else fails closed — including a type variable
+/// (there is no string-denoting bound, so `map<T, V>` could be instantiated at a
+/// non-string key) and any new `Ty` variant, rejected loudly rather than silently admitted.
+fn is_supported_map_key_type(
+    db: &dyn crate::Db,
+    ty: &Ty,
+    seen_aliases: &mut FxHashSet<QualifiedTypeName>,
+) -> bool {
+    match ty {
+        Ty::String { .. } | Ty::Never { .. } | Ty::Unknown { .. } | Ty::Error { .. } => true,
+        Ty::Literal(baml_base::Literal::String(_), _, _) => true,
+        Ty::Union(members, _) => members
+            .iter()
+            .all(|member| is_supported_map_key_type(db, member, seen_aliases)),
+        Ty::TypeAlias(qtn, _) => {
+            if !seen_aliases.insert(qtn.clone()) {
+                return false;
+            }
+            let supported = crate::inference::alias_def(db, qtn)
+                .is_some_and(|expanded| is_supported_map_key_type(db, &expanded, seen_aliases));
+            seen_aliases.remove(qtn);
+            supported
+        }
+        _ => false,
+    }
+}
+
 /// Resolve an AST `TypeExpr` to a `Ty`, driven entirely by `ctx` (name
 /// resolution, `Self`, and type-variable bounds). Lowering is a pure recursion
 /// over the `TypeExpr`: the scope-specific decisions all funnel through
@@ -841,11 +872,22 @@ pub fn lower_type_expr(
             Box::new(lower_type_expr(inner, ctx, diagnostics)),
             TyAttr::default(),
         ),
-        TypeExprKind::Map { key, value, .. } => Ty::Map {
-            key: Box::new(lower_type_expr(key, ctx, diagnostics)),
-            value: Box::new(lower_type_expr(value, ctx, diagnostics)),
-            attr: TyAttr::default(),
-        },
+        TypeExprKind::Map { key, value, .. } => {
+            let key_ty = lower_type_expr(key, ctx, diagnostics);
+            let value_ty = lower_type_expr(value, ctx, diagnostics);
+            // Map keys are strings at runtime, so the key type must denote `string`
+            // (or a subset of it) — E0067.
+            if !is_supported_map_key_type(db, &key_ty, &mut FxHashSet::default()) {
+                diagnostics.push(TirTypeError::InvalidMapKeyType {
+                    key: key_ty.clone(),
+                });
+            }
+            Ty::Map {
+                key: Box::new(key_ty),
+                value: Box::new(value_ty),
+                attr: TyAttr::default(),
+            }
+        }
         TypeExprKind::Union {
             variants: members, ..
         } => Ty::Union(
@@ -4281,6 +4323,64 @@ function needs<T extends Marker>(x: T) -> int throws never {
         assert!(
             has_unfilled_infer_hole(&errors),
             "an un-inferable `_` should be reported, got {errors:?}"
+        );
+    }
+
+    // ─── Map key type (E0067) ───────────────────────────────────────────────
+    //
+    // Map keys are strings at runtime, so a `map<K, V>` type expression must
+    // spell a string-denoting key.
+
+    fn has_invalid_map_key(errors: &[TirTypeError]) -> bool {
+        errors
+            .iter()
+            .any(|e| matches!(e, TirTypeError::InvalidMapKeyType { .. }))
+    }
+
+    #[test]
+    fn map_with_class_key_is_rejected() {
+        let errors = all_type_errors(
+            "class Key {\n  v: int\n}\n\
+             class Holder {\n  m: map<Key, int>\n}\n",
+        );
+        assert!(
+            has_invalid_map_key(&errors),
+            "a class map key should be rejected (E0067), got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn map_with_int_key_is_rejected_even_behind_an_alias() {
+        let errors = all_type_errors(
+            "type IntKey = int\n\
+             class Holder {\n  m: map<IntKey, int>\n}\n",
+        );
+        assert!(
+            has_invalid_map_key(&errors),
+            "an int-aliased map key should be rejected (E0067), got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn map_with_string_and_literal_union_keys_is_accepted() {
+        let errors = all_type_errors(
+            "type Key = \"a\" | \"b\"\n\
+             class Holder {\n  m1: map<string, int>\n  m2: map<Key, int>\n}\n",
+        );
+        assert!(
+            !has_invalid_map_key(&errors),
+            "string / string-literal-union map keys are valid, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn map_with_type_variable_key_is_rejected() {
+        // No bound can prove a type variable string-denoting, so `map<K, V>` could be
+        // instantiated at a non-string key — fail closed.
+        let errors = all_type_errors("class Holder<K, V> {\n  m: map<K, V>\n}\n");
+        assert!(
+            has_invalid_map_key(&errors),
+            "a type-variable map key should be rejected (E0067), got {errors:?}"
         );
     }
 }

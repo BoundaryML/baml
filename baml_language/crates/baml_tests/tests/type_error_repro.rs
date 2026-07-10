@@ -208,8 +208,11 @@ async fn map_with_repeated_string_alias_union_key_is_accepted() {
 }
 
 #[tokio::test]
-async fn generic_map_key_annotation_is_deferred() {
-    let output = baml_test!(
+#[should_panic(expected = "map keys must be `string`; got `K`")]
+async fn generic_map_key_annotation_is_rejected() {
+    // No bound can prove a type variable string-denoting, so `map<K, V>` could be
+    // instantiated at a non-string key — rejected at the declaration (E0067).
+    let _ = baml_test!(
         r#"
         function passthrough<K, V>(items: map<K, V>) -> map<K, V> {
             items
@@ -219,11 +222,6 @@ async fn generic_map_key_annotation_is_deferred() {
             0
         }
     "#
-    );
-    assert!(
-        matches!(output.result, Ok(BexExternalValue::Int(0))),
-        "expected generic map key annotation to compile, got: {:?}",
-        output.result
     );
 }
 
