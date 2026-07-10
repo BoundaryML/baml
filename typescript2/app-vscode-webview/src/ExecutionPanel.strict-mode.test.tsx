@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   ExecutionPanel,
   type ControlFlowGraph,
+  type ProjectUpdate,
   type RuntimePort,
   type Run,
   type WorkerInMessage,
@@ -173,6 +174,109 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
         ),
       ).toBe(true);
     });
+  });
+});
+
+describe('ExecutionPanel test previews', () => {
+  it('hydrates legacy test args without running and releases selection on navigation', async () => {
+    const port = new FakeRuntimePort();
+    const projectUpdate: ProjectUpdate = {
+      isBexCurrent: true,
+      functions: [
+        {
+          name: 'ClassifySentiment',
+          kind: 'llm',
+          origin: 'userDefined',
+          capabilities: {
+            renderPrompt: true,
+            buildRequest: true,
+            clientName: 'Gpt5',
+          },
+          params: [
+            {
+              name: 'text',
+              hasDefault: false,
+              schema: { type: 'string' },
+            },
+          ],
+        },
+        { name: 'OtherFunction', kind: 'expr', origin: 'userDefined' },
+      ],
+      tests: [
+        {
+          name: 'HappySentiment',
+          functionName: 'ClassifySentiment',
+          argsJson: '{"text":"I absolutely love this feature"}',
+        },
+      ],
+      diagnostics: [],
+    };
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: projectUpdate,
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByTitle(
+        'Use HappySentiment args for ClassifySentiment',
+      ),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+      text: 'I absolutely love this feature',
+    });
+    expect(
+      screen.getByText('ClassifySentiment()'),
+    ).toBeInTheDocument();
+    expect(port.sent.some((message) => message.type === 'startRun')).toBe(false);
+    expect(port.sent.some((message) => message.type === 'startTestRun')).toBe(false);
+
+    act(() => {
+      port.emit({
+        type: 'cursorContext',
+        context: {
+          functionName: 'OtherFunction',
+          isWorkflow: false,
+          workflowMemberships: [],
+          sourceExprId: null,
+          testName: null,
+        },
+      });
+    });
+    expect(await screen.findByText('OtherFunction()')).toBeInTheDocument();
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            ...projectUpdate,
+            tests: projectUpdate.tests?.map((test) => ({
+              ...test,
+              argsJson: '{"text":"source edit"}',
+            })),
+          },
+        },
+      });
+    });
+    expect(await screen.findByText('OtherFunction()')).toBeInTheDocument();
   });
 });
 

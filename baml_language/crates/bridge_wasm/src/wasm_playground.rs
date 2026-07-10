@@ -199,9 +199,19 @@ pub struct ProjectDiagnostic {
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
+pub struct TestInfo {
+    pub name: String,
+    pub function_name: String,
+    pub args_json: String,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
+    pub tests: Vec<TestInfo>,
     /// Shared type table for `FunctionInfo.params` refs; `None` = binary
     /// predates the args form. Must match `bex_project::ProjectUpdate`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -354,6 +364,15 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                                     client_name: c.client_name,
                                 }),
                                 params: f.params.map(|ps| ps.into_iter().map(Into::into).collect()),
+                            })
+                            .collect(),
+                        tests: update
+                            .tests
+                            .into_iter()
+                            .map(|test| TestInfo {
+                                name: test.name,
+                                function_name: test.function_name,
+                                args_json: test.args_json,
                             })
                             .collect(),
                         types: update.types.map(|types| {

@@ -1085,6 +1085,7 @@ impl BexMulitProject {
         let guard = project.project.read_source_for_request().ok()?;
         let candidate = crate::project::collect_diagnostic_candidate(&guard);
         let listing = baml_project::list_functions_with_metadata(guard.db());
+        let tests_listing = baml_project::list_tests_with_metadata(guard.db());
         drop(guard);
 
         let documents = candidate_to_publishable(&candidate, self.encoding_for_publication());
@@ -1113,10 +1114,19 @@ impl BexMulitProject {
                 params: f.params,
             })
             .collect();
+        let tests = tests_listing
+            .into_iter()
+            .map(|test| crate::bex_lsp::TestInfo {
+                name: test.name,
+                function_name: test.function_name,
+                args_json: test.args_json,
+            })
+            .collect();
 
         Some(crate::bex_lsp::ProjectUpdate {
             is_bex_current,
             functions,
+            tests,
             types: Some(listing.types),
             diagnostics,
         })

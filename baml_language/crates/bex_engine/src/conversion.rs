@@ -2550,10 +2550,10 @@ fn union_class_arm(ty: &RuntimeTy) -> Option<&RuntimeTy> {
 /// Handles int↔bigint conversion at the FFI boundary. These conversions exist
 /// **only** at the host boundary — the type system is purely structural and
 /// does not relate `int` and `bigint` (see
-/// `baml_compiler2_tir::normalize::is_subtype_of`). `int → bigint` widens
-/// unconditionally; `bigint → int` succeeds when the value fits in i64,
-/// erroring on overflow rather than silently truncating. Also performs optional
-/// unwrap and numeric-singleton union routing.
+/// `baml_compiler2_tir::normalize::is_subtype_of`). `int → bigint` and
+/// `int → float` widen unconditionally; `bigint → int` succeeds when the value
+/// fits in i64, erroring on overflow rather than silently truncating. Unions
+/// delegate to member coercion.
 ///
 /// Class / enum naming is intentionally *not* rewritten here — the
 /// engine-side FQN (e.g. `user.lorem.MyLorem`) is the authoritative
@@ -2572,8 +2572,8 @@ pub(crate) fn coerce_return_to_declared_type(
 /// These conversions exist only at the FFI boundary. The compile-time subtype
 /// relation (`baml_compiler2_tir::normalize::is_subtype_of`,
 /// `baml_type::RuntimeTy::is_subtype_of`) is purely structural and does **not** widen
-/// `int` to `bigint`; the arms below add that widening (plus a checked
-/// `bigint → int` narrowing) only when crossing the host boundary.
+/// `int` to `bigint` or `float`; the arms below add those widenings (plus a
+/// checked `bigint → int` narrowing) only when crossing the host boundary.
 fn coerce_numeric_to_declared_type(
     value: BexExternalValue,
     ty: &RuntimeTy,
@@ -2598,39 +2598,53 @@ fn coerce_numeric_to_declared_type(
                 message: format!("bigint value {bi} does not fit in i64"),
             }),
 
-        // Union with exactly one of {Int, Bigint}: route to that member.
-        // Nullable numeric unions (`int | null`) flow through here too — a
-        // `Null` value coerced against the chosen numeric member falls to the
-        // catch-all `(v, _) => Ok(v)` and is preserved.
-        // Unions containing both are left alone; `find_matching_union_member`
-        // picks by value shape at the VM boundary.
+        // Int → Float widening (FFI boundary only — `int` is not a subtype of
+        // `float` in the type system). Hosts whose encoders are value-shaped
+        // rather than schema-shaped emit integral numbers as ints (Python `7`,
+        // JS `Number.isInteger`), so a `float` slot must accept them; without
+        // this arm the int rides through unconverted and a declared `-> float`
+        // hands the host back an int.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "deliberate host-language `float(int)` semantics — may round above 2^53"
+        )]
+        (
+            BexExternalValue::Int(i),
+            RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _),
+        ) => Ok(BexExternalValue::Float(i as f64)),
+
+        // Union: delegate to member coercion. A value that already inhabits
+        // some member is left alone (an `Int` against `int | float` stays
+        // `Int`; `Null` against `int | null` is preserved). Otherwise the
+        // first member the value coerces into wins — a host int lands on the
+        // `bigint` member of `bigint | null` or the `float` member of
+        // `float?`. A member coercion error (bigint → int overflow)
+        // propagates rather than silently falling through.
         (v, RuntimeTy::Union(members, _)) => {
-            let has_int = members.iter().any(|m| {
-                matches!(
-                    m,
-                    RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _)
-                )
-            });
-            let has_bigint = members.iter().any(|m| {
-                matches!(
-                    m,
-                    RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _)
-                )
-            });
-            if has_int == has_bigint {
-                Ok(v)
-            } else if let Some(target) = members.iter().find(|m| {
-                matches!(
-                    m,
-                    RuntimeTy::Int { .. }
-                        | RuntimeTy::Bigint { .. }
-                        | RuntimeTy::Literal(Literal::Int(_) | Literal::Bigint(_), _, _)
-                )
-            }) {
-                coerce_numeric_to_declared_type(v, target)
-            } else {
-                Ok(v)
+            if members.iter().any(|m| value_matches_type(&v, m)) {
+                return Ok(v);
             }
+            // A host int prefers the lossless target: `bigint` (exact for
+            // every i64) beats `float` (rounds above 2^53) regardless of
+            // member declaration order. An exact `int` member was already
+            // taken by the match check above. The partition is stable, so
+            // declaration order still breaks ties within each group.
+            let prefer_bigint = matches!(&v, BexExternalValue::Int(_));
+            let (bigint_members, other_members): (Vec<&RuntimeTy>, Vec<&RuntimeTy>) =
+                members.iter().partition(|m| {
+                    prefer_bigint
+                        && matches!(
+                            m,
+                            RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _)
+                        )
+                });
+            for member in bigint_members.into_iter().chain(other_members) {
+                let coerced = coerce_numeric_to_declared_type(v.clone(), member)?;
+                if value_matches_type(&coerced, member) {
+                    return Ok(coerced);
+                }
+            }
+            Ok(v)
         }
 
         (v, _) => Ok(v),
