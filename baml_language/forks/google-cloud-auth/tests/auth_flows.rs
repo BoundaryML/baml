@@ -5,6 +5,10 @@
 //! `google-cloud-auth` behaviors: service-account JWT-bearer, ADC
 //! `authorized_user` refresh grant, ADC `service_account`, well-known ADC path
 //! discovery, and the GCE metadata server.
+//!
+//! NOTE: minted tokens are cached process-wide keyed by (credential material,
+//! scope). Every test therefore uses UNIQUE credential material (distinct
+//! emails / refresh tokens) so tests cannot serve each other's cached tokens.
 
 mod common;
 
@@ -35,7 +39,7 @@ async fn service_account_mints_token_via_jwt_bearer() {
         );
         Ok(ok(token_response("ya29.sa")))
     });
-    let sa = service_account_json("svc@test-project.iam.gserviceaccount.com", TOKEN_URI);
+    let sa = service_account_json("svc-jwt@test-project.iam.gserviceaccount.com", TOKEN_URI);
     let token = token_from_service_account_json(&io, &sa, CLOUD_PLATFORM_SCOPE)
         .await
         .unwrap();
@@ -58,7 +62,7 @@ async fn service_account_honors_custom_token_uri() {
         assert_eq!(url, "https://oauth2.example.com/token");
         Ok(ok(token_response("ya29.custom")))
     });
-    let sa = service_account_json("svc@test-project.iam.gserviceaccount.com", custom);
+    let sa = service_account_json("svc-custom@test-project.iam.gserviceaccount.com", custom);
     let token = token_from_service_account_json(&io, &sa, CLOUD_PLATFORM_SCOPE)
         .await
         .unwrap();
@@ -71,8 +75,8 @@ async fn service_account_honors_custom_token_uri() {
 async fn adc_authorized_user_uses_refresh_grant() {
     // client_id kept alphanumeric so it round-trips through the fork's
     // NON_ALPHANUMERIC percent-encoding unchanged; refresh_token carries `/`
-    // to exercise encoding (`1//refresh` -> `1%2F%2Frefresh`).
-    let adc = authorized_user_json("cidabc123", "1//refresh", TOKEN_URI);
+    // to exercise encoding (`1//refreshgrant` -> `1%2F%2Frefreshgrant`).
+    let adc = authorized_user_json("cidabc123", "1//refreshgrant", TOKEN_URI);
     let io = MockIo::new()
         .env("GOOGLE_APPLICATION_CREDENTIALS", "/adc.json")
         .file("/adc.json", &adc)
@@ -80,7 +84,10 @@ async fn adc_authorized_user_uses_refresh_grant() {
             assert_eq!(url, TOKEN_URI);
             assert!(body.contains("grant_type=refresh_token"), "body={body}");
             assert!(body.contains("client_id=cidabc123"), "body={body}");
-            assert!(body.contains("refresh_token=1%2F%2Frefresh"), "body={body}");
+            assert!(
+                body.contains("refresh_token=1%2F%2Frefreshgrant"),
+                "body={body}"
+            );
             Ok(ok(token_response("ya29.user")))
         });
     let token = token_from_adc(&io, CLOUD_PLATFORM_SCOPE).await.unwrap();
@@ -91,7 +98,7 @@ async fn adc_authorized_user_uses_refresh_grant() {
 
 #[tokio::test]
 async fn adc_service_account_via_gac_signs_jwt() {
-    let sa = service_account_json("svc@test-project.iam.gserviceaccount.com", TOKEN_URI);
+    let sa = service_account_json("svc-gac@test-project.iam.gserviceaccount.com", TOKEN_URI);
     let io = MockIo::new()
         .env("GOOGLE_APPLICATION_CREDENTIALS", "/sa.json")
         .file("/sa.json", &sa)
@@ -135,7 +142,7 @@ async fn gac_set_but_unreadable_is_an_error_not_a_fallthrough() {
 
 #[tokio::test]
 async fn adc_discovers_well_known_path_from_home() {
-    let adc = authorized_user_json("cid", "rt", TOKEN_URI);
+    let adc = authorized_user_json("cid", "rt-home", TOKEN_URI);
     // No GOOGLE_APPLICATION_CREDENTIALS; only HOME + the well-known file.
     let io = MockIo::new()
         .env("HOME", "/home/dev")
@@ -150,7 +157,7 @@ async fn adc_discovers_well_known_path_from_home() {
 
 #[tokio::test]
 async fn adc_honors_cloudsdk_config_override() {
-    let adc = authorized_user_json("cid", "rt", TOKEN_URI);
+    let adc = authorized_user_json("cid", "rt-sdk", TOKEN_URI);
     let io = MockIo::new()
         .env("CLOUDSDK_CONFIG", "/custom/gcloud")
         .file("/custom/gcloud/application_default_credentials.json", &adc)
@@ -197,6 +204,44 @@ async fn adc_falls_back_to_metadata_server() {
     assert_eq!(token, "ya29.metadata");
 }
 
+// --- Token caching ----------------------------------------------------------
+
+#[tokio::test]
+async fn tokens_are_cached_until_near_expiry() {
+    // Long-lived token: second mint must be served from cache (no HTTP).
+    let adc = authorized_user_json("cid", "rt-cache-long", TOKEN_URI);
+    let io = MockIo::new()
+        .env("GOOGLE_APPLICATION_CREDENTIALS", "/cache/adc.json")
+        .file("/cache/adc.json", &adc)
+        .http(|_m, _u, _h, _b| Ok(ok(token_response("ya29.cached"))));
+    let first = token_from_adc(&io, CLOUD_PLATFORM_SCOPE).await.unwrap();
+    let second = token_from_adc(&io, CLOUD_PLATFORM_SCOPE).await.unwrap();
+    assert_eq!(first, "ya29.cached");
+    assert_eq!(second, "ya29.cached");
+    assert_eq!(io.http_calls(), 1, "second call must hit the cache");
+
+    // Token expiring inside the 3m45s refresh threshold: always re-minted.
+    let adc_short = authorized_user_json("cid", "rt-cache-short", TOKEN_URI);
+    let io_short = MockIo::new()
+        .env("GOOGLE_APPLICATION_CREDENTIALS", "/cache/adc-short.json")
+        .file("/cache/adc-short.json", &adc_short)
+        .http(|_m, _u, _h, _b| {
+            Ok(ok(serde_json::json!({
+                "access_token": "ya29.short",
+                "token_type": "Bearer",
+                "expires_in": 10,
+            })
+            .to_string()))
+        });
+    token_from_adc(&io_short, CLOUD_PLATFORM_SCOPE).await.unwrap();
+    token_from_adc(&io_short, CLOUD_PLATFORM_SCOPE).await.unwrap();
+    assert_eq!(
+        io_short.http_calls(),
+        2,
+        "near-expiry tokens must be re-minted"
+    );
+}
+
 // --- adc_available probe ---------------------------------------------------
 
 #[tokio::test]
@@ -227,7 +272,7 @@ async fn token_endpoint_non_2xx_is_surfaced() {
             body: r#"{"error":"invalid_grant"}"#.into(),
         })
     });
-    let sa = service_account_json("svc@test-project.iam.gserviceaccount.com", TOKEN_URI);
+    let sa = service_account_json("svc-err@test-project.iam.gserviceaccount.com", TOKEN_URI);
     let err = token_from_service_account_json(&io, &sa, CLOUD_PLATFORM_SCOPE)
         .await
         .unwrap_err();
@@ -247,7 +292,10 @@ async fn unsupported_adc_type_is_rejected() {
 #[tokio::test]
 async fn missing_access_token_in_response_is_error() {
     let io = MockIo::new().http(|_m, _u, _h, _b| Ok(ok(r#"{"token_type":"Bearer"}"#.to_string())));
-    let sa = service_account_json("svc@test-project.iam.gserviceaccount.com", TOKEN_URI);
+    let sa = service_account_json(
+        "svc-missing@test-project.iam.gserviceaccount.com",
+        TOKEN_URI,
+    );
     let err = token_from_service_account_json(&io, &sa, CLOUD_PLATFORM_SCOPE)
         .await
         .unwrap_err();
