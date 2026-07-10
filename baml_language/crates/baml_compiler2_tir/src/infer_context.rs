@@ -70,6 +70,24 @@ pub enum SelfCallPosition {
     NestedInReturn,
 }
 
+/// The kind of enclosing declaration whose type-level parameter a method's
+/// generic shadows — names the declaration accurately in the
+/// [`TirTypeError::TypeParamShadowed`] message ("class `X`" / "interface `X`").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShadowedParamOwner {
+    Class,
+    Interface,
+}
+
+impl fmt::Display for ShadowedParamOwner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ShadowedParamOwner::Class => write!(f, "class"),
+            ShadowedParamOwner::Interface => write!(f, "interface"),
+        }
+    }
+}
+
 /// What went wrong — no location info, just the semantic error.
 ///
 /// `TirTypeError` is intentionally span-free for Salsa cacheability.
@@ -293,7 +311,11 @@ pub enum TirTypeError {
     CannotInferTypeParameter { name: Name },
     /// A method's generic type parameter shadows a type-level parameter (generic
     /// parameter or associated type) of the enclosing class or interface.
-    TypeParamShadowed { param_name: Name, class_name: Name },
+    TypeParamShadowed {
+        param_name: Name,
+        type_name: Name,
+        owner: ShadowedParamOwner,
+    },
     /// A method's generic type parameter shadows a generic parameter declared on
     /// the enclosing `implements` block.
     TypeParamShadowedImplParam { param_name: Name },
@@ -1078,11 +1100,12 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::TypeParamShadowed {
                 param_name,
-                class_name,
+                type_name,
+                owner,
             } => {
                 write!(
                     f,
-                    "type parameter `{param_name}` on method shadows the same parameter on `{class_name}`. \
+                    "type parameter `{param_name}` on method shadows the same parameter on {owner} `{type_name}`. \
                     Please use a different name for the type parameter."
                 )
             }

@@ -2460,8 +2460,10 @@ mod tests {
             assert!(
                 errs.iter().any(|e| matches!(
                     e,
-                    TirTypeError::TypeParamShadowed { param_name, class_name }
-                        if param_name.as_str() == param && class_name.as_str() == decl
+                    TirTypeError::TypeParamShadowed { param_name, type_name, owner }
+                        if param_name.as_str() == param
+                            && type_name.as_str() == decl
+                            && *owner == crate::infer_context::ShadowedParamOwner::Interface
                 )),
                 "`{decl}` should report method generic `{param}` shadowing, got {errs:?}"
             );
