@@ -169,3 +169,89 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
             .send(WsOutMessage::PlaygroundNotification { notification: json });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use bex_project::PlaygroundSender;
+
+    use super::*;
+
+    struct NoopLspSender;
+    impl bex_project::LspClientSenderTrait for NoopLspSender {
+        fn send_notification(
+            &self,
+            _: lsp_server::Notification,
+        ) -> Result<(), bex_project::LspError> {
+            Ok(())
+        }
+        fn send_response_impl(&self, _: lsp_server::Response) -> Result<(), bex_project::LspError> {
+            Ok(())
+        }
+        fn make_request(&self, _: lsp_server::Request) -> Result<(), bex_project::LspError> {
+            Ok(())
+        }
+    }
+
+    fn browser_sender(
+        broadcast_tx: broadcast::Sender<WsOutMessage>,
+        target: SharedOpenTarget,
+    ) -> NativePlaygroundSender {
+        NativePlaygroundSender::new(
+            broadcast_tx,
+            Arc::new(NoopLspSender),
+            4265,
+            true, // browser mode
+            None,
+            target,
+        )
+    }
+
+    /// Browser-mode OpenPlayground navigates the already-open page in place and
+    /// records the target for replay — the core of B-808. Holding a live
+    /// receiver keeps `receiver_count() > 0`, which both exercises the reuse
+    /// path and guarantees the test never launches a real browser.
+    #[test]
+    fn browser_open_playground_broadcasts_in_place_and_records_target() {
+        let (tx, mut rx) = broadcast::channel(8);
+        let target: SharedOpenTarget = Arc::new(Mutex::new(None));
+        let sender = browser_sender(tx, target.clone());
+
+        sender.send_playground_notification(bex_project::PlaygroundNotification::OpenPlayground {
+            project: "/tmp/proj".to_string(),
+            function_name: Some("Foo".to_string()),
+            test_name: None,
+            testset_name: None,
+        });
+
+        let WsOutMessage::PlaygroundNotification { notification } = rx
+            .try_recv()
+            .expect("open should broadcast to the connected page")
+        else {
+            panic!("expected a playground notification");
+        };
+        assert_eq!(notification["type"], "openPlayground");
+        assert_eq!(notification["project"], "/tmp/proj");
+        assert_eq!(notification["functionName"], "Foo");
+
+        let recorded = target
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("target recorded for RequestState replay");
+        assert_eq!(recorded.project, "/tmp/proj");
+        assert_eq!(recorded.function_name.as_deref(), Some("Foo"));
+    }
+
+    /// Two OpenPlaygrounds arriving before the first window connects must not
+    /// spawn two browser windows.
+    #[test]
+    fn claim_browser_open_debounces_rapid_spawns() {
+        let (tx, _rx) = broadcast::channel(8);
+        let sender = browser_sender(tx, Arc::new(Mutex::new(None)));
+        assert!(sender.claim_browser_open(), "first spawn allowed");
+        assert!(
+            !sender.claim_browser_open(),
+            "second spawn within debounce suppressed"
+        );
+    }
+}
