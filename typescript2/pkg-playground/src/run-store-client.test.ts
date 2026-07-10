@@ -321,6 +321,59 @@ describe('run-store-client', () => {
     await expect(pending).resolves.toEqual(run);
     client.dispose();
   });
+
+  it('rejects pending requests and closes subscriptions on a session reset', async () => {
+    const port = new FakeRuntimePort();
+    const client = createRunStoreClient(port);
+    const boundaryId = 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ';
+
+    const pending = client.startRun({
+      project: 'project',
+      functionName: 'Extract',
+      argsBytes: new Uint8Array(),
+    });
+    const subscription = client.subscribe(boundaryId);
+    const iterator = subscription.events[Symbol.asyncIterator]();
+
+    // Queue old-session data without consuming it. Reset must discard this
+    // backlog, not merely mark the queue closed behind it.
+    port.emit({
+      type: 'runPatch',
+      patch: {
+        boundaryId,
+        cursor: 1,
+        changes: [{ type: 'setStatus', status: 'running' }],
+      },
+    });
+    port.emit({
+      type: 'runPatch',
+      patch: {
+        boundaryId,
+        cursor: 2,
+        changes: [{ type: 'setStatus', status: 'cancelling' }],
+      },
+    });
+
+    port.emit({ type: 'runtimeSessionReset', sessionEpoch: 2 });
+
+    await expect(pending).rejects.toThrow('session reset (2)');
+    await expect(iterator.next()).resolves.toEqual({
+      value: undefined,
+      done: true,
+    });
+
+    // A late response from the prior socket cannot complete a new request.
+    port.emit({
+      type: 'runStarted',
+      requestId: 1,
+      run: runFixture(boundaryId),
+    });
+    const fresh = client.listRuns();
+    expect(port.sent.at(-1)).toMatchObject({ type: 'listRuns', requestId: 3 });
+    port.emit({ type: 'runList', requestId: 3, runs: [] });
+    await expect(fresh).resolves.toEqual([]);
+    client.dispose();
+  });
 });
 
 class FakeRuntimePort implements RuntimePort {

@@ -310,8 +310,13 @@ const App: React.FC = () => {
       {!editorActive && (
         <ExecutionPanel
           port={port}
+          onSelectedProjectChange={setActiveProject}
           onNavigateToSource={(source: SourceNavigationTarget) => {
-            getVsCodeApi()?.postMessage({ type: 'navigateToSource', source });
+            getVsCodeApi()?.postMessage({
+              type: 'navigateToSource',
+              source,
+              sourcePositionEncoding: port.sourcePositionEncoding,
+            });
           }}
         />
       )}

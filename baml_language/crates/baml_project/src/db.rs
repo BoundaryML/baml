@@ -895,9 +895,12 @@ impl ProjectDatabase {
         }
         let end_offset: u32 = range.end().into();
         let end_offset = end_offset.min(len);
-        let line_index = crate::position::LineIndex::new(text);
-        let start = line_index.offset_to_position(start_offset)?;
-        let end = line_index.offset_to_position(end_offset).unwrap_or(start);
+        // Playground wire coordinates are fixed zero-based UTF-16 code units;
+        // they never inherit an LSP session's negotiated encoding.
+        let codec =
+            crate::position::LspPositionCodec::new(text, crate::position::PositionEncoding::Utf16);
+        let start = codec.offset_to_position(start_offset).ok()?;
+        let end = codec.offset_to_position(end_offset).ok()?;
 
         Some(baml_compiler2_visualization::control_flow::SourceSpan {
             file_id: source_file.file_id(self).as_u32(),

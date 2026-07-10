@@ -15,8 +15,12 @@
 
 import type { RuntimePort } from '../runtime-port';
 import type { WorkerOutMessage, WorkerInMessage } from '../worker-protocol';
+import { PLAYGROUND_SOURCE_POSITION_ENCODING } from '../protocol';
 
 export class WorkerRuntimePort implements RuntimePort {
+  /** The worker and frontend ship atomically, so no compatibility handshake is needed. */
+  readonly sourcePositionEncoding = PLAYGROUND_SOURCE_POSITION_ENCODING;
+
   private _handlers = new Set<(msg: WorkerOutMessage) => void>();
   private _worker: Worker;
   private _listener: (event: MessageEvent) => void;

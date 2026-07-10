@@ -8,8 +8,12 @@
  */
 
 import type { WorkerOutMessage, WorkerInMessage } from './worker-protocol';
+import type { SourcePositionEncoding } from './protocol';
 
 export interface RuntimePort {
+  /** Source-coordinate contract advertised by this runtime, when known. */
+  readonly sourcePositionEncoding?: SourcePositionEncoding;
+
   /** Send a command to the runtime. */
   postMessage(msg: WorkerInMessage): void;
 

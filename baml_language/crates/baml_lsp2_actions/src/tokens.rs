@@ -1,7 +1,7 @@
 //! Semantic tokens for BAML files (compiler2 / `lsp2_actions` version).
 //!
-//! Provides `semantic_tokens(db, file) -> Vec<SemanticToken>` using a hybrid
-//! CST + compiler2 approach:
+//! Provides `semantic_tokens(db, file) -> &Vec<SemanticToken>` as a
+//! Salsa-tracked query using a hybrid CST + compiler2 approach:
 //!
 //! - **Structural tokens** (keywords, comments, strings, numbers, operators)
 //!   come from a single CST walk with syntactic classification.
@@ -139,7 +139,7 @@ impl SemanticTokenType {
 // ── SemanticToken ─────────────────────────────────────────────────────────────
 
 /// A classified token ready for LSP encoding.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct SemanticToken {
     pub range: TextRange,
     pub token_type: SemanticTokenType,
@@ -152,9 +152,10 @@ pub struct SemanticToken {
 /// Always returns tokens in document order (required by the LSP
 /// `textDocument/semanticTokens/full` contract).
 ///
-/// Regular function (not a Salsa query). Internally calls Salsa-cached queries
+/// Salsa-tracked per-file query. Internally calls other Salsa-cached queries
 /// (`infer_scope_types`, `function_body`, `function_body_source_map`,
 /// `file_semantic_index`, `syntax_tree`).
+#[salsa::tracked(returns(ref))]
 pub fn semantic_tokens(db: &dyn Db, file: SourceFile) -> Vec<SemanticToken> {
     let root = baml_compiler_parser::syntax_tree(db, file);
     let mut out = Vec::new();

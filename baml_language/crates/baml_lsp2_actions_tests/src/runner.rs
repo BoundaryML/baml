@@ -167,7 +167,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         for (filename, source_file) in &file_map {
             let hints = annotations(&db, *source_file);
             for hint in hints {
-                all_hints.push((filename.clone(), hint));
+                all_hints.push((filename.clone(), hint.clone()));
             }
         }
 
@@ -184,7 +184,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         for (filename, source_file) in &file_map {
             let tokens = semantic_tokens(&db, *source_file);
             for token in tokens {
-                all_tokens.push((filename.clone(), token));
+                all_tokens.push((filename.clone(), token.clone()));
             }
         }
 

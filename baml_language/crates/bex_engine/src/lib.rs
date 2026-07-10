@@ -698,6 +698,12 @@ pub struct BexEngine {
     /// construction (the config is read-once per process). Gates every
     /// profiling emission and the per-resume ring refresh.
     prof_enabled: bool,
+    /// Whether this engine has been admitted to the externally visible
+    /// profiling lifecycle.  Project rebuilds construct speculative engines
+    /// before they know whether their source revision is still current; those
+    /// candidates must not register metadata (or emit an `engine_closed`
+    /// tombstone when discarded) until the conditional project commit wins.
+    prof_lifecycle_active: bool,
 }
 
 impl Drop for BexEngine {
@@ -708,7 +714,7 @@ impl Drop for BexEngine {
     /// long-lived engine-churning hosts (LSP recompiles) accumulate open
     /// files and heartbeat work for dead engines.
     fn drop(&mut self) {
-        if self.prof_enabled {
+        if self.prof_lifecycle_active {
             bex_events::prof::engine_closed(self.engine_id.0);
         }
     }
@@ -1275,6 +1281,23 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        let mut engine = Self::new_inactive(bytecode_program, sys_ops, argv)?;
+        engine.activate_profiling();
+        Ok(engine)
+    }
+
+    /// Construct an engine whose profiling lifecycle is still inactive.
+    ///
+    /// This is the constructor for speculative, revision-tagged project
+    /// candidates.  The caller must invoke [`Self::activate_profiling`] only
+    /// after its conditional source-revision commit has won and immediately
+    /// before making the engine reachable.  Dropping an inactive candidate is
+    /// deliberately silent.
+    pub fn new_inactive(
+        bytecode_program: bex_vm_types::Program,
+        sys_ops: std::sync::Arc<sys_ops::SysOps>,
+        argv: Vec<String>,
+    ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
@@ -1331,16 +1354,6 @@ impl BexEngine {
                 obj
             })
             .collect();
-        if prof_enabled {
-            // The .bamlprof header consumes the M0 metadata table (its ids
-            // match the ids stamped on each Function above — same walk
-            // order, same 1-based sequence).
-            bex_events::prof::register_engine_metadata(
-                engine_id.0,
-                prof_engine_metadata(&program_metadata),
-            );
-        }
-
         // Pre-compute class and enum indices before moving objects to heap.
         // This is used for allocating instances/variants from sys-op results.
         let class_indices: Vec<(String, usize)> = compile_time_objects
@@ -1580,7 +1593,27 @@ impl BexEngine {
             error_class_ptrs,
             panic_class_ptrs,
             prof_enabled,
+            prof_lifecycle_active: false,
         })
+    }
+
+    /// Admit an already constructed engine to the profiling lifecycle.
+    ///
+    /// The operation is synchronous and idempotent so a project can perform
+    /// it inside the same critical section as its revision comparison and
+    /// runtime-state swap.
+    pub fn activate_profiling(&mut self) {
+        if !self.prof_enabled || self.prof_lifecycle_active {
+            return;
+        }
+
+        // The .bamlprof header consumes the M0 metadata table (its ids match
+        // the ids stamped on each Function during construction).
+        bex_events::prof::register_engine_metadata(
+            self.engine_id.0,
+            prof_engine_metadata(&self.program_metadata),
+        );
+        self.prof_lifecycle_active = true;
     }
 
     #[must_use]
@@ -5234,5 +5267,63 @@ mod concurrent_tests {
         //     assert!(result.is_ok(), "concurrent call failed: {:?}", result);
         // }
         // ```
+    }
+}
+
+#[cfg(test)]
+mod profiling_candidate_tests {
+    use std::sync::Arc;
+
+    use super::BexEngine;
+
+    fn inactive_engine() -> BexEngine {
+        static PROGRAM: std::sync::OnceLock<bex_vm_types::Program> = std::sync::OnceLock::new();
+        BexEngine::new_inactive(
+            PROGRAM
+                .get_or_init(|| baml_project::testing::compile_source("function f() -> int { 1 }"))
+                .clone(),
+            Arc::new(sys_ops::SysOpsBuilder::new().build()),
+            Vec::new(),
+        )
+        .expect("test engine candidate should construct")
+    }
+
+    #[test]
+    fn discarded_inactive_candidate_never_registers_profile_metadata() {
+        let engine = inactive_engine();
+        let engine_id = engine.engine_id().0;
+
+        assert!(!engine.prof_lifecycle_active);
+        assert!(bex_events::prof::metadata::get_engine_metadata(engine_id).is_none());
+
+        drop(engine);
+        assert!(
+            bex_events::prof::metadata::get_engine_metadata(engine_id).is_none(),
+            "discarding a speculative engine must not create a closed tombstone"
+        );
+    }
+
+    #[test]
+    fn profile_lifecycle_starts_only_when_candidate_is_activated() {
+        let mut engine = inactive_engine();
+        let engine_id = engine.engine_id().0;
+        let profiling_enabled = engine.prof_enabled;
+        assert!(bex_events::prof::metadata::get_engine_metadata(engine_id).is_none());
+
+        engine.activate_profiling();
+        assert_eq!(engine.prof_lifecycle_active, profiling_enabled);
+        assert_eq!(
+            bex_events::prof::metadata::get_engine_metadata(engine_id).is_some(),
+            profiling_enabled
+        );
+
+        // Admission is deliberately idempotent so retrying the commit path
+        // cannot duplicate or replace lifecycle state.
+        engine.activate_profiling();
+        assert_eq!(engine.prof_lifecycle_active, profiling_enabled);
+
+        drop(engine);
+        let _ = bex_events::prof::flush_and_join(std::time::Duration::from_secs(1));
+        assert!(bex_events::prof::metadata::get_engine_metadata(engine_id).is_none());
     }
 }

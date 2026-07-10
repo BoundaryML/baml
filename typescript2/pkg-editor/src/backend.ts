@@ -76,7 +76,7 @@ export interface EditorConnection {
    * usually no-op (the language client streams didChange to the server).
    */
   onFilesChanged?(files: Record<string, string>): void;
-  /** Called when the caret moves inside a .baml file (0-indexed). */
+  /** Called with fixed zero-based UTF-16 coordinates for a caret in a .baml file. */
   onCursorMoved?(file: string, line: number, column: number): void;
   /** Tear down transports (and any worker). */
   dispose(): void | Promise<void>;

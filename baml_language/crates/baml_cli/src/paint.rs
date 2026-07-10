@@ -8,11 +8,10 @@
 //! so classification is effectively free (it reads Salsa-cached queries) and can
 //! never drift from the language the way a hand-maintained grammar would.
 //!
-//! [`Highlighter`] caches the per-file token set so a single description (body +
-//! dependency/reference rows, which can touch several files) computes each file's
-//! tokens at most once.
+//! [`Highlighter`] reuses the Salsa-cached per-file token set across a single
+//! description (body + dependency/reference rows, which can touch several files).
 
-use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
+use std::{fmt::Write, path::Path};
 
 use baml_db::{
     FileId, SourceFile,
@@ -467,31 +466,19 @@ impl Painter {
 
 // ── Source highlighting ─────────────────────────────────────────────────────────
 
-/// Highlights source ranges using the compiler's semantic tokens, caching the
-/// token set per file so repeated lookups within one render are cheap.
+/// Highlights source ranges using the compiler's Salsa-cached semantic tokens.
 pub struct Highlighter<'db> {
     db: &'db ProjectDatabase,
-    cache: RefCell<HashMap<SourceFile, Rc<[SemanticToken]>>>,
 }
 
 impl<'db> Highlighter<'db> {
     pub fn new(db: &'db ProjectDatabase) -> Self {
-        Self {
-            db,
-            cache: RefCell::new(HashMap::new()),
-        }
+        Self { db }
     }
 
-    /// Semantic tokens for `file`, computed once and cached (sorted by start).
-    fn tokens(&self, file: SourceFile) -> Rc<[SemanticToken]> {
-        if let Some(cached) = self.cache.borrow().get(&file) {
-            return Rc::clone(cached);
-        }
-        let mut toks = semantic_tokens(self.db, file);
-        toks.sort_by_key(|t| t.range.start());
-        let rc: Rc<[SemanticToken]> = toks.into();
-        self.cache.borrow_mut().insert(file, Rc::clone(&rc));
-        rc
+    /// Semantic tokens for `file`, memoized by Salsa and emitted in source order.
+    fn tokens(&self, file: SourceFile) -> &[SemanticToken] {
+        semantic_tokens(self.db, file)
     }
 
     /// Highlight the verbatim source slice `file.text()[range]`.
@@ -509,7 +496,7 @@ impl<'db> Highlighter<'db> {
 
         let mut out = String::new();
         let mut cursor = 0usize;
-        for tok in self.tokens(file).iter() {
+        for tok in self.tokens(file) {
             let ts: usize = tok.range.start().into();
             let te: usize = tok.range.end().into();
             if te <= start {

@@ -33,6 +33,7 @@
 //! `--all-features` (both enabled); prefer one when building the LSP binary.
 
 mod deadlock_watchdog;
+mod lsp_runtime;
 mod native_lsp_sender;
 mod native_vfs;
 pub mod playground_env;
@@ -44,9 +45,122 @@ pub mod playground_server;
 pub mod playground_session;
 pub mod playground_ws;
 
+const OUTBOUND_QUEUE_BYTES: usize = 64 * 1024 * 1024;
+const MAX_OUTBOUND_FRAME_BYTES: usize = 4 * 1024 * 1024;
+
+#[derive(Debug, Clone)]
+enum OutboundPayload {
+    Message(lsp_server::Message),
+    RawJson(serde_json::Value),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct OutboundFrame {
+    payload: OutboundPayload,
+    _charge: Arc<OutboundCharge>,
+}
+
+impl OutboundFrame {
+    pub(crate) fn message(&self) -> Option<&lsp_server::Message> {
+        match &self.payload {
+            OutboundPayload::Message(message) => Some(message),
+            OutboundPayload::RawJson(_) => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct OutboundBudget {
+    used: std::sync::atomic::AtomicUsize,
+    limit: usize,
+    max_frame: usize,
+}
+
+#[derive(Debug)]
+struct OutboundCharge {
+    budget: Arc<OutboundBudget>,
+    bytes: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OutboundReserveError {
+    Serialization,
+    Oversized,
+    Saturated,
+}
+
+impl Drop for OutboundCharge {
+    fn drop(&mut self) {
+        self.budget
+            .used
+            .fetch_sub(self.bytes, std::sync::atomic::Ordering::AcqRel);
+    }
+}
+
+impl OutboundBudget {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            used: std::sync::atomic::AtomicUsize::new(0),
+            limit: OUTBOUND_QUEUE_BYTES,
+            max_frame: MAX_OUTBOUND_FRAME_BYTES,
+        })
+    }
+
+    fn try_reserve(
+        self: &Arc<Self>,
+        payload: OutboundPayload,
+    ) -> Result<OutboundFrame, OutboundReserveError> {
+        let bytes = match &payload {
+            OutboundPayload::Message(message) => serde_json::to_vec(message)
+                .map_err(|_| OutboundReserveError::Serialization)?
+                .len(),
+            OutboundPayload::RawJson(value) => serde_json::to_vec(value)
+                .map_err(|_| OutboundReserveError::Serialization)?
+                .len(),
+        };
+        if bytes > self.max_frame {
+            return Err(OutboundReserveError::Oversized);
+        }
+        let mut used = self.used.load(std::sync::atomic::Ordering::Acquire);
+        loop {
+            if used.saturating_add(bytes) > self.limit {
+                return Err(OutboundReserveError::Saturated);
+            }
+            match self.used.compare_exchange_weak(
+                used,
+                used + bytes,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(observed) => used = observed,
+            }
+        }
+        Ok(OutboundFrame {
+            payload,
+            _charge: Arc::new(OutboundCharge {
+                budget: self.clone(),
+                bytes,
+            }),
+        })
+    }
+
+    pub(crate) fn try_message(
+        self: &Arc<Self>,
+        message: lsp_server::Message,
+    ) -> Result<OutboundFrame, OutboundReserveError> {
+        self.try_reserve(OutboundPayload::Message(message))
+    }
+
+    fn try_raw(self: &Arc<Self>, value: serde_json::Value) -> Option<OutboundFrame> {
+        self.try_reserve(OutboundPayload::RawJson(value)).ok()
+    }
+}
+
 use std::{
     collections::BTreeMap,
     fs,
+    io::{BufRead, Write},
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, UNIX_EPOCH},
@@ -59,6 +173,117 @@ use playground_io::{PlaygroundIo, PlaygroundIoState};
 use playground_session::PlaygroundSessionStore;
 use playground_ws::WsOutMessage;
 use tokio::net::TcpListener;
+
+const MAX_STDIO_FRAME_BYTES: usize = 8 * 1024 * 1024;
+
+#[derive(Debug, PartialEq, Eq)]
+enum StdioReadError {
+    Parse(String),
+    InvalidRequest(String),
+    Framing(String),
+}
+
+fn decode_lsp_message(value: serde_json::Value) -> Result<lsp_server::Message, String> {
+    let Some(object) = value.as_object() else {
+        return Err("JSON-RPC envelope must be an object".to_string());
+    };
+    if object.get("jsonrpc").and_then(serde_json::Value::as_str) != Some("2.0") {
+        return Err("JSON-RPC envelope must contain jsonrpc: \"2.0\"".to_string());
+    }
+    let has_method = object
+        .get("method")
+        .is_some_and(serde_json::Value::is_string);
+    let has_result = object.contains_key("result");
+    let has_error = object.contains_key("error");
+    if has_method {
+        if has_result || has_error {
+            return Err("JSON-RPC request/notification cannot contain result or error".to_string());
+        }
+        if object
+            .get("id")
+            .is_some_and(|id| !(id.is_string() || id.as_i64().is_some() || id.as_u64().is_some()))
+        {
+            return Err("JSON-RPC request id must be a string or integer".to_string());
+        }
+    } else {
+        if has_result == has_error {
+            return Err(
+                "JSON-RPC response must contain exactly one of result or error".to_string(),
+            );
+        }
+        let Some(id) = object.get("id") else {
+            return Err("JSON-RPC response is missing id".to_string());
+        };
+        if !(id.is_string() || id.as_i64().is_some() || id.as_u64().is_some()) {
+            return Err("JSON-RPC response id must be a string or integer".to_string());
+        }
+    }
+    serde_json::from_value(value).map_err(|error| format!("Invalid request: {error}"))
+}
+
+fn read_lsp_message(
+    input: &mut impl BufRead,
+) -> Result<Option<lsp_server::Message>, StdioReadError> {
+    let mut content_length = None;
+    let mut header = String::new();
+    loop {
+        header.clear();
+        let read = input
+            .read_line(&mut header)
+            .map_err(|error| StdioReadError::Framing(error.to_string()))?;
+        if read == 0 {
+            return if content_length.is_none() {
+                Ok(None)
+            } else {
+                Err(StdioReadError::Framing(
+                    "unexpected EOF in LSP headers".to_string(),
+                ))
+            };
+        }
+        let Some(line) = header.strip_suffix("\r\n") else {
+            return Err(StdioReadError::Framing(
+                "LSP header must end in CRLF".to_string(),
+            ));
+        };
+        if line.is_empty() {
+            break;
+        }
+        let Some((name, value)) = line.split_once(": ") else {
+            return Err(StdioReadError::Framing(format!(
+                "malformed LSP header: {line}"
+            )));
+        };
+        if name.eq_ignore_ascii_case("Content-Length") {
+            let parsed = value
+                .parse::<usize>()
+                .map_err(|_| StdioReadError::Framing("invalid Content-Length".to_string()))?;
+            if parsed > MAX_STDIO_FRAME_BYTES {
+                return Err(StdioReadError::Framing(format!(
+                    "LSP frame exceeds {MAX_STDIO_FRAME_BYTES} bytes"
+                )));
+            }
+            content_length = Some(parsed);
+        }
+    }
+    let content_length = content_length
+        .ok_or_else(|| StdioReadError::Framing("missing Content-Length".to_string()))?;
+    let mut body = vec![0; content_length];
+    input
+        .read_exact(&mut body)
+        .map_err(|error| StdioReadError::Framing(error.to_string()))?;
+    let value: serde_json::Value = serde_json::from_slice(&body)
+        .map_err(|error| StdioReadError::Parse(format!("Parse error: {error}")))?;
+    decode_lsp_message(value)
+        .map(Some)
+        .map_err(StdioReadError::InvalidRequest)
+}
+
+fn write_raw_lsp_json(output: &mut impl Write, value: &serde_json::Value) -> std::io::Result<()> {
+    let body = serde_json::to_vec(value)?;
+    write!(output, "Content-Length: {}\r\n\r\n", body.len())?;
+    output.write_all(&body)?;
+    output.flush()
+}
 
 pub fn version() -> &'static str {
     baml_version::CANONICAL_VERSION
@@ -215,17 +440,20 @@ fn run_server_inner(
     let baml_vfs = bex_project::BamlVFS::new(vfs);
 
     // Stdio sender (LSP client sender)
-    let (writer_tx, writer_rx) = crossbeam_channel::unbounded::<lsp_server::Message>();
+    let (writer_tx, writer_rx) = crossbeam_channel::bounded::<OutboundFrame>(512);
     let writer_tx = Arc::new(writer_tx);
-    let lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync> =
-        Arc::new(native_lsp_sender::NativeLspSender::new(&writer_tx));
+    let writer_budget = OutboundBudget::new();
+    let lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync> = Arc::new(
+        native_lsp_sender::NativeLspSender::new(&writer_tx, &writer_budget),
+    );
 
     // Browser-mode LSP transport: the standalone playground has no stdio LSP
     // client, so in browser mode we forward all LSP output (responses +
     // publishDiagnostics) to the `/api/lsp` WebSocket instead of stdout. A
     // bridge thread (spawned only in browser mode) drains `writer_rx` into
     // this broadcast channel.
-    let (lsp_out_tx, _lsp_out_rx) = tokio::sync::broadcast::channel::<lsp_server::Message>(256);
+    let (lsp_out_tx, _lsp_out_rx) = tokio::sync::broadcast::channel::<OutboundFrame>(256);
+    let lsp_runtime = lsp_runtime::LspRuntime::new()?;
 
     // Mirror of the content the browser editor currently has per file. Shared
     // between the `/api/lsp` bridge (writes it on didOpen/didChange) and the disk
@@ -268,7 +496,6 @@ fn run_server_inner(
     let playground_sender: Arc<dyn bex_project::PlaygroundSender> =
         Arc::new(playground_sender::NativePlaygroundSender::new(
             broadcast_tx.clone(),
-            lsp_sender.clone(),
             playground_port,
             matches!(playground_open_target, PlaygroundOpenTarget::Browser),
             session_token.clone(),
@@ -337,8 +564,8 @@ fn run_server_inner(
             std::thread::Builder::new()
                 .name("lsp-ws-bridge".into())
                 .spawn(move || {
-                    while let Ok(msg) = writer_rx.recv() {
-                        let _ = lsp_out_tx_bridge.send(msg);
+                    while let Ok(frame) = writer_rx.recv() {
+                        let _ = lsp_out_tx_bridge.send(frame);
                     }
                 })?;
 
@@ -348,6 +575,7 @@ fn run_server_inner(
             let _disk_watcher = playground_server::spawn_disk_watcher(
                 &workspace_roots,
                 lsp_out_tx.clone(),
+                writer_budget.clone(),
                 doc_mirror.clone(),
             );
 
@@ -360,6 +588,7 @@ fn run_server_inner(
                 runs,
                 playground_dir,
                 lsp_out_tx,
+                lsp_runtime.clone(),
                 doc_mirror,
                 workspace_roots.clone(),
                 session_token,
@@ -367,6 +596,7 @@ fn run_server_inner(
         }
 
         let workspace_roots_for_server = workspace_roots.clone();
+        let lsp_runtime_for_server = lsp_runtime.clone();
         tokio_runtime.spawn(async move {
             if let Err(e) = playground_server::run(
                 listener,
@@ -377,6 +607,7 @@ fn run_server_inner(
                 runs,
                 playground_dir,
                 lsp_out_tx,
+                lsp_runtime_for_server,
                 doc_mirror,
                 workspace_roots_for_server,
                 session_token,
@@ -390,14 +621,53 @@ fn run_server_inner(
         anyhow::bail!("Could not start playground server");
     }
 
+    let stdio_closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stdio_sink_tx = writer_tx.clone();
+    let stdio_sink_budget = writer_budget.clone();
+    let stdio_sink: lsp_runtime::Sink = Arc::new(move |message| {
+        let frame = match stdio_sink_budget.try_message(message) {
+            Ok(frame) => frame,
+            Err(OutboundReserveError::Saturated) => {
+                return lsp_runtime::SinkDelivery::Saturated;
+            }
+            Err(OutboundReserveError::Oversized | OutboundReserveError::Serialization) => {
+                return lsp_runtime::SinkDelivery::Oversized;
+            }
+        };
+        match stdio_sink_tx.try_send(frame) {
+            Ok(()) => lsp_runtime::SinkDelivery::Sent,
+            Err(crossbeam_channel::TrySendError::Full(_)) => lsp_runtime::SinkDelivery::Saturated,
+            Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
+                lsp_runtime::SinkDelivery::Closed
+            }
+        }
+    });
+    let stdio_closed_for_endpoint = stdio_closed.clone();
+    let stdio_close: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+        stdio_closed_for_endpoint.store(true, std::sync::atomic::Ordering::Release);
+    });
+    let stdio_session = lsp_runtime
+        .open_session(
+            bex_project::lsp_ingress::TransportKind::Stdio,
+            bex.clone(),
+            stdio_sink,
+            stdio_close,
+            None,
+        )
+        .session_id;
+
     // Spawn the stdout writer thread.
     std::thread::Builder::new()
         .name("lsp-stdout-writer".into())
         .spawn(move || {
             let stdout = std::io::stdout();
             let mut stdout = stdout.lock();
-            while let Ok(msg) = writer_rx.recv() {
-                if msg.write(&mut stdout).is_err() {
+            while let Ok(frame) = writer_rx.recv() {
+                let result = match &frame.payload {
+                    OutboundPayload::Message(message) => message.write(&mut stdout),
+                    OutboundPayload::RawJson(value) => write_raw_lsp_json(&mut stdout, value),
+                };
+                if result.is_err() {
                     break;
                 }
             }
@@ -409,41 +679,59 @@ fn run_server_inner(
 
     // Main event loop — forward all messages to bex_project.
     // The `initialize` handshake is handled by `bex_project` via `handle_request`.
+    let mut abnormal_exit = false;
     loop {
-        let msg = match lsp_server::Message::read(&mut stdin) {
+        let msg = match read_lsp_message(&mut stdin) {
             Ok(Some(msg)) => msg,
             Ok(None) => break,
-            Err(e) => {
-                tracing::error!("Failed to read LSP message: {e}");
-                break;
+            Err(error) => {
+                let (code, message, recoverable) = match error {
+                    StdioReadError::Parse(message) => (-32700, message, true),
+                    StdioReadError::InvalidRequest(message) => (-32600, message, true),
+                    StdioReadError::Framing(message) => (-32700, message, false),
+                };
+                let response = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": serde_json::Value::Null,
+                    "error": { "code": code, "message": message },
+                });
+                let queued = writer_budget
+                    .try_raw(response)
+                    .is_some_and(|frame| writer_tx.try_send(frame).is_ok());
+                if !queued || !recoverable {
+                    break;
+                }
+                continue;
             }
         };
 
-        match msg {
-            lsp_server::Message::Notification(notification) => {
-                tracing::debug!("<<< notification: {}", notification.method);
-                if notification.method == "exit" {
+        let mut terminate = false;
+        loop {
+            match lsp_runtime.submit(stdio_session, msg.clone()) {
+                lsp_runtime::SubmitResult::Accepted | lsp_runtime::SubmitResult::Dropped => break,
+                lsp_runtime::SubmitResult::Backpressure => {
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                lsp_runtime::SubmitResult::Exited { normal } => {
+                    abnormal_exit = !normal;
+                    terminate = true;
                     break;
                 }
-                bex.handle_notification(notification);
-            }
-            lsp_server::Message::Request(request) => {
-                tracing::debug!("<<< request: {} (id={})", request.method, request.id);
-                if request.method == "shutdown" {
-                    let response = lsp_server::Response {
-                        id: request.id,
-                        result: Some(serde_json::Value::Null),
-                        error: None,
-                    };
-                    let _ = writer_tx.send(lsp_server::Message::Response(response));
-                    continue;
+                lsp_runtime::SubmitResult::Closed => {
+                    terminate = true;
+                    break;
                 }
-                bex.handle_request(request);
-            }
-            lsp_server::Message::Response(response) => {
-                tracing::debug!("<<< response from client: {:?}", response.id);
             }
         }
+        if terminate || stdio_closed.load(std::sync::atomic::Ordering::Acquire) {
+            break;
+        }
+    }
+
+    lsp_runtime.close_session(stdio_session);
+
+    if abnormal_exit {
+        anyhow::bail!("LSP client sent exit before completing shutdown");
     }
 
     tracing::info!("LSP server shutting down");
@@ -617,6 +905,49 @@ fn file_signature(metadata: &fs::Metadata) -> FileSignature {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn framed(body: &str) -> Vec<u8> {
+        format!("Content-Length: {}\r\n\r\n{body}", body.len()).into_bytes()
+    }
+
+    #[test]
+    fn stdio_parser_distinguishes_parse_and_invalid_request() {
+        let mut malformed = std::io::Cursor::new(framed("{"));
+        assert!(matches!(
+            read_lsp_message(&mut malformed),
+            Err(StdioReadError::Parse(_))
+        ));
+
+        let mut invalid = std::io::Cursor::new(framed(r#"{"jsonrpc":"2.0","wat":true}"#));
+        assert!(matches!(
+            read_lsp_message(&mut invalid),
+            Err(StdioReadError::InvalidRequest(_))
+        ));
+
+        let mut request = std::io::Cursor::new(framed(
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
+        ));
+        assert!(matches!(
+            read_lsp_message(&mut request),
+            Ok(Some(lsp_server::Message::Request(_)))
+        ));
+    }
+
+    #[test]
+    fn raw_stdio_error_uses_null_id_and_content_length() {
+        let value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": serde_json::Value::Null,
+            "error": { "code": -32700, "message": "Parse error" },
+        });
+        let mut output = Vec::new();
+        write_raw_lsp_json(&mut output, &value).unwrap();
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.starts_with("Content-Length: "));
+        assert!(output.contains("\r\n\r\n"));
+        assert!(output.contains(r#""id":null"#));
+        assert!(output.contains(r#""code":-32700"#));
+    }
 
     #[test]
     fn playground_banner_shows_url_project_root_and_ssh_hint() {

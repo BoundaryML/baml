@@ -16,7 +16,6 @@ use crate::playground_ws::WsOutMessage;
 
 pub struct NativePlaygroundSender {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
-    lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
     playground_port: u16,
     open_in_browser: bool,
     /// Browser-mode session token; carried on the opened URL so the page can
@@ -27,14 +26,12 @@ pub struct NativePlaygroundSender {
 impl NativePlaygroundSender {
     pub fn new(
         broadcast_tx: broadcast::Sender<WsOutMessage>,
-        lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
         playground_port: u16,
         open_in_browser: bool,
         session_token: Option<Arc<str>>,
     ) -> Self {
         Self {
             broadcast_tx,
-            lsp_sender,
             playground_port,
             open_in_browser,
             session_token,
@@ -43,14 +40,19 @@ impl NativePlaygroundSender {
 }
 
 impl bex_project::PlaygroundSender for NativePlaygroundSender {
+    fn lsp_playground_port(&self) -> Option<u16> {
+        (!self.open_in_browser).then_some(self.playground_port)
+    }
+
+    fn has_runtime_subscribers(&self) -> bool {
+        self.broadcast_tx.receiver_count() > 0
+    }
+
     fn send_playground_notification(&self, notification: bex_project::PlaygroundNotification) {
-        if let bex_project::PlaygroundNotification::OpenPlayground {
-            ref project,
-            ref function_name,
-            ref test_name,
-            ref testset_name,
-        } = notification
-        {
+        if matches!(
+            &notification,
+            bex_project::PlaygroundNotification::OpenPlayground { .. }
+        ) {
             if self.open_in_browser {
                 let url = match &self.session_token {
                     Some(token) => {
@@ -65,31 +67,8 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
                         tracing::error!("Failed to open browser at {}: {}", url, e);
                     }
                 });
-            } else {
-                let params = serde_json::json!({
-                    "port": self.playground_port,
-                    "projectPath": project,
-                    "functionName": function_name,
-                    "testName": test_name,
-                    "testsetName": testset_name,
-                });
-                let notif =
-                    lsp_server::Notification::new("baml/openPlayground".to_string(), params);
-                if let Err(e) = self.lsp_sender.send_notification(notif) {
-                    tracing::error!("Failed to send baml/openPlayground notification: {}", e);
-                }
             }
             return;
-        }
-
-        // Forward project list to the LSP client so the extension can
-        // show per-project playground links in the status bar tooltip.
-        if let bex_project::PlaygroundNotification::ListProjects { ref projects } = notification {
-            let params = serde_json::json!({ "projects": projects });
-            let notif = lsp_server::Notification::new("baml/listProjects".to_string(), params);
-            if let Err(e) = self.lsp_sender.send_notification(notif) {
-                tracing::error!("Failed to send baml/listProjects notification: {}", e);
-            }
         }
 
         let json = serde_json::to_value(&notification).unwrap_or_default();

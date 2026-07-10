@@ -18,7 +18,11 @@ import type {
   WebSocketInMessage,
   WebSocketOutMessage,
 } from '../worker-protocol';
-import { isPlaygroundProtocolCompatible } from '../protocol';
+import {
+  isPlaygroundProtocolCompatible,
+  parseSourcePositionEncoding,
+  type SourcePositionEncoding,
+} from '../protocol';
 
 const MAX_RECONNECT_DELAY = 5000;
 
@@ -35,12 +39,20 @@ export class WebSocketRuntimePort implements RuntimePort {
   private url: string;
   private ws: WebSocket | null = null;
   private handlers = new Set<(msg: WorkerOutMessage) => void>();
-  private outQueue: string[] = [];
   private inBuffer: WorkerOutMessage[] = [];
   private disposed = false;
   private reconnectDelay = 500;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private playgroundCompatible = true;
+  private playgroundCompatible = false;
+  private handshakeComplete = false;
+  private runtimeDemandSupported: boolean | undefined;
+  private serverSessionEpoch: number | undefined;
+  private _sourcePositionEncoding: SourcePositionEncoding | undefined;
+  /** The one selected-project lease this browser session wants to hold. */
+  private desiredRuntimeLease: Extract<
+    WorkerInMessage,
+    { type: 'ensureProjectRuntime' }
+  > | null = null;
   private status: WebSocketRuntimePortStatus = 'connecting';
   private statusHandlers = new Set<(status: WebSocketRuntimePortStatus) => void>();
 
@@ -49,28 +61,41 @@ export class WebSocketRuntimePort implements RuntimePort {
     this.connect();
   }
 
+  get sourcePositionEncoding(): SourcePositionEncoding | undefined {
+    return this._sourcePositionEncoding;
+  }
+
   private connect(): void {
     if (this.disposed) return;
 
+    // A reconnect performs a fresh handshake; do not retain capabilities from
+    // the previous server instance while waiting for its replacement.
+    this._sourcePositionEncoding = undefined;
+    this.runtimeDemandSupported = undefined;
+    this.serverSessionEpoch = undefined;
+    this.playgroundCompatible = false;
+    this.handshakeComplete = false;
+
+    let socket: WebSocket;
     try {
-      this.ws = new WebSocket(this.url);
+      socket = new WebSocket(this.url);
+      this.ws = socket;
     } catch {
       this.scheduleReconnect();
       return;
     }
 
-    this.ws.onopen = () => {
+    socket.onopen = () => {
+      if (this.ws !== socket) return;
       this.setStatus('open');
       this.reconnectDelay = 500; // reset backoff
-      // Flush queued outgoing messages.
-      for (const msg of this.outQueue) {
-        this.ws!.send(msg);
-      }
-      this.outQueue = [];
-      this.ws!.send(JSON.stringify({ type: 'requestState' }));
+      // State requests are catalog-only. Re-establishing demand is an explicit
+      // message after the hello confirms the server supports protocol v3.
+      socket.send(JSON.stringify({ type: 'requestState' }));
     };
 
-    this.ws.onmessage = (event: MessageEvent) => {
+    socket.onmessage = (event: MessageEvent) => {
+      if (this.ws !== socket) return;
       try {
         const raw: WebSocketOutMessage = JSON.parse(event.data as string);
         const msg = this.fromServer(raw);
@@ -87,13 +112,23 @@ export class WebSocketRuntimePort implements RuntimePort {
       }
     };
 
-    this.ws.onclose = () => {
+    socket.onclose = () => {
+      if (this.ws !== socket) return;
+      // Tombstone this socket immediately. A queued callback from the closed
+      // connection must not be mistaken for output from the reconnect that
+      // will be installed after the backoff.
+      this.ws = null;
+      this._sourcePositionEncoding = undefined;
+      this.handshakeComplete = false;
+      this.playgroundCompatible = false;
+      this.runtimeDemandSupported = undefined;
+      this.serverSessionEpoch = undefined;
       if (!this.disposed) {
         this.scheduleReconnect();
       }
     };
 
-    this.ws.onerror = () => {
+    socket.onerror = () => {
       // onclose will fire after onerror, which triggers reconnect.
     };
   }
@@ -112,18 +147,55 @@ export class WebSocketRuntimePort implements RuntimePort {
   }
 
   postMessage(msg: WorkerInMessage): void {
+    if (msg.type === 'ensureProjectRuntime') {
+      this.desiredRuntimeLease = msg;
+    } else if (msg.type === 'releaseProjectRuntime') {
+      if (
+        this.desiredRuntimeLease?.project === msg.project &&
+        this.desiredRuntimeLease.incarnation === msg.incarnation
+      ) {
+        this.desiredRuntimeLease = null;
+      }
+    }
+
+    // Every successful open issues one forced state request after the socket
+    // subscription exists, so pre-open callers do not need to accumulate
+    // duplicate requestState frames in the reconnect queue.
+    if (
+      msg.type === 'requestState' &&
+      (!this.ws || this.ws.readyState !== WebSocket.OPEN)
+    ) {
+      return;
+    }
+
     const serverMsg = this.toServer(msg);
     if (!serverMsg) return;
-    this.sendServerMessage(serverMsg);
-  }
 
-  private sendServerMessage(serverMsg: WebSocketInMessage): void {
-    const raw = JSON.stringify(serverMsg);
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(raw);
-    } else {
-      this.outQueue.push(raw);
+    // Lease controls describe desired session state, so stale transitions must
+    // never accumulate in the generic reconnect queue. `connect()` restores
+    // exactly the latest lease after requesting the catalog.
+    if (
+      (msg.type === 'ensureProjectRuntime' ||
+        msg.type === 'releaseProjectRuntime' ||
+        msg.type === 'retryProjectRuntime') &&
+      (!this.ws ||
+        this.ws.readyState !== WebSocket.OPEN ||
+        this.runtimeDemandSupported !== true)
+    ) {
+      return;
     }
+    // Commands are session-scoped. Never queue them across a disconnect, and
+    // do not let them race the hello that establishes the new session. The
+    // catalog-only requestState frame is the sole pre-handshake exception.
+    if (
+      !this.ws ||
+      this.ws.readyState !== WebSocket.OPEN ||
+      (!this.handshakeComplete && serverMsg.type !== 'requestState') ||
+      (this.handshakeComplete && !this.playgroundCompatible)
+    ) {
+      return;
+    }
+    this.ws.send(JSON.stringify(serverMsg));
   }
 
   private setStatus(status: WebSocketRuntimePortStatus): void {
@@ -177,8 +249,8 @@ export class WebSocketRuntimePort implements RuntimePort {
     }
     this.handlers.clear();
     this.statusHandlers.clear();
-    this.outQueue = [];
     this.inBuffer = [];
+    this.desiredRuntimeLease = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -280,6 +352,27 @@ export class WebSocketRuntimePort implements RuntimePort {
         return null; // handled locally, not sent to server
       case 'requestState':
         return { type: 'requestState' };
+      case 'ensureProjectRuntime':
+        return {
+          type: 'ensureProjectRuntime',
+          requestId: msg.requestId,
+          project: msg.project,
+          incarnation: msg.incarnation,
+        };
+      case 'releaseProjectRuntime':
+        return {
+          type: 'releaseProjectRuntime',
+          requestId: msg.requestId,
+          project: msg.project,
+          incarnation: msg.incarnation,
+        };
+      case 'retryProjectRuntime':
+        return {
+          type: 'retryProjectRuntime',
+          requestId: msg.requestId,
+          project: msg.project,
+          incarnation: msg.incarnation,
+        };
       case 'requestControlFlowGraph':
         return {
           type: 'requestControlFlowGraph',
@@ -323,22 +416,55 @@ export class WebSocketRuntimePort implements RuntimePort {
   private fromServer(raw: WebSocketOutMessage): WorkerOutMessage | null {
     switch (raw.type) {
       case 'hello':
+        this.desiredRuntimeLease = null;
+        // Drop anything buffered for a handler from the prior connection
+        // before publishing the replacement-session boundary.
+        this.inBuffer = [];
+        this._sourcePositionEncoding = parseSourcePositionEncoding(
+          raw.sourcePositionEncoding,
+        );
         this.playgroundCompatible = isPlaygroundProtocolCompatible(
           raw.playgroundProtocol,
           raw.minClientPlaygroundProtocol,
         );
+        this.runtimeDemandSupported =
+          this.playgroundCompatible && raw.playgroundProtocol >= 3;
+        this.serverSessionEpoch = raw.sessionEpoch;
+        this.handshakeComplete = true;
         if (!this.playgroundCompatible) {
           console.warn(
             `BAML playground protocol ${raw.playgroundProtocol} from toolchain ${raw.toolchainVersion} is incompatible with this extension.`,
           );
         }
+        this.deliver({
+          type: 'runtimeSessionReset',
+          sessionEpoch: raw.sessionEpoch,
+        });
         return null;
+      default:
+        // Fail closed until a compatible hello establishes this connection.
+        if (!this.handshakeComplete || !this.playgroundCompatible) return null;
+        break;
+    }
+
+    switch (raw.type) {
       case 'ready':
-        if (!this.playgroundCompatible) {
+        return { type: 'ready' };
+      case 'projectRuntimeState':
+        return {
+          type: 'projectRuntimeState',
+          requestId: raw.requestId,
+          project: raw.project,
+          state: raw.state,
+        };
+      case 'playgroundNotification':
+        if (
+          isProjectDerivedNotification(raw.notification) &&
+          projectDerivedSessionEpoch(raw.notification) !==
+            this.serverSessionEpoch
+        ) {
           return null;
         }
-        return { type: 'ready' };
-      case 'playgroundNotification':
         return {
           type: 'playgroundNotification',
           notification: raw.notification,
@@ -450,8 +576,15 @@ export class WebSocketRuntimePort implements RuntimePort {
           },
         };
       case 'controlFlowGraphResult':
+        if (raw.sessionEpoch !== this.serverSessionEpoch) return null;
         return {
           type: 'controlFlowGraphResult',
+          sessionEpoch: raw.sessionEpoch,
+          project: raw.project,
+          projectIncarnation: raw.projectIncarnation,
+          sourceRevision: raw.sourceRevision,
+          generation: raw.generation,
+          derivedEpoch: raw.derivedEpoch,
           functionName: raw.functionName,
           graph: (raw.graph ?? null) as
             | import('../worker-protocol').ControlFlowGraph
@@ -479,6 +612,31 @@ export class WebSocketRuntimePort implements RuntimePort {
   private clearLogDecorations(): void {
     this.deliver({ type: 'clearLogDecorations' });
   }
+}
+
+function projectDerivedSessionEpoch(
+  notification: import('../worker-protocol').PlaygroundNotification,
+): number | undefined {
+  switch (notification.type) {
+    case 'listProjects':
+    case 'updateProject':
+    case 'controlFlowGraphResult':
+    case 'testCollectionResult':
+      return notification.sessionEpoch;
+    default:
+      return undefined;
+  }
+}
+
+function isProjectDerivedNotification(
+  notification: import('../worker-protocol').PlaygroundNotification,
+): boolean {
+  return (
+    notification.type === 'listProjects' ||
+    notification.type === 'updateProject' ||
+    notification.type === 'controlFlowGraphResult' ||
+    notification.type === 'testCollectionResult'
+  );
 }
 
 // ---------------------------------------------------------------------------

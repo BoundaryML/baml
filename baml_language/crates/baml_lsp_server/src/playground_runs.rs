@@ -31,6 +31,15 @@ impl GraphRuntimeOverlaySpanProvider for ProjectGraphRuntimeOverlaySpanProvider 
             &run.request.project_id.0,
             run.request.project_generation.0,
             function_name,
+            run.host_call_id
+                .as_ref()
+                .and_then(|host_call_id| match host_call_id {
+                    bex_events::run::HostCallId::Native(call_id) => Some(*call_id),
+                    bex_events::run::HostCallId::Wasm(call_id) => {
+                        Some(sys_types::CallId(u64::from(*call_id)))
+                    }
+                    bex_events::run::HostCallId::Adapter { .. } => None,
+                }),
         ) else {
             return GraphRuntimeOverlaySpanResolution::Unavailable(project_generation_unavailable(
                 run,

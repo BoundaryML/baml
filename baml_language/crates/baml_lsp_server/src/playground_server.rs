@@ -490,7 +490,8 @@ struct WsState {
     _history_observer_registration: Arc<HistoryObserverRegistration>,
     value_store: LiveValueStore,
     /// LSP output (responses + publishDiagnostics) destined for `/api/lsp`.
-    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
+    lsp_runtime: Arc<crate::lsp_runtime::LspRuntime>,
     /// What the browser currently has per file (for disk-watcher echo avoidance).
     doc_mirror: DocMirror,
     /// Workspace roots that browser-mode LSP saves are allowed to write under.
@@ -957,7 +958,7 @@ struct UpdateSourceFileResponse {
 
 /// Start the playground server on the given listener.
 #[allow(clippy::too_many_arguments)]
-pub async fn run(
+pub(crate) async fn run(
     listener: TcpListener,
     bex: Arc<dyn bex_project::BexLsp>,
     broadcast_tx: broadcast::Sender<WsOutMessage>,
@@ -965,7 +966,8 @@ pub async fn run(
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
     playground_dir_override: Option<PathBuf>,
-    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
+    lsp_runtime: Arc<crate::lsp_runtime::LspRuntime>,
     doc_mirror: DocMirror,
     workspace_roots: Vec<PathBuf>,
     session_token: Option<Arc<str>>,
@@ -980,6 +982,7 @@ pub async fn run(
         run_store,
         playground_dir_override,
         lsp_out_tx,
+        lsp_runtime,
         doc_mirror,
         Arc::new(workspace_roots),
         access_guard,
@@ -1000,7 +1003,8 @@ fn build_router(
     io_state: Arc<PlaygroundIoState>,
     run_store: Arc<InMemoryRunStore>,
     playground_dir_override: Option<PathBuf>,
-    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
+    lsp_runtime: Arc<crate::lsp_runtime::LspRuntime>,
     doc_mirror: DocMirror,
     workspace_roots: Arc<Vec<PathBuf>>,
     access_guard: PlaygroundAccessGuard,
@@ -1020,6 +1024,7 @@ fn build_router(
         _history_observer_registration: history_observer_registration,
         value_store,
         lsp_out_tx,
+        lsp_runtime,
         doc_mirror,
         workspace_roots,
     };
@@ -1115,30 +1120,73 @@ fn lsp_message_to_ws_text(msg: &lsp_server::Message) -> Option<AxumWsMsg> {
     }
 }
 
+async fn send_lsp_ws_message(
+    sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
+    message: AxumWsMsg,
+) -> bool {
+    matches!(
+        tokio::time::timeout(std::time::Duration::from_secs(5), sink.send(message)).await,
+        Ok(Ok(()))
+    )
+}
+
 async fn lsp_ws_session(socket: WebSocket, state: WsState) {
     tracing::info!("Playground: LSP WS session started");
     let (mut sink, mut stream) = socket.split();
     let mut lsp_rx = state.lsp_out_tx.subscribe();
-
-    // Dispatch `bex` LSP work (which can recompile the project on every keystroke
-    // via didChange) on a DEDICATED thread instead of the async WS task. Calling
-    // the synchronous, CPU-heavy `bex.handle_*` inline would block this task's
-    // select! — so a save (and its disk write-through) would queue behind the
-    // backlog of didChange recompiles and only land once the user stops typing.
-    // The thread processes messages in order; the WS loop stays responsive.
-    let (dispatch_tx, dispatch_rx) = std::sync::mpsc::channel::<lsp_server::Message>();
-    let bex = state.bex.clone();
-    let _dispatch_thread = std::thread::Builder::new()
-        .name("lsp-ws-dispatch".into())
-        .spawn(move || {
-            while let Ok(msg) = dispatch_rx.recv() {
-                match msg {
-                    lsp_server::Message::Request(req) => bex.handle_request(req),
-                    lsp_server::Message::Notification(notif) => bex.handle_notification(notif),
-                    lsp_server::Message::Response(_) => {}
-                }
+    let (response_tx, mut response_rx) = tokio::sync::mpsc::channel(256);
+    let response_budget = crate::OutboundBudget::new();
+    let response_sink_budget = response_budget.clone();
+    let response_sink: crate::lsp_runtime::Sink = Arc::new(move |message| {
+        let frame = match response_sink_budget.try_message(message) {
+            Ok(frame) => frame,
+            Err(crate::OutboundReserveError::Saturated) => {
+                return crate::lsp_runtime::SinkDelivery::Saturated;
             }
-        });
+            Err(
+                crate::OutboundReserveError::Oversized | crate::OutboundReserveError::Serialization,
+            ) => return crate::lsp_runtime::SinkDelivery::Oversized,
+        };
+        match response_tx.try_send(frame) {
+            Ok(()) => crate::lsp_runtime::SinkDelivery::Sent,
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                crate::lsp_runtime::SinkDelivery::Saturated
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                crate::lsp_runtime::SinkDelivery::Closed
+            }
+        }
+    });
+    let (close_tx, mut close_rx) = tokio::sync::watch::channel(false);
+    let close_endpoint: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+        let _ = close_tx.send(true);
+    });
+    let pending_text = Arc::new(std::sync::Mutex::new(std::collections::HashMap::<
+        String,
+        String,
+    >::new()));
+    let hook_pending_text = pending_text.clone();
+    let hook_doc_mirror = state.doc_mirror.clone();
+    let hook_workspace_roots = state.workspace_roots.clone();
+    let after_notification: crate::lsp_runtime::NotificationHook = Arc::new(move |notification| {
+        let Ok(mut pending_text) = hook_pending_text.lock() else {
+            return;
+        };
+        track_and_persist_lsp_notification(
+            notification,
+            &mut pending_text,
+            &hook_doc_mirror,
+            &hook_workspace_roots,
+        );
+    });
+    let opened = state.lsp_runtime.open_session(
+        bex_project::lsp_ingress::TransportKind::Browser,
+        state.bex.clone(),
+        response_sink,
+        close_endpoint,
+        Some(after_notification),
+    );
+    let session_id = opened.session_id;
 
     // Latest full text per document URI, captured from didOpen/didChange so we
     // can write it through to disk on didSave. Disk writes happen ONLY on an
@@ -1146,9 +1194,6 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
     // any other editor (e.g. VS Code) don't race to write the same file. The
     // disk watcher still pushes external edits to the browser live; applying one
     // fires a didChange that is NOT written back, so there's no edit loop.
-    let mut pending_text: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
-
     loop {
         tokio::select! {
             client_msg = stream.next() => {
@@ -1157,11 +1202,9 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
                         let text_str: &str = &text;
                         handle_lsp_client_text(
                             text_str,
-                            &dispatch_tx,
-                            &state.doc_mirror,
-                            &state.workspace_roots,
+                            &state.lsp_runtime,
+                            session_id,
                             &mut sink,
-                            &mut pending_text,
                         ).await;
                     }
                     Some(Ok(AxumWsMsg::Close(_))) | None => break,
@@ -1170,77 +1213,87 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
             }
             out_msg = lsp_rx.recv() => {
                 match out_msg {
-                    Ok(msg) => {
-                        if let Some(ws_msg) = lsp_message_to_ws_text(&msg)
-                            && sink.send(ws_msg).await.is_err()
+                    Ok(frame) if !matches!(frame.message(), Some(lsp_server::Message::Response(_))) => {
+                        if let Some(ws_msg) = frame.message().and_then(lsp_message_to_ws_text)
+                            && !send_lsp_ws_message(&mut sink, ws_msg).await
                         {
                             break;
                         }
                     }
+                    Ok(_) => {}
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         tracing::warn!("LSP WS: broadcast lagged by {n} messages");
+                        break;
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            response = response_rx.recv() => {
+                match response {
+                    Some(frame) => {
+                        if let Some(ws_msg) = frame.message().and_then(lsp_message_to_ws_text)
+                            && !send_lsp_ws_message(&mut sink, ws_msg).await
+                        {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
+            changed = close_rx.changed() => {
+                if changed.is_err() || *close_rx.borrow() {
+                    break;
                 }
             }
         }
     }
 
-    // Dropping `dispatch_tx` ends the dispatch thread (its recv() returns Err).
-    drop(dispatch_tx);
+    state.lsp_runtime.close_session(session_id);
     tracing::debug!("LSP WS session ended");
 }
 
 async fn handle_lsp_client_text(
     text: &str,
-    dispatch_tx: &std::sync::mpsc::Sender<lsp_server::Message>,
-    doc_mirror: &DocMirror,
-    workspace_roots: &[PathBuf],
+    runtime: &Arc<crate::lsp_runtime::LspRuntime>,
+    session_id: bex_project::lsp_ingress::SessionId,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
-    pending_text: &mut std::collections::HashMap<String, String>,
 ) {
-    let msg = match serde_json::from_str::<lsp_server::Message>(text) {
-        Ok(m) => m,
-        Err(e) => {
-            tracing::warn!("LSP WS: invalid JSON-RPC message: {e}");
+    let value = match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!("LSP WS: malformed JSON: {error}");
+            let parse_error = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": serde_json::Value::Null,
+                "error": { "code": -32700, "message": format!("Parse error: {error}") },
+            });
+            let _ =
+                send_lsp_ws_message(sink, AxumWsMsg::Text(parse_error.to_string().into())).await;
             return;
         }
     };
-
-    match msg {
-        lsp_server::Message::Request(req) => {
-            // Mirror the stdio loop: answer `shutdown` directly without
-            // dispatching it into BexLsp.
-            if req.method == "shutdown" {
-                let response = lsp_server::Response {
-                    id: req.id,
-                    result: Some(serde_json::Value::Null),
-                    error: None,
-                };
-                if let Some(ws_msg) =
-                    lsp_message_to_ws_text(&lsp_server::Message::Response(response))
-                {
-                    let _ = sink.send(ws_msg).await;
-                }
-                return;
-            }
-            let _ = dispatch_tx.send(lsp_server::Message::Request(req));
+    let msg = match crate::decode_lsp_message(value) {
+        Ok(message) => message,
+        Err(error) => {
+            let invalid_request = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": serde_json::Value::Null,
+                    "error": { "code": -32600, "message": error },
+            });
+            let _ = send_lsp_ws_message(sink, AxumWsMsg::Text(invalid_request.to_string().into()))
+                .await;
+            return;
         }
-        lsp_server::Message::Notification(notif) => {
-            if notif.method == "exit" {
-                return;
+    };
+    loop {
+        match runtime.submit(session_id, msg.clone()) {
+            crate::lsp_runtime::SubmitResult::Accepted
+            | crate::lsp_runtime::SubmitResult::Dropped
+            | crate::lsp_runtime::SubmitResult::Exited { .. }
+            | crate::lsp_runtime::SubmitResult::Closed => break,
+            crate::lsp_runtime::SubmitResult::Backpressure => {
+                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
             }
-            // Capture the latest text and, on an explicit save (didSave), write
-            // it through to disk RIGHT HERE on the WS read loop — not the dispatch
-            // thread — so the save is immediate and independent of the recompile
-            // backlog. didChange never writes to disk. BexLsp still sees the
-            // notification (via the dispatch thread) for live diagnostics.
-            track_and_persist_lsp_notification(&notif, pending_text, doc_mirror, workspace_roots);
-            let _ = dispatch_tx.send(lsp_server::Message::Notification(notif));
-        }
-        lsp_server::Message::Response(_) => {
-            // Responses to server-initiated requests; the stdio loop ignores
-            // these as well.
         }
     }
 }
@@ -1385,9 +1438,10 @@ fn update_doc_mirror(doc_mirror: &DocMirror, uri: &str, text: &str) {
 /// a change whose content already matches `doc_mirror` (what the browser has, or
 /// just wrote through) is NOT pushed back. The returned watcher must be kept
 /// alive for as long as watching should continue.
-pub fn spawn_disk_watcher(
+pub(crate) fn spawn_disk_watcher(
     roots: &[PathBuf],
-    lsp_out_tx: broadcast::Sender<lsp_server::Message>,
+    lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
+    lsp_out_budget: Arc<crate::OutboundBudget>,
     doc_mirror: DocMirror,
 ) -> Option<notify::RecommendedWatcher> {
     use notify::{EventKind, RecursiveMode, Watcher};
@@ -1422,7 +1476,22 @@ pub fn spawn_disk_watcher(
                 method: DISK_CHANGE_NOTIFICATION.to_string(),
                 params: serde_json::json!({ "uri": url.to_string(), "text": content }),
             };
-            let _ = lsp_out_tx.send(lsp_server::Message::Notification(notif));
+            let message = lsp_server::Message::Notification(notif);
+            let frame = match lsp_out_budget.try_message(message) {
+                Ok(frame) => frame,
+                Err(crate::OutboundReserveError::Saturated) => {
+                    tracing::warn!("Disk watcher: LSP outbound byte budget is saturated");
+                    continue;
+                }
+                Err(
+                    crate::OutboundReserveError::Oversized
+                    | crate::OutboundReserveError::Serialization,
+                ) => {
+                    tracing::warn!("Disk watcher: LSP outbound frame is not deliverable");
+                    continue;
+                }
+            };
+            let _ = lsp_out_tx.send(frame);
             tracing::debug!(
                 "Disk watcher: pushed external change for {}",
                 canonical.display()
@@ -1519,20 +1588,40 @@ fn text_response(status: StatusCode, message: String) -> Response {
         .unwrap_or_else(|_| Response::new(Body::empty()))
 }
 
+struct PlaygroundSessionGuard {
+    bex: Arc<dyn bex_project::BexLsp>,
+    session_epoch: u64,
+}
+
+impl Drop for PlaygroundSessionGuard {
+    fn drop(&mut self) {
+        self.bex.end_playground_session(self.session_epoch);
+    }
+}
+
 async fn playground_ws_session(socket: WebSocket, state: WsState) {
     tracing::info!("Playground: WS session started");
+    let session_epoch = state.bex.begin_playground_session();
+    let _session_guard = PlaygroundSessionGuard {
+        bex: state.bex.clone(),
+        session_epoch,
+    };
+    let mut state = state;
+    state.bex = state.bex.bind_playground_session(session_epoch);
     let (mut sink, mut stream) = socket.split();
 
     if let Some(hello) = to_ws_text(&WsOutMessage::Hello {
+        session_epoch,
         toolchain_version: baml_version::CANONICAL_VERSION.to_string(),
-        playground_protocol: 2,
-        min_client_playground_protocol: 2,
+        playground_protocol: 3,
+        min_client_playground_protocol: 3,
         capabilities: vec![
             "playgroundWebSocket.v2".to_string(),
             "callFunction.v1".to_string(),
             "collectTests.v1".to_string(),
             "sourceFiles.v1".to_string(),
         ],
+        source_position_encoding: "utf16-zero-based-v1".to_string(),
     }) {
         if sink.send(hello).await.is_err() {
             return;
@@ -1573,16 +1662,25 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
 
     // Send current playground state.
     state.bex.request_playground_state();
+    let mut selected_runtime_project: Option<(String, u64)> = None;
 
     loop {
         tokio::select! {
             client_msg = stream.next() => {
                 match client_msg {
                     Some(Ok(AxumWsMsg::Text(text))) => {
+                        if !state.bex.playground_session_is_current(session_epoch) {
+                            break;
+                        }
                         let text_str: &str = &text;
                         match serde_json::from_str::<WsInMessage>(text_str) {
                             Ok(msg) => {
-                                handle_ws_in_message(msg, &state, &mut sink).await;
+                                handle_ws_in_message(
+                                    msg,
+                                    &state,
+                                    &mut sink,
+                                    &mut selected_runtime_project,
+                                ).await;
                             }
                             Err(e) => {
                                 tracing::warn!("Playground WS: invalid message: {e}");
@@ -1596,6 +1694,15 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
             broadcast_msg = broadcast_rx.recv() => {
                 match broadcast_msg {
                     Ok(msg) => {
+                        if !state.bex.playground_session_is_current(session_epoch) {
+                            break;
+                        }
+                        if msg
+                            .target_playground_session()
+                            .is_some_and(|target| target != session_epoch)
+                        {
+                            continue;
+                        }
                         if let Some(ws_msg) = to_ws_text(&msg)
                             && sink.send(ws_msg).await.is_err()
                         {
@@ -1604,11 +1711,18 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         tracing::warn!("Playground WS: broadcast lagged by {n} messages");
+                        break;
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
             }
         }
+    }
+
+    if let Some((project, incarnation)) = selected_runtime_project {
+        state
+            .bex
+            .release_project_runtime(&project, Some(incarnation));
     }
 
     tracing::debug!("Playground WS session ended");
@@ -1654,17 +1768,6 @@ async fn handle_function_run(
     };
 
     let broadcast_tx = state.broadcast_tx.clone();
-    let project_generation = state.bex.project_generation(&project).unwrap_or(0);
-    // Pin the run's control-flow graph while its generation is still
-    // current, so overlay spans stay resolvable after later recompiles.
-    if let Some(function_name) = overlay_function_name_for_target(&target.run_target) {
-        let _ = state.bex.control_flow_graph_for_generation(
-            &project,
-            project_generation,
-            function_name,
-        );
-    }
-    let fs_path = bex_project::FsPath::from_str(project);
     let boundary_id = BoundaryId::new_random();
     let value_capture =
         bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
@@ -1675,21 +1778,29 @@ async fn handle_function_run(
             logs_enabled: true,
         })
         .with_value_capture(value_capture.clone());
-
-    let bex = match state.bex.get_bex_for_project(&fs_path) {
-        Ok(bex) => bex,
-        Err(e) => {
+    let graph_function = overlay_function_name_for_target(&target.run_target)
+        .unwrap_or(target.call_function_name.as_str());
+    let prepared = match state
+        .bex
+        .prepare_function_run(&project, call_id, graph_function)
+        .await
+    {
+        Ok(prepared) => prepared,
+        Err(error) => {
             send_ws(
                 sink,
                 &client.error(
-                    "projectMissing",
-                    format!("Failed to get Bex for project: {e}"),
+                    "currentBuildUnavailable",
+                    format!("Failed to prepare the current project build: {error}"),
                 ),
             )
             .await;
             return;
         }
     };
+    let project_generation = prepared.generation;
+    let bex = prepared.engine;
+    let fs_path = bex_project::FsPath::from_str(project.clone());
 
     let run_store = state.run_store.clone();
     let history_store = state.history_store.clone();
@@ -1721,6 +1832,7 @@ async fn handle_function_run(
         client.run_started_request_id(),
     );
 
+    let bex_lsp = state.bex.clone();
     tokio::spawn(async move {
         let function_name = target.call_function_name;
         match bex
@@ -1775,17 +1887,23 @@ async fn handle_function_run(
                 );
             }
         };
+        bex_lsp.finish_project_run(&project, call_id);
     });
 }
 
-fn handle_test_run(
+async fn handle_test_run(
     client: FunctionRunClient,
     project: String,
-    generation: u64,
+    requested_generation: u64,
     test_name: String,
     call_id: sys_types::CallId,
     state: &WsState,
-) {
+) -> Result<(), bex_project::LspError> {
+    let prepared = state
+        .bex
+        .prepare_test_run(&project, call_id, requested_generation)
+        .await?;
+    let generation = prepared.generation;
     let boundary_id = BoundaryId::new_random();
     let value_capture =
         bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
@@ -1833,7 +1951,7 @@ fn handle_test_run(
 
     tokio::spawn(async move {
         match bex
-            .call_test_function_with_trace(&project, generation, &test_name, ctx)
+            .call_test_function_with_trace(&project, generation, &test_name, call_id, ctx)
             .await
         {
             Ok(traced) => {
@@ -1884,13 +2002,16 @@ fn handle_test_run(
                 );
             }
         };
+        bex.finish_project_run(&project, call_id);
     });
+    Ok(())
 }
 
 async fn handle_ws_in_message(
     msg: WsInMessage,
     state: &WsState,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
+    selected_runtime_project: &mut Option<(String, u64)>,
 ) {
     match msg {
         WsInMessage::StartRun {
@@ -1957,22 +2078,14 @@ async fn handle_ws_in_message(
                     state.env_state.cancel_for_host_call(&host_call_id);
                     match (host_call_id, project_id) {
                         (HostCallId::Native(call_id), Some(project_id)) => {
-                            let fs_path = bex_project::FsPath::from_str(project_id);
-                            match state.bex.get_bex_for_project(&fs_path) {
-                                Ok(bex) => match bex.cancel_function_call(call_id) {
-                                    Ok(()) => WsOutMessage::CommandAck {
-                                        request_id,
-                                        outcome: "accepted".to_string(),
-                                    },
-                                    Err(e) => WsOutMessage::CommandError {
-                                        request_id,
-                                        code: "hostCancelFailed".to_string(),
-                                        message: format!("{e}"),
-                                    },
+                            match state.bex.cancel_project_run(&project_id, call_id) {
+                                Ok(()) => WsOutMessage::CommandAck {
+                                    request_id,
+                                    outcome: "accepted".to_string(),
                                 },
                                 Err(e) => WsOutMessage::CommandError {
                                     request_id,
-                                    code: "projectMissing".to_string(),
+                                    code: "hostCancelFailed".to_string(),
                                     message: format!("{e}"),
                                 },
                             }
@@ -2253,14 +2366,23 @@ async fn handle_ws_in_message(
             generation,
             test_name,
         } => {
-            handle_test_run(
-                FunctionRunClient { request_id },
+            let client = FunctionRunClient { request_id };
+            if let Err(error) = handle_test_run(
+                client,
                 project,
                 generation,
                 test_name,
                 sys_types::CallId::next(),
                 state,
-            );
+            )
+            .await
+            {
+                send_ws(
+                    sink,
+                    &client.error("currentBuildUnavailable", error.to_string()),
+                )
+                .await;
+            }
         }
 
         WsInMessage::ExpandTestSet {
@@ -2367,28 +2489,153 @@ async fn handle_ws_in_message(
             state.bex.request_playground_state();
         }
 
+        WsInMessage::EnsureProjectRuntime {
+            request_id,
+            project,
+            incarnation,
+        } => {
+            if let Some(requested_incarnation) = incarnation {
+                let current_incarnation = state.bex.project_incarnation(&project);
+                if current_incarnation != Some(requested_incarnation) {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "staleProjectIncarnation".to_string(),
+                            message: format!(
+                                "Project incarnation {requested_incarnation} is stale; current incarnation is {current_incarnation:?}"
+                            ),
+                        },
+                    )
+                    .await;
+                    return;
+                }
+            }
+            if let Some((previous, previous_incarnation)) = selected_runtime_project.take() {
+                state
+                    .bex
+                    .release_project_runtime(&previous, Some(previous_incarnation));
+            }
+            let lease_incarnation = incarnation.or_else(|| state.bex.project_incarnation(&project));
+            match state
+                .bex
+                .ensure_project_runtime(&project, lease_incarnation)
+                .await
+            {
+                Ok(runtime_state) => {
+                    if let Some(lease_incarnation) = lease_incarnation {
+                        *selected_runtime_project = Some((project.clone(), lease_incarnation));
+                    }
+                    state.bex.request_playground_state();
+                    send_ws(
+                        sink,
+                        &WsOutMessage::ProjectRuntimeState {
+                            request_id,
+                            project,
+                            state: serde_json::to_value(runtime_state).unwrap_or_default(),
+                        },
+                    )
+                    .await;
+                }
+                Err(error) => {
+                    send_ws(
+                        sink,
+                        &WsOutMessage::CommandError {
+                            request_id,
+                            code: "currentBuildUnavailable".to_string(),
+                            message: error.to_string(),
+                        },
+                    )
+                    .await;
+                }
+            }
+        }
+
+        WsInMessage::ReleaseProjectRuntime {
+            request_id,
+            project,
+            incarnation,
+        } => {
+            if selected_runtime_project
+                .as_ref()
+                .is_some_and(|(selected, selected_incarnation)| {
+                    selected == &project
+                        && incarnation
+                            .is_none_or(|incarnation| incarnation == *selected_incarnation)
+                })
+            {
+                let selected_incarnation = selected_runtime_project
+                    .as_ref()
+                    .map(|(_, incarnation)| *incarnation);
+                state
+                    .bex
+                    .release_project_runtime(&project, selected_incarnation);
+                *selected_runtime_project = None;
+            }
+            send_ws(
+                sink,
+                &WsOutMessage::CommandAck {
+                    request_id,
+                    outcome: "accepted".to_string(),
+                },
+            )
+            .await;
+        }
+
+        WsInMessage::RetryProjectRuntime {
+            request_id,
+            project,
+            incarnation,
+        } => match state
+            .bex
+            .retry_project_runtime(
+                &project,
+                incarnation.or_else(|| {
+                    selected_runtime_project.as_ref().and_then(
+                        |(selected, selected_incarnation)| {
+                            (selected == &project).then_some(*selected_incarnation)
+                        },
+                    )
+                }),
+            )
+            .await
+        {
+            Ok(runtime_state) => {
+                state.bex.request_playground_state();
+                send_ws(
+                    sink,
+                    &WsOutMessage::ProjectRuntimeState {
+                        request_id,
+                        project,
+                        state: serde_json::to_value(runtime_state).unwrap_or_default(),
+                    },
+                )
+                .await;
+            }
+            Err(error) => {
+                send_ws(
+                    sink,
+                    &WsOutMessage::CommandError {
+                        request_id,
+                        code: "retryFailed".to_string(),
+                        message: error.to_string(),
+                    },
+                )
+                .await;
+            }
+        },
+
         WsInMessage::RequestCollectTests { project } => {
             state.bex.request_collect_tests(&project);
         }
 
         WsInMessage::RequestControlFlowGraph {
-            project: _,
+            project,
             function_name,
         } => {
-            let graph = state.bex.ast_control_flow_graph(&function_name);
-            let graph = graph.map(|g| {
-                baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(&g)
-            });
-            let graph_json = graph.as_ref().and_then(|g| serde_json::to_value(g).ok());
-            let msg = WsOutMessage::ControlFlowGraphResult {
-                function_name,
-                graph: graph_json,
-            };
-            if let Some(ws_msg) = to_ws_text(&msg)
-                && sink.send(ws_msg).await.is_err()
-            {
-                tracing::warn!("Failed to send control flow graph result");
-            }
+            state
+                .bex
+                .request_control_flow_graph(&project, &function_name);
         }
 
         WsInMessage::CursorPosition { file, line, column } => {
@@ -2403,11 +2650,15 @@ async fn handle_ws_in_message(
         }
 
         WsInMessage::SetEnvVar { key, value } => {
-            state.env_state.set_override(key, value);
+            if state.env_state.set_override(key, value) {
+                state.bex.runtime_inputs_changed();
+            }
         }
 
         WsInMessage::DeleteEnvVar { key } => {
-            state.env_state.remove_override(&key);
+            if state.env_state.remove_override(&key) {
+                state.bex.runtime_inputs_changed();
+            }
         }
     }
 }

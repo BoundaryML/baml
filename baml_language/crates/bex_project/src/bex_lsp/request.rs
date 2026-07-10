@@ -33,14 +33,55 @@ macro_rules! define_lsp_request_trait {
             pub trait BexLspRequest {
                 fn handle_request(&self, notif: lsp_server::Request) {
                     let sender = self.request_sender();
+                    let mut responder = move |id, result| {
+                        let _ = sender(id, result);
+                    };
+                    self.handle_request_with_responder(notif, &mut responder);
+                }
+
+                /// Dispatch with a connection-owned responder. Transports use
+                /// this to race handler completion against cancellation and
+                /// route reused request IDs through a session-scoped token.
+                fn handle_request_with_responder(
+                    &self,
+                    notif: lsp_server::Request,
+                    responder: &mut dyn FnMut(
+                        lsp_server::RequestId,
+                        Result<serde_json::Value, LspError>,
+                    ),
+                ) {
+                    self.handle_request_with_cancellation(notif, None, responder);
+                }
+
+                /// Dispatch with an operation-owned cancellation token. The
+                /// token is checked only at handler boundaries and is never
+                /// connected to Salsa's unwind-based cancellation.
+                fn handle_request_with_cancellation(
+                    &self,
+                    notif: lsp_server::Request,
+                    cancellation: Option<&sys_types::CancellationToken>,
+                    responder: &mut dyn FnMut(
+                        lsp_server::RequestId,
+                        Result<serde_json::Value, LspError>,
+                    ),
+                ) {
                     let id = notif.id.clone();
+                    if cancellation.is_some_and(sys_types::CancellationToken::is_cancelled) {
+                        responder(
+                            id,
+                            Err(LspError::RequestCanceled(
+                                "request canceled before handler entry".to_string(),
+                            )),
+                        );
+                        return;
+                    }
                     match notif.method.as_str() {
                         $(
                             lsp_request!($lsp_method) => {
                                 let (id, params) = match lsp_request_extract!(notif, $lsp_method) {
                                     Ok(extracted) => extracted,
                                     Err(err) => {
-                                        let _ = sender(id, Err(err));
+                                        responder(id, Err(err));
                                         return;
                                     }
                                 };
@@ -48,11 +89,20 @@ macro_rules! define_lsp_request_trait {
                                     Ok(result) => serde_json::to_value(result).map_err(LspError::RequestSerializeError),
                                     Err(err) => Err(err),
                                 };
-                                let _ = sender(id, result);
+                                if cancellation.is_some_and(sys_types::CancellationToken::is_cancelled) {
+                                    responder(
+                                        id,
+                                        Err(LspError::RequestCanceled(
+                                            "request canceled after handler completion".to_string(),
+                                        )),
+                                    );
+                                    return;
+                                }
+                                responder(id, result);
                             }
                         ),*,
                         other => {
-                            let _ = sender(notif.id, Err(LspError::UnknownErrorCode(format!("request not supported: {}", other))));
+                            responder(notif.id, Err(LspError::MethodNotFound(other.to_string())));
                             return;
                         }
                     }

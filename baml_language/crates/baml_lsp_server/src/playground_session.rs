@@ -17,12 +17,17 @@ impl PlaygroundSessionStore {
         self.env_overrides.lock().get(key).cloned()
     }
 
-    pub fn set_env_override(&self, key: String, value: String) {
-        self.env_overrides.lock().insert(key, value);
+    pub fn set_env_override(&self, key: String, value: String) -> bool {
+        let mut overrides = self.env_overrides.lock();
+        if overrides.get(&key) == Some(&value) {
+            return false;
+        }
+        overrides.insert(key, value);
+        true
     }
 
-    pub fn remove_env_override(&self, key: &str) {
-        self.env_overrides.lock().remove(key);
+    pub fn remove_env_override(&self, key: &str) -> bool {
+        self.env_overrides.lock().remove(key).is_some()
     }
 }
 
@@ -34,10 +39,12 @@ mod tests {
     fn env_overrides_are_session_owned() {
         let store = PlaygroundSessionStore::default();
 
-        store.set_env_override("API_KEY".to_string(), "secret".to_string());
+        assert!(store.set_env_override("API_KEY".to_string(), "secret".to_string()));
+        assert!(!store.set_env_override("API_KEY".to_string(), "secret".to_string()));
         assert_eq!(store.env_override("API_KEY").as_deref(), Some("secret"));
 
-        store.remove_env_override("API_KEY");
+        assert!(store.remove_env_override("API_KEY"));
+        assert!(!store.remove_env_override("API_KEY"));
         assert_eq!(store.env_override("API_KEY"), None);
     }
 }

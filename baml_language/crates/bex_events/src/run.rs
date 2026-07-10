@@ -635,6 +635,9 @@ pub struct RunDiagnostic {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Run {
     pub boundary_id: BoundaryId,
+    /// Host execution identity retained in snapshots so graph overlays can
+    /// resolve the exact pinned run lease across project remove/re-add.
+    pub host_call_id: Option<HostCallId>,
     pub target: RunTarget,
     pub visibility: RunVisibility,
     pub status: RunStatus,
@@ -911,6 +914,7 @@ impl InMemoryRunStore {
         let start_guard = StartGuard::new();
         let run = Run {
             boundary_id,
+            host_call_id: None,
             target: request_summary.target.clone(),
             visibility,
             status: RunStatus::Pending,
@@ -1091,6 +1095,7 @@ impl InMemoryRunStore {
         let patch = {
             let record = inner.runs.get_mut(&boundary_id)?;
             record.host_call_id = Some(host_call_id.clone());
+            record.run.host_call_id = Some(host_call_id.clone());
             record.run.started_at_ms = record.run.started_at_ms.or_else(|| Some(epoch_ms()));
             matches!(record.run.status, RunStatus::Pending).then(|| {
                 push_patch(

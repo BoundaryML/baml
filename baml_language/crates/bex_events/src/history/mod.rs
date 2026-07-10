@@ -977,6 +977,7 @@ fn open_boundary_from_segments_with_fallback(
 
     Ok(Run {
         boundary_id,
+        host_call_id: None,
         target: started.request.target.clone(),
         visibility: started.request.target.default_visibility(None),
         status,

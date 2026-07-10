@@ -60,6 +60,20 @@ impl BackgroundSpawner {
         drop(self.handle.spawn(f));
     }
 
+    /// Spawn one replaceable native task and return a cheap cancellation
+    /// handle. Debounce owners retain this handle so edits replace a timer
+    /// instead of accumulating one sleeping task per keystroke.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn spawn_abortable(
+        &self,
+        f: impl Future<Output = ()> + Send + 'static,
+    ) -> tokio::task::AbortHandle {
+        let task = self.handle.spawn(f);
+        let abort = task.abort_handle();
+        drop(task);
+        abort
+    }
+
     #[cfg(target_arch = "wasm32")]
     pub fn spawn(&self, f: impl Future<Output = ()> + 'static) {
         wasm_bindgen_futures::spawn_local(f);

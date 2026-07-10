@@ -147,13 +147,13 @@ impl PlaygroundEnvState {
     }
 
     /// Mirror a SessionStore-owned env override into the native resolver.
-    pub fn set_override(&self, key: String, value: String) {
-        self.session_store.set_env_override(key, value);
+    pub fn set_override(&self, key: String, value: String) -> bool {
+        self.session_store.set_env_override(key, value)
     }
 
     /// Remove the native mirror for a SessionStore-owned env override.
-    pub fn remove_override(&self, key: &str) {
-        self.session_store.remove_env_override(key);
+    pub fn remove_override(&self, key: &str) -> bool {
+        self.session_store.remove_env_override(key)
     }
 }
 

@@ -31,6 +31,7 @@ use thiserror::Error;
 mod bex;
 mod bex_lsp;
 mod fs;
+pub mod lsp_ingress;
 mod project;
 
 pub struct BexArgs(pub HashMap<String, BexExternalValue>);
@@ -111,6 +112,7 @@ pub use baml_project::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
 pub use bex_lsp::{
     BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, FunctionOrigin, LlmCapabilities,
     LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, PlaygroundSourceFile,
-    ProjectDiagnostic, ProjectUpdate, TestExpandError, new_lsp,
+    PreparedFunctionRun, PreparedTestRun, ProjectCatalogEntry, ProjectDiagnostic,
+    ProjectRuntimeStatus, ProjectUpdate, TestExpandError, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

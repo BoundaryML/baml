@@ -13,7 +13,15 @@ import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { encodeRunArgs } from '@b/pkg-proto';
 import type { BamlJsValue } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Play, Settings, Square } from 'lucide-react';
+import {
+  KeyRound,
+  Loader2,
+  PanelLeft,
+  Play,
+  RefreshCw,
+  Settings,
+  Square,
+} from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
@@ -41,6 +49,7 @@ import type {
   DiagnosticEntry,
   FetchLogEntry,
   FunctionInfo,
+  ProjectRuntimeStatus,
   ProjectUpdate,
   Run,
   BoundaryId,
@@ -48,6 +57,15 @@ import type {
   SourceNavigationTarget,
   WorkerOutMessage,
 } from './worker-protocol';
+import {
+  ProjectPayloadFencer,
+  acceptMonotonicEpoch,
+  preparingRuntimeStatus,
+  projectIdentityKey,
+  runtimeIsReady,
+  runtimeStatusFromUpdate,
+  type ProjectIdentity,
+} from './project-runtime-state';
 import type { ResultRendererProps } from './result-renderers';
 import { ArgsForm } from './ArgsForm';
 import {
@@ -374,7 +392,7 @@ const CollectionDebugView: FC<CollectionDebugViewProps> = ({
           Test collection
         </span>
         <span className="text-vsc-text-faint text-[10px] flex-1">
-          {hasError ? 'expansion error' : 'collection fetch logs'}
+          {hasError ? 'collection error' : 'collection fetch logs'}
         </span>
         <span className="text-vsc-text-faint text-[10px]">
           {state.fetchLogs.length} request
@@ -385,7 +403,7 @@ const CollectionDebugView: FC<CollectionDebugViewProps> = ({
       {hasError && (
         <div className="px-2.5 py-2 bg-vsc-surface border-b border-vsc-border">
           <div className="text-[10px] font-semibold text-red-500 mb-1 uppercase tracking-wide">
-            Expansion Error
+            Collection Error
           </div>
           <pre className="text-[11px] text-vsc-text whitespace-pre-wrap font-vsc-mono bg-vsc-bg p-2 rounded border border-vsc-border overflow-auto max-h-[300px]">
             {errorMessage}
@@ -734,17 +752,50 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     };
   }, [executionStore]);
 
-  const [projectRoots, setProjectRoots] = useState<string[]>([]);
+  const projectFencerRef = useRef(new ProjectPayloadFencer());
+  const [projectCatalog, setProjectCatalog] = useState<ProjectIdentity[]>([]);
+  const [runtimeSessionEpoch, setRuntimeSessionEpoch] = useState(0);
   const [projectUpdates, setProjectUpdates] = useState<
     Record<string, ProjectUpdate>
   >({});
+  const [runtimeStates, setRuntimeStates] = useState<
+    Record<string, ProjectRuntimeStatus>
+  >({});
+  const runtimeStatesRef = useRef(runtimeStates);
+  const commitRuntimeStates = useCallback(
+    (
+      update: (
+        previous: Record<string, ProjectRuntimeStatus>,
+      ) => Record<string, ProjectRuntimeStatus>,
+    ) => {
+      const next = update(runtimeStatesRef.current);
+      runtimeStatesRef.current = next;
+      setRuntimeStates(next);
+    },
+    [],
+  );
+  const nextRuntimeRequestIdRef = useRef(Number.MAX_SAFE_INTEGER);
+  const runtimeRequestsRef = useRef(
+    new Map<
+      number,
+      { action: 'ensure' | 'retry'; identity: ProjectIdentity }
+    >(),
+  );
+  const selectedRuntimeLeaseRef = useRef<ProjectIdentity | null>(null);
   const [testTree, setTestTree] = useState<SerializedTestDef[] | null>(null);
+  const [testTreeStale, setTestTreeStale] = useState(false);
   const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<number>(0);
   const [testStartErrors, setTestStartErrors] = useState<Map<string, string>>(
     new Map(),
   );
   const [failedExpands, setFailedExpands] = useState<Set<string>>(new Set());
+  const testCollectionEpochsRef = useRef(new Map<string, number>());
+  const pendingExpandsRef = useRef<{
+    project: string | null;
+    generation: number;
+    names: Set<string>;
+  }>({ project: null, generation: -1, names: new Set() });
   const [collectionDebug, setCollectionDebug] =
     useState<CollectionDebugState | null>(null);
   // When true, the main content area shows the collection run's fetch logs
@@ -752,8 +803,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // When true, the main content area shows the test run history panel
   const [viewingTestRun, setViewingTestRun] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const selectedProjectRef = useRef(selectedProject);
+  useEffect(() => {
+    selectedProjectRef.current = selectedProject;
+  }, [selectedProject]);
   const [pendingTestTarget, setPendingTestTarget] =
     useState<PendingTestTarget | null>(null);
+
+  const projectRoots = useMemo(
+    () => projectCatalog.map((entry) => entry.project),
+    [projectCatalog],
+  );
+  const selectedProjectIdentity = useMemo(
+    () => projectCatalog.find((entry) => entry.project === selectedProject),
+    [projectCatalog, selectedProject],
+  );
+  const selectedProjectIdentityKey = `${runtimeSessionEpoch}\u0000${projectIdentityKey(
+    selectedProjectIdentity,
+  )}`;
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [showInternalFunctions, setShowInternalFunctions] = useState(false);
@@ -827,6 +894,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const workflowCfgResponsesRef = useRef<Map<string, ControlFlowGraph | null>>(
     new Map(),
   );
+  const cfgRequestIdentitiesRef = useRef(
+    new Map<
+      string,
+      Array<{ identity: ProjectIdentity; generation?: number | null }>
+    >(),
+  );
+  const cfgDerivedEpochsRef = useRef(new Map<string, number>());
   const [workflowCacheVersion, setWorkflowCacheVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<
     'run' | 'graph' | 'trace' | 'flame' | 'prompt' | 'curl'
@@ -946,6 +1020,280 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
   // Buffer fetch logs by callId so logs that arrive before testCollectionResult are not lost.
   const pendingLogsRef = useRef<Map<number, FetchLogEntry[]>>(new Map());
+
+  const nextRuntimeRequestId = useCallback(() => {
+    const requestId = nextRuntimeRequestIdRef.current;
+    nextRuntimeRequestIdRef.current -= 1;
+    return requestId;
+  }, []);
+
+  const purgeSelectedProjectState = useCallback(
+    (project: string) => {
+      if (selectedProjectRef.current !== project) return;
+      setSelectedFn(null);
+      selectedFnRef.current = null;
+      setWorkflowContext(null);
+      setViewingCollection(false);
+      setViewingTestRun(false);
+      setPendingTestTarget(null);
+      setTestTree(null);
+      setTestTreeStale(false);
+      setCollectionCallId(null);
+      setGeneration(0);
+      setTestStartErrors(new Map());
+      setFailedExpands(new Set());
+      setCollectionDebug(null);
+      setControlFlowGraph(null);
+      controlFlowGraphRef.current = null;
+      setHighlightedNodeId(null);
+      setPromptPreviewResult(null);
+      setCurlPreviewResult(null);
+      setPromptPreviewError(null);
+      setCurlPreviewError(null);
+      setPreviewLoading(false);
+      workflowCfgCacheRef.current = new Map();
+      workflowCfgResponsesRef.current = new Map();
+      cfgRequestIdentitiesRef.current.clear();
+      cfgDerivedEpochsRef.current.clear();
+      pendingHighlightRef.current = null;
+      graphNavigationRef.current = null;
+      pendingLogsRef.current.clear();
+      for (const key of testCollectionEpochsRef.current.keys()) {
+        if (key.startsWith(`${project}\u0000`)) {
+          testCollectionEpochsRef.current.delete(key);
+        }
+      }
+      pendingExpandsRef.current = {
+        project: null,
+        generation: -1,
+        names: new Set(),
+      };
+      typedArgsByFnRef.current = {};
+      setArgsJson(initialArgsJson ?? '{}');
+    },
+    [initialArgsJson],
+  );
+
+  /**
+   * Move the visible project and invalidate every project-qualified view in
+   * the same event. Ref mirrors are updated before React commits so a late
+   * message from the old project cannot observe the new project with stale
+   * function/test/graph state.
+   */
+  const selectProject = useCallback(
+    (next: string | null) => {
+      const previous = selectedProjectRef.current;
+      if (previous === next) return;
+      if (previous) purgeSelectedProjectState(previous);
+      selectedProjectRef.current = next;
+      setSelectedProject(next);
+    },
+    [purgeSelectedProjectState],
+  );
+
+  const invalidateSelectedDerivedState = useCallback((project: string) => {
+    if (selectedProjectRef.current !== project) return;
+    // The prior collection remains useful context while the current source is
+    // rebuilding (and especially when it is invalid), but it must never become
+    // launchable again until a current-revision collection replaces it.
+    setTestTreeStale(true);
+    setTestStartErrors(new Map());
+    setFailedExpands(new Set());
+    setControlFlowGraph(null);
+    controlFlowGraphRef.current = null;
+    setHighlightedNodeId(null);
+    workflowCfgCacheRef.current = new Map();
+    workflowCfgResponsesRef.current = new Map();
+    cfgRequestIdentitiesRef.current.clear();
+    cfgDerivedEpochsRef.current.clear();
+    pendingHighlightRef.current = null;
+    graphNavigationRef.current = null;
+    pendingLogsRef.current.clear();
+    for (const key of testCollectionEpochsRef.current.keys()) {
+      if (key.startsWith(`${project}\u0000`)) {
+        testCollectionEpochsRef.current.delete(key);
+      }
+    }
+    pendingExpandsRef.current = {
+      project: null,
+      generation: -1,
+      names: new Set(),
+    };
+  }, []);
+
+  const acceptControlFlowGraphResponse = useCallback(
+    (
+      functionName: string,
+      sessionEpoch?: number,
+      project?: string,
+      projectIncarnation?: number,
+      sourceRevision?: number,
+      generation?: number,
+      derivedEpoch?: number,
+    ) => {
+      if (!projectFencerRef.current.acceptSession(sessionEpoch)) return false;
+      const queue = cfgRequestIdentitiesRef.current.get(functionName);
+      const requested = queue?.shift();
+      const requestedIdentity = requested?.identity;
+      if (queue?.length === 0) {
+        cfgRequestIdentitiesRef.current.delete(functionName);
+      }
+      const responseProject =
+        project ?? requestedIdentity?.project ?? selectedProjectRef.current;
+      if (!responseProject || responseProject !== selectedProjectRef.current) {
+        return false;
+      }
+      const catalogIdentity =
+        projectFencerRef.current.identity(responseProject);
+      if (
+        catalogIdentity?.incarnation !== undefined ||
+        catalogIdentity?.sourceRevision !== undefined
+      ) {
+        if (
+          projectIncarnation === undefined ||
+          sourceRevision === undefined ||
+          generation === undefined ||
+          derivedEpoch === undefined
+        ) {
+          return false;
+        }
+        const currentGeneration =
+          runtimeStatesRef.current[responseProject]?.generation;
+        if (
+          currentGeneration == null ||
+          generation !== currentGeneration ||
+          (requested?.generation != null &&
+            generation !== requested.generation)
+        ) {
+          return false;
+        }
+        if (!projectFencerRef.current.accept(
+          responseProject,
+          projectIncarnation,
+          sourceRevision,
+        )) {
+          return false;
+        }
+        return acceptMonotonicEpoch(
+          cfgDerivedEpochsRef.current,
+          [
+            sessionEpoch,
+            responseProject,
+            projectIncarnation,
+            sourceRevision,
+            generation,
+            functionName,
+          ].join('\u0000'),
+          derivedEpoch,
+        );
+      }
+      if (
+        projectIncarnation !== undefined ||
+        sourceRevision !== undefined
+      ) {
+        return projectFencerRef.current.accept(
+          responseProject,
+          projectIncarnation,
+          sourceRevision,
+        );
+      }
+      if (!requestedIdentity) {
+        return projectFencerRef.current.identity(responseProject)?.incarnation === undefined;
+      }
+      return projectFencerRef.current.accept(
+        responseProject,
+        requestedIdentity.incarnation,
+        requestedIdentity.sourceRevision,
+      );
+    },
+    [],
+  );
+
+  const requestControlFlowGraph = useCallback(
+    (project: string, functionName: string) => {
+      const identity = projectFencerRef.current.identity(project) ?? { project };
+      const queue = cfgRequestIdentitiesRef.current.get(functionName) ?? [];
+      queue.push({
+        identity,
+        generation: runtimeStatesRef.current[project]?.generation,
+      });
+      cfgRequestIdentitiesRef.current.set(functionName, queue);
+      port.postMessage({
+        type: 'requestControlFlowGraph',
+        project,
+        functionName,
+      });
+    },
+    [port],
+  );
+
+  // Move the browser session's one selected-project lease. `requestState`
+  // remains catalog/snapshot delivery only and never creates demand itself.
+  useEffect(() => {
+    const next = selectedProjectIdentity ?? null;
+    const previous = selectedRuntimeLeaseRef.current;
+    if (projectIdentityKey(previous ?? undefined) === projectIdentityKey(next ?? undefined)) {
+      return;
+    }
+
+    if (previous) {
+      port.postMessage({
+        type: 'releaseProjectRuntime',
+        requestId: nextRuntimeRequestId(),
+        project: previous.project,
+        incarnation: previous.incarnation,
+      });
+    }
+    selectedRuntimeLeaseRef.current = null;
+
+    if (!next) return;
+    const requestId = nextRuntimeRequestId();
+    runtimeRequestsRef.current.set(requestId, {
+      action: 'ensure',
+      identity: next,
+    });
+    selectedRuntimeLeaseRef.current = next;
+    commitRuntimeStates((prev) => {
+      const current = prev[next.project];
+      if (
+        current &&
+        (next.sourceRevision === undefined ||
+          current.requestedRevision >= next.sourceRevision)
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [next.project]: preparingRuntimeStatus(next, current),
+      };
+    });
+    port.postMessage({
+      type: 'ensureProjectRuntime',
+      requestId,
+      project: next.project,
+      incarnation: next.incarnation,
+    });
+  }, [
+    nextRuntimeRequestId,
+    port,
+    commitRuntimeStates,
+    selectedProjectIdentityKey,
+  ]);
+
+  useEffect(
+    () => () => {
+      const lease = selectedRuntimeLeaseRef.current;
+      if (!lease) return;
+      selectedRuntimeLeaseRef.current = null;
+      port.postMessage({
+        type: 'releaseProjectRuntime',
+        requestId: nextRuntimeRequestId(),
+        project: lease.project,
+        incarnation: lease.incarnation,
+      });
+    },
+    [nextRuntimeRequestId, port],
+  );
 
   // ── Cursor context navigation ────────────────────────────────────────
 
@@ -1215,21 +1563,208 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   useEffect(() => {
     const unsubscribe = port.onMessage((data: WorkerOutMessage) => {
       switch (data.type) {
+        case 'runtimeSessionReset': {
+          const selected = selectedProjectRef.current;
+          if (selected) purgeSelectedProjectState(selected);
+          projectFencerRef.current = new ProjectPayloadFencer(data.sessionEpoch);
+          runtimeRequestsRef.current.clear();
+          cfgRequestIdentitiesRef.current.clear();
+          cfgDerivedEpochsRef.current.clear();
+          testCollectionEpochsRef.current.clear();
+          selectedRuntimeLeaseRef.current = null;
+          runtimeStatesRef.current = {};
+          setProjectCatalog([]);
+          setProjectUpdates({});
+          setRuntimeStates({});
+          setRuntimeSessionEpoch(data.sessionEpoch);
+          break;
+        }
+
         case 'playgroundNotification': {
           const n = data.notification;
           if (!n) break;
           switch (n.type) {
-            case 'listProjects':
-              setProjectRoots(n.projects ?? []);
-              setSelectedProject((prev) => {
-                if (prev && (n.projects ?? []).includes(prev)) return prev;
-                return (n.projects ?? [])[0] ?? null;
+            case 'listProjects': {
+              if (!projectFencerRef.current.acceptSession(n.sessionEpoch)) break;
+              const change = projectFencerRef.current.applyCatalog(
+                n.projects ?? [],
+                n.entries,
+              );
+              const catalogByProject = new Map(
+                change.entries.map((entry) => [entry.project, entry]),
+              );
+              setProjectCatalog(change.entries);
+              for (const [requestId, pending] of runtimeRequestsRef.current) {
+                if (
+                  projectIdentityKey(catalogByProject.get(pending.identity.project)) !==
+                  projectIdentityKey(pending.identity)
+                ) {
+                  runtimeRequestsRef.current.delete(requestId);
+                }
+              }
+
+              for (const project of change.purgedProjects) {
+                purgeSelectedProjectState(project);
+              }
+              for (const project of change.advancedProjects) {
+                invalidateSelectedDerivedState(project);
+              }
+
+              setProjectUpdates((prev) => {
+                let changed = false;
+                const next: Record<string, ProjectUpdate> = {};
+                for (const [project, update] of Object.entries(prev)) {
+                  const identity = catalogByProject.get(project);
+                  const purgeForIdentity = change.purgedProjects.has(project);
+                  const staleForRevision =
+                    identity?.sourceRevision !== undefined &&
+                    (update.sourceRevision === undefined ||
+                      update.sourceRevision < identity.sourceRevision);
+                  if (!identity || purgeForIdentity || staleForRevision) {
+                    changed = true;
+                    continue;
+                  }
+                  next[project] = update;
+                }
+                return changed ? next : prev;
               });
+
+              commitRuntimeStates((prev) => {
+                let changed = false;
+                const next = { ...prev };
+                for (const project of Object.keys(next)) {
+                  if (!catalogByProject.has(project) || change.purgedProjects.has(project)) {
+                    delete next[project];
+                    changed = true;
+                  }
+                }
+                for (const project of change.advancedProjects) {
+                  const identity = catalogByProject.get(project);
+                  if (!identity) continue;
+                  const current = next[project];
+                  if (
+                    current &&
+                    identity.sourceRevision !== undefined &&
+                    current.requestedRevision >= identity.sourceRevision
+                  ) {
+                    continue;
+                  }
+                  next[project] =
+                    selectedProjectRef.current === project
+                      ? preparingRuntimeStatus(identity, current)
+                      : {
+                          ...preparingRuntimeStatus(identity, current),
+                          state: 'idleStale',
+                        };
+                  changed = true;
+                }
+                return changed ? next : prev;
+              });
+
+              const selected = selectedProjectRef.current;
+              selectProject(
+                selected && catalogByProject.has(selected)
+                  ? selected
+                  : change.entries[0]?.project ?? null,
+              );
               break;
-            case 'updateProject':
+            }
+            case 'updateProject': {
+              if (
+                !projectFencerRef.current.acceptSession(n.sessionEpoch) ||
+                !projectFencerRef.current.accept(
+                  n.project,
+                  n.update.projectIncarnation,
+                  n.update.sourceRevision,
+                )
+              ) {
+                break;
+              }
+              const status = runtimeStatusFromUpdate(n.update);
+              const previousStatus = runtimeStatesRef.current[n.project];
+              if (
+                selectedProjectRef.current === n.project &&
+                previousStatus &&
+                ((runtimeIsReady(previousStatus) && !runtimeIsReady(status)) ||
+                  (previousStatus.generation != null &&
+                    status.generation != null &&
+                    previousStatus.generation !== status.generation))
+              ) {
+                // Runtime-input changes can rebuild the same source revision.
+                // Invalidate engine-derived UI on the runtime transition too;
+                // the catalog's source-revision fence cannot observe it.
+                invalidateSelectedDerivedState(n.project);
+              }
               setProjectUpdates((prev) => ({ ...prev, [n.project]: n.update }));
+              commitRuntimeStates((prev) => ({
+                ...prev,
+                [n.project]: status,
+              }));
               break;
+            }
             case 'testCollectionResult': {
+              if (n.project !== selectedProjectRef.current) break;
+              if (
+                !projectFencerRef.current.acceptSession(n.sessionEpoch) ||
+                !projectFencerRef.current.accept(
+                  n.project,
+                  n.projectIncarnation,
+                  n.sourceRevision,
+                )
+              ) {
+                break;
+              }
+              const currentRuntime = runtimeStatesRef.current[n.project];
+              const collectionIdentity =
+                projectFencerRef.current.identity(n.project);
+              const qualifiedCollection =
+                collectionIdentity?.incarnation !== undefined ||
+                collectionIdentity?.sourceRevision !== undefined;
+              if (
+                qualifiedCollection &&
+                (currentRuntime?.generation == null ||
+                  n.collectionEpoch === undefined)
+              ) {
+                break;
+              }
+              if (
+                currentRuntime?.generation != null &&
+                currentRuntime.generation !== n.generation
+              ) {
+                break;
+              }
+              if (n.collectionEpoch !== undefined) {
+                const epochKey = [
+                  n.project,
+                  collectionIdentity?.incarnation ?? 'legacy',
+                  n.sourceRevision ??
+                    collectionIdentity?.sourceRevision ??
+                    'legacy',
+                  n.generation,
+                ].join('\u0000');
+                if (
+                  !acceptMonotonicEpoch(
+                    testCollectionEpochsRef.current,
+                    epochKey,
+                    n.collectionEpoch,
+                  )
+                ) {
+                  break;
+                }
+              }
+              if (n.collectionError) {
+                const buffered = pendingLogsRef.current.get(n.callId) ?? [];
+                pendingLogsRef.current.delete(n.callId);
+                setCollectionDebug({
+                  id: n.callId,
+                  fetchLogs: buffered,
+                  error: n.collectionError,
+                  status: 'error',
+                });
+                setPendingTestTarget(null);
+                setViewingCollection(true);
+                break;
+              }
               try {
                 const jsonStr = new TextDecoder().decode(
                   new Uint8Array(n.data),
@@ -1246,6 +1781,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 }
 
                 setTestTree(tree);
+                setTestTreeStale(false);
                 setCollectionCallId(n.callId);
                 setGeneration(n.generation);
                 setTestStartErrors(new Map());
@@ -1268,14 +1804,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               break;
             }
             case 'openPlayground':
-              setSelectedProject(n.project);
+              selectProject(n.project);
               if (n.functionName) {
                 setWorkflowContext(null);
+                selectedFnRef.current = n.functionName;
                 setSelectedFn(n.functionName);
                 setViewingCollection(false);
                 setViewingTestRun(false);
               } else if (n.testName || n.testsetName) {
                 setWorkflowContext(null);
+                selectedFnRef.current = null;
                 setSelectedFn(null);
                 setViewingCollection(false);
                 setViewingTestRun(true);
@@ -1288,13 +1826,22 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   kind: n.testName ? 'test' : 'testset',
                   name: n.testName ?? n.testsetName!,
                 });
-                port.postMessage({
-                  type: 'requestCollectTests',
-                  project: n.project,
-                });
               }
               break;
             case 'controlFlowGraphResult':
+              if (
+                !acceptControlFlowGraphResponse(
+                  n.functionName,
+                  n.sessionEpoch,
+                  n.project,
+                  n.projectIncarnation,
+                  n.sourceRevision,
+                  n.generation,
+                  n.derivedEpoch,
+                )
+              ) {
+                break;
+              }
               workflowCfgResponsesRef.current.set(n.functionName, n.graph);
               setWorkflowCacheVersion((v) => v + 1);
               if (n.graph) {
@@ -1315,10 +1862,34 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           break;
         }
 
+        case 'projectRuntimeState': {
+          const pending = runtimeRequestsRef.current.get(data.requestId);
+          runtimeRequestsRef.current.delete(data.requestId);
+          if (!pending || pending.identity.project !== data.project) break;
+          if (
+            projectIdentityKey(projectFencerRef.current.identity(data.project)) !==
+            projectIdentityKey(pending.identity)
+          ) {
+            break;
+          }
+          if (
+            !projectFencerRef.current.accept(
+              data.project,
+              pending.identity.incarnation,
+              data.state.requestedRevision,
+            )
+          ) {
+            break;
+          }
+          commitRuntimeStates((prev) => ({
+            ...prev,
+            [data.project]: data.state,
+          }));
+          break;
+        }
+
         case 'runStarted':
         case 'runPatch':
-        case 'commandAck':
-        case 'commandError':
         case 'runList':
         case 'historyList':
         case 'runSnapshot':
@@ -1328,6 +1899,45 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           // RunStoreClient consumes these during the staged migration. The
           // legacy reducer keeps ignoring them until the UI cutover.
           break;
+
+        case 'commandAck':
+          runtimeRequestsRef.current.delete(data.requestId);
+          break;
+
+        case 'commandError': {
+          const pending = runtimeRequestsRef.current.get(data.requestId);
+          runtimeRequestsRef.current.delete(data.requestId);
+          if (!pending) break;
+          if (
+            projectIdentityKey(projectFencerRef.current.identity(pending.identity.project)) !==
+            projectIdentityKey(pending.identity)
+          ) {
+            break;
+          }
+          if (
+            !projectFencerRef.current.accept(
+              pending.identity.project,
+              pending.identity.incarnation,
+              pending.identity.sourceRevision,
+            )
+          ) {
+            break;
+          }
+          commitRuntimeStates((prev) => {
+            const current = prev[pending.identity.project];
+            const failed: ProjectRuntimeStatus = {
+              state: 'failed',
+              requestedRevision:
+                current?.requestedRevision ?? pending.identity.sourceRevision ?? 0,
+              installedRevision: current?.installedRevision ?? null,
+              generation: current?.generation ?? null,
+              hasLastKnownGood: current?.hasLastKnownGood ?? false,
+              error: data.message,
+            };
+            return { ...prev, [pending.identity.project]: failed };
+          });
+          break;
+        }
 
         case 'fetchLogNew': {
           const logEntry = data.entry;
@@ -1440,6 +2050,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           break;
 
         case 'controlFlowGraphResult':
+          if (
+            !acceptControlFlowGraphResponse(
+              data.functionName,
+              data.sessionEpoch,
+              data.project,
+              data.projectIncarnation,
+              data.sourceRevision,
+              data.generation,
+              data.derivedEpoch,
+            )
+          ) {
+            break;
+          }
           workflowCfgResponsesRef.current.set(data.functionName, data.graph);
           setWorkflowCacheVersion((v) => v + 1);
           if (data.graph) {
@@ -1473,22 +2096,80 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       }
     });
 
-    // Ask the worker to re-send functionNames/diagnostics/engineStale.
-    // These are sent once during init but may arrive before this listener
-    // is attached (race between worker 'ready' and dynamic imports).
+    // Force the catalog after the listener is installed. This does not create
+    // runtime demand; the selected-project lease effect above does that only
+    // after the catalog chooses one project.
     port.postMessage({ type: 'requestState' });
 
     return unsubscribe;
-  }, [port]);
+  }, [
+    acceptControlFlowGraphResponse,
+    commitRuntimeStates,
+    invalidateSelectedDerivedState,
+    port,
+    purgeSelectedProjectState,
+    selectProject,
+  ]);
 
   // Request control flow graph when selected function changes OR code is edited.
   // On function/project switch: clear the graph (shows loading state).
   // On code edit (projectUpdateVersion): keep old graph visible, swap when new one arrives.
   const prevGraphFnRef = useRef(selectedFn);
   const prevGraphProjectRef = useRef(selectedProject);
-  const projectUpdateVersion = selectedProject
+  const currentUpdate = selectedProject
     ? projectUpdates[selectedProject]
     : undefined;
+  const projectUpdateVersion = currentUpdate;
+  const selectedRuntimeStatus = selectedProject
+    ? runtimeStates[selectedProject] ??
+      (currentUpdate ? runtimeStatusFromUpdate(currentUpdate) : undefined)
+    : undefined;
+  const currentUpdateRuntimeStatus = currentUpdate
+    ? runtimeStatusFromUpdate(currentUpdate)
+    : undefined;
+  const runtimeReady =
+    runtimeIsReady(selectedRuntimeStatus) &&
+    runtimeIsReady(currentUpdateRuntimeStatus) &&
+    (currentUpdate?.sourceRevision === undefined ||
+      selectedRuntimeStatus === undefined ||
+      currentUpdate.sourceRevision >= selectedRuntimeStatus.requestedRevision);
+  const runtimePreparing =
+    selectedProject != null &&
+    !runtimeReady &&
+    (!selectedRuntimeStatus ||
+      selectedRuntimeStatus.state === 'idleStale' ||
+      selectedRuntimeStatus.state === 'building' ||
+      selectedRuntimeStatus.state === 'ready');
+
+  const retryCurrentRuntime = useCallback(() => {
+    if (!selectedProjectIdentity) return;
+    const requestId = nextRuntimeRequestId();
+    runtimeRequestsRef.current.set(requestId, {
+      action: 'retry',
+      identity: selectedProjectIdentity,
+    });
+    commitRuntimeStates((prev) => {
+      const next = {
+        ...prev,
+        [selectedProjectIdentity.project]: preparingRuntimeStatus(
+          selectedProjectIdentity,
+          prev[selectedProjectIdentity.project],
+        ),
+      };
+      return next;
+    });
+    port.postMessage({
+      type: 'retryProjectRuntime',
+      requestId,
+      project: selectedProjectIdentity.project,
+      incarnation: selectedProjectIdentity.incarnation,
+    });
+  }, [
+    commitRuntimeStates,
+    nextRuntimeRequestId,
+    port,
+    selectedProjectIdentityKey,
+  ]);
 
   useEffect(() => {
     const fnChanged = prevGraphFnRef.current !== selectedFn;
@@ -1500,13 +2181,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       setControlFlowGraph(null);
       setHighlightedNodeId(null);
     }
-    if (!selectedFn || !selectedProject) return;
-    port.postMessage({
-      type: 'requestControlFlowGraph',
-      project: selectedProject,
-      functionName: selectedFn,
-    });
-  }, [port, selectedFn, selectedProject, projectUpdateVersion]);
+    if (!selectedFn || !selectedProject || !runtimeReady) return;
+    requestControlFlowGraph(selectedProject, selectedFn);
+  }, [
+    requestControlFlowGraph,
+    selectedFn,
+    selectedProject,
+    projectUpdateVersion,
+    runtimeReady,
+  ]);
 
   // Clear preview results when selected function changes
   useEffect(() => {
@@ -1545,7 +2228,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // Auto-refresh prompt/curl preview when args change while tab is active
   useEffect(() => {
     if (activeTab !== 'prompt' && activeTab !== 'curl') return;
-    if (!selectedFn || !selectedProject) return;
+    if (!selectedFn || !selectedProject || !runtimeReady) {
+      setPreviewLoading(false);
+      return;
+    }
 
     const subFn = activeTab === 'prompt' ? 'render_prompt' : 'build_request';
     const setResult =
@@ -1672,6 +2358,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     executionStore,
     valueBodyCache,
     projectUpdateVersion,
+    runtimeReady,
   ]);
 
   // Single write path for args edits (form and raw): the prompt/cURL preview
@@ -1778,7 +2465,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   );
 
   const onRunFunction = useCallback(async () => {
-    if (!selectedFn || !selectedProject || isRunning) return;
+    if (!selectedFn || !selectedProject || isRunning || !runtimeReady) return;
 
     // Don't force the 'run' tab — running keeps the user on whatever tab
     // they're viewing (graph, trace, prompt, etc.).
@@ -1812,18 +2499,26 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       const errMsg = e instanceof Error ? e.message : String(e);
       setRunValidationError(errMsg);
     }
-  }, [selectedFn, selectedProject, argsJson, isRunning, executionStore]);
+  }, [
+    selectedFn,
+    selectedProject,
+    argsJson,
+    isRunning,
+    executionStore,
+    runtimeReady,
+  ]);
 
   const handleRefreshTests = useCallback(() => {
-    if (!selectedProject) return;
+    if (!selectedProject || !runtimeReady) return;
     port.postMessage({ type: 'requestCollectTests', project: selectedProject });
-  }, [selectedProject, port]);
+  }, [selectedProject, port, runtimeReady]);
 
   const appliedInitialTestTargetRef = useRef(false);
   useEffect(() => {
     if (
       appliedInitialTestTargetRef.current ||
       !selectedProject ||
+      !runtimeReady ||
       (!initialTestName && !initialTestsetName)
     ) {
       return;
@@ -1844,7 +2539,35 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       name: initialTestName ?? initialTestsetName!,
     });
     port.postMessage({ type: 'requestCollectTests', project: selectedProject });
-  }, [initialTestName, initialTestsetName, selectedProject, port]);
+  }, [
+    initialTestName,
+    initialTestsetName,
+    selectedProject,
+    port,
+    runtimeReady,
+  ]);
+
+  useEffect(() => {
+    if (
+      !pendingTestTarget ||
+      !runtimeReady ||
+      (testTree && !testTreeStale)
+    ) {
+      return;
+    }
+    if (pendingTestTarget.project !== selectedProject) return;
+    port.postMessage({
+      type: 'requestCollectTests',
+      project: pendingTestTarget.project,
+    });
+  }, [
+    pendingTestTarget,
+    port,
+    runtimeReady,
+    selectedProject,
+    testTree,
+    testTreeStale,
+  ]);
 
   const waitForTerminalRun = useCallback(
     (boundaryId: BoundaryId) => {
@@ -1880,7 +2603,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
 
   const handleRunTest = useCallback(
     async (name: string) => {
-      if (!selectedProject) return;
+      if (!selectedProject || !runtimeReady || testTreeStale) return;
       // Switch to the test run view so the runs panel is visible even when no function is selected.
       setViewingTestRun(true);
       setViewingCollection(false);
@@ -1907,11 +2630,24 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         );
       }
     },
-    [executionStore, generation, selectedProject, waitForTerminalRun],
+    [
+      executionStore,
+      generation,
+      selectedProject,
+      waitForTerminalRun,
+      runtimeReady,
+      testTreeStale,
+    ],
   );
 
   useEffect(() => {
-    if (!pendingTestTarget || !selectedProject || !testTree) {
+    if (
+      !pendingTestTarget ||
+      !selectedProject ||
+      !testTree ||
+      !runtimeReady ||
+      testTreeStale
+    ) {
       return;
     }
     if (pendingTestTarget.project !== selectedProject) {
@@ -1950,18 +2686,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         await handleRunTest(testName);
       }
     })();
-  }, [pendingTestTarget, selectedProject, testTree, handleRunTest]);
-
-  // Track which testsets we've already requested expansion for (per generation)
-  const pendingExpandsRef = useRef<{
-    project: string | null;
-    generation: number;
-    names: Set<string>;
-  }>({ project: null, generation: -1, names: new Set() });
+  }, [
+    pendingTestTarget,
+    selectedProject,
+    testTree,
+    handleRunTest,
+    runtimeReady,
+    testTreeStale,
+  ]);
 
   // Auto-expand lazy testsets after receiving a new testTree
   useEffect(() => {
-    if (!testTree || !selectedProject) return;
+    if (!testTree || !selectedProject || !runtimeReady || testTreeStale) return;
     // Reset pending set and failed state when generation or project changes.
     // Generation is per-project on the server, so different projects can share
     // the same generation number — we must track both to avoid leaking state.
@@ -1994,12 +2730,19 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       }
     };
     expandLazy(testTree);
-  }, [testTree, selectedProject, generation, port]);
+  }, [
+    testTree,
+    selectedProject,
+    generation,
+    port,
+    runtimeReady,
+    testTreeStale,
+  ]);
 
   // Retry expansion for a failed (or already expanded) testset
   const handleRetryExpand = useCallback(
     (testsetName: string) => {
-      if (!selectedProject) return;
+      if (!selectedProject || !runtimeReady || testTreeStale) return;
       // Remove from failed set so it shows spinner again
       setFailedExpands((prev) => {
         const next = new Set(prev);
@@ -2017,14 +2760,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         testsetName,
       });
     },
-    [selectedProject, generation, port],
+    [selectedProject, generation, port, runtimeReady, testTreeStale],
   );
 
   // ── Derived state ──────────────────────────────────────────────────────
 
-  const currentUpdate = selectedProject
-    ? projectUpdates[selectedProject]
-    : undefined;
   const isLoadingProject = selectedProject != null && currentUpdate == null;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
   const internalFunctionCount = functions.filter(isInternalFunction).length;
@@ -2032,7 +2772,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     ? functions
     : functions.filter((fn) => !isInternalFunction(fn));
   const functionNames = visibleFunctions.map((f) => f.name);
-  const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
   const diags = currentUpdate?.diagnostics ?? [];
 
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
@@ -2177,7 +2916,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     names: new Set(),
   });
   useEffect(() => {
-    if (!selectedProject) return;
+    if (!selectedProject || !runtimeReady) return;
     const slot = prefetchedCfgRef.current;
     if (slot.version !== projectUpdateVersion) {
       slot.version = projectUpdateVersion;
@@ -2188,13 +2927,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     for (const name of functionNames) {
       if (slot.names.has(name)) continue;
       slot.names.add(name);
-      port.postMessage({
-        type: 'requestControlFlowGraph',
-        project: selectedProject,
-        functionName: name,
-      });
+      requestControlFlowGraph(selectedProject, name);
     }
-  }, [functionNames, selectedProject, projectUpdateVersion, port]);
+  }, [
+    functionNames,
+    selectedProject,
+    projectUpdateVersion,
+    requestControlFlowGraph,
+    runtimeReady,
+  ]);
 
   // Reverse call map over the cached CFGs: callee -> the functions that
   // call it. calleeName may be bare while function names are qualified
@@ -2382,6 +3123,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const errors = diags.filter((d) => d.severity === 'error');
   const warnings = diags.filter((d) => d.severity === 'warning');
   const hasErrors = errors.length > 0;
+  const runtimeControlsDisabled = !runtimeReady || hasErrors;
 
   // Whether any known-required keys are missing — proactive, not just reactive to pending requests
   const hasMissingKeys = [...knownRequiredKeys].some((k) => !envVars[k]);
@@ -2443,7 +3185,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           // keystroke when nothing will run.
           if (viewingCollection || viewingTestRun) return;
           e.preventDefault();
-          if (!hasErrors) void onRunFunction();
+          if (!runtimeControlsDisabled) void onRunFunction();
         }}
       >
         {/* ──── Combined top bar ──── */}
@@ -2508,7 +3250,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           {projectRoots.length > 1 && (
             <ToggleGroup
               value={selectedProject ?? projectRoots[0]}
-              onValueChange={(v) => setSelectedProject(v)}
+              onValueChange={selectProject}
               options={projectRoots.map((root) => ({
                 value: root,
                 label: (
@@ -2540,7 +3282,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                       size="icon-xs"
                       className="h-7 w-7"
                       aria-label="Run"
-                      disabled={hasErrors || isRunning || !selectedProject}
+                      disabled={
+                        runtimeControlsDisabled || isRunning || !selectedProject
+                      }
                       onClick={onRunFunction}
                     >
                       <Play />
@@ -2667,8 +3411,58 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           </button>
         )}
 
+        {/* Current-source runtime state. Catalog/source data renders
+            immediately, but all runtime-derived controls stay disabled until
+            the requested revision is installed. */}
+        {selectedProject && !runtimeReady && (
+          <div
+            role="status"
+            className="flex shrink-0 items-center gap-2 border-b border-vsc-border bg-vsc-surface px-2.5 py-2"
+          >
+            {runtimePreparing ? (
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-vsc-accent" />
+            ) : (
+              <span
+                className={cn(
+                  'h-2 w-2 shrink-0 rounded-full',
+                  selectedRuntimeStatus?.state === 'failed'
+                    ? 'bg-vsc-red'
+                    : 'bg-vsc-yellow',
+                )}
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="font-vsc-mono text-[11px] text-vsc-text">
+                {runtimePreparing
+                  ? 'Preparing current build…'
+                  : selectedRuntimeStatus?.state === 'blockedByDiagnostics'
+                    ? 'Current build is blocked by diagnostics'
+                    : 'Current build failed'}
+              </div>
+              {(selectedRuntimeStatus?.error ||
+                selectedRuntimeStatus?.hasLastKnownGood) && (
+                <div className="truncate font-vsc-mono text-[10px] text-vsc-text-faint">
+                  {selectedRuntimeStatus?.error ??
+                    'A last-known-good build exists, but new Run/Test actions require current source.'}
+                </div>
+              )}
+            </div>
+            {selectedRuntimeStatus?.state === 'failed' && (
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={retryCurrentRuntime}
+                className="shrink-0 text-[10px]"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Retry build
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Diagnostics banner */}
-        {(hasErrors || engineStale) && (
+        {hasErrors && (
           <div className="border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
             {diags.length > 0 ? (
               <>
@@ -2696,7 +3490,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     {warnings.length > 0
                       ? `${warnings.length} warning${warnings.length !== 1 ? 's' : ''}`
                       : ''}
-                    {' — using last successful build'}
+                    {selectedRuntimeStatus?.hasLastKnownGood
+                      ? ' — last successful build retained'
+                      : ' — current build unavailable'}
                   </span>
                 </button>
                 {diagsExpanded && (
@@ -2720,11 +3516,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   </div>
                 )}
               </>
-            ) : (
-              <div className="px-2.5 py-1 font-vsc-mono text-[10px] text-[#f48771]">
-                Build is stale — using last successful build
-              </div>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -2749,7 +3541,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   showInternalFunctions={showInternalFunctions}
                   internalFunctionCount={internalFunctionCount}
                   isLoadingProject={isLoadingProject}
+                  runtimeControlsDisabled={runtimeControlsDisabled}
                   testTree={testTree}
+                  testTreeStale={testTreeStale}
                   selectedFn={selectedFn}
                   onSelectFn={(fn) => {
                     setViewingCollection(false);
@@ -3175,7 +3969,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                         size="xs"
                         className="mx-1 my-0.5 shrink-0 text-[11px] font-semibold"
                         aria-label={isRunning ? 'Running' : 'Run'}
-                        disabled={hasErrors || isRunning || !selectedProject}
+                        disabled={
+                          runtimeControlsDisabled || isRunning || !selectedProject
+                        }
                         onClick={onRunFunction}
                       >
                         {isRunning ? (

@@ -148,6 +148,30 @@ pub enum WsInMessage {
     },
     #[serde(rename = "requestState")]
     RequestState,
+    #[serde(rename = "ensureProjectRuntime")]
+    EnsureProjectRuntime {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        project: String,
+        #[serde(default)]
+        incarnation: Option<u64>,
+    },
+    #[serde(rename = "releaseProjectRuntime")]
+    ReleaseProjectRuntime {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        project: String,
+        #[serde(default)]
+        incarnation: Option<u64>,
+    },
+    #[serde(rename = "retryProjectRuntime")]
+    RetryProjectRuntime {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        project: String,
+        #[serde(default)]
+        incarnation: Option<u64>,
+    },
     #[serde(rename = "requestCollectTests")]
     RequestCollectTests { project: String },
     #[serde(rename = "requestControlFlowGraph")]
@@ -215,6 +239,8 @@ pub enum RunListVisibility {
 pub enum WsOutMessage {
     #[serde(rename = "hello")]
     Hello {
+        #[serde(rename = "sessionEpoch")]
+        session_epoch: u64,
         #[serde(rename = "toolchainVersion")]
         toolchain_version: String,
         #[serde(rename = "playgroundProtocol")]
@@ -222,9 +248,18 @@ pub enum WsOutMessage {
         #[serde(rename = "minClientPlaygroundProtocol")]
         min_client_playground_protocol: u32,
         capabilities: Vec<String>,
+        #[serde(rename = "sourcePositionEncoding")]
+        source_position_encoding: String,
     },
     #[serde(rename = "ready")]
     Ready,
+    #[serde(rename = "projectRuntimeState")]
+    ProjectRuntimeState {
+        #[serde(rename = "requestId")]
+        request_id: u64,
+        project: String,
+        state: serde_json::Value,
+    },
     #[serde(rename = "playgroundNotification")]
     PlaygroundNotification { notification: serde_json::Value },
     #[serde(rename = "runStarted")]
@@ -360,11 +395,61 @@ pub enum WsOutMessage {
     CursorContext { context: serde_json::Value },
 }
 
+impl WsOutMessage {
+    /// Project-derived playground notifications carry their endpoint epoch in
+    /// the payload. Run-owned/global broadcasts intentionally return `None`.
+    pub fn target_playground_session(&self) -> Option<u64> {
+        match self {
+            Self::PlaygroundNotification { notification } => notification
+                .get("sessionEpoch")
+                .and_then(|value| value.as_u64()),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn hello_advertises_fixed_utf16_source_positions() {
+        let value = serde_json::to_value(WsOutMessage::Hello {
+            session_epoch: 7,
+            toolchain_version: "test".to_string(),
+            playground_protocol: 3,
+            min_client_playground_protocol: 3,
+            capabilities: vec![],
+            source_position_encoding: "utf16-zero-based-v1".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(
+            value.get("sourcePositionEncoding"),
+            Some(&json!("utf16-zero-based-v1"))
+        );
+        assert_eq!(value.get("sessionEpoch"), Some(&json!(7)));
+    }
+
+    #[test]
+    fn project_notifications_expose_their_target_session() {
+        let targeted = WsOutMessage::PlaygroundNotification {
+            notification: json!({
+                "type": "updateProject",
+                "sessionEpoch": 17,
+            }),
+        };
+        assert_eq!(targeted.target_playground_session(), Some(17));
+        assert_eq!(
+            WsOutMessage::RunPatch {
+                patch: serde_json::Value::Null,
+            }
+            .target_playground_session(),
+            None
+        );
+    }
 
     #[test]
     fn run_command_frames_use_run_vocabulary() {

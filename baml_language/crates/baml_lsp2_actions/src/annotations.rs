@@ -1,7 +1,7 @@
 //! Inline type / parameter-name annotations for BAML files (inlay hints).
 //!
-//! Provides `annotations(db, file) -> Vec<InlineAnnotation>` — a regular
-//! function (not a Salsa query) that walks expression-body functions in a file
+//! Provides `annotations(db, file) -> &Vec<InlineAnnotation>` — a Salsa-tracked
+//! query that walks expression-body functions in a file
 //! (top-level functions, class/interface methods, and the synthesized
 //! `$init_test` registration functions), recursing into lambda bodies (e.g.
 //! the bodies of `test` / `testset` blocks, which lower to lambdas passed to
@@ -81,7 +81,7 @@ pub enum AnnotationKind {
 }
 
 /// A single inline annotation (inlay hint) to display in the editor.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct InlineAnnotation {
     /// Byte offset in the file where the hint is inserted.
     pub offset: TextSize,
@@ -102,9 +102,10 @@ pub struct InlineAnnotation {
 /// Returns annotations sorted in document order (required by the LSP
 /// `textDocument/inlayHint` contract).
 ///
-/// Regular function (not a Salsa query). Internally calls Salsa-cached
-/// queries (`function_body`, `function_body_source_map`,
-/// `infer_scope_types`, `file_item_tree`, `file_semantic_index`).
+/// Salsa-tracked per-file query. Internally calls other Salsa-cached queries
+/// (`function_body`, `function_body_source_map`, `infer_scope_types`,
+/// `file_item_tree`, `file_semantic_index`).
+#[salsa::tracked(returns(ref))]
 pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let index = baml_compiler2_hir::file_semantic_index(db, file);

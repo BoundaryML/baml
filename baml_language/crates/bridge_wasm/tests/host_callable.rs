@@ -299,7 +299,14 @@ async fn run_function(
     args: &[u8],
 ) -> Result<BamlOutboundValue, JsValue> {
     let start_index = notifications.length();
-    runtime.start_run(call_id, "/workspace/baml_src".to_string(), name, args)?;
+    runtime
+        .start_run(
+            call_id,
+            "/workspace/baml_src".to_string(),
+            name.to_string(),
+            args.to_vec(),
+        )
+        .await?;
     wait_for_run_result(notifications, start_index).await
 }
 

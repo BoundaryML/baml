@@ -6,6 +6,8 @@
  * gives exhaustive switch narrowing.
  */
 
+import type { SourcePositionEncoding } from './protocol';
+
 // ---------------------------------------------------------------------------
 // Log decoration types (inline log display like ErrorLens)
 // ---------------------------------------------------------------------------
@@ -23,10 +25,12 @@ export interface LogDecoration {
 }
 
 interface SourceNavigationTargetBase {
+  /** Zero-based UTF-16 coordinates when the hello capability advertises that contract. */
   line: number;
   column: number;
   endLine?: number;
   endColumn?: number;
+  /** UTF-8 byte offsets, independent of line/column encoding. */
   startOffset?: number;
   endOffset?: number;
 }
@@ -44,6 +48,32 @@ export type SourceNavigationTarget = SourceNavigationTargetBase &
 export interface DiagnosticEntry {
   severity: 'error' | 'warning' | 'info';
   message: string;
+}
+
+/** Stable identity for one semantic project in the editor/runtime catalog. */
+export interface ProjectCatalogEntry {
+  project: string;
+  /** Changes when a project is removed and later re-added at the same path. */
+  incarnation: number;
+  /** Latest source revision known when this catalog entry was published. */
+  sourceRevision: number;
+}
+
+export type ProjectRuntimePhase =
+  | 'idleStale'
+  | 'building'
+  | 'ready'
+  | 'blockedByDiagnostics'
+  | 'failed';
+
+export interface ProjectRuntimeStatus {
+  state: ProjectRuntimePhase;
+  requestedRevision: number;
+  installedRevision?: number | null;
+  generation?: number | null;
+  hasLastKnownGood: boolean;
+  /** Present for a terminal build/$init failure when the runtime has details. */
+  error?: string;
 }
 
 export type FunctionKind = 'llm' | 'expr';
@@ -129,6 +159,15 @@ export interface FunctionInfo {
 }
 
 export interface ProjectUpdate {
+  /** Present on revision-fenced native runtime payloads. */
+  sourceRevision?: number;
+  /** Present on incarnation-fenced native runtime payloads. */
+  projectIncarnation?: number;
+  /**
+   * Explicit runtime state. Optional only for older atomically-shipped WASM
+   * runtimes, where `isBexCurrent` remains the compatibility signal.
+   */
+  runtime?: ProjectRuntimeStatus;
   isBexCurrent: boolean;
   functions: FunctionInfo[];
   /** Shared type table for `FunctionInfo.params` refs. `undefined` = binary
@@ -139,8 +178,21 @@ export interface ProjectUpdate {
 }
 
 export type PlaygroundNotification =
-  | { type: 'listProjects'; projects: string[] }
-  | { type: 'updateProject'; project: string; update: ProjectUpdate }
+  | {
+      type: 'listProjects';
+      /** Required for protocol-v3/native and current WASM runtimes. */
+      sessionEpoch?: number;
+      /** Legacy catalog used by atomically-shipped WASM clients. */
+      projects: string[];
+      /** Revision/incarnation-qualified native catalog. */
+      entries?: ProjectCatalogEntry[];
+    }
+  | {
+      type: 'updateProject';
+      sessionEpoch?: number;
+      project: string;
+      update: ProjectUpdate;
+    }
   | {
       type: 'openPlayground';
       project: string;
@@ -150,17 +202,30 @@ export type PlaygroundNotification =
     }
   | {
       type: 'controlFlowGraphResult';
+      sessionEpoch?: number;
+      project?: string;
+      projectIncarnation?: number;
+      sourceRevision?: number;
+      generation?: number;
+      derivedEpoch?: number;
       functionName: string;
       graph: ControlFlowGraph | null;
     }
   | { type: 'cursorContext'; context: CursorContext }
   | {
       type: 'testCollectionResult';
+      sessionEpoch?: number;
       project: string;
+      projectIncarnation?: number;
+      sourceRevision?: number;
       generation: number;
+      /** Monotonic collection operation epoch for same-revision ABA fencing. */
+      collectionEpoch?: number;
       callId: number;
       data: number[];
       expandError?: { testsetName: string; message: string };
+      /** Full collection failed; `data` must not replace the previous tree. */
+      collectionError?: string;
     }
   | {
       type: 'profileArtifactChunk';
@@ -596,12 +661,21 @@ export type RunCursorExpiredReason =
 export type WebSocketOutMessage =
   | {
       type: 'hello';
+      sessionEpoch: number;
       toolchainVersion: string;
       playgroundProtocol: number;
       minClientPlaygroundProtocol: number;
       capabilities: string[];
+      /** Fixed playground source-coordinate contract, independent of LSP. */
+      sourcePositionEncoding?: SourcePositionEncoding;
     }
   | { type: 'ready' }
+  | {
+      type: 'projectRuntimeState';
+      requestId: number;
+      project: string;
+      state: ProjectRuntimeStatus;
+    }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'runStarted'; requestId?: number; run: Run }
   | { type: 'runPatch'; patch: RunPatch }
@@ -650,6 +724,12 @@ export type WebSocketOutMessage =
     }
   | {
       type: 'controlFlowGraphResult';
+      sessionEpoch?: number;
+      project?: string;
+      projectIncarnation?: number;
+      sourceRevision?: number;
+      generation?: number;
+      derivedEpoch?: number;
       functionName: string;
       graph: ControlFlowGraph | null;
     }
@@ -729,6 +809,24 @@ export type WebSocketInMessage =
   | { type: 'setEnvVar'; key: string; value: string }
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'requestState' }
+  | {
+      type: 'ensureProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'releaseProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'retryProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
   | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number };
@@ -739,6 +837,13 @@ export type WebSocketInMessage =
 
 export type WorkerOutMessage =
   | { type: 'ready' }
+  | { type: 'runtimeSessionReset'; sessionEpoch: number }
+  | {
+      type: 'projectRuntimeState';
+      requestId: number;
+      project: string;
+      state: ProjectRuntimeStatus;
+    }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | ProfileArtifactChunkMessage
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
@@ -779,6 +884,12 @@ export type WorkerOutMessage =
   | { type: 'buildTime'; value: string }
   | {
       type: 'controlFlowGraphResult';
+      sessionEpoch?: number;
+      project?: string;
+      projectIncarnation?: number;
+      sourceRevision?: number;
+      generation?: number;
+      derivedEpoch?: number;
       functionName: string;
       graph: ControlFlowGraph | null;
     }
@@ -859,6 +970,24 @@ export type WorkerInMessage =
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'selectProject'; root: string }
   | { type: 'requestState' }
+  | {
+      type: 'ensureProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'releaseProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'retryProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
   | { type: 'requestCollectTests'; project: string }

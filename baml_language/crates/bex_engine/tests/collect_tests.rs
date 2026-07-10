@@ -169,6 +169,42 @@ async fn expand_testset(
         .await
 }
 
+async fn registry_is_expanded(
+    engine: &Arc<BexEngine>,
+    registry: BexExternalValue,
+    name: &str,
+) -> bool {
+    match engine
+        .call_function(
+            "testing.TestRegistry.is_expanded",
+            vec![registry, BexExternalValue::String(name.to_string().into())],
+            bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("is_expanded should succeed")
+    {
+        BexExternalValue::Bool(expanded) => expanded,
+        other => panic!("is_expanded returned an unexpected value: {other:?}"),
+    }
+}
+
+async fn rollback_testset_expansion(
+    engine: &Arc<BexEngine>,
+    registry: BexExternalValue,
+    name: &str,
+) {
+    engine
+        .call_function(
+            "testing.TestRegistry.rollback_expand_set",
+            vec![registry, BexExternalValue::String(name.to_string().into())],
+            bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("rollback_expand_set should succeed");
+}
+
 /// Helper: run a named test via the registry's `run_test` method.
 async fn run_named_test(
     engine: &Arc<BexEngine>,
@@ -710,6 +746,42 @@ async fn serialize_registry_with_unexpanded_testsets() {
         !matches!(serialized, BexExternalValue::Null),
         "expected non-null serialized result, got: {serialized:?}"
     );
+}
+
+#[tokio::test]
+async fn test_registry_expansion_can_be_rolled_back_before_publication() {
+    let source = r#"
+        testset "lazy_suite" {
+            test "inner" { null }
+        }
+    "#;
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+    let before = format!(
+        "{:?}",
+        serialize_registry(&engine, registry.clone())
+            .await
+            .expect("unexpanded registry should serialize")
+    );
+    assert!(!registry_is_expanded(&engine, registry.clone(), "lazy_suite").await);
+
+    expand_testset(&engine, registry.clone(), "lazy_suite")
+        .await
+        .expect("expansion should succeed");
+    assert!(registry_is_expanded(&engine, registry.clone(), "lazy_suite").await);
+
+    rollback_testset_expansion(&engine, registry.clone(), "lazy_suite").await;
+    assert!(!registry_is_expanded(&engine, registry.clone(), "lazy_suite").await);
+    let after = format!(
+        "{:?}",
+        serialize_registry(&engine, registry)
+            .await
+            .expect("rolled-back registry should serialize")
+    );
+    assert_eq!(after, before);
 }
 
 /// Testset with `for` loop and nested `testset <variable>` blocks.

@@ -128,6 +128,35 @@ class TestRegistry {
     return items
   }
 
+  function is_expanded(self, name: string) -> bool {
+    if (self.expansions.has(name)) {
+      return true
+    }
+    for (let key in self.expansions.keys()) {
+      if (name.starts_with(key + "/")) {
+        return self.expansions[key].is_expanded(name)
+      }
+    }
+    return false
+  }
+
+  // Roll back one newly-created expansion after serialization/publication
+  // failure. The Rust caller serializes expansion mutation with the registry
+  // owner and invokes this only when `is_expanded(name)` was initially false.
+  function rollback_expand_set(self, name: string) -> null {
+    if (self.expansions.has(name)) {
+      self.expansions.delete(name)
+      return null
+    }
+    for (let key in self.expansions.keys()) {
+      if (name.starts_with(key + "/")) {
+        self.expansions[key].rollback_expand_set(name)
+        return null
+      }
+    }
+    return null
+  }
+
   // Find test by name in root collector, then recurse into expanded sub-registries.
   function run_test(self, name: string) -> TestReport {
     // Check tests in this registry's collector
@@ -192,18 +221,25 @@ class TestRegistry {
   // Expand a lazy testset by name. Searches recursively through expanded
   // sub-registries so nested testsets can be expanded too.
   function expand_set(self, name: string) -> SerializedTestDef[] {
+    self.expand_set_in_place(name)
+    return self.serialize()
+  }
+
+  // Mutation-only entry point used by the playground's transactional
+  // expand/serialize/publish path.
+  function expand_set_in_place(self, name: string) -> null {
     // Try root collector first
     for (let ts in self.collector.testsets) {
       if (ts.name == name) {
         self.expand_testset_registry(ts)
-        return self.serialize()
+        return null
       }
     }
     // Search in expanded sub-registries using segment-aware prefix match
     for (let k in self.expansions.keys()) {
       let sub = self.expansions[k]
       if (name.starts_with(k + "/")) {
-        return sub.expand_set(name)
+        return sub.expand_set_in_place(name)
       }
     }
     throw ("TestSet not found for expansion: " + name)

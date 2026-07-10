@@ -184,6 +184,11 @@ export function createWorkerBackend(): EditorBackend {
       worker.addEventListener('message', onLogDecorations);
       disposers.push(() => worker.removeEventListener('message', onLogDecorations));
 
+      // Do not expose the runtime port until the worker has created the WASM
+      // runtime. Otherwise ExecutionPanel's initial catalog-only requestState
+      // can race initialization and be silently ignored.
+      await workerReadyPromise;
+
       return {
         lcConnection: {
           options: { $type: 'WorkerDirect', worker, messagePort: channel.port1 },

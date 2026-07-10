@@ -383,7 +383,13 @@ async fn call_run(
     let start_index = runtime.notifications.length();
     runtime
         .runtime
-        .start_run(call_id, "/workspace/baml_src".to_string(), name, args)?;
+        .start_run(
+            call_id,
+            "/workspace/baml_src".to_string(),
+            name.to_string(),
+            args.to_vec(),
+        )
+        .await?;
     wait_for_run_result(&runtime.notifications, start_index).await
 }
 

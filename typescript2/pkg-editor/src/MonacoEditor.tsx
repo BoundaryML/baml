@@ -21,6 +21,10 @@ import { useEffect, useRef, useState, type FC } from 'react';
 import './views-workbench.css';
 import { type IFileWriteOptions } from '@codingame/monaco-vscode-files-service-override';
 import type { Dimension } from '@codingame/monaco-vscode-api/vscode/vs/base/browser/dom';
+import {
+  editorPositionToPlaygroundPosition,
+  playgroundSourceRangeToEditorRange,
+} from '@b/pkg-playground/protocol';
 import { isMediaPath, mimeFromPath, toDataUrl, fromDataUrl } from './media';
 import type { EditorBackend, EditorConnection, WorkbenchHandle } from './backend';
 
@@ -782,8 +786,14 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
         cursorDebounceTimer = setTimeout(() => {
           const pos = e.selections[0]?.active;
           if (!pos) return;
-          // VS Code API positions are 0-indexed, matching lsp_types::Position.
-          currentConnRef.current?.onCursorMoved?.(filename, pos.line, pos.character);
+          // VS Code API columns are UTF-16 code units. Playground coordinates
+          // stay fixed to that contract even when the LSP negotiated UTF-8.
+          const wirePosition = editorPositionToPlaygroundPosition(pos);
+          currentConnRef.current?.onCursorMoved?.(
+            filename,
+            wirePosition.line,
+            wirePosition.column,
+          );
         }, 50);
       });
       disposables.push({ dispose: () => { clearTimeout(cursorDebounceTimer); cursorSubscription.dispose(); } });
@@ -930,14 +940,33 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, back
           );
           const editor = bamlEditor ?? vscode.window.activeTextEditor;
           if (editor) {
-            // line/column/endLine/endColumn are 0-indexed LSP positions, and
-            // the backend expands end_* so the whole node span can be selected
-            // directly (see SourceSpan in baml_compiler2_visualization).
-            const start = new vscode.Position(source.line, source.column);
-            const end =
-              source.endLine != null && source.endColumn != null
-                ? new vscode.Position(source.endLine, source.endColumn)
-                : start;
+            // This standalone Monaco route historically consumed source lines
+            // directly. Select the named fixed-UTF-16 adapter when advertised,
+            // but preserve that direct fallback for older servers. (The VS Code
+            // extension host has a separate legacy one-based-line conversion.)
+            const sourceRange = conn.runtimePort.sourcePositionEncoding
+              ? playgroundSourceRangeToEditorRange(
+                  source,
+                  conn.runtimePort.sourcePositionEncoding,
+                )
+              : {
+                  start: { line: source.line, character: source.column },
+                  end:
+                    source.endLine != null && source.endColumn != null
+                      ? {
+                          line: source.endLine,
+                          character: source.endColumn,
+                        }
+                      : { line: source.line, character: source.column },
+                };
+            const start = new vscode.Position(
+              sourceRange.start.line,
+              sourceRange.start.character,
+            );
+            const end = new vscode.Position(
+              sourceRange.end.line,
+              sourceRange.end.character,
+            );
             // anchor=start, active=end → the span is selected with the caret
             // at its end (kept inside the span for the graph round-trip check).
             editor.selection = new vscode.Selection(start, end);

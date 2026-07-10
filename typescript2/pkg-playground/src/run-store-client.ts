@@ -90,6 +90,7 @@ class AsyncQueue<T> implements AsyncIterable<T> {
   private closed = false;
 
   push(value: T): void {
+    if (this.closed) return;
     const waiter = this.waiters.shift();
     if (waiter) {
       waiter({ value, done: false });
@@ -99,7 +100,11 @@ class AsyncQueue<T> implements AsyncIterable<T> {
   }
 
   close(): void {
+    if (this.closed) return;
     this.closed = true;
+    // A session boundary tombstones queued data as well as future pushes.
+    // Iterators must not drain old-session patches after reset.
+    this.values = [];
     for (const waiter of this.waiters.splice(0)) {
       waiter({ value: undefined, done: true });
     }
@@ -147,6 +152,23 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
 
   const off = port.onMessage((msg: WorkerOutMessage) => {
     switch (msg.type) {
+      case 'runtimeSessionReset': {
+        const error = new Error(
+          `RunStoreClient session reset (${msg.sessionEpoch})`,
+        );
+        for (const waiter of pending.values()) {
+          // Subscription queues are closed below. Pushing a cursor-expired
+          // event here would make the execution store query an old boundary
+          // ID against the replacement server.
+          if (waiter.kind !== 'subscribe') waiter.reject(error);
+        }
+        pending.clear();
+        for (const subscription of subscriptions.values()) {
+          subscription.queue.close();
+        }
+        subscriptions.clear();
+        return;
+      }
       case 'runStarted': {
         if (msg.requestId == null) return;
         const waiter = pending.get(msg.requestId);

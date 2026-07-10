@@ -55,7 +55,10 @@ export interface ExecutionStore {
 }
 
 export function applyRunPatch(run: Run, patch: RunPatch): Run {
-  if (run.boundaryId !== patch.boundaryId) {
+  if (
+    run.boundaryId !== patch.boundaryId ||
+    patch.cursor <= run.cursor
+  ) {
     return cloneRun(run);
   }
 
@@ -91,6 +94,8 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
 
   function applySnapshot(run: Run): void {
     if (disposed) return;
+    const current = runsById.get(run.boundaryId);
+    if (current && run.cursor <= current.cursor) return;
     runsById.set(run.boundaryId, cloneRun(run));
     if (selectedBoundaryId == null) selectedBoundaryId = run.boundaryId;
     notify();
@@ -99,7 +104,7 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
   function applyPatch(patch: RunPatch): void {
     if (disposed) return;
     const run = runsById.get(patch.boundaryId);
-    if (!run) return;
+    if (!run || patch.cursor <= run.cursor) return;
     runsById.set(patch.boundaryId, applyRunPatch(run, patch));
     notify();
   }

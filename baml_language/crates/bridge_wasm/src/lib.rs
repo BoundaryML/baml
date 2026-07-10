@@ -790,14 +790,14 @@ impl BamlWasmRuntime {
     /// Run lifecycle updates are emitted through the playground notification
     /// callback as `runStarted` / `runPatch` messages.
     #[wasm_bindgen(js_name = startRun)]
-    pub fn start_run(
+    pub async fn start_run(
         &self,
         request_id: u32,
         project: String,
-        name: &str,
-        args_bytes: &[u8],
+        name: String,
+        args_bytes: Vec<u8>,
     ) -> Result<(), JsValue> {
-        let kwargs = playground_run_args_to_bex_values(args_bytes, &HANDLE_TABLE)
+        let kwargs = playground_run_args_to_bex_values(&args_bytes, &HANDLE_TABLE)
             .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
         let call_id = next_wasm_call_id()?;
         let host_call_id = HostCallId::Wasm(
@@ -806,18 +806,20 @@ impl BamlWasmRuntime {
         );
         let boundary_id = BoundaryId::new_random();
         let fs_path = bex_project::FsPath::from_str(project.clone());
-        let bex = self
+        let prepared = self
             .bex
-            .get_bex_for_project(&fs_path)
-            .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
-        let project_generation = self.bex.project_generation(&project).unwrap_or(0);
+            .prepare_function_run(&project, call_id, &name)
+            .await
+            .map_err(|e| JsError::new(&format!("Failed to prepare current build: {e}")))?;
+        let bex = prepared.engine;
+        let project_generation = prepared.generation;
         let started = self.run_store.create_attached_run(
             boundary_id,
             ExecutionRequest {
                 project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
                 project_generation: ProjectGeneration(project_generation),
                 target: RunTarget::Function {
-                    function_name: name.to_string(),
+                    function_name: name.clone(),
                 },
                 args_summary: None,
                 options_summary: None,
@@ -843,7 +845,9 @@ impl BamlWasmRuntime {
         let history_store = self.history_store.clone();
         let profile_drain = self.profile_drain.clone();
         let value_store = self.value_store.clone();
-        let function_name = name.to_string();
+        let function_name = name;
+        let bex_lsp = self.bex.clone();
+        let run_project = project;
         let value_capture =
             bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
@@ -916,6 +920,7 @@ impl BamlWasmRuntime {
                     );
                 }
             }
+            bex_lsp.finish_project_run(&run_project, call_id);
         });
 
         Ok(())
@@ -923,16 +928,16 @@ impl BamlWasmRuntime {
 
     /// Start a RunStore-owned prompt/cURL preview run.
     #[wasm_bindgen(js_name = startPreviewRun)]
-    pub fn start_preview_run(
+    pub async fn start_preview_run(
         &self,
         request_id: u32,
         project: String,
-        parent_function_name: &str,
-        helper: &str,
-        function_name: &str,
-        args_bytes: &[u8],
+        parent_function_name: String,
+        helper: String,
+        function_name: String,
+        args_bytes: Vec<u8>,
     ) -> Result<(), JsValue> {
-        let kwargs = playground_run_args_to_bex_values(args_bytes, &HANDLE_TABLE)
+        let kwargs = playground_run_args_to_bex_values(&args_bytes, &HANDLE_TABLE)
             .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
         let call_id = next_wasm_call_id()?;
         let host_call_id = HostCallId::Wasm(
@@ -941,19 +946,21 @@ impl BamlWasmRuntime {
         );
         let boundary_id = BoundaryId::new_random();
         let fs_path = bex_project::FsPath::from_str(project.clone());
-        let bex = self
+        let prepared = self
             .bex
-            .get_bex_for_project(&fs_path)
-            .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
-        let project_generation = self.bex.project_generation(&project).unwrap_or(0);
+            .prepare_function_run(&project, call_id, &parent_function_name)
+            .await
+            .map_err(|e| JsError::new(&format!("Failed to prepare current build: {e}")))?;
+        let bex = prepared.engine;
+        let project_generation = prepared.generation;
         let started = self.run_store.create_attached_run(
             boundary_id,
             ExecutionRequest {
                 project_id: ProjectId(fs_path.as_path().to_string_lossy().to_string()),
                 project_generation: ProjectGeneration(project_generation),
                 target: RunTarget::Preview {
-                    parent_function_name: parent_function_name.to_string(),
-                    helper: helper.to_string(),
+                    parent_function_name,
+                    helper,
                 },
                 args_summary: None,
                 options_summary: None,
@@ -979,7 +986,8 @@ impl BamlWasmRuntime {
         let history_store = self.history_store.clone();
         let profile_drain = self.profile_drain.clone();
         let value_store = self.value_store.clone();
-        let function_name = function_name.to_string();
+        let bex_lsp = self.bex.clone();
+        let run_project = project;
         let value_capture =
             bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
@@ -1052,6 +1060,7 @@ impl BamlWasmRuntime {
                     );
                 }
             }
+            bex_lsp.finish_project_run(&run_project, call_id);
         });
 
         Ok(())
@@ -1079,11 +1088,8 @@ impl BamlWasmRuntime {
                 send_run_patch(&self.playground_callback, &patch);
                 match (host_call_id, project_id) {
                     (HostCallId::Wasm(call_id), Some(project_id)) => {
-                        let fs_path = bex_project::FsPath::from_str(project_id);
-                        let bex = self.bex.get_bex_for_project(&fs_path).map_err(|e| {
-                            JsError::new(&format!("Failed to get Bex for project: {e}"))
-                        })?;
-                        bex.cancel_function_call(sys_types::CallId(u64::from(call_id)))
+                        self.bex
+                            .cancel_project_run(&project_id, sys_types::CallId(u64::from(call_id)))
                             .map_err(|e| {
                                 JsError::new(&format!("Failed to cancel function call: {e}"))
                             })?;
@@ -1458,13 +1464,64 @@ impl BamlWasmRuntime {
         self.bex.request_playground_state();
     }
 
+    /// Notify the runtime that an environment/configuration input used during
+    /// engine construction changed. Demanded projects rebuild once; cold
+    /// projects stay stale until selected or run.
+    #[wasm_bindgen(js_name = runtimeInputsChanged)]
+    pub fn runtime_inputs_changed(&self) {
+        self.bex.runtime_inputs_changed();
+    }
+
+    #[wasm_bindgen(js_name = ensureProjectRuntime)]
+    pub async fn ensure_project_runtime(
+        &self,
+        project: String,
+        incarnation: Option<u32>,
+    ) -> Result<JsValue, JsValue> {
+        if let Some(requested) = incarnation
+            && self.bex.project_incarnation(&project) != Some(u64::from(requested))
+        {
+            return Err(JsError::new("Project incarnation is stale").into());
+        }
+        let status = self
+            .bex
+            .ensure_project_runtime(&project, incarnation.map(u64::from))
+            .await
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        serde_wasm_bindgen::to_value(&status)
+            .map_err(|error| JsError::new(&format!("Failed to encode runtime state: {error}")))
+            .map_err(JsValue::from)
+    }
+
+    #[wasm_bindgen(js_name = releaseProjectRuntime)]
+    pub fn release_project_runtime(&self, project: String, incarnation: Option<u32>) {
+        self.bex
+            .release_project_runtime(&project, incarnation.map(u64::from));
+    }
+
+    #[wasm_bindgen(js_name = retryProjectRuntime)]
+    pub async fn retry_project_runtime(
+        &self,
+        project: String,
+        incarnation: Option<u32>,
+    ) -> Result<JsValue, JsValue> {
+        let status = self
+            .bex
+            .retry_project_runtime(&project, incarnation.map(u64::from))
+            .await
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        serde_wasm_bindgen::to_value(&status)
+            .map_err(|error| JsError::new(&format!("Failed to encode runtime state: {error}")))
+            .map_err(JsValue::from)
+    }
+
     /// Request the control flow graph for a function.
     ///
     /// Triggers a `playground_send_notification` callback with a
     /// `ControlFlowGraphResult` notification containing the serialized graph.
     #[wasm_bindgen(js_name = requestControlFlowGraph)]
-    pub fn request_control_flow_graph(&self, _project: String, function_name: &str) {
-        self.bex.request_control_flow_graph(function_name);
+    pub fn request_control_flow_graph(&self, project: String, function_name: &str) {
+        self.bex.request_control_flow_graph(&project, function_name);
     }
 
     /// Handle a cursor position change from the editor.
@@ -1496,27 +1553,33 @@ impl BamlWasmRuntime {
 
     /// Start a RunStore-owned test run.
     #[wasm_bindgen(js_name = "startTestRun")]
-    pub fn start_test_run(
+    pub async fn start_test_run(
         &self,
         request_id: u32,
-        project: &str,
+        project: String,
         generation: u32,
-        test_name: &str,
+        test_name: String,
     ) -> Result<(), JsValue> {
         let call_id = next_wasm_call_id()?;
         let host_call_id = HostCallId::Wasm(
             u32::try_from(call_id.0)
                 .map_err(|_| JsError::new("Function call ID overflowed u32"))?,
         );
+        let prepared = self
+            .bex
+            .prepare_test_run(&project, call_id, u64::from(generation))
+            .await
+            .map_err(|e| JsError::new(&format!("Failed to prepare current test build: {e}")))?;
+        let generation = prepared.generation;
         let boundary_id = BoundaryId::new_random();
         let started = self.run_store.create_attached_run(
             boundary_id,
             ExecutionRequest {
-                project_id: ProjectId(project.to_string()),
-                project_generation: ProjectGeneration(u64::from(generation)),
+                project_id: ProjectId(project.clone()),
+                project_generation: ProjectGeneration(generation),
                 target: RunTarget::Test {
-                    generation: ProjectGeneration(u64::from(generation)),
-                    test_name: test_name.to_string(),
+                    generation: ProjectGeneration(generation),
+                    test_name: test_name.clone(),
                 },
                 args_summary: None,
                 options_summary: None,
@@ -1543,9 +1606,6 @@ impl BamlWasmRuntime {
         let history_store = self.history_store.clone();
         let profile_drain = self.profile_drain.clone();
         let value_store = self.value_store.clone();
-        let project = project.to_string();
-        let test_name = test_name.to_string();
-        let generation = u64::from(generation);
         let value_capture =
             bex_project::TraceCaptureProducer::new(bex_project::TraceCaptureConfig::enabled(16));
         let ctx = bex_project::FunctionCallContextBuilder::new(call_id)
@@ -1558,7 +1618,7 @@ impl BamlWasmRuntime {
             .build();
         wasm_bindgen_futures::spawn_local(async move {
             match bex
-                .call_test_function_with_trace(&project, generation, &test_name, ctx)
+                .call_test_function_with_trace(&project, generation, &test_name, call_id, ctx)
                 .await
             {
                 Ok(traced) => {
@@ -1616,6 +1676,7 @@ impl BamlWasmRuntime {
                     );
                 }
             }
+            bex.finish_project_run(&project, call_id);
         });
 
         Ok(())

@@ -200,6 +200,9 @@ pub struct ProjectDiagnostic {
 #[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
+    pub source_revision: u64,
+    pub project_incarnation: u64,
+    pub runtime: ProjectRuntimeStatus,
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
     /// Shared type table for `FunctionInfo.params` refs; `None` = binary
@@ -211,12 +214,39 @@ pub struct ProjectUpdate {
 
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectRuntimeStatus {
+    pub state: String,
+    pub requested_revision: u64,
+    pub installed_revision: Option<u64>,
+    pub generation: Option<u64>,
+    pub has_last_known_good: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectCatalogEntry {
+    pub project: String,
+    pub incarnation: u64,
+    pub source_revision: u64,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum PlaygroundNotification {
     #[serde(rename_all = "camelCase")]
-    ListProjects { projects: Vec<String> },
+    ListProjects {
+        session_epoch: u64,
+        projects: Vec<String>,
+        entries: Vec<ProjectCatalogEntry>,
+    },
     #[serde(rename_all = "camelCase")]
     UpdateProject {
+        session_epoch: u64,
         project: String,
         update: ProjectUpdate,
     },
@@ -232,6 +262,12 @@ pub enum PlaygroundNotification {
     },
     #[serde(rename_all = "camelCase")]
     ControlFlowGraphResult {
+        session_epoch: u64,
+        project: String,
+        project_incarnation: u64,
+        source_revision: u64,
+        generation: u64,
+        derived_epoch: u64,
         function_name: String,
         graph: Option<serde_json::Value>,
     },
@@ -239,12 +275,18 @@ pub enum PlaygroundNotification {
     CursorContext { context: serde_json::Value },
     #[serde(rename_all = "camelCase")]
     TestCollectionResult {
+        session_epoch: u64,
         project: String,
+        project_incarnation: u64,
+        source_revision: u64,
         generation: u64,
+        collection_epoch: u64,
         call_id: u64,
         data: Vec<u8>,
         #[serde(skip_serializing_if = "Option::is_none")]
         expand_error: Option<bex_project::TestExpandError>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        collection_error: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
     RunStarted {
@@ -317,62 +359,84 @@ pub enum PlaygroundNotification {
 impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
     fn from(n: bex_project::PlaygroundNotification) -> Self {
         match n {
-            bex_project::PlaygroundNotification::ListProjects { projects } => {
-                PlaygroundNotification::ListProjects { projects }
-            }
-            bex_project::PlaygroundNotification::UpdateProject { project, update } => {
-                PlaygroundNotification::UpdateProject {
-                    project,
-                    update: ProjectUpdate {
-                        is_bex_current: update.is_bex_current,
-                        functions: update
-                            .functions
-                            .into_iter()
-                            .map(|f| FunctionInfo {
-                                name: f.name,
-                                kind: match f.kind {
-                                    bex_project::FunctionKind::Llm => FunctionKind::Llm,
-                                    bex_project::FunctionKind::Expr => FunctionKind::Expr,
-                                },
-                                origin: match f.origin {
-                                    bex_project::FunctionOrigin::UserDefined => {
-                                        FunctionOrigin::UserDefined
-                                    }
-                                    bex_project::FunctionOrigin::Companion => {
-                                        FunctionOrigin::Companion
-                                    }
-                                    bex_project::FunctionOrigin::Internal => {
-                                        FunctionOrigin::Internal
-                                    }
-                                    bex_project::FunctionOrigin::AutoDerive => {
-                                        FunctionOrigin::AutoDerive
-                                    }
-                                },
-                                capabilities: f.capabilities.map(|c| LlmCapabilities {
-                                    render_prompt: c.render_prompt,
-                                    build_request: c.build_request,
-                                    client_name: c.client_name,
-                                }),
-                                params: f.params.map(|ps| ps.into_iter().map(Into::into).collect()),
-                            })
-                            .collect(),
-                        types: update.types.map(|types| {
-                            types
-                                .into_iter()
-                                .map(|(name, t)| (name, t.into()))
-                                .collect()
-                        }),
-                        diagnostics: update
-                            .diagnostics
-                            .into_iter()
-                            .map(|d| ProjectDiagnostic {
-                                severity: d.severity.to_string(),
-                                message: d.message,
-                            })
-                            .collect(),
+            bex_project::PlaygroundNotification::ListProjects {
+                session_epoch,
+                projects,
+                entries,
+            } => PlaygroundNotification::ListProjects {
+                session_epoch,
+                projects,
+                entries: entries
+                    .into_iter()
+                    .map(|entry| ProjectCatalogEntry {
+                        project: entry.project,
+                        incarnation: entry.incarnation,
+                        source_revision: entry.source_revision,
+                    })
+                    .collect(),
+            },
+            bex_project::PlaygroundNotification::UpdateProject {
+                session_epoch,
+                project,
+                update,
+            } => PlaygroundNotification::UpdateProject {
+                session_epoch,
+                project,
+                update: ProjectUpdate {
+                    source_revision: update.source_revision,
+                    project_incarnation: update.project_incarnation,
+                    runtime: ProjectRuntimeStatus {
+                        state: update.runtime.state,
+                        requested_revision: update.runtime.requested_revision,
+                        installed_revision: update.runtime.installed_revision,
+                        generation: update.runtime.generation,
+                        has_last_known_good: update.runtime.has_last_known_good,
+                        error_message: update.runtime.error_message,
                     },
-                }
-            }
+                    is_bex_current: update.is_bex_current,
+                    functions: update
+                        .functions
+                        .into_iter()
+                        .map(|f| FunctionInfo {
+                            name: f.name,
+                            kind: match f.kind {
+                                bex_project::FunctionKind::Llm => FunctionKind::Llm,
+                                bex_project::FunctionKind::Expr => FunctionKind::Expr,
+                            },
+                            origin: match f.origin {
+                                bex_project::FunctionOrigin::UserDefined => {
+                                    FunctionOrigin::UserDefined
+                                }
+                                bex_project::FunctionOrigin::Companion => FunctionOrigin::Companion,
+                                bex_project::FunctionOrigin::Internal => FunctionOrigin::Internal,
+                                bex_project::FunctionOrigin::AutoDerive => {
+                                    FunctionOrigin::AutoDerive
+                                }
+                            },
+                            capabilities: f.capabilities.map(|c| LlmCapabilities {
+                                render_prompt: c.render_prompt,
+                                build_request: c.build_request,
+                                client_name: c.client_name,
+                            }),
+                            params: f.params.map(|ps| ps.into_iter().map(Into::into).collect()),
+                        })
+                        .collect(),
+                    types: update.types.map(|types| {
+                        types
+                            .into_iter()
+                            .map(|(name, t)| (name, t.into()))
+                            .collect()
+                    }),
+                    diagnostics: update
+                        .diagnostics
+                        .into_iter()
+                        .map(|d| ProjectDiagnostic {
+                            severity: d.severity.to_string(),
+                            message: d.message,
+                        })
+                        .collect(),
+                },
+            },
             bex_project::PlaygroundNotification::OpenPlayground {
                 project,
                 function_name,
@@ -385,9 +449,21 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                 testset_name,
             },
             bex_project::PlaygroundNotification::ControlFlowGraphResult {
+                session_epoch,
+                project,
+                project_incarnation,
+                source_revision,
+                generation,
+                derived_epoch,
                 function_name,
                 graph,
             } => PlaygroundNotification::ControlFlowGraphResult {
+                session_epoch,
+                project,
+                project_incarnation,
+                source_revision,
+                generation,
+                derived_epoch,
                 function_name,
                 graph,
             },
@@ -395,17 +471,27 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                 PlaygroundNotification::CursorContext { context }
             }
             bex_project::PlaygroundNotification::TestCollectionResult {
+                session_epoch,
                 project,
+                project_incarnation,
+                source_revision,
                 generation,
+                collection_epoch,
                 call_id,
                 data,
                 expand_error,
+                collection_error,
             } => PlaygroundNotification::TestCollectionResult {
+                session_epoch,
                 project,
+                project_incarnation,
+                source_revision,
                 generation,
+                collection_epoch,
                 call_id,
                 data,
                 expand_error,
+                collection_error,
             },
         }
     }

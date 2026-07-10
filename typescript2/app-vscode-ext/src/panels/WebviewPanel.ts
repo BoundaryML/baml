@@ -14,6 +14,7 @@ import {
   workspace,
 } from 'vscode';
 import { getPlaygroundHtml } from './getWebviewHtml';
+import { playgroundLineToEditorLine } from './sourcePosition';
 
 type SourceNavigationTarget = {
   line: number;
@@ -45,24 +46,36 @@ function isBamlEditor(editor: TextEditor): boolean {
 export class WebviewPanel {
   public static currentPanel: WebviewPanel | undefined;
   private readonly _panel: VSCodeWebviewPanel;
+  private readonly _port: number;
   private _disposables: Disposable[] = [];
   private _openTarget: OpenPlaygroundTarget;
+  private _disposed = false;
 
-  private constructor(panel: VSCodeWebviewPanel, openTarget: OpenPlaygroundTarget) {
+  private constructor(
+    panel: VSCodeWebviewPanel,
+    port: number,
+    openTarget: OpenPlaygroundTarget,
+  ) {
     this._panel = panel;
+    this._port = port;
     this._openTarget = openTarget;
 
     // Dispose listener
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this._panel.webview.onDidReceiveMessage(
-      (message: { type?: string; source?: SourceNavigationTarget; project?: string }) => {
+      (message: {
+        type?: string;
+        source?: SourceNavigationTarget;
+        project?: string;
+        sourcePositionEncoding?: string;
+      }) => {
         if (message.type === 'webviewReady') {
           this.forwardOpenPlayground();
           this.forwardActiveEditorCursorPosition();
           return;
         }
         if (message.type === 'navigateToSource' && message.source) {
-          void this.navigateToSource(message.source);
+          void this.navigateToSource(message.source, message.sourcePositionEncoding);
         } else if (message.type === 'openInBrowser') {
           void commands.executeCommand(
             'baml.openPlaygroundInBrowser',
@@ -82,13 +95,18 @@ export class WebviewPanel {
   }
 
   public static async render(extensionUri: Uri, port: number, openTarget: OpenPlaygroundTarget) {
-    if (WebviewPanel.currentPanel) {
-      WebviewPanel.currentPanel._openTarget = openTarget;
-      WebviewPanel.currentPanel._panel.reveal(ViewColumn.Beside, true);
-      WebviewPanel.currentPanel.forwardOpenPlayground();
-      WebviewPanel.currentPanel.forwardActiveEditorCursorPosition();
+    const current = WebviewPanel.currentPanel;
+    if (current?._port === port) {
+      current._openTarget = openTarget;
+      current._panel.reveal(ViewColumn.Beside, true);
+      current.forwardOpenPlayground();
+      current.forwardActiveEditorCursorPosition();
       return;
     }
+    // Sibling ownership roots have distinct language-server/playground
+    // processes. A panel cannot be retargeted by changing only its project:
+    // its HTML and port mapping are bound to the server that created it.
+    current?.dispose();
 
     const panel = window.createWebviewPanel(
       'bamlPlayground',
@@ -105,19 +123,23 @@ export class WebviewPanel {
       }
     );
 
-    WebviewPanel.currentPanel = new WebviewPanel(panel, openTarget);
+    const instance = new WebviewPanel(panel, port, openTarget);
+    WebviewPanel.currentPanel = instance;
 
     // Show a loading message while we load the packaged playground shell.
     panel.webview.html = `<!DOCTYPE html>
 <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;color:#888;font-family:sans-serif;">
 <p>Loading playground\u2026</p>
-</body></html>`;
+    </body></html>`;
 
     try {
-      panel.webview.html = await getPlaygroundHtml(panel.webview, extensionUri, port);
-      WebviewPanel.currentPanel.forwardOpenPlayground();
-      WebviewPanel.currentPanel.forwardActiveEditorCursorPosition();
+      const html = await getPlaygroundHtml(panel.webview, extensionUri, port);
+      if (WebviewPanel.currentPanel !== instance) return;
+      panel.webview.html = html;
+      instance.forwardOpenPlayground();
+      instance.forwardActiveEditorCursorPosition();
     } catch (e) {
+      if (WebviewPanel.currentPanel !== instance) return;
       const msg = e instanceof Error ? e.message : String(e);
       panel.webview.html = `<!DOCTYPE html>
 <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;color:#c44;font-family:sans-serif;">
@@ -157,8 +179,11 @@ export class WebviewPanel {
   }
 
   public dispose() {
-    WebviewPanel.currentPanel = undefined;
-    this._panel.dispose();
+    if (this._disposed) return;
+    this._disposed = true;
+    if (WebviewPanel.currentPanel === this) {
+      WebviewPanel.currentPanel = undefined;
+    }
 
     while (this._disposables.length) {
       const disposable = this._disposables.pop();
@@ -166,9 +191,13 @@ export class WebviewPanel {
         disposable.dispose();
       }
     }
+    this._panel.dispose();
   }
 
-  private async navigateToSource(source: SourceNavigationTarget): Promise<void> {
+  private async navigateToSource(
+    source: SourceNavigationTarget,
+    sourcePositionEncoding?: string,
+  ): Promise<void> {
     if (!source.filePath) {
       void window.showErrorMessage(
         `Cannot navigate to source for file id ${source.fileId}: no file path was provided.`,
@@ -188,9 +217,11 @@ export class WebviewPanel {
       preview: false,
     });
 
-    const start = new Position(Math.max(0, source.line - 1), source.column);
+    const toEditorLine = (line: number) =>
+      playgroundLineToEditorLine(line, sourcePositionEncoding);
+    const start = new Position(toEditorLine(source.line), source.column);
     const end = new Position(
-      Math.max(0, (source.endLine ?? source.line) - 1),
+      toEditorLine(source.endLine ?? source.line),
       source.endColumn ?? source.column,
     );
     const range = new Range(start, end);

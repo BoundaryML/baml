@@ -7,6 +7,24 @@ export type { RuntimePort } from './runtime-port';
 export { WorkerRuntimePort } from './ports/WorkerRuntimePort';
 export { WebSocketRuntimePort } from './ports/WebSocketRuntimePort';
 export type { WebSocketRuntimePortStatus } from './ports/WebSocketRuntimePort';
+export {
+  PLAYGROUND_SOURCE_POSITION_ENCODING,
+  editorPositionToPlaygroundPosition,
+  isPlaygroundProtocolCompatible,
+  monacoPositionToPlaygroundPosition,
+  parseSourcePositionEncoding,
+  playgroundPositionToEditorPosition,
+  playgroundPositionToMonacoPosition,
+  playgroundSourceRangeToEditorRange,
+} from './protocol';
+export type {
+  EditorPosition,
+  EditorRange,
+  MonacoPosition,
+  PlaygroundPosition,
+  PlaygroundSourceRange,
+  SourcePositionEncoding,
+} from './protocol';
 export { createRunStoreClient } from './run-store-client';
 export { applyRunPatch, createExecutionStore } from './execution-store';
 export { decodeRunResultValue } from './run-store-projections';
@@ -85,6 +103,9 @@ export type {
   FetchLogEntry,
   EnvVarRequest,
   PlaygroundNotification,
+  ProjectCatalogEntry,
+  ProjectRuntimePhase,
+  ProjectRuntimeStatus,
   ProjectUpdate,
   Run,
   RunCursor,

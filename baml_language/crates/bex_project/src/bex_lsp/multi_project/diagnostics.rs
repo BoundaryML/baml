@@ -1,31 +1,28 @@
 use std::collections::HashMap;
 
 use baml_base::FileId;
+use baml_project::position::{LspPositionCodec, PositionEncoding};
 
-use crate::bex_lsp::multi_project::wasm_helpers;
+use crate::{bex_lsp::multi_project::wasm_helpers, fs::FsPath, project::SourceRevision};
+
+pub(super) enum DiagnosticRead<T> {
+    Ready(T),
+    Busy,
+    Poisoned,
+}
+
+pub(super) struct DiagnosticCandidate {
+    pub(super) source_revision: SourceRevision,
+    pub(super) documents: HashMap<std::path::PathBuf, Vec<lsp_types::Diagnostic>>,
+    pub(super) source_texts: HashMap<FsPath, String>,
+}
 
 /// Configuration for LSP diagnostic conversion.
 struct LspConversionConfig<'a> {
     /// Maps `FileId` to file path for URL generation.
     pub file_paths: &'a HashMap<FileId, std::path::PathBuf>,
-    /// Maps `FileId` to (`source_text`, `line_starts`) for range conversion.
-    pub file_sources: &'a HashMap<FileId, (String, Vec<u32>)>,
-}
-
-/// A convenient enumeration for supported text encodings. Can be converted to [`lsp_types::PositionEncodingKind`].
-// Please maintain the order from least to greatest priority for the derived `Ord` impl.
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) enum PositionEncoding {
-    /// UTF 16 is the encoding supported by all LSP clients.
-    #[default]
-    UTF16,
-
-    /// Second choice because UTF32 uses a fixed 4 byte encoding for each character (makes conversion relatively easy)
-    #[allow(dead_code)]
-    UTF32,
-
-    /// BAML's preferred encoding
-    UTF8,
+    /// Maps `FileId` to source text for range conversion.
+    pub file_sources: &'a HashMap<FileId, String>,
 }
 
 fn to_lsp_diagnostic(
@@ -34,7 +31,8 @@ fn to_lsp_diagnostic(
     encoding: PositionEncoding,
 ) -> Option<lsp_types::Diagnostic> {
     let primary_span = diagnostic.primary_span()?;
-    let (source_text, line_starts) = config.file_sources.get(&primary_span.file_id)?;
+    let source_text = config.file_sources.get(&primary_span.file_id)?;
+    let codec = LspPositionCodec::new(source_text, encoding);
 
     let diagnostic = lsp_types::Diagnostic {
         severity: Some(match diagnostic.severity {
@@ -42,7 +40,7 @@ fn to_lsp_diagnostic(
             baml_compiler_diagnostics::Severity::Warning => lsp_types::DiagnosticSeverity::WARNING,
             baml_compiler_diagnostics::Severity::Info => lsp_types::DiagnosticSeverity::INFORMATION,
         }),
-        range: span_to_lsp_range(primary_span.range, source_text, line_starts, encoding),
+        range: codec.text_range_to_range(primary_span.range).ok()?,
         code: Some(lsp_types::NumberOrString::String(
             diagnostic.code().to_string(),
         )),
@@ -55,8 +53,10 @@ fn to_lsp_diagnostic(
                 .into_iter()
                 .filter_map(|r| {
                     let path = config.file_paths.get(&r.span.file_id)?;
-                    let (source_text, line_starts) = config.file_sources.get(&r.span.file_id)?;
-                    let range = span_to_lsp_range(r.span.range, source_text, line_starts, encoding);
+                    let source_text = config.file_sources.get(&r.span.file_id)?;
+                    let range = LspPositionCodec::new(source_text, encoding)
+                        .text_range_to_range(r.span.range)
+                        .ok()?;
                     Some(lsp_types::DiagnosticRelatedInformation {
                         location: lsp_types::Location {
                             uri: wasm_helpers::from_file_path(path).ok()?,
@@ -74,83 +74,6 @@ fn to_lsp_diagnostic(
     Some(diagnostic)
 }
 
-/// Convert a `TextRange` to an LSP Range.
-pub(super) fn span_to_lsp_range(
-    range: text_size::TextRange,
-    source_text: &str,
-    line_starts: &[u32],
-    encoding: PositionEncoding,
-) -> lsp_types::Range {
-    let start_offset: u32 = range.start().into();
-    let end_offset: u32 = range.end().into();
-
-    let start = offset_to_position(start_offset, source_text, line_starts, encoding);
-    let end = offset_to_position(end_offset, source_text, line_starts, encoding);
-
-    lsp_types::Range { start, end }
-}
-
-/// Convert a byte offset to an LSP Position.
-///
-/// The character position is computed based on the position encoding negotiated
-/// with the LSP client:
-/// - UTF-8: character offset is byte offset from line start
-/// - UTF-16: character offset is UTF-16 code unit count from line start
-/// - UTF-32: character offset is character (codepoint) count from line start
-fn offset_to_position(
-    offset: u32,
-    source_text: &str,
-    line_starts: &[u32],
-    encoding: PositionEncoding,
-) -> lsp_types::Position {
-    // Binary search for the line containing this offset
-    let line = match line_starts.binary_search(&offset) {
-        Ok(line) => line,
-        Err(line) => line.saturating_sub(1),
-    };
-
-    let line_start = line_starts.get(line).copied().unwrap_or(0);
-
-    // Calculate character position based on encoding
-    let character = match encoding {
-        PositionEncoding::UTF8 => {
-            // UTF-8 encoding: character offset equals byte offset
-            offset.saturating_sub(line_start)
-        }
-        PositionEncoding::UTF16 => {
-            // UTF-16 encoding: count UTF-16 code units
-            let line_start_usize = line_start as usize;
-            let offset_usize = offset as usize;
-            if offset_usize <= line_start_usize || offset_usize > source_text.len() {
-                0
-            } else {
-                // Get the slice from line start to offset
-                let slice = &source_text[line_start_usize..offset_usize.min(source_text.len())];
-                // Count UTF-16 code units
-                u32::try_from(slice.encode_utf16().count()).unwrap_or(0)
-            }
-        }
-        PositionEncoding::UTF32 => {
-            // UTF-32 encoding: count Unicode codepoints (characters)
-            let line_start_usize = line_start as usize;
-            let offset_usize = offset as usize;
-            if offset_usize <= line_start_usize || offset_usize > source_text.len() {
-                0
-            } else {
-                // Get the slice from line start to offset
-                let slice = &source_text[line_start_usize..offset_usize.min(source_text.len())];
-                // Count characters
-                u32::try_from(slice.chars().count()).unwrap_or(0)
-            }
-        }
-    };
-
-    lsp_types::Position {
-        line: u32::try_from(line).unwrap_or(0),
-        character,
-    }
-}
-
 pub(super) trait WithDiagnostics {
     /// The position encoding negotiated with the LSP client.
     /// This is essential for correct character position calculation in files
@@ -158,7 +81,7 @@ pub(super) trait WithDiagnostics {
     fn diagnostics_by_file(
         &self,
         position_encoding: PositionEncoding,
-    ) -> std::collections::HashMap<std::path::PathBuf, Vec<lsp_types::Diagnostic>>;
+    ) -> DiagnosticRead<DiagnosticCandidate>;
 }
 
 impl WithDiagnostics for crate::project::BexProject {
@@ -166,15 +89,17 @@ impl WithDiagnostics for crate::project::BexProject {
     fn diagnostics_by_file(
         &self,
         position_encoding: PositionEncoding,
-    ) -> std::collections::HashMap<std::path::PathBuf, Vec<lsp_types::Diagnostic>> {
-        let Ok(db) = self.db.try_lock() else {
-            log::warn!("diagnostics_by_file: db mutex already locked, skipping");
-            return HashMap::new();
+    ) -> DiagnosticRead<DiagnosticCandidate> {
+        let db = match self.db.try_lock() {
+            Ok(db) => db,
+            Err(std::sync::TryLockError::WouldBlock) => return DiagnosticRead::Busy,
+            Err(std::sync::TryLockError::Poisoned(_)) => return DiagnosticRead::Poisoned,
         };
+        let source_snapshot = db.source_snapshot();
 
         let source_files = db.get_source_files();
 
-        let mut file_sources: HashMap<baml_base::FileId, (String, Vec<u32>)> = HashMap::new();
+        let mut file_sources: HashMap<baml_base::FileId, String> = HashMap::new();
         let mut file_paths: HashMap<baml_base::FileId, std::path::PathBuf> = HashMap::new();
         let mut diags_by_file: Vec<(
             std::path::PathBuf,
@@ -182,17 +107,16 @@ impl WithDiagnostics for crate::project::BexProject {
         )> = Vec::new();
 
         for file in &source_files {
-            let file_id = file.file_id(&*db);
+            let file_id = file.file_id(&**db);
             let Some(path) = db.file_id_to_path(file_id).cloned() else {
                 continue;
             };
 
-            let text = file.text(&*db).clone();
-            let line_starts = compute_line_starts(&text);
-            file_sources.insert(file_id, (text, line_starts));
+            let text = file.text(&**db).clone();
+            file_sources.insert(file_id, text);
             file_paths.insert(file_id, path.clone());
 
-            let diags = baml_lsp2_actions::check_file(&*db, *file);
+            let diags = baml_lsp2_actions::check_file(&**db, *file);
             diags_by_file.push((path, diags));
         }
 
@@ -216,23 +140,85 @@ impl WithDiagnostics for crate::project::BexProject {
             }
         }
 
-        grouped
+        let source_texts = file_paths
+            .iter()
+            .filter_map(|(file_id, path)| {
+                file_sources.get(file_id).map(|text| {
+                    (
+                        FsPath::from_str(path.to_string_lossy().into_owned()),
+                        text.clone(),
+                    )
+                })
+            })
+            .collect();
+
+        DiagnosticRead::Ready(DiagnosticCandidate {
+            source_revision: source_snapshot.revision,
+            documents: grouped,
+            source_texts,
+        })
     }
 }
 
-/// Build line starts for a source file.
-///
-/// Returns byte offsets of each line start. Uses `char_indices()` to get
-/// byte positions rather than character indices, which is essential for
-/// files containing multi-byte UTF-8 characters.
-pub(super) fn compute_line_starts(source: &str) -> Vec<u32> {
-    let mut line_starts = vec![0];
-    for (byte_offset, c) in source.char_indices() {
-        if c == '\n' {
-            // The next line starts at byte_offset + 1
-            // (newline '\n' is always 1 byte in UTF-8)
-            line_starts.push(u32::try_from(byte_offset + 1).unwrap_or(0));
-        }
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::project::BexProject;
+
+    fn project() -> Arc<BexProject> {
+        Arc::new(BexProject::new(
+            &vfs::VfsPath::new(vfs::MemoryFS::new()),
+            Arc::new(sys_ops::SysOpsBuilder::new().build()),
+        ))
     }
-    line_starts
+
+    #[test]
+    fn invalid_open_document_produces_revision_and_version_tagged_diagnostics() {
+        let project = project();
+        let path = FsPath::from_str("/main.baml".to_string());
+        let uri = lsp_types::Url::parse("file:///main.baml").expect("valid test URI");
+        let text = "function f() -> int {".to_string();
+        let revision = project.apply_open_document(path.clone(), uri, 8, text.clone());
+
+        let DiagnosticRead::Ready(candidate) = project.diagnostics_by_file(PositionEncoding::Utf16)
+        else {
+            panic!("an uncontended invalid document should produce diagnostics");
+        };
+
+        assert_eq!(candidate.source_revision, revision);
+        assert_eq!(candidate.source_texts.get(&path), Some(&text));
+        assert!(
+            candidate
+                .documents
+                .get(std::path::Path::new("/main.baml"))
+                .is_some_and(|diagnostics| !diagnostics.is_empty()),
+            "the final invalid edit must remain publishable without an engine"
+        );
+    }
+
+    #[test]
+    #[cfg(panic = "unwind")]
+    fn diagnostics_distinguish_busy_from_poison() {
+        let busy_project = project();
+        let source_guard = busy_project.db.lock().expect("source lock");
+        assert!(matches!(
+            busy_project.diagnostics_by_file(PositionEncoding::Utf16),
+            DiagnosticRead::Busy
+        ));
+        drop(source_guard);
+
+        let poisoned_project = project();
+        let poisoner = poisoned_project.clone();
+        let poison = std::thread::spawn(move || {
+            let _guard = poisoner.db.lock().expect("source lock");
+            panic!("poison diagnostics source gate for the unwind-enabled unit test");
+        });
+        assert!(poison.join().is_err());
+        assert!(matches!(
+            poisoned_project.diagnostics_by_file(PositionEncoding::Utf16),
+            DiagnosticRead::Poisoned
+        ));
+    }
 }

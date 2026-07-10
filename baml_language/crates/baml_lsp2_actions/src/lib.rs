@@ -1,8 +1,9 @@
 //! `baml_lsp2_actions` — IDE action layer built on top of compiler2.
 //!
-//! Modeled after ruff's `ty_ide` crate: regular functions (not Salsa queries)
-//! that take `&dyn Db` and return domain types. Internally they call Salsa
-//! queries from `baml_compiler2_hir` and `baml_compiler2_tir` for cached data.
+//! Modeled after ruff's `ty_ide` crate: IDE functions take `&dyn Db` and return
+//! domain types. Most are regular functions that call cached compiler queries;
+//! frequently repeated whole-file products such as outlines, annotations, and
+//! semantic tokens are Salsa-tracked directly.
 //!
 //! ## Phase 1
 //!
@@ -88,7 +89,7 @@ pub trait Db: baml_compiler2_tir::Db {}
 // ── Public API re-exports ─────────────────────────────────────────────────────
 
 pub use actions::{FileAction, FileActionKind, file_actions};
-pub use annotations::{AnnotationKind, InlineAnnotation, annotations};
+pub use annotations::{AnnotationKind, InlineAnnotation};
 // Re-export `DefinitionKind` so callers (e.g. bex_project) don't need to
 // depend on `baml_compiler2_hir` directly just for type conversions.
 pub use baml_compiler2_hir::contributions::DefinitionKind;
@@ -110,3 +111,12 @@ pub use search::{SymbolInfo, search_symbols};
 pub use tokens::{SemanticToken, SemanticTokenType, TOKEN_TYPES, semantic_tokens};
 pub use type_info::{FunctionParamInfo, TypeInfo, type_at};
 pub use usages::usages_at;
+
+/// Return the Salsa-memoized inline annotations for `file`.
+///
+/// This wrapper preserves the crate-root API without re-exporting Salsa's
+/// generated query type into the same namespace as the public `annotations`
+/// module.
+pub fn annotations(db: &dyn Db, file: baml_base::SourceFile) -> &Vec<InlineAnnotation> {
+    annotations::annotations(db, file)
+}

@@ -12,6 +12,11 @@ import {
 
 beforeAll(() => {
   HTMLElement.prototype.scrollTo ??= vi.fn();
+  globalThis.ResizeObserver ??= class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
 });
 
 describe('ExecutionPanel StrictMode lifecycle', () => {
@@ -651,6 +656,782 @@ describe('ExecutionPanel args form', () => {
         ),
       ).toBe(true);
     });
+  });
+});
+
+describe('ExecutionPanel demand-gated project runtime', () => {
+  it('reacquires the selected lease after a transport session reset', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+    const catalog = (sessionEpoch: number): WorkerOutMessage => ({
+      type: 'playgroundNotification',
+      notification: {
+        type: 'listProjects',
+        sessionEpoch,
+        projects: ['/project'],
+        entries: [
+          { project: '/project', incarnation: 1, sourceRevision: 1 },
+        ],
+      },
+    });
+
+    act(() => {
+      port.emit({ type: 'runtimeSessionReset', sessionEpoch: 1 });
+      port.emit(catalog(1));
+    });
+    await waitFor(() => {
+      expect(
+        port.sent.filter((message) => message.type === 'ensureProjectRuntime'),
+      ).toHaveLength(1);
+    });
+
+    act(() => {
+      port.emit({ type: 'runtimeSessionReset', sessionEpoch: 2 });
+      port.emit(catalog(2));
+    });
+
+    await waitFor(() => {
+      expect(
+        port.sent.filter((message) => message.type === 'ensureProjectRuntime'),
+      ).toHaveLength(2);
+    });
+  });
+
+  it('retains the last test tree and shows a qualified collection error', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+    const treeBytes = Array.from(
+      new TextEncoder().encode(
+        JSON.stringify([{ type: 'test', name: 'suite/kept' }]),
+      ),
+    );
+
+    act(() => {
+      port.emit({ type: 'runtimeSessionReset', sessionEpoch: 9 });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          sessionEpoch: 9,
+          projects: ['/project'],
+          entries: [
+            { project: '/project', incarnation: 2, sourceRevision: 8 },
+          ],
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          sessionEpoch: 9,
+          project: '/project',
+          update: {
+            sourceRevision: 8,
+            projectIncarnation: 2,
+            runtime: {
+              state: 'ready',
+              requestedRevision: 8,
+              installedRevision: 8,
+              generation: 4,
+              hasLastKnownGood: true,
+            },
+            isBexCurrent: true,
+            functions: [],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    expect(await screen.findByTitle('Re-collect tests')).toBeEnabled();
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'testCollectionResult',
+          sessionEpoch: 9,
+          project: '/project',
+          projectIncarnation: 2,
+          sourceRevision: 8,
+          generation: 4,
+          collectionEpoch: 1,
+          callId: 10,
+          data: treeBytes,
+        },
+      });
+    });
+
+    expect(await screen.findByText('kept')).toBeInTheDocument();
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'testCollectionResult',
+          sessionEpoch: 8,
+          project: '/project',
+          projectIncarnation: 2,
+          sourceRevision: 8,
+          generation: 4,
+          collectionEpoch: 2,
+          callId: 11,
+          data: [],
+          collectionError: 'stale collection error',
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'testCollectionResult',
+          sessionEpoch: 9,
+          project: '/project',
+          projectIncarnation: 2,
+          sourceRevision: 8,
+          generation: 4,
+          collectionEpoch: 2,
+          callId: 12,
+          data: [],
+          collectionError: 'collector exploded',
+        },
+      });
+    });
+
+    expect(await screen.findByText('collector exploded')).toBeInTheDocument();
+    expect(screen.queryByText('stale collection error')).not.toBeInTheDocument();
+    expect(screen.getByText('kept')).toBeInTheDocument();
+  });
+
+  it('retains a source-stale test tree but disables its launches', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+    const treeBytes = Array.from(
+      new TextEncoder().encode(
+        JSON.stringify([{ type: 'test', name: 'suite/kept' }]),
+      ),
+    );
+
+    act(() => {
+      port.emit({ type: 'runtimeSessionReset', sessionEpoch: 10 });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          sessionEpoch: 10,
+          projects: ['/project'],
+          entries: [
+            { project: '/project', incarnation: 2, sourceRevision: 8 },
+          ],
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          sessionEpoch: 10,
+          project: '/project',
+          update: {
+            sourceRevision: 8,
+            projectIncarnation: 2,
+            runtime: {
+              state: 'ready',
+              requestedRevision: 8,
+              installedRevision: 8,
+              generation: 4,
+              hasLastKnownGood: true,
+            },
+            isBexCurrent: true,
+            functions: [],
+            diagnostics: [],
+          },
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'testCollectionResult',
+          sessionEpoch: 10,
+          project: '/project',
+          projectIncarnation: 2,
+          sourceRevision: 8,
+          generation: 4,
+          collectionEpoch: 1,
+          callId: 10,
+          data: treeBytes,
+        },
+      });
+    });
+
+    expect(await screen.findByText('kept')).toBeInTheDocument();
+    expect(screen.getByTitle('Run test: suite/kept')).toBeEnabled();
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          sessionEpoch: 10,
+          projects: ['/project'],
+          entries: [
+            { project: '/project', incarnation: 2, sourceRevision: 9 },
+          ],
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          sessionEpoch: 10,
+          project: '/project',
+          update: {
+            sourceRevision: 9,
+            projectIncarnation: 2,
+            runtime: {
+              state: 'blockedByDiagnostics',
+              requestedRevision: 9,
+              installedRevision: 8,
+              generation: 4,
+              hasLastKnownGood: true,
+            },
+            isBexCurrent: false,
+            functions: [],
+            diagnostics: [{ severity: 'error', message: 'invalid source' }],
+          },
+        },
+      });
+    });
+
+    expect(await screen.findByText('stale')).toBeInTheDocument();
+    expect(screen.getByText('kept')).toBeInTheDocument();
+    expect(screen.getByTitle('Run test: suite/kept')).toBeDisabled();
+  });
+
+  it('stales a test tree when runtime inputs rebuild the same source revision', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+    const treeBytes = Array.from(
+      new TextEncoder().encode(
+        JSON.stringify([{ type: 'test', name: 'suite/current' }]),
+      ),
+    );
+    const emitRuntime = (
+      state: 'building' | 'ready',
+      generation: number,
+    ) => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          sessionEpoch: 11,
+          project: '/project',
+          update: {
+            sourceRevision: 8,
+            projectIncarnation: 2,
+            runtime: {
+              state,
+              requestedRevision: 8,
+              installedRevision: state === 'ready' ? 8 : null,
+              generation,
+              hasLastKnownGood: true,
+            },
+            isBexCurrent: state === 'ready',
+            functions: [],
+            diagnostics: [],
+          },
+        },
+      });
+    };
+    const emitCollection = (generation: number, collectionEpoch: number) => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'testCollectionResult',
+          sessionEpoch: 11,
+          project: '/project',
+          projectIncarnation: 2,
+          sourceRevision: 8,
+          generation,
+          collectionEpoch,
+          callId: collectionEpoch,
+          data: treeBytes,
+        },
+      });
+    };
+
+    act(() => {
+      port.emit({ type: 'runtimeSessionReset', sessionEpoch: 11 });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          sessionEpoch: 11,
+          projects: ['/project'],
+          entries: [
+            { project: '/project', incarnation: 2, sourceRevision: 8 },
+          ],
+        },
+      });
+      emitRuntime('ready', 4);
+      emitCollection(4, 1);
+    });
+
+    expect(await screen.findByTitle('Run test: suite/current')).toBeEnabled();
+
+    act(() => emitRuntime('building', 4));
+    expect(await screen.findByText('stale')).toBeInTheDocument();
+    expect(screen.getByTitle('Run test: suite/current')).toBeDisabled();
+
+    act(() => emitRuntime('ready', 5));
+    expect(screen.getByTitle('Run test: suite/current')).toBeDisabled();
+
+    act(() => emitCollection(5, 2));
+    await waitFor(() => {
+      expect(screen.queryByText('stale')).not.toBeInTheDocument();
+      expect(screen.getByTitle('Run test: suite/current')).toBeEnabled();
+    });
+  });
+
+  it('fences CFG responses by session, generation, and derived epoch', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({ type: 'runtimeSessionReset', sessionEpoch: 5 });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          sessionEpoch: 5,
+          projects: ['/project'],
+          entries: [
+            { project: '/project', incarnation: 3, sourceRevision: 12 },
+          ],
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          sessionEpoch: 5,
+          project: '/project',
+          update: {
+            sourceRevision: 12,
+            projectIncarnation: 3,
+            runtime: {
+              state: 'ready',
+              requestedRevision: 12,
+              installedRevision: 12,
+              generation: 4,
+              hasLastKnownGood: true,
+            },
+            isBexCurrent: true,
+            functions: [
+              { name: 'Workflow', kind: 'expr', origin: 'userDefined' },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Workflow' }));
+    await waitFor(() => {
+      expect(
+        port.sent.some(
+          (message) =>
+            message.type === 'requestControlFlowGraph' &&
+            message.functionName === 'Workflow',
+        ),
+      ).toBe(true);
+    });
+
+    act(() => {
+      port.emit({
+        type: 'controlFlowGraphResult',
+        sessionEpoch: 4,
+        project: '/project',
+        projectIncarnation: 3,
+        sourceRevision: 12,
+        generation: 4,
+        derivedEpoch: 2,
+        functionName: 'Workflow',
+        graph: graphFixture('WrongSession'),
+      });
+      port.emit({
+        type: 'controlFlowGraphResult',
+        sessionEpoch: 5,
+        project: '/project',
+        projectIncarnation: 3,
+        sourceRevision: 12,
+        generation: 3,
+        derivedEpoch: 2,
+        functionName: 'Workflow',
+        graph: graphFixture('WrongGeneration'),
+      });
+    });
+
+    expect(screen.queryByText('WrongSession')).not.toBeInTheDocument();
+    expect(screen.queryByText('WrongGeneration')).not.toBeInTheDocument();
+
+    act(() => {
+      port.emit({
+        type: 'controlFlowGraphResult',
+        sessionEpoch: 5,
+        project: '/project',
+        projectIncarnation: 3,
+        sourceRevision: 12,
+        generation: 4,
+        derivedEpoch: 2,
+        functionName: 'Workflow',
+        graph: graphFixture('CurrentGraph'),
+      });
+    });
+    expect(await screen.findByText('CurrentGraph')).toBeInTheDocument();
+
+    act(() => {
+      port.emit({
+        type: 'controlFlowGraphResult',
+        sessionEpoch: 5,
+        project: '/project',
+        projectIncarnation: 3,
+        sourceRevision: 12,
+        generation: 4,
+        derivedEpoch: 1,
+        functionName: 'Workflow',
+        graph: graphFixture('RegressiveGraph'),
+      });
+    });
+    expect(screen.queryByText('RegressiveGraph')).not.toBeInTheDocument();
+    expect(screen.getByText('CurrentGraph')).toBeInTheDocument();
+  });
+
+  it('moves one selected-project lease instead of warming the catalog', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          projects: ['/a', '/b'],
+          entries: [
+            { project: '/a', incarnation: 1, sourceRevision: 1 },
+            { project: '/b', incarnation: 4, sourceRevision: 9 },
+          ],
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        port.sent.filter((message) => message.type === 'ensureProjectRuntime'),
+      ).toHaveLength(1);
+    });
+    expect(
+      port.sent.find((message) => message.type === 'ensureProjectRuntime'),
+    ).toMatchObject({ project: '/a', incarnation: 1 });
+
+    fireEvent.click(await screen.findByRole('button', { name: '/b' }));
+
+    await waitFor(() => {
+      const leaseMessages = port.sent.filter(
+        (message) =>
+          message.type === 'ensureProjectRuntime' ||
+          message.type === 'releaseProjectRuntime',
+      );
+      expect(leaseMessages).toHaveLength(3);
+      expect(leaseMessages.slice(-2)).toEqual([
+        {
+          type: 'releaseProjectRuntime',
+          requestId: expect.any(Number),
+          project: '/a',
+          incarnation: 1,
+        },
+        {
+          type: 'ensureProjectRuntime',
+          requestId: expect.any(Number),
+          project: '/b',
+          incarnation: 4,
+        },
+      ]);
+    });
+  });
+
+  it('clears project-scoped selection before rendering the next project', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+
+    const readyUpdate = (
+      project: string,
+      incarnation: number,
+      sourceRevision: number,
+      functionName: string,
+    ): WorkerOutMessage => ({
+      type: 'playgroundNotification',
+      notification: {
+        type: 'updateProject',
+        project,
+        update: {
+          sourceRevision,
+          projectIncarnation: incarnation,
+          runtime: {
+            state: 'ready',
+            requestedRevision: sourceRevision,
+            installedRevision: sourceRevision,
+            generation: incarnation,
+            hasLastKnownGood: true,
+          },
+          isBexCurrent: true,
+          functions: [
+            { name: functionName, kind: 'expr', origin: 'userDefined' },
+          ],
+          diagnostics: [],
+        },
+      },
+    });
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          projects: ['/a', '/b'],
+          entries: [
+            { project: '/a', incarnation: 1, sourceRevision: 1 },
+            { project: '/b', incarnation: 2, sourceRevision: 3 },
+          ],
+        },
+      });
+      port.emit(readyUpdate('/a', 1, 1, 'FunctionA'));
+      port.emit(readyUpdate('/b', 2, 3, 'FunctionB'));
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'FunctionA' }));
+    expect(
+      await screen.findByText('Press Run to execute FunctionA()'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '/b' }));
+
+    expect(
+      screen.queryByText('Press Run to execute FunctionA()'),
+    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'FunctionB' })).toBeInTheDocument();
+  });
+
+  it('renders preparation immediately and rejects stale project payloads', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          projects: ['/project'],
+          entries: [
+            { project: '/project', incarnation: 2, sourceRevision: 8 },
+          ],
+        },
+      });
+    });
+
+    expect(await screen.findByText('Preparing current build…')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(port.sent).toContainEqual({
+        type: 'ensureProjectRuntime',
+        requestId: expect.any(Number),
+        project: '/project',
+        incarnation: 2,
+      });
+    });
+    expect(screen.getByTitle('Re-collect tests')).toBeDisabled();
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: '/project',
+          update: {
+            sourceRevision: 7,
+            projectIncarnation: 2,
+            runtime: {
+              state: 'ready',
+              requestedRevision: 7,
+              installedRevision: 7,
+              hasLastKnownGood: true,
+            },
+            isBexCurrent: true,
+            functions: [
+              { name: 'StaleFunction', kind: 'expr', origin: 'userDefined' },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+    expect(screen.queryByText('StaleFunction')).not.toBeInTheDocument();
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: '/project',
+          update: {
+            sourceRevision: 8,
+            projectIncarnation: 2,
+            runtime: {
+              state: 'ready',
+              requestedRevision: 8,
+              installedRevision: 8,
+              generation: 4,
+              hasLastKnownGood: true,
+            },
+            isBexCurrent: true,
+            functions: [
+              { name: 'CurrentFunction', kind: 'expr', origin: 'userDefined' },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    expect(await screen.findByRole('button', { name: 'CurrentFunction' })).toBeInTheDocument();
+    expect(screen.getByTitle('Re-collect tests')).toBeEnabled();
+  });
+
+  it('purges cached state when a project is removed and re-added', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+
+    const emitCatalog = (incarnation: number, sourceRevision: number) => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          projects: ['/project'],
+          entries: [{ project: '/project', incarnation, sourceRevision }],
+        },
+      });
+    };
+    const emitReady = (incarnation: number, sourceRevision: number, name: string) => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: '/project',
+          update: {
+            sourceRevision,
+            projectIncarnation: incarnation,
+            runtime: {
+              state: 'ready',
+              requestedRevision: sourceRevision,
+              installedRevision: sourceRevision,
+              generation: incarnation,
+              hasLastKnownGood: true,
+            },
+            isBexCurrent: true,
+            functions: [{ name, kind: 'expr', origin: 'userDefined' }],
+            diagnostics: [],
+          },
+        },
+      });
+    };
+
+    act(() => {
+      emitCatalog(1, 3);
+      emitReady(1, 3, 'OldFunction');
+    });
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    expect(await screen.findByRole('button', { name: 'OldFunction' })).toBeInTheDocument();
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: [], entries: [] },
+      });
+      emitCatalog(2, 1);
+      emitReady(1, 99, 'LateOldFunction');
+    });
+
+    expect(await screen.findByText('Preparing current build…')).toBeInTheDocument();
+    expect(screen.queryByText('OldFunction')).not.toBeInTheDocument();
+    expect(screen.queryByText('LateOldFunction')).not.toBeInTheDocument();
+
+    act(() => emitReady(2, 1, 'NewFunction'));
+    expect(await screen.findByRole('button', { name: 'NewFunction' })).toBeInTheDocument();
+  });
+
+  it('retries a terminal build only after the explicit Retry build action', async () => {
+    const port = new FakeRuntimePort();
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'listProjects',
+          projects: ['/project'],
+          entries: [
+            { project: '/project', incarnation: 1, sourceRevision: 5 },
+          ],
+        },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: '/project',
+          update: {
+            sourceRevision: 5,
+            projectIncarnation: 1,
+            runtime: {
+              state: 'failed',
+              requestedRevision: 5,
+              installedRevision: 4,
+              hasLastKnownGood: true,
+              error: '$init failed',
+            },
+            isBexCurrent: false,
+            functions: [
+              { name: 'LastGoodFunction', kind: 'expr', origin: 'userDefined' },
+            ],
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    expect(await screen.findByText('$init failed')).toBeInTheDocument();
+    expect(
+      port.sent.filter((message) => message.type === 'retryProjectRuntime'),
+    ).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry build' }));
+
+    expect(await screen.findByText('Preparing current build…')).toBeInTheDocument();
+    expect(
+      port.sent.filter(
+        (message) =>
+          message.type === 'retryProjectRuntime' &&
+          message.project === '/project' &&
+          message.incarnation === 1,
+      ),
+    ).toHaveLength(1);
   });
 });
 

@@ -462,6 +462,9 @@ importers:
         specifier: ^9.0.1
         version: 9.0.1
     devDependencies:
+      '@types/node':
+        specifier: ^22.19.3
+        version: 22.19.3
       '@types/react':
         specifier: 18.3.26
         version: 18.3.26
@@ -9419,7 +9422,7 @@ snapshots:
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:
-      '@types/node': 24.12.4
+      '@types/node': 22.19.3
 
   '@types/statuses@2.0.6': {}
 

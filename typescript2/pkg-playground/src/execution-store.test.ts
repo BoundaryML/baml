@@ -91,6 +91,31 @@ describe('execution-store', () => {
     expect(next.result?.value).toBe('ok');
   });
 
+  it('ignores duplicate or regressive patches already covered by a snapshot', () => {
+    const terminal = runFixture('run-1', 100, {
+      cursor: 5,
+      status: 'succeeded',
+    });
+    const stalePatch: RunPatch = {
+      boundaryId: 'run-1',
+      cursor: 4,
+      changes: [{ type: 'setStatus', status: 'running' }],
+    };
+    const duplicatePatch: RunPatch = {
+      ...stalePatch,
+      cursor: 5,
+    };
+
+    expect(applyRunPatch(terminal, stalePatch)).toMatchObject({
+      cursor: 5,
+      status: 'succeeded',
+    });
+    expect(applyRunPatch(terminal, duplicatePatch)).toMatchObject({
+      cursor: 5,
+      status: 'succeeded',
+    });
+  });
+
   it('keeps snapshots sorted and notifies subscribers', () => {
     const store = createExecutionStore(mockRunStoreClient());
     const listener = vi.fn();
@@ -109,6 +134,25 @@ describe('execution-store', () => {
     ]);
 
     unsubscribe();
+    store.dispose();
+  });
+
+  it('does not let an older snapshot regress a newer run cursor', () => {
+    const store = createExecutionStore(mockRunStoreClient());
+    store.applySnapshot(
+      runFixture('run-1', 100, { cursor: 5, status: 'succeeded' }),
+    );
+    store.applySnapshot(
+      runFixture('run-1', 100, { cursor: 4, status: 'running' }),
+    );
+    store.applySnapshot(
+      runFixture('run-1', 100, { cursor: 5, status: 'running' }),
+    );
+
+    expect(store.getSnapshot().runs[0]).toMatchObject({
+      cursor: 5,
+      status: 'succeeded',
+    });
     store.dispose();
   });
 

@@ -27,6 +27,16 @@ macro_rules! define_lsp_notification_trait {
             pub trait BexLspNotification {
                 /// Dispatch an incoming notification to the appropriate handler method.
                 fn handle_notification(&self, notif: lsp_server::Notification) {
+                    let _ = self.handle_notification_with_status(notif);
+                }
+
+                /// Dispatch and report whether the mutation was accepted.
+                /// Transport ownership/persistence bookkeeping must happen
+                /// only after this returns true.
+                fn handle_notification_with_status(
+                    &self,
+                    notif: lsp_server::Notification,
+                ) -> bool {
                     let is_log_message = notif.method.as_str() == "window/logMessage";
                     let result = match notif.method.as_str() {
                         $(
@@ -40,14 +50,15 @@ macro_rules! define_lsp_notification_trait {
                         other => Err(LspError::NotificationNotSupported(other.to_string())),
                     };
                     match result {
-                        Ok(()) => (),
+                        Ok(()) => true,
                         Err(err) => {
                             if !is_log_message {
                                 let _ = self.send_notification_log_message(lsp_types::LogMessageParams {
                                         typ: lsp_types::MessageType::ERROR,
                                         message: err.to_string(),
-                                    });
+                                });
                             }
+                            false
                         }
                     }
                 }

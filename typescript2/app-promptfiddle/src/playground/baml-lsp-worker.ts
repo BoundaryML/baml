@@ -60,6 +60,7 @@ declare const self: DedicatedWorkerGlobalScope;
 // ---------------------------------------------------------------------------
 
 let disposed = false;
+let activePlaygroundSessionEpoch: number | undefined;
 
 function dispose(): void {
   if (disposed) return;
@@ -256,6 +257,24 @@ function runtimeForCommand(
   return null;
 }
 
+/** Optional during the atomically-shipped WASM bridge transition. */
+interface RuntimeDemandApi {
+  ensureProjectRuntime?: (
+    project: string,
+    incarnation?: number,
+  ) => Promise<unknown> | unknown;
+  releaseProjectRuntime?: (project: string, incarnation?: number) => void;
+  retryProjectRuntime?: (
+    project: string,
+    incarnation?: number,
+  ) => Promise<unknown> | unknown;
+  runtimeInputsChanged?: () => void;
+}
+
+function runtimeDemandApi(): RuntimeDemandApi | null {
+  return runtime as unknown as RuntimeDemandApi | null;
+}
+
 // ---------------------------------------------------------------------------
 // Fetch logging (proxied to main thread for UI)
 // ---------------------------------------------------------------------------
@@ -392,16 +411,31 @@ export function mapsToRecordsDeep<T>(input: T): T {
 
 
 function onPlaygroundNotification(notification: PlaygroundNotification): void {
+  const workerNotification =
+    notification as unknown as WorkerPlaygroundNotification;
+  if (!acceptPlaygroundNotificationSession(workerNotification)) return;
+
   // Request-response messages get unwrapped to top-level WorkerOutMessage.
   // Only unsolicited push notifications stay wrapped in playgroundNotification.
   switch (notification.type) {
-    case "controlFlowGraphResult":
+    case "controlFlowGraphResult": {
+      const qualified = notification as unknown as Extract<
+        WorkerPlaygroundNotification,
+        { type: "controlFlowGraphResult" }
+      >;
       postOut({
         type: "controlFlowGraphResult",
+        sessionEpoch: qualified.sessionEpoch,
+        project: qualified.project,
+        projectIncarnation: qualified.projectIncarnation,
+        sourceRevision: qualified.sourceRevision,
+        generation: qualified.generation,
+        derivedEpoch: qualified.derivedEpoch,
         functionName: notification.functionName,
         graph: notification.graph ?? null,
       });
       break;
+    }
     case "cursorContext":
       postOut({
         type: "cursorContext",
@@ -485,8 +519,32 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
     default:
       // Cast to worker-protocol type: the WASM-generated type uses `string` for severity
       // while the protocol narrows it to a literal union; the runtime values are always valid.
-      postOut({ type: "playgroundNotification", notification: notification as unknown as WorkerPlaygroundNotification });
+      postOut({ type: "playgroundNotification", notification: workerNotification });
   }
+}
+
+function acceptPlaygroundNotificationSession(
+  notification: WorkerPlaygroundNotification,
+): boolean {
+  if (
+    notification.type !== "listProjects" &&
+    notification.type !== "updateProject" &&
+    notification.type !== "controlFlowGraphResult" &&
+    notification.type !== "testCollectionResult"
+  ) {
+    return true;
+  }
+
+  const epoch = notification.sessionEpoch;
+  if (epoch === undefined) return activePlaygroundSessionEpoch === undefined;
+  if (
+    activePlaygroundSessionEpoch === undefined ||
+    epoch > activePlaygroundSessionEpoch
+  ) {
+    activePlaygroundSessionEpoch = epoch;
+    postOut({ type: "runtimeSessionReset", sessionEpoch: epoch });
+  }
+  return epoch === activePlaygroundSessionEpoch;
 }
 
 // ---------------------------------------------------------------------------
@@ -718,7 +776,7 @@ self.onmessage = async (event: MessageEvent) => {
         const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
         if (!rt) return;
         try {
-          rt.startRun(
+          await rt.startRun(
             msg.requestId,
             msg.project,
             msg.functionName,
@@ -803,7 +861,7 @@ self.onmessage = async (event: MessageEvent) => {
         const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
         if (!rt) return;
         try {
-          rt.startPreviewRun(
+          await rt.startPreviewRun(
             msg.requestId,
             msg.project,
             msg.parentFunctionName,
@@ -827,7 +885,7 @@ self.onmessage = async (event: MessageEvent) => {
         const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
         if (!rt) return;
         try {
-          rt.startTestRun(
+          await rt.startTestRun(
             msg.requestId,
             msg.project,
             msg.generation,
@@ -1007,11 +1065,15 @@ self.onmessage = async (event: MessageEvent) => {
     }
 
     case "setEnvVar":
+      if (envVars[msg.key] === msg.value) return;
       envVars[msg.key] = msg.value;
+      runtimeDemandApi()?.runtimeInputsChanged?.();
       return;
 
     case "deleteEnvVar":
+      if (!(msg.key in envVars)) return;
       delete envVars[msg.key];
+      runtimeDemandApi()?.runtimeInputsChanged?.();
       return;
 
     case "filesChanged": {
@@ -1028,6 +1090,91 @@ self.onmessage = async (event: MessageEvent) => {
       runtime?.requestPlaygroundState();
       postOut({ type: "buildTime", value: getBuildTime() });
       return;
+
+    case "ensureProjectRuntime": {
+      const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
+      if (!rt) return;
+      try {
+        const ensure = runtimeDemandApi()?.ensureProjectRuntime;
+        if (ensure) {
+          const state = await ensure.call(rt, msg.project, msg.incarnation);
+          postOut({
+            type: "projectRuntimeState",
+            requestId: msg.requestId,
+            project: msg.project,
+            state: mapsToRecordsDeep(state),
+          } as WorkerOutMessage);
+        } else {
+          // Compatibility with an older, eagerly-built bridge. Its qualified
+          // update (or legacy isBexCurrent field) remains authoritative.
+          rt.requestPlaygroundState();
+          postOut({
+            type: "commandAck",
+            requestId: msg.requestId,
+            outcome: "accepted",
+          });
+        }
+      } catch (e) {
+        postOut({
+          type: "commandError",
+          requestId: msg.requestId,
+          code: "currentBuildUnavailable",
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case "releaseProjectRuntime": {
+      try {
+        runtimeDemandApi()?.releaseProjectRuntime?.(msg.project, msg.incarnation);
+        postOut({
+          type: "commandAck",
+          requestId: msg.requestId,
+          outcome: "accepted",
+        });
+      } catch (e) {
+        postOut({
+          type: "commandError",
+          requestId: msg.requestId,
+          code: "runtimeReleaseFailed",
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
+
+    case "retryProjectRuntime": {
+      const rt = runtimeForCommand(msg.requestId, "wasmRuntimeNotReady");
+      if (!rt) return;
+      try {
+        const retry = runtimeDemandApi()?.retryProjectRuntime;
+        if (retry) {
+          const state = await retry.call(rt, msg.project, msg.incarnation);
+          postOut({
+            type: "projectRuntimeState",
+            requestId: msg.requestId,
+            project: msg.project,
+            state: mapsToRecordsDeep(state),
+          } as WorkerOutMessage);
+        } else {
+          rt.requestPlaygroundState();
+          postOut({
+            type: "commandAck",
+            requestId: msg.requestId,
+            outcome: "accepted",
+          });
+        }
+      } catch (e) {
+        postOut({
+          type: "commandError",
+          requestId: msg.requestId,
+          code: "currentBuildUnavailable",
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+      return;
+    }
 
     case "requestControlFlowGraph":
       runtime?.requestControlFlowGraph(msg.project, msg.functionName);
