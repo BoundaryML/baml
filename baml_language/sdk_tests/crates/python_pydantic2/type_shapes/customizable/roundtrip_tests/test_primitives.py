@@ -52,6 +52,16 @@ def test_round_trip_float():
     assert round_trip_float(x=2.5) == 2.5
 
 
+def test_round_trip_float_accepts_int():
+    # A Python int into a float param widens at the FFI boundary (the wire
+    # encoder is value-shaped, so `7` arrives Rust-side as an int). The
+    # declared `-> float` must hand back a genuine float, not the int riding
+    # through unconverted.
+    result = round_trip_float(x=7)
+    assert isinstance(result, float)
+    assert result == 7.0
+
+
 def test_round_trip_string():
     assert round_trip_string(x="hi") == "hi"
 
@@ -78,3 +88,20 @@ def test_round_trip_primitives():
         uint8array_field=b"ab",
     )
     assert round_trip_primitives(p=p) == p
+
+
+def test_round_trip_primitives_float_field_accepts_int():
+    # An int into a float *field* is coerced by pydantic at construction, so
+    # it reaches the wire as a float already — pin that contract alongside the
+    # param-level widening above.
+    p = Primitives(
+        int_field=1,
+        float_field=2,
+        string_field="s",
+        bool_field=True,
+        null_field=None,
+        uint8array_field=b"ab",
+    )
+    assert isinstance(p.float_field, float)
+    result = round_trip_primitives(p=p)
+    assert result.float_field == 2.0
