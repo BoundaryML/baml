@@ -31,9 +31,13 @@ pub(crate) struct IdeInstallArgs {
     /// Install the active toolchain's BAML VSIX into VS Code.
     #[arg(long)]
     pub code: bool,
-    /// Copy the active toolchain's BAML VSIX into a directory for manual install.
-    #[arg(long, value_name = "PATH")]
-    pub path: Option<PathBuf>,
+    /// Copy the active toolchain's BAML VSIX into a directory for manual
+    /// install.
+    // Named `--dir` rather than `--path`: `--path` is ambiguous about
+    // whether it takes a file or a directory, and this flag only accepts
+    // a directory.
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
 }
 
 impl IdeArgs {
@@ -47,7 +51,7 @@ impl IdeArgs {
 impl IdeInstallArgs {
     pub fn run(&self) -> Result<ExitCode> {
         let vsix = active_toolchain_vsix()?;
-        if let Some(dir) = &self.path {
+        if let Some(dir) = &self.dir {
             fs::create_dir_all(dir)
                 .with_context(|| format!("failed to create {}", dir.display()))?;
             let dest = dir.join("baml-vscode.vsix");
@@ -86,11 +90,11 @@ impl IdeInstallArgs {
     fn resolve_editor(&self) -> Result<OsString> {
         if self.cursor {
             return command_on_path("cursor")
-                .ok_or_else(|| anyhow!("Cursor CLI `cursor` was not found on PATH"));
+                .ok_or_else(|| missing_ide_cli_error("Cursor", "cursor", HostOs::CURRENT));
         }
         if self.code {
             return command_on_path("code")
-                .ok_or_else(|| anyhow!("VS Code CLI `code` was not found on PATH"));
+                .ok_or_else(|| missing_ide_cli_error("VS Code", "code", HostOs::CURRENT));
         }
 
         let cursor = command_on_path("cursor");
@@ -102,12 +106,81 @@ impl IdeInstallArgs {
                 "both Cursor and VS Code CLIs were found; rerun with --cursor or --code"
             )),
             (None, None) => Err(anyhow!(
-                "no supported editor CLI was found.\nManual install commands:\n  cursor --install-extension {}\n  code --install-extension {}",
-                active_toolchain_vsix()?.display(),
-                active_toolchain_vsix()?.display()
+                r"failed to install the BAML extension automatically: no supported IDE CLI (`code` or `cursor`) was found on PATH.
+
+{help}",
+                help = manual_install_help("VS Code or Cursor", HostOs::CURRENT)
             )),
         }
     }
+}
+
+/// The IDE is often installed without its CLI shim (on macOS the `code`
+/// and `cursor` commands must be added to PATH by hand from inside the
+/// IDE), so a bare not-found error dead-ends users who do have the IDE.
+/// Explain what we could not do and walk through the manual install
+/// instead.
+fn missing_ide_cli_error(ide: &str, cli: &str, os: HostOs) -> anyhow::Error {
+    anyhow!(
+        r"failed to install the BAML extension into {ide} automatically: the `{cli}` CLI was not found on PATH.
+
+{help}",
+        help = manual_install_help(ide, os)
+    )
+}
+
+/// OS-specific wording for the manual-install guidance: the example
+/// downloads directory and the Command Palette chord. A parameter of
+/// [`manual_install_help`] so tests can cover every variant.
+#[derive(Clone, Copy, Debug)]
+enum HostOs {
+    MacOs,
+    Windows,
+    Linux,
+}
+
+impl HostOs {
+    /// The OS this binary was built for. Toolchains are per-platform, so
+    /// compile-time selection matches the machine the user is running on.
+    const CURRENT: Self = if cfg!(target_os = "macos") {
+        Self::MacOs
+    } else if cfg!(windows) {
+        Self::Windows
+    } else {
+        Self::Linux
+    };
+
+    /// A directory that exists on (or is at least meaningful to) every
+    /// desktop install of this OS.
+    fn example_dir(self) -> &'static str {
+        match self {
+            Self::Windows => r"%USERPROFILE%\Downloads",
+            Self::MacOs | Self::Linux => "~/Downloads",
+        }
+    }
+
+    fn palette_chord(self) -> &'static str {
+        match self {
+            Self::MacOs => "Cmd+Shift+P",
+            Self::Windows | Self::Linux => "Ctrl+Shift+P",
+        }
+    }
+}
+
+fn manual_install_help(ide: &str, os: HostOs) -> String {
+    format!(
+        r#"Install it manually instead:
+
+  1. Save baml-vscode.vsix somewhere easy to find:
+
+         baml ide install --dir {dir}
+
+  2. In {ide}, press {chord} and run "Extensions: Install from VSIX...".
+
+  3. Select the saved baml-vscode.vsix."#,
+        dir = os.example_dir(),
+        chord = os.palette_chord(),
+    )
 }
 
 fn active_toolchain_vsix() -> Result<PathBuf> {
@@ -142,4 +215,46 @@ fn command_on_path(command: &str) -> Option<OsString> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+
+    #[derive(Parser, Debug)]
+    struct Wrapper {
+        #[command(flatten)]
+        args: IdeInstallArgs,
+    }
+
+    #[test]
+    fn install_dir_flag_binds() {
+        let parsed = Wrapper::try_parse_from(["install", "--dir", "out"]).unwrap();
+        assert_eq!(parsed.args.dir, Some(PathBuf::from("out")));
+    }
+
+    /// Pin the missing-CLI error verbatim so any wording change is a
+    /// deliberate one. Windows exercises the OS-specific pieces (example
+    /// directory and Command Palette chord) that differ from the Unix
+    /// defaults.
+    #[test]
+    fn missing_ide_cli_error_suggests_manual_install() {
+        let msg = missing_ide_cli_error("VS Code", "code", HostOs::Windows).to_string();
+        assert_eq!(
+            msg,
+            r#"failed to install the BAML extension into VS Code automatically: the `code` CLI was not found on PATH.
+
+Install it manually instead:
+
+  1. Save baml-vscode.vsix somewhere easy to find:
+
+         baml ide install --dir %USERPROFILE%\Downloads
+
+  2. In VS Code, press Ctrl+Shift+P and run "Extensions: Install from VSIX...".
+
+  3. Select the saved baml-vscode.vsix."#
+        );
+    }
 }
