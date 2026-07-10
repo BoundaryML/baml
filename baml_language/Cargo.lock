@@ -1048,7 +1048,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "uuid",
  "vfs",
  "webbrowser",
 ]
