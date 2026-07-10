@@ -93,6 +93,11 @@ const nextConfig = {
         destination: '/',
         permanent: true,
       },
+      {
+        source: '/solutions',
+        destination: '/',
+        permanent: true,
+      },
     ];
   },
   async rewrites() {

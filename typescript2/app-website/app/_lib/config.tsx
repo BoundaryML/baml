@@ -539,7 +539,6 @@ export const siteConfig = {
       { href: '/podcast', id: 4, name: 'Podcast' },
       { href: '/who-are-we', id: 5, name: 'Team' },
       // { href: '/play', id: 5, name: 'Playground' },
-      // { href: '/solutions', id: 6, name: 'Solutions' },
       // { href: '/pricing', id: 7, name: 'Pricing' },
     ],
   },
