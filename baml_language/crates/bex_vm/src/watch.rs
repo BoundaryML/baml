@@ -201,7 +201,8 @@ pub enum Path {
     MapKey(String),
 }
 
-/// The emit dependency graph with incremental reachability maintenance.
+/// The emit dependency graph with incremental linking and complete
+/// recomputation after destructive topology changes.
 ///
 /// Public API consists of this set of operations:
 ///
@@ -308,6 +309,60 @@ impl Watch {
         visited
     }
 
+    /// Recomputes reachability from every active root and drops structural
+    /// graph entries that no active root can reach.
+    ///
+    /// Destructive topology changes cannot be updated locally in the general
+    /// case: cycles and shared descendants mean that removing one edge (or one
+    /// root) may leave a node reachable through another path. Rebuilding the
+    /// indexes from the remaining roots keeps these invariants in one place:
+    ///
+    /// - `children` contains only edges whose endpoints are actively watched;
+    /// - `parents` is the exact reverse of `children`;
+    /// - `reachable_from_root` and `roots_reaching_node` are exact inverses.
+    fn rebuild_reachability_and_prune(&mut self) {
+        if self.roots.is_empty() {
+            self.children.clear();
+            self.parents.clear();
+            self.reachable_from_root.clear();
+            self.roots_reaching_node.clear();
+            return;
+        }
+
+        let mut reachable_from_root = HashMap::with_capacity(self.roots.len());
+        let mut roots_reaching_node: HashMap<NodeId, HashSet<NodeId>> = HashMap::new();
+
+        for &root in self.roots.keys() {
+            let reachable = self.breadth_first_search_from(root);
+            for &node in &reachable {
+                roots_reaching_node.entry(node).or_default().insert(root);
+            }
+            reachable_from_root.insert(root, reachable);
+        }
+
+        let live_nodes: HashSet<NodeId> = roots_reaching_node.keys().copied().collect();
+        self.children.retain(|parent, edges| {
+            if !live_nodes.contains(parent) {
+                return false;
+            }
+            edges.retain(|(_, child)| live_nodes.contains(child));
+            !edges.is_empty()
+        });
+
+        self.parents.clear();
+        for (&parent, edges) in &self.children {
+            for (path, child) in edges {
+                self.parents
+                    .entry(*child)
+                    .or_default()
+                    .insert((parent, path.clone()));
+            }
+        }
+
+        self.reachable_from_root = reachable_from_root;
+        self.roots_reaching_node = roots_reaching_node;
+    }
+
     /// Registers a new emittable root at the given node.
     ///
     /// Triggers a BFS graph traversal starting at `root`.
@@ -331,73 +386,41 @@ impl Watch {
 
     /// Unregisters an emittable root (e.g., when it goes out of scope).
     ///
-    /// Scans all reachable nodes from root and updates cached indexes. It does
-    /// not fully traverse the graph starting at `root`.
+    /// Recomputes reachability from the remaining roots and removes graph
+    /// entries that are no longer watched. This is deliberately a complete
+    /// teardown operation: callers do not need to unlink the root's binding
+    /// separately.
     pub fn unregister_root(&mut self, root: NodeId) {
-        // Remove from active roots
-        self.roots.remove(&root);
+        self.unregister_roots([root]);
+    }
 
-        // Clean up reachability cache
-        if let Some(reachable) = self.reachable_from_root.remove(&root) {
-            for node in reachable {
-                if let Some(roots) = self.roots_reaching_node.get_mut(&node) {
-                    roots.remove(&root);
-                    if roots.is_empty() {
-                        self.roots_reaching_node.remove(&node);
-                    }
-                }
-            }
+    /// Unregisters multiple emittable roots with a single graph rebuild.
+    ///
+    /// Frame teardown can remove several watched locals at once. Removing all
+    /// of their root states before recomputing avoids rebuilding the same
+    /// surviving graph once per local.
+    pub fn unregister_roots(&mut self, roots: impl IntoIterator<Item = NodeId>) {
+        let mut removed_any = false;
+        for root in roots {
+            removed_any |= self.roots.remove(&root).is_some();
+        }
+        if removed_any {
+            self.rebuild_reachability_and_prune();
         }
     }
 
     /// Unlinks parent.path -> child from the graph.
     ///
-    /// Updates reachability incrementally for all affected roots.
+    /// Recomputes reachability from all active roots after removing the edge.
     pub fn unlink_edge(&mut self, parent: NodeId, path: Path, child: NodeId) {
         if let Some(edges) = self.children.get_mut(&parent) {
-            edges.remove(&(path.clone(), child));
+            edges.remove(&(path, child));
             if edges.is_empty() {
                 self.children.remove(&parent);
             }
         }
 
-        if let Some(edges) = self.parents.get_mut(&child) {
-            edges.remove(&(parent, path));
-            if edges.is_empty() {
-                self.parents.remove(&child);
-            }
-        }
-
-        // For each root that reaches the child, recompute reachability and
-        // remove unreachable nodes.
-        let roots_reaching = self.copy_roots_reaching(child);
-
-        for root in roots_reaching {
-            let still_reachable = self.breadth_first_search_from(root);
-
-            // Swap in the new reachable set, taking ownership of the old one
-            // without cloning.
-            let old_reachable = self
-                .reachable_from_root
-                .insert(root, still_reachable)
-                .unwrap_or_default();
-
-            let still_reachable = &self.reachable_from_root[&root];
-
-            // Update inverse index: remove root from nodes no longer reachable.
-            // If a node becomes unreachable from ALL roots, prune its graph
-            // edges to avoid stale entries (and dangling HeapPtrs after GC).
-            for node in old_reachable.difference(still_reachable) {
-                if let Some(roots) = self.roots_reaching_node.get_mut(node) {
-                    roots.remove(&root);
-                    if roots.is_empty() {
-                        self.roots_reaching_node.remove(node);
-                        self.children.remove(node);
-                        self.parents.remove(node);
-                    }
-                }
-            }
-        }
+        self.rebuild_reachability_and_prune();
     }
 
     /// Watched root state.
@@ -440,13 +463,16 @@ impl Watch {
 ///
 /// Free function to avoid borrow checker issues when calling from `BexVm`.
 pub fn track_watch_dependencies(watch: &mut Watch, parent: NodeId, path: Path, child_ptr: HeapPtr) {
+    // Collect roots reaching parent so we can propagate reachability.
+    let roots = watch.copy_roots_reaching(parent);
+    if roots.is_empty() {
+        return;
+    }
+
     let child = NodeId::HeapObject(child_ptr);
 
     // Add the top-level edge (e.g. root --Binding--> object).
     watch.add_edge(parent, path, child);
-
-    // Collect roots reaching parent so we can propagate reachability.
-    let roots = watch.copy_roots_reaching(parent);
 
     // Walk the heap from child, building edges and propagating reachability.
     let mut queue = VecDeque::new();
@@ -646,7 +672,7 @@ impl RootHaver for Watch {
     /// `debug_assert!(remap_was_traced(...))` calls below verify the
     /// invariant on every patched node.
     fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if forwarding.is_empty() || self.roots.is_empty() {
+        if forwarding.is_empty() {
             return;
         }
 
@@ -703,18 +729,56 @@ impl RootHaver for Watch {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::types::Instance;
 
     use super::*;
 
     fn test_root_state() -> RootState {
+        test_root_state_with_value(Value::int(0))
+    }
+
+    fn test_root_state_with_value(value: Value) -> RootState {
         RootState {
-            value: Value::int(0),
+            value,
             last_assigned: None,
             last_notified: None,
             channel: "Test".to_string(),
             filter: WatchFilter::Default,
         }
+    }
+
+    fn assert_graph_invariants(watch: &Watch) {
+        let mut expected_parents: HashMap<NodeId, HashSet<(NodeId, Path)>> = HashMap::new();
+        for (&parent, edges) in &watch.children {
+            assert!(
+                watch.roots_reaching_node.contains_key(&parent),
+                "unwatched parent retained in graph: {parent:?}"
+            );
+            for (path, child) in edges {
+                assert!(
+                    watch.roots_reaching_node.contains_key(child),
+                    "unwatched child retained in graph: {child:?}"
+                );
+                expected_parents
+                    .entry(*child)
+                    .or_default()
+                    .insert((parent, path.clone()));
+            }
+        }
+        assert_eq!(watch.parents, expected_parents);
+
+        let mut expected_inverse: HashMap<NodeId, HashSet<NodeId>> = HashMap::new();
+        for &root in watch.roots.keys() {
+            let reachable = watch.breadth_first_search_from(root);
+            assert_eq!(watch.reachable_from_root.get(&root), Some(&reachable));
+            for node in reachable {
+                expected_inverse.entry(node).or_default().insert(root);
+            }
+        }
+        assert_eq!(watch.roots_reaching_node, expected_inverse);
     }
 
     /// Allocates an `Object` on the heap via `Box` and returns a `HeapPtr`.
@@ -752,6 +816,24 @@ mod tests {
 
         assert!(watch.roots.contains_key(&var));
         assert_eq!(watch.copy_roots_reaching(var).len(), 1);
+        assert_graph_invariants(&watch);
+    }
+
+    #[test]
+    fn tracking_dependencies_for_unwatched_parent_is_a_noop() {
+        let mut watch = Watch::new();
+        let parent = NodeId::LocalVar(StackIndex::from_raw(0));
+        let child = leaf();
+
+        track_watch_dependencies(&mut watch, parent, Path::Binding, child);
+
+        assert!(watch.children.is_empty());
+        assert!(watch.parents.is_empty());
+        assert!(watch.reachable_from_root.is_empty());
+        assert!(watch.roots_reaching_node.is_empty());
+        let mut gc_roots = Vec::new();
+        watch.collect_roots(&mut gc_roots);
+        assert!(gc_roots.is_empty());
     }
 
     #[test]
@@ -779,6 +861,7 @@ mod tests {
             watch.copy_roots_reaching(NodeId::HeapObject(obj_ptr)).len(),
             0
         );
+        assert_graph_invariants(&watch);
     }
 
     #[test]
@@ -810,6 +893,9 @@ mod tests {
         // Neither should be covered
         assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(a)).len(), 0);
         assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(b)).len(), 0);
+        assert!(watch.children.is_empty());
+        assert!(watch.parents.is_empty());
+        assert_graph_invariants(&watch);
     }
 
     #[test]
@@ -843,6 +929,7 @@ mod tests {
         assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(obj1)).len(), 1);
         assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(obj2)).len(), 0);
         assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(obj3)).len(), 0);
+        assert_graph_invariants(&watch);
     }
 
     #[test]
@@ -878,6 +965,127 @@ mod tests {
             watch.copy_roots_reaching(NodeId::HeapObject(obj_ptr)).len(),
             0
         );
+        assert_graph_invariants(&watch);
+    }
+
+    #[test]
+    fn unregister_root_prunes_shared_graph_without_damaging_remaining_root() {
+        let mut watch = Watch::new();
+        let root_a = NodeId::LocalVar(StackIndex::from_raw(0));
+        let root_b = NodeId::LocalVar(StackIndex::from_raw(1));
+        let class_ptr = leaf();
+        let shared = leaf();
+        let parent_a = instance(class_ptr, vec![Value::object(shared)]);
+        let parent_b = instance(class_ptr, vec![Value::object(shared)]);
+
+        watch.register_root(root_a, test_root_state());
+        watch.register_root(root_b, test_root_state());
+        track_watch_dependencies(&mut watch, root_a, Path::Binding, parent_a);
+        track_watch_dependencies(&mut watch, root_b, Path::Binding, parent_b);
+
+        watch.unregister_root(root_a);
+
+        assert!(!watch.is_watched(root_a));
+        assert!(!watch.is_watched(NodeId::HeapObject(parent_a)));
+        assert!(watch.is_watched(root_b));
+        assert!(watch.is_watched(NodeId::HeapObject(parent_b)));
+        assert_eq!(
+            watch.copy_roots_reaching(NodeId::HeapObject(shared)),
+            vec![root_b]
+        );
+        assert_graph_invariants(&watch);
+
+        watch.unregister_root(root_b);
+        assert!(watch.children.is_empty());
+        assert!(watch.parents.is_empty());
+        assert!(watch.reachable_from_root.is_empty());
+        assert!(watch.roots_reaching_node.is_empty());
+    }
+
+    #[test]
+    fn unregister_roots_batches_shared_graph_teardown() {
+        let mut watch = Watch::new();
+        let root_a = NodeId::LocalVar(StackIndex::from_raw(0));
+        let root_b = NodeId::LocalVar(StackIndex::from_raw(1));
+        let root_c = NodeId::LocalVar(StackIndex::from_raw(2));
+        let class_ptr = leaf();
+        let shared = leaf();
+        let parent_a = instance(class_ptr, vec![Value::object(shared)]);
+        let parent_b = instance(class_ptr, vec![Value::object(shared)]);
+        let parent_c = instance(class_ptr, vec![Value::object(shared)]);
+
+        for (root, parent) in [(root_a, parent_a), (root_b, parent_b), (root_c, parent_c)] {
+            watch.register_root(root, test_root_state());
+            track_watch_dependencies(&mut watch, root, Path::Binding, parent);
+        }
+
+        watch.unregister_roots([root_a, root_b]);
+
+        assert!(!watch.is_watched(root_a));
+        assert!(!watch.is_watched(root_b));
+        assert!(!watch.is_watched(NodeId::HeapObject(parent_a)));
+        assert!(!watch.is_watched(NodeId::HeapObject(parent_b)));
+        assert!(watch.is_watched(root_c));
+        assert!(watch.is_watched(NodeId::HeapObject(parent_c)));
+        assert_eq!(
+            watch.copy_roots_reaching(NodeId::HeapObject(shared)),
+            vec![root_c]
+        );
+        assert_graph_invariants(&watch);
+
+        watch.unregister_roots([root_c]);
+        assert!(watch.children.is_empty());
+        assert!(watch.parents.is_empty());
+        assert!(watch.reachable_from_root.is_empty());
+        assert!(watch.roots_reaching_node.is_empty());
+    }
+
+    #[test]
+    fn unlink_diamond_preserves_shared_descendant_through_alternate_path() {
+        let mut watch = Watch::new();
+        let root = NodeId::LocalVar(StackIndex::from_raw(0));
+        let class_ptr = leaf();
+        let shared = leaf();
+        let left = instance(class_ptr, vec![Value::object(shared)]);
+        let right = instance(class_ptr, vec![Value::object(shared)]);
+        let diamond = instance(class_ptr, vec![Value::object(left), Value::object(right)]);
+
+        watch.register_root(root, test_root_state());
+        track_watch_dependencies(&mut watch, root, Path::Binding, diamond);
+        watch.unlink_edge(
+            NodeId::HeapObject(diamond),
+            Path::InstanceField(0),
+            NodeId::HeapObject(left),
+        );
+
+        assert!(!watch.is_watched(NodeId::HeapObject(left)));
+        assert!(watch.is_watched(NodeId::HeapObject(right)));
+        assert!(watch.is_watched(NodeId::HeapObject(shared)));
+        assert_eq!(
+            watch.copy_roots_reaching(NodeId::HeapObject(shared)),
+            vec![root]
+        );
+        assert_graph_invariants(&watch);
+    }
+
+    #[test]
+    fn unregister_then_unlink_is_idempotent_and_leaves_no_gc_roots() {
+        let mut watch = Watch::new();
+        let root = NodeId::LocalVar(StackIndex::from_raw(0));
+        let child = leaf();
+
+        watch.register_root(root, test_root_state_with_value(Value::object(child)));
+        track_watch_dependencies(&mut watch, root, Path::Binding, child);
+
+        // This is the historical VM teardown order. `unregister_root` is now
+        // complete, so the redundant unlink must be a harmless no-op.
+        watch.unregister_root(root);
+        watch.unlink_edge(root, Path::Binding, NodeId::HeapObject(child));
+
+        assert_graph_invariants(&watch);
+        let mut gc_roots = Vec::new();
+        watch.collect_roots(&mut gc_roots);
+        assert!(gc_roots.is_empty());
     }
 
     /// Regression test: every `HeapPtr` that `forward_roots` would patch
@@ -933,6 +1141,124 @@ mod tests {
                 roots.contains(&needed),
                 "collect_roots missing pointer that forward_roots would patch: {needed:?}"
             );
+        }
+    }
+    #[test]
+    fn forward_roots_defensively_remaps_a_synthetic_orphaned_graph() {
+        let mut watch = Watch::new();
+        let root = NodeId::LocalVar(StackIndex::from_raw(0));
+        let old_child = leaf();
+        let new_child = leaf();
+
+        // Public operations preserve the active-reachability invariant. Build
+        // an orphan directly to keep the GC forwarding code defensive if a
+        // future mutation path violates that invariant.
+        watch.add_edge(root, Path::Binding, NodeId::HeapObject(old_child));
+
+        assert!(watch.roots.is_empty());
+        let mut before = Vec::new();
+        watch.collect_roots(&mut before);
+        assert!(before.contains(&old_child));
+
+        watch.forward_roots(&HashMap::from([(old_child, new_child)]));
+
+        let mut after = Vec::new();
+        watch.collect_roots(&mut after);
+        assert!(!after.contains(&old_child));
+        assert!(after.contains(&new_child));
+    }
+
+    #[test]
+    fn active_watch_survives_gc_then_releases_object_on_unregister() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let mut watch = Watch::new();
+        let root = NodeId::LocalVar(StackIndex::from_raw(0));
+        let object = tlab.alloc_string("watched".to_string());
+
+        watch.register_root(root, test_root_state_with_value(Value::object(object)));
+        track_watch_dependencies(&mut watch, root, Path::Binding, object);
+
+        let mut gc_roots = Vec::new();
+        watch.collect_roots(&mut gc_roots);
+        let (first_stats, _, forwarding) = unsafe { heap.collect_garbage(&gc_roots) };
+        tlab.invalidate();
+        assert_eq!(first_stats.live_count, 1);
+        watch.forward_roots(&forwarding);
+        assert_graph_invariants(&watch);
+
+        watch.unregister_root(root);
+        let mut after_unregister = Vec::new();
+        watch.collect_roots(&mut after_unregister);
+        assert!(after_unregister.is_empty());
+
+        let (second_stats, _, _) = unsafe { heap.collect_garbage(&after_unregister) };
+        tlab.invalidate();
+        assert_eq!(second_stats.live_count, 0);
+        assert_eq!(second_stats.collected_count, 1);
+    }
+
+    #[test]
+    fn repeated_watch_teardown_does_not_retain_heap_objects() {
+        const ITERATIONS: usize = 1_000;
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let mut watch = Watch::new();
+        let root = NodeId::LocalVar(StackIndex::from_raw(0));
+
+        for i in 0..ITERATIONS {
+            let object = tlab.alloc_string(format!("temporary-{i}"));
+            watch.register_root(root, test_root_state_with_value(Value::object(object)));
+            track_watch_dependencies(&mut watch, root, Path::Binding, object);
+            watch.unregister_root(root);
+        }
+
+        assert_graph_invariants(&watch);
+        let mut gc_roots = Vec::new();
+        watch.collect_roots(&mut gc_roots);
+        assert!(gc_roots.is_empty(), "Watch retained {gc_roots:?}");
+
+        let (stats, _, _) = unsafe { heap.collect_garbage(&gc_roots) };
+        tlab.invalidate();
+        assert_eq!(stats.live_count, 0);
+        assert!(
+            stats.collected_count >= ITERATIONS,
+            "expected at least {ITERATIONS} temporary objects to be collected, got {}",
+            stats.collected_count
+        );
+    }
+
+    #[test]
+    fn repeated_gc_forward_and_unwatch_cycles_do_not_retain_objects() {
+        const CYCLES: usize = 100;
+
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let mut watch = Watch::new();
+        let root = NodeId::LocalVar(StackIndex::from_raw(0));
+
+        for i in 0..CYCLES {
+            let object = tlab.alloc_string(format!("cycle-{i}"));
+            watch.register_root(root, test_root_state_with_value(Value::object(object)));
+            track_watch_dependencies(&mut watch, root, Path::Binding, object);
+
+            let mut active_roots = Vec::new();
+            watch.collect_roots(&mut active_roots);
+            let (active_stats, _, forwarding) = unsafe { heap.collect_garbage(&active_roots) };
+            tlab.invalidate();
+            assert_eq!(active_stats.live_count, 1, "active cycle {i}");
+            watch.forward_roots(&forwarding);
+            assert_graph_invariants(&watch);
+
+            watch.unregister_root(root);
+            let mut released_roots = Vec::new();
+            watch.collect_roots(&mut released_roots);
+            assert!(released_roots.is_empty(), "released cycle {i}");
+            let (released_stats, _, _) = unsafe { heap.collect_garbage(&released_roots) };
+            tlab.invalidate();
+            assert_eq!(released_stats.live_count, 0, "released cycle {i}");
+            assert_graph_invariants(&watch);
         }
     }
 }
