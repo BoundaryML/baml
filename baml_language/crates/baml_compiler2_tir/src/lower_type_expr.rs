@@ -1038,10 +1038,10 @@ pub fn interface_generic_param_bounds<'db>(
 }
 
 /// Every generic-parameter interface bound in scope for a function's signature or body: the
-/// enclosing class or interface's parameters (when the function is a method), plus the
-/// function's own parameters. Keyed by parameter name; own parameters are inserted last so
-/// they replace an enclosing parameter of the same name (which is itself a diagnosed
-/// shadowing error).
+/// enclosing class, interface, or `implements`-block's parameters (when the function is a
+/// method), plus the function's own parameters. Keyed by parameter name; own parameters are
+/// inserted last so they replace an enclosing parameter of the same name (which is itself a
+/// diagnosed shadowing error).
 #[salsa::tracked(returns(ref))]
 pub fn function_in_scope_generic_param_bounds<'db>(
     db: &'db dyn crate::Db,
@@ -1069,6 +1069,24 @@ pub fn function_in_scope_generic_param_bounds<'db>(
                 interface_generic_param_bounds(
                     db,
                     baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *interface_id),
+                )
+                .iter()
+                .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
+            );
+        }
+    }
+    // A method of an out-of-body `implements` block sees the block's generics (`implements<T
+    // extends Source> Renderable for Wrapped<T>`) — so a `T.member` / `Self.member` projection
+    // in its signature or body resolves through `T`'s declared bound. (In-body impl methods sit
+    // in the class, already covered above.)
+    for impl_id in &item_tree.free_impls {
+        if let Some(block) = item_tree.impls.get(impl_id)
+            && block.methods.contains(&function_id)
+        {
+            bounds.extend(
+                impl_generic_param_bounds(
+                    db,
+                    baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id),
                 )
                 .iter()
                 .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
