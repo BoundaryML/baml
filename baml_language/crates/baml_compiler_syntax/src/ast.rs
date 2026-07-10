@@ -2711,6 +2711,13 @@ impl ConfigValue {
 }
 
 impl TestDef {
+    fn function_config_item(&self) -> Option<ConfigItem> {
+        self.syntax
+            .descendants()
+            .filter_map(ConfigItem::cast)
+            .find(|item| item.matches_key("functions") || item.matches_key("function"))
+    }
+
     /// Get the test name.
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
@@ -2733,10 +2740,7 @@ impl TestDef {
     pub fn function_names(&self) -> Vec<SyntaxToken> {
         // Look for a ConfigItem with key "functions" and extract all function names.
         // The function names are inside a CONFIG_VALUE child node, not in attributes.
-        self.syntax
-            .descendants()
-            .filter_map(ConfigItem::cast)
-            .find(|item| item.matches_key("functions") || item.matches_key("function"))
+        self.function_config_item()
             .and_then(|item| {
                 // Find the CONFIG_VALUE child (excludes attributes which are siblings)
                 item.syntax()
@@ -2759,10 +2763,7 @@ impl TestDef {
     /// such as `workflows.Classify` as one value.
     pub fn function_reference_names(&self) -> Vec<String> {
         let Some(value) = self
-            .syntax
-            .descendants()
-            .filter_map(ConfigItem::cast)
-            .find(|item| item.matches_key("functions") || item.matches_key("function"))
+            .function_config_item()
             .and_then(|item| item.config_value_node())
         else {
             return Vec::new();

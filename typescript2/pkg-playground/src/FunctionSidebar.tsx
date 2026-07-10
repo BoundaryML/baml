@@ -27,7 +27,11 @@ import type {
   SerializedTestDef,
   SerializedTestSet,
 } from './serialized-test-tree';
-import type { FunctionInfo, TestInfo } from './worker-protocol';
+import {
+  previewTestKey,
+  type FunctionInfo,
+  type TestInfo,
+} from './worker-protocol';
 
 // ---------------------------------------------------------------------------
 // TestTreeNode — recursive tree renderer for SerializedTestDef items
@@ -484,7 +488,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
               )}
 
               {previewTests.map((test) => {
-                const key = `${test.functionName}\u0000${test.name}`;
+                const key = previewTestKey(test);
                 const duplicateName = (previewNameCounts.get(test.name) ?? 0) > 1;
                 return (
                   <button

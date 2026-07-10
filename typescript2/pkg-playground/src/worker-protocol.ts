@@ -135,6 +135,13 @@ export interface TestInfo {
   argsJson: string;
 }
 
+/** Stable identity shared by preview selection state and sidebar rows. */
+export function previewTestKey(
+  test: Pick<TestInfo, 'functionName' | 'name'>,
+): string {
+  return `${test.functionName}\u0000${test.name}`;
+}
+
 export interface ProjectUpdate {
   isBexCurrent: boolean;
   functions: FunctionInfo[];

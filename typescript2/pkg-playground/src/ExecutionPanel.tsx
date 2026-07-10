@@ -35,19 +35,20 @@ import { ErrorDisplay } from './components/ErrorDisplay';
 import { MetadataBadges } from './components/MetadataBadges';
 import { PromptStats } from './components/PromptStats';
 import type { RuntimePort } from './runtime-port';
-import type {
-  ControlFlowGraph,
-  CursorContext,
-  DiagnosticEntry,
-  FetchLogEntry,
-  FunctionInfo,
-  ProjectUpdate,
-  TestInfo,
-  Run,
-  BoundaryId,
-  RunStatus,
-  SourceNavigationTarget,
-  WorkerOutMessage,
+import {
+  previewTestKey,
+  type ControlFlowGraph,
+  type CursorContext,
+  type DiagnosticEntry,
+  type FetchLogEntry,
+  type FunctionInfo,
+  type ProjectUpdate,
+  type TestInfo,
+  type Run,
+  type BoundaryId,
+  type RunStatus,
+  type SourceNavigationTarget,
+  type WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
 import { ArgsForm } from './ArgsForm';
@@ -173,10 +174,6 @@ function testTargetMatches(candidate: string, target: string): boolean {
     candidate.endsWith(`/${target}`) ||
     candidate.split('/').pop() === target
   );
-}
-
-function previewTestKey(test: TestInfo): string {
-  return `${test.functionName}\u0000${test.name}`;
 }
 
 function isExpandedTestSet(def: SerializedTestDef): def is SerializedTestSet {
@@ -1163,6 +1160,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     // that owns the call so the top-level workflow remains the primary view.
     if (isCallSite) {
       if (sourceExprFunctionName !== currentFn) {
+        setSelectedPreviewTestKey(null);
         setSelectedFn(sourceExprFunctionName);
         setViewingCollection(false);
         setViewingTestRun(false);
@@ -1194,6 +1192,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       if (root !== currentFn) {
         pendingHighlightRef.current =
           target != null ? { fn: root, nodeId: target } : null;
+        setSelectedPreviewTestKey(null);
         setSelectedFn(root);
         setViewingCollection(false);
         setViewingTestRun(false);
@@ -1210,6 +1209,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     }
     // Not part of any workflow — show the function's own graph.
     if (ctx.functionName !== currentFn) {
+      setSelectedPreviewTestKey(null);
       setSelectedFn(ctx.functionName);
       setViewingCollection(false);
       setViewingTestRun(false);
@@ -1279,11 +1279,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               setSelectedProject(n.project);
               if (n.functionName) {
                 setWorkflowContext(null);
+                setSelectedPreviewTestKey(null);
                 setSelectedFn(n.functionName);
                 setViewingCollection(false);
                 setViewingTestRun(false);
               } else if (n.testName || n.testsetName) {
                 setWorkflowContext(null);
+                setSelectedPreviewTestKey(null);
                 setSelectedFn(null);
                 setViewingCollection(false);
                 setViewingTestRun(true);
@@ -2445,6 +2447,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               findCallSiteNode(wf, hop);
             pendingHighlightRef.current =
               target != null ? { fn: wf, nodeId: target } : null;
+            setSelectedPreviewTestKey(null);
             setSelectedFn(wf);
             setHighlightedNodeId(null);
           }}

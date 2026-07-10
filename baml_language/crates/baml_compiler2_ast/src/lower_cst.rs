@@ -1872,14 +1872,18 @@ fn lower_test_arg_map(block: &ast::ConfigBlock) -> Vec<(Name, TestArgValue)> {
         .collect()
 }
 
+fn lower_test_arg_map_as_value(block: &ast::ConfigBlock) -> TestArgValue {
+    TestArgValue::Map(
+        lower_test_arg_map(block)
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect(),
+    )
+}
+
 fn lower_test_arg_item(item: &ast::ConfigItem) -> TestArgValue {
     if let Some(block) = item.nested_block() {
-        return TestArgValue::Map(
-            lower_test_arg_map(&block)
-                .into_iter()
-                .map(|(key, value)| (key.to_string(), value))
-                .collect(),
-        );
+        return lower_test_arg_map_as_value(&block);
     }
 
     item.config_value_node()
@@ -1897,14 +1901,8 @@ fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
                 .children()
                 .filter_map(|element| match element.kind() {
                     SyntaxKind::CONFIG_VALUE => Some(lower_test_arg_config_value(&element)),
-                    SyntaxKind::CONFIG_BLOCK => ast::ConfigBlock::cast(element).map(|block| {
-                        TestArgValue::Map(
-                            lower_test_arg_map(&block)
-                                .into_iter()
-                                .map(|(key, value)| (key.to_string(), value))
-                                .collect(),
-                        )
-                    }),
+                    SyntaxKind::CONFIG_BLOCK => ast::ConfigBlock::cast(element)
+                        .map(|block| lower_test_arg_map_as_value(&block)),
                     _ => None,
                 })
                 .collect(),
