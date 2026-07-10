@@ -264,6 +264,12 @@ fn run_server_inner(
         print_playground_banner(playground_port, &workspace_roots, session_token.as_deref());
     }
 
+    // Tracks the target of the most recent OpenPlayground so browser-mode pages
+    // that connect after the request can be navigated to it (see the sender and
+    // the WS `RequestState` handler). Shared between the sender and the server.
+    let current_open_target: playground_sender::SharedOpenTarget =
+        Arc::new(std::sync::Mutex::new(None));
+
     // Playground sender (needs port + lsp_sender for OpenPlayground)
     let playground_sender: Arc<dyn bex_project::PlaygroundSender> =
         Arc::new(playground_sender::NativePlaygroundSender::new(
@@ -272,6 +278,7 @@ fn run_server_inner(
             playground_port,
             matches!(playground_open_target, PlaygroundOpenTarget::Browser),
             session_token.clone(),
+            current_open_target.clone(),
         ));
 
     // Create the BexLsp (multi-project LSP)
@@ -363,6 +370,7 @@ fn run_server_inner(
                 doc_mirror,
                 workspace_roots.clone(),
                 session_token,
+                current_open_target.clone(),
             ));
         }
 
@@ -380,6 +388,7 @@ fn run_server_inner(
                 doc_mirror,
                 workspace_roots_for_server,
                 session_token,
+                current_open_target.clone(),
             )
             .await
             {

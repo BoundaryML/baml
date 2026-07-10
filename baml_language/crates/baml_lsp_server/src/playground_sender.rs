@@ -4,15 +4,41 @@
 //! playground notifications through a `tokio::sync::broadcast` channel
 //! that WebSocket clients subscribe to.
 //!
-//! `OpenPlayground` is special: instead of going over WebSocket it either
-//! opens the system browser for `baml playground` or sends an LSP
-//! notification to the editor client.
+//! `OpenPlayground` is special. In editor mode it sends an LSP notification to
+//! the editor client. In browser mode (`baml playground`) it navigates the
+//! open playground page over the WebSocket and only spawns a system browser
+//! window when no page is connected, so repeated opens reuse one window
+//! instead of stacking new ones.
 
-use std::sync::Arc;
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use tokio::sync::broadcast;
 
 use crate::playground_ws::WsOutMessage;
+
+/// The playground target most recently requested via `OpenPlayground`.
+///
+/// Browser mode records this so a page that connects *after* the request
+/// (a freshly spawned window, or a reconnect) can be navigated to the same
+/// target when it asks for state. See the `RequestState` handler.
+#[derive(Clone, Default)]
+pub struct OpenPlaygroundTarget {
+    pub project: String,
+    pub function_name: Option<String>,
+    pub test_name: Option<String>,
+    pub testset_name: Option<String>,
+}
+
+/// Shared between the sender (writer) and the WS server (replays it on
+/// connect). `None` until the first `OpenPlayground` in a browser session.
+pub type SharedOpenTarget = Arc<Mutex<Option<OpenPlaygroundTarget>>>;
+
+/// A second browser window must not be spawned while the first is still
+/// loading (before it connects and bumps `receiver_count`).
+const BROWSER_SPAWN_DEBOUNCE: Duration = Duration::from_secs(5);
 
 pub struct NativePlaygroundSender {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
@@ -22,6 +48,10 @@ pub struct NativePlaygroundSender {
     /// Browser-mode session token; carried on the opened URL so the page can
     /// authorize its /api requests.
     session_token: Option<Arc<str>>,
+    /// Last requested open target, shared with the WS server for replay.
+    current_open_target: SharedOpenTarget,
+    /// When we last spawned a browser window, to debounce double-opens.
+    last_browser_open: Mutex<Option<Instant>>,
 }
 
 impl NativePlaygroundSender {
@@ -31,6 +61,7 @@ impl NativePlaygroundSender {
         playground_port: u16,
         open_in_browser: bool,
         session_token: Option<Arc<str>>,
+        current_open_target: SharedOpenTarget,
     ) -> Self {
         Self {
             broadcast_tx,
@@ -38,7 +69,23 @@ impl NativePlaygroundSender {
             playground_port,
             open_in_browser,
             session_token,
+            current_open_target,
+            last_browser_open: Mutex::new(None),
         }
+    }
+
+    /// Returns true if this call should spawn a browser window. Debounces
+    /// rapid `OpenPlayground`s that arrive before the first window connects.
+    fn claim_browser_open(&self) -> bool {
+        let mut guard = self.last_browser_open.lock().unwrap();
+        let now = Instant::now();
+        if let Some(prev) = *guard
+            && now.duration_since(prev) < BROWSER_SPAWN_DEBOUNCE
+        {
+            return false;
+        }
+        *guard = Some(now);
+        true
     }
 }
 
@@ -52,19 +99,43 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
         } = notification
         {
             if self.open_in_browser {
-                let url = match &self.session_token {
-                    Some(token) => {
-                        format!("http://localhost:{}/?token={token}", self.playground_port)
-                    }
-                    None => format!("http://localhost:{}", self.playground_port),
-                };
-                // `webbrowser::open` can block until a text-mode browser (lynx/w3m)
-                // exits on headless hosts; never hold up server startup on it.
-                std::thread::spawn(move || {
-                    if let Err(e) = webbrowser::open(&url) {
-                        tracing::error!("Failed to open browser at {}: {}", url, e);
-                    }
+                // Remember where to navigate so a page that connects after this
+                // request (fresh window or reconnect) can be sent here on
+                // `RequestState`.
+                *self.current_open_target.lock().unwrap() = Some(OpenPlaygroundTarget {
+                    project: project.clone(),
+                    function_name: function_name.clone(),
+                    test_name: test_name.clone(),
+                    testset_name: testset_name.clone(),
                 });
+
+                // Navigate any already-open page in place rather than spawning a
+                // new window: pages listen on this broadcast and react to the
+                // `openPlayground` notification.
+                let json = serde_json::to_value(&notification).unwrap_or_default();
+                let _ = self
+                    .broadcast_tx
+                    .send(WsOutMessage::PlaygroundNotification { notification: json });
+
+                // Only open a browser window when nothing is connected. The
+                // debounce avoids a second window while the first is still
+                // loading (before it connects and bumps `receiver_count`).
+                if self.broadcast_tx.receiver_count() == 0 && self.claim_browser_open() {
+                    let url = match &self.session_token {
+                        Some(token) => {
+                            format!("http://localhost:{}/?token={token}", self.playground_port)
+                        }
+                        None => format!("http://localhost:{}", self.playground_port),
+                    };
+                    // `webbrowser::open` can block until a text-mode browser
+                    // (lynx/w3m) exits on headless hosts; never hold up the
+                    // server on it.
+                    std::thread::spawn(move || {
+                        if let Err(e) = webbrowser::open(&url) {
+                            tracing::error!("Failed to open browser at {}: {}", url, e);
+                        }
+                    });
+                }
             } else {
                 let params = serde_json::json!({
                     "port": self.playground_port,
