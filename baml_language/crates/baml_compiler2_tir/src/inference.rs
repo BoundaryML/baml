@@ -298,14 +298,19 @@ fn type_bindings_for_params(params: &[Name]) -> FxHashMap<Name, Ty> {
 
 /// Lower one generic parameter's `extends` bound expression to its `Ty`, in the
 /// declaration's own scope with the sibling parameters (`params`) in scope as
-/// rigid type variables. A projection *inside* a bound is not itself resolved
-/// (no bounds threaded — that would be circular); shared by the enforcement
-/// table and [`env_interface_bounds`].
+/// rigid type variables, and the env's *concrete* constraints (e.g. `Self`'s
+/// interface inside a default method) visible so a projection bound
+/// (`U extends Self.Item`) resolves through them. Sibling *declared* bounds are
+/// not threaded (that would be order-dependent/circular); shared by the
+/// enforcement table and [`env_interface_bounds`].
+#[expect(clippy::too_many_arguments)]
 fn lower_env_generic_bound(
     db: &dyn crate::Db,
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     params: &[Name],
+    concrete_bounds: &TypeVarBoundsMap,
+    self_ty: Option<&Ty>,
     bound_te: &ast::TypeExpr,
     diags: &mut Vec<crate::infer_context::TirTypeError>,
 ) -> Ty {
@@ -316,11 +321,27 @@ fn lower_env_generic_bound(
             package_items: pkg_items,
             ns_context,
             generic_params: params,
-            bounds: &TypeVarBoundsMap::default(),
-            self_ty: None,
+            bounds: concrete_bounds,
+            self_ty: self_ty.cloned(),
         },
         diags,
     )
+}
+
+/// The lowering view of a [`GenericEnv`]'s concrete constraints: the bounds map
+/// (each concrete constraint as a single-conjunct entry) and, when the env
+/// carries a `Self` constraint, the symbolic `Self` type — so a declared bound
+/// mentioning `Self.Item` lowers inside the same scope its enforcement runs in.
+fn env_concrete_lowering_scope(env: &GenericEnv) -> (TypeVarBoundsMap, Option<Ty>) {
+    let bounds: TypeVarBoundsMap = env
+        .concrete_bounds
+        .iter()
+        .map(|(name, constraint)| (name.clone(), vec![constraint.clone()]))
+        .collect();
+    let self_ty = bounds
+        .contains_key(&Name::new("Self"))
+        .then(crate::self_type::self_type_for_interface_default);
+    (bounds, self_ty)
 }
 
 /// A [`GenericEnv`]'s interface-constraint bounds, for resolving a `T.member`
@@ -337,13 +358,22 @@ fn env_interface_bounds(
     env: &GenericEnv,
 ) -> TypeVarBoundsMap {
     let mut bounds = TypeVarBoundsMap::default();
+    let (concrete_lowering_bounds, lowering_self_ty) = env_concrete_lowering_scope(env);
     for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
         let Some(bound_te) = bound else {
             continue;
         };
         let mut diags = Vec::new();
-        let bound_ty =
-            lower_env_generic_bound(db, pkg_items, ns_context, &env.params, bound_te, &mut diags);
+        let bound_ty = lower_env_generic_bound(
+            db,
+            pkg_items,
+            ns_context,
+            &env.params,
+            &concrete_lowering_bounds,
+            lowering_self_ty.as_ref(),
+            bound_te,
+            &mut diags,
+        );
         if let Some(constraint) = bound_ty.as_interface() {
             // Last-wins, matching `install_generic_param_bounds`'s `insert`: a name repeated
             // across `bound_param_names` is a shadowing artifact (an inner-scope parameter
@@ -480,6 +510,7 @@ fn install_generic_param_bounds(
     span: TextRange,
 ) {
     let mut bounds = crate::lower_type_expr::TypeVarBoundsMap::default();
+    let (concrete_lowering_bounds, lowering_self_ty) = env_concrete_lowering_scope(env);
     debug_assert_eq!(env.bound_param_names.len(), env.owned_bounds.len());
     for ((name, bound), owned) in env
         .bound_param_names
@@ -492,16 +523,18 @@ fn install_generic_param_bounds(
         };
         // Inherited bounds (an enclosing declaration's) are lowered for the
         // enforcement table but their diagnostics belong to — and were already
-        // reported by — the owning declaration's scope. Generic-parameter bounds
-        // carry no `Self` and see no sibling bounds (matching the prior behaviour).
+        // reported by — the owning declaration's scope. The env's *concrete*
+        // constraints (e.g. `Self`'s interface inside a default method) are
+        // visible so `U extends Self.Item` resolves; sibling declared bounds
+        // are not threaded (that would be order-dependent).
         let constraint = lower_declared_interface_bound(
             db,
             builder,
             pkg_items,
             ns_context,
             &env.params,
-            &crate::lower_type_expr::TypeVarBoundsMap::default(),
-            None,
+            &concrete_lowering_bounds,
+            lowering_self_ty.as_ref(),
             bound_te,
             span,
             owned,

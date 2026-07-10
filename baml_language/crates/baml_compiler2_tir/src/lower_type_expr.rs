@@ -4551,6 +4551,60 @@ function needs<T extends Marker>(x: T) -> int throws never {
         );
     }
 
+    /// Two realizations of `Source` plus a class implementing each — the fixture for
+    /// the bare-destructure-head pin-inference rule.
+    const SOURCE_REALIZATIONS: &str = "interface Source {\n\
+           type Item\n\
+           value: Self.Item\n\
+         }\n\
+         class IntSource {\n\
+           value: int\n\
+           implements Source {\n    type Item = int\n  }\n\
+         }\n\
+         class StringSource {\n\
+           value: string\n\
+           implements Source {\n    type Item = string\n  }\n\
+         }\n";
+
+    #[test]
+    fn bare_interface_destructure_head_adopts_unambiguous_scrutinee_pins() {
+        // A bare destructure head (`Source { value }`) omits the pins; a scrutinee
+        // with a single realization determines them, so `value` types as `int`.
+        let errors = all_type_errors(&format!(
+            "{SOURCE_REALIZATIONS}\
+             function f(s: Source<Item = int>) -> int throws never {{\n\
+               return match (s) {{\n\
+                 Source {{ value }} => value,\n\
+               }}\n\
+             }}\n",
+        ));
+        assert!(
+            errors.is_empty(),
+            "a bare head over a single-realization scrutinee adopts its pins, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn bare_interface_destructure_head_over_two_realizations_is_ambiguous() {
+        // Two distinct realizations of the pattern's interface in the scrutinee: the
+        // omitted pins are not inferrable — the pattern must write them.
+        let errors = all_type_errors(&format!(
+            "{SOURCE_REALIZATIONS}\
+             function f(s: Source<Item = int> | Source<Item = string>) -> int throws never {{\n\
+               return match (s) {{\n\
+                 Source {{ value }} => 0,\n\
+                 _ => 1,\n\
+               }}\n\
+             }}\n",
+        ));
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, TirTypeError::AmbiguousInterfacePatternBindings { .. })),
+            "a bare head over two realizations must report ambiguous bindings, got {errors:?}"
+        );
+    }
+
     /// Shared two-file fixture: a nested-namespace iterator core with a generic
     /// concrete implementor (`Repeat<T> implements Iterator<T, never>`) and a
     /// union-typed impl head (`MapIter implements Iterator<R, E | E2>`).

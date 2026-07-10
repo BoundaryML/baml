@@ -4257,6 +4257,11 @@ fn associated_union_pattern_does_not_exhaust_wider_associated_binding() {
 
 #[tokio::test]
 async fn runtime_guard_accepts_generic_requested_associated_type_var() {
+    // The parameter pins both admissible realizations (an existential value type
+    // must pin its associated types); the *type pattern* then requests the pin at
+    // the function's own generic (`Source<Item = T>`), so the runtime guard
+    // filters by the realized binding: the int realization matches at
+    // `score<int>`, the string one falls through.
     let output = baml_test!(
         r#"
         interface Source {
@@ -4269,7 +4274,13 @@ async fn runtime_guard_accepts_generic_requested_associated_type_var() {
             }
         }
 
-        function score<T>(source: Source) -> int {
+        class StringSource {
+            implements Source {
+                type Item = string
+            }
+        }
+
+        function score<T>(source: Source<Item = T> | Source<Item = string>) -> int {
             return match (source) {
                 let matching: Source<Item = T> => 1,
                 _ => 0,
@@ -4277,11 +4288,11 @@ async fn runtime_guard_accepts_generic_requested_associated_type_var() {
         }
 
         function main() -> int {
-            return score<int>(IntSource {})
+            return score<int>(IntSource {}) * 10 + score<int>(StringSource {})
         }
         "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(10));
 }
 
 #[tokio::test]
@@ -4883,13 +4894,14 @@ async fn reflection_bounded_impl_cycle_terminates() {
 }
 
 /// An interface default method whose generic bound references an associated
-/// type via `Self` (`U extends Self.Item`) must keep that bound in the emitted
-/// metadata. The bound is lowered with the same `Self`/associated-type bindings
-/// as the signature, so `Self.Item` resolves to a projection instead of erasing
-/// `Self` to `Ty::Unknown` and being silently dropped.
+/// type via `Self` (`U extends Self.Item`) lowers the bound in the same `Self`
+/// scope as the signature — so it resolves to a *projection*, which is then
+/// rejected as a non-interface bound (bounds are interfaces only, E0145;
+/// Rust-parity: `U: Self::Item` is E0404 "expected trait"). The failure is
+/// loud, never an erased-`Self` bound silently dropped from enforcement.
 #[test]
-fn interface_default_method_self_referencing_bound_is_emitted() {
-    let (display_type_params, _, _) = compiled_function_display_metadata(
+fn interface_default_method_self_referencing_bound_is_rejected() {
+    assert_compile_error_code(
         r#"
         interface Container {
             type Item
@@ -4899,11 +4911,6 @@ fn interface_default_method_self_referencing_bound_is_emitted() {
             }
         }
         "#,
-        "Container.pick",
-    );
-    assert!(
-        display_type_params.iter().any(|p| p.contains("Item")),
-        "interface default-method bound `U extends Self.Item` was dropped from \
-         emitted metadata: {display_type_params:?}"
+        "E0145",
     );
 }

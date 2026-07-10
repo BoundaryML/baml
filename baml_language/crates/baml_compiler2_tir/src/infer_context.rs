@@ -530,6 +530,17 @@ pub enum TirTypeError {
         interface: crate::ty::QualifiedTypeName,
         missing: Vec<Name>,
     },
+    /// A *bare* interface destructure pattern (`Source { value }`, no written generic
+    /// args or associated bindings) adopts its associated-type bindings from the
+    /// scrutinee — so the scrutinee must determine them uniquely. A scrutinee admitting
+    /// two distinct realizations of the pattern's interface
+    /// (`Source<Item = int> | Source<Item = string>`) is ambiguous: the pattern must
+    /// write the bindings explicitly. (A *type* pattern never infers — it is an
+    /// ordinary type and pins everything, per [`Self::MissingAssociatedTypeBindings`].)
+    AmbiguousInterfacePatternBindings {
+        interface: crate::ty::QualifiedTypeName,
+        candidates: Vec<Ty>,
+    },
     /// An `implements` block does not provide a body for a method the interface
     /// declares as required (no default). Impl conformance (E0113).
     MissingInterfaceMethod {
@@ -1386,6 +1397,23 @@ impl fmt::Display for TirTypeError {
                      `<T extends {}>` does not require them)",
                     interface.render_user_facing(),
                     interface.render_user_facing(),
+                )
+            }
+            TirTypeError::AmbiguousInterfacePatternBindings {
+                interface,
+                candidates,
+            } => {
+                let candidates = candidates
+                    .iter()
+                    .map(|ty| format!("`{}`", ty.render_user_facing()))
+                    .collect::<Vec<_>>()
+                    .join(" and ");
+                write!(
+                    f,
+                    "cannot infer the associated type bindings for the bare interface pattern \
+                     `{interface} {{ … }}`: the scrutinee admits {candidates}; write the bindings \
+                     explicitly (`{interface}<…> {{ … }}`)",
+                    interface = interface.render_user_facing(),
                 )
             }
             TirTypeError::MissingInterfaceMethod { interface, method } => {

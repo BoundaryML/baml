@@ -1999,7 +1999,8 @@ fn tir_type_error_to_diagnostic_id(
         }
         // Generic type-argument constraints.
         TirTypeError::BoundedTypeArgNotConcrete { .. }
-        | TirTypeError::MissingAssociatedTypeBindings { .. } => DiagnosticId::TypeMismatch,
+        | TirTypeError::MissingAssociatedTypeBindings { .. }
+        | TirTypeError::AmbiguousInterfacePatternBindings { .. } => DiagnosticId::TypeMismatch,
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.
         TirTypeError::MissingInterfaceMethod { .. } => DiagnosticId::MissingInterfaceMethod,

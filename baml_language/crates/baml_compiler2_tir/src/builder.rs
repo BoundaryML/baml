@@ -67,16 +67,6 @@ fn format_interface_display(name: &Name, args: &[Ty]) -> String {
     }
 }
 
-#[derive(Clone)]
-struct InterfaceBindingInputs<'a, 'db> {
-    iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
-    iface_data: &'a baml_compiler2_hir::item_tree::Interface,
-    associated_bindings: &'a [(Name, Ty)],
-    /// The receiver an omitted default is filled at (`Self`).
-    receiver: &'a Ty,
-    prefer_symbolic_projections: bool,
-}
-
 /// The interface bound to search for a member — the receiver's declared interface, whose
 /// `requires`-closure is walked. For an existential receiver this is the receiver's own
 /// interface; for a `T extends I` / `H.Item` receiver it's the constraint that bounds it.
@@ -11574,54 +11564,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         false
     }
 
-    fn add_interface_associated_type_bindings(
-        &self,
-        inputs: &InterfaceBindingInputs<'_, '_>,
-        bindings: &mut FxHashMap<Name, Ty>,
-    ) {
-        let db = self.context.db();
-        for assoc in &inputs.iface_data.associated_types {
-            if let Some((_, ty)) = inputs
-                .associated_bindings
-                .iter()
-                .find(|(name, _)| name == &assoc.name)
-            {
-                bindings.insert(assoc.name.clone(), ty.clone());
-                continue;
-            }
-            // A usable default only applies when we aren't preferring symbolic projections
-            // (the rigid-var receiver keeps `Self.Assoc` visible to generic resolution). Fill it
-            // at the receiver: `Self` is that receiver, so a Self-referencing default reduces
-            // through it. The default is lowered once (symbolic `Self`) by the shared query.
-            if !inputs.prefer_symbolic_projections
-                && let Some((default, _diags)) =
-                    crate::interfaces::interface_associated_type_default(
-                        db,
-                        inputs.iface_loc,
-                        assoc.name.clone(),
-                    )
-            {
-                let realized = crate::interfaces::realize_associated_default(
-                    &default,
-                    &[],
-                    &[],
-                    inputs.receiver,
-                );
-                let ty = crate::generics::substitute_ty(&realized, bindings);
-                bindings.insert(assoc.name.clone(), ty);
-                continue;
-            }
-            // Associated-type projection resolution is being rebuilt; until then an
-            // unbound associated type erases to `Ty::Error`.
-            bindings.insert(
-                assoc.name.clone(),
-                Ty::Error {
-                    attr: TyAttr::default(),
-                },
-            );
-        }
-    }
-
     /// A fresh type-variable name for the `Self` receiver of an *unbound*
     /// interface-method reference (`let m = I.method`). Each such reference is a
     /// distinct `Self`, and its interface bound is recorded in the shared,
@@ -11850,103 +11792,6 @@ impl<'db> TypeInferenceBuilder<'db> {
             .into_iter()
             .map(|(_, ty)| ty)
             .collect()
-    }
-
-    /// Interface field `(name, type)` pairs in requires-closure order with
-    /// generic substitution applied. This mirrors `resolve_interface_member`
-    /// but is side-effect-free for matrix construction.
-    fn interface_field_infos_ordered_for_ty(&self, iface_ty: &Ty) -> Vec<(Name, Ty)> {
-        let mut out = Vec::new();
-        let mut seen = FxHashSet::default();
-        let Ty::Interface(iface_name, iface_type_args, associated_bindings, _) = iface_ty else {
-            return out;
-        };
-        let Some(pkg_items) = self.resolve_class_pkg_items(iface_name.package()) else {
-            return out;
-        };
-        let Some(Definition::Interface(root_loc)) =
-            pkg_items.lookup_type(iface_name.namespace(), iface_name.name())
-        else {
-            return out;
-        };
-
-        let db = self.context.db();
-        for (iface_loc, closure_args, closure_assoc) in
-            crate::interfaces::interface_closure_locs_with_args_and_assoc(
-                db,
-                root_loc,
-                iface_type_args,
-                associated_bindings,
-                true,
-            )
-        {
-            let file = iface_loc.file(db);
-            let iface_tree = baml_compiler2_ppir::file_item_tree(db, file);
-            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
-                continue;
-            };
-            let iface_ns = baml_compiler2_hir::file_package::file_package(db, file)
-                .namespace_path
-                .clone();
-            let mut bindings =
-                crate::generics::bind_type_vars(&iface_data.generic_params, &closure_args);
-            for generic_param in &iface_data.generic_params {
-                bindings
-                    .entry(generic_param.clone())
-                    .or_insert_with(|| Ty::TypeVar(generic_param.clone(), TyAttr::default()));
-            }
-            self.add_interface_associated_type_bindings(
-                &InterfaceBindingInputs {
-                    iface_loc,
-                    iface_data,
-                    associated_bindings: &closure_assoc,
-                    receiver: iface_ty,
-                    prefer_symbolic_projections: false,
-                },
-                &mut bindings,
-            );
-
-            // The declaring interface's parameter bounds, so a `T.member`
-            // projection in a field type resolves `T`'s declaring interface.
-            let iface_bounds =
-                crate::lower_type_expr::interface_generic_param_bounds(db, iface_loc);
-            // `bindings` is complete before the field loop — snapshot its keys once.
-            let generic_params: Vec<_> = bindings.keys().cloned().collect();
-            // This matrix view is side-effect-free — field-type lowering diagnostics are
-            // surfaced where the field is declared, so drop them into a local sink here.
-            let mut diags = Vec::new();
-            for field in &iface_data.fields {
-                if !seen.insert(field.name.clone()) {
-                    continue;
-                }
-                let ty = field
-                    .type_expr
-                    .as_ref()
-                    .map(|te| {
-                        crate::generics::substitute_ty(
-                            &crate::lower_type_expr::lower_type_expr(
-                                te,
-                                &crate::lower_type_expr::ScopeCtx {
-                                    db,
-                                    package_items: pkg_items,
-                                    ns_context: &iface_ns,
-                                    generic_params: &generic_params,
-                                    bounds: iface_bounds,
-                                    self_ty: None,
-                                },
-                                &mut diags,
-                            ),
-                            &bindings,
-                        )
-                    })
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    });
-                out.push((field.name.clone(), ty));
-            }
-        }
-
-        out
     }
 
     /// The class field that an interface field (`field_name` on the realized interface
@@ -14893,6 +14738,25 @@ impl TypeInferenceBuilder<'_> {
                     key: kb, value: vb, ..
                 },
             ) => self.pattern_matchable(ka, kb) && self.pattern_matchable(va, vb),
+            // A bare interface pattern head (`Source { value }`) places no pin
+            // constraint — it destructures any realization of that interface,
+            // adopting the scrutinee's pins (mirrors `lower_class_pat`'s adoption).
+            // A pinned head still constrains: it falls through to bidirectional
+            // subtyping, where differing pins reject the arm.
+            (
+                Ty::Interface(pat_qtn, pat_args, pat_assoc, _),
+                Ty::Interface(scrut_qtn, scrut_args, _, _),
+            ) if pat_qtn == scrut_qtn
+                && pat_assoc.is_empty()
+                && (pat_args.is_empty()
+                    || (pat_args.len() == scrut_args.len()
+                        && pat_args
+                            .iter()
+                            .zip(scrut_args.iter())
+                            .all(|(a, b)| self.equivalent(a, b)))) =>
+            {
+                true
+            }
             _ => self.is_subtype(&pat, &scrut) || self.is_subtype(&scrut, &pat),
         }
     }
@@ -14906,11 +14770,11 @@ impl TypeInferenceBuilder<'_> {
     fn pattern_overlaps_scrut_member(&self, pat: &Ty, scrut: &Ty) -> bool {
         let members = self.flatten_union_optional_members(scrut);
         // Only a genuine union/optional contributes >1 member; a scalar scrut
-        // yields itself and was already covered by the two `is_subtype` checks.
-        members.len() > 1
-            && members
-                .iter()
-                .any(|m| self.is_subtype(pat, m) || self.is_subtype(m, pat))
+        // yields itself and was already covered by `pattern_matchable`. Each
+        // member is checked with the same relation, so a covariant-destructure
+        // pattern (bare interface head, empty array) matches a union member
+        // exactly as it would a scalar scrutinee of that member's type.
+        members.len() > 1 && members.iter().any(|m| self.pattern_matchable(pat, m))
     }
 
     /// Flatten a (possibly nested) union type into its leaf members. A nullable
@@ -15721,36 +15585,71 @@ impl TypeInferenceBuilder<'_> {
         // elided fields are wildcarded, while named fields preserve their
         // lowered subpatterns for exhaustiveness/refutability.
         if let Ty::Interface(pattern_iface_qtn, pattern_args, pattern_assoc, attr) = &class_ty {
-            let effective_interface_ty = match (
-                pattern_assoc.is_empty(),
-                self.expand_alias_chains(scrut_ty.clone()),
-            ) {
-                (true, Ty::Interface(scrut_iface_qtn, scrut_args, scrut_assoc, scrut_attr))
-                    if pattern_iface_qtn == &scrut_iface_qtn
-                        && (pattern_args.is_empty()
-                            || (pattern_args.len() == scrut_args.len()
-                                && pattern_args
-                                    .iter()
-                                    .zip(scrut_args.iter())
-                                    .all(|(a, b)| self.equivalent(a, b)))) =>
-                {
-                    Ty::Interface(
-                        pattern_iface_qtn.clone(),
-                        if pattern_args.is_empty() {
-                            scrut_args
-                        } else {
-                            pattern_args.clone()
-                        },
-                        scrut_assoc,
-                        scrut_attr,
-                    )
+            // A head that omits its associated bindings adopts them from the
+            // scrutinee — so the scrutinee must determine them *uniquely*. Collect
+            // every scrutinee realization of this interface consistent with the
+            // written generic args (a union may carry several): exactly one →
+            // adopt its args/bindings; two or more distinct → ambiguous, the
+            // pattern must write the bindings (`Source<Item = …> { … }`); none →
+            // keep the written form (the mismatch is reported by the pattern-vs-
+            // scrut gate). A head with written bindings is used as written.
+            let effective_interface_ty = if pattern_assoc.is_empty() {
+                // Candidate realizations, kept as the member `Ty::Interface`s themselves.
+                let mut candidates: Vec<Ty> = Vec::new();
+                for member in self.flatten_union_optional_members(scrut_ty) {
+                    let Ty::Interface(member_qtn, member_args, ..) = &member else {
+                        continue;
+                    };
+                    if member_qtn != pattern_iface_qtn {
+                        continue;
+                    }
+                    let args_compatible = pattern_args.is_empty()
+                        || (pattern_args.len() == member_args.len()
+                            && pattern_args
+                                .iter()
+                                .zip(member_args.iter())
+                                .all(|(a, b)| self.equivalent(a, b)));
+                    if args_compatible && !candidates.contains(&member) {
+                        candidates.push(member);
+                    }
                 }
-                _ => Ty::Interface(
+                if candidates.len() > 1 {
+                    self.report_at_pat_or_expr(
+                        TirTypeError::AmbiguousInterfacePatternBindings {
+                            interface: pattern_iface_qtn.clone(),
+                            candidates: candidates.clone(),
+                        },
+                        pat_id,
+                        at_expr,
+                    );
+                }
+                match (candidates.len(), candidates.into_iter().next()) {
+                    (1, Some(Ty::Interface(_, scrut_args, scrut_assoc, scrut_attr))) => {
+                        Ty::Interface(
+                            pattern_iface_qtn.clone(),
+                            if pattern_args.is_empty() {
+                                scrut_args
+                            } else {
+                                pattern_args.clone()
+                            },
+                            scrut_assoc,
+                            scrut_attr,
+                        )
+                    }
+                    _ => Ty::Interface(
+                        pattern_iface_qtn.clone(),
+                        pattern_args.clone(),
+                        pattern_assoc.clone(),
+                        attr.clone(),
+                    ),
+                }
+            } else {
+                Ty::Interface(
                     pattern_iface_qtn.clone(),
                     pattern_args.clone(),
                     pattern_assoc.clone(),
                     attr.clone(),
-                ),
+                )
             };
             let mut by_name: FxHashMap<Name, &ast::FieldPat> = FxHashMap::default();
             for fp in fields {

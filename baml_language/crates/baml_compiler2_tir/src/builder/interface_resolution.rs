@@ -914,6 +914,96 @@ impl<'db> TypeInferenceBuilder<'db> {
         None
     }
 
+    /// Interface field `(name, type)` pairs in requires-closure order, each field lowered
+    /// in the same environment as the member-access path (`Self` = the receiver
+    /// existential, so a `Self.Assoc` field type collapses through the receiver's pins).
+    /// Side-effect-free for matrix construction: lowering diagnostics are dropped — the
+    /// decl-validation pass reports a field type's own errors, and the member-access path
+    /// reports receiver-specific ones.
+    pub(super) fn interface_field_infos_ordered_for_ty(&self, iface_ty: &Ty) -> Vec<(Name, Ty)> {
+        let mut out = Vec::new();
+        let mut seen = rustc_hash::FxHashSet::default();
+        let Ty::Interface(iface_name, iface_type_args, associated_bindings, _) = iface_ty else {
+            return out;
+        };
+        let Some(pkg_items) = self.resolve_class_pkg_items(iface_name.package()) else {
+            return out;
+        };
+        let Some(baml_compiler2_hir::contributions::Definition::Interface(root_loc)) =
+            pkg_items.lookup_type(iface_name.namespace(), iface_name.name())
+        else {
+            return out;
+        };
+
+        let db = self.context.db();
+        for (iface_loc, closure_args, closure_assoc) in
+            crate::interfaces::interface_closure_locs_with_args_and_assoc(
+                db,
+                root_loc,
+                iface_type_args,
+                associated_bindings,
+                true,
+            )
+        {
+            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+            let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) else {
+                continue;
+            };
+            if iface_data.fields.is_empty() {
+                continue;
+            }
+            let Some(qtn) = crate::interfaces::interface_loc_qtn(db, iface_loc) else {
+                continue;
+            };
+            // `Self` stays the receiver existential (`iface_ty`, the closure root) for
+            // every closure entry — a required interface's `Self.Assoc` field resolves
+            // through the root's closure exactly as it would on a member access.
+            let view = InterfaceView {
+                loc: iface_loc,
+                realized: baml_type::Interface::new(qtn, closure_args, closure_assoc),
+            };
+            let env = self.interface_member_lowering_env(
+                &view,
+                SelfReceiver::Existential(iface_ty),
+                &[],
+                None,
+            );
+            let ns = view.namespace(db);
+            let mut diags = env.diags;
+            for field in &iface_data.fields {
+                if !seen.insert(field.name.clone()) {
+                    continue;
+                }
+                let ty = field
+                    .type_expr
+                    .as_ref()
+                    .map(|te| {
+                        crate::generics::substitute_ty(
+                            &crate::lower_type_expr::lower_type_expr(
+                                te,
+                                &crate::lower_type_expr::ScopeCtx {
+                                    db,
+                                    package_items: view.pkg_items(db),
+                                    ns_context: &ns,
+                                    generic_params: &env.all_generic_params,
+                                    bounds: &env.bounds,
+                                    self_ty: Some(env.self_ty.clone()),
+                                },
+                                &mut diags,
+                            ),
+                            &env.bindings,
+                        )
+                    })
+                    .unwrap_or(Ty::Unknown {
+                        attr: TyAttr::default(),
+                    });
+                out.push((field.name.clone(), ty));
+            }
+        }
+
+        out
+    }
+
     /// Build the lowering environment for one interface member (field or method) resolved on
     /// a receiver — everything the member's declared type expression(s) need to lower: the
     /// in-scope type-variable names, their bounds, what `Self` lowers to, and the final
