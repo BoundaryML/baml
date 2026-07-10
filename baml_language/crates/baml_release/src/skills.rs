@@ -100,12 +100,12 @@ pub fn read_skills_state(state_path: &Path) -> Option<SkillsState> {
 }
 
 /// Write the `[skills]` section of `state.toml`, preserving every other
-/// section (notably the wrapper-owned `[channels.*]`).
+/// section (notably the wrapper-owned `[channels.*]`). Only a missing file is
+/// treated as empty; an unreadable or unparseable file is an error, so a
+/// corrupt `state.toml` is never silently replaced (which would also destroy
+/// the other writers' sections).
 pub fn write_skills_state(state_path: &Path, skills: &SkillsState) -> Result<()> {
-    let mut root = fs::read_to_string(state_path)
-        .ok()
-        .and_then(|text| text.parse::<toml::Value>().ok())
-        .unwrap_or_else(|| toml::Value::Table(toml::value::Table::new()));
+    let mut root = read_state_document(state_path)?;
     let table = root
         .as_table_mut()
         .context("state.toml root is not a table")?;
@@ -113,7 +113,44 @@ pub fn write_skills_state(state_path: &Path, skills: &SkillsState) -> Result<()>
         "skills".to_string(),
         toml::Value::try_from(skills).context("failed to serialize skills state")?,
     );
-    let text = toml::to_string_pretty(&root).context("failed to serialize state.toml")?;
+    write_state_document(state_path, &root)
+}
+
+/// Remove the `[skills]` section of `state.toml`, preserving every other
+/// section. Used after installs from custom sources, which have no commit
+/// identity: stale provenance would otherwise make the wrapper report
+/// unrelated content as current.
+pub fn clear_skills_state(state_path: &Path) -> Result<()> {
+    let mut root = read_state_document(state_path)?;
+    let Some(table) = root.as_table_mut() else {
+        return Ok(());
+    };
+    if table.remove("skills").is_none() {
+        return Ok(());
+    }
+    write_state_document(state_path, &root)
+}
+
+fn read_state_document(state_path: &Path) -> Result<toml::Value> {
+    let text = match fs::read_to_string(state_path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(toml::Value::Table(toml::value::Table::new()));
+        }
+        Err(err) => {
+            return Err(err).with_context(|| format!("failed to read {}", state_path.display()));
+        }
+    };
+    text.parse::<toml::Value>().with_context(|| {
+        format!(
+            "failed to parse {} (fix or delete the file and retry)",
+            state_path.display()
+        )
+    })
+}
+
+fn write_state_document(state_path: &Path, root: &toml::Value) -> Result<()> {
+    let text = toml::to_string_pretty(root).context("failed to serialize state.toml")?;
     write_text_atomic(state_path, &text)
 }
 
@@ -248,6 +285,45 @@ mod tests {
         let path = tmp.path().join("state.toml");
         fs::write(&path, "[channels.canary]\nactive_version = \"1\"\nresolved_at = \"x\"\nmanifest_path = \"y\"\n").unwrap();
         assert!(read_skills_state(&path).is_none());
+    }
+
+    #[test]
+    fn write_skills_state_refuses_to_clobber_corrupt_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("state.toml");
+        fs::write(&path, "this is not [valid toml").unwrap();
+
+        let skills = SkillsState {
+            installed_commit: "abc123".to_string(),
+            installed_at: "2026-07-10T00:00:00Z".to_string(),
+        };
+        let err = write_skills_state(&path, &skills).unwrap_err();
+        assert!(format!("{err:#}").contains("failed to parse"), "{err:#}");
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "this is not [valid toml"
+        );
+    }
+
+    #[test]
+    fn clear_skills_state_removes_section_and_preserves_others() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("state.toml");
+        fs::write(
+            &path,
+            "[channels.canary]\nactive_version = \"0.11.0\"\nresolved_at = \"x\"\nmanifest_path = \"y\"\n\n[skills]\ninstalled_commit = \"abc\"\ninstalled_at = \"z\"\n",
+        )
+        .unwrap();
+
+        clear_skills_state(&path).unwrap();
+
+        assert!(read_skills_state(&path).is_none());
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("[channels.canary]"), "{text}");
+
+        // Missing file and missing section are both no-ops.
+        clear_skills_state(&path).unwrap();
+        clear_skills_state(&tmp.path().join("missing.toml")).unwrap();
     }
 
     #[test]

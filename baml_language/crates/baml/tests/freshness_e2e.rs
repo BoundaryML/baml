@@ -21,7 +21,9 @@ const SKILL_MISSING_WARNING: &str =
 /// A project directory containing installed baml agent skills.
 fn project_with_skills() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
-    fs::create_dir_all(dir.path().join(".agents/skills/baml-core")).unwrap();
+    let skill_dir = dir.path().join(".agents/skills/baml-core");
+    fs::create_dir_all(&skill_dir).unwrap();
+    fs::write(skill_dir.join("SKILL.md"), "---\nname: baml-core\n---\n").unwrap();
     dir
 }
 
@@ -189,6 +191,19 @@ fn missing_project_skills_prompt_install_on_every_command() {
     home.write_state(Some("bbb"));
     home.write_skill_cache("bbb");
     let stderr = stderr_of(&home.run_from(empty.path(), &[]));
+    assert!(stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
+    assert!(!stderr.contains(SKILL_OUTDATED_WARNING), "{stderr}");
+}
+
+#[test]
+fn empty_skill_directory_still_prompts_install() {
+    let home = TestHome::new();
+
+    // A leftover baml-* directory without a SKILL.md is not an installation.
+    let project = tempfile::tempdir().unwrap();
+    fs::create_dir_all(project.path().join(".agents/skills/baml-core")).unwrap();
+
+    let stderr = stderr_of(&home.run_from(project.path(), &[]));
     assert!(stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
     assert!(!stderr.contains(SKILL_OUTDATED_WARNING), "{stderr}");
 }

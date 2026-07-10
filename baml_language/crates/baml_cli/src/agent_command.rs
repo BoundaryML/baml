@@ -84,8 +84,9 @@ impl AgentInstallArgs {
         };
         let loaded = load_skills(self)?;
         install_skills(&root, &loaded.skills)?;
-        if let Some(commit) = &loaded.commit {
-            record_installed_commit(commit);
+        match &loaded.commit {
+            Some(commit) => record_installed_commit(commit),
+            None => clear_installed_commit(),
         }
         print_success(&root)?;
         Ok(ExitCode::Success)
@@ -164,6 +165,18 @@ fn record_installed_commit(commit: &str) {
     ) {
         crate::reporter::print_warning(format_args!(
             "failed to update skill freshness cache: {err:#}"
+        ));
+    }
+}
+
+/// Installs from custom `--from` sources have no commit identity. Drop any
+/// previously recorded provenance so the wrapper doesn't report the custom
+/// content as up to date with (or behind) the official skill repo.
+fn clear_installed_commit() {
+    if let Err(err) = baml_release::skills::clear_skills_state(&baml_release::skills::state_path())
+    {
+        crate::reporter::print_warning(format_args!(
+            "failed to clear recorded skill provenance: {err:#}"
         ));
     }
 }

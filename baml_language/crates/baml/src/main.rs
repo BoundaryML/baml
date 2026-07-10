@@ -559,12 +559,15 @@ fn warning_prefix() -> impl std::fmt::Display {
 
 /// Refresh the freshness caches (channel manifest and latest skill commit)
 /// over the network when they're older than the TTL, at most one attempt per
-/// TTL window. Runs before normal commands, so failures are silent and the
-/// timeout is short; disable entirely with `[update] auto_check = false`.
+/// TTL window. Runs before normal commands, so failures are silent and both
+/// refreshes share a single [`AUTO_CHECK_TIMEOUT`] wall-clock budget (a
+/// command never stalls longer than that, even with both caches due);
+/// disable entirely with `[update] auto_check = false`.
 fn auto_refresh_caches(selector: &ResolvedSelector) {
     if !read_config().update.auto_check_enabled() {
         return;
     }
+    let deadline = std::time::Instant::now() + AUTO_CHECK_TIMEOUT;
 
     if is_channel(&selector.selector) {
         let cache = manifest_cache_dir(&baml_release::manifest_base_url())
@@ -579,9 +582,16 @@ fn auto_refresh_caches(selector: &ResolvedSelector) {
         }
     }
 
+    // The skill refresh gets whatever budget the manifest refresh left over.
+    // When nothing remains, skip without touching the attempt marker so the
+    // next command retries instead of waiting out the full TTL window.
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    if remaining.is_zero() {
+        return;
+    }
     let cache = baml_release::skills::latest_skill_commit_cache_path();
     if should_attempt_refresh(&cache) {
-        if let Ok(sha) = baml_release::skills::fetch_latest_skill_commit(AUTO_CHECK_TIMEOUT) {
+        if let Ok(sha) = baml_release::skills::fetch_latest_skill_commit(remaining) {
             let _ = baml_release::skills::write_cached_latest_skill_commit(&cache, &sha);
         }
     }
@@ -675,13 +685,19 @@ fn project_has_baml_skills() -> bool {
     }
 }
 
+/// A skill counts only when it's a `baml-*` directory actually containing a
+/// `SKILL.md`; a leftover empty directory or stray file must not suppress the
+/// missing-skill prompt.
 fn dir_contains_baml_skill(skills_dir: &Path) -> bool {
     fs::read_dir(skills_dir)
         .ok()
         .into_iter()
         .flatten()
         .filter_map(std::result::Result::ok)
-        .any(|entry| entry.file_name().to_string_lossy().starts_with("baml-"))
+        .any(|entry| {
+            entry.file_name().to_string_lossy().starts_with("baml-")
+                && entry.path().join("SKILL.md").is_file()
+        })
 }
 
 /// Passive freshness check for channel selectors, run on every pass-through
