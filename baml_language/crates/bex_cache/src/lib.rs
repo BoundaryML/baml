@@ -876,17 +876,25 @@ pub struct RemoteCache {
 }
 
 /// Whether a bearer token may be attached to `base_url`: true over https, or
-/// to a real http loopback host (`localhost`, `127.0.0.1`, `::1`). The host is
+/// to a real http loopback host (`localhost`, `127.0.0.1`, `[::1]`). The host is
 /// taken from a parsed URL, so `host_str` drops any userinfo and port — a
 /// look-alike authority such as `localhost.evil.com` or `127.0.0.1@evil.com`
 /// resolves to a non-loopback host and is correctly rejected, closing the
 /// cleartext-token leak those inputs would otherwise cause.
+///
+/// `Url::host_str` returns IPv6 literals in their bracketed form, so the IPv6
+/// loopback arrives as `[::1]` (not `::1`); both spellings are matched so the
+/// token is preserved for `http://[::1]:<port>`.
 fn token_allowed(base_url: &str) -> bool {
     if base_url.starts_with("https://") {
         return true;
     }
     reqwest::Url::parse(base_url).is_ok_and(|u| {
-        u.scheme() == "http" && matches!(u.host_str(), Some("localhost" | "127.0.0.1" | "::1"))
+        u.scheme() == "http"
+            && matches!(
+                u.host_str(),
+                Some("localhost" | "127.0.0.1" | "::1" | "[::1]")
+            )
     })
 }
 
@@ -1184,6 +1192,14 @@ mod remote_tests {
         assert!(
             token_allowed("http://localhost:8080"),
             "http loopback keeps token"
+        );
+        assert!(
+            token_allowed("http://127.0.0.1:8080"),
+            "http IPv4 loopback keeps token"
+        );
+        assert!(
+            token_allowed("http://[::1]:8080"),
+            "http IPv6 loopback keeps token (host_str is bracketed)"
         );
         assert!(
             !token_allowed("http://localhost.evil.com"),

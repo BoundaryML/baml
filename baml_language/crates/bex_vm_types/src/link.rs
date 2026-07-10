@@ -166,6 +166,29 @@ fn resolve_object_import(
     }
 }
 
+/// The single unit in `group` that carries the group's `$init`/`$init_test`
+/// tail, or `None` if the group has none.
+///
+/// # Errors
+///
+/// [`LinkError::DuplicateExport`] (named `$init tail`) if more than one unit in
+/// the group carries an `init_tail`. A group's tail is placed after the group's
+/// regular code and must be unique; silently keeping the first and dropping the
+/// rest would lose `$init`/`$init_test` bytecode if an emitter bug ever produced
+/// two, so this is surfaced rather than swallowed.
+fn sole_init_tail(units: &[CompilationUnit], group: &[usize]) -> Result<Option<usize>, LinkError> {
+    let mut tail: Option<usize> = None;
+    for &u in group {
+        if units[u].init_tail.is_some() {
+            if tail.is_some() {
+                return Err(LinkError::DuplicateExport("$init tail".to_string()));
+            }
+            tail = Some(u);
+        }
+    }
+    Ok(tail)
+}
+
 /// Link symbolic units into a runnable [`Program`].
 ///
 /// `units` must already be in the deterministic file-discovery order (builtins
@@ -191,15 +214,11 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
 
     // The `$init`/`$init_test` tail of each group is carried on one of its units
     // (at most one). It is placed after the group's regular code (design §9 R2).
+    // Two tails in one group would drop bytecode, so it is an error rather than a
+    // silent first-wins.
     let group_tail: [Option<usize>; 2] = [
-        groups[0]
-            .iter()
-            .copied()
-            .find(|&u| units[u].init_tail.is_some()),
-        groups[1]
-            .iter()
-            .copied()
-            .find(|&u| units[u].init_tail.is_some()),
+        sole_init_tail(units, groups[0])?,
+        sole_init_tail(units, groups[1])?,
     ];
 
     // ---- Per-unit func/let counts -------------------------------------------
@@ -325,9 +344,16 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             // A `Code` export (named function) may sit after a shadowed generic in
             // its bucket, so its absolute index comes from `code_abs`, not the flat
             // base. Generic *values* are never exported, so a `Code` export is never
-            // a shadow.
+            // a shadow. A malformed export could name an out-of-range code slot;
+            // `link` is fallible and runs on cache/relink paths, so index safely
+            // instead of panicking. The sibling arms resolve through
+            // `export_object_abs`, which is pure arithmetic and cannot panic.
             let abs = match local_ref {
-                LocalRef::Code(k) => code_abs[u][*k as usize],
+                LocalRef::Code(k) => *code_abs[u].get(*k as usize).ok_or_else(|| {
+                    LinkError::UnresolvedImport(format!(
+                        "{name}: code export slot {k} out of range for unit {u}"
+                    ))
+                })?,
                 other => export_object_abs(&layout[u], *other),
             };
             if obj_by_name.insert(name.clone(), abs).is_some() {
@@ -709,7 +735,7 @@ mod tests {
         bytecode::Bytecode,
         relink::visit_index_operands,
         types::{Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin},
-        unit::{ExportTable, ProgramPackageFrag},
+        unit::{ExportTable, InitTail, ProgramPackageFrag},
     };
 
     fn func(name: &str, instructions: Vec<Instruction>) -> Object {
@@ -992,6 +1018,51 @@ mod tests {
             Err(LinkError::UnresolvedImport(name)) => assert_eq!(name, "other.External"),
             Err(e) => panic!("expected UnresolvedImport, got a different error: {e:?}"),
             Ok(_) => panic!("expected UnresolvedImport, got Ok"),
+        }
+    }
+
+    /// Two units in the same (user) group each carrying an `init_tail` must be
+    /// rejected — silently keeping the first would drop the second's
+    /// `$init`/`$init_test` bytecode.
+    #[test]
+    fn link_rejects_two_init_tails_in_one_group() {
+        let mut a = local_only_unit();
+        a.source_file = "a.baml".to_string();
+        a.init_tail = Some(InitTail::default());
+        // A second user unit with disjoint names so name-dedup can't fire first.
+        let mut b = local_only_unit();
+        b.source_file = "b.baml".to_string();
+        b.classes = vec![class("b.Other", 200)];
+        b.code = vec![func("b.foo", vec![Instruction::Return])];
+        b.exports = ExportTable {
+            objects: vec![
+                ("b.Other".to_string(), LocalRef::Class(0)),
+                ("b.foo".to_string(), LocalRef::Code(0)),
+            ],
+            globals: vec![("b.foo".to_string(), 0)],
+        };
+        b.init_tail = Some(InitTail::default());
+
+        match link(&[a, b]) {
+            Err(LinkError::DuplicateExport(name)) => assert_eq!(name, "$init tail"),
+            other => panic!("expected DuplicateExport for duplicate init tail, got {other:?}"),
+        }
+    }
+
+    /// A malformed export naming a code slot past the end of the unit's `code`
+    /// bucket must return an error, not panic — `link` runs on cache/relink paths
+    /// where it must stay panic-free.
+    #[test]
+    fn link_rejects_out_of_range_code_export() {
+        let mut unit = local_only_unit();
+        unit.exports
+            .objects
+            .push(("user.bogus".to_string(), LocalRef::Code(99)));
+        match link(std::slice::from_ref(&unit)) {
+            Err(LinkError::UnresolvedImport(_)) => {}
+            other => {
+                panic!("expected UnresolvedImport for out-of-range code export, got {other:?}")
+            }
         }
     }
 }
