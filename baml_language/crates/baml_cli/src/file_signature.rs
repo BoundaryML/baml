@@ -157,6 +157,12 @@ pub(crate) fn file_layout_hash(db: &ProjectDatabase, file: SourceFile) -> [u8; 3
             if bs < ds || be > de {
                 continue;
             }
+            // Body ranges are currently disjoint siblings (lambdas are
+            // BLOCK_EXPR, no nested fn decls), so `bs < cursor` can't happen
+            // today; guard future-proofs this if that ever changes.
+            if bs < cursor {
+                continue;
+            }
             let gap = &bytes[cursor..bs];
             hasher.update((gap.len() as u64).to_le_bytes());
             hasher.update(gap);

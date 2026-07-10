@@ -654,8 +654,10 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
     // short-circuiting here skips all of it. This stays ABOVE the fragment fold.
     if let Some(seeds) = db.seeded_stdlib_interface() {
         if let Some(bytes) = seeds.by_package(db).get(pkg_name.as_str()) {
-            return borsh::from_slice::<PackageInterface>(bytes)
-                .expect("seeded stdlib interface must deserialize");
+            if let Ok(iface) = borsh::from_slice::<PackageInterface>(bytes) {
+                return iface;
+            }
+            // corrupt/stale seed → fall through to honest derivation
         }
     }
 

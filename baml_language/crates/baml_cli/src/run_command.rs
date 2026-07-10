@@ -796,7 +796,9 @@ impl RunArgs {
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
             if let Err(e) = ctx.store_with_manifest(&db, &program, fresh, reuse_plan.as_ref()) {
-                self.vlog(format_args!("Bytecode cache write failed: {e}"));
+                crate::bytecode_cache::cache_debug(format_args!(
+                    "Bytecode cache write failed: {e}"
+                ));
             }
             // Materialize the stdlib interface blob on a miss (idempotent on a
             // hit, so only write when the seed was absent).
