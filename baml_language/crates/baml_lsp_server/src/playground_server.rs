@@ -495,6 +495,9 @@ struct WsState {
     doc_mirror: DocMirror,
     /// Workspace roots that browser-mode LSP saves are allowed to write under.
     workspace_roots: Arc<Vec<PathBuf>>,
+    /// Target of the most recent OpenPlayground; replayed to a page when it
+    /// requests state so a freshly opened / reconnected window navigates there.
+    current_open_target: crate::playground_sender::SharedOpenTarget,
 }
 
 type LiveValueStore = Arc<Mutex<LiveValueCache>>;
@@ -969,6 +972,7 @@ pub async fn run(
     doc_mirror: DocMirror,
     workspace_roots: Vec<PathBuf>,
     session_token: Option<Arc<str>>,
+    current_open_target: crate::playground_sender::SharedOpenTarget,
 ) -> anyhow::Result<()> {
     let local_addr = listener.local_addr()?;
     let access_guard = PlaygroundAccessGuard::new(session_token);
@@ -983,6 +987,7 @@ pub async fn run(
         doc_mirror,
         Arc::new(workspace_roots),
         access_guard,
+        current_open_target,
     )?;
 
     tracing::info!("Playground: http://localhost:{}", local_addr.port());
@@ -1004,6 +1009,7 @@ fn build_router(
     doc_mirror: DocMirror,
     workspace_roots: Arc<Vec<PathBuf>>,
     access_guard: PlaygroundAccessGuard,
+    current_open_target: crate::playground_sender::SharedOpenTarget,
 ) -> anyhow::Result<Router> {
     let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
@@ -1022,6 +1028,7 @@ fn build_router(
         lsp_out_tx,
         doc_mirror,
         workspace_roots,
+        current_open_target,
     };
 
     let api = Router::new()
@@ -2365,6 +2372,25 @@ async fn handle_ws_in_message(
 
         WsInMessage::RequestState => {
             state.bex.request_playground_state();
+            // A page that connected after an OpenPlayground request (a freshly
+            // spawned browser window, or a reconnect) still needs to be told
+            // where to navigate. Replay the last target directly to it.
+            let target = state.current_open_target.lock().unwrap().clone();
+            if let Some(target) = target {
+                let notif = bex_project::PlaygroundNotification::OpenPlayground {
+                    project: target.project,
+                    function_name: target.function_name,
+                    test_name: target.test_name,
+                    testset_name: target.testset_name,
+                };
+                let json = serde_json::to_value(&notif).unwrap_or_default();
+                let msg = WsOutMessage::PlaygroundNotification { notification: json };
+                if let Some(ws_msg) = to_ws_text(&msg)
+                    && sink.send(ws_msg).await.is_err()
+                {
+                    tracing::warn!("Failed to replay open-playground target");
+                }
+            }
         }
 
         WsInMessage::RequestCollectTests { project } => {
