@@ -21,7 +21,7 @@
 // same VM local-boxing caveat documented in `ns_class_type_args_at_runtime`).
 
 interface Shape {
-    function area(self) -> int
+    function area(self) -> int throws never
 }
 
 class Sq {

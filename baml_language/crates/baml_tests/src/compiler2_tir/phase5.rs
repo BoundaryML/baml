@@ -757,8 +757,9 @@ fn bare_name_cross_namespace_rejected() {
         &mut diags,
     );
     assert!(
-        matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
-        "bare Config from ns_llm should not resolve"
+        matches!(ty, baml_compiler2_tir::ty::Ty::Error { .. }),
+        "bare Config from ns_llm should not resolve (an unresolved name is the diagnosed \
+         `!error` sentinel, never `unknown`)"
     );
     assert!(
         diags.len() == 1,
@@ -806,8 +807,9 @@ fn multi_segment_bare_path_rejected() {
         &mut diags,
     );
     assert!(
-        matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
-        "ns2.MyClass from ns1 should not resolve without root. prefix"
+        matches!(ty, baml_compiler2_tir::ty::Ty::Error { .. }),
+        "ns2.MyClass from ns1 should not resolve without root. prefix (an unresolved name \
+         is the diagnosed `!error` sentinel, never `unknown`)"
     );
     assert!(!diags.is_empty(), "should emit UnresolvedType diagnostic");
     let msg = diags[0].to_string();
