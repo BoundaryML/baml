@@ -69,3 +69,28 @@ export function lambDataUri(): string {
   }
   return lamb;
 }
+
+const imgCache = new Map<string, string>();
+
+/** Read a vendored image (in components/og/) as a base64 data URI, memoized. */
+function imageDataUri(file: string, mime = 'image/jpeg'): string {
+  let uri = imgCache.get(file);
+  if (!uri) {
+    uri = `data:${mime};base64,${read(file).toString('base64')}`;
+    imgCache.set(file, uri);
+  }
+  return uri;
+}
+
+/** The "ai that works" podcast hosts' X avatars, as data URIs. */
+export function podcastHosts(): { src: string; handle: string }[] {
+  return [
+    { handle: '@vaibcode', src: imageDataUri('host-vaibcode.jpg') },
+    { handle: '@dexhorthy', src: imageDataUri('host-dexhorthy.jpg') },
+  ];
+}
+
+/** The team photo, as a data URI (for the /who-are-we card). */
+export function teamPhoto(): string {
+  return imageDataUri('team.jpg');
+}

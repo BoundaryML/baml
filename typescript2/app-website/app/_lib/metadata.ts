@@ -20,15 +20,22 @@ export const TWITTER_HANDLE = '@boundaryml';
 export function ogImagePath(opts: {
   title: string;
   eyebrow?: string;
+  /** Card subtitle (mono, under the headline). */
   description?: string;
-  /** Render the horizontal computing-eras timeline (homepage card). */
+  /** Render the horizontal computing-eras timeline. */
   timeline?: boolean;
+  /** Render the podcast host avatars. */
+  podcast?: boolean;
+  /** Render the team photo. */
+  team?: boolean;
 }): string {
   const search = new URLSearchParams();
   search.set('title', opts.title);
   if (opts.eyebrow) search.set('eyebrow', opts.eyebrow);
   if (opts.description) search.set('desc', opts.description);
   if (opts.timeline) search.set('timeline', '1');
+  if (opts.podcast) search.set('podcast', '1');
+  if (opts.team) search.set('team', '1');
   return `/api/og?${search.toString()}`;
 }
 
@@ -38,10 +45,18 @@ export interface CreateMetadataOptions {
   description: string;
   /** Path for canonical + og:url, e.g. "/quickstart". Defaults to "/". */
   path?: string;
-  /** Small uppercase kicker on the preview image, e.g. "Quickstart". */
+  /** Deprecated: the card no longer renders a kicker. Ignored. */
   eyebrow?: string;
   /** Override the OG/Twitter/image title when it should differ from <title>. */
   ogTitle?: string;
+  /** Card subtitle (mono, under the headline). Use only for a real fact. */
+  ogSubtitle?: string;
+  /** Card variant: the computing-eras timeline (home + /explore). */
+  timeline?: boolean;
+  /** Card variant: podcast host avatars (/podcast). */
+  podcast?: boolean;
+  /** Card variant: the team photo (/who-are-we). */
+  team?: boolean;
   /** Set an exact <title>, bypassing the "… | BAML" template. */
   titleAbsolute?: string;
   /** Provide a custom preview image instead of the generated one. */
@@ -56,19 +71,29 @@ export function createMetadata({
   title,
   description,
   path = '/',
-  eyebrow,
   ogTitle,
+  ogSubtitle,
   titleAbsolute,
   image,
   type = 'website',
   keywords,
   indexable = true,
+  timeline,
+  podcast,
+  team,
 }: CreateMetadataOptions): Metadata {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const url = `${SITE_URL}${normalizedPath}`;
   const cardTitle = ogTitle ?? title;
   const ogImage =
-    image ?? ogImagePath({ description, eyebrow, title: cardTitle });
+    image ??
+    ogImagePath({
+      description: ogSubtitle,
+      podcast,
+      team,
+      timeline,
+      title: cardTitle,
+    });
 
   return {
     alternates: { canonical: url },
