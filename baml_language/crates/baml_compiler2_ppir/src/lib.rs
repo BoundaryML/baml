@@ -228,11 +228,17 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                 // Clone the original class and rename it
                 let mut stream_class = c.clone();
                 stream_class.name = SmolStr::new(format!("{}$stream", c.name));
-                // $stream classes don't have methods. Generic params are
-                // preserved so that field types referencing them (e.g. `v: T`)
-                // round-trip through TIR as `Ty::TypeVar` instead of collapsing
-                // to `Ty::Unknown`.
+                // A $stream class does not *inherit* its base's methods — neither direct ones
+                // nor those an in-body `implements` block contributes (a method valid for the
+                // base need not be for its stream companion). A stream class participates in an
+                // interface only if the user *explicitly* implements it (`implement Foo for
+                // Bar$stream { ... }`, a separate out-of-body impl that is untouched here).
+                // Dropping the cloned in-body `implements` blocks also drops the interface
+                // obligations that would otherwise require those methods. Generic params are
+                // preserved so that field types referencing them (e.g. `v: T`) round-trip
+                // through TIR as `Ty::TypeVar` instead of collapsing to `Ty::Unknown`.
                 stream_class.methods.clear();
+                stream_class.implements.clear();
                 // Use a dummy span so the synthetic class doesn't shadow the
                 // original in offset-based scope lookup (scope_at_offset
                 // iterates in reverse and would find this scope first if it
