@@ -7,10 +7,10 @@ import { Navbar } from '@/components/navbar';
 
 export const metadata = createMetadata({
   description:
-    'Meet the team building BAML, the language for agents and structured-output LLM work.',
-  eyebrow: 'Team',
-  ogTitle: 'Who are we',
+    'The small team rebuilding language and tooling for a world where AI writes most of the code.',
+  ogTitle: 'Our team',
   path: '/who-are-we',
+  team: true,
   title: 'Who are we',
 });
 
@@ -37,36 +37,36 @@ type TeamMember = {
 // silos.
 const teamMembers: TeamMember[] = [
   {
-    name: 'Vaibhav Gupta',
-    role: 'Co-founder & CEO',
+    bio: 'Vaibhav previously built the on-device depth and face-unlock systems for Google’s Pixel 4, and worked on Microsoft’s HoloLens.',
     image: '/profile-vbv.jpeg',
     linkedin: 'https://www.linkedin.com/in/vaigup',
+    name: 'Vaibhav Gupta',
+    role: 'Co-founder & CEO',
     twitter: 'https://x.com/vaicode',
-    bio: 'Vaibhav previously built the on-device depth and face-unlock systems for Google’s Pixel 4, and worked on Microsoft’s HoloLens.',
   },
   {
-    name: 'Aaron Villalpando',
-    role: 'Co-founder & CTO',
+    bio: 'Aaron previously spent seven years at Amazon, scaling EC2’s internal monitoring and building live-streaming features for Prime Video and Twitch.',
     image: '/aaronv.jpg',
     linkedin: 'https://www.linkedin.com/in/aaron-villalpando-99284576/',
+    name: 'Aaron Villalpando',
+    role: 'Co-founder & CTO',
     twitter: 'https://x.com/aaronvi',
-    bio: 'Aaron previously spent seven years at Amazon, scaling EC2’s internal monitoring and building live-streaming features for Prime Video and Twitch.',
   },
   {
-    name: 'Sam Lijin',
-    role: 'Engineering',
+    bio: 'Sam previously worked on user identity and Cloud Firestore at Google, then built developer tooling at Trunk, after studying CS at Vanderbilt.',
     image: '/profile-sam.png',
     linkedin: 'https://www.linkedin.com/in/sxlijin/',
+    name: 'Sam Lijin',
+    role: 'Engineering',
     twitter: 'https://x.com/sxlijin',
-    bio: 'Sam previously worked on user identity and Cloud Firestore at Google, then built developer tooling at Trunk, after studying CS at Vanderbilt.',
   },
   {
-    name: 'Antonio Sarosi',
-    role: 'Engineering',
+    bio: 'Antonio has written an ACID-compliant database, an Nginx-style reverse proxy, and a memory allocator from scratch in Rust, and teaches it all to 180K+ subscribers on YouTube.',
     image: '/antonio.jpeg',
     linkedin: 'https://www.linkedin.com/in/antoniosarosi/',
+    name: 'Antonio Sarosi',
+    role: 'Engineering',
     twitter: 'https://x.com/antoniosarosi',
-    bio: 'Antonio has written an ACID-compliant database, an Nginx-style reverse proxy, and a memory allocator from scratch in Rust, and teaches it all to 180K+ subscribers on YouTube.',
   },
   {
     bio: 'Paulo is a former Y Combinator founder who grew his startup past $2M in ARR, and was an early BAML user before he joined.',
@@ -87,11 +87,11 @@ const teamMembers: TeamMember[] = [
     role: 'Engineering',
   },
   {
+    bio: 'Dhilan is a computer science intern from UT Austin who built agent-tries-baml, the system BAML uses to measure and improve how well AI agents write it.',
+    image: '/dhilan.png',
     name: 'Dhilan Shah',
     role: 'Engineering',
-    image: '/dhilan.png',
     twitter: 'https://x.com/_dhilan_shah_',
-    bio: 'Dhilan is a computer science intern from UT Austin who built agent-tries-baml, the system BAML uses to measure and improve how well AI agents write it.',
   },
 ];
 
@@ -101,10 +101,10 @@ export default function WhoAreWePage() {
       style={{
         background: BG,
         color: INK,
-        width: '100%',
-        maxWidth: 1600,
         margin: '0 auto',
+        maxWidth: 1600,
         minHeight: '100vh',
+        width: '100%',
       }}
     >
       <Navbar />
@@ -112,20 +112,20 @@ export default function WhoAreWePage() {
       {/* Hero: text and team photo side by side */}
       <section
         style={{
-          padding: '88px 48px 72px',
           borderBottom: `1px solid ${BORDER}`,
+          padding: '88px 48px 72px',
         }}
       >
-        <div className="hero-grid" style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div className="hero-grid" style={{ margin: '0 auto', maxWidth: 1200 }}>
           <div>
             <h1
               style={{
+                color: INK,
                 fontSize: 'clamp(2.5rem, 5.5vw, 4.5rem)',
                 fontWeight: 600,
-                lineHeight: 1.02,
                 letterSpacing: '-0.03em',
+                lineHeight: 1.02,
                 margin: 0,
-                color: INK,
               }}
             >
               Our Team
@@ -133,39 +133,39 @@ export default function WhoAreWePage() {
             <div style={{ marginTop: 28 }}>
               <p
                 style={{
+                  color: MUTED,
                   fontSize: 18,
                   lineHeight: 1.6,
-                  color: MUTED,
                   margin: 0,
                 }}
               >
-                Coding has changed more in the last two years than in the
-                twenty before it. The languages, the tools, and the type
-                systems we all rely on were designed for a world where humans
-                did the writing. We're a small team rebuilding those
-                foundations for a world where AI does most of it.
+                Coding has changed more in the last two years than in the twenty
+                before it. The languages, the tools, and the type systems we all
+                rely on were designed for a world where humans did the writing.
+                We're a small team rebuilding those foundations for a world
+                where AI does most of it.
               </p>
             </div>
           </div>
           <div
             style={{
+              background: CARD_BG,
               border: `1px solid ${BORDER}`,
               borderRadius: 8,
               overflow: 'hidden',
-              background: CARD_BG,
             }}
           >
             <Image
               alt="Our team"
               height={1333}
               src="/team.jpg"
-              width={2000}
               style={{
-                width: '100%',
+                display: 'block',
                 height: '100%',
                 objectFit: 'cover',
-                display: 'block',
+                width: '100%',
               }}
+              width={2000}
             />
           </div>
         </div>
@@ -173,25 +173,25 @@ export default function WhoAreWePage() {
 
       {/* Team grid */}
       <section style={{ padding: '64px 48px 96px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ margin: '0 auto', maxWidth: 1200 }}>
           <div
             style={{
-              display: 'flex',
               alignItems: 'baseline',
+              borderBottom: `1px solid ${BORDER}`,
+              display: 'flex',
               gap: 16,
               marginBottom: 32,
               paddingBottom: 16,
-              borderBottom: `1px solid ${BORDER}`,
             }}
           >
             <p
               style={{
+                color: EYEBROW,
                 fontSize: 12,
                 fontWeight: 500,
                 letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-                color: EYEBROW,
                 margin: 0,
+                textTransform: 'uppercase',
               }}
             >
               People building BAML
@@ -201,9 +201,9 @@ export default function WhoAreWePage() {
           <div
             style={{
               display: 'grid',
+              gap: 16,
               gridTemplateColumns:
                 'repeat(auto-fill, minmax(min(100%, 380px), 1fr))',
-              gap: 16,
             }}
           >
             {teamMembers.map((member) => (
@@ -287,40 +287,40 @@ export default function WhoAreWePage() {
       {/* Hiring CTA */}
       <section
         style={{
-          padding: '80px 48px 120px',
           borderTop: `1px solid ${BORDER}`,
+          padding: '80px 48px 120px',
         }}
       >
-        <div style={{ maxWidth: 720, margin: '0 auto', textAlign: 'center' }}>
+        <div style={{ margin: '0 auto', maxWidth: 720, textAlign: 'center' }}>
           <p
             style={{
+              color: EYEBROW,
               fontSize: 12,
               fontWeight: 500,
               letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              color: EYEBROW,
               margin: 0,
+              textTransform: 'uppercase',
             }}
           >
             Join us
           </p>
           <h2
             style={{
+              color: INK,
               fontSize: 'clamp(1.75rem, 3.5vw, 2.5rem)',
               fontWeight: 600,
-              lineHeight: 1.1,
               letterSpacing: '-0.02em',
+              lineHeight: 1.1,
               margin: '16px 0 0',
-              color: INK,
             }}
           >
             Work on the hard parts.
           </h2>
           <p
             style={{
+              color: MUTED,
               fontSize: 17,
               lineHeight: 1.6,
-              color: MUTED,
               margin: '20px auto 32px',
               maxWidth: 560,
             }}

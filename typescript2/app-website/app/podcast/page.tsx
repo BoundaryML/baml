@@ -1,12 +1,11 @@
 import { Headphones } from 'lucide-react';
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
-import { Button } from '@/components/ui/button';
 import { HeroSection } from './_components/hero-section';
 import { PodcastEpisodesGrid } from './_components/podcast-episodes-grid';
-import { fetchPodcastEpisodes, fallbackEpisodes } from './podcast-data';
-import { createMetadata } from '@/app/_lib/metadata';
+import { fallbackEpisodes, fetchPodcastEpisodes } from './podcast-data';
 
 const podcastPlatforms = [
   { icon: '📅', name: 'Event Calendar', url: 'https://lu.ma/baml' },
@@ -17,12 +16,12 @@ const podcastPlatforms = [
 
 export const metadata = createMetadata({
   description:
-    'Join our weekly interactive sessions where we build real AI applications together. Learn practical techniques for building production-ready AI systems with BAML.',
-  eyebrow: 'Podcast',
+    'ai that works: weekly live sessions building real AI applications with BAML.',
   keywords:
     'AI podcast, LLM development, BAML, AI engineering, machine learning, developer podcast, AI applications',
-  ogTitle: 'ai that works — weekly AI development sessions',
+  ogTitle: 'ai that works',
   path: '/podcast',
+  podcast: true,
   title: 'ai that works',
   titleAbsolute:
     '🦄 ai that works: Weekly AI Development Sessions | BAML Podcast',
@@ -35,8 +34,8 @@ export default async function PodcastPage() {
     <div
       className="mx-auto relative"
       style={{
-        maxWidth: 1600,
         background: '#FBF7ED',
+        maxWidth: 1600,
       }}
     >
       <Navbar />
@@ -66,9 +65,9 @@ export default async function PodcastPage() {
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-center">
               {podcastPlatforms.map((platform) => (
                 <Link
-                  key={platform.name}
-                  href={platform.url}
                   className="editorial-btn"
+                  href={platform.url}
+                  key={platform.name}
                 >
                   <span>{platform.icon}</span>
                   Subscribe on {platform.name}

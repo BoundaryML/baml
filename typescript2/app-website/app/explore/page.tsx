@@ -1,16 +1,19 @@
-import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { createMetadata } from '@/app/_lib/metadata';
 import '../learn2/learn2.css';
 import '../learn3/learn3.css';
 import '../learn4/learn4.css';
 import '../baml-intro/baml-intro.css';
 import { Article } from '../baml-intro/_components/Article';
 
-export const metadata: Metadata = {
+export const metadata = createMetadata({
   description:
-    'BAML for AI workflows and agents: native LLM functions, tests, a sound type system, namespaces, baml describe, baml pack, green threads, and more.',
+    "Why agents need a real programming language, plus BAML's tooling for agents and humans and how to adopt it.",
+  ogTitle: 'Why agents need a new language',
+  path: '/explore',
+  timeline: true,
   title: 'Explore BAML',
-};
+});
 
 export default function ExplorePage() {
   // The `deep` view renders Part 1 (AI workflows) onward, with the "On this

@@ -5,12 +5,10 @@ import { BlogContent } from './_components/blog-content';
 import { getPosts } from './_lib/get-posts';
 
 export const metadata = createMetadata({
-  description:
-    'Explore the latest insights, tutorials, and updates from the BAML team. Learn best practices for building type-safe, production-ready AI applications.',
-  eyebrow: 'Blog',
+  description: 'Tutorials, updates, and notes from the team building BAML.',
   keywords:
     'BAML blog, AI development, LLM tutorials, machine learning insights, type safety, AI engineering, production AI',
-  ogTitle: 'Insights, tutorials & AI development updates',
+  ogTitle: 'The BAML blog',
   path: '/blog',
   title: 'Blog',
 });

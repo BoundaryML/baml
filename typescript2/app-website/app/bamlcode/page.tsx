@@ -1,28 +1,30 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
+import { createMetadata } from '@/app/_lib/metadata';
 import { ProblemsBoard } from './_components/ProblemsBoard';
 import { PROBLEMS } from './_lib/problems-index';
 import './bamlcode.css';
 
-export const metadata: Metadata = {
+export const metadata = createMetadata({
   description:
     'Practice algorithm problems written in BAML, graded instantly in your browser. No API key required.',
+  ogTitle: 'LeetCode for BAML',
+  path: '/bamlcode',
   title: 'bamlcode: LeetCode for BAML',
-};
+});
 
 export default function BamlCodeIndex() {
   const items = PROBLEMS.map((p) => ({
-    slug: p.slug,
-    id: p.id,
-    title: p.title,
-    difficulty: p.difficulty,
     category: p.category,
+    difficulty: p.difficulty,
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
   }));
 
   return (
     <div className="bc-app">
       <aside className="bc-sidebar">
-        <Link href="/bamlcode" className="bc-sidebar-logo font-mono">
+        <Link className="bc-sidebar-logo font-mono" href="/bamlcode">
           bamlcode
         </Link>
         <nav className="bc-sidebar-nav font-mono">

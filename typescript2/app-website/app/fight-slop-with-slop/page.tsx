@@ -1,23 +1,18 @@
-import type { Metadata } from "next";
-import { Navbar } from "@/components/navbar";
-import { FooterSection } from "@/components/footer-section";
-import WarScene from "./_components/WarScene";
-import WarEpilogue from "./_components/WarEpilogue";
-import PledgeSection from "./_components/PledgeSection";
-import "./war-on-slop.css";
+import { createMetadata } from '@/app/_lib/metadata';
+import { FooterSection } from '@/components/footer-section';
+import { Navbar } from '@/components/navbar';
+import PledgeSection from './_components/PledgeSection';
+import WarEpilogue from './_components/WarEpilogue';
+import WarScene from './_components/WarScene';
+import './war-on-slop.css';
 
-export const metadata: Metadata = {
-  title: "War on Slop",
+export const metadata = createMetadata({
   description:
-    "A standing legion against the great unwashed tide of AI slop. Order, craft, and the hand-made; fighting slop with slop.",
-  openGraph: {
-    title: "The War on Slop",
-    description:
-      "Order, craft, and the hand-made versus the great unwashed tide.",
-    siteName: "BAML",
-    type: "website",
-  },
-};
+    'A standing legion against the tide of AI slop. Kill slop with clean constructs at the language level.',
+  ogTitle: 'fight slop with slop',
+  path: '/fight-slop-with-slop',
+  title: 'War on Slop',
+});
 
 export default function Page() {
   return (
@@ -29,12 +24,12 @@ export default function Page() {
             fight slop with slop
           </h1>
           <p className="tweet-font mt-3 text-sm text-wos-accent">
-            by{" "}
+            by{' '}
             <a
-              href="https://x.com/boundaryml"
-              target="_blank"
-              rel="noopener noreferrer"
               className="hover:underline"
+              href="https://x.com/boundaryml"
+              rel="noopener noreferrer"
+              target="_blank"
             >
               @boundaryml
             </a>

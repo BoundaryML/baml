@@ -5,9 +5,8 @@ import { createMetadata } from '@/app/_lib/metadata';
 import { readBamlAgentGuideMarkdown } from '@/lib/agent-content';
 
 export const metadata = createMetadata({
-  description:
-    'BAML Agent Guide — how AI coding agents should write idiomatic BAML.',
-  eyebrow: 'Agent Guide',
+  description: 'How AI coding agents should write idiomatic BAML.',
+  ogTitle: 'BAML Agent Guide',
   path: '/agent/guide',
   title: 'BAML Agent Guide',
 });

@@ -5,8 +5,8 @@ import { Navbar } from '@/components/navbar';
 
 export const metadata = createMetadata({
   description:
-    'The BAML playground runs entirely in your browser. Learn how BAML compiles to WebAssembly so you can edit, typecheck, and run BAML code without a backend.',
-  eyebrow: 'Playground',
+    'The BAML playground runs the real compiler in your browser via WebAssembly. No server, no simulation.',
+  ogTitle: 'How the playground works',
   path: '/how-the-playground-works',
   title: 'How the BAML Playground Works',
 });

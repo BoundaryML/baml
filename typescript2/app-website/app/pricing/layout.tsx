@@ -3,8 +3,8 @@ import { createMetadata } from '@/app/_lib/metadata';
 // `/pricing` is a client component, so its metadata lives in this server layout.
 export const metadata = createMetadata({
   description:
-    'Simple pricing for BAML and Boundary — start free, scale to production, with enterprise support available.',
-  eyebrow: 'Pricing',
+    'Free and open source, runs entirely on your machine, never calls our servers. Cloud tools come later this year.',
+  ogTitle: 'Free and open source',
   path: '/pricing',
   title: 'Pricing',
 });

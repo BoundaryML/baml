@@ -3,9 +3,9 @@ import { Navbar } from '@/components/navbar';
 import { CouncilGate } from './council-gate';
 
 export const metadata = createMetadata({
-  description: 'Members only.',
-  eyebrow: 'Members Only',
+  description: 'Members only. Speak the words to enter the chamber.',
   indexable: false,
+  ogTitle: 'The Sheep Council',
   path: '/sheep-council',
   title: 'The Sheep Council',
 });

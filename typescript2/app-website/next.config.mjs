@@ -48,6 +48,11 @@ const nextConfig = {
   async redirects() {
     return [
       {
+        source: '/built-with-baml',
+        destination: '/',
+        permanent: true,
+      },
+      {
         source: '/hi',
         destination: '/',
         permanent: false,

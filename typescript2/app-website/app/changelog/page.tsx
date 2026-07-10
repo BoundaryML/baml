@@ -14,8 +14,7 @@ import { ChangelogList } from './changelog-list';
 
 export const metadata = createMetadata({
   description: 'The latest releases of BAML, shipped continuously.',
-  eyebrow: 'Changelog',
-  ogTitle: 'BAML Changelog',
+  ogTitle: 'Changelog',
   path: '/changelog',
   title: 'Changelog',
 });

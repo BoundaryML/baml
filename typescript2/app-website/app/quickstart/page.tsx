@@ -12,8 +12,8 @@ import { Navbar } from '@/components/navbar';
 export const metadata = createMetadata({
   description:
     'Install BAML and its toolchain, agent skills, and editor extensions.',
-  eyebrow: 'Quickstart',
-  ogTitle: 'Install BAML in minutes',
+  ogSubtitle: 'Mac, Windows, and Linux.',
+  ogTitle: 'Install BAML in seconds',
   path: '/quickstart',
   title: 'Quickstart',
 });

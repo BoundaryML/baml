@@ -9,7 +9,7 @@ import { EapSchedule } from './eap-schedule';
 // cadence as the underlying fetch (see lib/luma.ts).
 export const metadata = createMetadata({
   description: 'Book a live BAML early access onboarding session.',
-  eyebrow: 'Early Access',
+  ogTitle: 'Get BAML early',
   path: '/eap',
   title: 'Early Access Sign Up',
 });
