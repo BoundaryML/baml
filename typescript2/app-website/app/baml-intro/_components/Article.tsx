@@ -51,6 +51,7 @@ import {
   TS_LIES,
 } from './snippets';
 import { TenetsAccordion } from './TenetsAccordion';
+import { TryBaml } from './TryBaml';
 
 /* All sections share one reading-column width so every header aligns.
  * Editors, playgrounds, and side-by-side pairs break out wider via
@@ -178,115 +179,6 @@ function Part({
       </h2>
       {children}
     </section>
-  );
-}
-
-/* "Try it out!" install unit — tabs, command, and copy button in one
- * editor-like frame. Humans get brew, agents get the plugin commands
- * (mirrors the homepage hero's install paths). */
-const TRY_TABS = [
-  { id: 'humans', label: 'for humans' },
-  { id: 'agents', label: 'for agents' },
-] as const;
-
-/* The human install: pick how to get the `baml` wrapper (Homebrew or the
- * keyless curl one-liner, mirroring the quickstart page), then the same setup
- * steps. Agents get the plugin commands instead. */
-const HUMAN_INSTALL = [
-  { cmd: 'brew install boundaryml/tap/baml', id: 'brew', label: 'Homebrew' },
-  {
-    cmd: 'curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s',
-    id: 'curl',
-    label: 'curl',
-  },
-] as const;
-const HUMAN_STEPS = [
-  'baml init',
-  'baml agent install',
-  'baml ide install --code',
-];
-const AGENT_LINES = [
-  '/plugin marketplace add BoundaryML/baml-skill',
-  '/plugin install baml@boundaryml-baml',
-];
-
-type InstallMethod = (typeof HUMAN_INSTALL)[number]['id'];
-
-function TryItTabs() {
-  const [tab, setTab] = useState<'humans' | 'agents'>('humans');
-  const [method, setMethod] = useState<InstallMethod>('brew');
-  const [copied, setCopied] = useState(false);
-
-  const install =
-    HUMAN_INSTALL.find((m) => m.id === method) ?? HUMAN_INSTALL[0];
-  const lines = tab === 'humans' ? [install.cmd, ...HUMAN_STEPS] : AGENT_LINES;
-  const prompt = tab === 'humans' ? '$ ' : '';
-
-  return (
-    <div className="l6-block">
-      <div className="l6-try font-mono">
-        <div aria-label="Install path" className="l6-try-head" role="tablist">
-          {TRY_TABS.map((t) => (
-            <button
-              aria-selected={tab === t.id}
-              className={`l6-try-tab font-mono${tab === t.id ? ' l6-try-tab--on' : ''}`}
-              key={t.id}
-              onClick={() => {
-                setTab(t.id);
-                setCopied(false);
-              }}
-              role="tab"
-              type="button"
-            >
-              {t.label}
-            </button>
-          ))}
-          <button
-            className="l6-try-copy font-mono"
-            onClick={() => {
-              navigator.clipboard.writeText(lines.join('\n'));
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1600);
-            }}
-            type="button"
-          >
-            {copied ? 'copied!' : 'copy'}
-          </button>
-        </div>
-        {tab === 'humans' ? (
-          <div
-            aria-label="Install method"
-            className="l6-try-method"
-            role="tablist"
-          >
-            <span className="l6-try-method-cap">install with</span>
-            {HUMAN_INSTALL.map((m) => (
-              <button
-                aria-selected={method === m.id}
-                className={`l6-try-method-btn font-mono${method === m.id ? ' l6-try-method-btn--on' : ''}`}
-                key={m.id}
-                onClick={() => {
-                  setMethod(m.id);
-                  setCopied(false);
-                }}
-                role="tab"
-                type="button"
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <div className="l6-try-body">
-          {lines.map((line) => (
-            <div key={line}>
-              {prompt ? <span className="l6-try-prompt">{prompt}</span> : null}
-              {line}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -1339,7 +1231,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
 
             {/* ---- close ---- */}
             <Section id="close" title="Try it out!">
-              <TryItTabs />
+              <TryBaml />
               <p>
                 <a
                   className="l6-link"

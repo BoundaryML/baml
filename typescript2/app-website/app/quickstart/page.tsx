@@ -1,13 +1,7 @@
-import { codeToHtml } from 'shiki';
-
 import { createMetadata } from '@/app/_lib/metadata';
+import { TryBaml } from '@/app/baml-intro/_components/TryBaml';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
-
-// Static page: the content is hardcoded, so code blocks are highlighted at
-// BUILD time with shiki (server-side, full highlighting). The page is
-// prerendered to plain HTML — no client-side shiki, no serverless function,
-// no 500 risk.
 
 export const metadata = createMetadata({
   description:
@@ -17,22 +11,6 @@ export const metadata = createMetadata({
   path: '/quickstart',
   title: 'Quickstart',
 });
-
-/** Build-time syntax-highlighted code block. */
-async function Code({
-  children,
-  lang = 'bash',
-}: {
-  children: string;
-  lang?: string;
-}) {
-  const html = await codeToHtml(children.trim(), {
-    lang,
-    theme: 'github-light',
-  });
-  // eslint-disable-next-line react/no-danger
-  return <div className="qs-code" dangerouslySetInnerHTML={{ __html: html }} />;
-}
 
 const CSS = `
 .qs-wrap { margin: 0 auto; max-width: 720px; padding: 96px 24px 128px; }
@@ -73,60 +51,7 @@ export default function QuickstartPage() {
           incrementally adoptable, typesafe, and has agent first tooling.
         </p>
 
-        <h2>Installing BAML and Toolchain</h2>
-        <p>Install the BAML wrapper with:</p>
-        <Code>brew install boundaryml/tap/baml</Code>
-
-        <details className="qs-details">
-          <summary>Linux?</summary>
-          <Code>curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s</Code>
-        </details>
-
-        <details className="qs-details">
-          <summary>Arch Linux?</summary>
-          <Code>{`yay -S baml-bin
-# or build from source:
-yay -S baml`}</Code>
-        </details>
-
-        <details className="qs-details">
-          <summary>Windows?</summary>
-          <Code>irm https://pkg.boundaryml.com/install.ps1 | iex -Yes</Code>
-        </details>
-
-        <p>
-          This installs <code>baml</code> to your computer. <code>baml</code> is
-          how you use the language and manage your BAML versions. To pick a
-          version, choose either <code>nightly</code> or <code>canary</code>{' '}
-          (recommended) channel.
-        </p>
-
-        <p>Use canary:</p>
-        <Code>baml toolchain use canary</Code>
-
-        <p>Use nightly:</p>
-        <Code>baml toolchain use nightly</Code>
-
-        <p>
-          You can update your BAML version with{' '}
-          <code>baml toolchain update</code>. And you can pin a version with{' '}
-          <code>use</code> or by using a <code>.toml</code> file.
-        </p>
-
-        <h2>Installing Agent Skills</h2>
-        <p>You can teach your agent how to use BAML with one command:</p>
-        <Code>baml agent install</Code>
-        <p>
-          It installs or refreshes the latest official BAML agent skills into
-          the current project for Claude Code, Codex, and OpenCode.
-        </p>
-
-        <h2>Installing the VS Code Extension</h2>
-        <p>
-          BAML has a great DX. You can see and test your code through our VS
-          Code extension, and installing it couldn&rsquo;t be simpler:
-        </p>
-        <Code>baml ide install --code</Code>
+        <TryBaml />
 
         <h2>Useful Links to Keep Handy</h2>
         <ul className="qs-links">
