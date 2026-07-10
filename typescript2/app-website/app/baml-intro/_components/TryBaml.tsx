@@ -80,7 +80,7 @@ const OS_OPTS: Opt[] = [
     label: 'Arch',
   },
   {
-    cmd: 'irm https://pkg.boundaryml.com/install.ps1 | iex -Yes',
+    cmd: 'irm https://pkg.boundaryml.com/install.ps1 | iex',
     icon: (
       <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
         <path d="M3 5.6 10.4 4.5v6.9H3zM11.3 4.4 21 3v8.4h-9.7zM3 12.6h7.4v6.9L3 18.4zM11.3 12.6H21V21l-9.7-1.4z" />
@@ -186,7 +186,7 @@ Install the toolchain (pick one for this machine):
 - Homebrew (macOS/Linux): \`brew install boundaryml/tap/baml\`
 - curl (macOS/Linux): \`curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s\`
 - Arch: \`yay -S baml-bin\`
-- Windows: \`irm https://pkg.boundaryml.com/install.ps1 | iex -Yes\`
+- Windows: \`irm https://pkg.boundaryml.com/install.ps1 | iex\`
 
 Then set up the project:
 - \`baml init\`
