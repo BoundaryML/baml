@@ -12,8 +12,6 @@ use clap::Args;
 
 use crate::{ExitCode, project_load::find_project_root_from};
 
-const SKILL_SOURCE_URL: &str =
-    "https://codeload.github.com/BoundaryML/baml-skill/tar.gz/refs/heads/main";
 const HTTP_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Args, Clone, Debug)]
@@ -46,12 +44,8 @@ pub(crate) struct AgentInstallArgs {
     #[arg(long, value_name = "PATH")]
     pub dir: Option<PathBuf>,
 
-    /// Install skills from the current BoundaryML/baml-skill main branch.
-    #[arg(long, conflicts_with = "from")]
-    pub latest: bool,
-
     /// Install skills from a tar.gz URL, local tar.gz archive, or local directory.
-    #[arg(long, value_name = "URL_OR_PATH", conflicts_with = "latest")]
+    #[arg(long, value_name = "URL_OR_PATH")]
     pub from: Option<String>,
 }
 
@@ -88,28 +82,41 @@ impl AgentInstallArgs {
             Some(dir) => explicit_install_root(dir)?,
             None => detect_install_root()?,
         };
-        let skills = load_skills(self)?;
-        install_skills(&root, &skills)?;
+        let loaded = load_skills(self)?;
+        install_skills(&root, &loaded.skills)?;
+        match &loaded.commit {
+            Some(commit) => record_installed_commit(commit),
+            None => clear_installed_commit(),
+        }
         print_success(&root)?;
         Ok(ExitCode::Success)
     }
 }
 
-fn load_skills(args: &AgentInstallArgs) -> Result<Vec<Skill>> {
-    if args.latest {
-        let archive = fetch_url_bytes(SKILL_SOURCE_URL)?;
-        return skills_from_archive(&archive);
-    }
+struct LoadedSkills {
+    skills: Vec<Skill>,
+    /// Head commit of the skill repo, present only when installing from the
+    /// default source (the repo's main branch). Custom `--from` sources have
+    /// no commit identity to record.
+    commit: Option<String>,
+}
 
+fn load_skills(args: &AgentInstallArgs) -> Result<LoadedSkills> {
     if let Some(source) = &args.from {
         if is_http_url(source) {
             let archive = fetch_url_bytes(source)?;
-            return skills_from_archive(&archive);
+            return Ok(LoadedSkills {
+                skills: skills_from_archive(&archive)?,
+                commit: None,
+            });
         }
 
         let path = Path::new(source);
         if path.is_dir() {
-            return skills_from_dir(path);
+            return Ok(LoadedSkills {
+                skills: skills_from_dir(path)?,
+                commit: None,
+            });
         }
 
         let archive = fs::read(path).with_context(|| {
@@ -118,61 +125,64 @@ fn load_skills(args: &AgentInstallArgs) -> Result<Vec<Skill>> {
                 path.display()
             )
         })?;
-        return skills_from_archive(&archive);
+        return Ok(LoadedSkills {
+            skills: skills_from_archive(&archive)?,
+            commit: None,
+        });
     }
 
-    let version = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_VERSION")
-        .unwrap_or_else(|| baml_version::CANONICAL_VERSION.to_string());
-    let url = versioned_skill_archive_url(&version);
-    let archive = fetch_url_bytes(&url)?;
-    let checksum_text = fetch_url_text(&format!("{url}.sha256"))?;
-    baml_release::verify_release_archive_checksum_text(&archive, &url, &checksum_text)
-        .context("verifying agent skills archive checksum failed")?;
-    skills_from_archive(&archive)
+    // Default: install the current head of the skill repo. The commit is
+    // resolved first and the tarball downloaded at that exact commit, so the
+    // recorded provenance always matches the installed content.
+    let commit = baml_release::skills::fetch_latest_skill_commit(HTTP_TIMEOUT)
+        .context("failed to resolve the latest BAML agent skills commit")?;
+    let archive = fetch_url_bytes(&baml_release::skills::skill_archive_url(&commit))?;
+    Ok(LoadedSkills {
+        skills: skills_from_archive(&archive)?,
+        commit: Some(commit),
+    })
+}
+
+/// Record which skill commit was installed (in `~/.baml/state.toml`) and
+/// refresh the latest-commit cache so freshness warnings clear immediately.
+/// Failures are reported but don't fail the install: the skills themselves
+/// were written successfully.
+fn record_installed_commit(commit: &str) {
+    let state = baml_release::skills::SkillsState {
+        installed_commit: commit.to_string(),
+        installed_at: baml_release::skills::utc_now_rfc3339(),
+    };
+    if let Err(err) =
+        baml_release::skills::write_skills_state(&baml_release::skills::state_path(), &state)
+    {
+        crate::reporter::print_warning(format_args!(
+            "failed to record installed skill commit: {err:#}"
+        ));
+    }
+    if let Err(err) = baml_release::skills::write_cached_latest_skill_commit(
+        &baml_release::skills::latest_skill_commit_cache_path(),
+        commit,
+    ) {
+        crate::reporter::print_warning(format_args!(
+            "failed to update skill freshness cache: {err:#}"
+        ));
+    }
+}
+
+/// Installs from custom `--from` sources have no commit identity. Drop any
+/// previously recorded provenance so the wrapper doesn't report the custom
+/// content as up to date with (or behind) the official skill repo.
+fn clear_installed_commit() {
+    if let Err(err) = baml_release::skills::clear_skills_state(&baml_release::skills::state_path())
+    {
+        crate::reporter::print_warning(format_args!(
+            "failed to clear recorded skill provenance: {err:#}"
+        ));
+    }
 }
 
 fn is_http_url(value: &str) -> bool {
     value.starts_with("https://") || value.starts_with("http://")
-}
-
-fn env_var_nonempty(name: &str) -> Option<String> {
-    std::env::var(name)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-fn versioned_skill_archive_url(version: &str) -> String {
-    let base_url = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_BASE_URL");
-    let repo = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_REPO")
-        .unwrap_or_else(baml_release::release_repo);
-    versioned_skill_archive_url_with_env(version, base_url.as_deref(), Some(&repo))
-}
-
-fn versioned_skill_archive_url_with_env(
-    version: &str,
-    base_url: Option<&str>,
-    repo: Option<&str>,
-) -> String {
-    let filename = versioned_skill_archive_filename(version);
-    if let Some(base_url) = base_url.map(str::trim).filter(|value| !value.is_empty()) {
-        return format!("{}/{}", base_url.trim_end_matches('/'), filename);
-    }
-
-    let repo = repo
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(baml_release::DEFAULT_RELEASE_REPO);
-    format!("https://github.com/{repo}/releases/download/baml-language-{version}/{filename}")
-}
-
-fn versioned_skill_archive_filename(version: &str) -> String {
-    format!("baml-agent-skills-{version}.tar.gz")
-}
-
-fn fetch_url_text(url: &str) -> Result<String> {
-    let bytes = fetch_url_bytes(url)?;
-    String::from_utf8(bytes).with_context(|| format!("{url} was not valid UTF-8"))
 }
 
 fn fetch_url_bytes(url: &str) -> Result<Vec<u8>> {
@@ -748,22 +758,6 @@ mod tests {
                     .file_name()
                     .to_string_lossy()
                     .starts_with(".baml-agent-install-backup-"))
-        );
-    }
-
-    #[test]
-    fn versioned_archive_url_defaults_to_release_asset() {
-        assert_eq!(
-            versioned_skill_archive_url_with_env("1.2.3", None, None),
-            "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3/baml-agent-skills-1.2.3.tar.gz"
-        );
-        assert_eq!(
-            versioned_skill_archive_url_with_env("1.2.3", Some("https://example.com/base/"), None),
-            "https://example.com/base/baml-agent-skills-1.2.3.tar.gz"
-        );
-        assert_eq!(
-            versioned_skill_archive_url_with_env("1.2.3", None, Some("BoundaryML/custom")),
-            "https://github.com/BoundaryML/custom/releases/download/baml-language-1.2.3/baml-agent-skills-1.2.3.tar.gz"
         );
     }
 
