@@ -394,11 +394,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let impls = self.type_impls(base_ty);
 
-        // Partition the type's own impls by realized interface `(qtn, args)`: those declaring
-        // `member` as a method, and (separately) those declaring it as a field. Coherence
-        // forbids two impls of the same realized interface, so dedup defensively.
-        let mut method_candidates: Vec<((crate::ty::QualifiedTypeName, Vec<Ty>), _, _, _)> =
-            Vec::new();
+        // Partition the type's own impls by *realized* interface — the impl's head with its
+        // matched bindings substituted (`implements Iterator<T, never>` on `Repeat<T>` at a
+        // `Repeat<int>` receiver is `Iterator<int, never>`, never the raw pattern form): those
+        // declaring `member` as a method, and (separately) those declaring it as a field.
+        // Coherence forbids two impls of the same realized interface, so dedup defensively.
+        let mut method_candidates: Vec<(baml_type::Interface, _, _, _)> = Vec::new();
         for resolved_impl in &impls {
             let Some(resolved_method) = resolved_impl.get_method(db, member) else {
                 continue;
@@ -406,10 +407,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let Ok(data) = crate::interfaces::impl_data(db, resolved_impl.impl_loc) else {
                 continue;
             };
-            let Some(iface_qtn) = crate::interfaces::interface_loc_qtn(db, data.interface) else {
-                continue;
-            };
-            let realized = (iface_qtn, data.interface_args.clone());
+            let realized = resolved_impl.implemented_interface(db);
             if !method_candidates.iter().any(|(r, ..)| *r == realized) {
                 method_candidates.push((realized, resolved_impl.impl_loc, data, resolved_method));
             }
@@ -463,7 +461,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         if method_candidates.len() >= 2 {
             let sources = method_candidates
                 .iter()
-                .map(|((qtn, args), ..)| format_interface_display(qtn.name(), args))
+                .map(|(realized, ..)| {
+                    format_interface_display(realized.name.name(), &realized.generics)
+                })
                 .collect();
             self.context.report_at_member(
                 TirTypeError::AmbiguousInterfaceMethod {
@@ -486,11 +486,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let access = MemberAccess { member, at, bound };
         let view = InterfaceView {
             loc: data.interface,
-            realized: baml_type::Interface::new(
-                realized.0,
-                data.interface_args.clone(),
-                data.associated_types.clone(),
-            ),
+            realized,
         };
         let ty =
             self.resolve_member_on_one_interface(&view, SelfReceiver::ExactTy(base_ty), &access)?;

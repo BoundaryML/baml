@@ -4453,4 +4453,86 @@ function needs<T extends Marker>(x: T) -> int throws never {
             "an errored receiver must not cascade a member-access error, got {errors:?}"
         );
     }
+    /// Shared two-file fixture: a nested-namespace iterator core with a generic
+    /// concrete implementor (`Repeat<T> implements Iterator<T, never>`) and a
+    /// union-typed impl head (`MapIter implements Iterator<R, E | E2>`).
+    fn compile_ns_iter_core(main: &str) -> Vec<TirTypeError> {
+        let core = "class Done {\n  x: int\n}\n\
+             interface Iterable<T, E> {\n  function iter(self) -> Iterator<T, E> throws never\n}\n\
+             interface Iterator<T, E> requires Iterable<T, E> {\n\
+               function next(self) -> T | Done throws E\n\
+               function collect(self) -> T[] throws E {\n\
+                 let r: T[] = [];\n\
+                 while (true) {\n\
+                   match (self.next()) {\n\
+                     Done => { break; },\n\
+                     let x: T => r.push(x),\n\
+                   }\n\
+                 }\n\
+                 r\n\
+               }\n\
+             }\n\
+             class Repeat<T> {\n  value: T\n  count: int\n\
+               implements Iterable<T, never> {\n    function iter(self) -> Iterator<T, never> throws never { self }\n  }\n\
+               implements Iterator<T, never> {\n    function next(self) -> T | Done throws never { self.value }\n  }\n\
+             }\n\
+             class MapIter<T, R, E, E2> {\n  func: (T) -> R throws E2\n\
+               implements Iterable<R, E | E2> {\n    function iter(self) -> Iterator<R, E | E2> throws never { self }\n  }\n\
+               implements Iterator<R, E | E2> {\n    function next(self) -> R | Done throws E | E2 { Done { x: 0 } }\n  }\n\
+             }\n";
+        let mut db = TestDb::default();
+        let f0 = baml_base::SourceFile::new(
+            &db,
+            core.to_string(),
+            PathBuf::from("ns_core/core.baml"),
+            baml_base::FileId::new(0),
+        );
+        let f1 = baml_base::SourceFile::new(
+            &db,
+            main.to_string(),
+            PathBuf::from("test.baml"),
+            baml_base::FileId::new(1),
+        );
+        db.project = Some(Project::new(&db, PathBuf::from("."), vec![f0, f1]));
+        let mut errors: Vec<TirTypeError> = Vec::new();
+        for file in baml_compiler2_hir::compiler2_all_files(&db) {
+            errors.extend(
+                crate::inference::collect_file_diagnostics(&db, file)
+                    .diagnostics
+                    .into_iter()
+                    .map(|d| d.error),
+            );
+        }
+        errors
+    }
+
+    #[test]
+    fn concrete_generic_receiver_realizes_interface_default_method_return() {
+        // `Repeat<int>.collect()` reaches the interface default through the class's
+        // in-body impl (`implements Iterator<T, never>` at `T = int`): the member
+        // resolution must use the impl's *realized* interface (`Iterator<int, never>`),
+        // never the raw pattern form — which leaked `T` into the return as `(T | int)[]`.
+        let errors = compile_ns_iter_core(
+            "function f() -> int[] throws unknown {\n  root.core.Repeat<int> { value: 7, count: 3 }.collect()\n}\n",
+        );
+        assert!(
+            errors.is_empty(),
+            "collect() on Repeat<int> should realize to int[], got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn union_impl_head_position_matches_normalized_request() {
+        // `MapIter implements Iterator<R, E | E2>`: at `{E: never, E2: never}` the head
+        // position is `never | never`, which normalizes to the requested `never`. The
+        // impl matcher must substitute already-bound pattern positions and compare
+        // normalized — structural union-vs-non-union descent can never see that.
+        let errors = compile_ns_iter_core(
+            "function g(m: root.core.MapIter<int, int, never, never>) -> root.core.Iterator<int, never> throws never {\n  m\n}\n",
+        );
+        assert!(
+            errors.is_empty(),
+            "MapIter<int, int, never, never> should implement Iterator<int, never>, got {errors:?}"
+        );
+    }
 }

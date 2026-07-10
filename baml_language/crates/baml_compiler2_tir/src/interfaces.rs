@@ -534,6 +534,23 @@ pub fn match_ty_pattern_into(
         return Some(());
     }
 
+    // A pattern position whose type variables are all *already bound* (by the
+    // for-type or an earlier position) is no longer a pattern — substitute the
+    // bindings and compare normalized, so `Iterator<R, E | E2>` at
+    // `{E: never, E2: never}` matches a requested `Iterator<int, never>`
+    // (`never | never` normalizes to `never`, which no structural descent can
+    // see). On mismatch fall through: structural matching may still succeed by
+    // re-binding positions to equal values.
+    if contains_bound_typevar(pattern, generic_params) {
+        let unbound = |name: &Name| generic_params.contains(name) && !bindings.contains_key(name);
+        if !crate::generics::contains_typevar_where(pattern, &unbound) {
+            let substituted = crate::generics::substitute_ty(pattern, bindings);
+            if normalize::is_same_normalized_type(&substituted, concrete, aliases) {
+                return Some(());
+            }
+        }
+    }
+
     match (pattern, concrete) {
         (Ty::Class(p_qtn, p_args, _), Ty::Class(c_qtn, c_args, _))
             if p_qtn == c_qtn && p_args.len() == c_args.len() =>
