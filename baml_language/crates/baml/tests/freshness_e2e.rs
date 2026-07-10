@@ -67,9 +67,9 @@ impl TestHome {
             "[channels.canary]\nactive_version = \"0.11.0\"\nresolved_at = \"x\"\nmanifest_path = \"y\"\n",
         );
         if let Some(commit) = installed_skill_commit {
-            text.push_str(&format!(
-                "\n[skills]\ninstalled_commit = \"{commit}\"\ninstalled_at = \"x\"\n"
-            ));
+            text.push_str("\n[skills]\ninstalled_commit = \"");
+            text.push_str(commit);
+            text.push_str("\"\ninstalled_at = \"x\"\n");
         }
         fs::write(self.root.join("state.toml"), text).unwrap();
     }

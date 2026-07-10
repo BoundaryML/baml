@@ -182,7 +182,7 @@ pub fn utc_now_rfc3339() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .unwrap_or(0);
-    let days = (secs / 86_400) as i64;
+    let days = i64::try_from(secs / 86_400).unwrap_or(0);
     let time_of_day = secs % 86_400;
     let (year, month, day) = civil_from_days(days);
     format!(
@@ -203,8 +203,10 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let year = yoe + era * 400;
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
     let mp = (5 * doy + 2) / 153;
-    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    // Both values are provably in range (day 1..=31, month 1..=12); the
+    // fallbacks only exist to satisfy the no-panicking-cast lints.
+    let day = u32::try_from(doy - (153 * mp + 2) / 5 + 1).unwrap_or(1);
+    let month = u32::try_from(if mp < 10 { mp + 3 } else { mp - 9 }).unwrap_or(1);
     (if month <= 2 { year + 1 } else { year }, month, day)
 }
 

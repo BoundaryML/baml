@@ -612,12 +612,11 @@ fn refresh_marker_path(cache_path: &Path) -> PathBuf {
 
 /// True when the file is missing or its mtime is older than `ttl`.
 fn file_older_than(path: &Path, ttl: Duration) -> bool {
-    !path
-        .metadata()
+    path.metadata()
         .and_then(|metadata| metadata.modified())
         .ok()
         .and_then(|modified| SystemTime::now().duration_since(modified).ok())
-        .is_some_and(|age| age <= ttl)
+        .is_none_or(|age| age > ttl)
 }
 
 /// Passive check of the agent-skill situation, printed on every pass-through
