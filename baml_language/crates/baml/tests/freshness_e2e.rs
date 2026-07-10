@@ -13,8 +13,17 @@ use std::{
 };
 
 const TOOLCHAIN_WARNING: &str = "warning: Your version of baml for toolchain: canary is outdated. Update it with baml toolchain update.";
-const SKILL_WARNING: &str =
+const SKILL_OUTDATED_WARNING: &str =
     "warning: Your baml skill is outdated, use baml agent install to upgrade it.";
+const SKILL_MISSING_WARNING: &str =
+    "warning: No baml skill is installed, set it up with baml agent install.";
+
+/// A project directory containing installed baml agent skills.
+fn project_with_skills() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir_all(dir.path().join(".agents/skills/baml-core")).unwrap();
+    dir
+}
 
 /// A temp `BAML_HOME` seeded with an installed fake toolchain (version
 /// `0.11.0`, tracked via the `canary` channel) whose `baml-cli` prints
@@ -121,8 +130,10 @@ impl TestHome {
         output
     }
 
+    /// Run from a project that has skills installed, so skill warnings don't
+    /// bleed into tests that are about something else.
     fn run(&self) -> Output {
-        let cwd = tempfile::tempdir().unwrap();
+        let cwd = project_with_skills();
         self.run_from(cwd.path(), &[])
     }
 }
@@ -152,7 +163,7 @@ fn warns_when_skill_provenance_is_behind_cached_latest() {
     home.write_state(Some("aaa"));
     home.write_skill_cache("bbb");
     let stderr = stderr_of(&home.run());
-    assert!(stderr.contains(SKILL_WARNING), "{stderr}");
+    assert!(stderr.contains(SKILL_OUTDATED_WARNING), "{stderr}");
 }
 
 #[test]
@@ -165,20 +176,31 @@ fn silent_when_skill_provenance_matches_cached_latest() {
 }
 
 #[test]
-fn without_provenance_warns_only_when_project_has_baml_skills() {
+fn missing_project_skills_prompt_install_on_every_command() {
     let home = TestHome::new();
-    home.write_skill_cache("bbb");
 
-    // No provenance, no skills in the project: stay silent.
+    // No skills in the project: prompt to install, even with no caches at all.
     let empty = tempfile::tempdir().unwrap();
     let stderr = stderr_of(&home.run_from(empty.path(), &[]));
-    assert!(!stderr.contains("skill"), "{stderr}");
+    assert!(stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
 
-    // Same home, but the project has installed baml skills: warn.
-    let project = tempfile::tempdir().unwrap();
-    fs::create_dir_all(project.path().join(".agents/skills/baml-core")).unwrap();
+    // Still the install prompt (not the upgrade one) when a latest-commit
+    // cache and even matching global provenance exist.
+    home.write_state(Some("bbb"));
+    home.write_skill_cache("bbb");
+    let stderr = stderr_of(&home.run_from(empty.path(), &[]));
+    assert!(stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
+    assert!(!stderr.contains(SKILL_OUTDATED_WARNING), "{stderr}");
+}
+
+#[test]
+fn project_skills_without_provenance_prompt_upgrade() {
+    let home = TestHome::new();
+    home.write_skill_cache("bbb");
+    let project = project_with_skills();
     let stderr = stderr_of(&home.run_from(project.path(), &[]));
-    assert!(stderr.contains(SKILL_WARNING), "{stderr}");
+    assert!(stderr.contains(SKILL_OUTDATED_WARNING), "{stderr}");
+    assert!(!stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
 }
 
 #[test]
@@ -189,10 +211,10 @@ fn auto_check_failure_is_quiet_and_throttled_by_marker() {
     // refresh attempt is due. The manifest cache is fresh, so no toolchain
     // fetch happens.
     let env = [("BAML_AGENT_SKILLS_COMMITS_URL", "http://127.0.0.1:1/")];
-    let cwd = tempfile::tempdir().unwrap();
+    let cwd = project_with_skills();
 
     let stderr = stderr_of(&home.run_from(cwd.path(), &env));
-    assert!(!stderr.contains("skill"), "{stderr}");
+    assert!(!stderr.contains("outdated"), "{stderr}");
     let marker = home
         .root
         .join("manifest-cache/skills/latest-commit.json.last-check");
@@ -201,7 +223,7 @@ fn auto_check_failure_is_quiet_and_throttled_by_marker() {
 
     // Second run inside the TTL window: the marker throttles the retry.
     let stderr = stderr_of(&home.run_from(cwd.path(), &env));
-    assert!(!stderr.contains("skill"), "{stderr}");
+    assert!(!stderr.contains("outdated"), "{stderr}");
     assert_eq!(
         marker.metadata().unwrap().modified().unwrap(),
         marker_mtime,
@@ -215,7 +237,7 @@ fn auto_check_optout_skips_refresh_entirely() {
     // auto_check = false (TestHome default config) and no skill cache: no
     // attempt marker may appear even though a refresh would be due.
     let env = [("BAML_AGENT_SKILLS_COMMITS_URL", "http://127.0.0.1:1/")];
-    let cwd = tempfile::tempdir().unwrap();
+    let cwd = project_with_skills();
     home.run_from(cwd.path(), &env);
     assert!(
         !home

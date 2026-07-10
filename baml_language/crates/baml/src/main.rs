@@ -620,26 +620,40 @@ fn file_older_than(path: &Path, ttl: Duration) -> bool {
         .is_some_and(|age| age <= ttl)
 }
 
-/// Passive freshness check for the installed agent skills. Compares the
-/// `[skills]` provenance in state.toml against the cached latest skill repo
-/// commit; never touches the network. When no provenance was ever recorded
-/// (installs predating provenance tracking), warns only if the current
-/// project actually has baml skills installed.
+/// Passive check of the agent-skill situation, printed on every pass-through
+/// invocation; never touches the network (see [`skill_warning_message`]).
 fn warn_if_skill_outdated() {
-    let Some(latest) = baml_release::skills::read_cached_latest_skill_commit(
+    let latest = baml_release::skills::read_cached_latest_skill_commit(
         &baml_release::skills::latest_skill_commit_cache_path(),
-    ) else {
-        return;
-    };
-    let outdated = match baml_release::skills::read_skills_state(&state_path()) {
-        Some(state) => state.installed_commit != latest,
-        None => project_has_baml_skills(),
-    };
-    if outdated {
-        eprintln!(
-            "{}: Your baml skill is outdated, use baml agent install to upgrade it.",
-            warning_prefix()
-        );
+    );
+    let state = baml_release::skills::read_skills_state(&state_path());
+    if let Some(message) =
+        skill_warning_message(project_has_baml_skills(), state.as_ref(), latest.as_deref())
+    {
+        eprintln!("{}: {message}", warning_prefix());
+    }
+}
+
+/// Decide which skill warning (if any) applies:
+///
+/// - No `baml-*` skills in the project at all: prompt to install. This fires
+///   on every command regardless of caches, so users discover skills exist.
+/// - Skills present but the `[skills]` provenance is missing or behind the
+///   cached latest skill repo commit: prompt to upgrade. Requires the cache
+///   (written by the auto-check or explicit commands); without it we can't
+///   know what's current, so we stay silent rather than guess.
+fn skill_warning_message(
+    project_has_skills: bool,
+    state: Option<&baml_release::skills::SkillsState>,
+    cached_latest: Option<&str>,
+) -> Option<&'static str> {
+    if !project_has_skills {
+        return Some("No baml skill is installed, set it up with baml agent install.");
+    }
+    let latest = cached_latest?;
+    match state {
+        Some(state) if state.installed_commit == latest => None,
+        _ => Some("Your baml skill is outdated, use baml agent install to upgrade it."),
     }
 }
 
@@ -1371,5 +1385,48 @@ mod tests {
     fn short_sha_truncates_long_and_keeps_short() {
         assert_eq!(short_sha("0123456789abcdef0123"), "0123456789ab");
         assert_eq!(short_sha("abc"), "abc");
+    }
+
+    fn skills_state(commit: &str) -> baml_release::skills::SkillsState {
+        baml_release::skills::SkillsState {
+            installed_commit: commit.to_string(),
+            installed_at: "x".to_string(),
+        }
+    }
+
+    #[test]
+    fn missing_project_skills_prompt_install_regardless_of_caches() {
+        let expected = Some("No baml skill is installed, set it up with baml agent install.");
+        assert_eq!(skill_warning_message(false, None, None), expected);
+        assert_eq!(skill_warning_message(false, None, Some("bbb")), expected);
+        // Even matching global provenance doesn't matter: this project has no skills.
+        assert_eq!(
+            skill_warning_message(false, Some(&skills_state("bbb")), Some("bbb")),
+            expected
+        );
+    }
+
+    #[test]
+    fn skills_behind_or_untracked_prompt_upgrade() {
+        let expected = Some("Your baml skill is outdated, use baml agent install to upgrade it.");
+        assert_eq!(
+            skill_warning_message(true, Some(&skills_state("aaa")), Some("bbb")),
+            expected
+        );
+        assert_eq!(skill_warning_message(true, None, Some("bbb")), expected);
+    }
+
+    #[test]
+    fn current_skills_or_unknown_latest_stay_silent() {
+        assert_eq!(
+            skill_warning_message(true, Some(&skills_state("bbb")), Some("bbb")),
+            None
+        );
+        // No cache yet: can't know what's current, so no warning.
+        assert_eq!(skill_warning_message(true, None, None), None);
+        assert_eq!(
+            skill_warning_message(true, Some(&skills_state("aaa")), None),
+            None
+        );
     }
 }
