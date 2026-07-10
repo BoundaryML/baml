@@ -671,6 +671,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "baml_release",
+ "console",
  "reqwest",
  "serde",
  "serde_json",

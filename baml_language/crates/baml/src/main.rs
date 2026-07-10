@@ -17,6 +17,9 @@ const CONFIG_FILE: &str = "config.toml";
 const STATE_FILE: &str = "state.toml";
 const CHANNEL_CACHE_TTL: Duration = Duration::from_hours(24);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+/// Short timeout for the passive background freshness checks that run before
+/// normal commands, so an unreachable network can't stall the actual work.
+const AUTO_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Config {
@@ -41,13 +44,26 @@ impl Default for DefaultConfig {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct UpdateConfig {
-    auto_check: bool,
+    /// Whether normal commands may refresh the freshness caches (channel
+    /// manifest and latest skill commit) over the network once per TTL
+    /// window. Defaults to on; set `[update] auto_check = false` to opt out.
+    auto_check: Option<bool>,
+}
+
+impl UpdateConfig {
+    fn auto_check_enabled(&self) -> bool {
+        self.auto_check.unwrap_or(true)
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct State {
     #[serde(default)]
     channels: BTreeMap<String, ChannelState>,
+    /// Sections owned by other writers (e.g. `[skills]`, written by
+    /// `baml agent install`), preserved verbatim across wrapper writes.
+    #[serde(flatten)]
+    rest: BTreeMap<String, toml::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -363,6 +379,9 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
         return Err(missing_toolchain_error(&selector, &version));
     }
     verify_toolchain_version_file(&version)?;
+    auto_refresh_caches(&selector);
+    warn_if_channel_outdated(&selector, &version);
+    warn_if_skill_outdated();
 
     let mut command = Command::new(cli);
     command.args(args);
@@ -527,6 +546,160 @@ fn is_channel(selector: &str) -> bool {
     selector == "canary" || selector == "nightly"
 }
 
+/// Bold-yellow lowercase `warning` prefix, matching the styled diagnostics the
+/// toolchain CLI emits (see `baml_exec::diag_print`). Color is dropped
+/// automatically when stderr is not a TTY.
+fn warning_prefix() -> impl std::fmt::Display {
+    console::Style::new()
+        .yellow()
+        .bold()
+        .for_stderr()
+        .apply_to("warning")
+}
+
+/// Refresh the freshness caches (channel manifest and latest skill commit)
+/// over the network when they're older than the TTL, at most one attempt per
+/// TTL window. Runs before normal commands, so failures are silent and the
+/// timeout is short; disable entirely with `[update] auto_check = false`.
+fn auto_refresh_caches(selector: &ResolvedSelector) {
+    if !read_config().update.auto_check_enabled() {
+        return;
+    }
+
+    if is_channel(&selector.selector) {
+        let cache = manifest_cache_dir(&baml_release::manifest_base_url())
+            .join(format!("{}.json", selector.selector));
+        if should_attempt_refresh(&cache) {
+            let _ = fetch_manifest_with_timeout(
+                &selector.selector,
+                None,
+                FetchPolicy::ForceRemote,
+                AUTO_CHECK_TIMEOUT,
+            );
+        }
+    }
+
+    let cache = baml_release::skills::latest_skill_commit_cache_path();
+    if should_attempt_refresh(&cache) {
+        if let Ok(sha) = baml_release::skills::fetch_latest_skill_commit(AUTO_CHECK_TIMEOUT) {
+            let _ = baml_release::skills::write_cached_latest_skill_commit(&cache, &sha);
+        }
+    }
+}
+
+/// A cache file is due for a refresh attempt when both the file itself and
+/// its attempt marker are older than the TTL. The marker is touched before
+/// every attempt (success or failure) so an unreachable network is retried at
+/// most once per TTL window instead of on every command.
+fn should_attempt_refresh(cache_path: &Path) -> bool {
+    let marker = refresh_marker_path(cache_path);
+    if !file_older_than(cache_path, CHANNEL_CACHE_TTL)
+        || !file_older_than(&marker, CHANNEL_CACHE_TTL)
+    {
+        return false;
+    }
+    if let Some(parent) = marker.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    fs::write(&marker, "").is_ok()
+}
+
+fn refresh_marker_path(cache_path: &Path) -> PathBuf {
+    let mut path = cache_path.as_os_str().to_owned();
+    path.push(".last-check");
+    PathBuf::from(path)
+}
+
+/// True when the file is missing or its mtime is older than `ttl`.
+fn file_older_than(path: &Path, ttl: Duration) -> bool {
+    !path
+        .metadata()
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+        .is_some_and(|age| age <= ttl)
+}
+
+/// Passive freshness check for the installed agent skills. Compares the
+/// `[skills]` provenance in state.toml against the cached latest skill repo
+/// commit; never touches the network. When no provenance was ever recorded
+/// (installs predating provenance tracking), warns only if the current
+/// project actually has baml skills installed.
+fn warn_if_skill_outdated() {
+    let Some(latest) = baml_release::skills::read_cached_latest_skill_commit(
+        &baml_release::skills::latest_skill_commit_cache_path(),
+    ) else {
+        return;
+    };
+    let outdated = match baml_release::skills::read_skills_state(&state_path()) {
+        Some(state) => state.installed_commit != latest,
+        None => project_has_baml_skills(),
+    };
+    if outdated {
+        eprintln!(
+            "{}: Your baml skill is outdated, use baml agent install to upgrade it.",
+            warning_prefix()
+        );
+    }
+}
+
+/// Walk from the current directory up to $HOME looking for installed
+/// `baml-*` agent skills (`.agents/skills/` or `.claude/skills/`).
+fn project_has_baml_skills() -> bool {
+    let Ok(mut dir) = env::current_dir() else {
+        return false;
+    };
+    let home = env::var_os("HOME").map(PathBuf::from);
+    loop {
+        let agents = dir.join(".agents").join("skills");
+        let claude = dir.join(".claude").join("skills");
+        if dir_contains_baml_skill(&agents) || dir_contains_baml_skill(&claude) {
+            return true;
+        }
+        if home.as_ref().is_some_and(|home| dir == *home) || !dir.pop() {
+            return false;
+        }
+    }
+}
+
+fn dir_contains_baml_skill(skills_dir: &Path) -> bool {
+    fs::read_dir(skills_dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(std::result::Result::ok)
+        .any(|entry| entry.file_name().to_string_lossy().starts_with("baml-"))
+}
+
+/// Passive freshness check for channel selectors, run on every pass-through
+/// invocation. Reads only the locally cached channel manifest (written by
+/// explicit toolchain commands such as `install`, `use`, `update`, `status`);
+/// it never touches the network, and stays silent if no cache exists yet.
+fn warn_if_channel_outdated(selector: &ResolvedSelector, active_version: &str) {
+    if !is_channel(&selector.selector) {
+        return;
+    }
+    let cache_path = manifest_cache_dir(&baml_release::manifest_base_url())
+        .join(format!("{}.json", selector.selector));
+    if cached_manifest_is_newer(&cache_path, active_version) {
+        eprintln!(
+            "{}: Your version of baml for toolchain: {} is outdated. Update it with baml toolchain update.",
+            warning_prefix(),
+            selector.selector
+        );
+    }
+}
+
+fn cached_manifest_is_newer(cache_path: &Path, active_version: &str) -> bool {
+    let Ok(text) = fs::read_to_string(cache_path) else {
+        return false;
+    };
+    let Ok(manifest) = toml_or_json::<ToolchainManifest>(&text) else {
+        return false;
+    };
+    manifest.version != active_version
+}
+
 fn manifest_base_url(override_url: Option<&str>) -> String {
     override_url
         .map(|value| value.trim_end_matches('/').to_string())
@@ -537,6 +710,15 @@ fn fetch_manifest(
     selector: &str,
     override_url: Option<&str>,
     policy: FetchPolicy,
+) -> Result<ToolchainManifest> {
+    fetch_manifest_with_timeout(selector, override_url, policy, HTTP_TIMEOUT)
+}
+
+fn fetch_manifest_with_timeout(
+    selector: &str,
+    override_url: Option<&str>,
+    policy: FetchPolicy,
+    timeout: Duration,
 ) -> Result<ToolchainManifest> {
     let base = manifest_base_url(override_url);
     let url = if is_channel(selector) {
@@ -562,7 +744,7 @@ fn fetch_manifest(
         Some(text) => text,
         None => {
             fetched_remote = true;
-            let client = http_client()?;
+            let client = http_client_with_timeout(timeout)?;
             client
                 .get(&url)
                 .send()
@@ -696,6 +878,7 @@ fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
     config.default.selector = selector.to_string();
     write_config(&config)?;
     println!("selected BAML toolchain {selector}");
+    check_skill_freshness_after_toolchain_change();
     Ok(())
 }
 
@@ -720,7 +903,61 @@ fn update_toolchain(override_url: Option<&str>) -> Result<()> {
             "failed to refresh {} from the remote manifest; the active installed toolchain was left unchanged",
             config.default.selector
         )
-    })
+    })?;
+    check_skill_freshness_after_toolchain_change();
+    Ok(())
+}
+
+/// Fetch the latest skill repo commit, persist it to the freshness cache, and
+/// return it.
+fn refresh_latest_skill_commit(timeout: Duration) -> Result<String> {
+    let sha = baml_release::skills::fetch_latest_skill_commit(timeout)?;
+    let _ = baml_release::skills::write_cached_latest_skill_commit(
+        &baml_release::skills::latest_skill_commit_cache_path(),
+        &sha,
+    );
+    Ok(sha)
+}
+
+fn short_sha(sha: &str) -> &str {
+    &sha[..sha.len().min(12)]
+}
+
+/// Print the agent-skill section of `baml toolchain status`. Skill problems
+/// never fail the status command; network failures degrade to a note.
+fn print_skill_status() {
+    let installed = baml_release::skills::read_skills_state(&state_path());
+    match &installed {
+        Some(state) => println!(
+            "skill installed: {} ({})",
+            short_sha(&state.installed_commit),
+            state.installed_at
+        ),
+        None => println!("skill installed: (none recorded locally)"),
+    }
+    match refresh_latest_skill_commit(HTTP_TIMEOUT) {
+        Ok(latest) => {
+            println!("skill latest: {}", short_sha(&latest));
+            match installed {
+                Some(state) if state.installed_commit == latest => {
+                    println!("skill status: up to date");
+                }
+                _ => {
+                    println!("skill status: outdated");
+                    println!("Run: baml agent install");
+                }
+            }
+        }
+        Err(_) => println!("skill latest: (failed to check)"),
+    }
+}
+
+/// After a toolchain change, also refresh the skill freshness cache and nudge
+/// if the installed skill is behind. Best-effort: silent on network failure.
+fn check_skill_freshness_after_toolchain_change() {
+    if refresh_latest_skill_commit(AUTO_CHECK_TIMEOUT).is_ok() {
+        warn_if_skill_outdated();
+    }
 }
 
 fn status_toolchain(override_url: Option<&str>) -> Result<()> {
@@ -762,6 +999,8 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
                 println!("Run: baml toolchain use {}", selector.selector);
             }
         }
+        println!();
+        print_skill_status();
         return Ok(());
     }
 
@@ -781,6 +1020,8 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
     println!("status: exact versions do not advance automatically");
     println!("Run: baml toolchain use canary");
     println!("Or:  baml toolchain use nightly");
+    println!();
+    print_skill_status();
     Ok(())
 }
 
@@ -899,8 +1140,13 @@ fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
 }
 
 fn http_client() -> Result<reqwest::blocking::Client> {
+    http_client_with_timeout(HTTP_TIMEOUT)
+}
+
+fn http_client_with_timeout(timeout: Duration) -> Result<reqwest::blocking::Client> {
     reqwest::blocking::Client::builder()
-        .timeout(HTTP_TIMEOUT)
+        .connect_timeout(timeout.min(Duration::from_secs(10)))
+        .timeout(timeout)
         .build()
         .context("failed to build HTTP client")
 }
@@ -1040,5 +1286,90 @@ mod tests {
             selector_annotation(&resolved("nightly", SelectorSource::Env)),
             " (nightly, from $BAML_VERSION)"
         );
+    }
+
+    fn write_cached_manifest(version: &str) -> tempfile::NamedTempFile {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        fs::write(
+            tmp.path(),
+            format!(
+                r#"{{"schema":1,"version":"{version}","channel":"canary","released_at":"2026-07-10T00:00:00Z","artifacts":{{}}}}"#
+            ),
+        )
+        .unwrap();
+        tmp
+    }
+
+    #[test]
+    fn cached_manifest_newer_than_active_version_is_detected() {
+        let tmp = write_cached_manifest("0.12.0");
+        assert!(cached_manifest_is_newer(tmp.path(), "0.11.0"));
+    }
+
+    #[test]
+    fn cached_manifest_matching_active_version_is_not_outdated() {
+        let tmp = write_cached_manifest("0.11.0");
+        assert!(!cached_manifest_is_newer(tmp.path(), "0.11.0"));
+    }
+
+    #[test]
+    fn missing_manifest_cache_stays_silent() {
+        let missing = Path::new("/tmp/definitely-missing-baml-manifest.json");
+        assert!(!cached_manifest_is_newer(missing, "0.11.0"));
+    }
+
+    #[test]
+    fn unparseable_manifest_cache_stays_silent() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        fs::write(tmp.path(), "not json").unwrap();
+        assert!(!cached_manifest_is_newer(tmp.path(), "0.11.0"));
+    }
+
+    #[test]
+    fn missing_file_counts_as_older_than_ttl() {
+        let missing = Path::new("/tmp/definitely-missing-baml-freshness-file");
+        assert!(file_older_than(missing, CHANNEL_CACHE_TTL));
+    }
+
+    #[test]
+    fn fresh_file_is_not_older_than_ttl() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        assert!(!file_older_than(tmp.path(), CHANNEL_CACHE_TTL));
+    }
+
+    #[test]
+    fn refresh_attempt_is_throttled_by_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = tmp.path().join("latest-commit.json");
+        // Cache missing and no marker: attempt allowed, marker gets created.
+        assert!(should_attempt_refresh(&cache));
+        assert!(refresh_marker_path(&cache).exists());
+        // Fresh marker: no retry within the TTL window.
+        assert!(!should_attempt_refresh(&cache));
+    }
+
+    #[test]
+    fn state_write_preserves_foreign_sections() {
+        let text = "[channels.canary]\nactive_version = \"0.11.0\"\nresolved_at = \"x\"\nmanifest_path = \"y\"\n\n[skills]\ninstalled_commit = \"abc\"\ninstalled_at = \"2026-07-10T00:00:00Z\"\n";
+        let state: State = toml::from_str(text).unwrap();
+        let out = toml::to_string_pretty(&state).unwrap();
+        assert!(out.contains("[skills]"), "{out}");
+        assert!(out.contains("installed_commit = \"abc\""), "{out}");
+        assert!(out.contains("[channels.canary]"), "{out}");
+    }
+
+    #[test]
+    fn auto_check_defaults_on_and_respects_optout() {
+        assert!(UpdateConfig::default().auto_check_enabled());
+        let config: Config = toml::from_str("[update]\nauto_check = false\n").unwrap();
+        assert!(!config.update.auto_check_enabled());
+        let config: Config = toml::from_str("[update]\nauto_check = true\n").unwrap();
+        assert!(config.update.auto_check_enabled());
+    }
+
+    #[test]
+    fn short_sha_truncates_long_and_keeps_short() {
+        assert_eq!(short_sha("0123456789abcdef0123"), "0123456789ab");
+        assert_eq!(short_sha("abc"), "abc");
     }
 }
