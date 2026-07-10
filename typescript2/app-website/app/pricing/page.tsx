@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
+import { SoftwareApplicationStructuredData } from '@/components/structured-data';
 import { Button } from '@/components/ui/button';
 
 export default function PricingPage() {
   return (
     <div className="max-w-7xl mx-auto border-x relative">
+      <SoftwareApplicationStructuredData />
       <Navbar />
       <main className="flex flex-col items-center justify-center divide-y divide-border min-h-screen w-full">
         <section className="relative flex w-full flex-1 items-center justify-center px-4 py-20 md:py-32">

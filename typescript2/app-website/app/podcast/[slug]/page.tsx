@@ -7,6 +7,7 @@ import { ogImagePath, TWITTER_HANDLE } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Markdown } from '@/components/magicui/markdown';
 import { Navbar } from '@/components/navbar';
+import { ArticleStructuredData } from '@/components/structured-data';
 import { Button } from '@/components/ui/button';
 import { EpisodesCarousel } from '../_components/episodes-carousel';
 import { fetchPodcastEpisodes } from '../podcast-data';
@@ -224,6 +225,17 @@ export default async function EpisodePage({
 
   return (
     <div className="max-w-7xl mx-auto border-x relative">
+      <ArticleStructuredData
+        datePublished={episode.date}
+        description={episode.description}
+        headline={`ai that works: ${episode.title}`}
+        image={ogImagePath({
+          description: episode.description,
+          eyebrow: 'ai that works',
+          title: episode.title,
+        })}
+        url={`/podcast/${episode.slug}`}
+      />
       <Navbar />
       <main className="min-h-screen w-full">
         {/* Back Button */}

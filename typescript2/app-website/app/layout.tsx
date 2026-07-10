@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { ogImagePath, TWITTER_HANDLE } from '@/app/_lib/metadata';
 import { SiteBanner } from '@/components/site-banner';
+import { SiteStructuredData } from '@/components/structured-data';
 import { ThemeProvider } from '@/components/theme-provider';
 import { cn } from '@/lib/utils';
 import './globals.css';
@@ -106,6 +107,7 @@ export default function RootLayout(props: { children: React.ReactNode }) {
           caveat.variable,
         )}
       >
+        <SiteStructuredData />
         <Suspense>
           <AnalyticsProvider>
             <ThemeProvider

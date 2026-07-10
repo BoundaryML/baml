@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
+import { ArticleStructuredData } from '@/components/structured-data';
 import { Button } from '@/components/ui/button';
 import { getPost, getPosts } from '../_lib/get-posts';
 import { PostBody } from './content';
@@ -30,8 +31,8 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
 
   if (!post) {
     return {
-      title: 'Post Not Found | BAML Blog',
       description: 'The requested blog post could not be found.',
+      title: 'Post Not Found | BAML Blog',
     };
   }
 
@@ -60,38 +61,38 @@ export async function generateMetadata({ params }: BlogPostPageProps) {
   ].join(', ');
 
   return {
-    title: fullTitle,
-    description: post.description,
     alternates: {
       canonical: postUrl,
     },
     authors: post.author ? [{ name: post.author.name }] : undefined,
+    description: post.description,
     keywords: keywords,
     openGraph: {
-      title: post.title,
-      description: post.description,
-      url: postUrl,
-      siteName: 'BAML',
-      type: 'article',
-      publishedTime: post.date,
       authors: post.author ? [post.author.name] : undefined,
-      tags: post.tags,
+      description: post.description,
       images: [
         {
+          alt: `${post.title} - BAML Blog`,
+          height: 630,
           url: ogImage,
           width: 1200,
-          height: 630,
-          alt: `${post.title} - BAML Blog`,
         },
       ],
+      publishedTime: post.date,
+      siteName: 'BAML',
+      tags: post.tags,
+      title: post.title,
+      type: 'article',
+      url: postUrl,
     },
+    title: fullTitle,
     twitter: {
       card: 'summary_large_image',
-      title: post.title,
+      creator: '@boundaryml',
       description: post.description,
       images: [ogImage],
-      creator: '@boundaryml',
       site: '@boundaryml',
+      title: post.title,
     },
   };
 }
@@ -132,6 +133,14 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
   return (
     <div className="max-w-7xl mx-auto border-x relative">
+      <ArticleStructuredData
+        authorName={post.author?.name}
+        datePublished={post.date}
+        description={post.description}
+        headline={post.title}
+        image={`/api/og?slug=${encodeURIComponent(post.slug)}`}
+        url={`/blog/${post.slug}`}
+      />
       <Navbar />
       <main className="flex flex-col items-center justify-center min-h-screen w-full">
         {/* Back Button */}
