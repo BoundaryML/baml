@@ -13,8 +13,8 @@ use baml_type::normalize::TypeContext;
 
 use super::{
     Definition, ExprId, InterfaceBound, MemberAccess, Name, PackageItems, SelfReceiver,
-    TirTypeError, Ty, TyAttr, TypeInferenceBuilder, format_interface_display,
-    function_generic_param_bounds_exprs, lower_generic_param_bounds,
+    TirTypeError, Ty, TyAttr, TypeInferenceBuilder, function_generic_param_bounds_exprs,
+    lower_generic_param_bounds,
 };
 use crate::{
     infer_context::SelfCallPosition,
@@ -261,14 +261,48 @@ pub(super) enum UnionMemberResolution {
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
-    /// a matching field or method. Default methods (with bodies) are
-    /// resolved via `FunctionLoc` like class methods. Required methods are
-    /// lowered straight from the `InterfaceMethodSig` since they don't have
-    /// function locs. Returns `None` when the member isn't found anywhere
-    /// in the chain (the caller emits the `UnresolvedMember` diagnostic).
-    /// Resolve `member` on interface `iface_name`.
+    /// A namespace-qualified display of `iface` for an ambiguity / projection diagnostic —
+    /// spelled so the suggested `recv.as<…>` fix resolves from the *current call site's*
+    /// namespace. A dependency-package interface, or a local one named from the package root,
+    /// uses the plain user-facing path (`zoo.Animal`, resolvable as written); a local interface
+    /// named from inside a sub-namespace is forced root-relative (`root.zoo.Animal`) so a bare
+    /// `zoo` segment is not misread there as a sibling namespace or a package.
+    fn qualified_interface_display(&self, iface: &baml_type::Interface) -> String {
+        let qtn = &iface.name;
+        let base = if qtn.is_local() && !self.ns_context.is_empty() {
+            match qtn.namespace().as_slice() {
+                [] => format!("root.{}", qtn.name()),
+                ns => format!(
+                    "root.{}.{}",
+                    ns.iter().map(Name::as_str).collect::<Vec<_>>().join("."),
+                    qtn.name()
+                ),
+            }
+        } else {
+            qtn.render_user_facing()
+        };
+        if iface.generics.is_empty() {
+            base
+        } else {
+            let args = iface
+                .generics
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{base}<{args}>")
+        }
+    }
+
+    /// Resolve `access.member` on an existential / type-variable receiver whose interface
+    /// constraint is `bound`, by walking `bound`'s `requires`-closure and resolving the
+    /// member on the first interface that declares it. A default method (with a body) is
+    /// resolved via its `FunctionLoc` like a class method; a required method is lowered
+    /// straight from its `InterfaceMethodSig` (no function loc). Returns `None` when no
+    /// interface in the chain declares the member (the caller emits the `UnresolvedMember`
+    /// diagnostic).
     ///
-    /// `self_recv` describes how the receiver pins `Self`, which decides whether
+    /// `recv` describes how the receiver pins `Self`, which decides whether
     /// the object-safety restriction (`InvalidSelfCallThroughInterface`) applies:
     ///
     /// - [`SelfReceiver::RigidVar`]: the call reaches the interface through a
@@ -375,7 +409,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 let sources: Vec<String> = declarers
                     .iter()
-                    .map(|v| format_interface_display(v.realized.name.name(), &v.realized.generics))
+                    .map(|v| self.qualified_interface_display(&v.realized))
                     .collect();
                 let err = if is_field {
                     TirTypeError::AmbiguousInterfaceField {
@@ -442,12 +476,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         if field_sources.len() >= 2 {
             let sources = field_sources
                 .iter()
-                .map(|s| {
-                    Name::new(format_interface_display(
-                        s.interface.name.name(),
-                        &s.interface.generics,
-                    ))
-                })
+                .map(|s| Name::new(self.qualified_interface_display(&s.interface)))
                 .collect();
             self.context.report_at_member(
                 TirTypeError::AmbiguousInterfaceField {
@@ -463,10 +492,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             });
         }
         if let Some(source) = field_sources.into_iter().next() {
-            let interface_name = Name::new(format_interface_display(
-                source.interface.name.name(),
-                &source.interface.generics,
-            ));
+            let interface_name = Name::new(self.qualified_interface_display(&source.interface));
             self.context.report_at_member(
                 TirTypeError::InterfaceFieldRequiresProjection {
                     class_name: receiver_name,
@@ -485,9 +511,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         if method_candidates.len() >= 2 {
             let sources = method_candidates
                 .iter()
-                .map(|(realized, ..)| {
-                    format_interface_display(realized.name.name(), &realized.generics)
-                })
+                .map(|(realized, ..)| self.qualified_interface_display(realized))
                 .collect();
             self.context.report_at_member(
                 TirTypeError::AmbiguousInterfaceMethod {
@@ -653,9 +677,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let receiver = Name::new(union_ty.render_user_facing());
                 let sources: Vec<String> = declaring
                     .iter()
-                    .map(|(ai, _)| {
-                        format_interface_display(ai.interface.name.name(), &ai.interface.generics)
-                    })
+                    .map(|(ai, _)| self.qualified_interface_display(&ai.interface))
                     .collect();
                 let err = if is_field {
                     TirTypeError::AmbiguousInterfaceField {

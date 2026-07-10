@@ -4452,6 +4452,29 @@ function needs<T extends Marker>(x: T) -> int throws never {
     }
 
     #[test]
+    fn impl_override_plus_other_interface_default_same_name_is_ambiguous() {
+        // A class overrides `process` for one interface while another implemented
+        // interface provides `process` as an un-overridden default. The override
+        // materializes on the class but the default does not, so the fast path must
+        // still defer to the impls resolver, which reports the ambiguity.
+        let errors = all_type_errors(
+            "interface WithDefault {\n  function process(self) -> string throws never { return \"D\" }\n}\n\
+             interface WithRequired {\n  function process(self) -> string throws never\n}\n\
+             class Impl {\n\
+               implements WithDefault {}\n\
+               implements WithRequired {\n    function process(self) -> string { return \"R\" }\n  }\n\
+             }\n\
+             function f(x: Impl) -> string throws never {\n  return x.process()\n}\n",
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, TirTypeError::AmbiguousInterfaceMethod { .. })),
+            "an override + another interface's same-named default must be ambiguous, got {errors:?}"
+        );
+    }
+
+    #[test]
     fn member_access_on_errored_receiver_does_not_cascade() {
         // `Nonexistent` fails to resolve (its own error); member access on the
         // resulting `!error` receiver must not add a second "has no member"

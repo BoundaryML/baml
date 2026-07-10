@@ -54,19 +54,6 @@ use interface_resolution::UnionMemberResolution;
 // `Ty::TypeVar`). They are free functions so they can be called from both
 // `resolve_member` (mutable context) and `try_resolve_member_on_ty` (shared).
 
-/// Construct `Ty::TypeAlias` for `baml.json.json`.
-/// Render an interface instantiation for diagnostics, e.g. `Box` (no args) or
-/// `Box<int>`. Used so ambiguity/projection hints name the exact instantiation
-/// (`.as<Box<int>>`) rather than the bare interface name.
-fn format_interface_display(name: &Name, args: &[Ty]) -> String {
-    if args.is_empty() {
-        name.to_string()
-    } else {
-        let rendered: Vec<String> = args.iter().map(std::string::ToString::to_string).collect();
-        format!("{name}<{}>", rendered.join(", "))
-    }
-}
-
 /// The interface bound to search for a member — the receiver's declared interface, whose
 /// `requires`-closure is walked. For an existential receiver this is the receiver's own
 /// interface; for a `T extends I` / `H.Item` receiver it's the constraint that bounds it.
@@ -12016,20 +12003,52 @@ impl<'db> TypeInferenceBuilder<'db> {
         let class_data = &item_tree[class_loc.id(db)];
 
         // `class_data.methods` flattens every `implements I { … }` block's methods together
-        // with class-level ones. A name that matches more than one can only come from two
-        // distinct interfaces declaring it (coherence forbids two impls of one interface),
-        // so resolving it here would silently pick the first. Defer to
-        // `resolve_member_from_impls`, which dedups by realized interface and reports the
-        // ambiguity (E0121). A unique match keeps this fast path — correct static dispatch
-        // on a concrete receiver.
-        if class_data
+        // with class-level ones. A name matching more than one can only come from two distinct
+        // interfaces declaring it (coherence forbids two impls of one interface), so resolving
+        // it here would silently pick the first. Defer to `resolve_member_from_impls`, which
+        // dedups by realized interface and reports the ambiguity (E0121).
+        let materialized: Vec<_> = class_data
             .methods
             .iter()
-            .filter(|&&mid| item_tree[mid].name == *method_name)
-            .count()
-            > 1
-        {
+            .copied()
+            .filter(|&mid| item_tree[mid].name == *method_name)
+            .collect();
+        if materialized.len() > 1 {
             return None;
+        }
+        // Even a *single* materialized match can be ambiguous: an impl-block override of one
+        // interface's method does not shadow a *different* interface's same-named method that
+        // the class inherits as an un-overridden default — that default lives only in the
+        // interface's `default_methods` and is never materialized on the class. Defer when the
+        // sole match is an impl-block method and another implemented interface also provides the
+        // member (enumerated by `type_impls`, defaults included). A *class-level* method still
+        // shadows interface methods (BEP-044), and a uniquely-provided one keeps the fast path.
+        if let [only] = materialized.as_slice()
+            && item_tree.method_to_iface_target.contains_key(only)
+        {
+            let receiver_args: Vec<Ty> = if class_type_args.is_empty() {
+                class_data
+                    .generic_params
+                    .iter()
+                    .map(|gp| Ty::TypeVar(gp.clone(), TyAttr::default()))
+                    .collect()
+            } else {
+                class_type_args.to_vec()
+            };
+            let receiver =
+                crate::self_type::receiver_type_for_class_at(class_name.clone(), receiver_args);
+            let mut providers: Vec<baml_type::Interface> = Vec::new();
+            for resolved_impl in self.type_impls(&receiver) {
+                if resolved_impl.get_method(db, method_name).is_some() {
+                    let realized = resolved_impl.implemented_interface(db);
+                    if !providers.contains(&realized) {
+                        providers.push(realized);
+                        if providers.len() > 1 {
+                            return None;
+                        }
+                    }
+                }
+            }
         }
 
         for &method_id in &class_data.methods {
