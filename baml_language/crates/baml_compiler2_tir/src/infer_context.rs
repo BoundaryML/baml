@@ -113,6 +113,12 @@ pub enum TirTypeError {
     NotIterable { ty: Ty },
     /// Expression is not indexable (e.g. `true[0]`).
     NotIndexable { ty: Ty },
+    /// A class destructuring pattern names a field the class does not declare.
+    UnknownClassPatternField {
+        class_name: crate::ty::QualifiedTypeName,
+        field_name: Name,
+        suggestions: Vec<Name>,
+    },
     /// A `map` type expression whose key type is not `string` (e.g. `map<int, V>`).
     /// Map keys are strings at runtime, so the key type must denote `string` or a
     /// subset of it.
@@ -742,6 +748,38 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::NotIndexable { ty } => {
                 write!(f, "type `{}` is not indexable", ty.render_user_facing())
+            }
+            TirTypeError::UnknownClassPatternField {
+                class_name,
+                field_name,
+                suggestions,
+            } => {
+                if suggestions.is_empty() {
+                    write!(
+                        f,
+                        "class `{}` has no field `{field_name}`",
+                        class_name.render_user_facing()
+                    )
+                } else if suggestions.len() == 1 {
+                    write!(
+                        f,
+                        "class `{}` has no field `{field_name}`. Did you mean `{}`?",
+                        class_name.render_user_facing(),
+                        suggestions[0]
+                    )
+                } else {
+                    let joined = suggestions
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("`, `");
+                    write!(
+                        f,
+                        "class `{}` has no field `{field_name}`. Did you mean one of these: \
+                         `{joined}`?",
+                        class_name.render_user_facing()
+                    )
+                }
             }
             TirTypeError::InvalidMapKeyType { key } => {
                 write!(
