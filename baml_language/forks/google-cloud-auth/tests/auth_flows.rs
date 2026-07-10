@@ -106,6 +106,31 @@ async fn adc_service_account_via_gac_signs_jwt() {
     assert_eq!(token, "ya29.adc-sa");
 }
 
+// --- ADC: GOOGLE_APPLICATION_CREDENTIALS set but unreadable ----------------
+
+#[tokio::test]
+async fn gac_set_but_unreadable_is_an_error_not_a_fallthrough() {
+    // google-auth parity: a set-but-broken GAC must NOT silently fall through
+    // to the well-known file or metadata server.
+    let adc = authorized_user_json("cid", "rt-should-not-be-used", TOKEN_URI);
+    let io = MockIo::new()
+        .env("GOOGLE_APPLICATION_CREDENTIALS", "/missing/adc.json")
+        .env("HOME", "/home/dev")
+        .file(
+            "/home/dev/.config/gcloud/application_default_credentials.json",
+            &adc,
+        )
+        .http(|_m, _u, _h, _b| Ok(ok(token_response("ya29.never"))));
+    let err = token_from_adc(&io, CLOUD_PLATFORM_SCOPE).await.unwrap_err();
+    match &err {
+        AuthError::NoCredentials(msg) => {
+            assert!(msg.contains("/missing/adc.json"), "msg={msg}");
+        }
+        other => panic!("expected NoCredentials, got {other:?}"),
+    }
+    assert_eq!(io.http_calls(), 0, "must not fall through to other sources");
+}
+
 // --- ADC: well-known config path discovery (no GAC env) -------------------
 
 #[tokio::test]
@@ -132,6 +157,21 @@ async fn adc_honors_cloudsdk_config_override() {
         .http(|_m, _url, _h, _b| Ok(ok(token_response("ya29.cloudsdk"))));
     let token = token_from_adc(&io, CLOUD_PLATFORM_SCOPE).await.unwrap();
     assert_eq!(token, "ya29.cloudsdk");
+}
+
+#[tokio::test]
+async fn adc_discovers_well_known_path_from_appdata() {
+    // Windows: no HOME; %APPDATA%\gcloud is the config dir.
+    let adc = authorized_user_json("cid", "rt-appdata", TOKEN_URI);
+    let io = MockIo::new()
+        .env("APPDATA", "C:/Users/dev/AppData/Roaming")
+        .file(
+            "C:/Users/dev/AppData/Roaming/gcloud/application_default_credentials.json",
+            &adc,
+        )
+        .http(|_m, _url, _h, _b| Ok(ok(token_response("ya29.appdata"))));
+    let token = token_from_adc(&io, CLOUD_PLATFORM_SCOPE).await.unwrap();
+    assert_eq!(token, "ya29.appdata");
 }
 
 // --- ADC: GCE metadata server fallback ------------------------------------

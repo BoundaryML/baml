@@ -10,8 +10,10 @@
 //!   token at the account's `token_uri`.
 //! - **Application Default Credentials** — `authorized_user` JSON (OAuth2
 //!   refresh-token grant), `service_account` JSON, or the GCE metadata server,
-//!   discovered from `GOOGLE_APPLICATION_CREDENTIALS` or the well-known ADC
-//!   config path.
+//!   discovered from `GOOGLE_APPLICATION_CREDENTIALS` (a file path only; a
+//!   set-but-unreadable path is a hard error, not a fallthrough — matching
+//!   google-auth) or the well-known ADC config path (`$CLOUDSDK_CONFIG`,
+//!   `$HOME/.config/gcloud`, or `%APPDATA%\gcloud`).
 
 #![allow(clippy::doc_markdown)]
 
@@ -112,13 +114,13 @@ pub async fn token_from_service_account_json(
     post_token(io, token_uri, &body).await
 }
 
-/// Returns `true` when Application Default Credentials look discoverable (an
-/// inline/file `GOOGLE_APPLICATION_CREDENTIALS` or the well-known ADC config
-/// file). Does not perform any network IO. Mirrors the resolution-time probe
-/// the AWS SDK performs.
+/// Returns `true` when Application Default Credentials look discoverable (a
+/// `GOOGLE_APPLICATION_CREDENTIALS` file or the well-known ADC config file).
+/// Does not perform any network IO. Mirrors the resolution-time probe the AWS
+/// SDK performs.
 pub async fn adc_available(io: &dyn TokenIo) -> bool {
-    if let Some(val) = io.env("GOOGLE_APPLICATION_CREDENTIALS").await {
-        if !val.is_empty() && io.read_file(&val).await.is_some() {
+    if let Some(path) = gac_path(io).await {
+        if io.read_file(&path).await.is_some() {
             return true;
         }
     }
@@ -134,13 +136,15 @@ pub async fn adc_available(io: &dyn TokenIo) -> bool {
 /// `GOOGLE_APPLICATION_CREDENTIALS` file, the well-known ADC config file, then
 /// the GCE metadata server.
 pub async fn token_from_adc(io: &dyn TokenIo, scope: &str) -> Result<String, AuthError> {
-    // 1. GOOGLE_APPLICATION_CREDENTIALS file path.
-    if let Some(val) = io.env("GOOGLE_APPLICATION_CREDENTIALS").await {
-        if !val.is_empty() {
-            if let Some(contents) = io.read_file(&val).await {
-                return token_from_adc_json(io, &contents, scope).await;
-            }
-        }
+    // 1. GOOGLE_APPLICATION_CREDENTIALS file path. Like google-auth, a set
+    //    var whose file cannot be read is an error, not a fallthrough.
+    if let Some(path) = gac_path(io).await {
+        let Some(contents) = io.read_file(&path).await else {
+            return Err(AuthError::NoCredentials(format!(
+                "GOOGLE_APPLICATION_CREDENTIALS points to '{path}' but the file could not be read"
+            )));
+        };
+        return token_from_adc_json(io, &contents, scope).await;
     }
 
     // 2. Well-known ADC config file.
@@ -212,7 +216,10 @@ async fn token_from_metadata(io: &dyn TokenIo, scope: &str) -> Result<String, Au
     let resp = io.http("GET", &url, &headers, "").await?;
     if resp.status < 200 || resp.status >= 300 {
         return Err(AuthError::NoCredentials(format!(
-            "no ADC credentials found and GCE metadata server returned status {}",
+            "no ADC credentials found (checked GOOGLE_APPLICATION_CREDENTIALS, the gcloud ADC \
+             file, and the GCE metadata server, which returned status {}). To set up ADC, run \
+             `gcloud auth application-default login` or see \
+             https://cloud.google.com/docs/authentication/external/set-up-adc",
             resp.status
         )));
     }
@@ -298,19 +305,35 @@ fn sign_service_account_jwt(sa: &ServiceAccount, scope: &str) -> Result<String, 
 // ADC config path discovery
 // ---------------------------------------------------------------------------
 
-/// The well-known ADC config file path
-/// (`$CLOUDSDK_CONFIG/application_default_credentials.json` or
-/// `$HOME/.config/gcloud/application_default_credentials.json`).
+/// A non-empty `GOOGLE_APPLICATION_CREDENTIALS` value (always a file path;
+/// inline JSON is deliberately not supported).
+async fn gac_path(io: &dyn TokenIo) -> Option<String> {
+    io.env("GOOGLE_APPLICATION_CREDENTIALS")
+        .await
+        .filter(|s| !s.is_empty())
+}
+
+/// The gcloud config directory: `$CLOUDSDK_CONFIG`, `$HOME/.config/gcloud`
+/// (Unix), or `%APPDATA%\gcloud` (Windows).
+async fn gcloud_config_dir(io: &dyn TokenIo) -> Option<String> {
+    if let Some(dir) = io.env("CLOUDSDK_CONFIG").await.filter(|s| !s.is_empty()) {
+        return Some(dir);
+    }
+    if let Some(home) = io.env("HOME").await.filter(|s| !s.is_empty()) {
+        return Some(format!("{home}/.config/gcloud"));
+    }
+    if let Some(appdata) = io.env("APPDATA").await.filter(|s| !s.is_empty()) {
+        return Some(format!("{appdata}/gcloud"));
+    }
+    None
+}
+
+/// The well-known ADC config file path.
 async fn adc_config_path(io: &dyn TokenIo) -> Option<String> {
-    let config_dir = if let Some(dir) = io.env("CLOUDSDK_CONFIG").await.filter(|s| !s.is_empty()) {
-        dir
-    } else {
-        // Unix uses HOME; Windows uses APPDATA\gcloud, but BAML targets Unix +
-        // wasm for this path. Fall back to HOME.
-        let home = io.env("HOME").await.filter(|s| !s.is_empty())?;
-        format!("{home}/.config/gcloud")
-    };
-    Some(format!("{config_dir}/application_default_credentials.json"))
+    Some(format!(
+        "{}/application_default_credentials.json",
+        gcloud_config_dir(io).await?
+    ))
 }
 
 fn encode(s: &str) -> String {
