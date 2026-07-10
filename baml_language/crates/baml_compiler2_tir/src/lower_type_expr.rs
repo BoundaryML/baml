@@ -4386,6 +4386,52 @@ function needs<T extends Marker>(x: T) -> int throws never {
         );
     }
 
+    // ─── Container-literal adoption in checking position ───────────────────
+    //
+    // Containers are invariant, so a list/map literal checked against a
+    // container-bearing expected type adopts the declared element type
+    // (bidirectional checking) instead of synthesize-then-subtype.
+
+    #[test]
+    fn container_literals_adopt_the_unique_container_member_of_a_recursive_alias() {
+        // The `json` shape: the literal adopts `map<string, J>` from the alias's
+        // union, and the nested array/map literals recurse the same way.
+        let errors = all_type_errors(
+            "type J = null | bool | int | float | string | J[] | map<string, J>\n\
+             function make() -> J {\n  {\"a\": 1, \"b\": [2, 3], \"c\": {\"nested\": null}}\n}\n",
+        );
+        assert!(
+            errors.is_empty(),
+            "a nested map/array literal should adopt through the recursive alias, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn map_literal_value_outside_the_adopted_type_is_still_rejected() {
+        let errors = all_type_errors(
+            "type J = null | int | J[] | map<string, J>\n\
+             function make() -> J {\n  {\"a\": \"nope\"}\n}\n",
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, TirTypeError::TypeMismatch { .. })),
+            "a value outside the adopted union must still be rejected, got {errors:?}"
+        );
+    }
+
+    #[test]
+    fn ambiguous_union_of_containers_falls_back_to_subtype() {
+        // Two list members: adoption is ambiguous, so the literal synthesizes
+        // (`int[]`) and passes as a member of the union.
+        let errors =
+            all_type_errors("function make() -> int[] | string[] throws never {\n  [1]\n}\n");
+        assert!(
+            errors.is_empty(),
+            "a synthesized member of an ambiguous union should pass, got {errors:?}"
+        );
+    }
+
     #[test]
     fn member_access_on_errored_receiver_does_not_cascade() {
         // `Nonexistent` fails to resolve (its own error); member access on the

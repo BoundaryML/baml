@@ -263,6 +263,24 @@ impl IrrefutableContextKind {
     }
 }
 
+/// Which container kind a literal in checking position is — selects the shape
+/// [`TypeInferenceBuilder::adopted_container_for_literal`] looks for in the
+/// expected type.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum ContainerLiteralKind {
+    List,
+    Map,
+}
+
+impl ContainerLiteralKind {
+    fn matches(self, ty: &Ty) -> bool {
+        match self {
+            ContainerLiteralKind::List => matches!(ty, Ty::List(..) | Ty::EvolvingList(..)),
+            ContainerLiteralKind::Map => matches!(ty, Ty::Map { .. } | Ty::EvolvingMap(..)),
+        }
+    }
+}
+
 /// Cache key discriminator for [`TypeInferenceBuilder::pattern_natural_type`].
 /// The function takes an `unconstrained` `Ty` to substitute at leaves; in
 /// practice it's always one of these two, so the cache is keyed on the
@@ -5544,13 +5562,22 @@ impl<'db> TypeInferenceBuilder<'db> {
         expected: &Ty,
         fields: &[(Name, ExprId)],
     ) -> Ty {
-        if let Ty::Map {
-            key: key_ty,
-            value: val_ty,
-            ..
-        }
-        | Ty::EvolvingMap(key_ty, val_ty, _) = expected
+        // Same adoption rule as the `Expr::Map` checking arm: aliases, nullable
+        // wrappers, and unions with a unique map member all determine the
+        // declared key/value types (containers are invariant, so each entry is
+        // checked bidirectionally rather than synthesize-then-subtype).
+        if let Some(container) =
+            self.adopted_container_for_literal(expected, ContainerLiteralKind::Map)
         {
+            let (Ty::Map {
+                key: key_ty,
+                value: val_ty,
+                ..
+            }
+            | Ty::EvolvingMap(key_ty, val_ty, _)) = &container
+            else {
+                unreachable!("container is Map/EvolvingMap by construction")
+            };
             let string_ty = Ty::string();
             if !fields.is_empty() && !self.is_subtype(&string_ty, key_ty) {
                 self.context.report(
@@ -5565,9 +5592,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             for (_, value) in fields {
                 self.check_expr(*value, body, val_ty);
             }
-            let ty = expected.clone();
-            self.record_expr_type(expr_id, ty.clone());
-            ty
+            self.record_expr_type(expr_id, container.clone());
+            container
         } else {
             let inferred = self.infer_map_object_expr(body, fields);
             if !matches!(expected, Ty::Unknown { .. } | Ty::Error { .. })
@@ -6555,15 +6581,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 ty
             }
             Expr::Array { elements } => {
-                // Adopt the declared element type, looking through a nullable
-                // wrapper (`int[]?` is `int[] | null`) so an empty array still
-                // adopts `int`. The literal is recorded as the (non-null)
+                // Adopt the declared element type, looking through aliases, a
+                // nullable wrapper (`int[]?` is `int[] | null`), and a union with
+                // a unique list member (`json` is `… | json[] | …`), so each
+                // element checks against the declared element type — containers
+                // are invariant, so synthesize-then-subtype would wrongly reject
+                // `[1]` against `json[]`. The literal is recorded as the adopted
                 // container — the array itself is `int[]`, assignable to `int[]?`.
-                let container = match expected {
-                    Ty::List(..) | Ty::EvolvingList(..) => Some(expected.clone()),
-                    _ => Self::nullable_non_null_part(expected)
-                        .filter(|t| matches!(t, Ty::List(..) | Ty::EvolvingList(..))),
-                };
+                let container =
+                    self.adopted_container_for_literal(expected, ContainerLiteralKind::List);
                 if let Some(container) = container {
                     let (Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _)) = &container else {
                         unreachable!("container is List/EvolvingList by construction")
@@ -6613,14 +6639,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 ..
             } => self.check_object_expr(expr_id, body, expected, fields, type_name, type_args),
             Expr::Map { entries } => {
-                // Look through a nullable wrapper (`map<string, int>?`) so an
-                // empty map still adopts the declared key/value types; the literal
-                // is recorded as the (non-null) container.
-                let container = match expected {
-                    Ty::Map { .. } | Ty::EvolvingMap(..) => Some(expected.clone()),
-                    _ => Self::nullable_non_null_part(expected)
-                        .filter(|t| matches!(t, Ty::Map { .. } | Ty::EvolvingMap(..))),
-                };
+                // Look through aliases, a nullable wrapper (`map<string, int>?`),
+                // and a union with a unique map member (`json` is
+                // `… | map<string, json>`), so each entry checks against the
+                // declared key/value types — containers are invariant, so
+                // synthesize-then-subtype would wrongly reject `{"a": 1}` against
+                // `map<string, json>`. The literal is recorded as the adopted
+                // container.
+                let container =
+                    self.adopted_container_for_literal(expected, ContainerLiteralKind::Map);
                 if let Some(container) = container {
                     let (Ty::Map {
                         key: key_ty,
@@ -11074,6 +11101,57 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.infer_call_bindings_via_matching_shape(formal, &view, bindings, None, true);
         }
         self.infer_call_bindings_via_matching_shape(formal, actual, bindings, None, true);
+    }
+
+    /// The container type a list/map literal in checking position adopts from
+    /// `expected`, or `None` when `expected` does not determine one.
+    ///
+    /// Containers are invariant, so a container literal is checked
+    /// *bidirectionally* — each element against the declared element type —
+    /// rather than synthesized and subtype-checked, which would wrongly reject
+    /// `{"a": 1}` against `map<string, json>` (`map<string, int>` is not a
+    /// subtype of it under invariance). The expected type is alias-expanded at
+    /// the top level (`json` → `… | json[] | map<string, json>`); a nullable
+    /// wrapper or a wider union determines the container only when exactly one
+    /// distinct member (itself alias-expanded, nested unions flattened) is of
+    /// the literal's kind — with two or more the adoption target is ambiguous,
+    /// so the caller falls back to synthesize + subtype.
+    fn adopted_container_for_literal(
+        &self,
+        expected: &Ty,
+        kind: ContainerLiteralKind,
+    ) -> Option<Ty> {
+        // Top-level expansion only: the nested occurrences inside a recursive
+        // alias like `json` stay symbolic, which is what terminates this.
+        let expanded = self.expand_alias_chains(expected.clone());
+        if kind.matches(&expanded) {
+            return Some(expanded);
+        }
+        let Ty::Union(members, _) = expanded else {
+            return None;
+        };
+        // Collect kind-matching members across nested unions (a `json` member of
+        // a wider union contributes its own `json[]` / `map<string, json>`).
+        // Fuel-bounded so a pathological self-referential union alias cannot spin.
+        let mut worklist: Vec<Ty> = members;
+        let mut adopted: Option<Ty> = None;
+        let mut fuel = 64usize;
+        while let Some(member) = worklist.pop() {
+            if fuel == 0 {
+                return None;
+            }
+            fuel -= 1;
+            let member = self.expand_alias_chains(member);
+            if kind.matches(&member) {
+                if adopted.as_ref().is_some_and(|already| already != &member) {
+                    return None;
+                }
+                adopted = Some(member);
+            } else if let Ty::Union(nested, _) = member {
+                worklist.extend(nested);
+            }
+        }
+        adopted
     }
 
     fn nullable_non_null_part(ty: &Ty) -> Option<Ty> {
