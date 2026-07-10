@@ -587,7 +587,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                   <span className="l6-tl-node l6-tl-node--now" />
                   <span className="l6-tl-era">Agentic Coding</span>
                   <span className="l6-tl-arrow">→</span>
-                  <span className="l6-tl-lang">????</span>
+                  <span className="l6-tl-lang">BAML</span>
                 </li>
               </ul>
               <p>

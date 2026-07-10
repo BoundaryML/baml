@@ -29,6 +29,10 @@ type Tenet = {
 
 const TENETS: Tenet[] = [
   {
+    title: 'Invent as little as necessary.',
+    why: 'The more we invent, the worse agents are at it. Everything different from what they already know should be a deliberate decision.',
+  },
+  {
     code: [
       { c: 'cm', t: '// the model reply is just a string' },
       { t: '\n' },
@@ -73,10 +77,6 @@ const TENETS: Tenet[] = [
   {
     title: 'Build tools for agents, not just IDEs.',
     why: "Humans still need their IDEs. But most code is now read and written by agents, and an agent can't hover, click, or read a tooltip.",
-  },
-  {
-    title: 'Invent as little as necessary.',
-    why: 'The more we invent, the worse agents are at it. Everything different from what they already know should be a deliberate decision.',
   },
 ];
 
@@ -680,7 +680,7 @@ function LocalDemo({
 }
 
 export function TenetsAccordion() {
-  const [openIndex, setOpenIndex] = useState<number | null>(TENETS.length - 1);
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
   const traceRef = useRef<HTMLDivElement | null>(null);
   const branchRef = useRef<HTMLDivElement | null>(null);
   const localRef = useRef<HTMLDivElement | null>(null);

@@ -93,7 +93,7 @@ export function IterateTestDemo() {
           <div className="pl-4 space-y-2">
             <div className="bg-blue-900/20 border border-blue-800/30 rounded p-2">
               <div className="text-blue-300 mb-1">Experience:</div>
-              <div className="text-gray-300 pl-2">- Founder at BoundaryML</div>
+              <div className="text-gray-300 pl-2">- Founder at Boundary</div>
               <div className="text-gray-300 pl-2">- CV Engineer at Google</div>
               <div className="text-gray-300 pl-2">
                 - CV Engineer at Microsoft
@@ -173,9 +173,7 @@ export function IterateTestDemo() {
                   <span className="text-gray-500">: [</span>
                   <span className="text-gray-500 italic"> 3 items</span>
                   <div className="pl-4">
-                    <div className="text-green-400">
-                      "Founder at BoundaryML",
-                    </div>
+                    <div className="text-green-400">"Founder at Boundary",</div>
                     <div className="text-green-400">
                       "CV Engineer at Google",
                     </div>

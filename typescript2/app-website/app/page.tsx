@@ -9,8 +9,8 @@ import { Article } from './baml-intro/_components/Article';
 // Homepage currently mirrors /baml-intro. The previous homepage is preserved
 // at app/home-old/page.tsx (reachable at /home-old).
 export const metadata: Metadata = {
-  description:
-    'Statically typed like Rust, flexible like TypeScript, parallel like Go. Fully qualified names, no imports, native tests, baml describe, baml pack — every feature built so agents make fewer mistakes.',
+  // description falls through to the layout's homeDescription (the exposé) so
+  // the search snippet matches the social card.
   title: 'BAML — the programming language for agents',
 };
 

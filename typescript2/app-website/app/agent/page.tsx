@@ -425,9 +425,6 @@ export default function AgentPage() {
           <Link href="/agent/guide" style={{ color: ACCENT }}>
             Full BAML agent guide
           </Link>
-          <a href="/llms.txt" style={{ color: ACCENT }}>
-            llms.txt
-          </a>
           <a href="https://docs.boundaryml.com" style={{ color: ACCENT }}>
             Docs
           </a>

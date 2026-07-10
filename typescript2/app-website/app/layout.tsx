@@ -51,9 +51,6 @@ const homeOgImage = ogImagePath({
 export const metadata: Metadata = {
   alternates: {
     canonical: `${baseUrl}/`,
-    types: {
-      'text/plain': '/llms.txt',
-    },
   },
   description: homeDescription,
   icons: {
