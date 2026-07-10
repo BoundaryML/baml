@@ -591,9 +591,7 @@ fn auto_refresh_caches(selector: &ResolvedSelector) {
     }
     let cache = baml_release::skills::latest_skill_commit_cache_path();
     if should_attempt_refresh(&cache) {
-        if let Ok(sha) = baml_release::skills::fetch_latest_skill_commit(remaining) {
-            let _ = baml_release::skills::write_cached_latest_skill_commit(&cache, &sha);
-        }
+        let _ = refresh_latest_skill_commit(remaining);
     }
 }
 
