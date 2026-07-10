@@ -12164,7 +12164,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let mut diags = Vec::new();
 
                 // Build the self type WITH concrete type args, or TypeVars for
-                // unbound generics (UFCS case).
+                // unbound generics (UFCS case). The builtin container roots are
+                // their structural sugar (`baml.Array<T>` → `T[]`), matching the
+                // shape their values actually have — a static-form call
+                // (`baml.Array.length(arr)`) infers `T` by shape-matching the
+                // `Ty::List` argument against this formal.
                 let class_ty_args: Vec<Ty> = if class_type_args.is_empty() {
                     class_data
                         .generic_params
@@ -12174,7 +12178,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else {
                     class_type_args.to_vec()
                 };
-                let class_ty = Ty::Class(class_name.clone(), class_ty_args, TyAttr::default());
+                let class_ty =
+                    crate::self_type::receiver_type_for_class_at(class_name.clone(), class_ty_args);
 
                 // All generic params in scope for lowering (class + method).
                 let mut all_generic_params = class_data.generic_params.clone();

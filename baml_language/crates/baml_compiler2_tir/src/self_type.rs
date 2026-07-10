@@ -44,22 +44,38 @@ pub fn self_type_for_class(
         .iter()
         .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
         .collect();
+    receiver_type_for_class_at(qtn, args)
+}
+
+/// [`self_type_for_class`] at explicit generic `args` (`TypeVar`s or concrete): the builtin
+/// container roots are their structural sugar (`baml.Array<int>` → `int[]`), everything else
+/// a nominal `Ty::Class`. This is the receiver shape a value actually has — an array value is
+/// a `Ty::List`, never a `Ty::Class(baml.Array, …)` — so a static-form call
+/// (`baml.Array.length(arr)`) must type its `self` formal structurally too, or call-site
+/// inference could never bind `T` from the `Ty::List` actual.
+pub fn receiver_type_for_class_at(qtn: QualifiedTypeName, args: Vec<Ty>) -> Ty {
     if qtn.is_builtin_root_type("Array") {
         debug_assert_eq!(
             args.len(),
             1,
             "builtin `baml.Array` has one generic parameter"
         );
-        Ty::List(Box::new(args[0].clone()), TyAttr::default())
+        Ty::List(
+            Box::new(args.into_iter().next().unwrap_or_else(|| unreachable!())),
+            TyAttr::default(),
+        )
     } else if qtn.is_builtin_root_type("Map") {
         debug_assert_eq!(
             args.len(),
             2,
             "builtin `baml.Map` has two generic parameters"
         );
+        let mut args = args.into_iter();
+        let key = args.next().unwrap_or_else(|| unreachable!());
+        let value = args.next().unwrap_or_else(|| unreachable!());
         Ty::Map {
-            key: Box::new(args[0].clone()),
-            value: Box::new(args[1].clone()),
+            key: Box::new(key),
+            value: Box::new(value),
             attr: TyAttr::default(),
         }
     } else {
