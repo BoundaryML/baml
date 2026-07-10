@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   ExecutionPanel,
   type ControlFlowGraph,
+  type ProjectUpdate,
   type RuntimePort,
   type Run,
   type WorkerInMessage,
@@ -176,6 +177,109 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
   });
 });
 
+describe('ExecutionPanel test previews', () => {
+  it('hydrates legacy test args without running and releases selection on navigation', async () => {
+    const port = new FakeRuntimePort();
+    const projectUpdate: ProjectUpdate = {
+      isBexCurrent: true,
+      functions: [
+        {
+          name: 'ClassifySentiment',
+          kind: 'llm',
+          origin: 'userDefined',
+          capabilities: {
+            renderPrompt: true,
+            buildRequest: true,
+            clientName: 'Gpt5',
+          },
+          params: [
+            {
+              name: 'text',
+              hasDefault: false,
+              schema: { type: 'string' },
+            },
+          ],
+        },
+        { name: 'OtherFunction', kind: 'expr', origin: 'userDefined' },
+      ],
+      tests: [
+        {
+          name: 'HappySentiment',
+          functionName: 'ClassifySentiment',
+          argsJson: '{"text":"I absolutely love this feature"}',
+        },
+      ],
+      diagnostics: [],
+    };
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: projectUpdate,
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByTitle(
+        'Use HappySentiment args for ClassifySentiment',
+      ),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+      text: 'I absolutely love this feature',
+    });
+    expect(
+      screen.getByText('ClassifySentiment()'),
+    ).toBeInTheDocument();
+    expect(port.sent.some((message) => message.type === 'startRun')).toBe(false);
+    expect(port.sent.some((message) => message.type === 'startTestRun')).toBe(false);
+
+    act(() => {
+      port.emit({
+        type: 'cursorContext',
+        context: {
+          functionName: 'OtherFunction',
+          isWorkflow: false,
+          workflowMemberships: [],
+          sourceExprId: null,
+          testName: null,
+        },
+      });
+    });
+    expect(await screen.findByText('OtherFunction()')).toBeInTheDocument();
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            ...projectUpdate,
+            tests: projectUpdate.tests?.map((test) => ({
+              ...test,
+              argsJson: '{"text":"source edit"}',
+            })),
+          },
+        },
+      });
+    });
+    expect(await screen.findByText('OtherFunction()')).toBeInTheDocument();
+  });
+});
+
 describe('ExecutionPanel args form', () => {
   it('renders the args form from param schemas and serializes edits into argsJson', async () => {
     const port = new FakeRuntimePort();
@@ -325,6 +429,199 @@ describe('ExecutionPanel args form', () => {
     const rawAgain = await screen.findByPlaceholderText('{"key": "value"}');
     await waitFor(() => {
       expect(JSON.parse((rawAgain as HTMLInputElement).value)).toEqual(seeded);
+    });
+  });
+
+  it('reconciles cached form values when a same-name function schema changes', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'EchoPerson',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'person',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Person' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.Person': {
+                kind: 'class',
+                fields: [
+                  { name: 'name', schema: { type: 'string' } },
+                  { name: 'active', schema: { type: 'bool' } },
+                ],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'EchoPerson' }));
+    fireEvent.change(await screen.findByPlaceholderText('text'), {
+      target: { value: 'Ada' },
+    });
+
+    // Hot-reload the same function name with a new required class field.
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'EchoPerson',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'person',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Person' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.Person': {
+                kind: 'class',
+                fields: [
+                  { name: 'name', schema: { type: 'string' } },
+                  { name: 'active', schema: { type: 'bool' } },
+                  { name: 'age', schema: { type: 'int' } },
+                ],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    const ageInput = await screen.findByPlaceholderText('0');
+    await waitFor(() => {
+      expect(ageInput).toHaveValue('0');
+      expect(screen.getByPlaceholderText('text')).toHaveValue('Ada');
+    });
+    fireEvent.change(screen.getByPlaceholderText('text'), {
+      target: { value: 'Ada Lovelace' },
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    await waitFor(() => {
+      expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+        person: {
+          $baml: { type: 'user.Person' },
+          name: 'Ada Lovelace',
+          active: false,
+          age: 0,
+        },
+      });
+    });
+  });
+
+  it('serializes untouched defaults inside a required nested class', async () => {
+    const port = new FakeRuntimePort();
+
+    render(<ExecutionPanel port={port} />);
+
+    act(() => {
+      port.emit({
+        type: 'playgroundNotification',
+        notification: { type: 'listProjects', projects: ['project'] },
+      });
+      port.emit({
+        type: 'playgroundNotification',
+        notification: {
+          type: 'updateProject',
+          project: 'project',
+          update: {
+            isBexCurrent: true,
+            functions: [
+              {
+                name: 'EchoEnvelope',
+                kind: 'expr',
+                origin: 'userDefined',
+                params: [
+                  {
+                    name: 'envelope',
+                    hasDefault: false,
+                    schema: { type: 'ref', name: 'user.Envelope' },
+                  },
+                ],
+              },
+            ],
+            types: {
+              'user.Flag': {
+                kind: 'class',
+                fields: [{ name: 'active', schema: { type: 'bool' } }],
+              },
+              'user.Envelope': {
+                kind: 'class',
+                fields: [
+                  {
+                    name: 'flag',
+                    schema: { type: 'ref', name: 'user.Flag' },
+                  },
+                ],
+              },
+            },
+            diagnostics: [],
+          },
+        },
+      });
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Functions (1)' }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'EchoEnvelope' }),
+    );
+
+    // The switch is untouched and visually false; raw state must already
+    // contain that same false value rather than a marker-only nested class.
+    expect(await screen.findByRole('switch')).not.toBeChecked();
+    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
+    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
+    await waitFor(() => {
+      expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
+        envelope: {
+          $baml: { type: 'user.Envelope' },
+          flag: {
+            $baml: { type: 'user.Flag' },
+            active: false,
+          },
+        },
+      });
     });
   });
 
