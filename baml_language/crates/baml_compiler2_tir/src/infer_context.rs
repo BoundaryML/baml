@@ -596,10 +596,12 @@ pub enum TirTypeError {
     },
     /// The impl's target type does not implement an interface the implemented interface
     /// `requires` — implementing `I` requires also implementing each of `I`'s parents.
-    /// Impl conformance (E0125).
+    /// `required` is the *realized* obligation (generic args and associated pins included),
+    /// so a type that implements the parent at a different binding reads as what's missing
+    /// (`Parent<Item = int>`, not a bare `Parent` it does implement). Impl conformance (E0125).
     MissingRequiredInterface {
         interface: crate::ty::QualifiedTypeName,
-        required: crate::ty::QualifiedTypeName,
+        required: baml_type::Interface,
     },
     /// An `implements` head names a type that is not an interface (a class, enum, or alias).
     /// Impl header (E0119).
@@ -1498,7 +1500,7 @@ impl fmt::Display for TirTypeError {
                     f,
                     "implementing `{}` also requires implementing `{}`",
                     interface.render_user_facing(),
-                    required.render_user_facing()
+                    required.to_ty().render_user_facing()
                 )
             }
             TirTypeError::ImplTargetNotInterface { name } => {

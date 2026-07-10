@@ -156,13 +156,23 @@ fn lower_interface_associated_bindings<'db>(
     // A binding value (impl-block source) resolves names in the impl's own scope; an
     // associated-type default (interface source) is lowered once — with a symbolic `Self` —
     // by `interface_associated_type_default` and realized here at the impl's `self_ty`.
-    // Resolved associated types join the value scope as they resolve (a later binding may
-    // reference an earlier sibling).
+    //
+    // A later binding references an earlier sibling as `Self.Item` (bare names are banned):
+    // `Self` lowers as a rigid type variable whose bound is the interface carrying the
+    // *already-resolved* pins, so the projection collapses to the earlier witness at
+    // lowering time — never consulting the impl set (this runs inside `impl_data`; a
+    // concrete-base projection here would re-enter it). A residual symbolic `Self`
+    // substitutes to the for-type afterwards.
+    let self_name = Name::new("Self");
+    let iface_qtn = interface_loc_qtn(db, iface_loc);
     let mut value_scope: Vec<Name> = generic_params.to_vec();
+    value_scope.push(self_name.clone());
     let mut value_bindings: rustc_hash::FxHashMap<Name, Ty> = generic_params
         .iter()
         .map(|param| (param.clone(), Ty::TypeVar(param.clone(), TyAttr::default())))
         .collect();
+    value_bindings.insert(self_name.clone(), self_ty.clone());
+    let mut resolved_pins: Vec<(Name, Ty)> = Vec::new();
     let mut default_bindings = generics::bind_type_vars(&iface.generic_params, interface_args);
 
     iface
@@ -174,6 +184,17 @@ fn lower_interface_associated_bindings<'db>(
                 .find(|binding| binding.name == assoc.name)
                 && let Some(type_expr) = &binding.type_expr
             {
+                let mut bounds = caller_bounds.clone();
+                if let Some(qtn) = &iface_qtn {
+                    bounds.insert(
+                        self_name.clone(),
+                        vec![baml_type::Interface::new(
+                            qtn.clone(),
+                            interface_args.to_vec(),
+                            resolved_pins.clone(),
+                        )],
+                    );
+                }
                 crate::generics::substitute_ty(
                     &crate::lower_type_expr::lower_type_expr(
                         type_expr,
@@ -182,8 +203,8 @@ fn lower_interface_associated_bindings<'db>(
                             package_items: binding_pkg_items,
                             ns_context: binding_namespace_path,
                             generic_params: &value_scope,
-                            bounds: caller_bounds,
-                            self_ty: None,
+                            bounds: &bounds,
+                            self_ty: Some(Ty::TypeVar(self_name.clone(), TyAttr::default())),
                         },
                         diagnostics,
                     ),
@@ -202,8 +223,7 @@ fn lower_interface_associated_bindings<'db>(
                 );
                 crate::generics::substitute_ty(&realized, &default_bindings)
             };
-            value_scope.push(assoc.name.clone());
-            value_bindings.insert(assoc.name.clone(), ty.clone());
+            resolved_pins.push((assoc.name.clone(), ty.clone()));
             default_bindings.insert(assoc.name.clone(), ty.clone());
             Some((assoc.name.clone(), ty))
         })

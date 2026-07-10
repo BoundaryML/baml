@@ -214,7 +214,7 @@ fn determine_interface(
         Ty::Interface(qtn, args, assoc, _) => {
             let root = baml_type::Interface::new(qtn.clone(), args.clone(), assoc.clone());
             let undeclared = AssocContainer::Interface(root.name.clone());
-            resolve_via_roots(ctx.db(), vec![root], explicit, member, undeclared, &base)
+            resolve_via_roots(ctx, vec![root], explicit, member, undeclared, &base)
         }
         // A type variable searches the closure of *every* interface in its bound
         // conjunction (`T extends A & B`). No bound at all means it cannot be proven
@@ -243,14 +243,7 @@ fn determine_interface(
             Some(bounds) => {
                 // Report against the first bound if none declares `member`.
                 let undeclared = AssocContainer::Interface(bounds[0].name.clone());
-                resolve_via_roots(
-                    ctx.db(),
-                    bounds.into_vec(),
-                    explicit,
-                    member,
-                    undeclared,
-                    &base,
-                )
+                resolve_via_roots(ctx, bounds.into_vec(), explicit, member, undeclared, &base)
             }
         },
         // Concrete receivers resolve through their own impls: an associated type
@@ -292,7 +285,7 @@ fn determine_interface(
                 unreachable!("a symbolic projection base always carries its determined interface")
             });
             determine_chained(
-                ctx.db(),
+                ctx,
                 &base,
                 inner_base,
                 inner_interface,
@@ -338,7 +331,7 @@ fn determine_interface(
 /// qualifier, narrow to that interface's QTN and realize it at the base (carrying the base's
 /// pins); the subject must actually provide it, else it does not implement it (E0277).
 fn resolve_via_roots(
-    db: &dyn crate::Db,
+    ctx: &dyn TypeExprContext<'_>,
     roots: Vec<baml_type::Interface>,
     explicit: Option<baml_type::Interface>,
     member: &Name,
@@ -346,8 +339,8 @@ fn resolve_via_roots(
     subject: &Ty,
 ) -> Determination {
     match explicit {
-        None => resolve_through_roots(db, roots, member, undeclared),
-        Some(qualifier) => match realize_qualifier_through_roots(db, &roots, &qualifier) {
+        None => resolve_through_roots(ctx.db(), roots, member, undeclared),
+        Some(qualifier) => match realize_qualifier_through_roots(ctx, &roots, &qualifier) {
             Some(realized) => Determination::Determined(realized),
             None => Determination::SubjectDoesNotImplementQualifier {
                 subject: subject.clone(),
@@ -359,14 +352,17 @@ fn resolve_via_roots(
 
 /// The realized view of `qualifier` reachable from `roots` — walk each root's
 /// `requires`-closure for the qualifier's QTN and return it at its realized generic
-/// arguments and associated pins. `None` if no root provides the qualifier. This is the
-/// narrowed counterpart of [`resolve_through_roots`]: the QTN is known, so it selects that
-/// one interface instead of searching every declarer of a member.
+/// arguments and associated pins, provided the *written* qualifier constraints are
+/// consistent with that realization. `None` if no root provides a compatible
+/// realization. This is the narrowed counterpart of [`resolve_through_roots`]: the QTN
+/// is known, so it selects that one interface instead of searching every declarer of a
+/// member.
 fn realize_qualifier_through_roots(
-    db: &dyn crate::Db,
+    ctx: &dyn TypeExprContext<'_>,
     roots: &[baml_type::Interface],
     qualifier: &baml_type::Interface,
 ) -> Option<baml_type::Interface> {
+    let db = ctx.db();
     for root in roots {
         let Some(root_loc) = resolve_interface_loc(db, &root.name) else {
             continue;
@@ -381,11 +377,86 @@ fn realize_qualifier_through_roots(
             if let Some(qtn) = crate::interfaces::interface_loc_qtn(db, loc)
                 && qtn == qualifier.name
             {
-                return Some(baml_type::Interface::new(qtn, args, assoc));
+                let realized = baml_type::Interface::new(qtn, args, assoc);
+                if qualifier_compatible_with_realization(ctx, qualifier, &realized) {
+                    return Some(realized);
+                }
+                // The right interface at an incompatible realization — keep
+                // scanning; another root may prove a compatible one.
             }
         }
     }
     None
+}
+
+/// Whether the *written* qualifier constraints are consistent with a realization the
+/// base's bounds prove: every written generic argument and associated pin must be
+/// equivalent to the realization's. A pin the realization leaves unproven rejects —
+/// `T extends Entity` (whose closure realizes `HasKey<Key = string>`) does not prove
+/// `(T as HasKey<Key = int>)`, exactly as Rust's `T: Entity` does not prove
+/// `T: HasKey<Key = int>`. A symbolic (type-variable-carrying) position resolves only
+/// at instantiation, so it fails open rather than rejecting a valid generic spelling.
+fn qualifier_compatible_with_realization(
+    ctx: &dyn TypeExprContext<'_>,
+    qualifier: &baml_type::Interface,
+    realized: &baml_type::Interface,
+) -> bool {
+    // A bare qualifier (`(T as Codec).Out` with no written args) accepts whatever
+    // realization the bound proves; written args must correspond positionally.
+    if !qualifier.generics.is_empty() {
+        if qualifier.generics.len() != realized.generics.len() {
+            return false;
+        }
+        for (written, real) in qualifier.generics.iter().zip(realized.generics.iter()) {
+            if crate::generics::contains_typevar(written) || crate::generics::contains_typevar(real)
+            {
+                continue;
+            }
+            if !ctx.types_equivalent(written, real) {
+                return false;
+            }
+        }
+    }
+    for (name, written) in &qualifier.associated_types {
+        let Some((_, real)) = realized
+            .associated_types
+            .iter()
+            .find(|(real_name, _)| real_name == name)
+        else {
+            return false;
+        };
+        if crate::generics::contains_typevar(written) || crate::generics::contains_typevar(real) {
+            continue;
+        }
+        if !ctx.types_equivalent(written, real) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Invariant equality under a lowering scope's package + bounds — the
+/// [`TypeExprContext::types_equivalent`] implementation for [`ScopeCtx`], kept here
+/// beside the other scope-driven algebra entries ([`resolve_concrete_projection`]).
+///
+/// [`ScopeCtx`]: crate::lower_type_expr::ScopeCtx
+pub(crate) fn scope_types_equivalent(
+    db: &dyn crate::Db,
+    pkg: &Name,
+    bounds: &crate::lower_type_expr::TypeVarBoundsMap,
+    a: &Ty,
+    b: &Ty,
+) -> bool {
+    let pkg_id = PackageId::new(db, pkg.clone());
+    let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
+    let aliases = crate::inference::package_alias_map(db, res_ctx);
+    let gctx = GlobalTypeContext {
+        db,
+        res_ctx,
+        aliases: &aliases,
+        bounds,
+    };
+    baml_type::normalize::equivalent(a, b, &gctx)
 }
 
 /// Resolve `member` through a set of interface roots — a type variable's bound
@@ -450,7 +521,7 @@ fn resolve_through_roots(
 /// An associated type with no declared bound cannot be proven to implement any
 /// interface, so `member` is unknown on it.
 fn determine_chained(
-    db: &dyn crate::Db,
+    ctx: &dyn TypeExprContext<'_>,
     projection: &Ty,
     inner_base: &Ty,
     inner_interface: &baml_type::Interface,
@@ -458,6 +529,7 @@ fn determine_chained(
     explicit: Option<baml_type::Interface>,
     member: &Name,
 ) -> Determination {
+    let db = ctx.db();
     let Some(iface_loc) = resolve_interface_loc(db, &inner_interface.name) else {
         // The inner interface does not resolve — already errored upstream.
         return Determination::Poisoned;
@@ -479,7 +551,7 @@ fn determine_chained(
         };
     };
     let container = AssocContainer::Interface(root.name.clone());
-    resolve_via_roots(db, vec![root], explicit, member, container, projection)
+    resolve_via_roots(ctx, vec![root], explicit, member, container, projection)
 }
 
 /// The interface bound declared on associated type `member` of the interface at

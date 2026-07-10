@@ -471,7 +471,7 @@ fn lower_declared_interface_bound(
             builder.report_at_span(diag, span);
         }
         match &bound_ty {
-            Ty::Interface(qtn, generics, _, _) => {
+            Ty::Interface(qtn, generics, assoc, _) => {
                 if generics.is_empty()
                     && let Some(arity) = interface_declared_generic_arity(db, qtn)
                     && arity > 0
@@ -484,6 +484,55 @@ fn lower_declared_interface_bound(
                         },
                         span,
                     );
+                }
+                // An explicit associated binding written on the bound (`P extends
+                // Parser<Output = V>`) must implement that assoc's own declared bound
+                // (`type Output extends Named`) — the same implements relation the
+                // impl-side binding check enforces. Only *written* bindings: a default
+                // is the interface's own obligation, checked at its declaration; a
+                // symbolic value resolves at instantiation and fails open. Cycle-safe:
+                // scope inference runs strictly downstream of `impl_data`.
+                if let baml_compiler2_ast::TypeExprKind::Path {
+                    associated_type_bindings,
+                    ..
+                } = &bound_te.kind
+                {
+                    let head =
+                        baml_type::Interface::new(qtn.clone(), generics.clone(), assoc.clone());
+                    for written in associated_type_bindings {
+                        let Some((_, value)) = assoc.iter().find(|(n, _)| *n == written.name)
+                        else {
+                            // Unknown binding name — lowering reported it already.
+                            continue;
+                        };
+                        if crate::generics::contains_typevar(value) {
+                            continue;
+                        }
+                        let normalized = baml_type::normalize::normalize(value, &*builder);
+                        for declared in
+                            crate::builder::associated_projection::associated_type_declared_bound(
+                                db,
+                                &head,
+                                &written.name,
+                            )
+                        {
+                            if !crate::interfaces::normalized_arg_implements_bound(
+                                &*builder,
+                                &normalized,
+                                &declared,
+                            ) {
+                                builder.report_at_span(
+                                    crate::infer_context::TirTypeError::AssociatedTypeBindingViolatesBound {
+                                        interface: qtn.clone(),
+                                        name: written.name.clone(),
+                                        binding: value.clone(),
+                                        bound: declared,
+                                    },
+                                    span,
+                                );
+                            }
+                        }
+                    }
                 }
             }
             // Already diagnosed by lowering the bound expression itself — a second
@@ -1780,7 +1829,9 @@ pub fn infer_scope_types<'db>(
                                         for diag in binding_diags {
                                             builder.report_at_span(diag, te.span);
                                         }
-                                        type_bindings.insert(assoc.name.clone(), ty.clone());
+                                        // Into `iface_type_bindings` only — the binding realizes
+                                        // later defaults, but the bare name is NOT in scope
+                                        // (banned: the method must write `Self.Item`).
                                         iface_type_bindings.insert(assoc.name.clone(), ty);
                                         continue;
                                     }
@@ -1797,98 +1848,21 @@ pub fn infer_scope_types<'db>(
                                         // (an interface method body's receiver is rigid), so a
                                         // Self-referencing default resolves to `(Self as I).X`.
                                         // Diagnostics surface at the interface declaration.
+                                        // Into `iface_type_bindings` only (see the explicit-
+                                        // binding arm above): bare names are banned.
                                         let ty = crate::generics::substitute_ty(
                                             &default_ty,
                                             &iface_type_bindings,
                                         );
-                                        type_bindings.insert(assoc.name.clone(), ty.clone());
                                         iface_type_bindings.insert(assoc.name.clone(), ty);
                                     }
                                 }
                             }
-                        } else if let Some(iface_name) = &enclosing_class_name
-                            && let Some(def) =
-                                pkg_items.lookup_type(&pkg_info.namespace_path, iface_name)
-                            && let baml_compiler2_hir::contributions::Definition::Interface(
-                                iface_loc,
-                            ) = def
-                        {
-                            let iface_file = iface_loc.file(db);
-                            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
-                            if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
-                                let iface_ns =
-                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
-                                        .namespace_path;
-                                // Inside the interface's own default body, `Self` is the rigid
-                                // type variable bound by this interface; an associated type
-                                // projects onto it symbolically (`Self.Item`), through the
-                                // interface as a constraint (no associated pins of its own).
-                                let iface_constraint = baml_type::Interface::new(
-                                    crate::lower_type_expr::qualify_def(db, def, iface_name),
-                                    iface_data
-                                        .generic_params
-                                        .iter()
-                                        .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
-                                        .collect(),
-                                    Vec::new(),
-                                );
-                                let self_assoc_projection =
-                                    |member: Name| Ty::AssociatedTypeProjection {
-                                        base: Box::new(Ty::TypeVar(
-                                            Name::new("Self"),
-                                            TyAttr::default(),
-                                        )),
-                                        interface: Some(Box::new(iface_constraint.clone())),
-                                        member,
-                                        attr: TyAttr::default(),
-                                    };
-                                for assoc in &iface_data.associated_types {
-                                    // The default's own lowering diagnostics are surfaced once at
-                                    // the interface declaration (`interface_associated_type_default`),
-                                    // not here.
-                                    //
-                                    // Inside the interface's own (default) method, `Self` is the
-                                    // rigid type variable bound by the interface, not an existential
-                                    // interface value. Associated types therefore project onto `Self`
-                                    // even when they have defaults. Defaults are for omitted bindings
-                                    // at interface type-use sites; a default body must stay
-                                    // polymorphic over implementors that override the associated type.
-                                    // This also matches how `self.method()` resolves the same
-                                    // associated type via `SelfReceiver::RigidVar`.
-                                    type_bindings.insert(
-                                        assoc.name.clone(),
-                                        self_assoc_projection(assoc.name.clone()),
-                                    );
-                                }
-                                let own_associated: FxHashSet<Name> = iface_data
-                                    .associated_types
-                                    .iter()
-                                    .map(|assoc| assoc.name.clone())
-                                    .collect();
-                                let inherited = inherited_interface_associated_type_names(
-                                    db, iface_loc, pkg_items, &iface_ns,
-                                );
-                                let mut inherited_counts: FxHashMap<Name, usize> =
-                                    FxHashMap::default();
-                                for name in &inherited {
-                                    *inherited_counts.entry(name.clone()).or_default() += 1;
-                                }
-                                for inherited_name in inherited {
-                                    if inherited_counts
-                                        .get(&inherited_name)
-                                        .copied()
-                                        .unwrap_or_default()
-                                        == 1
-                                        && !own_associated.contains(&inherited_name)
-                                    {
-                                        type_bindings.insert(
-                                            inherited_name.clone(),
-                                            self_assoc_projection(inherited_name),
-                                        );
-                                    }
-                                }
-                            }
                         }
+                        // Inside an interface's own default body, associated types are
+                        // deliberately NOT registered as bare names: a bare `Item` is
+                        // banned everywhere — the body writes `Self.Item`, which lowers
+                        // through the `Self` bound installed below.
                         builder.set_type_bindings(type_bindings.clone());
                         // Lower body type annotations through the shared context: `Self` and
                         // `Self.Assoc` resolve via `self_ty` and the `Self` bound; interface /

@@ -1355,7 +1355,7 @@ pub fn validate_impl_signatures<'db>(
                 diags.push((
                     crate::infer_context::TirTypeError::MissingRequiredInterface {
                         interface: iface_qtn.clone(),
-                        required: qtn.clone(),
+                        required: required_iface,
                     },
                     ImplDiagnosticLocation::InterfaceTarget,
                 ));

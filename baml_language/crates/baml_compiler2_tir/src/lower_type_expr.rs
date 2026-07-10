@@ -67,6 +67,12 @@ pub trait TypeExprContext<'db> {
     /// not its impls.
     fn concrete_projection(&self, base: &Ty, member: &baml_base::Name) -> ConcreteProjection;
 
+    /// Invariant equality of two types under this scope's context (the canonical
+    /// `equivalent`). Used where a *written* constraint must denote the same type as a
+    /// derived realization — e.g. validating an explicit projection qualifier's generic
+    /// args and associated pins against the realization the base's bounds prove.
+    fn types_equivalent(&self, a: &Ty, b: &Ty) -> bool;
+
     /// A concrete-headed base's realized view of `interface` — the `implements` block's
     /// realized interface (with the impl's associated-type pins) when `base` implements
     /// it, else `None`. Narrows an explicit `(base as I).member` qualifier to the written
@@ -177,6 +183,16 @@ impl<'db> TypeExprContext<'db> for ScopeCtx<'_, 'db> {
             self.bounds,
             base,
             member,
+        )
+    }
+
+    fn types_equivalent(&self, a: &Ty, b: &Ty) -> bool {
+        crate::builder::associated_projection::scope_types_equivalent(
+            self.db,
+            &self.package_items.package,
+            self.bounds,
+            a,
+            b,
         )
     }
 
@@ -2546,12 +2562,15 @@ mod tests {
         );
     }
 
-    // The impl's own generics and earlier siblings are in scope for binding values.
+    // The impl's own generics are in scope for binding values, and an earlier
+    // sibling is reachable as `Self.A` (bare `A` is banned): `Self`'s bound
+    // carries the already-resolved pins, so the projection collapses to the
+    // earlier witness at lowering time.
     #[test]
     fn impl_binding_value_resolves_impl_generics_and_siblings() {
         let db = compile(concat!(
             "interface TwoAssoc {\n  type A\n  type B\n}\n",
-            "implements<T> TwoAssoc for T[] {\n  type A = T\n  type B = A[]\n}\n",
+            "implements<T> TwoAssoc for T[] {\n  type A = T\n  type B = Self.A[]\n}\n",
         ));
         let user = PackageId::new(&db, Name::new("user"));
         let impls = crate::interfaces::package_impl_locs(&db, user);

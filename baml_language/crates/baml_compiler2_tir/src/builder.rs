@@ -12234,6 +12234,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 };
                 // Note: diags from method signatures are reported at definition site.
+                // BUG: that invariant only holds when this ctx and the definition-site
+                // scope resolve the same names; a name resolvable there but not here
+                // lowers to `Ty::Error` whose diagnostic is silently dropped (`diags`
+                // above is never drained). Keep the two scopes in lockstep.
                 return Some((ty, class_loc, func_loc));
             }
         }

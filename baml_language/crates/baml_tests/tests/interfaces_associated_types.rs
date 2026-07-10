@@ -626,7 +626,7 @@ fn associated_type_bindings_substitute_inside_implements_blocks() {
             implements Stack {
                 type Item = int
 
-                function push(self, value: Item) -> null {
+                function push(self, value: Self.Item) -> null {
                     return null
                 }
 
@@ -1686,8 +1686,8 @@ fn associated_type_default_can_reference_declaring_namespace_type_from_implement
                 name: string
 
                 implements root.lib.Serializable {
-                    function serialize(self) -> Format {
-                        return Format { data: self.name }
+                    function serialize(self) -> Self.Format {
+                        return root.lib.Payload { data: self.name }
                     }
                 }
             }
@@ -1712,7 +1712,7 @@ fn explicit_associated_type_witness_can_reference_earlier_witness() {
 
             implements Batch {
                 type Item = int
-                type Items = Item[]
+                type Items = Self.Item[]
 
                 function all(self) -> int[] {
                     return self.values
@@ -3088,7 +3088,7 @@ fn duplicate_associated_type_declaration_errors() {
 fn associated_type_cannot_collide_with_interface_generic_param() {
     assert_compile_error_contains(
         r#"
-        interface Container<Self.Item> {
+        interface Container<Item> {
             type Item
         }
         "#,
@@ -3631,7 +3631,7 @@ fn associated_union_projection_rejects_narrow_class_return() {
             implements Iterator {
                 type Item = int | string
 
-                function next(self) -> Item {
+                function next(self) -> Self.Item {
                     return self.value
                 }
             }
@@ -3645,9 +3645,14 @@ fn associated_union_projection_rejects_narrow_class_return() {
     );
 }
 
+// Return types are covariant in BAML (like throws): the interface declares
+// `Self.Item | string`, which realizes to `int | string` at `IntProducer`, and
+// the override's narrower `int` return conforms (`int <: int | string`).
+// Conformance is whole-function subtyping — params contravariant, return and
+// throws covariant — not the old checker's exact match.
 #[test]
-fn associated_union_required_method_impl_must_match_interface_signature() {
-    assert_compile_error_contains(
+fn associated_union_required_method_impl_may_narrow_return_covariantly() {
+    assert_zero_compile_errors(
         r#"
         interface Producer {
             type Item
@@ -3665,7 +3670,6 @@ fn associated_union_required_method_impl_must_match_interface_signature() {
             }
         }
         "#,
-        "does not match interface",
     );
 }
 
@@ -3692,7 +3696,7 @@ fn associated_union_binding_must_satisfy_extends_bound_in_generic_bound() {
             return parser.parse()
         }
         "#,
-        "does not satisfy bound",
+        "does not implement bound",
     );
 }
 
