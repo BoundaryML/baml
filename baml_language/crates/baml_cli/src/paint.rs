@@ -487,7 +487,7 @@ impl<'db> Highlighter<'db> {
         if let Some(cached) = self.cache.borrow().get(&file) {
             return Rc::clone(cached);
         }
-        let mut toks = semantic_tokens(self.db, file);
+        let mut toks = semantic_tokens(self.db, file).clone();
         toks.sort_by_key(|t| t.range.start());
         let rc: Rc<[SemanticToken]> = toks.into();
         self.cache.borrow_mut().insert(file, Rc::clone(&rc));

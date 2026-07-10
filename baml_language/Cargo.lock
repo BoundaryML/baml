@@ -1332,6 +1332,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sys_native",
  "sys_ops",
  "sys_types",
  "text-size",
@@ -1339,6 +1340,7 @@ dependencies = [
  "tokio",
  "tracing",
  "vfs",
+ "walkdir",
  "wasm-bindgen-futures",
 ]
 

@@ -1,12 +1,39 @@
+//! Multi-project LSP server core.
+//!
+//! Implements the refresh → diagnostics → rebuild pipeline from
+//! `docs/design/lsp-latency-and-mutex-fix.md`:
+//!
+//! - **Refresh (I1):** every editor/watcher/playground event becomes one
+//!   [`crate::project::SourceBatch`] applied atomically with document
+//!   versions; the source revision advances only when text actually changed.
+//! - **Diagnostics (0B/I6):** each project owns a latest-revision dirty
+//!   fence. Publication converts an owned revision-tagged candidate; `Busy`
+//!   retains the last publication and schedules a trailing retry; stale
+//!   candidates are discarded; poison surfaces as an internal failure and
+//!   stops retrying.
+//! - **Engine rebuild (0A/B3):** the debounce epoch is a pre-work ticket
+//!   only. The rebuild itself is single-flight per project and installs
+//!   through [`crate::project::BexProject::commit_engine_if_current`] — a
+//!   superseded candidate changes nothing.
+//! - **Test collection/expansion (0A.7/0A.8):** collection runs under an
+//!   atomically captured ticket and installs through an ABA fence keyed by
+//!   engine generation + collection epoch; expansions serialize on the
+//!   installed registry's mutation gate. Stale results emit nothing.
+//! - **Typed errors (I7):** `send_response` is the one place request errors
+//!   become wire codes; `-32001` is never emitted.
+
 mod commands;
 mod diagnostics;
 mod notification;
 mod request;
 mod wasm_helpers;
 
-use std::{collections::HashMap, io::Read};
+use std::{
+    collections::{HashMap, HashSet},
+    io::Read,
+    sync::{Arc, Mutex, OnceLock},
+};
 
-use ::std::sync::Arc;
 use baml_workspace::{BAML_SRC_DIR, BAML_TOML, find_baml_project_root_from_ancestors};
 pub use wasm_helpers::BackgroundSpawner;
 
@@ -18,24 +45,119 @@ use crate::{
     RuntimeError,
     bex_lsp::{
         LspError,
-        multi_project::diagnostics::{PositionEncoding, WithDiagnostics},
+        multi_project::diagnostics::{PublishableDocument, candidate_to_publishable},
+        position_codec::PositionEncoding,
+    },
+    project::{
+        BexProject, DbReadError, DiagnosticCandidate, EngineBuildOutcome, PrepareRunError,
+        RegistryLeaseError, SourceBatch, SourceGuard, SourceRevision,
     },
 };
 
+/// Debounce window for the diagnostics/project-update tail (B3).
+#[cfg(not(target_arch = "wasm32"))]
+const DIAGNOSTICS_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(150);
+
+/// Debounce window for the heavy engine tail (bytecode + `$init`).
+#[cfg(not(target_arch = "wasm32"))]
+const ENGINE_REBUILD_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Backoff before retrying a `Busy` diagnostics read (0B).
+#[cfg(not(target_arch = "wasm32"))]
+const DIAGNOSTICS_BUSY_RETRY: std::time::Duration = std::time::Duration::from_millis(40);
+
+/// Text + version of one open editor document. Version and text travel
+/// together so publications carry the exact checked document version (I1).
+struct OverlayDocument {
+    text: String,
+    /// `Some` for editor-owned documents; `None` for playground edits.
+    version: Option<i32>,
+}
+
+/// Latest-revision diagnostics publication fence (0B).
+///
+/// ```text
+/// source mutation           → mark latest revision dirty; schedule attempt
+/// Ready(current revision)   → conditionally publish; compare-and-clear
+/// Ready(stale revision)     → discard; retain latest dirty
+/// Busy                      → publish nothing; trailing retry with backoff
+/// Poisoned                  → publish nothing; surface internal failure
+/// ```
+#[derive(Default)]
+struct DiagnosticsFence {
+    /// Newest revision requiring publication. Compare-and-clear only.
+    dirty: Option<SourceRevision>,
+    /// Files covered by the last successful publication, so deleted files
+    /// get one empty publish. Not updated by busy/stale attempts.
+    last_published: HashSet<std::path::PathBuf>,
+    /// A trailing busy-retry is already scheduled. Only the native scheduler
+    /// can observe `Busy`; the WASM tail is synchronous and single-threaded.
+    #[cfg(not(target_arch = "wasm32"))]
+    retry_scheduled: bool,
+}
+
+impl DiagnosticsFence {
+    /// A mutation happened: the newest revision needs publication.
+    fn mark_dirty(&mut self, revision: SourceRevision) {
+        self.dirty = Some(self.dirty.map_or(revision, |d| d.max(revision)));
+    }
+
+    /// Decide a computed candidate's fate. `true` compare-and-clears the
+    /// dirty revision and admits publication; `false` discards a stale
+    /// candidate (a newer mutation is dirty and owns the next publication).
+    fn admit(&mut self, candidate_revision: SourceRevision) -> bool {
+        if let Some(dirty) = self.dirty {
+            if candidate_revision < dirty {
+                return false;
+            }
+            self.dirty = None;
+        }
+        true
+    }
+
+    /// Record a successful publication's file coverage. Returns the files
+    /// covered by the previous publication but absent now — each needs one
+    /// empty publish so stale editor markers clear (0B).
+    fn record_publication(
+        &mut self,
+        current: HashSet<std::path::PathBuf>,
+    ) -> Vec<std::path::PathBuf> {
+        let deleted = self.last_published.difference(&current).cloned().collect();
+        self.last_published = current;
+        deleted
+    }
+}
+
 struct LiveProject {
-    project: crate::project::BexProject,
-    in_memory_changes:
-        std::sync::Arc<std::sync::Mutex<std::collections::HashMap<crate::fs::FsPath, String>>>,
-    /// Tracks file paths for which we last published diagnostics, so we can
-    /// send an empty publish for files that disappear (deleted) on the next
-    /// full refresh.
-    last_published_files:
-        std::sync::Arc<std::sync::Mutex<std::collections::HashSet<crate::fs::FsPath>>>,
-    /// Debounce epoch for scheduled engine rebuilds: every refresh bumps it,
-    /// and a scheduled rebuild only runs if its captured epoch is still
-    /// current after the debounce delay.
+    project: BexProject,
+    in_memory_changes: Mutex<HashMap<crate::fs::FsPath, OverlayDocument>>,
+    diagnostics_fence: Mutex<DiagnosticsFence>,
+    /// Debounce tickets (pre-work suppression only — never authorization;
+    /// installation is guarded by the revision-conditional commit).
+    #[cfg(not(target_arch = "wasm32"))]
+    diagnostics_epoch: std::sync::atomic::AtomicU64,
     #[cfg(not(target_arch = "wasm32"))]
     rebuild_epoch: std::sync::atomic::AtomicU64,
+    /// Single-flight gate for engine rebuilds (0A.5): concurrent debounced
+    /// tails queue here instead of racing two `spawn_blocking` builds.
+    #[cfg(not(target_arch = "wasm32"))]
+    rebuild_gate: tokio::sync::Mutex<()>,
+}
+
+impl LiveProject {
+    fn new(project: BexProject) -> Self {
+        Self {
+            project,
+            in_memory_changes: Mutex::new(HashMap::new()),
+            diagnostics_fence: Mutex::new(DiagnosticsFence::default()),
+            #[cfg(not(target_arch = "wasm32"))]
+            diagnostics_epoch: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(not(target_arch = "wasm32"))]
+            rebuild_epoch: std::sync::atomic::AtomicU64::new(0),
+            #[cfg(not(target_arch = "wasm32"))]
+            rebuild_gate: tokio::sync::Mutex::new(()),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -46,10 +168,10 @@ struct BexMulitProject {
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
 
-    /// The position encoding negotiated with the LSP client.
-    /// This is essential for correct character position calculation in files
-    /// containing multi-byte UTF-8 characters (like 'é' or emoji).
-    position_encoding: PositionEncoding,
+    /// The position encoding negotiated during `initialize` (C1): UTF-8 when
+    /// the client offers it, otherwise UTF-16. Set exactly once; reading
+    /// before negotiation never freezes a default.
+    negotiated_encoding: std::sync::Arc<OnceLock<PositionEncoding>>,
 
     /// Workspace root directories provided by the LSP client during
     /// `initialize`. Used by `on_notification_initialized` to scope
@@ -65,27 +187,49 @@ struct BexMulitProject {
 pub trait LspClientSenderTrait {
     fn send_notification(&self, msg: lsp_server::Notification) -> Result<(), LspError>;
     fn send_response_impl(&self, msg: lsp_server::Response) -> Result<(), LspError>;
+    /// The one request error-code mapping boundary (I7). Every error is
+    /// serialized through [`LspError::to_response_error`]; `-32001` is dead.
     fn send_response(
         &self,
         id: lsp_server::RequestId,
         msg: Result<serde_json::Value, LspError>,
     ) -> Result<(), LspError> {
         let (result, error) = match msg {
-            Err(error) => (None, Some(error)),
+            Err(error) => (None, Some(error.to_response_error())),
             Ok(result) => (Some(result), None),
         };
-        let response = lsp_server::Response {
-            id,
-            result,
-            error: error.map(|e| lsp_server::ResponseError {
-                code: lsp_server::ErrorCode::UnknownErrorCode as i32,
-                message: e.to_string(),
-                data: None,
-            }),
-        };
+        let response = lsp_server::Response { id, result, error };
         self.send_response_impl(response)
     }
     fn make_request(&self, msg: lsp_server::Request) -> Result<(), LspError>;
+}
+
+/// Map a bounded database read failure to its typed LSP error (Phase 0C):
+/// timeout with a revision change is `ContentModified`, a same-revision
+/// timeout is `RequestFailed`, poison is `InternalError`.
+pub(super) fn db_read_error_to_lsp(e: DbReadError) -> LspError {
+    match e {
+        DbReadError::Busy {
+            revision_changed: true,
+        } => LspError::ContentModified(
+            "sources changed while the request waited for the project database".to_string(),
+        ),
+        DbReadError::Busy {
+            revision_changed: false,
+        } => LspError::RequestFailed(
+            "project database is busy; the request timed out waiting".to_string(),
+        ),
+        DbReadError::Broken => {
+            LspError::Internal("project is in a broken state (poisoned lock)".to_string())
+        }
+    }
+}
+
+/// Bounded request-lane read of a project's source gate.
+pub(super) fn read_for_request(project: &BexProject) -> Result<SourceGuard<'_>, LspError> {
+    project
+        .read_source_for_request()
+        .map_err(db_read_error_to_lsp)
 }
 
 enum ProjectRefreshMode {
@@ -96,7 +240,9 @@ enum ProjectRefreshMode {
     InMemoryChangesOnly {
         changed: Option<vfs::VfsPath>,
     },
-    Only(Vec<vfs::VfsPath>),
+    /// Documents were closed: re-apply their on-disk content and drop their
+    /// open-document versions in the same batch.
+    ClosedDocuments(Vec<vfs::VfsPath>),
 }
 
 impl BexMulitProject {
@@ -112,17 +258,56 @@ impl BexMulitProject {
             sys_op_factory,
             sender,
             playground_sender,
-            position_encoding: PositionEncoding::UTF8,
+            negotiated_encoding: std::sync::Arc::new(OnceLock::new()),
             workspace_roots: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             fs,
             spawner,
         }
     }
 
+    /// Encoding for request handlers: requests before `initialize` completes
+    /// are a protocol error and must not freeze a default (C1).
+    fn encoding_for_request(&self) -> Result<PositionEncoding, LspError> {
+        self.negotiated_encoding.get().copied().ok_or_else(|| {
+            LspError::ServerNotInitialized(
+                "position encoding has not been negotiated yet".to_string(),
+            )
+        })
+    }
+
+    /// Encoding for server-initiated publications. Pre-negotiation
+    /// publications (CLI-seeded workspaces) fall back to UTF-16 *without*
+    /// initializing the cell, so a later `initialize` still selects freely.
+    fn encoding_for_publication(&self) -> PositionEncoding {
+        match self.negotiated_encoding.get() {
+            Some(e) => *e,
+            None => {
+                log::debug!("publishing before encoding negotiation; using UTF-16 for this batch");
+                PositionEncoding::UTF16
+            }
+        }
+    }
+
+    fn negotiate_encoding(
+        &self,
+        client_capabilities: &lsp_types::ClientCapabilities,
+    ) -> PositionEncoding {
+        let offered = client_capabilities
+            .general
+            .as_ref()
+            .and_then(|g| g.position_encodings.as_deref());
+        let selected = PositionEncoding::negotiate(offered);
+        // First negotiation wins; a duplicate initialize cannot flip it.
+        let _ = self.negotiated_encoding.set(selected);
+        *self
+            .negotiated_encoding
+            .get()
+            .expect("negotiated encoding was just set")
+    }
+
     fn get_path_from_uri(&self, uri: &lsp_types::Url) -> Result<vfs::VfsPath, LspError> {
-        let path = wasm_helpers::to_file_path(uri).map_err(|()| {
-            LspError::UnknownErrorCode("Failed to convert URI to path".to_string())
-        })?;
+        let path = wasm_helpers::to_file_path(uri)
+            .map_err(|()| LspError::InvalidParams(format!("URI is not a file path: {uri}")))?;
         self.fs.get_path_from_path(&path, "get_path_from_uri")
     }
 
@@ -142,17 +327,17 @@ impl BexMulitProject {
 
         let sys_ops = (self.sys_op_factory)(&root_path);
         let project = crate::project::BexProject::new(&root_path, sys_ops);
-        let project = std::sync::Arc::new(LiveProject {
-            project,
-            in_memory_changes: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
-            last_published_files: std::sync::Arc::new(std::sync::Mutex::new(
-                std::collections::HashSet::new(),
-            )),
-            #[cfg(not(target_arch = "wasm32"))]
-            rebuild_epoch: std::sync::atomic::AtomicU64::new(0),
-        });
+        let project = std::sync::Arc::new(LiveProject::new(project));
         projects.insert(crate::fs::FsPath::from_vfs(&root_path), project.clone());
         Ok(project)
+    }
+
+    fn find_project(&self, project_root_str: &str) -> Option<std::sync::Arc<LiveProject>> {
+        let projects = self.projects.lock().unwrap();
+        projects
+            .iter()
+            .find(|(k, _)| k.as_path().to_string_lossy() == project_root_str)
+            .map(|(_, v)| v.clone())
     }
 
     fn get_bex_for_project(
@@ -268,10 +453,6 @@ impl BexMulitProject {
             })
             .collect();
         Ok(files)
-    }
-
-    fn refresh_project(&self, project_root: &vfs::VfsPath, refresh_mode: ProjectRefreshMode) {
-        self.refresh_project_async(project_root, refresh_mode);
     }
 
     fn has_baml_toml(path: &vfs::VfsPath) -> bool {
@@ -471,12 +652,17 @@ impl BexMulitProject {
         }
     }
 
-    fn refresh_project_async(&self, project_root: &vfs::VfsPath, refresh_mode: ProjectRefreshMode) {
+    // ── Refresh pipeline ─────────────────────────────────────────────────
+
+    /// Apply one editor/watcher/playground event as a source batch, then
+    /// schedule the diagnostics and engine tails. `didChange` cost is the
+    /// batch apply plus timer resets (B3); all computation is debounced.
+    fn refresh_project(&self, project_root: &vfs::VfsPath, refresh_mode: ProjectRefreshMode) {
         use crate::bex_lsp::notification::BexLspNotification;
         let mode_label = match &refresh_mode {
             ProjectRefreshMode::Full => "Full",
             ProjectRefreshMode::InMemoryChangesOnly { .. } => "InMemoryChangesOnly",
-            ProjectRefreshMode::Only(_) => "Only",
+            ProjectRefreshMode::ClosedDocuments(_) => "ClosedDocuments",
         };
         tracing::debug!(
             "refresh_project({}, mode={})",
@@ -488,171 +674,280 @@ impl BexMulitProject {
             return;
         };
 
-        let is_full_refresh = matches!(refresh_mode, ProjectRefreshMode::Full);
-        match refresh_mode {
-            ProjectRefreshMode::Full => {
-                tracing::debug!("  loading sources from disk...");
-                let mut sources = match self.load_project_sources(project_root) {
-                    Ok(sources) => sources,
-                    Err(e) => {
-                        let _ = self.send_notification_show_message(lsp_types::ShowMessageParams {
-                            typ: lsp_types::MessageType::ERROR,
-                            message: format!(
-                                "Failed to read project files for {project_root:?}: {e}"
-                            ),
-                        });
-                        return;
-                    }
-                };
-                tracing::debug!("  loaded {} source file(s)", sources.len());
-
-                {
-                    let in_memory_changes = project.in_memory_changes.lock().unwrap();
-                    for (path, source) in in_memory_changes.iter() {
-                        sources.insert(path.clone(), source.clone());
-                    }
-                }
-
-                let project = &project.project;
-
-                tracing::debug!("  apply_all_sources...");
-                project.apply_all_sources(&sources);
-                tracing::debug!("  apply_all_sources done");
+        let batch = match self.build_source_batch(project_root, &project, refresh_mode) {
+            Ok(batch) => batch,
+            Err(e) => {
+                let _ = self.send_notification_show_message(lsp_types::ShowMessageParams {
+                    typ: lsp_types::MessageType::ERROR,
+                    message: format!("Failed to read project files for {project_root:?}: {e}"),
+                });
+                return;
             }
-            ProjectRefreshMode::InMemoryChangesOnly { changed } => {
-                let in_memory_changes = project.in_memory_changes.lock().unwrap();
-                // A didChange names the one document that changed; re-applying
-                // every open buffer would dirty their whole query chains.
-                let sources: HashMap<_, _> = match &changed {
-                    Some(path) => {
-                        let key = crate::fs::FsPath::from_vfs(path);
-                        in_memory_changes
-                            .get(&key)
-                            .map(|source| (key, source.clone()))
-                            .into_iter()
-                            .collect()
-                    }
-                    None => in_memory_changes
-                        .iter()
-                        .map(|(path, source)| (path.clone(), source.clone()))
-                        .collect(),
-                };
-                drop(in_memory_changes);
+        };
 
-                let project = &project.project;
-                project.apply_some_sources(&sources);
-            }
-            ProjectRefreshMode::Only(paths) => {
-                // TODO: make this smarter and only read that the required files, instead of reading all files
-                let mut sources = match self.load_project_sources(project_root) {
-                    Ok(sources) => sources,
-                    Err(e) => {
-                        let _ = self.send_notification_show_message(lsp_types::ShowMessageParams {
-                            typ: lsp_types::MessageType::ERROR,
-                            message: format!(
-                                "Failed to read project files for {project_root:?}: {e}"
-                            ),
-                        });
-                        return;
-                    }
-                };
+        let Ok(revision) = project.project.mutate_sources(batch) else {
+            log::error!("refresh_project: project is broken; dropping refresh");
+            return;
+        };
 
-                {
-                    let in_memory_changes = project.in_memory_changes.lock().unwrap();
-                    for (path, source) in in_memory_changes.iter() {
-                        sources.insert(path.clone(), source.clone());
-                    }
-                }
-
-                let sources = paths
-                    .into_iter()
-                    .filter_map(|path| {
-                        let key = crate::fs::FsPath::from_vfs(&path);
-                        sources.remove(&key).map(|source| (key, source))
-                    })
-                    .collect();
-
-                let project = &project.project;
-                project.apply_some_sources(&sources);
-            }
-        }
-
-        // Diagnostics are computed straight from the database below; the
-        // heavy tail (bytecode + engine + test collection) is debounced onto
-        // a background task on native so fast typing costs one rebuild, not
-        // one per keystroke. WASM has no timer/blocking facilities wired
-        // here, so it keeps the synchronous rebuild.
-        #[cfg(target_arch = "wasm32")]
-        let _ = project.project.update_bex();
-
-        tracing::debug!("  computing diagnostics...");
-        let diagnostics = project.project.diagnostics_by_file(self.position_encoding);
-        tracing::debug!("  diagnostics computed for {} file(s)", diagnostics.len());
-
-        // Always publish diagnostics for every file the compiler knows about
-        // (including files with 0 diagnostics, to clear stale markers).
-        let current_paths: std::collections::HashSet<crate::fs::FsPath> = diagnostics
-            .keys()
-            .map(|p| crate::fs::FsPath::from_str(p.to_string_lossy().into_owned()))
-            .collect();
-
-        for path in &current_paths {
-            let file_diagnostics = diagnostics.get(path.as_path()).cloned().unwrap_or_default();
-            let Ok(uri) = wasm_helpers::from_file_path(path.as_path()) else {
-                continue;
-            };
-            let _ = self.send_notification_publish_diagnostics(
-                lsp_types::PublishDiagnosticsParams::new(uri, file_diagnostics, None),
-            );
-        }
-
-        // On a full refresh, also clear diagnostics for files that no longer
-        // exist (deleted since the last refresh).
-        if is_full_refresh {
-            let mut prev = project.last_published_files.lock().unwrap();
-            for deleted in prev.difference(&current_paths) {
-                let Ok(uri) = wasm_helpers::from_file_path(deleted.as_path()) else {
-                    continue;
-                };
-                let _ = self.send_notification_publish_diagnostics(
-                    lsp_types::PublishDiagnosticsParams::new(uri, vec![], None),
-                );
-            }
-            *prev = current_paths;
-        }
-
-        let flat_diags = Self::flatten_diagnostics(&diagnostics);
-
+        // Catalog is never gated (B4): announce on every refresh.
         self.send_list_projects();
-        self.send_update_project(project_root, &project, flat_diags);
 
-        // Auto-trigger runtime test collection when BexEngine is ready
-        if project.project.is_bex_current() {
-            self.request_collect_tests_impl(project_root.as_str());
-        }
+        project
+            .diagnostics_fence
+            .lock()
+            .unwrap()
+            .mark_dirty(revision);
 
         #[cfg(not(target_arch = "wasm32"))]
-        self.schedule_engine_rebuild(project_root, project);
+        {
+            self.schedule_diagnostics_tail(project_root, &project);
+            self.schedule_engine_rebuild(project_root, &project);
+        }
+
+        // WASM has no timers or blocking facilities wired here: run the
+        // whole tail synchronously (single-threaded, so never busy).
+        #[cfg(target_arch = "wasm32")]
+        self.run_project_tail_blocking(project_root, &project);
 
         tracing::debug!("refresh_project done");
     }
 
+    /// Build the atomic source batch for a refresh mode: texts plus the
+    /// open-document version ops that must commit with them (I1).
+    fn build_source_batch(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: &LiveProject,
+        refresh_mode: ProjectRefreshMode,
+    ) -> Result<SourceBatch, LspError> {
+        match refresh_mode {
+            ProjectRefreshMode::Full => {
+                let mut sources = self.load_project_sources(project_root)?;
+                let mut versions = Vec::new();
+                {
+                    let overlay = project.in_memory_changes.lock().unwrap();
+                    for (path, doc) in overlay.iter() {
+                        sources.insert(path.clone(), doc.text.clone());
+                        versions.push((path.clone(), doc.version));
+                    }
+                }
+                Ok(SourceBatch {
+                    replace_all: true,
+                    sources,
+                    versions,
+                })
+            }
+            ProjectRefreshMode::InMemoryChangesOnly { changed } => {
+                let overlay = project.in_memory_changes.lock().unwrap();
+                // A didChange names the one document that changed; re-applying
+                // every open buffer would dirty their whole query chains.
+                let selected: Vec<(crate::fs::FsPath, &OverlayDocument)> = match &changed {
+                    Some(path) => {
+                        let key = crate::fs::FsPath::from_vfs(path);
+                        overlay
+                            .get(&key)
+                            .map(|doc| (key, doc))
+                            .into_iter()
+                            .collect()
+                    }
+                    None => overlay
+                        .iter()
+                        .map(|(path, doc)| (path.clone(), doc))
+                        .collect(),
+                };
+                let mut sources = HashMap::new();
+                let mut versions = Vec::new();
+                for (path, doc) in selected {
+                    sources.insert(path.clone(), doc.text.clone());
+                    versions.push((path, doc.version));
+                }
+                Ok(SourceBatch {
+                    replace_all: false,
+                    sources,
+                    versions,
+                })
+            }
+            ProjectRefreshMode::ClosedDocuments(paths) => {
+                let disk_sources = self.load_project_sources(project_root)?;
+                let mut sources = HashMap::new();
+                let mut versions = Vec::new();
+                for path in paths {
+                    let key = crate::fs::FsPath::from_vfs(&path);
+                    if let Some(text) = disk_sources.get(&key) {
+                        sources.insert(key.clone(), text.clone());
+                    }
+                    versions.push((key, None));
+                }
+                Ok(SourceBatch {
+                    replace_all: false,
+                    sources,
+                    versions,
+                })
+            }
+        }
+    }
+
+    // ── Diagnostics tail (0B) ────────────────────────────────────────────
+
+    /// Debounced diagnostics/project-update tail. The epoch only suppresses
+    /// superseded timers; staleness of results is decided by the fence.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn schedule_diagnostics_tail(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: &std::sync::Arc<LiveProject>,
+    ) {
+        use std::sync::atomic::Ordering;
+        let epoch = project.diagnostics_epoch.fetch_add(1, Ordering::SeqCst) + 1;
+        let this = self.clone();
+        let project = project.clone();
+        let project_root = project_root.clone();
+        self.spawner.spawn(async move {
+            tokio::time::sleep(DIAGNOSTICS_DEBOUNCE).await;
+            if project.diagnostics_epoch.load(Ordering::SeqCst) != epoch {
+                return;
+            }
+            let compute_project = project.clone();
+            let outcome = tokio::task::spawn_blocking(move || {
+                compute_project.project.diagnostic_candidate_nowait()
+            })
+            .await
+            .unwrap_or(Ok(None));
+            this.handle_diagnostics_outcome(&project_root, &project, outcome);
+
+            // The playground project snapshot rides the same debounced tail
+            // (B3 step 6): one owned payload per quiet period, not one per
+            // keystroke.
+            this.send_update_project(&project_root, &project);
+        });
+    }
+
+    /// Apply one diagnostics computation outcome to the fence.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn handle_diagnostics_outcome(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: &std::sync::Arc<LiveProject>,
+        outcome: Result<Option<DiagnosticCandidate>, crate::project::ProjectBroken>,
+    ) {
+        match outcome {
+            Err(_) => {
+                // Poison is an internal failure, never an empty publication
+                // (I6). The project is terminally broken; do not retry.
+                log::error!(
+                    "diagnostics: project {} is broken; keeping last publication",
+                    project_root.as_str()
+                );
+            }
+            Ok(None) => {
+                self.schedule_diagnostics_busy_retry(project_root, project);
+            }
+            Ok(Some(candidate)) => {
+                self.publish_candidate(&candidate, project);
+            }
+        }
+    }
+
+    /// Busy: keep the last publication and re-arm one trailing retry (0B).
+    /// The retry is fence-tagged, so it publishes only if still relevant.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn schedule_diagnostics_busy_retry(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: &std::sync::Arc<LiveProject>,
+    ) {
+        {
+            let mut fence = project.diagnostics_fence.lock().unwrap();
+            if fence.dirty.is_none() || fence.retry_scheduled {
+                return;
+            }
+            fence.retry_scheduled = true;
+        }
+        let this = self.clone();
+        let project = project.clone();
+        let project_root = project_root.clone();
+        self.spawner.spawn(async move {
+            tokio::time::sleep(DIAGNOSTICS_BUSY_RETRY).await;
+            {
+                let mut fence = project.diagnostics_fence.lock().unwrap();
+                fence.retry_scheduled = false;
+                if fence.dirty.is_none() {
+                    return;
+                }
+            }
+            let compute_project = project.clone();
+            let outcome = tokio::task::spawn_blocking(move || {
+                compute_project.project.diagnostic_candidate_nowait()
+            })
+            .await
+            .unwrap_or(Ok(None));
+            this.handle_diagnostics_outcome(&project_root, &project, outcome);
+        });
+    }
+
+    /// Conditionally publish an owned candidate through the fence (0B):
+    /// stale candidates are discarded; publication compare-and-clears the
+    /// dirty revision, so a newer mutation that raced in stays scheduled.
+    fn publish_candidate(
+        &self,
+        candidate: &DiagnosticCandidate,
+        project: &std::sync::Arc<LiveProject>,
+    ) {
+        use crate::bex_lsp::notification::BexLspNotification;
+
+        let encoding = self.encoding_for_publication();
+        let documents = candidate_to_publishable(candidate, encoding);
+
+        let mut fence = project.diagnostics_fence.lock().unwrap();
+        if !fence.admit(candidate.source_revision) {
+            // A newer mutation is already dirty; its own attempt is
+            // scheduled. Publishing this would regress markers.
+            return;
+        }
+
+        let current_paths: HashSet<std::path::PathBuf> =
+            documents.iter().map(|d| d.path.clone()).collect();
+
+        for doc in &documents {
+            let Ok(uri) = wasm_helpers::from_file_path(&doc.path) else {
+                continue;
+            };
+            let _ = self.send_notification_publish_diagnostics(
+                lsp_types::PublishDiagnosticsParams::new(uri, doc.diagnostics.clone(), doc.version),
+            );
+        }
+
+        // Clear markers for files that disappeared since the last successful
+        // publication (busy/stale attempts never update this set).
+        for deleted in fence.record_publication(current_paths) {
+            let Ok(uri) = wasm_helpers::from_file_path(&deleted) else {
+                continue;
+            };
+            let _ = self.send_notification_publish_diagnostics(
+                lsp_types::PublishDiagnosticsParams::new(uri, vec![], None),
+            );
+        }
+    }
+
+    // ── Engine tail (0A) ─────────────────────────────────────────────────
+
     /// Debounced engine rebuild: bytecode generation, `BexEngine::new` (which
     /// executes `$init`), and test collection are the heavy tail of a refresh.
-    /// Running them per keystroke burned CPU and heap on engines that were
-    /// discarded milliseconds later, so they run on a background task after
-    /// the project has been quiet for the debounce window.
+    /// The debounce epoch is a pre-work ticket; the rebuild gate makes builds
+    /// single-flight; installation is authorized only by the
+    /// revision-conditional commit inside `rebuild_once` (I3).
     #[cfg(not(target_arch = "wasm32"))]
     fn schedule_engine_rebuild(
         &self,
         project_root: &vfs::VfsPath,
-        project: std::sync::Arc<LiveProject>,
+        project: &std::sync::Arc<LiveProject>,
     ) {
         use std::sync::atomic::Ordering;
-        const ENGINE_REBUILD_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
 
         let epoch = project.rebuild_epoch.fetch_add(1, Ordering::SeqCst) + 1;
         let this = self.clone();
+        let project = project.clone();
         let project_root = project_root.clone();
         self.spawner.spawn(async move {
             tokio::time::sleep(ENGINE_REBUILD_DEBOUNCE).await;
@@ -660,36 +955,91 @@ impl BexMulitProject {
                 // A newer refresh superseded this one; its own rebuild is scheduled.
                 return;
             }
-            let rebuild_project = project.clone();
-            let rebuilt =
-                tokio::task::spawn_blocking(move || rebuild_project.project.update_bex().is_ok())
-                    .await
-                    .unwrap_or(false);
-            if !rebuilt || project.rebuild_epoch.load(Ordering::SeqCst) != epoch {
+            let _flight = project.rebuild_gate.lock().await;
+            if project.rebuild_epoch.load(Ordering::SeqCst) != epoch {
                 return;
             }
-            // Re-announce the project now that the engine is current, and
-            // collect tests against it (mirrors the synchronous tail that ran
-            // per keystroke before debouncing).
-            let diagnostics = project.project.diagnostics_by_file(this.position_encoding);
-            let flat_diags = Self::flatten_diagnostics(&diagnostics);
-            this.send_update_project(&project_root, &project, flat_diags);
-            if project.project.is_bex_current() {
-                this.request_collect_tests_impl(project_root.as_str());
-            }
+            let rebuild_project = project.clone();
+            let Ok(report) =
+                tokio::task::spawn_blocking(move || rebuild_project.project.rebuild_once()).await
+            else {
+                log::error!("engine rebuild task panicked");
+                return;
+            };
+            this.apply_rebuild_report(&project_root, &project, report);
         });
     }
 
+    /// Publish a rebuild's diagnostics through the fence and, on a winning
+    /// commit, announce the ready runtime state and collect tests. Superseded
+    /// candidates change nothing (I3).
+    fn apply_rebuild_report(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: &std::sync::Arc<LiveProject>,
+        report: crate::project::RebuildReport,
+    ) {
+        if let Some(candidate) = &report.diagnostics {
+            self.publish_candidate(candidate, project);
+        }
+
+        match report.engine {
+            EngineBuildOutcome::Committed(receipt) => {
+                log::info!(
+                    "engine rebuild: generation {} committed at {}",
+                    receipt.generation,
+                    receipt.source_revision
+                );
+                self.send_update_project(project_root, project);
+                self.collect_tests_for_project(project_root.as_str(), project);
+            }
+            EngineBuildOutcome::BlockedByDiagnostics { source_revision } => {
+                log::info!("engine rebuild: blocked by diagnostics at {source_revision}");
+                self.send_update_project(project_root, project);
+            }
+            EngineBuildOutcome::Failed {
+                source_revision,
+                message,
+            } => {
+                log::warn!("engine rebuild failed at {source_revision}: {message}");
+                self.send_update_project(project_root, project);
+            }
+            EngineBuildOutcome::Superseded { current_revision } => {
+                log::info!(
+                    "engine rebuild superseded by {current_revision}; candidate dropped quietly"
+                );
+            }
+            EngineBuildOutcome::Broken => {
+                log::error!("engine rebuild: project is broken");
+            }
+        }
+    }
+
+    /// Synchronous project tail for WASM (no timers/blocking facilities):
+    /// rebuild, publish diagnostics, announce, and collect.
+    #[cfg(target_arch = "wasm32")]
+    fn run_project_tail_blocking(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: &std::sync::Arc<LiveProject>,
+    ) {
+        let report = project.project.rebuild_once();
+        self.apply_rebuild_report(project_root, project, report);
+    }
+
+    // ── Playground state ─────────────────────────────────────────────────
+
     fn flatten_diagnostics(
-        diagnostics: &std::collections::HashMap<std::path::PathBuf, Vec<lsp_types::Diagnostic>>,
+        documents: &[PublishableDocument],
     ) -> Vec<crate::bex_lsp::ProjectDiagnostic> {
         let mut out = Vec::new();
-        for (path, diags) in diagnostics {
-            let filename = path
+        for doc in documents {
+            let filename = doc
+                .path
                 .file_name()
                 .map(|f| f.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            for d in diags {
+            for d in &doc.diagnostics {
                 let severity = match d.severity {
                     Some(lsp_types::DiagnosticSeverity::ERROR) => "error",
                     Some(lsp_types::DiagnosticSeverity::WARNING) => "warning",
@@ -706,15 +1056,20 @@ impl BexMulitProject {
         out
     }
 
-    fn build_project_update(
-        project: &LiveProject,
-        diagnostics: Vec<crate::bex_lsp::ProjectDiagnostic>,
-    ) -> crate::bex_lsp::ProjectUpdate {
+    /// Build one owned, complete `ProjectUpdate` payload with a bounded
+    /// source read. `None` means the project was busy or broken — the caller
+    /// keeps the last announced state rather than sending a wiped payload.
+    fn build_project_update(&self, project: &LiveProject) -> Option<crate::bex_lsp::ProjectUpdate> {
         let is_bex_current = project.project.is_bex_current();
 
-        let db_guard = project.project.db.lock().unwrap();
-        let db = db_guard.db();
-        let listing = baml_project::list_functions_with_metadata(db);
+        let guard = project.project.read_source_for_request().ok()?;
+        let candidate = crate::project::collect_diagnostic_candidate(&guard);
+        let listing = baml_project::list_functions_with_metadata(guard.db());
+        drop(guard);
+
+        let documents = candidate_to_publishable(&candidate, self.encoding_for_publication());
+        let diagnostics = Self::flatten_diagnostics(&documents);
+
         let functions = listing
             .functions
             .into_iter()
@@ -739,12 +1094,12 @@ impl BexMulitProject {
             })
             .collect();
 
-        crate::bex_lsp::ProjectUpdate {
+        Some(crate::bex_lsp::ProjectUpdate {
             is_bex_current,
             functions,
             types: Some(listing.types),
             diagnostics,
-        }
+        })
     }
 
     fn send_list_projects(&self) {
@@ -753,18 +1108,20 @@ impl BexMulitProject {
             .keys()
             .map(|p| p.as_path().to_string_lossy().into_owned())
             .collect();
+        drop(projects);
         self.playground_sender.send_playground_notification(
             crate::bex_lsp::PlaygroundNotification::ListProjects { projects: roots },
         );
     }
 
-    fn send_update_project(
-        &self,
-        project_root: &vfs::VfsPath,
-        project: &LiveProject,
-        diagnostics: Vec<crate::bex_lsp::ProjectDiagnostic>,
-    ) {
-        let update = Self::build_project_update(project, diagnostics);
+    fn send_update_project(&self, project_root: &vfs::VfsPath, project: &LiveProject) {
+        let Some(update) = self.build_project_update(project) else {
+            log::debug!(
+                "skipping UpdateProject for busy project {}",
+                project_root.as_str()
+            );
+            return;
+        };
         self.playground_sender.send_playground_notification(
             crate::bex_lsp::PlaygroundNotification::UpdateProject {
                 project: project_root.as_str().to_string(),
@@ -773,74 +1130,71 @@ impl BexMulitProject {
         );
     }
 
-    fn request_collect_tests_impl(&self, project_root_str: &str) {
-        log::info!("[request_collect_tests_impl] project={project_root_str}");
-        // Resolve project and get the concrete BexEngine (before trait erasure)
-        let (engine, test_state) = {
-            let projects = self.projects.lock().unwrap();
-            let project = projects
-                .iter()
-                .find(|(k, _)| k.as_path().to_string_lossy() == project_root_str)
-                .map(|(_, v)| v.clone());
-            let Some(project) = project else {
-                return;
-            };
-            let Ok(engine) = project.project.get_bex() else {
-                return;
-            };
-            (engine, project.project.test_state())
-        };
+    // ── Test collection / runs (0A.7, 0A.8, I5) ──────────────────────────
 
-        // Cancel in-flight collection tasks and clear stale registry. The
-        // generation tracks compiled project snapshots and is bumped only when a
-        // new BexEngine/CFG snapshot is installed.
-        let (generation, cancel) = {
-            let mut state = test_state.lock().unwrap();
-            state.cancel.cancel();
-            state.cancel = sys_types::CancellationToken::new();
-            state.registry = None;
-            (state.generation, state.cancel.clone())
+    fn request_collect_tests_impl(&self, project_root_str: &str) {
+        let Some(project) = self.find_project(project_root_str) else {
+            return;
+        };
+        self.collect_tests_for_project(project_root_str, &project);
+    }
+
+    /// Start one test-collection attempt against the installed engine. The
+    /// ticket captures engine, generation, cancel token, and collection
+    /// epoch atomically; installation and every emission are fenced by that
+    /// identity, so stale collections emit nothing (0A.7).
+    fn collect_tests_for_project(
+        &self,
+        project_root_str: &str,
+        project: &std::sync::Arc<LiveProject>,
+    ) {
+        log::info!("[collect_tests] project={project_root_str}");
+        let ticket = match project.project.begin_test_collection() {
+            Ok(Some(ticket)) => ticket,
+            Ok(None) => {
+                log::info!("[collect_tests] no current engine; skipping");
+                return;
+            }
+            Err(_) => return,
         };
 
         let sender = self.playground_sender.clone();
+        let live = project.clone();
         let project = project_root_str.to_string();
         let package = "user".to_string();
         let call_id = sys_types::CallId::next();
+        let generation = ticket.generation;
+        let cancel = ticket.cancel.clone();
+        let engine = ticket.engine.clone();
 
-        // Spawn async collection task
         self.spawner.spawn(async move {
             match engine
                 .collect_tests(&package, call_id, cancel.clone())
                 .await
             {
                 Ok(registry) => {
-                    // Discard stale results if the engine was swapped during collection.
-                    // The guard is scoped to this block so it is dropped before the await below.
-                    let should_continue = {
-                        let mut state = test_state.lock().unwrap();
-                        if state.generation != generation {
-                            log::info!(
-                                "[collect_tests] discarding stale result (gen {generation} vs current {})",
-                                state.generation
-                            );
-                            false
-                        } else {
-                            // Extract Handle from BexExternalValue::Handle.
-                            // Null means the project has no tests ($init_test absent).
-                            let handle = match &registry {
-                                bex_engine::BexExternalValue::Handle(h) => Some(h.clone()),
-                                bex_engine::BexExternalValue::Null => None,
-                                _ => {
-                                    log::error!("[collect_tests] unexpected result type");
-                                    return;
-                                }
-                            };
-                            state.registry = handle;
-                            true
+                    // Extract Handle from BexExternalValue::Handle.
+                    // Null means the project has no tests ($init_test absent).
+                    let handle = match &registry {
+                        bex_engine::BexExternalValue::Handle(h) => Some(h.clone()),
+                        bex_engine::BexExternalValue::Null => None,
+                        _ => {
+                            log::error!("[collect_tests] unexpected result type");
+                            return;
                         }
                     };
-                    if !should_continue {
-                        return;
+
+                    // ABA fence: install only if the engine generation and
+                    // collection epoch still match; stale results emit nothing.
+                    match live.project.install_collected_registry(&ticket, handle) {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            log::info!(
+                                "[collect_tests] discarding stale result (gen {generation})"
+                            );
+                            return;
+                        }
+                        Err(_) => return,
                     }
 
                     // If the project has no tests, send an empty test tree.
@@ -873,6 +1227,12 @@ impl BexMulitProject {
                         .await
                     {
                         Ok(serialized) => {
+                            // Emission is fenced too: if a newer engine or
+                            // collection superseded us during serialize, stay
+                            // silent (the newer attempt owns the tree).
+                            if !live.project.collection_ticket_is_current(&ticket) {
+                                return;
+                            }
                             let data = serde_json::to_vec(&bex_value_to_json(&serialized))
                                 .unwrap_or_default();
                             sender.send_playground_notification(
@@ -887,6 +1247,9 @@ impl BexMulitProject {
                         }
                         Err(e) => {
                             log::error!("[collect_tests] serialize failed: {e}");
+                            if !live.project.collection_ticket_is_current(&ticket) {
+                                return;
+                            }
                             sender.send_playground_notification(
                                 crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
                                     project: project.clone(),
@@ -901,8 +1264,13 @@ impl BexMulitProject {
                     }
                 }
                 Err(e) => {
-                    // Collection failed — notify the frontend with an empty result so it unblocks
+                    // Stale/canceled collection emits nothing; a failure for
+                    // the still-current build unblocks the frontend with an
+                    // empty result.
                     log::error!("[collect_tests] collect_tests failed: {e}");
+                    if !live.project.collection_ticket_is_current(&ticket) {
+                        return;
+                    }
                     sender.send_playground_notification(
                         crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
                             project,
@@ -924,45 +1292,29 @@ impl BexMulitProject {
         test_name: &str,
         ctx: bex_engine::FunctionCallContext,
     ) -> Result<bex_engine::BexCallResult, bex_engine::EngineError> {
-        let (engine, registry_value) = {
-            let projects = self.projects.lock().unwrap();
-            let project = projects
-                .iter()
-                .find(|(k, _)| k.as_path().to_string_lossy() == project_root_str)
-                .map(|(_, v)| v.clone())
-                .ok_or_else(|| bex_engine::EngineError::FunctionNotFound {
-                    name: format!("project not found: {project_root_str}"),
-                })?;
-            let engine = project.project.get_bex().map_err(|e| {
-                bex_engine::EngineError::FunctionNotFound {
-                    name: format!("engine not ready: {e}"),
-                }
-            })?;
-            let test_state = project.project.test_state();
-            let state = test_state.lock().unwrap();
-            if state.generation != generation {
-                return Err(bex_engine::EngineError::FunctionNotFound {
-                    name: "stale generation".to_string(),
-                });
+        let project = self.find_project(project_root_str).ok_or_else(|| {
+            bex_engine::EngineError::FunctionNotFound {
+                name: format!("project not found: {project_root_str}"),
             }
-            let registry_value = match &state.registry {
-                Some(handle) => bex_engine::BexExternalValue::Handle(handle.clone()),
-                None => {
-                    return Err(bex_engine::EngineError::FunctionNotFound {
-                        name: "no test registry".to_string(),
-                    });
-                }
-            };
-            (engine, registry_value)
-        };
+        })?;
+
+        // One coherent lease (I5): validates the generation against the
+        // installed engine, requires current source (D7), and captures the
+        // engine + registry handle atomically.
+        let lease = project.project.lease_registry(generation).map_err(|e| {
+            bex_engine::EngineError::FunctionNotFound {
+                name: registry_lease_error_message(e).to_string(),
+            }
+        })?;
 
         log::info!("[call_test_function] test_name={test_name} generation={generation}");
 
-        let result = engine
+        let result = lease
+            .engine
             .call_function_with_trace(
                 "testing.TestRegistry.run_test",
                 vec![
-                    registry_value,
+                    bex_engine::BexExternalValue::Handle(lease.handle.clone()),
                     bex_engine::BexExternalValue::String(test_name.into()),
                 ],
                 ctx,
@@ -979,37 +1331,38 @@ impl BexMulitProject {
     }
 
     fn expand_test_set_impl(&self, project_root_str: &str, generation: u64, testset_name: &str) {
-        let (engine, registry_value, cancel) = {
-            let projects = self.projects.lock().unwrap();
-            let Some(project) = projects
-                .iter()
-                .find(|(k, _)| k.as_path().to_string_lossy() == project_root_str)
-                .map(|(_, v)| v.clone())
-            else {
-                return;
-            };
-            let Ok(engine) = project.project.get_bex() else {
-                return;
-            };
-            let test_state = project.project.test_state();
-            let state = test_state.lock().unwrap();
-            if state.generation != generation {
+        let Some(project) = self.find_project(project_root_str) else {
+            return;
+        };
+        // Stale expansion requests emit nothing: the newer collection owns
+        // the tree (D8 cancels stale tree maintenance).
+        let lease = match project.project.lease_registry(generation) {
+            Ok(lease) => lease,
+            Err(e) => {
+                log::info!(
+                    "[expand_test_set] not expanding '{testset_name}': {}",
+                    registry_lease_error_message(e)
+                );
                 return;
             }
-            let registry_value = match &state.registry {
-                Some(handle) => bex_engine::BexExternalValue::Handle(handle.clone()),
-                None => return,
-            };
-            let cancel = state.cancel.clone();
-            (engine, registry_value, cancel)
         };
 
         let call_id = sys_types::CallId::next();
         let sender = self.playground_sender.clone();
+        let live = project;
         let project = project_root_str.to_string();
         let name = testset_name.to_string();
 
         self.spawner.spawn(async move {
+            // One mutation owner per installed registry (0A.8): expansions
+            // mutate the registry heap object in place, so they serialize.
+            #[cfg(not(target_arch = "wasm32"))]
+            let _mutation_owner = lease.expansion_gate.lock().await;
+
+            let engine = lease.engine.clone();
+            let registry_value = bex_engine::BexExternalValue::Handle(lease.handle.clone());
+            let cancel = lease.cancel.clone();
+
             let ctx = bex_engine::FunctionCallContextBuilder::new(call_id)
                 .with_cancel_token(cancel.clone())
                 .with_profile_enabled(false)
@@ -1030,6 +1383,10 @@ impl BexMulitProject {
                 .await
             {
                 log::error!("[expand_test_set] expand failed for testset '{name}': {e}");
+                if cancel.is_cancelled() {
+                    // Superseded mid-expansion: emit nothing.
+                    return;
+                }
                 // Re-serialize and send the current (pre-expansion) state so the
                 // UI unblocks from the loading spinner instead of spinning forever.
                 let ctx_resend =
@@ -1056,6 +1413,9 @@ impl BexMulitProject {
                         serde_json::to_vec(&serde_json::json!([])).unwrap_or_default()
                     }
                 };
+                if !live.project.registry_lease_is_current(&lease) {
+                    return;
+                }
                 sender.send_playground_notification(
                     crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
                         project,
@@ -1087,6 +1447,10 @@ impl BexMulitProject {
                 .await
             {
                 Ok(serialized) => {
+                    // Stale expansion success emits nothing (0A.7 fence).
+                    if !live.project.registry_lease_is_current(&lease) {
+                        return;
+                    }
                     let data =
                         serde_json::to_vec(&bex_value_to_json(&serialized)).unwrap_or_default();
                     sender.send_playground_notification(
@@ -1101,6 +1465,9 @@ impl BexMulitProject {
                 }
                 Err(e) => {
                     log::error!("[expand_test_set] serialize after expanding '{name}' failed: {e}");
+                    if !live.project.registry_lease_is_current(&lease) {
+                        return;
+                    }
                     // Send empty result so the UI unblocks
                     sender.send_playground_notification(
                         crate::bex_lsp::PlaygroundNotification::TestCollectionResult {
@@ -1114,6 +1481,17 @@ impl BexMulitProject {
                 }
             }
         });
+    }
+}
+
+fn registry_lease_error_message(e: RegistryLeaseError) -> &'static str {
+    match e {
+        RegistryLeaseError::NeedsCurrentBuild => {
+            "engine is not current with the latest sources; wait for the rebuild"
+        }
+        RegistryLeaseError::NoRegistry => "no test registry collected yet",
+        RegistryLeaseError::NoTests => "project has no tests",
+        RegistryLeaseError::Broken => "project is in a broken state",
     }
 }
 
@@ -1266,13 +1644,59 @@ impl super::BexLsp for BexMulitProject {
         self.get_bex_for_project(project_root)
     }
 
+    fn prepare_function_run(
+        &self,
+        project_root: &str,
+        overlay_function: Option<&str>,
+    ) -> Result<super::PreparedRun, LspError> {
+        let project = self
+            .find_project(project_root)
+            .ok_or_else(|| LspError::RequestFailed(format!("project not found: {project_root}")))?;
+        let snapshot = project
+            .project
+            .prepare_function_run(overlay_function)
+            .map_err(|e| match e {
+                PrepareRunError::NeedsCurrentBuild => LspError::ContentModified(
+                    "engine is not current with the latest sources; wait for the rebuild"
+                        .to_string(),
+                ),
+                PrepareRunError::Busy => {
+                    LspError::RequestFailed("project is busy; retry shortly".to_string())
+                }
+                PrepareRunError::Broken => {
+                    LspError::Internal("project is in a broken state".to_string())
+                }
+            })?;
+        Ok(super::PreparedRun {
+            generation: snapshot.generation,
+            engine: snapshot.engine,
+        })
+    }
+
+    fn engine_for_generation(
+        &self,
+        project_root: &str,
+        generation: u64,
+    ) -> Option<Arc<dyn crate::Bex>> {
+        let project = self.find_project(project_root)?;
+        project
+            .project
+            .engine_for_generation(generation)
+            .map(|engine| engine as Arc<dyn crate::Bex>)
+    }
+
     fn all_env_var_names(&self) -> Vec<String> {
-        let projects = self.projects.lock().unwrap();
+        let projects: Vec<_> = {
+            let projects = self.projects.lock().unwrap();
+            projects.values().cloned().collect()
+        };
         let mut names = std::collections::BTreeSet::new();
-        for project in projects.values() {
-            let db_guard = project.project.db.lock().unwrap();
-            let db = db_guard.db();
-            for name in baml_lsp2_actions::all_env_var_names(db) {
+        for project in projects {
+            // Loop lane: skip busy projects instead of blocking dispatch.
+            let Ok(Some(guard)) = project.project.read_source_nowait() else {
+                continue;
+            };
+            for name in baml_lsp2_actions::all_env_var_names(guard.db()) {
                 names.insert(name);
             }
         }
@@ -1290,8 +1714,8 @@ impl super::BexLsp for BexMulitProject {
         let mut sources = self.load_project_sources(&project_root)?;
         {
             let in_memory_changes = project_handle.in_memory_changes.lock().unwrap();
-            for (path, source) in in_memory_changes.iter() {
-                sources.insert(path.clone(), source.clone());
+            for (path, doc) in in_memory_changes.iter() {
+                sources.insert(path.clone(), doc.text.clone());
             }
         }
 
@@ -1337,7 +1761,15 @@ impl super::BexLsp for BexMulitProject {
 
         let project_handle = self.get_or_create_project(project_root.clone())?;
         let mut in_memory_changes = project_handle.in_memory_changes.lock().unwrap();
-        in_memory_changes.insert(crate::fs::FsPath::from_vfs(&source_path), content);
+        // Playground edits are unversioned; a previously known editor version
+        // no longer describes this text.
+        in_memory_changes.insert(
+            crate::fs::FsPath::from_vfs(&source_path),
+            OverlayDocument {
+                text: content,
+                version: None,
+            },
+        );
         drop(in_memory_changes);
 
         self.refresh_project(
@@ -1366,12 +1798,18 @@ impl super::BexLsp for BexMulitProject {
 
     fn request_playground_state(&self) {
         self.send_list_projects();
-        let projects = self.projects.lock().unwrap();
-        for (fs_path, project) in projects.iter() {
+        let projects: Vec<(crate::fs::FsPath, std::sync::Arc<LiveProject>)> = {
+            let projects = self.projects.lock().unwrap();
+            projects
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        };
+        for (fs_path, project) in projects {
             let root_str = fs_path.as_path().to_string_lossy().into_owned();
-            let diags_by_file = project.project.diagnostics_by_file(self.position_encoding);
-            let flat_diags = Self::flatten_diagnostics(&diags_by_file);
-            let update = Self::build_project_update(project, flat_diags);
+            let Some(update) = self.build_project_update(&project) else {
+                continue;
+            };
             self.playground_sender.send_playground_notification(
                 crate::bex_lsp::PlaygroundNotification::UpdateProject {
                     project: root_str,
@@ -1385,10 +1823,15 @@ impl super::BexLsp for BexMulitProject {
         &self,
         function_name: &str,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
-        let projects = self.projects.lock().ok()?;
-        for project in projects.values() {
-            let db = project.project.db.lock().ok()?;
-            if let Some(graph) = db.ast_control_flow_graph(function_name) {
+        let projects: Vec<_> = {
+            let projects = self.projects.lock().ok()?;
+            projects.values().cloned().collect()
+        };
+        for project in projects {
+            let Ok(guard) = read_for_request(&project.project) else {
+                continue;
+            };
+            if let Some(graph) = guard.db().ast_control_flow_graph(function_name) {
                 return Some(graph);
             }
         }
@@ -1396,11 +1839,8 @@ impl super::BexLsp for BexMulitProject {
     }
 
     fn project_generation(&self, project_root: &str) -> Option<u64> {
-        let projects = self.projects.lock().ok()?;
-        projects
-            .iter()
-            .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
-            .map(|(_, project)| project.project.current_generation())
+        let project = self.find_project(project_root)?;
+        Some(project.project.current_generation())
     }
 
     fn control_flow_graph_for_generation(
@@ -1410,15 +1850,9 @@ impl super::BexLsp for BexMulitProject {
         function_name: &str,
     ) -> Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>> {
         // Clone the project handle out of the registry lock: building a
-        // missing graph takes the project's database lock, which must not be
+        // missing graph takes the project's source gate, which must not be
         // held while the registry lock is.
-        let project = {
-            let projects = self.projects.lock().ok()?;
-            projects
-                .iter()
-                .find(|(path, _)| path.as_path().to_string_lossy() == project_root)
-                .map(|(_, project)| project.clone())?
-        };
+        let project = self.find_project(project_root)?;
         project
             .project
             .control_flow_graph_for_generation(generation, function_name)
@@ -1455,30 +1889,36 @@ impl super::BexLsp for BexMulitProject {
             cursor_offset: None,
         };
 
-        let Ok(projects) = self.projects.lock() else {
-            return empty;
+        let projects: Vec<_> = {
+            let Ok(projects) = self.projects.lock() else {
+                return empty;
+            };
+            projects.values().cloned().collect()
         };
 
-        for project in projects.values() {
-            let Ok(db) = project.project.db.lock() else {
+        for project in projects {
+            let Ok(guard) = read_for_request(&project.project) else {
                 continue;
             };
+            let db = guard.db();
 
-            // Convert line/column to byte offset using the source file text.
             // The file_path from Monaco may be relative — find matching file.
             let Some(source_file) = db.find_source_file(file_path) else {
                 continue;
             };
 
-            let text: &str = source_file.text(&*db);
-            let position = lsp_types::Position {
+            // Playground wire coordinates are fixed zero-based UTF-16 (C2),
+            // independent of the negotiated LSP encoding.
+            let text: &str = source_file.text(db);
+            let codec =
+                crate::bex_lsp::position_codec::PositionCodec::new(text, PositionEncoding::UTF16);
+            let byte_offset = match codec.position_to_offset(lsp_types::Position {
                 line,
                 character: column,
+            }) {
+                Ok(offset) => u32::from(offset),
+                Err(_) => 0,
             };
-            let byte_offset = u32::try_from(baml_project::position::lsp_position_to_offset(
-                text, &position,
-            ))
-            .unwrap_or(0);
 
             return db.playground_cursor_context(file_path, byte_offset);
         }
@@ -1526,10 +1966,15 @@ impl super::BexLsp for BexMulitProject {
     }
 
     fn resolve_file_id(&self, file_id: u32) -> Option<String> {
-        let projects = self.projects.lock().unwrap();
-        for project in projects.values() {
-            let db = project.project.db.lock().unwrap();
-            if let Some(path) = db.file_id_to_path(baml_base::FileId::new(file_id)) {
+        let projects: Vec<_> = {
+            let projects = self.projects.lock().unwrap();
+            projects.values().cloned().collect()
+        };
+        for project in projects {
+            let Ok(Some(guard)) = project.project.read_source_nowait() else {
+                continue;
+            };
+            if let Some(path) = guard.db().file_id_to_path(baml_base::FileId::new(file_id)) {
                 return Some(path.to_string_lossy().to_string());
             }
         }
@@ -1651,6 +2096,63 @@ mod tests {
             vec![ws.root.join("app")],
             "gitignored directories must not be discovered"
         );
+    }
+
+    #[test]
+    fn diagnostics_fence_publishes_current_and_discards_stale() {
+        let mut fence = DiagnosticsFence::default();
+
+        // r1 dirty, candidate at r1: publish and clear.
+        fence.mark_dirty(SourceRevision(1));
+        assert!(fence.admit(SourceRevision(1)));
+        assert_eq!(fence.dirty, None);
+
+        // r2 and r3 dirty (newest wins), candidate from r2 arrives after r3
+        // was marked: discard, r3 stays dirty for its own attempt.
+        fence.mark_dirty(SourceRevision(2));
+        fence.mark_dirty(SourceRevision(3));
+        assert!(!fence.admit(SourceRevision(2)));
+        assert_eq!(fence.dirty, Some(SourceRevision(3)));
+
+        // The r3 candidate publishes and clears.
+        assert!(fence.admit(SourceRevision(3)));
+        assert_eq!(fence.dirty, None);
+
+        // A candidate *newer* than the dirty mark also publishes (the fence
+        // only rejects candidates older than the newest known mutation).
+        fence.mark_dirty(SourceRevision(4));
+        assert!(fence.admit(SourceRevision(5)));
+        assert_eq!(fence.dirty, None);
+
+        // With nothing dirty, an unsolicited (e.g. rebuild-tail) candidate
+        // still publishes.
+        assert!(fence.admit(SourceRevision(5)));
+    }
+
+    #[test]
+    fn diagnostics_fence_out_of_order_marks_keep_newest() {
+        let mut fence = DiagnosticsFence::default();
+        fence.mark_dirty(SourceRevision(7));
+        fence.mark_dirty(SourceRevision(5));
+        assert_eq!(fence.dirty, Some(SourceRevision(7)));
+    }
+
+    #[test]
+    fn diagnostics_fence_publication_coverage_clears_deleted_files() {
+        let mut fence = DiagnosticsFence::default();
+        let a = std::path::PathBuf::from("/p/a.baml");
+        let b = std::path::PathBuf::from("/p/b.baml");
+
+        let deleted = fence.record_publication([a.clone(), b.clone()].into_iter().collect());
+        assert!(deleted.is_empty());
+
+        // b disappeared: exactly one empty publish for it.
+        let deleted = fence.record_publication([a.clone()].into_iter().collect());
+        assert_eq!(deleted, vec![b]);
+
+        // Steady state: no repeat clears.
+        let deleted = fence.record_publication([a].into_iter().collect());
+        assert!(deleted.is_empty());
     }
 
     #[test]

@@ -52,7 +52,7 @@ macro_rules! define_lsp_request_trait {
                             }
                         ),*,
                         other => {
-                            let _ = sender(notif.id, Err(LspError::UnknownErrorCode(format!("request not supported: {}", other))));
+                            let _ = sender(notif.id, Err(LspError::RequestNotSupported(other.to_string())));
                             return;
                         }
                     }

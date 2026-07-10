@@ -1654,16 +1654,27 @@ async fn handle_function_run(
     };
 
     let broadcast_tx = state.broadcast_tx.clone();
-    let project_generation = state.bex.project_generation(&project).unwrap_or(0);
-    // Pin the run's control-flow graph while its generation is still
-    // current, so overlay spans stay resolvable after later recompiles.
-    if let Some(function_name) = overlay_function_name_for_target(&target.run_target) {
-        let _ = state.bex.control_flow_graph_for_generation(
-            &project,
-            project_generation,
-            function_name,
-        );
-    }
+    // One coherent launch snapshot (design I5): engine + generation captured
+    // in a single transaction, with the overlay control-flow graph pinned
+    // for that generation so overlay spans stay resolvable after later
+    // recompiles. Replaces the racy generation → graph → engine triple-read.
+    let prepared = match state.bex.prepare_function_run(
+        &project,
+        overlay_function_name_for_target(&target.run_target),
+    ) {
+        Ok(prepared) => prepared,
+        Err(e) => {
+            send_ws(
+                sink,
+                &client.error("projectNotReady", format!("Cannot start run: {e}")),
+            )
+            .await;
+            return;
+        }
+    };
+    let project_generation = prepared.generation;
+    let bex = prepared.engine;
+
     let fs_path = bex_project::FsPath::from_str(project);
     let boundary_id = BoundaryId::new_random();
     let value_capture =
@@ -1675,21 +1686,6 @@ async fn handle_function_run(
             logs_enabled: true,
         })
         .with_value_capture(value_capture.clone());
-
-    let bex = match state.bex.get_bex_for_project(&fs_path) {
-        Ok(bex) => bex,
-        Err(e) => {
-            send_ws(
-                sink,
-                &client.error(
-                    "projectMissing",
-                    format!("Failed to get Bex for project: {e}"),
-                ),
-            )
-            .await;
-            return;
-        }
-    };
 
     let run_store = state.run_store.clone();
     let history_store = state.history_store.clone();
@@ -1942,10 +1938,10 @@ async fn handle_ws_in_message(
                     return;
                 }
             };
-            let project_id = state
+            let run_identity = state
                 .run_store
                 .snapshot(boundary_id)
-                .map(|run| run.request.project_id.0);
+                .map(|run| (run.request.project_id.0, run.request.project_generation.0));
 
             let response = match state.run_store.cancel_run(boundary_id, epoch_ms(), None) {
                 bex_events::run::CancelRunEffect::CancelHostCall {
@@ -1955,10 +1951,22 @@ async fn handle_ws_in_message(
                     broadcast_run_patch(&state.broadcast_tx, &patch);
                     state.io_state.cancel_for_host_call(&host_call_id);
                     state.env_state.cancel_for_host_call(&host_call_id);
-                    match (host_call_id, project_id) {
-                        (HostCallId::Native(call_id), Some(project_id)) => {
-                            let fs_path = bex_project::FsPath::from_str(project_id);
-                            match state.bex.get_bex_for_project(&fs_path) {
+                    match (host_call_id, run_identity) {
+                        (HostCallId::Native(call_id), Some((project_id, generation))) => {
+                            // Cancel targets the engine the run launched on
+                            // (design D8): the run's call lives in that
+                            // engine's table even after newer engines were
+                            // installed. Fall back to the current engine for
+                            // runs whose generation is no longer retained.
+                            let engine = state
+                                .bex
+                                .engine_for_generation(&project_id, generation)
+                                .map(Ok)
+                                .unwrap_or_else(|| {
+                                    let fs_path = bex_project::FsPath::from_str(project_id.clone());
+                                    state.bex.get_bex_for_project(&fs_path)
+                                });
+                            match engine {
                                 Ok(bex) => match bex.cancel_function_call(call_id) {
                                     Ok(()) => WsOutMessage::CommandAck {
                                         request_id,

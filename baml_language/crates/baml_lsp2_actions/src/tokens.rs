@@ -139,7 +139,7 @@ impl SemanticTokenType {
 // ── SemanticToken ─────────────────────────────────────────────────────────────
 
 /// A classified token ready for LSP encoding.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct SemanticToken {
     pub range: TextRange,
     pub token_type: SemanticTokenType,
@@ -152,9 +152,12 @@ pub struct SemanticToken {
 /// Always returns tokens in document order (required by the LSP
 /// `textDocument/semanticTokens/full` contract).
 ///
-/// Regular function (not a Salsa query). Internally calls Salsa-cached queries
-/// (`infer_scope_types`, `function_body`, `function_body_source_map`,
-/// `file_semantic_index`, `syntax_tree`).
+/// Salsa tracked query (design B1): the CST walk re-classifies every token
+/// against type inference, which measured 40–150ms on real projects — too
+/// slow to recompute per request while the file is unchanged. Memoization
+/// keys off the file revision; edits to *other* files reuse this file's
+/// result if its inference inputs are unaffected.
+#[salsa::tracked(returns(ref))]
 pub fn semantic_tokens(db: &dyn Db, file: SourceFile) -> Vec<SemanticToken> {
     let root = baml_compiler_parser::syntax_tree(db, file);
     let mut out = Vec::new();

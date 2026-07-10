@@ -5,6 +5,7 @@ pub(crate) mod notification;
 mod request;
 
 mod multi_project;
+mod position_codec;
 mod protocol;
 
 use std::{path::PathBuf, sync::Arc};
@@ -40,7 +41,9 @@ pub enum LspError {
     #[error("Project not found: {}", .0.as_str())]
     ProjectNotFound(vfs::VfsPath),
 
-    #[error("Unknown error code: {0}")]
+    /// Legacy constructor kept for the WASM bridge; serialized as
+    /// `InternalError`, never as `-32001`.
+    #[error("{0}")]
     UnknownErrorCode(String),
 
     #[error("Invalid command arguments for command: {command}: {message}")]
@@ -60,6 +63,81 @@ pub enum LspError {
 
     #[error("No projects found")]
     NoProjectsFound,
+
+    /// The request's view became stale: sources were mutated while it waited
+    /// (LSP `ContentModified`, `-32801`).
+    #[error("Content modified: {0}")]
+    ContentModified(String),
+
+    /// Syntactically valid request that cannot be served right now:
+    /// same-revision busy timeout, overload, or unavailable target
+    /// (LSP `RequestFailed`, `-32803`).
+    #[error("{0}")]
+    RequestFailed(String),
+
+    /// Violated invariant, poisoned state, or other internal failure
+    /// (LSP `InternalError`, `-32603`).
+    #[error("Internal error: {0}")]
+    Internal(String),
+
+    /// Malformed params, position, or range (LSP `InvalidParams`, `-32602`).
+    #[error("Invalid params: {0}")]
+    InvalidParams(String),
+
+    /// Request arrived before `initialize` completed
+    /// (LSP `ServerNotInitialized`, `-32002`).
+    #[error("Server not initialized: {0}")]
+    ServerNotInitialized(String),
+}
+
+impl LspError {
+    /// The one LSP error-code mapping (I7). Every request error is serialized
+    /// through this table; `-32001 UnknownErrorCode` is never emitted.
+    #[must_use]
+    pub fn to_response_error(&self) -> lsp_server::ResponseError {
+        use lsp_server::ErrorCode;
+        let code = match self {
+            // Malformed params / positions / ranges.
+            LspError::NotificationExtractError(_)
+            | LspError::RequestExtractError(_)
+            | LspError::InvalidCommandArguments { .. }
+            | LspError::InvalidParams(_) => ErrorCode::InvalidParams,
+
+            // Unsupported method.
+            LspError::NotificationNotSupported(_) | LspError::RequestNotSupported(_) => {
+                ErrorCode::MethodNotFound
+            }
+
+            // Request before initialize completed.
+            LspError::ServerNotInitialized(_) => ErrorCode::ServerNotInitialized,
+
+            // The request's view became stale under an applied source change.
+            LspError::ContentModified(_) => ErrorCode::ContentModified,
+
+            // Valid request that cannot be served: unknown project/file,
+            // same-revision busy timeout, overload.
+            LspError::ProjectRootNotFound(..)
+            | LspError::ProjectNotFound(_)
+            | LspError::FileNotFound(_)
+            | LspError::InvalidPath { .. }
+            | LspError::InvalidVFSPath { .. }
+            | LspError::NoProjectsFound
+            | LspError::RequestFailed(_) => ErrorCode::RequestFailed,
+
+            // Internal failures: poison, violated invariants, serialization,
+            // runtime errors, and the legacy catch-all constructor.
+            LspError::RequestSerializeError(_)
+            | LspError::Runtime(_)
+            | LspError::ClientClosed
+            | LspError::UnknownErrorCode(_)
+            | LspError::Internal(_) => ErrorCode::InternalError,
+        };
+        lsp_server::ResponseError {
+            code: code as i32,
+            message: self.to_string(),
+            data: None,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +277,15 @@ pub trait PlaygroundSender: Send + Sync {
     fn send_playground_notification(&self, notification: PlaygroundNotification);
 }
 
+/// A coherent run-launch snapshot (I5): engine and generation captured in one
+/// source→runtime transaction, with the overlay control-flow graph already
+/// pinned for that generation. Holding `engine` keeps the launched-on engine
+/// alive for the run's duration, so cancel can always target it (D8).
+pub struct PreparedRun {
+    pub generation: u64,
+    pub engine: Arc<dyn crate::Bex>,
+}
+
 // ---------------------------------------------------------------------------
 // BexLsp trait
 // ---------------------------------------------------------------------------
@@ -211,6 +298,27 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
         &self,
         project_root: &crate::fs::FsPath,
     ) -> Result<Arc<dyn crate::Bex>, crate::RuntimeError>;
+
+    /// Capture a coherent run-launch snapshot (I5): validates that the
+    /// installed engine matches current sources, and pins the overlay
+    /// control-flow graph for `overlay_function` under the same transaction.
+    ///
+    /// Errors are typed for the playground boundary: `ContentModified` when a
+    /// rebuild is needed first, `RequestFailed` when the project is busy.
+    fn prepare_function_run(
+        &self,
+        project_root: &str,
+        overlay_function: Option<&str>,
+    ) -> Result<PreparedRun, LspError>;
+
+    /// The engine a run launched on, looked up by its pinned generation
+    /// (D8 cancel targeting). `None` once that generation has been replaced
+    /// and released.
+    fn engine_for_generation(
+        &self,
+        project_root: &str,
+        generation: u64,
+    ) -> Option<Arc<dyn crate::Bex>>;
 
     fn request_playground_state(&self);
 
@@ -309,3 +417,102 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
 }
 
 pub use multi_project::{BackgroundSpawner, LspClientSenderTrait, new_lsp};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The retired catch-all code (pre-0.14.2 `UnknownErrorCode`). No error
+    /// may serialize to it (design I7).
+    const LEGACY_UNKNOWN: i32 = -32001;
+
+    fn code(e: &LspError) -> i32 {
+        e.to_response_error().code
+    }
+
+    #[test]
+    fn typed_errors_map_to_spec_codes() {
+        use lsp_server::ErrorCode;
+
+        assert_eq!(
+            code(&LspError::ContentModified("edit raced".into())),
+            ErrorCode::ContentModified as i32,
+        );
+        assert_eq!(
+            code(&LspError::RequestFailed("busy".into())),
+            ErrorCode::RequestFailed as i32,
+        );
+        assert_eq!(
+            code(&LspError::Internal("poisoned".into())),
+            ErrorCode::InternalError as i32,
+        );
+        assert_eq!(
+            code(&LspError::InvalidParams("bad position".into())),
+            ErrorCode::InvalidParams as i32,
+        );
+        assert_eq!(
+            code(&LspError::ServerNotInitialized("early".into())),
+            ErrorCode::ServerNotInitialized as i32,
+        );
+        assert_eq!(
+            code(&LspError::RequestNotSupported("x/y".into())),
+            ErrorCode::MethodNotFound as i32,
+        );
+        assert_eq!(
+            code(&LspError::NotificationNotSupported("x/y".into())),
+            ErrorCode::MethodNotFound as i32,
+        );
+    }
+
+    #[test]
+    fn resource_lookup_failures_are_request_failed() {
+        use lsp_server::ErrorCode;
+        let root = vfs::VfsPath::new(vfs::MemoryFS::new());
+        for e in [
+            LspError::ProjectRootNotFound(root.clone(), "not a project".into()),
+            LspError::ProjectNotFound(root.clone()),
+            LspError::FileNotFound(root),
+            LspError::NoProjectsFound,
+        ] {
+            assert_eq!(code(&e), ErrorCode::RequestFailed as i32, "{e}");
+        }
+    }
+
+    #[test]
+    fn legacy_unknown_code_is_never_emitted() {
+        let root = vfs::VfsPath::new(vfs::MemoryFS::new());
+        let all = [
+            LspError::NotificationNotSupported("m".into()),
+            LspError::RequestNotSupported("m".into()),
+            LspError::RequestSerializeError(serde_json::from_str::<()>("x").unwrap_err()),
+            LspError::Runtime(crate::RuntimeError::Other("x".into())),
+            LspError::ClientClosed,
+            LspError::ProjectRootNotFound(root.clone(), "x".into()),
+            LspError::ProjectNotFound(root.clone()),
+            // The legacy constructor itself now serializes as InternalError.
+            LspError::UnknownErrorCode("legacy".into()),
+            LspError::InvalidCommandArguments {
+                command: "c".into(),
+                message: "m".into(),
+            },
+            LspError::FileNotFound(root),
+            LspError::InvalidPath {
+                path: std::path::PathBuf::from("/x"),
+                message: "m".into(),
+            },
+            LspError::NoProjectsFound,
+            LspError::ContentModified("m".into()),
+            LspError::RequestFailed("m".into()),
+            LspError::Internal("m".into()),
+            LspError::InvalidParams("m".into()),
+            LspError::ServerNotInitialized("m".into()),
+        ];
+        for e in &all {
+            assert_ne!(code(e), LEGACY_UNKNOWN, "{e} must not emit -32001");
+        }
+        assert_eq!(
+            code(&LspError::UnknownErrorCode("legacy".into())),
+            lsp_server::ErrorCode::InternalError as i32,
+        );
+    }
+}

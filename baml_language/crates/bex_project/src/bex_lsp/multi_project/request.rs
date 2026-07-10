@@ -1,3 +1,14 @@
+//! LSP request handlers.
+//!
+//! Every handler follows the same discipline (design C1 + Phase 0C):
+//!
+//! - Database access is a *bounded* read ([`super::read_for_request`]):
+//!   busy projects produce typed `ContentModified`/`RequestFailed` errors
+//!   instead of stalling the loop or bursting `-32001`.
+//! - Positions and ranges cross the LSP boundary through one
+//!   [`PositionCodec`] built with the encoding negotiated during
+//!   `initialize`. Compiler APIs stay byte-based.
+
 use lsp_types::{
     CodeLens, CodeLensOptions, CompletionOptions, HoverProviderCapability, InlayHintOptions,
     InlayHintServerCapabilities, SaveOptions, SemanticTokensFullOptions, SemanticTokensLegend,
@@ -7,15 +18,23 @@ use lsp_types::{
     WorkspaceServerCapabilities,
 };
 
-use super::{BexMulitProject, LspError, WithDiagnostics, commands, wasm_helpers};
-use crate::bex_lsp::{multi_project::commands::BexLspCommand, protocol, request::BexLspRequest};
+use super::{BexMulitProject, LspError, commands, read_for_request, wasm_helpers};
+use crate::bex_lsp::{
+    multi_project::commands::BexLspCommand,
+    position_codec::{PositionCodec, PositionEncoding},
+    protocol,
+    request::BexLspRequest,
+};
 
 /// Server capabilities advertised during the LSP `initialize` handshake.
 ///
 /// Defined here so that both the native stdio server and the WASM bridge
 /// share a single source of truth for what the LSP implementation supports.
-pub(super) fn server_capabilities() -> ServerCapabilities {
+/// `encoding` is the negotiated position encoding (C1) — advertising it is
+/// mandatory whenever the client offered `positionEncodings`.
+pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilities {
     ServerCapabilities {
+        position_encoding: Some(encoding.to_lsp_kind()),
         // Diagnostics are delivered via push (`publishDiagnostics`) only.
         // Pull diagnostics (`textDocument/diagnostic`) is disabled to avoid
         // the editor showing each diagnostic twice.
@@ -91,9 +110,9 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
     }
 }
 
-fn initialize_result() -> lsp_types::InitializeResult {
+fn initialize_result(encoding: PositionEncoding) -> lsp_types::InitializeResult {
     lsp_types::InitializeResult {
-        capabilities: server_capabilities(),
+        capabilities: server_capabilities(encoding),
         server_info: Some(lsp_types::ServerInfo {
             name: "baml-lsp".to_string(),
             version: Some(baml_version::CANONICAL_VERSION.to_string()),
@@ -129,6 +148,10 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("initialize"),
     ) -> Result<lsp_request_result!("initialize"), LspError> {
+        // Negotiate the position encoding first (C1): UTF-8 when offered,
+        // UTF-16 baseline otherwise. Everything after this reads the cell.
+        let encoding = self.negotiate_encoding(&params.capabilities);
+
         let mut roots = Vec::new();
 
         if let Some(folders) = &params.workspace_folders {
@@ -149,32 +172,33 @@ impl BexLspRequest for BexMulitProject {
         }
 
         tracing::info!(
-            "Workspace roots: {:?}",
-            roots.iter().map(vfs::VfsPath::as_str).collect::<Vec<_>>()
+            "Workspace roots: {:?}; position encoding: {:?}",
+            roots.iter().map(vfs::VfsPath::as_str).collect::<Vec<_>>(),
+            encoding,
         );
 
         *self.workspace_roots.lock().unwrap() = roots;
 
-        Ok(initialize_result())
+        Ok(initialize_result(encoding))
     }
 
     fn on_request_text_document_code_lens(
         &self,
         params: lsp_request_params!("textDocument/codeLens"),
     ) -> Result<lsp_request_result!("textDocument/codeLens"), LspError> {
+        let encoding = self.encoding_for_request()?;
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path.clone())?;
 
         let lenses = {
-            let project = project_handle.project.try_lock_db()?;
-            let lsp_db = project.db();
+            let guard = read_for_request(&project_handle.project)?;
+            let lsp_db = guard.db();
             let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
                 return Ok(None);
             };
             let text = source_file.text(lsp_db);
-            let line_starts = compute_line_starts(text);
-            let encoding = self.position_encoding;
+            let codec = PositionCodec::new(text, encoding);
 
             // Use compiler2 file_actions — finds functions + tests via
             // file_symbol_contributions (Salsa-cached, no type inference needed).
@@ -183,12 +207,7 @@ impl BexLspRequest for BexMulitProject {
             file_actions
                 .into_iter()
                 .map(|action| {
-                    let range = super::diagnostics::span_to_lsp_range(
-                        action.name_span,
-                        text,
-                        &line_starts,
-                        encoding,
-                    );
+                    let range = codec.byte_range_to_lsp(action.name_span);
                     let command = match action.kind {
                         baml_lsp2_actions::FileActionKind::RunInPlayground => {
                             super::commands::OpenBamlPanel {
@@ -237,46 +256,31 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/inlayHint"),
     ) -> Result<lsp_request_result!("textDocument/inlayHint"), LspError> {
+        let encoding = self.encoding_for_request()?;
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path)?;
 
-        let project = project_handle.project.try_lock_db()?;
-        let lsp_db = project.db();
+        let guard = read_for_request(&project_handle.project)?;
+        let lsp_db = guard.db();
         let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
             return Ok(None);
         };
 
         let text = source_file.text(lsp_db);
+        let codec = PositionCodec::new(text, encoding);
+        let range = codec.range_to_byte_range(params.range)?;
 
-        // Compute the byte-offset bounds of the requested range.
-        let range_start = text_size::TextSize::from(
-            u32::try_from(baml_project::position::lsp_position_to_offset(
-                text,
-                &params.range.start,
-            ))
-            .unwrap_or(0),
-        );
-        let range_end = text_size::TextSize::from(
-            u32::try_from(baml_project::position::lsp_position_to_offset(
-                text,
-                &params.range.end,
-            ))
-            .unwrap_or(u32::MAX),
-        );
-
-        // Compute inline annotations using compiler2 (type hints + param hints).
-        let hints = baml_lsp2_actions::annotations(lsp_db, source_file);
+        // Inline annotations are Salsa-memoized per file revision (B1); the
+        // handler only converts the cached hints into the requested range.
+        let hints = baml_lsp2_actions::file_annotations(lsp_db, source_file);
 
         let lsp_hints: Vec<lsp_types::InlayHint> = hints
-            .into_iter()
-            .filter(|h| h.offset >= range_start && h.offset < range_end)
+            .iter()
+            .filter(|h| h.offset >= range.start() && h.offset < range.end())
             .map(|h| lsp_types::InlayHint {
-                position: baml_project::position::offset_to_lsp_position(
-                    text,
-                    usize::from(h.offset),
-                ),
-                label: lsp_types::InlayHintLabel::String(h.label),
+                position: codec.offset_to_position(h.offset.into()),
+                label: lsp_types::InlayHintLabel::String(h.label.clone()),
                 kind: Some(match h.kind {
                     baml_lsp2_actions::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
                     baml_lsp2_actions::AnnotationKind::Parameter => {
@@ -302,53 +306,48 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/semanticTokens/full"),
     ) -> Result<lsp_request_result!("textDocument/semanticTokens/full"), LspError> {
+        let encoding = self.encoding_for_request()?;
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path)?;
 
-        let project = project_handle.project.try_lock_db()?;
-        let lsp_db = project.db();
+        let guard = read_for_request(&project_handle.project)?;
+        let lsp_db = guard.db();
         let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
             return Ok(None);
         };
         let text = source_file.text(lsp_db);
+        let codec = PositionCodec::new(text, encoding);
 
-        // Get the semantic tokens using compiler2 (hybrid CST + type-aware).
-        // Always returns tokens in document order.
+        // Semantic tokens are Salsa-memoized per file revision (B1); the
+        // handler only delta-encodes the cached classification.
         let tokens = baml_lsp2_actions::semantic_tokens(lsp_db, source_file);
 
-        // Convert to LSP delta-encoded format
-        let line_index = baml_project::position::LineIndex::new(text);
+        // Delta-encode in the negotiated encoding. Multiline tokens are split
+        // into same-line segments — VS Code does not advertise the multiline
+        // token capability, and splitting is valid for every client (C1).
         let mut lsp_tokens = Vec::with_capacity(tokens.len());
         let mut prev_line = 0u32;
         let mut prev_start = 0u32;
 
-        for token in &tokens {
-            let start_offset: u32 = token.range.start().into();
-            let end_offset: u32 = token.range.end().into();
-            let length = end_offset - start_offset;
-
-            let Some(pos) = line_index.offset_to_position(start_offset) else {
-                continue;
-            };
-
-            let delta_line = pos.line - prev_line;
-            let delta_start = if delta_line == 0 {
-                pos.character - prev_start
-            } else {
-                pos.character
-            };
-
-            lsp_tokens.push(lsp_types::SemanticToken {
-                delta_line,
-                delta_start,
-                length,
-                token_type: token.token_type.legend_index(),
-                token_modifiers_bitset: 0,
-            });
-
-            prev_line = pos.line;
-            prev_start = pos.character;
+        for token in tokens {
+            for segment in codec.token_segments(token.range) {
+                let delta_line = segment.line - prev_line;
+                let delta_start = if delta_line == 0 {
+                    segment.start_character - prev_start
+                } else {
+                    segment.start_character
+                };
+                lsp_tokens.push(lsp_types::SemanticToken {
+                    delta_line,
+                    delta_start,
+                    length: segment.length,
+                    token_type: token.token_type.legend_index(),
+                    token_modifiers_bitset: 0,
+                });
+                prev_line = segment.line;
+                prev_start = segment.start_character;
+            }
         }
 
         Ok(Some(lsp_types::SemanticTokensResult::Tokens(
@@ -363,34 +362,20 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/codeAction"),
     ) -> Result<lsp_request_result!("textDocument/codeAction"), LspError> {
+        let encoding = self.encoding_for_request()?;
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path.clone())?;
 
         let actions: Vec<lsp_types::CodeActionOrCommand> = {
-            let project = project_handle.project.try_lock_db()?;
-            let lsp_db = project.db();
+            let guard = read_for_request(&project_handle.project)?;
+            let lsp_db = guard.db();
             let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
                 return Ok(None);
             };
             let text = source_file.text(lsp_db);
-
-            // Convert the LSP range to a byte range for fixes_at.
-            let start_offset = text_size::TextSize::from(
-                u32::try_from(baml_project::position::lsp_position_to_offset(
-                    text,
-                    &params.range.start,
-                ))
-                .unwrap_or(0),
-            );
-            let end_offset = text_size::TextSize::from(
-                u32::try_from(baml_project::position::lsp_position_to_offset(
-                    text,
-                    &params.range.end,
-                ))
-                .unwrap_or(u32::MAX),
-            );
-            let range = text_size::TextRange::new(start_offset, end_offset);
+            let codec = PositionCodec::new(text, encoding);
+            let range = codec.range_to_byte_range(params.range)?;
 
             // Use compiler2 fixes_at — currently returns "Open in Playground".
             let fixes = baml_lsp2_actions::fixes_at(lsp_db, source_file, range);
@@ -493,9 +478,7 @@ impl BexLspRequest for BexMulitProject {
         // Use compiler2 completions_at — context-aware completions from CST + HIR/TIR.
         let completions = self.compute_on_position(
             &params.text_document_position,
-            |db, source_file, _project, offset| {
-                baml_lsp2_actions::completions_at(db, source_file, offset)
-            },
+            |db, source_file, offset, _| baml_lsp2_actions::completions_at(db, source_file, offset),
         )?;
 
         // Convert domain Completion → LSP CompletionItem.
@@ -555,7 +538,7 @@ impl BexLspRequest for BexMulitProject {
     ) -> Result<lsp_request_result!("textDocument/hover"), LspError> {
         let type_info = self.compute_on_position(
             &params.text_document_position_params,
-            |db, source_file, _project, offset| baml_lsp2_actions::type_at(db, source_file, offset),
+            |db, source_file, offset, _| baml_lsp2_actions::type_at(db, source_file, offset),
         )?;
 
         match type_info {
@@ -577,22 +560,17 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/definition"),
     ) -> Result<lsp_request_result!("textDocument/definition"), LspError> {
-        let position_encoding = self.position_encoding;
         self.compute_on_position(
             &params.text_document_position_params,
-            |db, source_file, _, offset| {
+            |db, source_file, offset, encoding| {
                 let loc = baml_lsp2_actions::definition_at(db, source_file, offset)?;
                 let file_id = loc.file.file_id(db);
                 let path = db.file_id_to_path(file_id)?;
                 let target_uri = wasm_helpers::from_file_path(path).ok()?;
-                let target_text = loc.file.text(db);
-                let line_starts = compute_line_starts(target_text);
-                let range = super::diagnostics::span_to_lsp_range(
-                    loc.range,
-                    target_text,
-                    &line_starts,
-                    position_encoding,
-                );
+                // The definition may live in another file: convert with the
+                // target file's codec, not the request file's.
+                let target_codec = PositionCodec::new(loc.file.text(db), encoding);
+                let range = target_codec.byte_range_to_lsp(loc.range);
                 Some(Ok(lsp_types::GotoDefinitionResponse::Scalar(
                     lsp_types::Location {
                         uri: target_uri,
@@ -608,10 +586,9 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/references"),
     ) -> Result<lsp_request_result!("textDocument/references"), LspError> {
-        let position_encoding = self.position_encoding;
         let references: Vec<lsp_types::Location> = self.compute_on_position(
             &params.text_document_position,
-            |db, source_file, _, offset| {
+            |db, source_file, offset, encoding| {
                 // Use compiler2 usages_at — returns Vec<Location> (file + TextRange).
                 let usages = baml_lsp2_actions::usages_at(db, source_file, offset);
 
@@ -621,14 +598,8 @@ impl BexLspRequest for BexMulitProject {
                         let file_id = loc.file.file_id(db);
                         let path = db.file_id_to_path(file_id)?;
                         let target_uri = wasm_helpers::from_file_path(path).ok()?;
-                        let target_text = loc.file.text(db);
-                        let line_starts = compute_line_starts(target_text);
-                        let range = super::diagnostics::span_to_lsp_range(
-                            loc.range,
-                            target_text,
-                            &line_starts,
-                            position_encoding,
-                        );
+                        let target_codec = PositionCodec::new(loc.file.text(db), encoding);
+                        let range = target_codec.byte_range_to_lsp(loc.range);
                         Some(lsp_types::Location {
                             uri: target_uri,
                             range,
@@ -649,23 +620,32 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/diagnostic"),
     ) -> Result<lsp_request_result!("textDocument/diagnostic"), LspError> {
+        // Pull diagnostics is not advertised, but answer correctly for
+        // clients that ask anyway: same candidate + codec conversion as the
+        // push path.
+        let encoding = self.encoding_for_request()?;
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path)?;
 
-        let mut diagnostics = project_handle
-            .project
-            .diagnostics_by_file(self.position_encoding);
-        let diagnostics = diagnostics
-            .remove(std::path::Path::new(path.as_str()))
+        let candidate = {
+            let guard = read_for_request(&project_handle.project)?;
+            crate::project::collect_diagnostic_candidate(&guard)
+        };
+        let documents = super::diagnostics::candidate_to_publishable(&candidate, encoding);
+        let items = documents
+            .into_iter()
+            .find(|doc| doc.path.as_path() == std::path::Path::new(path.as_str()))
+            .map(|doc| doc.diagnostics)
             .unwrap_or_default();
+
         Ok(lsp_types::DocumentDiagnosticReportResult::Report(
             lsp_types::DocumentDiagnosticReport::Full(
                 lsp_types::RelatedFullDocumentDiagnosticReport {
                     related_documents: None,
                     full_document_diagnostic_report: lsp_types::FullDocumentDiagnosticReport {
                         result_id: None,
-                        items: diagnostics,
+                        items,
                     },
                 },
             ),
@@ -676,15 +656,22 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("workspace/symbol"),
     ) -> Result<lsp_request_result!("workspace/symbol"), LspError> {
+        let encoding = self.encoding_for_request()?;
         let query = &params.query;
         let mut symbols = Vec::new();
 
-        let projects = self.projects.lock().unwrap();
-        for project_handle in projects.values() {
-            let Ok(db_guard) = project_handle.project.try_lock_db() else {
+        // Fan-out across every project: skip busy projects instead of
+        // serializing bounded waits (a symbol search should not stack
+        // N seconds of deadlines).
+        let projects: Vec<_> = {
+            let projects = self.projects.lock().unwrap();
+            projects.values().cloned().collect()
+        };
+        for project_handle in projects {
+            let Ok(Some(guard)) = project_handle.project.read_source_nowait() else {
                 continue;
             };
-            let lsp_db = db_guard.db();
+            let lsp_db = guard.db();
 
             // Use compiler2 search_symbols — iterates all user source files and
             // filters by the query string. file_outline is Salsa-cached per file,
@@ -700,13 +687,8 @@ impl BexLspRequest for BexMulitProject {
                 let Ok(uri) = wasm_helpers::from_file_path(path) else {
                     continue;
                 };
-                let text = sym.file.text(lsp_db);
-                let range = super::diagnostics::span_to_lsp_range(
-                    sym.name_span,
-                    text,
-                    &compute_line_starts(text),
-                    super::diagnostics::PositionEncoding::UTF16,
-                );
+                let codec = PositionCodec::new(sym.file.text(lsp_db), encoding);
+                let range = codec.byte_range_to_lsp(sym.name_span);
 
                 symbols.push(lsp_types::WorkspaceSymbol {
                     name: sym.name,
@@ -732,12 +714,9 @@ impl BexLspRequest for BexMulitProject {
     ) -> Result<lsp_request_result!("textDocument/documentSymbol"), LspError> {
         fn convert_outline_item(
             item: &baml_lsp2_actions::OutlineItem,
-            text: &str,
-            line_starts: &[u32],
-            encoding: super::diagnostics::PositionEncoding,
+            codec: &PositionCodec<'_>,
         ) -> lsp_types::DocumentSymbol {
-            let range =
-                super::diagnostics::span_to_lsp_range(item.name_span, text, line_starts, encoding);
+            let range = codec.byte_range_to_lsp(item.name_span);
 
             let children = if item.children.is_empty() {
                 None
@@ -745,7 +724,7 @@ impl BexLspRequest for BexMulitProject {
                 Some(
                     item.children
                         .iter()
-                        .map(|child| convert_outline_item(child, text, line_starts, encoding))
+                        .map(|child| convert_outline_item(child, codec))
                         .collect(),
                 )
             };
@@ -763,24 +742,23 @@ impl BexLspRequest for BexMulitProject {
             }
         }
 
+        let encoding = self.encoding_for_request()?;
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path)?;
 
-        let project = project_handle.project.try_lock_db()?;
-        let lsp_db = project.db();
+        let guard = read_for_request(&project_handle.project)?;
+        let lsp_db = guard.db();
         let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
             return Ok(None);
         };
 
-        let text = source_file.text(lsp_db);
-        let line_starts = compute_line_starts(text);
-        let encoding = self.position_encoding;
+        let codec = PositionCodec::new(source_file.text(lsp_db), encoding);
         let outline = baml_lsp2_actions::file_outline(lsp_db, source_file);
 
         let symbols: Vec<_> = outline
             .iter()
-            .map(|item| convert_outline_item(item, text, &line_starts, encoding))
+            .map(|item| convert_outline_item(item, &codec))
             .collect();
 
         if symbols.is_empty() {
@@ -794,16 +772,18 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/formatting"),
     ) -> Result<lsp_request_result!("textDocument/formatting"), LspError> {
+        let encoding = self.encoding_for_request()?;
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path)?;
         // Get current file text from the project database.
         let text = {
-            let db = project_handle.project.try_lock_db()?;
-            let Some(source_file) = db.get_file(std::path::Path::new(path.as_str())) else {
+            let guard = read_for_request(&project_handle.project)?;
+            let lsp_db = guard.db();
+            let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
                 return Err(LspError::FileNotFound(path));
             };
-            source_file.text(&*db).clone()
+            source_file.text(lsp_db).clone()
         };
 
         // Map LSP FormattingOptions → baml_fmt FormatOptions.
@@ -827,26 +807,17 @@ impl BexLspRequest for BexMulitProject {
             return Ok(None);
         }
 
-        // Compute end position of the original text for the replacement range.
-        let line_count = u32::try_from(text.lines().count()).unwrap_or(u32::MAX);
-        let last_line_len =
-            u32::try_from(text.lines().last().map_or(0, str::len)).unwrap_or(u32::MAX);
-        let (end_line, end_char) = if text.ends_with('\n') {
-            (line_count, 0)
-        } else {
-            (line_count.saturating_sub(1), last_line_len)
-        };
-
+        // Replace the whole document: [0:0, document end) in the negotiated
+        // encoding (the old line-count arithmetic miscounted `\r\n` and
+        // non-ASCII last lines).
+        let codec = PositionCodec::new(&text, encoding);
         Ok(Some(vec![lsp_types::TextEdit {
             range: lsp_types::Range {
                 start: lsp_types::Position {
                     line: 0,
                     character: 0,
                 },
-                end: lsp_types::Position {
-                    line: end_line,
-                    character: end_char,
-                },
+                end: codec.document_end(),
             },
             new_text: formatted,
         }]))
@@ -881,45 +852,39 @@ fn definition_kind_to_lsp_symbol_kind(
     }
 }
 
-/// Alias for the `compute_line_starts` helper from the diagnostics module.
-#[inline]
-fn compute_line_starts(source: &str) -> Vec<u32> {
-    super::diagnostics::compute_line_starts(source)
-}
-
 impl BexMulitProject {
+    /// Shared scaffolding for position-based requests: bounded read, file
+    /// lookup, and incoming position conversion through the negotiated codec.
+    ///
+    /// The closure receives the database, the file, the byte offset of the
+    /// request position, and the negotiated encoding (for converting result
+    /// spans that may live in *other* files).
     fn compute_on_position<T>(
         &self,
         params: &lsp_types::TextDocumentPositionParams,
         op: impl FnOnce(
             &baml_project::ProjectDatabase,
             baml_db::SourceFile,
-            baml_workspace::Project,
             text_size::TextSize,
+            PositionEncoding,
         ) -> T,
     ) -> Result<T, LspError> {
+        let encoding = self.encoding_for_request()?;
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
         let project_handle = self.get_or_create_project(root_path)?;
         let position = params.position;
 
-        let project = project_handle.project.try_lock_db()?;
-        let lsp_db = project.db();
-        let Some(project) = project.project() else {
-            return Err(LspError::ProjectNotFound(path));
-        };
+        let guard = read_for_request(&project_handle.project)?;
+        let lsp_db = guard.db();
         let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
             return Err(LspError::FileNotFound(path));
         };
         let text = source_file.text(lsp_db);
-        let offset = text_size::TextSize::from(
-            u32::try_from(baml_project::position::lsp_position_to_offset(
-                text, &position,
-            ))
-            .unwrap_or(0),
-        );
+        let codec = PositionCodec::new(text, encoding);
+        let offset = codec.position_to_offset(position)?;
 
-        Ok(op(lsp_db, source_file, project, offset))
+        Ok(op(lsp_db, source_file, offset, encoding))
     }
 }
 
@@ -929,7 +894,7 @@ mod tests {
 
     #[test]
     fn initialize_metadata_matches_protocol_contract() {
-        let result = initialize_result();
+        let result = initialize_result(PositionEncoding::UTF16);
         let experimental = result
             .capabilities
             .experimental
@@ -955,6 +920,18 @@ mod tests {
         assert_eq!(
             result.server_info.and_then(|info| info.version),
             Some(baml_version::CANONICAL_VERSION.to_string())
+        );
+    }
+
+    #[test]
+    fn capabilities_advertise_negotiated_encoding() {
+        assert_eq!(
+            server_capabilities(PositionEncoding::UTF8).position_encoding,
+            Some(lsp_types::PositionEncodingKind::UTF8)
+        );
+        assert_eq!(
+            server_capabilities(PositionEncoding::UTF16).position_encoding,
+            Some(lsp_types::PositionEncodingKind::UTF16)
         );
     }
 }
