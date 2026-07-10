@@ -83,8 +83,8 @@ function classMarkerOf(value: unknown): string | undefined {
   return undefined;
 }
 
-/** Marker-only class instance — what nested class refs seed; fields fill in
- *  as the user edits them (`ClassSection` injects the marker on every edit). */
+/** Marker-only class instance — used as the finite cut point for a required
+ *  recursive class path that cannot be populated to arbitrary depth. */
 export function classMarkerValue(name: string): Record<string, unknown> {
   return { $baml: { type: name } };
 }
@@ -130,26 +130,25 @@ export function resolveRef(name: string, lookup: TypeLookup): ResolvedRef {
 /** A sensible zero value for a schema node, used to seed new list rows,
  *  freshly-enabled optionals, union-variant switches, and empty args.
  *
- *  Seeding depth rule: a class ref expands **one level** — marker plus
- *  defaults for its immediate fields, where a nested class ref seeds
- *  marker-only. Deeper levels fill in as the user opens sections and edits
- *  fields (`ClassSection` injects the marker on edit). Eager deep seeding
- *  would reintroduce the payload blow-up on DAG-shaped class graphs
- *  client-side. */
+ *  Required acyclic class refs are populated recursively so every default a
+ *  typed widget displays is also present in the serialized value. A class ref
+ *  already active on the current path becomes marker-only, which is the
+ *  finite cut point for an irreducibly required recursive type. Optional and
+ *  container branches terminate naturally at null/empty values. */
 export function defaultValueForSchema(
   schema: FieldSchema,
   lookup: TypeLookup,
 ): unknown {
-  return defaultValue(schema, lookup, 0, new Set());
+  return defaultValue(schema, lookup, new Set(), new Set());
 }
 
 function defaultValue(
   schema: FieldSchema,
   lookup: TypeLookup,
-  classDepth: number,
+  classPath: Set<string>,
   /** Ref names already hopped through at this level (alias chains); guards
    *  pathological pure-ref cycles the extractor shouldn't emit. */
-  seen: Set<string>,
+  aliasPath: Set<string>,
 ): unknown {
   switch (schema.type) {
     case 'string':
@@ -167,7 +166,7 @@ function defaultValue(
     case 'enumVariant':
       return enumValue(schema.name, schema.value);
     case 'ref': {
-      if (seen.has(schema.name)) return null;
+      if (aliasPath.has(schema.name)) return null;
       const resolved = resolveRef(schema.name, lookup);
       if (resolved === undefined) return null;
       if (resolved.kind === 'enum') {
@@ -176,17 +175,21 @@ function defaultValue(
           : null;
       }
       if (resolved.kind === 'schema') {
-        const next = new Set(seen);
+        const next = new Set(aliasPath);
         next.add(schema.name);
-        return defaultValue(resolved.schema, lookup, classDepth, next);
+        return defaultValue(resolved.schema, lookup, classPath, next);
       }
-      if (classDepth >= 1) return classMarkerValue(resolved.name);
+      if (classPath.has(resolved.name)) {
+        return classMarkerValue(resolved.name);
+      }
+      const nextClassPath = new Set(classPath);
+      nextClassPath.add(resolved.name);
       const obj = classMarkerValue(resolved.name);
       for (const field of resolved.fields) {
         obj[field.name] = defaultValue(
           field.schema,
           lookup,
-          classDepth + 1,
+          nextClassPath,
           new Set(),
         );
       }
@@ -200,7 +203,7 @@ function defaultValue(
       return null;
     case 'union':
       return schema.variants.length > 0
-        ? defaultValue(schema.variants[0], lookup, classDepth, seen)
+        ? defaultValue(schema.variants[0], lookup, classPath, aliasPath)
         : null;
     case 'media':
     case 'unsupported':
@@ -213,8 +216,8 @@ function defaultValue(
 }
 
 /** Loose structural check: does `value` plausibly inhabit `schema`? Used to
- *  pick the active union variant and by hydration normalization
- *  ([`normalizeArgs`]) to route parsed raw JSON to the right variant.
+ *  pick the active union variant and by schema reconciliation
+ *  ([`reconcileArgs`]) to route parsed raw JSON to the right variant.
  *  Marker-carrying values are matched by name; plain values by JS shape.
  *  Raw-JSON nodes (unsupported/media/dangling refs/unknown tags) admit
  *  anything. */
@@ -364,43 +367,59 @@ export function isRawJsonSchema(
 }
 
 /**
- * Rewrite wire-untyped values into their typed marker forms so what the
- * widgets display is what actually encodes: bare enum strings (hand-edited
- * raw JSON, pre-marker session memory) become `$baml` enum markers, and
- * markerless class objects get the class marker plus defaults for missing
- * fields. Marker-carrying objects are left structurally alone (only their
- * present fields are normalized) — hydration must not grow already-typed
- * values. Returns the input reference unchanged when nothing needed fixing,
- * so callers can cheaply detect a no-op.
+ * Reconcile serialized args with the current function schema so the values
+ * rendered by typed widgets are exactly the values that will be encoded.
+ *
+ * Compatible user values and surplus raw-JSON keys are preserved. Missing
+ * required parameters/fields receive schema defaults, incompatible values are
+ * replaced with defaults, and typed class/enum markers are normalized.
+ * Defaulted function parameters remain absent so the runtime evaluates their
+ * declared BAML defaults. Returns the input reference when no change is
+ * required, allowing callers to avoid redundant state writes.
  */
-export function normalizeArgs(
+export function reconcileArgs(
   args: Record<string, unknown>,
   params: ParamSchema[],
   lookup: TypeLookup,
 ): Record<string, unknown> {
-  const schemaByName = new Map(params.map((p) => [p.name, p.schema]));
-  return mapObject(args, (key, value) => {
-    const schema = schemaByName.get(key);
-    return schema === undefined
+  const paramsByName = new Map(params.map((param) => [param.name, param]));
+  let reconciled = mapObject(args, (key, value) => {
+    const param = paramsByName.get(key);
+    return param === undefined
       ? value
-      : normalize(value, schema, lookup, new Set());
+      : reconcileValue(value, param.schema, lookup, new Set(), new Set());
   });
+
+  for (const param of params) {
+    if (!(param.name in reconciled) && !param.hasDefault) {
+      if (reconciled === args) reconciled = { ...args };
+      reconciled[param.name] = defaultValueForSchema(param.schema, lookup);
+    }
+  }
+
+  return reconciled;
 }
 
-function normalize(
+function reconcileValue(
   value: unknown,
   schema: FieldSchema,
   lookup: TypeLookup,
   /** Ref names hopped through without descending into a child value. */
-  seen: Set<string>,
+  aliasPath: Set<string>,
+  /** Class names active on the current value path. */
+  classPath: Set<string>,
 ): unknown {
+  if (!valueMatchesSchema(value, schema, lookup)) {
+    return defaultValue(schema, lookup, classPath, aliasPath);
+  }
+
   switch (schema.type) {
     case 'enumVariant':
       return typeof value === 'string' && value === schema.value
         ? enumValue(schema.name, value)
         : value;
     case 'ref': {
-      if (seen.has(schema.name)) return value;
+      if (aliasPath.has(schema.name)) return value;
       const resolved = resolveRef(schema.name, lookup);
       if (resolved === undefined) return value;
       if (resolved.kind === 'enum') {
@@ -409,60 +428,95 @@ function normalize(
           : value;
       }
       if (resolved.kind === 'schema') {
-        const next = new Set(seen);
+        const next = new Set(aliasPath);
         next.add(schema.name);
-        return normalize(value, resolved.schema, lookup, next);
+        return reconcileValue(
+          value,
+          resolved.schema,
+          lookup,
+          next,
+          classPath,
+        );
       }
       if (!isPlainObject(value) || isEnumMarkerValue(value)) return value;
+      const marker = classMarkerOf(value);
+      const recursiveClass = classPath.has(resolved.name);
+      const nextClassPath = new Set(classPath);
+      nextClassPath.add(resolved.name);
       const fieldSchemas = new Map(
         resolved.fields.map((f) => [f.name, f.schema]),
       );
-      const normalized = mapObject(value, (key, fieldValue) => {
+      let reconciled = mapObject(value, (key, fieldValue) => {
         const fieldSchema = fieldSchemas.get(key);
         return fieldSchema === undefined
           ? fieldValue
-          : normalize(fieldValue, fieldSchema, lookup, new Set());
+          : reconcileValue(
+              fieldValue,
+              fieldSchema,
+              lookup,
+              new Set(),
+              nextClassPath,
+            );
       });
-      if (classMarkerOf(value) !== undefined) return normalized;
-      // Marker spread last: a junk non-marker `$baml` key from raw editing
-      // must be overwritten, not preserved over the injected marker.
-      const withMarker: Record<string, unknown> = {
-        ...normalized,
-        ...classMarkerValue(resolved.name),
-      };
-      for (const field of resolved.fields) {
-        if (!(field.name in withMarker)) {
-          // Same one-level depth rule as seeding: these fields sit inside a
-          // class, so nested class refs default to marker-only.
-          withMarker[field.name] = defaultValue(field.schema, lookup, 1, new Set());
+      if (marker !== resolved.name) {
+        // Marker spread last: a junk non-marker `$baml` key from raw editing
+        // must be overwritten, not preserved over the injected marker.
+        reconciled = {
+          ...reconciled,
+          ...classMarkerValue(resolved.name),
+        };
+      }
+      if (!recursiveClass) {
+        for (const field of resolved.fields) {
+          if (!(field.name in reconciled)) {
+            if (reconciled === value) reconciled = { ...value };
+            reconciled[field.name] = defaultValue(
+              field.schema,
+              lookup,
+              nextClassPath,
+              new Set(),
+            );
+          }
         }
       }
-      return withMarker;
+      return reconciled;
     }
     case 'list': {
       if (!Array.isArray(value)) return value;
       const items = value.map((item) =>
-        normalize(item, schema.item, lookup, new Set()),
+        reconcileValue(item, schema.item, lookup, new Set(), classPath),
       );
       return items.some((item, i) => item !== value[i]) ? items : value;
     }
     case 'map': {
       if (!valueMatchesSchema(value, schema, lookup)) return value;
       return mapObject(value as Record<string, unknown>, (_key, entry) =>
-        normalize(entry, schema.value, lookup, new Set()),
+        reconcileValue(entry, schema.value, lookup, new Set(), classPath),
       );
     }
     case 'optional':
       return value === null
         ? value
-        : normalize(value, schema.inner, lookup, seen);
+        : reconcileValue(
+            value,
+            schema.inner,
+            lookup,
+            aliasPath,
+            classPath,
+          );
     case 'union': {
       const active = schema.variants.findIndex((v) =>
         valueMatchesSchema(value, v, lookup),
       );
       return active === -1
-        ? value
-        : normalize(value, schema.variants[active], lookup, seen);
+        ? defaultValue(schema, lookup, classPath, aliasPath)
+        : reconcileValue(
+            value,
+            schema.variants[active],
+            lookup,
+            aliasPath,
+            classPath,
+          );
     }
     default:
       return value;
