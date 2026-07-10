@@ -35,18 +35,20 @@ import { ErrorDisplay } from './components/ErrorDisplay';
 import { MetadataBadges } from './components/MetadataBadges';
 import { PromptStats } from './components/PromptStats';
 import type { RuntimePort } from './runtime-port';
-import type {
-  ControlFlowGraph,
-  CursorContext,
-  DiagnosticEntry,
-  FetchLogEntry,
-  FunctionInfo,
-  ProjectUpdate,
-  Run,
-  BoundaryId,
-  RunStatus,
-  SourceNavigationTarget,
-  WorkerOutMessage,
+import {
+  previewTestKey,
+  type ControlFlowGraph,
+  type CursorContext,
+  type DiagnosticEntry,
+  type FetchLogEntry,
+  type FunctionInfo,
+  type ProjectUpdate,
+  type TestInfo,
+  type Run,
+  type BoundaryId,
+  type RunStatus,
+  type SourceNavigationTarget,
+  type WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
 import { ArgsForm } from './ArgsForm';
@@ -755,6 +757,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     useState<PendingTestTarget | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
+  const [selectedPreviewTestKey, setSelectedPreviewTestKey] = useState<
+    string | null
+  >(null);
   const [showInternalFunctions, setShowInternalFunctions] = useState(false);
   const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
   // Args editor mode. 'form' renders the schema-driven ArgsForm when the
@@ -1154,6 +1159,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     // that owns the call so the top-level workflow remains the primary view.
     if (isCallSite) {
       if (sourceExprFunctionName !== currentFn) {
+        setSelectedPreviewTestKey(null);
         setSelectedFn(sourceExprFunctionName);
         setViewingCollection(false);
         setViewingTestRun(false);
@@ -1185,6 +1191,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       if (root !== currentFn) {
         pendingHighlightRef.current =
           target != null ? { fn: root, nodeId: target } : null;
+        setSelectedPreviewTestKey(null);
         setSelectedFn(root);
         setViewingCollection(false);
         setViewingTestRun(false);
@@ -1201,6 +1208,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     }
     // Not part of any workflow — show the function's own graph.
     if (ctx.functionName !== currentFn) {
+      setSelectedPreviewTestKey(null);
       setSelectedFn(ctx.functionName);
       setViewingCollection(false);
       setViewingTestRun(false);
@@ -1270,11 +1278,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               setSelectedProject(n.project);
               if (n.functionName) {
                 setWorkflowContext(null);
+                setSelectedPreviewTestKey(null);
                 setSelectedFn(n.functionName);
                 setViewingCollection(false);
                 setViewingTestRun(false);
               } else if (n.testName || n.testsetName) {
                 setWorkflowContext(null);
+                setSelectedPreviewTestKey(null);
                 setSelectedFn(null);
                 setViewingCollection(false);
                 setViewingTestRun(true);
@@ -1678,6 +1688,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   // `typedArgsByFnRef` — an edit that misses either silently desyncs them.
   const updateArgsJson = useCallback(
     (next: string) => {
+      setSelectedPreviewTestKey(null);
       setArgsJson(next);
       if (selectedFn) typedArgsByFnRef.current[selectedFn] = next;
     },
@@ -1989,6 +2000,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     : undefined;
   const isLoadingProject = selectedProject != null && currentUpdate == null;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
+  const previewTests = currentUpdate?.tests ?? [];
   const internalFunctionCount = functions.filter(isInternalFunction).length;
   const visibleFunctions = showInternalFunctions
     ? functions
@@ -2000,6 +2012,34 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
+
+  const handleSelectPreviewTest = useCallback((test: TestInfo) => {
+    const key = previewTestKey(test);
+    typedArgsByFnRef.current[test.functionName] = test.argsJson;
+    setArgsJson(test.argsJson);
+    setSelectedPreviewTestKey(key);
+    setSelectedFn(test.functionName);
+    setViewingCollection(false);
+    setViewingTestRun(false);
+    setHighlightedNodeId(null);
+    setWorkflowContext(null);
+  }, []);
+
+  // Keep a selected preview case synchronized with source edits. If the test
+  // is deleted, retain the current function/args as an ordinary manual draft.
+  useEffect(() => {
+    if (!selectedPreviewTestKey) return;
+    const test = previewTests.find(
+      (candidate) => previewTestKey(candidate) === selectedPreviewTestKey,
+    );
+    if (!test) {
+      setSelectedPreviewTestKey(null);
+      return;
+    }
+    typedArgsByFnRef.current[test.functionName] = test.argsJson;
+    setArgsJson(test.argsJson);
+    setSelectedFn(test.functionName);
+  }, [previewTests, selectedPreviewTestKey]);
 
   // ── Args form wiring ─────────────────────────────────────────────────────
   // `undefined` = no schema shipped (old engine / extraction miss) → raw-only.
@@ -2400,6 +2440,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               findCallSiteNode(wf, hop);
             pendingHighlightRef.current =
               target != null ? { fn: wf, nodeId: target } : null;
+            setSelectedPreviewTestKey(null);
             setSelectedFn(wf);
             setHighlightedNodeId(null);
           }}
@@ -2743,8 +2784,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   internalFunctionCount={internalFunctionCount}
                   isLoadingProject={isLoadingProject}
                   testTree={testTree}
+                  previewTests={previewTests}
+                  selectedPreviewTestKey={selectedPreviewTestKey}
+                  onSelectPreviewTest={handleSelectPreviewTest}
                   selectedFn={selectedFn}
                   onSelectFn={(fn) => {
+                    setSelectedPreviewTestKey(null);
                     setViewingCollection(false);
                     setViewingTestRun(false);
                     setHighlightedNodeId(null);

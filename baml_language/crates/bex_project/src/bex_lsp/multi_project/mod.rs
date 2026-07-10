@@ -738,10 +738,19 @@ impl BexMulitProject {
                 params: f.params,
             })
             .collect();
+        let tests = baml_project::list_tests_with_metadata(db)
+            .into_iter()
+            .map(|test| crate::bex_lsp::TestInfo {
+                name: test.name,
+                function_name: test.function_name,
+                args_json: test.args_json,
+            })
+            .collect();
 
         crate::bex_lsp::ProjectUpdate {
             is_bex_current,
             functions,
+            tests,
             types: Some(listing.types),
             diagnostics,
         }

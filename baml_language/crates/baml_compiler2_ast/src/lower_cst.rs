@@ -15,12 +15,12 @@ use rowan::ast::AstNode;
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg,
-        ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef,
-        FunctionDefaults, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
-        InterfaceFieldLinkDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef,
-        Param, RawAttribute, RawAttributeArg, RawPrompt, TemplateStringDef, TestDef, TypeAliasDef,
-        TypeExpr, TypeExprKind, VariantDef,
+        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg, EnumDef,
+        Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
+        ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
+        Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
+        RawPrompt, TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind,
+        VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -1829,17 +1829,110 @@ fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
     };
 
     let test_name = name_token.text().to_string();
-    let config_items = test
-        .config_block()
-        .map(|cb| lower_config_block(&cb, "test", &test_name, diags))
+    let config_block = test.config_block();
+    if let Some(block) = &config_block {
+        for item in block.items() {
+            if item.key().is_none() {
+                diags.push(LoweringDiagnostic::MissingConfigKey {
+                    block_kind: "test",
+                    block_name: test_name.clone(),
+                    span: item.syntax().span_range(),
+                });
+            }
+        }
+    }
+    let function_refs = test
+        .function_reference_names()
+        .into_iter()
+        .map(Name::new)
+        .collect();
+    let args = config_block
+        .as_ref()
+        .and_then(|block| block.items().find(|item| item.matches_key("args")))
+        .and_then(|item| item.nested_block())
+        .map(|block| lower_test_arg_map(&block))
         .unwrap_or_default();
 
     Some(TestDef {
         name: Name::new(&test_name),
-        config_items,
+        function_refs,
+        args,
         span: node.span_range(),
         name_span: name_token.text_range(),
     })
+}
+
+fn lower_test_arg_map(block: &ast::ConfigBlock) -> Vec<(Name, TestArgValue)> {
+    block
+        .items()
+        .filter_map(|item| {
+            let key = item.key()?;
+            Some((Name::new(key.text()), lower_test_arg_item(&item)))
+        })
+        .collect()
+}
+
+fn lower_test_arg_map_as_value(block: &ast::ConfigBlock) -> TestArgValue {
+    TestArgValue::Map(
+        lower_test_arg_map(block)
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect(),
+    )
+}
+
+fn lower_test_arg_item(item: &ast::ConfigItem) -> TestArgValue {
+    if let Some(block) = item.nested_block() {
+        return lower_test_arg_map_as_value(&block);
+    }
+
+    item.config_value_node()
+        .map(|value| lower_test_arg_config_value(&value))
+        .unwrap_or(TestArgValue::Null)
+}
+
+fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
+    if let Some(array) = value
+        .children()
+        .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
+    {
+        return TestArgValue::Array(
+            array
+                .children()
+                .filter_map(|element| match element.kind() {
+                    SyntaxKind::CONFIG_VALUE => Some(lower_test_arg_config_value(&element)),
+                    SyntaxKind::CONFIG_BLOCK => ast::ConfigBlock::cast(element)
+                        .map(|block| lower_test_arg_map_as_value(&block)),
+                    _ => None,
+                })
+                .collect(),
+        );
+    }
+
+    let raw = value.text().to_string();
+    if let Some(string) = crate::parse_string_attr_value(raw.trim()) {
+        return TestArgValue::String(string);
+    }
+
+    let text = ast::ConfigValue::cast(value.clone())
+        .and_then(|config_value| config_value.scalar_text())
+        .unwrap_or_default();
+
+    match text.as_str() {
+        "null" => return TestArgValue::Null,
+        "true" => return TestArgValue::Bool(true),
+        "false" => return TestArgValue::Bool(false),
+        _ => {}
+    }
+
+    if let Ok(value) = text.parse::<i64>() {
+        return TestArgValue::Int(value);
+    }
+    if let Ok(value) = text.parse::<f64>() {
+        return TestArgValue::float(value);
+    }
+
+    TestArgValue::String(text)
 }
 
 /// Extract the name expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
@@ -3034,32 +3127,6 @@ fn validate_client_options(
             span,
         });
     }
-}
-
-fn lower_config_block(
-    cb: &ast::ConfigBlock,
-    block_kind: &'static str,
-    block_name: &str,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Vec<ConfigItemDef> {
-    cb.items()
-        .filter_map(|item| {
-            let Some(key_token) = item.key() else {
-                diags.push(LoweringDiagnostic::MissingConfigKey {
-                    block_kind,
-                    block_name: block_name.to_string(),
-                    span: item.syntax().span_range(),
-                });
-                return None;
-            };
-            let value = item.value_str().unwrap_or_default();
-            Some(ConfigItemDef {
-                key: Name::new(key_token.text()),
-                value,
-                span: item.syntax().span_range(),
-            })
-        })
-        .collect()
 }
 
 /// Lower variant-level attributes from an `EnumVariant` node.

@@ -320,33 +320,7 @@ pub struct Client {
     pub round_robin_start: Option<usize>,
 }
 
-/// A test argument value stored in the `ItemTree`.
-///
-/// Floats are stored as bit patterns (via `f64::to_bits`) to allow `Eq` and `Hash`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TestArgValue {
-    Null,
-    Int(i64),
-    /// Float stored as raw bits (`f64::to_bits(value)`).
-    FloatBits(u64),
-    Bool(bool),
-    String(String),
-    Array(Vec<TestArgValue>),
-    Map(Vec<(String, TestArgValue)>),
-}
-
-impl TestArgValue {
-    pub fn float(v: f64) -> Self {
-        Self::FloatBits(v.to_bits())
-    }
-
-    pub fn as_float(&self) -> Option<f64> {
-        match self {
-            Self::FloatBits(bits) => Some(f64::from_bits(*bits)),
-            _ => None,
-        }
-    }
-}
+pub use baml_compiler2_ast::ast::TestArgValue;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Test {
@@ -803,27 +777,12 @@ impl ItemTree {
 
     pub fn alloc_test(&mut self, t: &ast::TestDef) -> LocalItemId<TestMarker> {
         let id = self.alloc_id(ItemKind::Test, &t.name);
-        // Extract function_refs from config_items (key "functions" or "function")
-        let function_refs = t
-            .config_items
-            .iter()
-            .filter(|item| item.key.as_str() == "functions" || item.key.as_str() == "function")
-            .flat_map(|item| {
-                // Values may be comma-separated or a single name
-                item.value
-                    .split(',')
-                    .map(|s| Name::new(s.trim().trim_matches('"')))
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-        // Args come from config_items with key "args" — store raw; complex parsing skipped
-        let args = Vec::new();
         self.tests.insert(
             id,
             Test {
                 name: t.name.clone(),
-                function_refs,
-                args,
+                function_refs: t.function_refs.clone(),
+                args: t.args.clone(),
             },
         );
         id
