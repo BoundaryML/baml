@@ -15,7 +15,6 @@
 
 import { WebSocketRuntimePort } from '@b/pkg-playground';
 import type { EditorBackend, EditorConnection, WorkbenchHandle } from './backend';
-import { withPlaygroundToken } from './playground-token';
 
 export interface RemoteBackendOptions {
   /** WebSocket URL for the LSP JSON-RPC endpoint, e.g. `ws://localhost:4265/api/lsp`. */
@@ -32,8 +31,8 @@ export function remoteUrlsFromLocation(
 ): { lspUrl: string; runtimeUrl: string } {
   const scheme = loc.protocol === 'https:' ? 'wss' : 'ws';
   return {
-    lspUrl: withPlaygroundToken(`${scheme}://${loc.host}/api/lsp`),
-    runtimeUrl: withPlaygroundToken(`${scheme}://${loc.host}/api/ws`),
+    lspUrl: `${scheme}://${loc.host}/api/lsp`,
+    runtimeUrl: `${scheme}://${loc.host}/api/ws`,
   };
 }
 

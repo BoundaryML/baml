@@ -19,9 +19,6 @@ pub struct NativePlaygroundSender {
     lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
     playground_port: u16,
     open_in_browser: bool,
-    /// Browser-mode session token; carried on the opened URL so the page can
-    /// authorize its /api requests.
-    session_token: Option<Arc<str>>,
 }
 
 impl NativePlaygroundSender {
@@ -30,14 +27,12 @@ impl NativePlaygroundSender {
         lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
         playground_port: u16,
         open_in_browser: bool,
-        session_token: Option<Arc<str>>,
     ) -> Self {
         Self {
             broadcast_tx,
             lsp_sender,
             playground_port,
             open_in_browser,
-            session_token,
         }
     }
 }
@@ -52,12 +47,7 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
         } = notification
         {
             if self.open_in_browser {
-                let url = match &self.session_token {
-                    Some(token) => {
-                        format!("http://localhost:{}/?token={token}", self.playground_port)
-                    }
-                    None => format!("http://localhost:{}", self.playground_port),
-                };
+                let url = format!("http://localhost:{}", self.playground_port);
                 // `webbrowser::open` can block until a text-mode browser (lynx/w3m)
                 // exits on headless hosts; never hold up server startup on it.
                 std::thread::spawn(move || {
