@@ -558,9 +558,10 @@ class AnthropicOptions {
 // @providers: vertex-ai
 /// Provider-specific options for `vertex-ai` clients.
 class VertexAiOptions {
-  /// Path to a service-account JSON credential file. Inline JSON is not
-  /// supported here; use `credentials_content` for inline credentials. When
-  /// neither is set, Application Default Credentials apply.
+  /// Path to a Google credential JSON file (service account, authorized user,
+  /// workload identity federation, or impersonated service account). Inline
+  /// JSON is not supported here; use `credentials_content` for inline
+  /// credentials. When neither is set, Application Default Credentials apply.
   credentials string | null
   /// Inline credential JSON as a `json` object (or a pre-serialized JSON
   /// string). Used when `credentials` is not set.

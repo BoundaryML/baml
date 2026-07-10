@@ -5,7 +5,10 @@
 //!
 //! ## Credential resolution order
 //!
-//! 1. `options.credentials` -- a service-account JSON **file path**
+//! 1. `options.credentials` -- a credential JSON **file path** (service
+//!    account, authorized user, workload identity federation, or impersonated
+//!    service account -- the same documents `GOOGLE_APPLICATION_CREDENTIALS`
+//!    accepts)
 //! 2. `options.credentials_content` -- an inline credential document as a
 //!    `json` object (or a pre-serialized JSON string)
 //! 3. Application Default Credentials -- the `GOOGLE_APPLICATION_CREDENTIALS`
@@ -19,10 +22,10 @@
 //! inline JSON in `credentials` or in env vars (`GOOGLE_APPLICATION_CREDENTIALS`
 //! is a file path, period) and `gcloud` CLI shell-outs.
 //!
-//! All token minting (service-account RS256 JWT, ADC authorized-user refresh,
-//! GCE metadata) runs through the slim `google-cloud-auth` fork, whose IO is
-//! routed through BAML's [`RuntimeIo`] by [`BamlTokenIo`]. Signing is pure Rust
-//! (`rsa` + `sha2`), so a single code path works on native and wasm.
+//! All token minting runs through the slim `google-cloud-auth` fork, whose IO
+//! is routed through BAML's [`RuntimeIo`] by [`BamlTokenIo`]. Signing is pure
+//! Rust (`rsa` + `sha2`), so a single code path works on native and wasm, and
+//! the fork caches tokens process-wide until shortly before expiry.
 
 use std::sync::Arc;
 
@@ -203,7 +206,7 @@ fn credentials_content_to_json_string(
 ///
 /// One source is selected, then used for both token and `project_id`.
 enum ResolvedCredentials {
-    /// `options.credentials` -- a service-account JSON file path.
+    /// `options.credentials` -- a credential JSON file path.
     CredentialsFile(String),
     /// `options.credentials_content` -- inline credential JSON, serialized.
     CredentialsJson(String),
@@ -244,7 +247,7 @@ async fn token_from_credentials(
     match creds {
         ResolvedCredentials::CredentialsJson(json_str) => {
             let adapter = BamlTokenIo { io };
-            google_cloud_auth::token_from_service_account_json(
+            google_cloud_auth::token_from_credentials_json(
                 &adapter,
                 json_str,
                 google_cloud_auth::CLOUD_PLATFORM_SCOPE,
@@ -255,7 +258,7 @@ async fn token_from_credentials(
         ResolvedCredentials::CredentialsFile(path) => {
             let json_str = read_credentials_file(path, &*io).await?;
             let adapter = BamlTokenIo { io };
-            google_cloud_auth::token_from_service_account_json(
+            google_cloud_auth::token_from_credentials_json(
                 &adapter,
                 &json_str,
                 google_cloud_auth::CLOUD_PLATFORM_SCOPE,
@@ -980,6 +983,41 @@ mod tests {
         let mut req = fake_request();
         auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
+    }
+
+    #[tokio::test]
+    async fn credentials_file_dispatches_all_adc_types_not_just_service_accounts() {
+        // An `authorized_user` document through options.credentials proves the
+        // consumer routes through the fork's full type dispatch.
+        let user_json = serde_json::json!({
+            "type": "authorized_user",
+            "client_id": "vertex-file-cid",
+            "client_secret": "vertex-file-secret",
+            "refresh_token": "vertex-file-refresh",
+        })
+        .to_string();
+        let client = make_client_with_vertex_opts(VertexAiOptions {
+            credentials: Some("/fake/authorized-user.json".to_string()),
+            credentials_content: None,
+            location: None,
+            project_id: None,
+        });
+        let io = FsIo {
+            expected_path: "/fake/authorized-user.json".to_string(),
+            file_contents: user_json,
+            token_body: serde_json::json!({
+                "access_token": "ya29.from-authorized-user",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            })
+            .to_string(),
+        };
+        let mut req = fake_request();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
+        assert_eq!(
+            req.headers.get("authorization").unwrap(),
+            "Bearer ya29.from-authorized-user",
+        );
     }
 
     #[tokio::test]

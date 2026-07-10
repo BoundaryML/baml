@@ -5,19 +5,24 @@
 //! [`TokenIo`] trait so the host can sandbox it; JWT signing is pure Rust
 //! (`rsa` + `sha2`), so a single code path works on both native and wasm.
 //!
-//! Supported credential sources:
-//! - **Service account** JSON — RS256 JWT bearer assertion exchanged for a
-//!   token at the account's `token_uri`.
-//! - **Application Default Credentials** — `authorized_user` JSON (OAuth2
-//!   refresh-token grant), `service_account` JSON, or the GCE metadata server,
-//!   discovered from `GOOGLE_APPLICATION_CREDENTIALS` (a file path only; a
-//!   set-but-unreadable path is a hard error, not a fallthrough — matching
-//!   google-auth) or the well-known ADC config path (`$CLOUDSDK_CONFIG`,
-//!   `$HOME/.config/gcloud`, or `%APPDATA%\gcloud`).
+//! Mirrors `google-auth` (Python/Node) Application Default Credentials as
+//! closely as the `TokenIo` surface allows:
 //!
-//! Minted tokens are cached process-wide and reused until shortly before
-//! expiry (google-auth's 3m45s refresh threshold), so per-request callers do
-//! not re-mint on every call.
+//! - **Discovery order**: `GOOGLE_APPLICATION_CREDENTIALS` (file path only;
+//!   a set-but-unreadable path is a hard error, not a fallthrough) → the
+//!   well-known ADC config file (`$CLOUDSDK_CONFIG`, `$HOME/.config/gcloud`,
+//!   or `%APPDATA%\gcloud`) → the GCE metadata server.
+//! - **Credential types**: `service_account` (RS256 JWT bearer),
+//!   `authorized_user` (refresh-token grant), `external_account` (workload
+//!   identity federation with file- or url-sourced subject tokens, optional
+//!   service-account impersonation), `external_account_authorized_user`,
+//!   and `impersonated_service_account`. AWS- and executable-sourced
+//!   federation and GDCH are rejected with [`AuthError::Unsupported`].
+//! - **Token caching**: minted tokens are cached process-wide and reused
+//!   until shortly before expiry (google-auth's 3m45s refresh threshold).
+//!
+//! Deliberately NOT supported (BAML policy): inline-JSON env vars and
+//! `gcloud` CLI shell-outs.
 
 #![allow(clippy::doc_markdown)]
 
@@ -27,7 +32,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{
+    Engine as _,
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+};
 use rsa::{
     RsaPrivateKey,
     pkcs8::DecodePrivateKey,
@@ -38,6 +46,7 @@ use rsa::{
 pub const CLOUD_PLATFORM_SCOPE: &str = "https://www.googleapis.com/auth/cloud-platform";
 
 const DEFAULT_TOKEN_URI: &str = "https://oauth2.googleapis.com/token";
+const DEFAULT_STS_TOKEN_URL: &str = "https://sts.googleapis.com/v1/token";
 const METADATA_TOKEN_URL: &str =
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
 
@@ -89,6 +98,8 @@ pub enum AuthError {
     TokenEndpoint(String),
     /// No credential source could be discovered.
     NoCredentials(String),
+    /// A credential type or source google-auth supports but this fork does not.
+    Unsupported(String),
 }
 
 impl std::fmt::Display for AuthError {
@@ -98,7 +109,8 @@ impl std::fmt::Display for AuthError {
             | AuthError::Signing(m)
             | AuthError::Io(m)
             | AuthError::TokenEndpoint(m)
-            | AuthError::NoCredentials(m) => write!(f, "Google Cloud: {m}"),
+            | AuthError::NoCredentials(m)
+            | AuthError::Unsupported(m) => write!(f, "Google Cloud: {m}"),
         }
     }
 }
@@ -182,6 +194,23 @@ pub async fn token_from_service_account_json(
     Ok(token.access_token)
 }
 
+/// Mint an access token from any supported credential JSON document,
+/// dispatching on its `type` field (the same dispatch `google-auth` performs
+/// on a `GOOGLE_APPLICATION_CREDENTIALS` file).
+pub async fn token_from_credentials_json(
+    io: &dyn TokenIo,
+    json_str: &str,
+    scope: &str,
+) -> Result<String, AuthError> {
+    let key = cache_key(json_str, scope);
+    if let Some(token) = cached_token(&key) {
+        return Ok(token);
+    }
+    let token = mint_from_credentials_json(io, json_str, scope).await?;
+    store_token(key, &token);
+    Ok(token.access_token)
+}
+
 /// Returns `true` when Application Default Credentials look discoverable (a
 /// `GOOGLE_APPLICATION_CREDENTIALS` file or the well-known ADC config file).
 /// Does not perform any network IO. Mirrors the resolution-time probe the AWS
@@ -212,13 +241,13 @@ pub async fn token_from_adc(io: &dyn TokenIo, scope: &str) -> Result<String, Aut
                 "GOOGLE_APPLICATION_CREDENTIALS points to '{path}' but the file could not be read"
             )));
         };
-        return token_from_adc_json(io, &contents, scope).await;
+        return token_from_credentials_json(io, &contents, scope).await;
     }
 
     // 2. Well-known ADC config file.
     if let Some(path) = adc_config_path(io).await {
         if let Some(contents) = io.read_file(&path).await {
-            return token_from_adc_json(io, &contents, scope).await;
+            return token_from_credentials_json(io, &contents, scope).await;
         }
     }
 
@@ -233,35 +262,31 @@ pub async fn token_from_adc(io: &dyn TokenIo, scope: &str) -> Result<String, Aut
 }
 
 // ---------------------------------------------------------------------------
-// ADC JSON dispatch
+// Credential-type dispatch
 // ---------------------------------------------------------------------------
 
-async fn token_from_adc_json(
-    io: &dyn TokenIo,
-    json_str: &str,
-    scope: &str,
-) -> Result<String, AuthError> {
-    let key = cache_key(json_str, scope);
-    if let Some(token) = cached_token(&key) {
-        return Ok(token);
-    }
-    let token = mint_from_adc_json(io, json_str, scope).await?;
-    store_token(key, &token);
-    Ok(token.access_token)
-}
-
-async fn mint_from_adc_json(
+async fn mint_from_credentials_json(
     io: &dyn TokenIo,
     json_str: &str,
     scope: &str,
 ) -> Result<Token, AuthError> {
     let value: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| AuthError::Parse(format!("failed to parse ADC JSON: {e}")))?;
+        .map_err(|e| AuthError::Parse(format!("failed to parse credential JSON: {e}")))?;
     match value.get("type").and_then(serde_json::Value::as_str) {
         Some("authorized_user") => mint_authorized_user(io, &value).await,
         Some("service_account") => mint_service_account(io, json_str, scope).await,
+        Some("external_account") => mint_external_account(io, &value, scope).await,
+        Some("external_account_authorized_user") => {
+            mint_external_account_authorized_user(io, &value).await
+        }
+        Some("impersonated_service_account") => mint_impersonated(io, &value, scope).await,
+        Some("gdch_service_account") => Err(AuthError::Unsupported(
+            "GDCH service-account credentials are not supported".to_string(),
+        )),
         Some(other) => Err(AuthError::NoCredentials(format!(
-            "unsupported ADC credential type '{other}' (only service_account and authorized_user are supported)"
+            "unsupported ADC credential type '{other}' (supported: service_account, \
+             authorized_user, external_account, external_account_authorized_user, \
+             impersonated_service_account)"
         ))),
         None => Err(AuthError::Parse(
             "ADC JSON missing 'type' field".to_string(),
@@ -352,6 +377,271 @@ async fn mint_authorized_user(
 }
 
 // ---------------------------------------------------------------------------
+// Flows: external account (workload identity federation)
+// ---------------------------------------------------------------------------
+
+async fn mint_external_account(
+    io: &dyn TokenIo,
+    value: &serde_json::Value,
+    scope: &str,
+) -> Result<Token, AuthError> {
+    let audience = str_field(value, "audience", "external_account")?;
+    let subject_token_type = str_field(value, "subject_token_type", "external_account")?;
+    let token_url = value
+        .get("token_url")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(DEFAULT_STS_TOKEN_URL);
+    let source = value.get("credential_source").ok_or_else(|| {
+        AuthError::Parse("external_account missing 'credential_source'".to_string())
+    })?;
+
+    if let Some(env_id) = source
+        .get("environment_id")
+        .and_then(serde_json::Value::as_str)
+    {
+        if env_id.starts_with("aws") {
+            return Err(AuthError::Unsupported(
+                "AWS-sourced workload identity federation is not supported".to_string(),
+            ));
+        }
+    }
+    if source.get("executable").is_some() {
+        return Err(AuthError::Unsupported(
+            "executable-sourced workload identity federation is not supported".to_string(),
+        ));
+    }
+
+    let subject_token = fetch_subject_token(io, source).await?;
+
+    let impersonation_url = value
+        .get("service_account_impersonation_url")
+        .and_then(serde_json::Value::as_str);
+    // With impersonation the STS leg always uses cloud-platform; the caller's
+    // scope is applied at the generateAccessToken step (matches google-auth).
+    let sts_scope = if impersonation_url.is_some() {
+        CLOUD_PLATFORM_SCOPE
+    } else {
+        scope
+    };
+
+    let mut body = format!(
+        "grant_type={}&audience={}&scope={}&requested_token_type={}&subject_token={}&subject_token_type={}",
+        encode("urn:ietf:params:oauth:grant-type:token-exchange"),
+        encode(audience),
+        encode(sts_scope),
+        encode("urn:ietf:params:oauth:token-type:access_token"),
+        encode(&subject_token),
+        encode(subject_token_type),
+    );
+
+    let mut headers = Vec::new();
+    let client_id = value.get("client_id").and_then(serde_json::Value::as_str);
+    let client_secret = value
+        .get("client_secret")
+        .and_then(serde_json::Value::as_str);
+    if let (Some(id), Some(secret)) = (client_id, client_secret) {
+        headers.push((
+            "authorization".to_string(),
+            format!("Basic {}", STANDARD.encode(format!("{id}:{secret}"))),
+        ));
+    } else if let Some(user_project) = value
+        .get("workforce_pool_user_project")
+        .and_then(serde_json::Value::as_str)
+    {
+        // Workforce pools need a user project when no client auth is given.
+        use std::fmt::Write as _;
+        let options = serde_json::json!({ "userProject": user_project }).to_string();
+        let _ = write!(body, "&options={}", encode(&options));
+    }
+
+    let sts_token = post_token_form(io, token_url, headers, &body).await?;
+
+    match impersonation_url {
+        None => Ok(sts_token),
+        Some(url) => impersonate(io, url, &sts_token.access_token, scope, None).await,
+    }
+}
+
+/// Fetch the third-party subject token from a `file` or `url` credential
+/// source, applying the optional `format` (text or JSON-field extraction).
+async fn fetch_subject_token(
+    io: &dyn TokenIo,
+    source: &serde_json::Value,
+) -> Result<String, AuthError> {
+    let raw = if let Some(file) = source.get("file").and_then(serde_json::Value::as_str) {
+        io.read_file(file).await.ok_or_else(|| {
+            AuthError::Io(format!("failed to read WIF subject-token file '{file}'"))
+        })?
+    } else if let Some(url) = source.get("url").and_then(serde_json::Value::as_str) {
+        let mut headers = Vec::new();
+        if let Some(hs) = source.get("headers").and_then(serde_json::Value::as_object) {
+            for (k, v) in hs {
+                if let Some(v) = v.as_str() {
+                    headers.push((k.clone(), v.to_string()));
+                }
+            }
+        }
+        let resp = io.http("GET", url, &headers, "").await?;
+        if !(200..300).contains(&resp.status) {
+            return Err(AuthError::TokenEndpoint(format!(
+                "WIF subject-token URL '{url}' returned status {}",
+                resp.status
+            )));
+        }
+        resp.body
+    } else {
+        return Err(AuthError::Unsupported(
+            "external_account credential_source must provide 'file' or 'url'".to_string(),
+        ));
+    };
+
+    let format = source.get("format");
+    let format_type = format
+        .and_then(|f| f.get("type"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("text");
+    if format_type == "json" {
+        let field = format
+            .and_then(|f| f.get("subject_token_field_name"))
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                AuthError::Parse(
+                    "external_account JSON format missing 'subject_token_field_name'".to_string(),
+                )
+            })?;
+        let parsed: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|e| AuthError::Parse(format!("failed to parse subject token JSON: {e}")))?;
+        parsed
+            .get(field)
+            .and_then(serde_json::Value::as_str)
+            .map(String::from)
+            .ok_or_else(|| AuthError::Parse(format!("subject token JSON missing '{field}'")))
+    } else {
+        Ok(raw.trim().to_string())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Flows: external account authorized user (workforce refresh grant)
+// ---------------------------------------------------------------------------
+
+async fn mint_external_account_authorized_user(
+    io: &dyn TokenIo,
+    value: &serde_json::Value,
+) -> Result<Token, AuthError> {
+    let refresh_token = str_field(value, "refresh_token", "external_account_authorized_user")?;
+    let client_id = str_field(value, "client_id", "external_account_authorized_user")?;
+    let client_secret = str_field(value, "client_secret", "external_account_authorized_user")?;
+    let token_url = value
+        .get("token_url")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(DEFAULT_STS_TOKEN_URL);
+
+    let headers = vec![(
+        "authorization".to_string(),
+        format!(
+            "Basic {}",
+            STANDARD.encode(format!("{client_id}:{client_secret}"))
+        ),
+    )];
+    let body = format!(
+        "grant_type=refresh_token&refresh_token={}",
+        encode(refresh_token),
+    );
+    // The response may carry a rotated refresh_token; with no store to persist
+    // it, the on-disk credential keeps working until Google expires it.
+    post_token_form(io, token_url, headers, &body).await
+}
+
+// ---------------------------------------------------------------------------
+// Flows: impersonated service account
+// ---------------------------------------------------------------------------
+
+async fn mint_impersonated(
+    io: &dyn TokenIo,
+    value: &serde_json::Value,
+    scope: &str,
+) -> Result<Token, AuthError> {
+    let url = str_field(
+        value,
+        "service_account_impersonation_url",
+        "impersonated_service_account",
+    )?;
+    let source = value.get("source_credentials").ok_or_else(|| {
+        AuthError::Parse("impersonated_service_account missing 'source_credentials'".to_string())
+    })?;
+
+    let source_token = match source.get("type").and_then(serde_json::Value::as_str) {
+        Some("authorized_user") => mint_authorized_user(io, source).await?,
+        Some("service_account") => {
+            mint_service_account(io, &source.to_string(), CLOUD_PLATFORM_SCOPE).await?
+        }
+        other => {
+            return Err(AuthError::Unsupported(format!(
+                "impersonated_service_account source_credentials type {other:?} is not \
+                 supported (only service_account and authorized_user)"
+            )));
+        }
+    };
+
+    impersonate(
+        io,
+        url,
+        &source_token.access_token,
+        scope,
+        value.get("delegates"),
+    )
+    .await
+}
+
+/// Exchange a source token for an impersonated service-account token via the
+/// IAM Credentials `generateAccessToken` endpoint.
+async fn impersonate(
+    io: &dyn TokenIo,
+    url: &str,
+    source_bearer: &str,
+    scope: &str,
+    delegates: Option<&serde_json::Value>,
+) -> Result<Token, AuthError> {
+    let mut body = serde_json::json!({ "scope": [scope], "lifetime": "3600s" });
+    if let Some(delegates) = delegates {
+        body["delegates"] = delegates.clone();
+    }
+    let headers = vec![
+        ("content-type".to_string(), "application/json".to_string()),
+        (
+            "authorization".to_string(),
+            format!("Bearer {source_bearer}"),
+        ),
+    ];
+    let resp = io.http("POST", url, &headers, &body.to_string()).await?;
+    if !(200..300).contains(&resp.status) {
+        return Err(AuthError::TokenEndpoint(format!(
+            "service-account impersonation endpoint returned status {}: {}",
+            resp.status, resp.body
+        )));
+    }
+    let value: serde_json::Value = serde_json::from_str(&resp.body).map_err(|e| {
+        AuthError::TokenEndpoint(format!("failed to parse impersonation response: {e}"))
+    })?;
+    let access_token = value
+        .get("accessToken")
+        .and_then(serde_json::Value::as_str)
+        .map(String::from)
+        .ok_or_else(|| {
+            AuthError::TokenEndpoint("impersonation response missing 'accessToken'".to_string())
+        })?;
+    let expires_at = value
+        .get("expireTime")
+        .and_then(serde_json::Value::as_str)
+        .and_then(rfc3339_to_unix);
+    Ok(Token {
+        access_token,
+        expires_at,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Flows: GCE metadata server
 // ---------------------------------------------------------------------------
 
@@ -375,7 +665,7 @@ async fn mint_metadata(io: &dyn TokenIo, scope: &str) -> Result<Token, AuthError
 // Token endpoint helpers
 // ---------------------------------------------------------------------------
 
-/// POST a form-encoded body to an OAuth2 token endpoint.
+/// POST a form-encoded body to an OAuth2/STS token endpoint.
 async fn post_token_form(
     io: &dyn TokenIo,
     url: &str,
@@ -417,7 +707,7 @@ fn parse_token_response(body: &str) -> Result<Token, AuthError> {
 }
 
 // ---------------------------------------------------------------------------
-// ADC config path discovery
+// Discovery: ADC paths, gcloud config, project id
 // ---------------------------------------------------------------------------
 
 /// A non-empty `GOOGLE_APPLICATION_CREDENTIALS` value (always a file path;
@@ -470,6 +760,49 @@ fn str_field<'a>(
         .ok_or_else(|| AuthError::Parse(format!("{credential_type} ADC missing '{key}'")))
 }
 
+/// Parse an RFC 3339 UTC timestamp (`2026-07-09T12:34:56Z`, optionally with
+/// fractional seconds) to unix seconds. Only the `Z` offset is supported —
+/// that is what Google's APIs emit.
+fn rfc3339_to_unix(s: &str) -> Option<u64> {
+    let s = s.strip_suffix('Z')?;
+    let (date, time) = s.split_once('T')?;
+
+    let mut parts = date.split('-');
+    let year: i64 = parts.next()?.parse().ok()?;
+    let month: u32 = parts.next()?.parse().ok()?;
+    let day: u32 = parts.next()?.parse().ok()?;
+    if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+
+    let time = time.split('.').next()?;
+    let mut parts = time.split(':');
+    let hour: u64 = parts.next()?.parse().ok()?;
+    let minute: u64 = parts.next()?.parse().ok()?;
+    let second: u64 = parts.next()?.parse().ok()?;
+    if parts.next().is_some() || hour > 23 || minute > 59 || second > 60 {
+        return None;
+    }
+
+    let days = days_from_civil(year, month, day);
+    if days < 0 {
+        return None;
+    }
+    #[allow(clippy::cast_sign_loss)]
+    Some(days as u64 * 86_400 + hour * 3_600 + minute * 60 + second)
+}
+
+/// Days since 1970-01-01 for a proleptic Gregorian date (Howard Hinnant's
+/// `days_from_civil`).
+fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let year_of_era = year - era * 400; // [0, 399]
+    let day_of_year = i64::from((153 * ((month + 9) % 12) + 2) / 5 + day - 1); // [0, 365]
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
 // ---------------------------------------------------------------------------
 // Tests (pure functions; flow coverage lives in tests/)
 // ---------------------------------------------------------------------------
@@ -486,6 +819,25 @@ mod tests {
             token_uri: None,
         };
         assert!(sign_service_account_jwt(&sa, CLOUD_PLATFORM_SCOPE).is_err());
+    }
+
+    #[test]
+    fn rfc3339_parses_google_timestamps() {
+        // Cross-checked with Python `datetime.timestamp()`.
+        assert_eq!(rfc3339_to_unix("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(rfc3339_to_unix("2026-07-09T00:00:00Z"), Some(1_783_555_200));
+        assert_eq!(
+            rfc3339_to_unix("2024-02-29T23:59:59Z"),
+            Some(1_709_251_199)
+        );
+        // Fractional seconds (IAM Credentials emits these).
+        assert_eq!(
+            rfc3339_to_unix("2026-07-09T00:00:00.123456Z"),
+            Some(1_783_555_200)
+        );
+        // Non-UTC offsets are not Google API output; refuse rather than guess.
+        assert_eq!(rfc3339_to_unix("2026-07-09T00:00:00+02:00"), None);
+        assert_eq!(rfc3339_to_unix("garbage"), None);
     }
 
     #[test]
