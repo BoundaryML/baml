@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4473
 ---
 === HIR2 ===
 
@@ -712,35 +713,35 @@ class baml.iter.StepBy {
   n: int
   first: bool
 }
-function baml.iter.chain(self: ?, other: Iterable<Item = Item, Error = E2>) -> Iterator<Item = Item, Error = Error | E2>  [expr] {
+function baml.iter.chain(self: ?, other: Iterable<Item = Self.Item, Error = E2>) -> Iterator<Item = Self.Item, Error = Self.Error | E2>  [expr] {
   {  } baml.iter.Chain { first: self, other: other.iter(), first_done: false }
 }
-function baml.iter.collect(self: ?) -> Item[]  [expr] {
-  { let r: Item[] = []; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => r.push(x) } } r
+function baml.iter.collect(self: ?) -> Self.Item[]  [expr] {
+  { let r: Self.Item[] = []; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => r.push(x) } } r
 }
 function baml.iter.count(self: ?) -> int  [expr] {
-  { let n: int = 0; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => { n Add= 1 } } } n
+  { let n: int = 0; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => { n Add= 1 } } } n
 }
-function baml.iter.every(self: ?, predicate: (Item) -> bool throws E2) -> bool  [expr] {
-  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => {  } if (Not predicate(x)) { return false } } } true
+function baml.iter.every(self: ?, predicate: (Self.Item) -> bool throws E2) -> bool  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => {  } if (Not predicate(x)) { return false } } } true
 }
-function baml.iter.filter(self: ?, predicate: (Item) -> bool throws E2) -> Iterator<Item = Item, Error = Error | E2>  [expr] {
+function baml.iter.filter(self: ?, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2>  [expr] {
   {  } baml.iter.Filter { source: self, predicate: predicate }
 }
-function baml.iter.filter_map(self: ?, fn: (Item) -> R? throws E2) -> Iterator<Item = R, Error = Error | E2>  [expr] {
+function baml.iter.filter_map(self: ?, fn: (Self.Item) -> R? throws E2) -> Iterator<Item = R, Error = Self.Error | E2>  [expr] {
   {  } baml.iter.FilterMap { source: self, func: fn }
 }
-function baml.iter.find(self: ?, predicate: (Item) -> bool throws E2) -> Item?  [expr] {
-  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => {  } if (predicate(x)) { return x } } } null
+function baml.iter.find(self: ?, predicate: (Self.Item) -> bool throws E2) -> Self.Item?  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => {  } if (predicate(x)) { return x } } } null
 }
-function baml.iter.flat_map(self: ?, fn: (Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Error | E2 | E3>  [expr] {
+function baml.iter.flat_map(self: ?, fn: (Self.Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Self.Error | E2 | E3>  [expr] {
   {  } baml.iter.FlatMap { source: self, func: fn, inner: baml.iter.Done {  } }
 }
 function baml.iter.flatten(src: Iterator<Item = I, Error = E>) -> Iterator<Item = R, Error = E | E3>  [expr] {
   {  } baml.iter.Flatten { source: src, inner: baml.iter.Done {  } }
 }
-function baml.iter.for_each(self: ?, fn: (Item) -> void throws E2) -> void  [expr] {
-  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => { fn(x) } } }
+function baml.iter.for_each(self: ?, fn: (Self.Item) -> void throws E2) -> void  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => { fn(x) } } }
 }
 function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
   {  } self
@@ -781,7 +782,7 @@ function baml.iter.iter(self: ?) -> Iterator<Item = T, Error = E | E2>  [expr] {
 function baml.iter.iter(self: ?) -> Iterator<Item = R, Error = E | E3>  [expr] {
   {  } self
 }
-function baml.iter.map(self: ?, fn: (Item) -> R throws E2) -> Iterator<Item = R, Error = Error | E2>  [expr] {
+function baml.iter.map(self: ?, fn: (Self.Item) -> R throws E2) -> Iterator<Item = R, Error = Self.Error | E2>  [expr] {
   {  } baml.iter.Map { source: self, func: fn }
 }
 function baml.iter.new(min: int, max: int, step: int = 1) -> baml.iter.Range  [expr] {
@@ -829,16 +830,16 @@ function baml.iter.next(self: ?) -> T | baml.iter.Done  [expr] {
 function baml.iter.peek(self: ?) -> T | baml.iter.Done  [expr] {
   { if (self.has_buffer) { return self.buffer }; let v = self.source.next(); self.buffer = v; self.has_buffer = true } v
 }
-function baml.iter.peekable(self: ?) -> baml.iter.Peekable<Item, Error>  [expr] {
+function baml.iter.peekable(self: ?) -> baml.iter.Peekable<Self.Item, Self.Error>  [expr] {
   {  } baml.iter.Peekable { source: self, buffer: baml.iter.Done {  }, has_buffer: false }
 }
-function baml.iter.reduce(self: ?, fn: (A, Item) -> A throws E2, initial: A) -> A  [expr] {
-  { let acc: A = initial; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => { acc = fn(acc, x) } } } acc
+function baml.iter.reduce(self: ?, fn: (A, Self.Item) -> A throws E2, initial: A) -> A  [expr] {
+  { let acc: A = initial; while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => { acc = fn(acc, x) } } } acc
 }
-function baml.iter.some(self: ?, predicate: (Item) -> bool throws E2) -> bool  [expr] {
-  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Item => {  } if (predicate(x)) { return true } } } false
+function baml.iter.some(self: ?, predicate: (Self.Item) -> bool throws E2) -> bool  [expr] {
+  { while true {  } match (self.next()) { baml.iter.Done => { break }, x: Self.Item => {  } if (predicate(x)) { return true } } } false
 }
-function baml.iter.step_by(self: ?, n: int) -> Iterator<Item = Item, Error = Error>  [expr] {
+function baml.iter.step_by(self: ?, n: int) -> Iterator<Item = Self.Item, Error = Self.Error>  [expr] {
   {  } baml.iter.StepBy { source: self, n: n, first: true }
 }
 

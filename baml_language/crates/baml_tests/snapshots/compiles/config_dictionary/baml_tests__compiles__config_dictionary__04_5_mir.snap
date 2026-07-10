@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10549
 ---
 === MIR2 ===
 fn user.MyClient$new() -> null {
@@ -13,9 +14,9 @@ fn user.MyClient$new() -> null {
     let _6: string[]
     let _7: string[]
     let _8: int[]
-    let _9: map<string, string | string[] | int>
+    let _9: map<string, int | string | string[]>
     let _10: string[]
-    let _11: (map<string, string | map<string, string>> | map<string, string>)[]
+    let _11: (map<string, string> | map<string, string | map<string, string>>)[]
     let _12: map<string, string | map<string, string>>
     let _13: map<string, string>
     let _14: map<string, string>

@@ -501,6 +501,20 @@ struct CallContext<'a> {
     expected: &'a Ty,
 }
 
+/// The call site's explicit `<T1, T2, ...>` type args, resolved ahead of
+/// [`TypeInferenceBuilder::check_call_inner`].
+enum ExplicitTypeArgs {
+    /// No explicit type args were written — use the forward/reverse inference paths.
+    NotProvided,
+    /// Written but malformed (wrong arity) — already diagnosed (`WrongTypeArgArity`), so
+    /// the unresolved-parameter check must not cascade a `CannotInferTypeParameter` on
+    /// top of it for the params the malformed list failed to fill.
+    Errored,
+    /// Validated and resolved: arity checked, each `TypeExpr` lowered. Inference phases
+    /// are skipped in favor of these bindings.
+    Resolved(FxHashMap<Name, Ty>),
+}
+
 struct CallCheckRequest<'a> {
     context: CallContext<'a>,
     callee_ty: Ty,
@@ -515,10 +529,9 @@ struct CallCheckRequest<'a> {
     /// receiver/class substitution, so the restriction would be wrong there).
     is_value_call: bool,
     is_optional_call: bool,
-    /// Pre-computed type-arg bindings when explicit `<T1, T2, ...>` were written at the call
-    /// site. `Some(map)` means the caller already validated arity and resolved each `TypeExpr`;
-    /// `None` means use the existing forward/reverse inference paths.
-    explicit_type_arg_bindings: Option<FxHashMap<Name, Ty>>,
+    /// The call site's explicit `<T1, T2, ...>` type args, if any (see
+    /// [`ExplicitTypeArgs`]).
+    explicit_type_args: ExplicitTypeArgs,
     /// The callee expression, when one exists. Used to resolve the callee's
     /// declared generic params so the call's final type-arg bindings can be
     /// recorded (in declared order) in `call_type_instantiations` for MIR.
@@ -3512,12 +3525,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_method_call,
             is_value_call,
             is_optional_call,
-            explicit_type_arg_bindings,
+            explicit_type_args,
             callee_expr,
             runtime_type_arg_params,
             runtime_type_arg_binding_seed,
             rigid_self_var,
         } = request;
+        let explicit_type_args_errored = matches!(explicit_type_args, ExplicitTypeArgs::Errored);
+        let explicit_type_arg_bindings = match explicit_type_args {
+            ExplicitTypeArgs::Resolved(bindings) => Some(bindings),
+            ExplicitTypeArgs::NotProvided | ExplicitTypeArgs::Errored => None,
+        };
         let explicit_args_used = explicit_type_arg_bindings.is_some();
         let callee_ty = self.expand_alias_chains(callee_ty);
 
@@ -4062,8 +4080,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .collect();
                 // An `Error` expected type is an upstream failure — suppress to avoid a cascade.
                 // An `Unknown` expected (a synthesis position with no annotation) is exactly where
-                // inference was meant to succeed, so a failure there IS reported.
-                if !matches!(expected, Ty::Error { .. }) {
+                // inference was meant to succeed, so a failure there IS reported. Malformed
+                // explicit type args (wrong arity) were already diagnosed at their own site, so
+                // the params they failed to fill must not also report as uninferable.
+                if !matches!(expected, Ty::Error { .. }) && !explicit_type_args_errored {
                     for name in &unresolved_callee_typevars {
                         self.context.report_simple(
                             TirTypeError::CannotInferTypeParameter { name: name.clone() },
@@ -4218,7 +4238,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         is_method_call,
                         is_value_call,
                         is_optional_call,
-                        explicit_type_arg_bindings,
+                        explicit_type_args: match explicit_type_arg_bindings {
+                            Some(bindings) => ExplicitTypeArgs::Resolved(bindings),
+                            None if explicit_type_args_errored => ExplicitTypeArgs::Errored,
+                            None => ExplicitTypeArgs::NotProvided,
+                        },
                         callee_expr,
                         runtime_type_arg_params: Vec::new(),
                         runtime_type_arg_binding_seed: Vec::new(),
@@ -4356,7 +4380,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             // bare-local value callee.
             is_value_call: false,
             is_optional_call: true,
-            explicit_type_arg_bindings: None,
+            explicit_type_args: ExplicitTypeArgs::NotProvided,
             callee_expr: Some(callee_id),
             runtime_type_arg_params,
             runtime_type_arg_binding_seed: self
@@ -6211,11 +6235,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         let callee_ty = self.infer_expr(callee, body);
 
         // When explicit type args are written at the call site (e.g. `foo<int, T>(x)`),
-        // validate arity and resolve them to a pre-computed bindings map.
-        let explicit_type_arg_bindings = if !type_args.is_empty() {
-            self.resolve_explicit_type_args(callee, type_args, expr_id)
+        // validate arity and resolve them to a pre-computed bindings map. A `None` from a
+        // *written* arg list means it was malformed (wrong arity, already diagnosed) — carried
+        // as `Errored` so the unresolved-parameter check doesn't cascade on the params it
+        // failed to fill.
+        let explicit_type_args = if !type_args.is_empty() {
+            match self.resolve_explicit_type_args(callee, type_args, expr_id) {
+                Some(bindings) => ExplicitTypeArgs::Resolved(bindings),
+                None => ExplicitTypeArgs::Errored,
+            }
         } else {
-            None
+            ExplicitTypeArgs::NotProvided
         };
         let callee_generic_params = self
             .callee_declared_generic_params(callee)
@@ -6240,7 +6270,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             is_method_call,
             is_value_call,
             is_optional_call: false,
-            explicit_type_arg_bindings,
+            explicit_type_args,
             callee_expr: Some(callee),
             runtime_type_arg_params,
             runtime_type_arg_binding_seed: self

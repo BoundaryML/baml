@@ -534,22 +534,31 @@ struct GenericLookupContext<'a, 'db> {
     item_tree: &'a baml_compiler2_hir::item_tree::ItemTree,
 }
 
+/// The enclosing class/interface declaration whose type-level parameters a method's
+/// signature env extends — with the declaration kind for shadowing diagnostics.
+struct ParentTypeGenerics {
+    type_name: Name,
+    owner: crate::infer_context::ShadowedParamOwner,
+    params: Vec<Name>,
+    bounds: Vec<Option<ast::TypeExpr>>,
+}
+
 fn parent_type_generic_env(
     ctx: GenericLookupContext<'_, '_>,
     parent_scope_id: Option<FileScopeId>,
-) -> Option<(
-    Name,
-    crate::infer_context::ShadowedParamOwner,
-    Vec<Name>,
-    Vec<Option<ast::TypeExpr>>,
-)> {
+) -> Option<ParentTypeGenerics> {
     let parent = &ctx.index.scopes[parent_scope_id?.index() as usize];
     if !matches!(parent.kind, ScopeKind::Class) {
         return None;
     }
     let type_name = parent.name.clone()?;
     let (owner, params, bounds) = enclosing_type_generics(ctx.item_tree, &type_name)?;
-    Some((type_name, owner, params, bounds))
+    Some(ParentTypeGenerics {
+        type_name,
+        owner,
+        params,
+        bounds,
+    })
 }
 
 fn prepend_parent_type_generics(
@@ -557,10 +566,9 @@ fn prepend_parent_type_generics(
     env: &mut GenericEnv,
     parent_scope_id: Option<FileScopeId>,
 ) -> Option<Name> {
-    let (type_name, _owner, parent_generics, parent_bounds) =
-        parent_type_generic_env(ctx, parent_scope_id)?;
-    env.prepend_declared(&parent_generics, &parent_bounds);
-    Some(type_name)
+    let parent = parent_type_generic_env(ctx, parent_scope_id)?;
+    env.prepend_declared(&parent.params, &parent.bounds);
+    Some(parent.type_name)
 }
 
 /// An out-of-body impl block's declared generics as `(param names, each's single optional
@@ -1478,28 +1486,26 @@ pub fn infer_scope_types<'db>(
                             }
                         }
                         env.prepend_declared(&impl_generic_params, &impl_generic_bounds);
-                    } else if let Some((type_name, owner, parent_generics, parent_bounds)) =
-                        parent_type_generic_env(
-                            GenericLookupContext {
-                                index,
-                                item_tree: &item_tree,
-                            },
-                            scope.parent,
-                        )
-                    {
+                    } else if let Some(parent) = parent_type_generic_env(
+                        GenericLookupContext {
+                            index,
+                            item_tree: &item_tree,
+                        },
+                        scope.parent,
+                    ) {
                         for mp in &sig.user_generic_params {
-                            if parent_generics.iter().any(|cp| cp == mp) {
+                            if parent.params.iter().any(|cp| cp == mp) {
                                 builder.report_at_span(
                                     crate::infer_context::TirTypeError::TypeParamShadowed {
                                         param_name: mp.clone(),
-                                        type_name: type_name.clone(),
-                                        owner,
+                                        type_name: parent.type_name.clone(),
+                                        owner: parent.owner,
                                     },
                                     func_data.span,
                                 );
                             }
                         }
-                        env.prepend_declared(&parent_generics, &parent_bounds);
+                        env.prepend_declared(&parent.params, &parent.bounds);
                     }
                     // BEP-044 (Self-as-type-variable): inside an interface's own
                     // method, `self` is a `Self` type variable bound by the

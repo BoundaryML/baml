@@ -512,13 +512,13 @@ function caller() -> int {
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.caller() -> int throws never {
-      { : unknown
-        let f = : (x: unknown) -> unknown throws never
-          (x: T) -> T { ... } : (x: unknown) -> unknown throws never
+      { : !error
+        let f = : (x: !error) -> !error throws never
+          (x: T) -> T { ... } : (x: !error) -> !error throws never
             {
               x
             }
-        f("string") : unknown
+        f("string") : !error
       }
       !! 48..49: unresolved type: T
       !! 54..55: unresolved type: T

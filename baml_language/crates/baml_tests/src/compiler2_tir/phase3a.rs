@@ -212,7 +212,7 @@ fn unknown_type_in_param() {
         "function f(x: Nonexistent) -> int { return 0; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: unknown) -> int throws never {
+    function user.f(x: !error) -> int throws never {
       { : never
         return 0 : 0
       }
@@ -226,7 +226,7 @@ fn unknown_type_in_return() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> DoesNotExist { return 0; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f() -> unknown throws never {
+    function user.f() -> !error throws never {
       { : never
         return 0 : 0
       }
@@ -1132,7 +1132,7 @@ fn if_without_else_let_binding() {
       }
       !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
       !! 58..64: did you mean `y`? `y ?? 0` is unnecessary, because `y` cannot be null
-      !! 58..64: `if` without `else` cannot be used as a value; add an `else` branch
+      !! 58..64: type mismatch: expected int, got void
     }
     ");
 }
@@ -1219,8 +1219,9 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
     }
     function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
-        return x.name : string | string
+        return x.name : unknown
       }
+      !! 116..120: type `Cat | Dog` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.Cat$stream {
       name: string | null
@@ -1257,7 +1258,7 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       { : never
         return x.whiskers : unknown
       }
-      !! 118..126: type `Dog` has no member `whiskers`
+      !! 118..126: type `Cat | Dog` has no member `whiskers`: its members implement no common interface that declares `whiskers`
     }
     class user.Cat$stream {
       name: string | null
@@ -1295,7 +1296,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       { : never
         return x.name : unknown
       }
-      !! 114..118: type `C` has no member `name`
+      !! 114..118: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.A$stream {
       name: string | null
@@ -1334,8 +1335,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       { : never
         return x.name : unknown
       }
-      !! 113..117: type `B` has no member `name`
-      !! 113..117: type `C` has no member `name`
+      !! 113..117: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
     class user.A$stream {
       name: string | null
@@ -1368,9 +1368,9 @@ function f(x: A | B) -> string { return x.value; }"#,
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
-        return x.value : int | string
+        return x.value : unknown
       }
-      !! 87..94: type mismatch: expected string, got int | string
+      !! 89..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
     }
     class user.A$stream {
       value: int | null
@@ -1400,10 +1400,11 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     }
     function user.f(x: user.A | user.B | null) -> string throws never {
       { : never
-        return x.name : string | string | null
+        return x.name : unknown | null
       }
       !! 95..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
-      !! 95..101: type mismatch: expected string, got string | string | null
+      !! 97..101: type `A | B` has no member `name`: its members implement no common interface that declares `name`
+      !! 95..101: type mismatch: expected string, got unknown | null
     }
     class user.A$stream {
       name: string | null

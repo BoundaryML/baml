@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 43658
 ---
 === TIR2 ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int throws never {
@@ -131,7 +132,7 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string() : unknown
     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string() : unknown
     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label : unknown
-    user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size) : user.ChainItem[]
+    user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size) : user.T[]
     user.profile.settings.preferences.color.len().to_string().len() : unknown
     user.profile.settings.preferences.color.len().to_string().len() : unknown
     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2).label : unknown

@@ -151,7 +151,7 @@ fn unresolved_field() {
       { : never
         return x.missing : unknown
       }
-      !! 66..73: type `Foo` has no member `missing`
+      !! 64..73: type `Foo` has no member `missing`
     }
     class user.Foo$stream {
       name: string | null
@@ -182,7 +182,7 @@ function f(data: Data) -> string {
       { : never
         return data.inner.foo : unknown
       }
-      !! 78..83: type `Data` has no member `inner`
+      !! 73..87: type `Data` has no member `inner`
     }
     class user.Data$stream {
       name: string | null
@@ -213,7 +213,7 @@ function f(s: Sentiment) -> string {
       { : never
         return s.feelin : unknown
       }
-      !! 85..91: type `Sentiment` has no member `feelin`
+      !! 83..91: type `Sentiment` has no member `feelin`
     }
     class user.Sentiment$stream {
       feeling: string | null
