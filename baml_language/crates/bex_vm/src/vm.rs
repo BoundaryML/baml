@@ -5106,8 +5106,20 @@ impl BexVm {
         old_value: Value,
         new_value: Value,
     ) {
-        if !self.watch.is_watched(watched_node) {
+        let Some(snapshot) = self.snapshot_watched_node(watched_node) else {
             return;
+        };
+        self.finish_watched_node_update(watched_node, path, old_value, new_value, snapshot);
+    }
+
+    /// Copies the roots affected by `watched_node` before a mutation occurs.
+    ///
+    /// Array and map element stores must release their object lock before
+    /// walking/deep-copying the graph, so they take this snapshot before the
+    /// atomic locked mutation and finish the topology update afterward.
+    fn snapshot_watched_node(&mut self, watched_node: NodeId) -> Option<(Vec<NodeId>, Vec<Value>)> {
+        if !self.watch.is_watched(watched_node) {
+            return None;
         }
 
         // Deep-copy previous root values so the notification filter can diff
@@ -5123,6 +5135,17 @@ impl BexVm {
             }
         }
 
+        Some((roots, old_roots_copies))
+    }
+
+    fn finish_watched_node_update(
+        &mut self,
+        watched_node: NodeId,
+        path: watch::Path,
+        old_value: Value,
+        new_value: Value,
+        (roots, old_roots_copies): (Vec<NodeId>, Vec<Value>),
+    ) {
         self.update_watched_node_dependencies(watched_node, path, old_value, new_value);
 
         for (&root, old_value) in roots.iter().zip(old_roots_copies) {
@@ -7756,31 +7779,41 @@ impl BexVm {
                     };
                     let new_value_u8: Option<u8> =
                         new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
-                    // Resolve the index and copy the old value before mutating.
-                    // Watch must snapshot affected roots while the container
-                    // still has its pre-assignment value.
+                    let watched_node = NodeId::HeapObject(array_object_index);
+                    let watch_snapshot = self.snapshot_watched_node(watched_node);
+                    // Acquire the array's write lock for bounds-check + old
+                    // read + new write atomically. The Watch snapshot above is
+                    // taken before the mutation without holding this lock.
                     let store_result: Result<(Value, usize), (i64, usize)> = {
                         match self.get_object(array_object_index) {
                             Object::Array(arr) => {
-                                let guard = arr.lock();
+                                let mut guard = arr.lock_mut();
                                 let len = guard.len();
                                 match crate::array_index::resolve_index(i, len) {
-                                    Some(idx) => Ok((guard[idx], idx)),
+                                    Some(idx) => {
+                                        let old = guard[idx];
+                                        guard[idx] = new_value;
+                                        Ok((old, idx))
+                                    }
                                     None => Err((i, len)),
                                 }
                             }
                             Object::Uint8Array(bytes) => {
-                                let Some(_byte_v) = new_value_u8 else {
+                                let Some(byte_v) = new_value_u8 else {
                                     return Err(VmInternalError::TypeError {
                                         expected: bex_vm_types::types::Type::Int,
                                         got: self.type_of(&new_value),
                                     }
                                     .into());
                                 };
-                                let guard = bytes.lock();
+                                let mut guard = bytes.lock_mut();
                                 let len = guard.len();
                                 match crate::array_index::resolve_index(i, len) {
-                                    Some(idx) => Ok((Value::int(i64::from(guard[idx])), idx)),
+                                    Some(idx) => {
+                                        let old = Value::int(i64::from(guard[idx]));
+                                        guard[idx] = byte_v;
+                                        Ok((old, idx))
+                                    }
                                     None => Err((i, len)),
                                 }
                             }
@@ -7804,22 +7837,16 @@ impl BexVm {
                             )));
                         }
                     };
-                    let watched_node = NodeId::HeapObject(array_object_index);
-                    self.update_watched_node(
-                        watched_node,
-                        watch::Path::ArrayIndex(index),
-                        old_value,
-                        new_value,
-                    );
-                    self.heap.write_barrier(array_object_index, new_value);
-                    match self.get_object(array_object_index) {
-                        Object::Array(arr) => arr.lock_mut()[index] = new_value,
-                        Object::Uint8Array(bytes) => {
-                            bytes.lock_mut()[index] =
-                                new_value_u8.expect("Uint8Array value validated above");
-                        }
-                        _ => unreachable!("array object already type-checked above"),
+                    if let Some(snapshot) = watch_snapshot {
+                        self.finish_watched_node_update(
+                            watched_node,
+                            watch::Path::ArrayIndex(index),
+                            old_value,
+                            new_value,
+                            snapshot,
+                        );
                     }
+                    self.heap.write_barrier(array_object_index, new_value);
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
                         return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
@@ -7835,13 +7862,18 @@ impl BexVm {
                     let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?.clone();
                     let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                    // Copy the old value before mutating so Watch snapshots the
-                    // pre-assignment root value.
+                    let watched_node = NodeId::HeapObject(map_index);
+                    let watch_snapshot = self.snapshot_watched_node(watched_node);
+                    // Keep capture-old + insert-new atomic. The Watch snapshot
+                    // above is taken before the mutation without holding this
+                    // lock.
                     let store_result: Result<Value, ObjectType> = {
                         match self.get_object(map_index) {
                             Object::Map(map) => {
-                                let guard = map.lock();
-                                Ok(guard.get(&key).copied().unwrap_or(Value::NULL))
+                                let mut guard = map.lock_mut();
+                                let old = guard.get(&key).copied().unwrap_or(Value::NULL);
+                                guard.insert(key.clone(), new_value);
+                                Ok(old)
                             }
                             other => Err(ObjectType::of(other)),
                         }
@@ -7856,18 +7888,16 @@ impl BexVm {
                             .into());
                         }
                     };
-                    let watched_node = NodeId::HeapObject(map_index);
-                    self.update_watched_node(
-                        watched_node,
-                        watch::Path::MapKey(key.to_string()),
-                        old_value,
-                        new_value,
-                    );
+                    if let Some(snapshot) = watch_snapshot {
+                        self.finish_watched_node_update(
+                            watched_node,
+                            watch::Path::MapKey(key.to_string()),
+                            old_value,
+                            new_value,
+                            snapshot,
+                        );
+                    }
                     self.heap.write_barrier(map_index, new_value);
-                    let Object::Map(map) = self.get_object(map_index) else {
-                        unreachable!("map object already type-checked above");
-                    };
-                    map.lock_mut().insert(key, new_value);
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
                         return Ok(Some(VmExecState::Notify(WatchNotification::Variables(

@@ -400,7 +400,7 @@ impl Watch {
     /// Recomputes reachability from all active roots after removing the edge.
     pub fn unlink_edge(&mut self, parent: NodeId, path: Path, child: NodeId) {
         if let Some(edges) = self.children.get_mut(&parent) {
-            edges.remove(&(path.clone(), child));
+            edges.remove(&(path, child));
             if edges.is_empty() {
                 self.children.remove(&parent);
             }
