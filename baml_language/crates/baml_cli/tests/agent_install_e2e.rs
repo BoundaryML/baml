@@ -93,7 +93,6 @@ fn default_install_fetches_head_and_records_provenance() {
             "BAML_AGENT_SKILLS_ARCHIVE_BASE_URL",
             format!("{server}/archive"),
         )
-        .env_remove("BAML_AGENT_SKILLS_RELEASE_VERSION")
         .output()
         .unwrap();
     assert!(

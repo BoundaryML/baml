@@ -95,8 +95,8 @@ impl AgentInstallArgs {
 struct LoadedSkills {
     skills: Vec<Skill>,
     /// Head commit of the skill repo, present only when installing from the
-    /// default source (the repo's main branch). Custom `--from` sources and
-    /// the pinned-release escape hatch have no commit identity to record.
+    /// default source (the repo's main branch). Custom `--from` sources have
+    /// no commit identity to record.
     commit: Option<String>,
 }
 
@@ -124,20 +124,6 @@ fn load_skills(args: &AgentInstallArgs) -> Result<LoadedSkills> {
                 path.display()
             )
         })?;
-        return Ok(LoadedSkills {
-            skills: skills_from_archive(&archive)?,
-            commit: None,
-        });
-    }
-
-    // Escape hatch: install the checksummed skill snapshot attached to a
-    // toolchain release instead of the skill repo head.
-    if let Some(version) = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_VERSION") {
-        let url = versioned_skill_archive_url(&version);
-        let archive = fetch_url_bytes(&url)?;
-        let checksum_text = fetch_url_text(&format!("{url}.sha256"))?;
-        baml_release::verify_release_archive_checksum_text(&archive, &url, &checksum_text)
-            .context("verifying agent skills archive checksum failed")?;
         return Ok(LoadedSkills {
             skills: skills_from_archive(&archive)?,
             commit: None,
@@ -184,46 +170,6 @@ fn record_installed_commit(commit: &str) {
 
 fn is_http_url(value: &str) -> bool {
     value.starts_with("https://") || value.starts_with("http://")
-}
-
-fn env_var_nonempty(name: &str) -> Option<String> {
-    std::env::var(name)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-fn versioned_skill_archive_url(version: &str) -> String {
-    let base_url = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_BASE_URL");
-    let repo = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_REPO")
-        .unwrap_or_else(baml_release::release_repo);
-    versioned_skill_archive_url_with_env(version, base_url.as_deref(), Some(&repo))
-}
-
-fn versioned_skill_archive_url_with_env(
-    version: &str,
-    base_url: Option<&str>,
-    repo: Option<&str>,
-) -> String {
-    let filename = versioned_skill_archive_filename(version);
-    if let Some(base_url) = base_url.map(str::trim).filter(|value| !value.is_empty()) {
-        return format!("{}/{}", base_url.trim_end_matches('/'), filename);
-    }
-
-    let repo = repo
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(baml_release::DEFAULT_RELEASE_REPO);
-    format!("https://github.com/{repo}/releases/download/baml-language-{version}/{filename}")
-}
-
-fn versioned_skill_archive_filename(version: &str) -> String {
-    format!("baml-agent-skills-{version}.tar.gz")
-}
-
-fn fetch_url_text(url: &str) -> Result<String> {
-    let bytes = fetch_url_bytes(url)?;
-    String::from_utf8(bytes).with_context(|| format!("{url} was not valid UTF-8"))
 }
 
 fn fetch_url_bytes(url: &str) -> Result<Vec<u8>> {
@@ -799,22 +745,6 @@ mod tests {
                     .file_name()
                     .to_string_lossy()
                     .starts_with(".baml-agent-install-backup-"))
-        );
-    }
-
-    #[test]
-    fn versioned_archive_url_defaults_to_release_asset() {
-        assert_eq!(
-            versioned_skill_archive_url_with_env("1.2.3", None, None),
-            "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3/baml-agent-skills-1.2.3.tar.gz"
-        );
-        assert_eq!(
-            versioned_skill_archive_url_with_env("1.2.3", Some("https://example.com/base/"), None),
-            "https://example.com/base/baml-agent-skills-1.2.3.tar.gz"
-        );
-        assert_eq!(
-            versioned_skill_archive_url_with_env("1.2.3", None, Some("BoundaryML/custom")),
-            "https://github.com/BoundaryML/custom/releases/download/baml-language-1.2.3/baml-agent-skills-1.2.3.tar.gz"
         );
     }
 
