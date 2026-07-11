@@ -21,23 +21,30 @@
   border-bottom: 1px solid #e7e2d6;
 }
 .tab {
-  padding: 3px 11px;
+  padding: 4px 13px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
+  font-weight: 500;
   color: #6f6a63;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.03em;
   cursor: pointer;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: 0;
+  border-radius: 7px;
+  transition:
+    color 130ms ease,
+    background 130ms ease;
 }
 .tab:hover {
   color: #1a1612;
+  background: rgba(26, 22, 18, 0.04);
 }
 .tab[aria-selected="true"] {
   color: #6d28d9;
-  background: #fffdf7;
-  border-color: #d8cfbd;
+  background: rgba(109, 40, 217, 0.1);
+}
+.tab[aria-selected="true"]:hover {
+  background: rgba(109, 40, 217, 0.14);
 }
 .copyBtn {
   padding: 3px 9px;

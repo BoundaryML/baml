@@ -88,15 +88,16 @@ function AnchorLink({ id }: { id: string }) {
 }
 
 /* A small "spec" chip linking the section to its design proposal (BEP) on
- * beps.boundaryml.com. The site routes on the bare number (/beps/16); the
- * label shows the canonical zero-padded form (BEP-016). Opens in a new tab. */
+ * beps.boundaryml.com. The route uses the zero-padded, min-two-digit number
+ * (/beps/02, /beps/16); the label shows the canonical BEP-002 form. Opens in
+ * a new tab. */
 function BepLink({ n }: { n: number }) {
   const label = `BEP-${String(n).padStart(3, '0')}`;
   return (
     <a
       aria-label={`${label} — read the design proposal`}
       className="l6-bep font-mono"
-      href={`https://beps.boundaryml.com/beps/${n}`}
+      href={`https://beps.boundaryml.com/beps/${String(n).padStart(2, '0')}`}
       rel="noreferrer"
       target="_blank"
     >
@@ -372,8 +373,39 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
       { rootMargin: '0px 0px -70% 0px' },
     );
     for (const s of sections) io.observe(s);
+
+    // On a hash load (e.g. /explore#describe), the browser's anchor jump fires
+    // before the ssr:false editors/playgrounds above the target mount and grow.
+    // That growth pushes the target down, leaving the viewport parked on the
+    // previous section. Re-pin to the anchor as the layout settles, backing off
+    // the instant the user scrolls, and stop once things stabilize.
+    const hashId = decodeURIComponent(window.location.hash.slice(1));
+    const target = hashId ? document.getElementById(hashId) : null;
+    let pinObserver: ResizeObserver | null = null;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    const stopPin = () => {
+      pinObserver?.disconnect();
+      pinObserver = null;
+      clearTimeout(settleTimer);
+      window.removeEventListener('wheel', stopPin);
+      window.removeEventListener('touchmove', stopPin);
+      window.removeEventListener('keydown', stopPin);
+    };
+    if (target) {
+      const pin = () =>
+        target.scrollIntoView({ block: 'start', behavior: 'instant' });
+      pinObserver = new ResizeObserver(pin);
+      pinObserver.observe(node);
+      window.addEventListener('wheel', stopPin, { passive: true });
+      window.addEventListener('touchmove', stopPin, { passive: true });
+      window.addEventListener('keydown', stopPin);
+      settleTimer = setTimeout(stopPin, 2500);
+      pin();
+    }
+
     return () => {
       io.disconnect();
+      stopPin();
       if (prevKind === null) {
         document.body.removeAttribute('data-vscode-theme-kind');
       } else {
@@ -636,7 +668,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
 
             {/* ---- error handling ---- */}
             <Section
-              bep={16}
+              bep={2}
               id="error-handling"
               num="3"
               title="Error handling (it reads like match)"

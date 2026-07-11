@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import styles from './try-baml.module.css';
 
 // Shared "Try BAML" install unit used by /quickstart and the /explore
@@ -290,6 +290,16 @@ export function TryBaml() {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [agentCopied, setAgentCopied] = useState(false);
+
+  // Default the install method to the visitor's platform.
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    if (/Windows/i.test(ua)) {
+      setOs('win');
+    } else if (/Linux|X11/i.test(ua) && !/Android/i.test(ua)) {
+      setOs('curl');
+    }
+  }, []);
 
   const osOpt = OS_OPTS.find((o) => o.id === os) ?? OS_OPTS[0];
   const envOpt = ENV_OPTS.find((e) => e.id === env) ?? ENV_OPTS[0];
