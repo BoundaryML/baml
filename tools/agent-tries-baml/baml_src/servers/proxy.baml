@@ -10,7 +10,7 @@
 //
 // The agent-under-test's baml toolchain is resolved per-run via ensure_agent_baml
 // (BAML_VERSION wrapper); skills are installed by the AGENT itself
-// (`baml agent install --latest`, part of the benchmarked behavior — the proxy
+// (`baml agent install`, part of the benchmarked behavior — the proxy
 // only detects the install post-run). Staging dirs are removed after every run
 // (cleanup_staging; STAGING_KEEP=1 to keep them for debugging).
 

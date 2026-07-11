@@ -111,10 +111,10 @@ class WorkerProcessor {
                 }
             };
 
-            // Warm runs install the official skills THEMSELVES (`baml agent install
-            // --latest`, per the system prompt) — the install is part of the
+            // Warm runs install the official skills THEMSELVES (`baml agent
+            // install`, per the system prompt) — the install is part of the
             // benchmarked behavior. We still record the exact skill identity
-            // (repo@sha): --latest resolves to baml-skill@main, so the main HEAD
+            // (repo@sha): the install resolves to baml-skill@main, so the main HEAD
             // sha at dispatch time identifies it to the minute. Cold runs install
             // nothing (the onboarding experience itself is under test).
             let skill_ver = if (cold) {

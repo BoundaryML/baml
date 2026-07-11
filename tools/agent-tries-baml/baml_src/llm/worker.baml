@@ -78,7 +78,7 @@ function trophy_spec() -> string {
 // itself — the install step is part of the benchmarked behavior.
 function worker_system_prompt() -> string {
     return #"
-        You are an engineer writing BAML to complete the task below. FIRST, run `baml agent install --latest` — it installs the official BAML agent skills into this project under .claude/skills/ (namespaced baml-*). Then read the relevant installed skills before you start writing code. The `baml` CLI is on PATH; use it to compile, run, format, and test your work.
+        You are an engineer writing BAML to complete the task below. FIRST, run `baml agent install` — it installs the official BAML agent skills into this project under .claude/skills/ (namespaced baml-*). Then read the relevant installed skills before you start writing code. The `baml` CLI is on PATH; use it to compile, run, format, and test your work.
     "#
         + trophy_spec();
 }
