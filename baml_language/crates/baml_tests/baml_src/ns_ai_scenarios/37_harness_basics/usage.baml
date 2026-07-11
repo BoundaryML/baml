@@ -218,6 +218,18 @@ test "37: a transport failure carries replay facts, not a retry opinion" {
   assert.equal(failure.commit_state(), root.ai.CommitState.NotCommitted)
 }
 
+test "37: nullable harness metadata does not poison unrelated SAP parses" {
+  // `json` already admits null. This exercises the entire package-wide SAP
+  // type database while asking for an unrelated primitive result.
+  let block = root.ai.ToolCallBlock {
+    call: root.ai.ToolCall { id: "call_1", name: "noop", args: "{}" },
+    provider_name: "fixture",
+    metadata: null,
+  };
+  assert.equal(block.provider_metadata(), null)
+  assert.equal(baml.sap.parse<string>("pong"), "pong")
+}
+
 testset "integ-test-37-harness-basics" {
   test "37 live: the same hand-written request expansion works with a real Realtime provider" {
     let channel = root.ai.RecordingChannel { frames: [] };

@@ -24,7 +24,9 @@ class Meta {
   finish_reason: string?,
   usage: Usage?,
   attributes: map<string, unknown>,
-  raw: json?,
+  // `json` already includes null; spelling this `json?` creates a nested
+  // recursive union that is invalid for SAP's global type database.
+  raw: json,
   blocks: ModelBlock[]?,
   citations: Citation[]?,
   logprobs: Logprob[]?,

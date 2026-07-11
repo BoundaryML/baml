@@ -3,7 +3,7 @@
 interface AgentEvent {
   function kind(self) -> string throws never
   function run_id(self) -> string? throws never { null }
-  function provider_metadata(self) -> json? throws never { null }
+  function provider_metadata(self) -> json throws never { null }
 }
 
 class ModelStartedEvent {
@@ -18,11 +18,11 @@ class ModelStartedEvent {
 class TextDeltaEvent {
   id: string?,
   text: string,
-  metadata: json?,
+  metadata: json,
   implements AgentEvent {
     function kind(self) -> string throws never { "text_delta" }
     function run_id(self) -> string? throws never { self.id }
-    function provider_metadata(self) -> json? throws never { self.metadata }
+    function provider_metadata(self) -> json throws never { self.metadata }
   }
 }
 
@@ -31,11 +31,11 @@ class ReasoningDeltaEvent {
   summary: string?,
   redacted: bool,
   provider: string,
-  metadata: json?,
+  metadata: json,
   implements AgentEvent {
     function kind(self) -> string throws never { "reasoning_delta" }
     function run_id(self) -> string? throws never { self.id }
-    function provider_metadata(self) -> json? throws never { self.metadata }
+    function provider_metadata(self) -> json throws never { self.metadata }
   }
 }
 

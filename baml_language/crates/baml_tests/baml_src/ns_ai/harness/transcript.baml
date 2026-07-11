@@ -3,7 +3,7 @@
 class ConversationMessage {
   role: string,
   parts: MessagePart[],
-  provider_metadata: json?,
+  provider_metadata: json,
 }
 
 class Conversation {

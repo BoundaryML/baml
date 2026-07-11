@@ -137,13 +137,13 @@ testset "integ-test-19-fork-branch" {
         let a = forkable.fork();
         let b = forkable.fork();
         [
-          a.run<string>(s19_ContinueBranch_request("", "Is it even or odd? One word.", provider = provider)),
+          a.run<string>(s19_ContinueBranch_request("", "What number did I call my favorite? One digit.", provider = provider)),
           b.run<string>(s19_ContinueBranch_request("", "What is it times two? One number.", provider = provider)),
         ]
       },
       _ => ["provider session is not forkable", "provider session is not forkable"],
     };
-    assert.is_true(answers[0].to_lower_case().includes("odd"))
+    assert.contains(answers[0], "7")
     assert.contains(answers[1], "14")
     shared.cleanup();
   }
