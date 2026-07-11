@@ -3,11 +3,12 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
-  class Array<T> { methods: [filled, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
+  class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
   class Bigint { methods: [abs, min, max, clamp, isqrt, pow, ilog, parse, random] }
   class Bool { methods: [] }
   type Comparable
   class Float { methods: [is_nan, is_infinite, is_finite, abs, min, max, clamp, floor, ceil, round, trunc, fract, ifloor, iceil, iround, itrunc, sqrt, pow, log, hypot, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, to_radians, to_degrees, parse, random, pi, e, golden_ratio, nan, inf] }
+  type FloatStats
   type FromJson
   class Int { methods: [abs, min, max, clamp, isqrt, pow, ilog, leading_zeros, leading_ones, trailing_zeros, trailing_ones, count_zeros, count_ones, parse, random, max_value, min_value] }
   class Map<K, V> { methods: [length, has, keys, values, set, get, delete, get_or_insert, clear] }
@@ -25,11 +26,16 @@ namespace baml:
   function _float_total_cmp
   function _from_json_shim<T>
   function _is_primitive_array<T>
+  function _mean_float
+  function _median_float
   function _rust_sort<A>
+  function _sum_float
+  function _sum_int
   function _to_json_default<T>
   function _to_json_shim<T>
   function _to_string_default<T>
   function _to_string_shim<T>
+  function _trunc_to_int
   function deep_copy<T>
   function deep_equals<T>
 namespace baml.csv:
@@ -77,6 +83,7 @@ namespace baml.csv:
 namespace baml.env:
   function get
   function get_or_panic
+  function get_or_panic_lenient
 namespace baml.errors:
   class AccessError { methods: [] }
   class CompilationError { methods: [] }
@@ -197,8 +204,9 @@ namespace baml.llm:
   class PlannerState { methods: [rr_local_offset, rr_pick_index] }
   class PrimitiveClient { methods: [render_prompt, specialize_prompt, render_specialized_prompt, build_request, build_request_stream, new_stream_accumulator, validate_finish_reason, parse] }
   class PrimitiveClientOptions { methods: [] }
-  class PromptAst { methods: [] }
-  class RetryPolicy { methods: [] }
+  class PromptAst { methods: [text, messages, to_string] }
+  class PromptMessage { methods: [] }
+  class RetryPolicy { methods: [initial_delay_or_default, multiplier_or_default, max_delay_or_default] }
   class Role { methods: [] }
   class Stream<TStream, TFinal> { methods: [next, final] }
   class StreamAccumulator { methods: [add_events, content, is_done, model, finish_reason, input_tokens, output_tokens] }
@@ -221,13 +229,8 @@ namespace baml.llm:
   function prompt_template_for
   function render_output_format
   function render_prompt
+  function render_prompt_values
   function stream_llm_function<TStream, TFinal>
-namespace baml.math:
-  function _sum_int
-  function mean
-  function median
-  function sum
-  function trunc
 namespace baml.media:
   class Audio { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }

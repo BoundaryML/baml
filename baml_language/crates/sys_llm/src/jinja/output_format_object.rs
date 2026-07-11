@@ -194,8 +194,8 @@ fn parse_hoist_classes_kwarg(kwargs: &Kwargs) -> Result<HoistClasses, minijinja:
 }
 
 /// Parse `map_style` kwarg:
-/// - Not present -> `TypeParameters` (default)
-/// - "`type_parameters`" -> `TypeParameters`
+/// - Not present -> `ObjectLiteral` (default JSON object shape)
+/// - "`type_parameters`" -> `TypeParameters` (opt-in `map<K, V>` escape hatch)
 /// - "`object_literal`" -> `ObjectLiteral`
 fn parse_map_style_kwarg(kwargs: &Kwargs) -> Result<MapStyle, minijinja::Error> {
     if !kwargs.has("map_style") {

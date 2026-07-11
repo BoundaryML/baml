@@ -12,17 +12,17 @@
 //! The dispatch callback:
 //! 1. Looks up the Python callable by `host_value_key`.
 //! 2. Decodes the `BamlOutboundValue` args into Python values via
-//!    `baml_core.proto._decode_value_holder` (already a list shape).
+//!    `baml_bridge.proto._decode_value_holder` (already a list shape).
 //! 3. Invokes the callable. If the return is a coroutine, runs it to
 //!    completion on a fresh `asyncio` event loop. The dispatch runs on a
 //!    spawned tokio task (see [`host_dispatch_callback`]), so blocking that
 //!    task to drive the coroutine to completion does not stall the engine,
 //!    which concurrently awaits the call's completion.
 //! 4. Encodes the result into `InboundValue` bytes via
-//!    `baml_core.proto.encode_call_args`-style serialization, then calls
+//!    `baml_bridge.proto.encode_call_args`-style serialization, then calls
 //!    `bridge_cffi::complete_host_call(call_id, 0, ptr, len)`.
 //! 5. On any Python exception, branches on the exception type:
-//!    - A `baml_core.errors.BamlError` carrying a codegenned BAML value
+//!    - A `baml_bridge.errors.BamlError` carrying a codegenned BAML value
 //!      is unwrapped (`.value`) and encoded as that real BAML class
 //!      (preserves catch matching against user-declared throws).
 //!    - Anything else (native `ValueError`, `KeyError`, ...) is registered
@@ -50,7 +50,7 @@ use std::{
 };
 
 use bridge_cffi::complete_host_call;
-use bridge_ctypes::baml_core::cffi::{
+use bridge_ctypes::baml_bridge::cffi::{
     BamlHandle, BamlHandleType, BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
     inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
 };
@@ -89,7 +89,7 @@ fn next_key() -> u64 {
 /// Insert a Python callable into the registry and return its key.
 ///
 /// Exposed to Python as `baml_py.register_host_callable(callable) -> int`.
-/// Called from the inbound encoder in `baml_core.proto` whenever a Python
+/// Called from the inbound encoder in `baml_bridge.proto` whenever a Python
 /// callable appears as a kwarg.
 #[gen_stub_pyfunction]
 #[pyfunction]
@@ -155,7 +155,7 @@ pub extern "C" fn host_release_callback(host_value_key: u64) {
 /// `BamlPyHandle` whose `handle_type` is `HOST_VALUE_CALLABLE` /
 /// `HOST_VALUE_OPAQUE`, returning a fresh strong reference if the entry
 /// is still live. Used by the outbound error decoder in
-/// `baml_core.proto` to rehydrate a `baml.errors.HostCallable` thrown
+/// `baml_bridge.proto` to rehydrate a `baml.errors.HostCallable` thrown
 /// by BAML back to the original Python exception object on same-host
 /// round-trip.
 ///
@@ -169,7 +169,7 @@ pub fn lookup_host_value(
     py: Python<'_>,
     handle: &crate::py_handle::BamlPyHandle,
 ) -> Option<Py<PyAny>> {
-    use bridge_ctypes::baml_core::cffi::BamlHandleType;
+    use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
     let ht_i32 = i32::try_from(handle.handle_type).ok()?;
     if ht_i32 != BamlHandleType::HostValueCallable as i32
         && ht_i32 != BamlHandleType::HostValueOpaque as i32
@@ -344,7 +344,7 @@ fn dispatch_in_python(callable: Py<PyAny>, call_id: u32, args_bytes: Vec<u8>) {
         // completion on a fresh asyncio loop. Sync callables fall through.
         let final_result = run_if_coroutine(py, result_obj)?;
 
-        // Encode the result as an `InboundValue` via `baml_core.proto`.
+        // Encode the result as an `InboundValue` via `baml_bridge.proto`.
         encode_result_inbound(py, final_result)
     });
 
@@ -358,7 +358,7 @@ fn dispatch_in_python(callable: Py<PyAny>, call_id: u32, args_bytes: Vec<u8>) {
 
 /// Decode the protobuf `BamlToHostCall` into the callable's positional args
 /// (a `tuple`) and supplied-optional kwargs (a `dict`), each value decoded via
-/// `baml_core.proto.decode_value`. The engine already resolved the call against
+/// `baml_bridge.proto.decode_value`. The engine already resolved the call against
 /// the callable's declared params and dropped omitted optionals, so `args` is a
 /// flat declared-order list; partition it by each arg's `is_optional_arg` flag —
 /// required args go positional, supplied optionals become kwargs keyed by
@@ -368,8 +368,8 @@ fn decode_args<'py>(
     py: Python<'py>,
     bytes: &[u8],
 ) -> PyResult<(Bound<'py, PyTuple>, Bound<'py, PyDict>)> {
-    let outbound_pb2 = PyModule::import(py, "baml_core.cffi.v1.baml_outbound_pb2")?;
-    let proto = PyModule::import(py, "baml_core.proto")?;
+    let outbound_pb2 = PyModule::import(py, "baml_bridge.cffi.v1.baml_outbound_pb2")?;
+    let proto = PyModule::import(py, "baml_bridge.proto")?;
     let type_map = proto.getattr("get_type_map")?.call0()?;
     let decode_value = proto.getattr("decode_value")?;
 
@@ -428,10 +428,10 @@ fn run_if_coroutine(py: Python<'_>, value: Py<PyAny>) -> PyResult<Py<PyAny>> {
 }
 
 /// Encode `value` as an `InboundValue` protobuf using
-/// `baml_core.proto._set_inbound_value`, then serialize to bytes.
+/// `baml_bridge.proto._set_inbound_value`, then serialize to bytes.
 fn encode_result_inbound(py: Python<'_>, value: Py<PyAny>) -> PyResult<Vec<u8>> {
-    let inbound_pb2 = PyModule::import(py, "baml_core.cffi.v1.baml_inbound_pb2")?;
-    let proto = PyModule::import(py, "baml_core.proto")?;
+    let inbound_pb2 = PyModule::import(py, "baml_bridge.cffi.v1.baml_inbound_pb2")?;
+    let proto = PyModule::import(py, "baml_bridge.proto")?;
     let holder = inbound_pb2.getattr("InboundValue")?.call0()?;
     // Track host callables registered while encoding so we can release them on
     // failure. A callback nested in the result (e.g. `{"cb": lambda x: x}`)
@@ -540,7 +540,7 @@ fn send_dispatch_bridge_failure(call_id: u32, message: String) {
     );
 }
 
-/// If `py_err` is a `baml_core.errors.BamlError` *or* `BamlPanic` carrying
+/// If `py_err` is a `baml_bridge.errors.BamlError` *or* `BamlPanic` carrying
 /// a codegenned BAML value, encode the unwrapped value (`e.value`) as an
 /// `InboundValue` — preserving its real BAML class identity so the BAML
 /// caller can `catch (e: MyError)` and read fields just like a BAML-thrown
@@ -562,7 +562,7 @@ fn send_dispatch_bridge_failure(call_id: u32, message: String) {
 /// the value) is also collapsed to the opaque path by the caller — the
 /// call always completes, even if the BAML-class identity is lost.
 fn try_encode_baml_error_throw(py: Python<'_>, py_err: &pyo3::PyErr) -> PyResult<Option<Vec<u8>>> {
-    let errors_mod = match PyModule::import(py, "baml_core.errors") {
+    let errors_mod = match PyModule::import(py, "baml_bridge.errors") {
         Ok(m) => m,
         // Defensive: missing module would be a packaging bug. Fall through.
         Err(_) => return Ok(None),
@@ -587,8 +587,8 @@ fn try_encode_baml_error_throw(py: Python<'_>, py_err: &pyo3::PyErr) -> PyResult
         // the caller will fall through to the opaque path.
         return Ok(None);
     }
-    let inbound_pb2 = PyModule::import(py, "baml_core.cffi.v1.baml_inbound_pb2")?;
-    let proto = PyModule::import(py, "baml_core.proto")?;
+    let inbound_pb2 = PyModule::import(py, "baml_bridge.cffi.v1.baml_inbound_pb2")?;
+    let proto = PyModule::import(py, "baml_bridge.proto")?;
     let holder = inbound_pb2.getattr("InboundValue")?.call0()?;
     let registered = pyo3::types::PyList::empty(py);
     let kwargs_dict = pyo3::types::PyDict::new(py);
@@ -616,7 +616,7 @@ fn try_encode_baml_error_throw(py: Python<'_>, py_err: &pyo3::PyErr) -> PyResult
 /// `complete_host_call`. Must be called under the GIL.
 ///
 /// Branches on the exception type:
-/// - `baml_core.errors.BamlError` → unwrap `.value` and emit it as its
+/// - `baml_bridge.errors.BamlError` → unwrap `.value` and emit it as its
 ///   real BAML class. The BAML caller's `catch (e: MyError)` matches.
 /// - Anything else (native `ValueError`, `KeyError`, ...) → emit an
 ///   opaque `baml.errors.HostCallable` Instance carrying the four

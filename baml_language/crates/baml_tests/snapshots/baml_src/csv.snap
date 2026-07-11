@@ -1648,7 +1648,7 @@ function csv.csv_excel_profile() -> string {
     load_const "x"
     load_type null | bool | int | bigint | float | string
     alloc_array 1
-    load_type null | bool | int | bigint | float | string[]
+    load_type (null | bool | int | bigint | float | string)[]
     alloc_array 1
     load_const null
     load_const null
@@ -4351,7 +4351,7 @@ function csv.csv_stringify_records_roundtrip() -> string {
     load_const "x\ny"
     load_type null | bool | int | bigint | float | string
     alloc_array 2
-    load_type null | bool | int | bigint | float | string[]
+    load_type (null | bool | int | bigint | float | string)[]
     alloc_array 2
     load_const <omitted>
     call baml.csv.stringify_records

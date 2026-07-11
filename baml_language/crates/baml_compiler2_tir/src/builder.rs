@@ -550,10 +550,10 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 }
 
-/// The builder *is* a [`TypeContext`](baml_type::normalize::TypeContext): the
+/// The builder *is* a [`baml_type::normalize::TypeContext`]: the
 /// nominal facts the type algebra needs are entirely global (see
 /// [`GlobalTypeContext`]), so each method delegates to a [`GlobalTypeContext`]
-/// over the builder's scope via [`Self::as_global`]. Implementing the trait
+/// over the builder's scope via `Self::as_global`. Implementing the trait
 /// directly lets value-checking call the defaulted algebra methods on the builder
 /// — `self.is_subtype(a, b)` — with no wrapper.
 impl baml_type::normalize::TypeContext for TypeInferenceBuilder<'_> {

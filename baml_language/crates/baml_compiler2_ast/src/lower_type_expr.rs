@@ -630,17 +630,26 @@ pub(crate) fn check_throws_wildcard(
     }
 }
 
-/// Reject — and neutralize — the `_` wildcard type where it cannot be inferred.
+/// Reject — and neutralize — the `_` wildcard type at a DECLARATION-site type
+/// position, where it cannot be inferred.
 ///
-/// `_` is an inference hole: it is only meaningful in a `let` binding annotation
-/// (filled from the initializer) or as a top-level `throws`-clause member
-/// (filled from the body's inferred throw set). In a signature, field, alias, or
-/// bound type there is nothing to infer it from. Every such occurrence is
-/// reported AND rewritten to [`TypeExprKind::Error`], so it lowers to the
-/// error-recovery `Ty::Unknown` sentinel rather than a `Ty::Infer` — which would
-/// otherwise reach type normalization, where an inference hole has no sound
-/// form (see `baml_type::normalize`). This keeps the invariant that a
-/// `Ty::Infer` only ever originates from the two hole-handling contexts.
+/// `_` is an inference hole. This firewall governs only the declaration sites it
+/// is applied to (a signature parameter/return, a field, an alias, a generic
+/// bound): there is nothing local to infer a hole from there, so every
+/// occurrence is reported AND rewritten to [`TypeExprKind::Error`]. It then
+/// lowers to the error-recovery `Ty::Unknown` sentinel rather than a `Ty::Infer`
+/// — which would otherwise reach type normalization, where an inference hole has
+/// no sound form (see `baml_type::normalize`).
+///
+/// A `Ty::Infer` therefore reaches type checking only from the positions this
+/// firewall does NOT cover, each of which fills-or-rejects the hole itself:
+///   * a `let` binding annotation (filled from the initializer),
+///   * a top-level `throws`-clause member (filled from the inferred throw set;
+///     nested `throws` holes ARE firewalled, see `check_throws_wildcard`), and
+///   * the expression-context type positions — a call turbofish, an object
+///     construction, a generic-apply value, an upcast target — handled during
+///     inference (see the expression-context `_` hole policy in
+///     `baml_compiler2_tir`'s `builder.rs`).
 ///
 /// Emits `WildcardTypeNotAllowed` for every occurrence at any depth.
 pub(crate) fn check_wildcard_type(

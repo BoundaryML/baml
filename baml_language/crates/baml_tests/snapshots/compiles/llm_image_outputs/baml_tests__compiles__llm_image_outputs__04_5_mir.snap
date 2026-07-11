@@ -252,7 +252,7 @@ fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> 
 
     bb2: {
         _4 = { const "prompt": copy _1 }: map<string, unknown>;
-        _5 = load_type(image | string[]);
+        _5 = load_type((image | string)[]);
         _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "GenerateMixedImageNarrative", copy _4, const <omitted>) -> [bb3];
     }
 
@@ -345,29 +345,30 @@ fn user.GenerateMixedImageNarrative$render_prompt(prompt: string, client: baml.l
     }
 }
 
-fn user.OpenAIImageResponses$new() -> null {
+fn user.OpenAIImageResponses$new(lenient: bool) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: string
-    let _3: map<string, string>
+    let _1: bool // lenient // param
+    let _2: baml.llm.PrimitiveClientOptions
+    let _3: string
     let _4: map<string, string>
-    let _5: map<string, unknown>
-    let _6: map<string, string>[]
-    let _7: map<string, string>
+    let _5: map<string, string>
+    let _6: map<string, unknown>
+    let _7: map<string, string>[]
+    let _8: map<string, string>
 
     bb0: {
-        _2 = call const fn baml.env.get_or_panic(const "OPENAI_API_KEY") -> [bb1];
+        _3 = call const fn baml.env.get_or_panic_lenient(const "OPENAI_API_KEY", copy _1) -> [bb1];
     }
 
     bb1: {
-        _3 = {  }: map<string, string>;
         _4 = {  }: map<string, string>;
-        _7 = { const "type": const "image_generation", const "size": const "1024x1024", const "quality": const "low" }: map<string, string>;
-        _6 = [copy _7]: map<string, string>[];
-        _5 = { const "tools": copy _6 }: map<string, unknown>;
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4.1", const null, const null, const null, const null, const null, const null, const null, const null, copy _2, const null, const null, copy _3, copy _4, copy _5 };
-        _0 = baml.llm.PrimitiveClient { const "OpenAIImageResponses", const "openai-responses", copy _1 };
+        _5 = {  }: map<string, string>;
+        _8 = { const "type": const "image_generation", const "size": const "1024x1024", const "quality": const "low" }: map<string, string>;
+        _7 = [copy _8]: map<string, string>[];
+        _6 = { const "tools": copy _7 }: map<string, unknown>;
+        _2 = baml.llm.PrimitiveClientOptions { const "gpt-4.1", const null, const null, const null, const null, const null, const null, const null, const null, copy _3, const null, const null, copy _4, copy _5, copy _6 };
+        _0 = baml.llm.PrimitiveClient { const "OpenAIImageResponses", const "openai-responses", copy _2 };
         goto -> bb2;
     }
 

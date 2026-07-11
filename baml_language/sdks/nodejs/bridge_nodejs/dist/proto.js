@@ -2,7 +2,7 @@
  * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
  *
  * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 // proto.ts — mirrors bridge_python/python_src/baml_py/proto.py
@@ -10,21 +10,21 @@
 // Encodes TS objects → CallFunctionArgs protobuf bytes (for sending to Rust)
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
-import { baml_core } from './proto/baml_cffi.js';
+import { baml_bridge } from './proto/baml_cffi.js';
 import { BamlHandle, BamlImage, BamlAudio, BamlVideo, BamlPdf, registerHostCallable, releaseHostCallable, completeHostCall, } from './native.js';
 import { BamlStream } from './stream.js';
 import { BamlAbortError, BamlCancelledError, BamlError, BamlPanic } from './errors.js';
 import { registerHostOpaque, tryRehydrateHostValueByKey, } from './host_value_registry.js';
 import { getTypeMap } from './typemap.js';
 import { lowerTypeToWireTy, outboundTyToBamlType } from './wire_ty.js';
-const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
-const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
-const BamlOutboundResult = baml_core.cffi.v1.BamlOutboundResult;
-const BamlToHostCall = baml_core.cffi.v1.BamlToHostCall;
-const InboundValue = baml_core.cffi.v1.InboundValue;
-const InboundClassValue = baml_core.cffi.v1.InboundClassValue;
-const InboundMapEntry = baml_core.cffi.v1.InboundMapEntry;
-const BamlHandleType = baml_core.cffi.v1.BamlHandleType;
+const CallFunctionArgs = baml_bridge.cffi.v1.CallFunctionArgs;
+const BamlOutboundValue = baml_bridge.cffi.v1.BamlOutboundValue;
+const BamlOutboundResult = baml_bridge.cffi.v1.BamlOutboundResult;
+const BamlToHostCall = baml_bridge.cffi.v1.BamlToHostCall;
+const InboundValue = baml_bridge.cffi.v1.InboundValue;
+const InboundClassValue = baml_bridge.cffi.v1.InboundClassValue;
+const InboundMapEntry = baml_bridge.cffi.v1.InboundMapEntry;
+const BamlHandleType = baml_bridge.cffi.v1.BamlHandleType;
 const CANCELLED_PANIC_CLASS = 'baml.panics.Cancelled';
 // ─── Inbound (TS → Rust) ───
 /**

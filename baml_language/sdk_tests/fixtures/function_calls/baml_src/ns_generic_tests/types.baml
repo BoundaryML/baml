@@ -216,6 +216,50 @@ function consume_int_wrapper(x: GenericBox<int>) -> int {
 }
 
 // ---------------------------------------------------------------------------
+// Non-generic functions returning REIFIED generics: the return type pins the
+// class type args at the *definition* site, so there's no caller binding and no
+// inference — the host just has to decode a fully-concrete generic instance
+// flowing OUTBOUND. The outbound mirror of `consume_int_wrapper` (concrete
+// generic inbound). Four reification shapes the host decoder must handle:
+//   * one TypeVar used once           -> GenericBox<int>
+//   * one TypeVar used many times     -> ContainerShapes<int> (bare/list/map/opt/union)
+//   * a nested generic type arg       -> GenericBox<GenericBox<int>>
+//   * multiple TypeVars, mixed fields -> GenericTriple<int, string, bool>
+//                                        (scalar int, string list, bool-valued map)
+// ---------------------------------------------------------------------------
+
+// One TypeVar, used once.
+function make_int_box() -> GenericBox<int> {
+  GenericBox<int> { value: 7 }
+}
+
+// One TypeVar (`int`), reified into every field shape at once.
+function make_int_container() -> ContainerShapes<int> {
+  ContainerShapes<int> {
+    item: 1,
+    items: [1, 2, 3],
+    by_key: { "k": 4 },
+    maybe: null,
+    mixed: 5
+  }
+}
+
+// The type arg is itself a generic instance: GenericBox<GenericBox<int>>.
+function make_nested_box() -> GenericBox<GenericBox<int>> {
+  GenericBox<GenericBox<int>> { value: GenericBox<int> { value: 9 } }
+}
+
+// Multiple TypeVars over mixed field shapes: a scalar int, a string list, and a
+// bool-valued map.
+function make_int_str_bool_triple() -> GenericTriple<int, string, bool> {
+  GenericTriple<int, string, bool> {
+    first: 1,
+    second: ["a", "b"],
+    third: { "k": true }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // §J variance soundness (02d/02e): a `TypeVar` that occurs at more than one
 // position whose variances conflict has no consistent binding and the call must
 // REJECT, instead of fabricating an unsound union. The invariant-container

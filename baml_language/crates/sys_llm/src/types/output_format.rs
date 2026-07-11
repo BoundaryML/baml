@@ -517,7 +517,7 @@ impl OutputFormatContent {
                 match options.map_style {
                     MapStyle::TypeParameters => Ok(Some(format!("map<{key_str}, {value_str}>"))),
                     MapStyle::ObjectLiteral => {
-                        Ok(Some(format!("{{ [key: {key_str}]: {value_str} }}")))
+                        Ok(Some(format!("{{ \"<{key_str}>\": {value_str} }}")))
                     }
                 }
             }
@@ -816,10 +816,13 @@ pub enum RenderSetting<T> {
 /// Ported from engine/baml-lib/jinja-runtime/src/output_format/types.rs:201-208
 #[derive(Clone, Debug, Default)]
 pub enum MapStyle {
-    /// Render as `map<K, V>` (angle bracket style)
-    #[default]
+    /// Render as `map<K, V>` (angle bracket style). Opt-in escape hatch: the
+    /// raw BAML type gives the model no example of the JSON object it must emit.
     TypeParameters,
-    /// Render as `{ [key: K]: V }` (object literal style)
+    /// Render as `{ "<K>": V }` (JSON object shape). Default: the model answers
+    /// with JSON, so the hint mirrors the object it needs to produce (consistent
+    /// with how classes and lists render) instead of leaking BAML type syntax.
+    #[default]
     ObjectLiteral,
 }
 
@@ -869,7 +872,7 @@ impl Default for RenderOptions {
             hoisted_class_prefix: RenderSetting::Auto,
             hoist_classes: HoistClasses::Auto,
             always_hoist_enums: RenderSetting::Auto,
-            map_style: MapStyle::TypeParameters,
+            map_style: MapStyle::ObjectLiteral,
             quote_class_fields: RenderSetting::Auto,
             render_null_as: RenderSetting::Auto,
         }
@@ -1140,7 +1143,54 @@ mod tests {
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
+            Some("Answer in JSON using this schema:\n{ \"<string>\": int }".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_map_type_parameters_opt_in() {
+        // `map_style='type_parameters'` stays available as an opt-in escape hatch
+        // that renders the literal BAML type syntax.
+        let content = OutputFormatContent::new(RuntimeTy::Map {
+            key: Box::new(RuntimeTy::String {
+                attr: TyAttr::default(),
+            }),
+            value: Box::new(RuntimeTy::Int {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        });
+        let rendered = content
+            .render(&RenderOptions {
+                map_style: MapStyle::TypeParameters,
+                ..RenderOptions::default()
+            })
+            .unwrap();
+        assert_eq!(
+            rendered,
             Some("Answer in JSON using this schema:\nmap<string, int>".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_class_with_map_field_object_shape() {
+        // B-630 repro: a `map<string, T>` field must render as a JSON object
+        // shape so the model sees the object it has to emit, rather than leaking
+        // the literal BAML type syntax `map<string, int>`.
+        let content = OutputFormatContent::new(ty_class("Review")).with_class(mk_class(
+            "Review",
+            vec![("scores", ty_map(ty_string(), ty_int()))],
+        ));
+
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                r#"Answer in JSON using this schema:
+{
+  scores: { "<string>": int },
+}"#
+            ))
         );
     }
 
@@ -2036,7 +2086,7 @@ Node[]"#
             rendered,
             Some(String::from(
                 r#"RecursiveMap {
-  data: map<string, RecursiveMap>,
+  data: { "<string>": RecursiveMap },
 }
 
 Answer in JSON using this schema: RecursiveMap"#
@@ -2062,7 +2112,7 @@ Answer in JSON using this schema: RecursiveMap"#
             rendered,
             Some(String::from(
                 r#"RecursiveMap {
-  data: map<string, RecursiveMap>,
+  data: { "<string>": RecursiveMap },
 }
 
 Answer in JSON using this schema:
@@ -2092,7 +2142,7 @@ Answer in JSON using this schema:
 }
 
 Answer in JSON using this schema:
-map<string, Node>"#
+{ "<string>": Node }"#
             ))
         );
     }
@@ -2121,7 +2171,7 @@ map<string, Node>"#
 
 Answer in JSON using this schema:
 {
-  data: map<string, Node>,
+  data: { "<string>": Node },
 }"#
             ))
         );
@@ -2151,7 +2201,7 @@ Answer in JSON using this schema:
 
 Answer in JSON using this schema:
 {
-  data: map<string, Node or null>,
+  data: { "<string>": Node or null },
 }"#
             ))
         );
@@ -2183,10 +2233,10 @@ Answer in JSON using this schema:
 }
 
 Answer in JSON using this schema:
-map<string, Node or int or {
+{ "<string>": Node or int or {
   field: string,
   data: int,
-}>"#
+} }"#
             ))
         );
     }
@@ -2225,10 +2275,10 @@ map<string, Node or int or {
 
 Answer in JSON using this schema:
 {
-  data: map<string, Node or int or {
+  data: { "<string>": Node or int or {
     field: string,
     data: int,
-  }>,
+  } },
 }"#
             ))
         );
@@ -2957,7 +3007,7 @@ Answer in JSON using this schema: SelfReferential"#
         assert_eq!(
             rendered,
             Some(String::from(
-                r#"RecursiveMapAlias = map<string, RecursiveMapAlias>
+                r#"RecursiveMapAlias = { "<string>": RecursiveMapAlias }
 
 Answer in JSON using this schema: RecursiveMapAlias"#
             ))

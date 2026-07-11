@@ -1,4 +1,4 @@
-import type { InboundValue } from './generated/baml_core/cffi/v1/baml_inbound';
+import type { InboundValue } from './generated/baml_bridge/cffi/v1/baml_inbound';
 
 export type BamlJsValue<T = unknown> =
   | string

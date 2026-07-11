@@ -18,7 +18,7 @@ pub struct ClassField {
     /// generic params (`N` indexes into `Instance::class_type_args`).
     ///
     /// Populated by emit using the enclosing class's `generic_params`.  For
-    /// non-generic classes this is `TyTemplate::Concrete(field_type.clone())`.
+    /// non-generic classes this is a fully-realized template (no `TypeArgRef`).
     pub field_template: baml_type::TyTemplate,
     pub description: Option<String>,
     pub alias: Option<String>,

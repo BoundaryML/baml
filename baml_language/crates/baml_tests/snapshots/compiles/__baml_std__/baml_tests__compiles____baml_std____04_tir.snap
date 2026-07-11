@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4513
 ---
 === TIR2 ===
 
@@ -97,6 +96,18 @@ function baml.compare(self: unknown, other: !error) -> int throws never {
 --- <builtin>/baml/containers.baml ---
 class baml.Array {
 }
+function baml.Array.generate<E>(length: int, f: (int) -> T throws E) -> T[] throws E {
+  { : T[]
+    let out: T[] = [] : T[]
+    let i = 0 : 0 -> int
+    while i < length
+      { : void
+        out.push<T>(f(i)) : int
+        i Add= 1 : int
+      }
+    out : T[]
+  }
+}
 function baml.Array.for_each<E>(self: baml.Array<T>, fn: (T) -> void throws E) -> void throws E {
   { : void
     for x in self.slice(0, self.length())
@@ -173,12 +184,22 @@ class baml.Map {
 }
 function baml.sum(self: unknown) -> int throws never {
   { : int
-    root.math._sum_int(self) : int
+    root._sum_int(self) : int
   }
 }
 function baml.sum(self: unknown) -> float throws never {
   { : float
-    root.math.sum(self) : float
+    root._sum_float(self) : float
+  }
+}
+function baml.mean(self: unknown) -> float throws baml.errors.InvalidArgument {
+  { : float
+    root._mean_float(self) : float
+  }
+}
+function baml.median(self: unknown) -> float throws baml.errors.InvalidArgument {
+  { : float
+    root._median_float(self) : float
   }
 }
 class baml.Array$stream {
@@ -744,6 +765,18 @@ class baml.csv.CsvWriter$stream {
 function baml.env.get_or_panic(key: string) -> string throws never {
   { : string
     get(key) ?? root.sys.panic("env var not found: " + key) : string
+  }
+}
+function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string throws never {
+  { : string
+    if (lenient : bool) : string
+      { : string
+        get(key) ?? "" : string
+      }
+    else
+      { : string
+        get_or_panic(key) : string
+      }
   }
 }
 
@@ -1772,7 +1805,7 @@ function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((b
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
     let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
+    let primitive_client = client.to_primitive_client(lenient = true) : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
   }
@@ -1795,10 +1828,13 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
   }
 }
-function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws never {
+function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws baml.errors.ParseError {
   { : TFinal
     let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
-    __sap_parse_final<TFinal>(json, cache) : TFinal
+    catch (__sap_parse_final<TFinal>(json, cache) : TFinal) : TFinal
+      catch (_)
+        root.errors.LlmClient { message: message } =>
+          throw root.errors.ParseError { message: message } : never
   }
 }
 function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {
@@ -1842,8 +1878,17 @@ class baml.llm.PlannerState$stream {
 }
 
 --- <builtin>/baml/ns_llm/llm_types.baml ---
+class baml.llm.PromptMessage {
+  role: string
+  content: string
+}
 class baml.llm.PromptAst {
   _data: $rust_type
+}
+function baml.llm.PromptAst.to_string(self: baml.llm.PromptAst) -> string throws never {
+  { : string
+    self.text() : string
+  }
 }
 class baml.llm.OutputFormat {
   _data: $rust_type
@@ -1867,9 +1912,24 @@ class baml.llm.Context {
 enum baml.llm.ClientType
 class baml.llm.RetryPolicy {
   max_retries: int
-  initial_delay_ms: int
-  multiplier: float
-  max_delay_ms: int
+  initial_delay_ms: int | null
+  multiplier: float | null
+  max_delay_ms: int | null
+}
+function baml.llm.RetryPolicy.initial_delay_or_default(self: baml.llm.RetryPolicy) -> float throws never {
+  { : float
+    self.initial_delay_ms ?? 200 + 0.0 : float
+  }
+}
+function baml.llm.RetryPolicy.multiplier_or_default(self: baml.llm.RetryPolicy) -> float throws never {
+  { : float
+    self.multiplier ?? 1.5 : float
+  }
+}
+function baml.llm.RetryPolicy.max_delay_or_default(self: baml.llm.RetryPolicy) -> float throws never {
+  { : float
+    self.max_delay_ms ?? 10000 + 0.0 : float
+  }
 }
 class baml.llm.Client {
   name: string
@@ -1878,7 +1938,7 @@ class baml.llm.Client {
   retry: baml.llm.RetryPolicy | null
   counter: int
 }
-function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient throws never {
+function baml.llm.Client.to_primitive_client(self: baml.llm.Client, lenient: bool = false) -> baml.llm.PrimitiveClient throws never {
   { : baml.llm.PrimitiveClient
     if (self.name.includes("/") : bool) : baml.llm.PrimitiveClient
       { : baml.llm.PrimitiveClient
@@ -1886,7 +1946,7 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
       }
     else
       { : baml.llm.PrimitiveClient
-        self.get_constructor()() : baml.llm.PrimitiveClient
+        self.get_constructor()(lenient) : baml.llm.PrimitiveClient
       }
   }
 }
@@ -1942,7 +2002,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
       r: RetryPolicy =>
         { : baml.llm.OrchestrationStep[]
           let result: OrchestrationStep[] = [] : baml.llm.OrchestrationStep[]
-          let current_delay = r.initial_delay_ms + 0.0 : float
+          let current_delay = r.initial_delay_or_default() : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt <= r.max_retries
@@ -1950,11 +2010,11 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
                 let delay = 0 : 0 -> int
                 if (attempt > 0 : bool) : void
                   { : void
-                    delay = root.math.trunc(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                    delay = root._trunc_to_int(current_delay) : int
+                    let next = current_delay * r.multiplier_or_default() : float
+                    if (next > r.max_delay_or_default() : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
+                        current_delay = r.max_delay_or_default() : float
                       }
                     else
                       { : void
@@ -1979,7 +2039,7 @@ function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, 
     match (self.retry : baml.llm.RetryPolicy | null) : never
       r: RetryPolicy =>
         { : never
-          let current_delay = r.initial_delay_ms + 0.0 : float
+          let current_delay = r.initial_delay_or_default() : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt <= r.max_retries
@@ -1987,11 +2047,11 @@ function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, 
                 let attempt_delay = inherited_delay_ms : int
                 if (attempt > 0 : bool) : void
                   { : void
-                    attempt_delay = root.math.trunc(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                    attempt_delay = root._trunc_to_int(current_delay) : int
+                    let next = current_delay * r.multiplier_or_default() : float
+                    if (next > r.max_delay_or_default() : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
+                        current_delay = r.max_delay_or_default() : float
                       }
                     else
                       { : void
@@ -2075,7 +2135,7 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
     match (self.retry : baml.llm.RetryPolicy | null) : never
       r: RetryPolicy =>
         { : never
-          let current_delay = r.initial_delay_ms + 0.0 : float
+          let current_delay = r.initial_delay_or_default() : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt <= r.max_retries
@@ -2083,11 +2143,11 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
                 let attempt_delay = inherited_delay_ms : int
                 if (attempt > 0 : bool) : void
                   { : void
-                    attempt_delay = root.math.trunc(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                    attempt_delay = root._trunc_to_int(current_delay) : int
+                    let next = current_delay * r.multiplier_or_default() : float
+                    if (next > r.max_delay_or_default() : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
+                        current_delay = r.max_delay_or_default() : float
                       }
                     else
                       { : void
@@ -2328,6 +2388,21 @@ function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.Primi
     self.specialize_prompt(prompt) : baml.llm.PromptAst
   }
 }
+function baml.llm.render_prompt_values(values: unknown[]) -> unknown[] throws never {
+  { : unknown[]
+    let rendered: unknown[] = [] : unknown[]
+    for value in values
+      { : int
+        rendered.push(match (value) { Role => value, _ => string.from(value) }) : int
+          match (value : unknown) : baml.llm.Role | string
+            Role =>
+              value : baml.llm.Role
+            _ =>
+              string.from<T>(value) : string
+      }
+    rendered : unknown[]
+  }
+}
 function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, return_type: type) -> baml.llm.Context throws never {
   { : baml.llm.Context
     Context { client: ContextClient { name: primitive.name, provider: primitive.provider, default_role: primitive.options.default_role ?? "system", allowed_roles: primitive.options.allowed_roles ?? [] }, tags: map {  }, output_format: render_output_format(return_type), _output_format: build_output_format(return_type) } : baml.llm.Context
@@ -2344,12 +2419,16 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ct
       (ctx: Context) -> { ... } : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
         {
           let t = body(make_role, ctx)
-          assemble_prompt_ast(t.parts, t.values)
+          assemble_prompt_ast(t.parts, render_prompt_values(t.values))
         }
     render : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
   }
 }
 lambda baml.llm.prompt {
+}
+class baml.llm.PromptMessage$stream {
+  role: string | null
+  content: string | null
 }
 class baml.llm.PromptAst$stream {
   _data: $rust_type
@@ -2453,8 +2532,6 @@ class baml.llm.PrimitiveClient$stream {
   provider: string | null
   options: baml.llm.PrimitiveClientOptions$stream | null
 }
-
---- <builtin>/baml/ns_math/math.baml ---
 
 --- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Pdf {

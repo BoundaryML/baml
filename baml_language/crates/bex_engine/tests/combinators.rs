@@ -104,12 +104,13 @@ async fn all_collects_in_order() {
 #[tokio::test]
 async fn all_rethrows_failure_to_catch() {
     let source = r#"
+        function ok() -> int throws string { 1 }
         function bad() -> int throws string { throw "boom" }
         function main() -> int {
-            // The spawns have different error types; annotate the array element
-            // type so each future adopts the common `null | string` error (arrays
-            // are invariant, so the union must be spelled at the element type).
-            let fs: baml.future.Future<int, null | string>[] = [spawn { 1 }, spawn { bad() }];
+            // Future's error param is invariant, so both spawns must produce the
+            // SAME error type; `ok` declares (without using) the same `throws
+            // string` as `bad` to keep the array element type homogeneous.
+            let fs = [spawn { ok() }, spawn { bad() }];
             let r = await baml.future.all(fs) catch (e) {
                 let e => [99]
             };
@@ -140,10 +141,15 @@ async fn race_returns_first_to_settle() {
 async fn any_returns_first_success() {
     let source = r#"
         function bad() -> int throws string { throw "boom" }
-        function good() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(80n)); 42 }
+        function good() -> int throws string {
+            // sleep's own `throws baml.errors.Io` is swallowed so the declared
+            // surface stays exactly `string`, matching `bad` (Future's error
+            // param is invariant, so the spawns must agree).
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(80n)) catch (e) { let e => null };
+            42
+        }
         function main() -> int {
-            // Different error types per spawn; annotate the common error union.
-            let fs: baml.future.Future<int, string | baml.errors.Io>[] = [spawn { bad() }, spawn { good() }];
+            let fs = [spawn { bad() }, spawn { good() }];
             await baml.future.any(fs) catch (e) {
                 let e => -1
             }

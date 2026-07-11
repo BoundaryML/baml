@@ -160,8 +160,10 @@ pub fn render_output_format_content(
         quote_class_fields: setting(quote_class_fields),
         hoist_classes: hoist_classes.map_or(HoistClasses::Auto, HoistClasses::Subset),
         map_style: match map_style.as_deref() {
-            Some("object_literal") => MapStyle::ObjectLiteral,
-            _ => MapStyle::TypeParameters,
+            // `type_parameters` is the opt-in escape hatch (`map<K, V>`); every
+            // other value (including the default) renders the JSON object shape.
+            Some("type_parameters") => MapStyle::TypeParameters,
+            _ => MapStyle::ObjectLiteral,
         },
         render_null_as: setting(render_null_as),
     };

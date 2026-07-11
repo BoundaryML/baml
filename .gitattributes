@@ -8,6 +8,9 @@
 # Force LF line endings for .baml files so include_str! embeds consistent
 # content on all platforms (avoids CRLF line-number shifts on Windows CI).
 *.baml text eol=lf
+# Same for the args-form wire-shape golden fixture, byte-compared against
+# serde_json output by baml_project's wire_shape_matches_the_ts_golden_fixture.
+typescript2/pkg-playground/src/__fixtures__/*.json text eol=lf
 # Force LF for the checked-in SSE replay recordings. The BAML replay server
 # chunks them for paced streaming with `split("\n\n")`; CRLF (from autocrlf
 # on Windows) turns every "\n\n" into "\r\n\r\n", so the whole body streams

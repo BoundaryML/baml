@@ -17,9 +17,9 @@ import { WebSocketRuntimePort } from '@b/pkg-playground';
 import type { EditorBackend, EditorConnection, WorkbenchHandle } from './backend';
 
 export interface RemoteBackendOptions {
-  /** WebSocket URL for the LSP JSON-RPC endpoint, e.g. `ws://localhost:3700/api/lsp`. */
+  /** WebSocket URL for the LSP JSON-RPC endpoint, e.g. `ws://localhost:4265/api/lsp`. */
   lspUrl: string;
-  /** WebSocket URL for the playground runtime endpoint, e.g. `ws://localhost:3700/api/ws`. */
+  /** WebSocket URL for the playground runtime endpoint, e.g. `ws://localhost:4265/api/ws`. */
   runtimeUrl: string;
   /** Window-indicator label shown in the workbench title bar. */
   windowLabel?: string;

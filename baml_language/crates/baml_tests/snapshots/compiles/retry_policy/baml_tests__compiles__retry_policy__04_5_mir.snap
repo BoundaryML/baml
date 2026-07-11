@@ -2,24 +2,30 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.MyClient$new() -> null {
+fn user.MyClient$new(lenient: bool) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<string, string>
-    let _3: map<string, string>
-    let _4: map<string, unknown>
+    let _1: bool // lenient // param
+    let _2: baml.llm.PrimitiveClientOptions
+    let _3: string | null
+    let _4: map<string, string>
+    let _5: map<string, string>
+    let _6: map<string, unknown>
 
     bb0: {
-        _2 = {  }: map<string, string>;
-        _3 = {  }: map<string, string>;
-        _4 = {  }: map<string, unknown>;
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _1 };
-        goto -> bb1;
+        _3 = sys_op const fn baml.env.get(const "OPENAI_API_KEY") -> bb1;
     }
 
     bb1: {
+        _4 = {  }: map<string, string>;
+        _5 = {  }: map<string, string>;
+        _6 = {  }: map<string, unknown>;
+        _2 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, copy _3, const null, const null, copy _4, copy _5, copy _6 };
+        _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }

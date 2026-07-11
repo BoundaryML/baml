@@ -5,7 +5,7 @@
 //! directory: runtime/cross-leaf imports, child-namespace re-exports, and
 //! real TS bodies for every top — classes, enums, type aliases, and
 //! `defineFunction(...)` / `defineInstanceFunction(...)` bindings. The five
-//! runtime-owned stdlib types re-export from `@boundaryml/baml-core-node` instead
+//! runtime-owned stdlib types re-export from `@boundaryml/baml-bridge` instead
 //! of getting a generated body.
 //!
 //! Codegen emits only `index.ts` — no sibling `index.d.ts`. The generated
@@ -35,7 +35,7 @@ use crate::{
     translate_ty::{TranslateCtx, TranslatedType, translate_ty},
 };
 
-const RUNTIME_PKG: &str = "@boundaryml/baml-core-node";
+const RUNTIME_PKG: &str = "@boundaryml/baml-bridge";
 
 /// All symbols that land in one leaf's body, in final render order.
 pub(crate) struct LeafBody {
@@ -1100,7 +1100,7 @@ mod tests {
             ],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
-        assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-core-node\";"));
+        assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-bridge\";"));
         assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string) => number;"));
         assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string) => Promise<number>;"));
     }
@@ -1166,7 +1166,7 @@ mod tests {
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
-        assert!(ts.contains("import { BamlImage as Image } from \"@boundaryml/baml-core-node\";"));
+        assert!(ts.contains("import { BamlImage as Image } from \"@boundaryml/baml-bridge\";"));
         assert!(ts.contains("export { Image };"));
         // The class binding already provides the type; no separate `export type`.
         assert!(!ts.contains("export type Image"));
@@ -1238,6 +1238,6 @@ mod tests {
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap } from \"@boundaryml/baml-core-node\";"));
+        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap } from \"@boundaryml/baml-bridge\";"));
     }
 }

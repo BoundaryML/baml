@@ -2,7 +2,7 @@
 //! transitive `requires` closure, associated-type binding lowering, and the generic
 //! type-pattern matcher used by impl resolution.
 //!
-//! Nominal subtyping is decided on the [`impl_rules`] substrate (`impl_data` /
+//! Nominal subtyping is decided on the `impl_rules` substrate (`impl_data` /
 //! `get_implements_block`), not here: `Class T <: Interface I` iff `T` has an `implements I`
 //! block, and interface `A <: B` iff `B` is in `A`'s `requires` closure — there is no
 //! shape-matching escape hatch.

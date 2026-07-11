@@ -5,7 +5,7 @@ import "./baml_sdk/index.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
-import { trunc, trunc_async } from "./baml_sdk/baml/math/index.js";
+import { now_ms, now_ms_async } from "./baml_sdk/baml/sys/index.js";
 import { exists, exists_async } from "./baml_sdk/baml/fs/index.js";
 
 // Intrinsic-only modules are not emitted at all, so a missing file is fine;
@@ -17,12 +17,13 @@ function generatedSdkFile(relPath: string): string | null {
 }
 
 describe("function_calls — stdlib entry points", () => {
-  // `baml.math.trunc(value: float) -> int` is a native `$rust_function`
-  // (FunctionKind::Native). Calling it as an entry point should truncate
-  // toward zero and return 3, not reject with `NotInvokableAsEntry`.
-  it("native baml.math.trunc is callable as an entry point", async () => {
-    expect(trunc(3.7)).toBe(3);
-    expect(await trunc_async(3.7)).toBe(3);
+  // `baml.sys.now_ms() -> int` is a native `$rust_function`
+  // (FunctionKind::Native). Calling it as an entry point should run the native
+  // and return a positive millisecond timestamp, not reject with
+  // `NotInvokableAsEntry`.
+  it("native baml.sys.now_ms is callable as an entry point", async () => {
+    expect(now_ms()).toBeGreaterThan(0);
+    expect(await now_ms_async()).toBeGreaterThan(0);
   });
 
   // `baml.fs.exists(path: string) -> bool` is a `$rust_io_function`

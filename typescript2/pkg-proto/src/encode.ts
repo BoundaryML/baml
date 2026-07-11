@@ -2,11 +2,11 @@ import type {
   InboundValue,
   InboundMapEntry,
   CallFunctionArgs as CallFunctionArgsType,
-} from './generated/baml_core/cffi/v1/baml_inbound';
+} from './generated/baml_bridge/cffi/v1/baml_inbound';
 import {
   CallFunctionArgs,
   InboundMapEntry as InboundMapEntryMessage,
-} from './generated/baml_core/cffi/v1/baml_inbound';
+} from './generated/baml_bridge/cffi/v1/baml_inbound';
 import type { BamlSerializable } from './types';
 
 function isBamlSerializable(val: unknown): val is BamlSerializable {
@@ -63,12 +63,38 @@ function serializeValue(val: unknown): InboundValue {
     if (isBamlSerializable(val)) {
       return val.toBaml();
     }
+    const bamlMarker = (val as Record<string, unknown>)['$baml'];
+    // Honour a `$baml: { enum: 'user.Color', value: 'Red' }` marker so hosts
+    // (e.g. the playground args form) can pass real enum variants. Nothing on
+    // the args path coerces a plain string into an enum variant, so without
+    // this an expr function's `param == Color.Red` is silently false. The
+    // enum name is passed verbatim: the engine resolves its registered FQN
+    // (`user.ns.Color`) directly and falls back to prepending `user.`.
+    if (bamlMarker && typeof bamlMarker === 'object' && 'enum' in bamlMarker) {
+      const marker = bamlMarker as { enum?: unknown; value?: unknown };
+      // Fail fast on a malformed marker: falling through would serialize the
+      // `$baml` object as a literal map entry, which the engine accepts
+      // silently and misinterprets.
+      if (
+        typeof marker.enum !== 'string' ||
+        typeof marker.value !== 'string'
+      ) {
+        throw new Error(
+          'Invalid $baml enum marker: expected { enum: string, value: string }',
+        );
+      }
+      return {
+        value: {
+          $case: 'enumValue',
+          enumValue: { name: marker.enum, value: marker.value },
+        },
+      };
+    }
     // Honour a `$baml: { type: 'ClassName' }` (or `'Namespace::ClassName'`)
     // marker so JSON shaped like `decodeCallResult` output round-trips back as
     // a `classValue`. Without this, every plain object would serialize as a
     // map, making typed function calls (e.g. `(inv: Invoice)`) fail with
     // "expected instance, got map" inside the runtime.
-    const bamlMarker = (val as Record<string, unknown>)['$baml'];
     if (
       bamlMarker &&
       typeof bamlMarker === 'object' &&

@@ -1418,7 +1418,8 @@ pub struct ResolvedImpl<'db> {
     pub bindings: TypeBindings,
 }
 
-/// Every `implements` block id declared in a package, as stable [`ImplLoc`]s.
+/// Every `implements` block id declared in a package, as stable
+/// [`ImplLoc`](baml_compiler2_hir::loc::ImplLoc)s.
 /// Uniform over in-body and out-of-body impls (both live in
 /// [`file_item_tree`](baml_compiler2_hir::file_item_tree)`.impls`). Public so MIR can enumerate
 /// a package's impls to rebuild the runtime interface-implementor tables on the L1 substrate.
@@ -2164,8 +2165,8 @@ impl<'db> ResolvedImpl<'db> {
     /// with the impl's [`bindings`](Self::bindings) substituted in — `impl<U> I<U> for Box<U>`
     /// resolved at `Box<int>` yields `I<int>`, and at `Box<T>` (a generic caller) yields
     /// `I<T>`. NOT necessarily typevar-free: a generic caller's *rigid* params survive
-    /// realization, so this is an [`Interface`] *constraint*, deliberately not a
-    /// `RealizedInterface`.
+    /// realization, so this is an [`Interface`](baml_type::Interface) *constraint*,
+    /// deliberately not a `RealizedInterface`.
     pub fn implemented_interface(&self, db: &'db dyn crate::Db) -> baml_type::Interface {
         // A `ResolvedImpl` is only ever constructed for an `impl_data`-Ok impl — every producer
         // (`impls_for_type`, `get_implements_block`) filters with `let Ok(data) = ...` — and an

@@ -460,6 +460,114 @@ function Extract(client: string, text: string) -> string {
         );
     }
 
+    /// The synthesized `<Client>$new` constructor for `client_name`.
+    fn client_new_companion(items: Vec<Item>, client_name: &str) -> crate::ast::FunctionDef {
+        let target = format!("{client_name}$new");
+        items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Function(f) if f.name.as_str() == target => Some(f),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("expected synthesized {target} function"))
+    }
+
+    /// Does `$new`'s body read `env_var` via a soft `baml.env.get`?
+    fn new_companion_reads_env(function: &crate::ast::FunctionDef, env_var: &str) -> bool {
+        use baml_base::Name;
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body for $new companion");
+        };
+        body.exprs.iter().any(|(_, expr)| {
+            let Expr::Call { callee, args, .. } = expr else {
+                return false;
+            };
+            let Expr::Path(path) = &body.exprs[*callee] else {
+                return false;
+            };
+            let is_env_get =
+                path.iter().map(Name::as_str).collect::<Vec<_>>() == ["baml", "env", "get"];
+            let reads_var = args.first().is_some_and(|arg| {
+                matches!(
+                    &body.exprs[arg.expr],
+                    Expr::Literal(baml_base::Literal::String(s)) if s == env_var
+                )
+            });
+            is_env_get && reads_var
+        })
+    }
+
+    #[test]
+    fn named_openai_client_defaults_api_key_to_env_var() {
+        // B-489: a named `client<llm>` with `provider openai` and no explicit
+        // `api_key` defaults the key to a soft `baml.env.get("OPENAI_API_KEY")`,
+        // mirroring the inline `"openai/model"` shorthand (unset -> null, never
+        // panics, so offline render still works without the var set).
+        let source = r#"
+client<llm> C {
+  provider openai
+  options { model "gpt-4o" }
+}
+"#;
+        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        assert!(
+            new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
+            "named openai client with no api_key should default to OPENAI_API_KEY"
+        );
+    }
+
+    #[test]
+    fn named_anthropic_client_defaults_api_key_to_env_var() {
+        let source = r#"
+client<llm> C {
+  provider anthropic
+  options { model "claude-3-5-sonnet-20241022" }
+}
+"#;
+        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        assert!(
+            new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
+            "named anthropic client with no api_key should default to ANTHROPIC_API_KEY"
+        );
+    }
+
+    #[test]
+    fn named_client_explicit_api_key_suppresses_env_default() {
+        // An explicit `api_key` wins: no env-var default is synthesized.
+        let source = r#"
+client<llm> C {
+  provider openai
+  options { model "gpt-4o"  api_key "sk-explicit" }
+}
+"#;
+        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        assert!(
+            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
+            "explicit api_key must suppress the OPENAI_API_KEY default"
+        );
+    }
+
+    #[test]
+    fn named_client_unknown_provider_gets_no_env_default() {
+        // Providers without a ubiquitous env-var convention are untouched.
+        // vertex-ai emits an unrelated MissingClientOptions diagnostic (no
+        // base_url/location), but the `$new` companion is still synthesized —
+        // so tolerate diagnostics and only assert on the api_key default.
+        let source = r#"
+client<llm> C {
+  provider vertex-ai
+  options { model "gemini-2.0-flash" }
+}
+"#;
+        let (items, _diags) = parse_and_lower_with_diagnostics(source);
+        let new_fn = client_new_companion(items, "C");
+        assert!(
+            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY")
+                && !new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
+            "vertex-ai must not default an api_key env var"
+        );
+    }
+
     #[test]
     fn ast_function_def_has_generic_params() {
         let source = r#"

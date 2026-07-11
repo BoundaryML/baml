@@ -65,9 +65,10 @@ jobs:
 
       - name: Comment URL in PR
         if: github.event_name == 'pull_request'
-        uses: thollander/actions-comment-pull-request@v3.0.1
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
         with:
-          file-path: preview_url.txt
+          header: docs-preview
+          path: preview_url.txt
 
       - name: Extract docs URL
         id: docs_url
@@ -174,11 +175,20 @@ jobs:
         run: |
           pnpm vercel deploy --target $TARGET_ENV --prebuilt --token=${{ secrets.VERCEL_TOKEN_SAM }} | tee preview_url.txt
 
+      # sticky-pull-request-comment resolves `path` with @actions/glob, which
+      # rejects `..` segments — and this job runs in ../sage-backend, outside
+      # the workspace. Stage the file into the workspace so the action can
+      # read it.
+      - name: Stage preview URL for PR comment
+        if: github.event_name == 'pull_request'
+        run: cp preview_url.txt "$GITHUB_WORKSPACE/backend_preview_url.txt"
+
       - name: Comment URL in PR
         if: github.event_name == 'pull_request'
-        uses: thollander/actions-comment-pull-request@v3.0.1
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
         with:
-          file-path: ../sage-backend/preview_url.txt
+          header: backend-preview
+          path: backend_preview_url.txt
 
       - name: Extract backend URL
         id: backend_url

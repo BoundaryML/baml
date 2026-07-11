@@ -36,6 +36,7 @@ la-arena = { workspace = true }
 lsp-types = { workspace = true }
 salsa = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
 text-size = { workspace = true }
 
 [features]

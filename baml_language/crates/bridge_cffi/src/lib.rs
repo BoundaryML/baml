@@ -32,7 +32,7 @@ pub mod host_spans;
 mod panic;
 
 pub use baml_to_host::{call_and_encode, error_to_outbound, result_to_outbound};
-pub use bridge_ctypes::baml_core;
+pub use bridge_ctypes::baml_bridge;
 pub use buffer::Buffer;
 pub use error::BridgeError;
 pub use ffi::{
@@ -163,7 +163,7 @@ fn call_function_inner(
     length: usize,
     id: u32,
 ) -> Result<(), BridgeError> {
-    use bridge_ctypes::baml_core::cffi::CallFunctionArgs;
+    use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
 
     let runtime = get_runtime()?;
 

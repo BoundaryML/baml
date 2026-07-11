@@ -134,7 +134,7 @@ fn build_class_namespace_tree(class_defs: &[NativeClassDef]) -> ClassNamespaceNo
 /// - `baml.Array.length` → class `Array` at root, method `length`
 /// - `baml.media.Pdf.url` → namespace `media`, class `Pdf`, method `url`
 /// - `baml.deep_copy` → root free function
-/// - `baml.math.trunc` → namespace `math`, free function `trunc`
+/// - `baml.sys.now_ms` → namespace `sys`, free function `now_ms`
 fn build_namespace_tree(builtins: &[NativeBuiltin]) -> NamespaceNode<'_> {
     let mut root = NamespaceNode::new();
 
@@ -2221,10 +2221,6 @@ mod tests {
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("pub trait BamlNamespaceMath"),
-            "missing BamlNamespaceMath trait:\n{output}"
-        );
-        assert!(
             output.contains("pub trait BamlNamespaceMedia"),
             "missing BamlNamespaceMedia trait:\n{output}"
         );
@@ -2301,10 +2297,6 @@ mod tests {
             "missing __dispatch_string:\n{output}"
         );
         assert!(
-            output.contains("fn __dispatch_math(rest: &str)"),
-            "missing __dispatch_math:\n{output}"
-        );
-        assert!(
             output.contains("fn __dispatch_media(rest: &str)"),
             "missing __dispatch_media:\n{output}"
         );
@@ -2326,10 +2318,6 @@ mod tests {
         assert!(
             output.contains("(\"media\", rest)) => Self::__dispatch_media(rest)"),
             "get_native_fn should dispatch media to __dispatch_media:\n{output}"
-        );
-        assert!(
-            output.contains("(\"math\", rest)) => Self::__dispatch_math(rest)"),
-            "get_native_fn should dispatch math to __dispatch_math:\n{output}"
         );
     }
 

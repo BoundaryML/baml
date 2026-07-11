@@ -15,7 +15,7 @@ use bex_events::{
 };
 use bridge_wasm::{
     BamlWasmRuntime, LspNotification,
-    baml_core::cffi::{BamlOutboundValue, baml_outbound_value::Value as OutboundValue},
+    baml_bridge::cffi::{BamlOutboundValue, baml_outbound_value::Value as OutboundValue},
 };
 use prost::Message;
 use wasm_bindgen::{JsCast, prelude::*};

@@ -231,7 +231,8 @@ async fn throwing_transformer_throws_at_spawn_site() {
 
 /// A transformer bound to a VARIABLE first (not called inline). The `let`
 /// binding gives generic inference no context to solve `E`, so it is supplied
-/// explicitly (`withDouble<never>()`); the pipeline still runs from the
+/// explicitly (`withDouble<null>()` — the spawn body throws nothing, so its
+/// `SpawnParams` error type is `null`); the pipeline still runs from the
 /// variable.
 #[tokio::test]
 async fn variable_bound_transformer_still_applies() {
@@ -249,7 +250,7 @@ async fn variable_bound_transformer_still_applies() {
             }
         }
         function main() -> int {
-            let t = withDouble<never>();
+            let t = withDouble<null>();
             let f = spawn with t { 21 };
             await f
         }

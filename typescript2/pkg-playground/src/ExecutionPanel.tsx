@@ -13,7 +13,7 @@ import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { encodeRunArgs } from '@b/pkg-proto';
 import type { BamlJsValue } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Settings, Square } from 'lucide-react';
+import { KeyRound, PanelLeft, Play, Settings, Square } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
@@ -35,20 +35,28 @@ import { ErrorDisplay } from './components/ErrorDisplay';
 import { MetadataBadges } from './components/MetadataBadges';
 import { PromptStats } from './components/PromptStats';
 import type { RuntimePort } from './runtime-port';
-import type {
-  ControlFlowGraph,
-  CursorContext,
-  DiagnosticEntry,
-  FetchLogEntry,
-  FunctionInfo,
-  ProjectUpdate,
-  Run,
-  BoundaryId,
-  RunStatus,
-  SourceNavigationTarget,
-  WorkerOutMessage,
+import {
+  previewTestKey,
+  type ControlFlowGraph,
+  type CursorContext,
+  type DiagnosticEntry,
+  type FetchLogEntry,
+  type FunctionInfo,
+  type ProjectUpdate,
+  type TestInfo,
+  type Run,
+  type BoundaryId,
+  type RunStatus,
+  type SourceNavigationTarget,
+  type WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
+import { ArgsForm } from './ArgsForm';
+import {
+  isPlainObject,
+  reconcileArgs,
+  typeLookupFrom,
+} from './args-form-model';
 import { ResultDisplay } from './ResultDisplay';
 import { ValueRenderer } from './ValueRenderer';
 import { CapturedValueCard } from './CapturedValueCard';
@@ -89,6 +97,12 @@ registerBuiltinResultRenderers();
 const LOGS_PANEL_DEFAULT_HEIGHT = 180;
 const LOGS_PANEL_MIN_HEIGHT = 40;
 const LOGS_PANEL_MAX_HEIGHT = 620;
+
+const IS_MAC =
+  typeof navigator !== 'undefined' && /Mac|iP/.test(navigator.platform);
+/** Shown on the Run button; the actual binding is the panel-scoped keydown
+ *  handler on the Tabs root. */
+const RUN_SHORTCUT_HINT = IS_MAC ? '⌘↵' : 'Ctrl+↵';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -743,8 +757,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     useState<PendingTestTarget | null>(null);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
+  const [selectedPreviewTestKey, setSelectedPreviewTestKey] = useState<
+    string | null
+  >(null);
   const [showInternalFunctions, setShowInternalFunctions] = useState(false);
   const [argsJson, setArgsJson] = useState(initialArgsJson ?? '{}');
+  // Args editor mode. 'form' renders the schema-driven ArgsForm when the
+  // selected function carries a param schema; 'raw' is the JSON input. With
+  // no schema (`FunctionInfo.params === undefined`) raw is the only mode.
+  const [argsMode, setArgsMode] = useState<'form' | 'raw'>('form');
   // Args the user typed for each function this session — restored (over the
   // `argsByFunction` seed) when they switch back to that function.
   const typedArgsByFnRef = useRef<Record<string, string>>({});
@@ -1138,6 +1159,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     // that owns the call so the top-level workflow remains the primary view.
     if (isCallSite) {
       if (sourceExprFunctionName !== currentFn) {
+        setSelectedPreviewTestKey(null);
         setSelectedFn(sourceExprFunctionName);
         setViewingCollection(false);
         setViewingTestRun(false);
@@ -1169,6 +1191,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
       if (root !== currentFn) {
         pendingHighlightRef.current =
           target != null ? { fn: root, nodeId: target } : null;
+        setSelectedPreviewTestKey(null);
         setSelectedFn(root);
         setViewingCollection(false);
         setViewingTestRun(false);
@@ -1185,6 +1208,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     }
     // Not part of any workflow — show the function's own graph.
     if (ctx.functionName !== currentFn) {
+      setSelectedPreviewTestKey(null);
       setSelectedFn(ctx.functionName);
       setViewingCollection(false);
       setViewingTestRun(false);
@@ -1254,11 +1278,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               setSelectedProject(n.project);
               if (n.functionName) {
                 setWorkflowContext(null);
+                setSelectedPreviewTestKey(null);
                 setSelectedFn(n.functionName);
                 setViewingCollection(false);
                 setViewingTestRun(false);
               } else if (n.testName || n.testsetName) {
                 setWorkflowContext(null);
+                setSelectedPreviewTestKey(null);
                 setSelectedFn(null);
                 setViewingCollection(false);
                 setViewingTestRun(true);
@@ -1500,21 +1526,30 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setPreviewLoading(false);
   }, [selectedFn]);
 
-  // Swap the args editor when the selected function changes: args the user
-  // typed for that function win, then its `argsByFunction` seed (exact or
-  // bare-name key, since selection may be namespaced), then the panel seed.
+  // The authoritative args string for a function at any moment: args the
+  // user typed for it this session win, then its `argsByFunction` seed
+  // (exact or bare-name key, since selection may be namespaced), then the
+  // panel seed. The swap effect writes this into argsJson on selection
+  // change; effects that must not read the (one-commit-stale on selection
+  // change) argsJson state read this instead.
+  const baseArgsFor = useCallback(
+    (fn: string) =>
+      typedArgsByFnRef.current[fn] ??
+      argsByFunction?.[fn] ??
+      argsByFunction?.[fn.split('.').pop() ?? ''] ??
+      initialArgsJson ??
+      '{}',
+    [argsByFunction, initialArgsJson],
+  );
+
+  // Swap the args editor when the selected function changes.
   const prevArgsFnRef = useRef(selectedFn);
   useEffect(() => {
     if (prevArgsFnRef.current === selectedFn) return;
     prevArgsFnRef.current = selectedFn;
     if (!selectedFn) return;
-    const seed =
-      argsByFunction?.[selectedFn] ??
-      argsByFunction?.[selectedFn.split('.').pop() ?? ''];
-    setArgsJson(
-      typedArgsByFnRef.current[selectedFn] ?? seed ?? initialArgsJson ?? '{}',
-    );
-  }, [selectedFn, argsByFunction, initialArgsJson]);
+    setArgsJson(baseArgsFor(selectedFn));
+  }, [selectedFn, baseArgsFor]);
 
   // Auto-refresh prompt/curl preview when args change while tab is active
   useEffect(() => {
@@ -1648,12 +1683,26 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     projectUpdateVersion,
   ]);
 
-  const onArgsJsonChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      setArgsJson(e.target.value);
-      if (selectedFn) typedArgsByFnRef.current[selectedFn] = e.target.value;
+  // Single write path for args edits (form and raw): the prompt/cURL preview
+  // and run-history snapshots read `argsJson`, and per-function memory reads
+  // `typedArgsByFnRef` — an edit that misses either silently desyncs them.
+  const updateArgsJson = useCallback(
+    (next: string) => {
+      setSelectedPreviewTestKey(null);
+      setArgsJson(next);
+      if (selectedFn) typedArgsByFnRef.current[selectedFn] = next;
     },
     [selectedFn],
+  );
+
+  const onArgsJsonChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => updateArgsJson(e.target.value),
+    [updateArgsJson],
+  );
+
+  const onArgsFormChange = useCallback(
+    (next: Record<string, unknown>) => updateArgsJson(JSON.stringify(next)),
+    [updateArgsJson],
   );
 
   // ── Run function ───────────────────────────────────────────────────────
@@ -1737,43 +1786,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     },
     [logsPanelHeight],
   );
-
-  const onRunFunction = useCallback(async () => {
-    if (!selectedFn || !selectedProject || isRunning) return;
-
-    // Don't force the 'run' tab — running keeps the user on whatever tab
-    // they're viewing (graph, trace, prompt, etc.).
-    setExpandedLogId(null);
-    setRunValidationError(null);
-
-    requestAnimationFrame(() => {
-      outputRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-
-    try {
-      const parsed = JSON.parse(argsJson);
-      if (
-        typeof parsed !== 'object' ||
-        parsed === null ||
-        Array.isArray(parsed)
-      ) {
-        throw new Error(
-          'Arguments must be a JSON object, e.g. {"arr": [3,1,2]}',
-        );
-      }
-      const argsBytes = encodeRunArgs(parsed as Record<string, unknown>);
-
-      const boundaryId = await executionStore.startRun({
-        project: selectedProject,
-        functionName: selectedFn,
-        argsBytes: new Uint8Array(argsBytes),
-      });
-      setArgsJsonByBoundaryId((prev) => ({ ...prev, [boundaryId]: argsJson }));
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      setRunValidationError(errMsg);
-    }
-  }, [selectedFn, selectedProject, argsJson, isRunning, executionStore]);
 
   const handleRefreshTests = useCallback(() => {
     if (!selectedProject) return;
@@ -1988,6 +2000,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     : undefined;
   const isLoadingProject = selectedProject != null && currentUpdate == null;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
+  const previewTests = currentUpdate?.tests ?? [];
   const internalFunctionCount = functions.filter(isInternalFunction).length;
   const visibleFunctions = showInternalFunctions
     ? functions
@@ -1999,6 +2012,167 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
   const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
+
+  const handleSelectPreviewTest = useCallback((test: TestInfo) => {
+    const key = previewTestKey(test);
+    typedArgsByFnRef.current[test.functionName] = test.argsJson;
+    setArgsJson(test.argsJson);
+    setSelectedPreviewTestKey(key);
+    setSelectedFn(test.functionName);
+    setViewingCollection(false);
+    setViewingTestRun(false);
+    setHighlightedNodeId(null);
+    setWorkflowContext(null);
+  }, []);
+
+  // Keep a selected preview case synchronized with source edits. If the test
+  // is deleted, retain the current function/args as an ordinary manual draft.
+  useEffect(() => {
+    if (!selectedPreviewTestKey) return;
+    const test = previewTests.find(
+      (candidate) => previewTestKey(candidate) === selectedPreviewTestKey,
+    );
+    if (!test) {
+      setSelectedPreviewTestKey(null);
+      return;
+    }
+    typedArgsByFnRef.current[test.functionName] = test.argsJson;
+    setArgsJson(test.argsJson);
+    setSelectedFn(test.functionName);
+  }, [previewTests, selectedPreviewTestKey]);
+
+  // ── Args form wiring ─────────────────────────────────────────────────────
+  // `undefined` = no schema shipped (old engine / extraction miss) → raw-only.
+  const paramSchemas = selectedFnInfo?.params;
+  const projectTypes = currentUpdate?.types;
+  const typeLookup = useMemo(
+    () => typeLookupFrom(projectTypes),
+    [projectTypes],
+  );
+  const argsSchemaKey = JSON.stringify([
+    paramSchemas ?? null,
+    projectTypes ?? null,
+  ]);
+  // The form can only render args that parse to a plain JSON object; anything
+  // else (mid-edit raw JSON, array) falls back to the raw input with a notice
+  // instead of destroying the user's text.
+  const parsedArgs = useMemo<Record<string, unknown> | null>(() => {
+    try {
+      const parsed: unknown = JSON.parse(argsJson);
+      if (isPlainObject(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // fall through
+    }
+    return null;
+  }, [argsJson]);
+  const reconciledFormArgs = useMemo(() => {
+    if (parsedArgs === null || paramSchemas === undefined) return null;
+    return reconcileArgs(parsedArgs, paramSchemas, typeLookup);
+  }, [parsedArgs, paramSchemas, typeLookup]);
+  const showArgsForm =
+    argsMode === 'form' && paramSchemas !== undefined && parsedArgs !== null;
+  const argsFormUnavailable =
+    argsMode === 'form' && paramSchemas !== undefined && parsedArgs === null;
+
+  // Reconcile once for each project/function/schema combination while form
+  // mode is active. This replaces the old function-only seed and normalize
+  // guards, which never re-ran when a same-name function changed type.
+  const argsSchemaScope = selectedFn
+    ? JSON.stringify([selectedProject ?? null, selectedFn, argsSchemaKey])
+    : null;
+  const reconcileStateRef = useRef<{ scope: string | null; done: boolean }>({
+    scope: null,
+    done: false,
+  });
+  useEffect(() => {
+    const state = reconcileStateRef.current;
+    if (argsMode === 'raw') {
+      state.done = false;
+      return;
+    }
+    if (!selectedFn || paramSchemas === undefined || argsSchemaScope === null) {
+      return;
+    }
+    if (state.scope === argsSchemaScope && state.done) return;
+    reconcileStateRef.current = { scope: argsSchemaScope, done: true };
+    let args: unknown;
+    try {
+      args = JSON.parse(baseArgsFor(selectedFn));
+    } catch {
+      return; // not form-renderable; the raw fallback shows it as-is
+    }
+    if (!isPlainObject(args)) return;
+    const reconciled = reconcileArgs(args, paramSchemas, typeLookup);
+    if (reconciled !== args) {
+      updateArgsJson(JSON.stringify(reconciled));
+    }
+  }, [
+    argsMode,
+    selectedFn,
+    paramSchemas,
+    typeLookup,
+    argsSchemaScope,
+    baseArgsFor,
+    updateArgsJson,
+  ]);
+
+  const onRunFunction = useCallback(async () => {
+    if (!selectedFn || !selectedProject || isRunning) return;
+
+    // Don't force the 'run' tab — running keeps the user on whatever tab
+    // they're viewing (graph, trace, prompt, etc.).
+    setExpandedLogId(null);
+    setRunValidationError(null);
+
+    requestAnimationFrame(() => {
+      outputRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    try {
+      const parsed: unknown = JSON.parse(argsJson);
+      if (!isPlainObject(parsed)) {
+        throw new Error(
+          'Arguments must be a JSON object, e.g. {"arr": [3,1,2]}',
+        );
+      }
+      // Effects normally keep form state canonical, but Run must also close
+      // the same-commit race after a project/schema update. Raw mode remains
+      // an exact escape hatch and is intentionally not reconciled here.
+      const runArgs =
+        argsMode === 'form' && paramSchemas !== undefined
+          ? reconcileArgs(parsed, paramSchemas, typeLookup)
+          : parsed;
+      const runArgsJson =
+        runArgs === parsed ? argsJson : JSON.stringify(runArgs);
+      if (runArgs !== parsed) updateArgsJson(runArgsJson);
+      const argsBytes = encodeRunArgs(runArgs);
+
+      const boundaryId = await executionStore.startRun({
+        project: selectedProject,
+        functionName: selectedFn,
+        argsBytes: new Uint8Array(argsBytes),
+      });
+      setArgsJsonByBoundaryId((prev) => ({
+        ...prev,
+        [boundaryId]: runArgsJson,
+      }));
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      setRunValidationError(errMsg);
+    }
+  }, [
+    selectedFn,
+    selectedProject,
+    argsJson,
+    argsMode,
+    paramSchemas,
+    typeLookup,
+    isRunning,
+    executionStore,
+    updateArgsJson,
+  ]);
   // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
   // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
   // them. expr functions just return a structured value (raw == parsed).
@@ -2266,6 +2440,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               findCallSiteNode(wf, hop);
             pendingHighlightRef.current =
               target != null ? { fn: wf, nodeId: target } : null;
+            setSelectedPreviewTestKey(null);
             setSelectedFn(wf);
             setHighlightedNodeId(null);
           }}
@@ -2289,6 +2464,21 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
         className="relative flex h-full min-h-0 w-full flex-1 flex-col gap-0 overflow-hidden"
+        // Panel-scoped run shortcut: fires for focus anywhere inside the
+        // playground (form fields, raw input, graph) without stealing
+        // Cmd/Ctrl+Enter from the host's code editor.
+        onKeyDown={(e) => {
+          if (!((e.metaKey || e.ctrlKey) && e.key === 'Enter')) return;
+          // Same gates as the Run buttons: no runs from the collection or
+          // test-run views (where the run tab, history, and error strip are
+          // all hidden — a run started here would be invisible), and never
+          // over build errors. (onRunFunction can't check these itself —
+          // hasErrors is derived after its declaration.) Don't swallow the
+          // keystroke when nothing will run.
+          if (viewingCollection || viewingTestRun) return;
+          e.preventDefault();
+          if (!hasErrors) void onRunFunction();
+        }}
       >
         {/* ──── Combined top bar ──── */}
         <div className="flex items-center gap-1.5 px-2 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
@@ -2369,17 +2559,33 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
             />
           )}
 
-          {selectedFn && !viewingCollection && !viewingTestRun && (
-            <Button
-              variant="success"
-              size="sm"
-              className="h-7 text-[11px] font-semibold"
-              disabled={hasErrors || isRunning || !selectedProject}
-              onClick={onRunFunction}
-            >
-              {isRunning ? 'Running...' : 'Run'}
-            </Button>
-          )}
+          {/* The primary Run button lives next to the args editor inside the
+              Run tab; other tabs keep a compact icon so re-running while
+              watching the graph/trace stays one click away. */}
+          {selectedFn &&
+            !viewingCollection &&
+            !viewingTestRun &&
+            activeTab !== 'run' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="success"
+                      size="icon-xs"
+                      className="h-7 w-7"
+                      aria-label="Run"
+                      disabled={hasErrors || isRunning || !selectedProject}
+                      onClick={onRunFunction}
+                    >
+                      <Play />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Run {selectedFn}() ({RUN_SHORTCUT_HINT})
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
 
           <TooltipProvider>
             <Tooltip>
@@ -2578,8 +2784,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   internalFunctionCount={internalFunctionCount}
                   isLoadingProject={isLoadingProject}
                   testTree={testTree}
+                  previewTests={previewTests}
+                  selectedPreviewTestKey={selectedPreviewTestKey}
+                  onSelectPreviewTest={handleSelectPreviewTest}
                   selectedFn={selectedFn}
                   onSelectFn={(fn) => {
+                    setSelectedPreviewTestKey(null);
                     setViewingCollection(false);
                     setViewingTestRun(false);
                     setHighlightedNodeId(null);
@@ -2962,18 +3172,75 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                 >
                   {/* Args */}
                   {/* `nokey`: keep React Flow's global key capture (Space,
-                      Backspace, ...) out of the args input */}
-                  <div className="nokey flex items-center border-b border-vsc-border shrink-0">
-                    <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
-                      args
-                    </span>
-                    <Input
-                      spellCheck={false}
-                      value={argsJson}
-                      onChange={onArgsJsonChange}
-                      className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
-                      placeholder='{"key": "value"}'
-                    />
+                      Backspace, ...) out of the args inputs */}
+                  <div className="nokey flex flex-col border-b border-vsc-border shrink-0">
+                    <div className="flex items-center min-h-7">
+                      <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
+                        args
+                      </span>
+                      {showArgsForm ? (
+                        <div className="flex-1" />
+                      ) : (
+                        <div className="flex-1 flex items-center min-w-0">
+                          <Input
+                            spellCheck={false}
+                            value={argsJson}
+                            onChange={onArgsJsonChange}
+                            className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
+                            placeholder='{"key": "value"}'
+                          />
+                          {argsFormUnavailable && (
+                            <span className="px-2 text-[10px] text-vsc-text-faint whitespace-nowrap">
+                              not a JSON object — form off
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {paramSchemas !== undefined && (
+                        <ToggleGroup
+                          size="sm"
+                          className="px-1.5 shrink-0"
+                          value={argsMode}
+                          options={[
+                            { value: 'form', label: 'form' },
+                            { value: 'raw', label: 'raw' },
+                          ]}
+                          onValueChange={setArgsMode}
+                        />
+                      )}
+                      <Button
+                        variant="success"
+                        size="xs"
+                        className="mx-1 my-0.5 shrink-0 text-[11px] font-semibold"
+                        aria-label={isRunning ? 'Running' : 'Run'}
+                        disabled={hasErrors || isRunning || !selectedProject}
+                        onClick={onRunFunction}
+                      >
+                        {isRunning ? (
+                          'Running...'
+                        ) : (
+                          <>
+                            Run
+                            <span className="font-normal opacity-70">
+                              {RUN_SHORTCUT_HINT}
+                            </span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {showArgsForm && paramSchemas && reconciledFormArgs && (
+                      <div className="max-h-56 overflow-y-auto px-2 py-1.5 border-t border-vsc-border">
+                        {/* Remount on function or schema changes so local widget
+                            drafts cannot outlive the schema they represent. */}
+                        <ArgsForm
+                          key={`${selectedProject ?? ''}:${selectedFn ?? ''}:${argsSchemaKey}`}
+                          params={paramSchemas}
+                          types={projectTypes}
+                          value={reconciledFormArgs}
+                          onChange={onArgsFormChange}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Live graph */}

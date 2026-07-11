@@ -1131,6 +1131,30 @@ pub fn function_in_scope_generic_param_bounds<'db>(
                 .iter()
                 .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
             );
+            // Inside an interface's own default method `Self` is a rigid type
+            // variable bounded by the interface itself (as a constraint, no
+            // associated pins — they are `Self`'s own, abstract here), mirroring
+            // the inference env's `Self` registration. Without it a signature
+            // `Self.Assoc` projection has no bound to resolve through and would
+            // silently lower to an error sentinel; with it the projection stays
+            // symbolic and lands on the default-method frame's associated-type
+            // slot at template lowering.
+            let iface_qtn = qualify_def(
+                db,
+                baml_compiler2_hir::contributions::Definition::Interface(
+                    baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *interface_id),
+                ),
+                &interface.name,
+            );
+            let iface_args = interface
+                .generic_params
+                .iter()
+                .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                .collect();
+            bounds.insert(
+                baml_base::Name::new("Self"),
+                vec![baml_type::Interface::new(iface_qtn, iface_args, Vec::new())],
+            );
         }
     }
     // A method of an out-of-body `implements` block sees the block's generics (`implements<T
