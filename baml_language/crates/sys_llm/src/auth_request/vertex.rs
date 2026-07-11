@@ -9,8 +9,7 @@
 //!    account, authorized user, workload identity federation, or impersonated
 //!    service account -- the same documents `GOOGLE_APPLICATION_CREDENTIALS`
 //!    accepts)
-//! 2. `options.credentials_content` -- an inline credential document as a
-//!    `json` object (or a pre-serialized JSON string)
+//! 2. `options.credentials_content` -- an inline credential JSON string
 //! 3. Application Default Credentials -- the `GOOGLE_APPLICATION_CREDENTIALS`
 //!    file, the well-known ADC config file, then the GCE metadata server
 //!
@@ -114,7 +113,7 @@ pub(crate) async fn auth_vertex(
     }
 
     // Resolve credentials once (needed for both project-id and token).
-    let creds = resolve_credentials(vertex_opts.as_ref())?;
+    let creds = resolve_credentials(vertex_opts.as_ref());
 
     // Resolve project_id placeholder in the URL if needed.
     if needs_project_id {
@@ -222,28 +221,6 @@ impl TokenIo for BamlTokenIo {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Serialize a `credentials_content` value (a BAML `json` value) to JSON text.
-///
-/// A string value is treated as pre-serialized JSON text and passed through;
-/// any other JSON shape (typically a `json` object) is serialized. `null`
-/// means unset (`Ok(None)`); a value with no JSON representation is an error.
-fn credentials_content_to_json_string(
-    value: &BexExternalValue,
-) -> Result<Option<String>, BuildRequestError> {
-    match value {
-        BexExternalValue::Null => Ok(None),
-        BexExternalValue::String(s) => Ok(Some(s.as_str().to_string())),
-        other => crate::build_request::bex_value_to_json(other)
-            .map(|v| Some(v.to_string()))
-            .ok_or_else(|| {
-                BuildRequestError::AuthorizationFailed(
-                    "Google Cloud: credentials_content must be a JSON credential object"
-                        .to_string(),
-                )
-            }),
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Credential resolution (single source for both token and project_id)
 // ---------------------------------------------------------------------------
@@ -266,20 +243,15 @@ enum ResolvedCredentials {
 /// Default Credentials.
 ///
 /// An explicitly-set option is used as-is -- a broken value errors instead of
-/// cascading to the next source. (`credentials_content null` is the unset
-/// spelling of the `json | null` type, not an explicit source.)
-fn resolve_credentials(
-    vertex_opts: Option<&VertexAiOptions>,
-) -> Result<ResolvedCredentials, BuildRequestError> {
+/// cascading to the next source.
+fn resolve_credentials(vertex_opts: Option<&VertexAiOptions>) -> ResolvedCredentials {
     if let Some(path) = vertex_opts.and_then(|o| o.credentials.as_ref()) {
-        return Ok(ResolvedCredentials::CredentialsFile(path.clone()));
+        return ResolvedCredentials::CredentialsFile(path.clone());
     }
     if let Some(content) = vertex_opts.and_then(|o| o.credentials_content.as_ref()) {
-        if let Some(json_str) = credentials_content_to_json_string(content)? {
-            return Ok(ResolvedCredentials::CredentialsJson(json_str));
-        }
+        return ResolvedCredentials::CredentialsJson(content.clone());
     }
-    Ok(ResolvedCredentials::Adc)
+    ResolvedCredentials::Adc
 }
 
 // ---------------------------------------------------------------------------
@@ -886,44 +858,10 @@ mod tests {
         assert!(result.is_err());
     }
 
-    /// Build a `json`-typed `credentials_content` value: a BAML map/object
-    /// mirroring the given JSON object (all test SA fields are strings).
-    fn json_object_to_bex(json_str: &str) -> BexExternalValue {
-        use bex_external_types::RuntimeTy;
-        let value: serde_json::Value = serde_json::from_str(json_str).unwrap();
-        let mut entries = indexmap::IndexMap::new();
-        for (k, v) in value.as_object().unwrap() {
-            entries.insert(
-                k.clone(),
-                BexExternalValue::String(v.as_str().unwrap().into()),
-            );
-        }
-        BexExternalValue::Map {
-            key_type: RuntimeTy::unknown(),
-            value_type: RuntimeTy::unknown(),
-            entries,
-        }
-    }
-
     #[tokio::test]
-    async fn credentials_content_inline_json_object() {
+    async fn credentials_content_inline_json_string() {
         let client = make_client_with_vertex_opts(VertexAiOptions {
-            credentials_content: Some(json_object_to_bex(&test_service_account_json())),
-            credentials: None,
-            location: None,
-            project_id: None,
-        });
-        let io = StubIo::with_token("ya29.from-service-account");
-        let mut req = fake_request();
-        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
-        assert_bearer_token(&req);
-    }
-
-    #[tokio::test]
-    async fn credentials_content_preserialized_json_string() {
-        // A `json` string value is treated as pre-serialized JSON text.
-        let client = make_client_with_vertex_opts(VertexAiOptions {
-            credentials_content: Some(BexExternalValue::String(test_service_account_json().into())),
+            credentials_content: Some(test_service_account_json()),
             credentials: None,
             location: None,
             project_id: None,
@@ -940,7 +878,7 @@ mod tests {
         // (but unreadable) file errors instead of cascading to the inline JSON.
         let client = make_client_with_vertex_opts(VertexAiOptions {
             credentials: Some("/unreadable/service-account.json".to_string()),
-            credentials_content: Some(json_object_to_bex(&test_service_account_json())),
+            credentials_content: Some(test_service_account_json()),
             location: None,
             project_id: None,
         });

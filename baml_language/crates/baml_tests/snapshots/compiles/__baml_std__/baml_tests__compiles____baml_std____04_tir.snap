@@ -2282,13 +2282,13 @@ class baml.llm.AnthropicOptions {
 class baml.llm.GoogleAiOptions {
   enterprise: bool | null
   credentials: string | null
-  credentials_content: baml.json.json | null
+  credentials_content: string | null
   location: string | null
   project_id: string | null
 }
 class baml.llm.VertexAiOptions {
   credentials: string | null
-  credentials_content: baml.json.json | null
+  credentials_content: string | null
   location: string | null
   project_id: string | null
 }
@@ -2507,13 +2507,13 @@ class baml.llm.AnthropicOptions$stream {
 class baml.llm.GoogleAiOptions$stream {
   enterprise: bool | null
   credentials: string | null
-  credentials_content: baml.json.json$stream | null
+  credentials_content: string | null
   location: string | null
   project_id: string | null
 }
 class baml.llm.VertexAiOptions$stream {
   credentials: string | null
-  credentials_content: baml.json.json$stream | null
+  credentials_content: string | null
   location: string | null
   project_id: string | null
 }

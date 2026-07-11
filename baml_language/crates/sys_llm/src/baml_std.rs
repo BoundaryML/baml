@@ -39,8 +39,20 @@ impl PrimitiveClient {
                 provider: provider.clone(),
             })?;
 
-        // Apply provider-specific defaults for any fields the user didn't set.
-        apply_provider_defaults(llm_provider, &mut options);
+        // Provider options must be parsed before defaults are applied: a
+        // google-ai client with `enterprise = true` uses the Vertex backend,
+        // so its unset fields need Vertex defaults rather than Google AI
+        // Studio defaults.
+        let provider_options = resolve_provider_options(&options.provider_options);
+        let defaults_provider = match (&provider_options, llm_provider) {
+            (Some(ProviderOptions::GoogleAi(options)), LlmProvider::GoogleAi)
+                if options.enterprise == Some(true) =>
+            {
+                LlmProvider::VertexAi
+            }
+            _ => llm_provider,
+        };
+        apply_provider_defaults(defaults_provider, &mut options);
 
         let model = options
             .model
@@ -72,7 +84,6 @@ impl PrimitiveClient {
             }
             map
         };
-        let provider_options = resolve_provider_options(&options.provider_options);
         Ok(Self {
             name,
             provider,
@@ -186,11 +197,14 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
             LlmProvider::AiGatewayImages => Some("https://ai-gateway.vercel.sh/v4/ai".into()),
             LlmProvider::Ollama => Some("http://localhost:11434".into()),
             LlmProvider::OpenRouter => Some("https://openrouter.ai/api/v1".into()),
-            LlmProvider::GoogleAi => {
-                Some(crate::build_request::google::GOOGLE_AI_DEFAULT_BASE_URL.into())
-            }
-            // VertexAi, AwsBedrock, AzureOpenAi: base_url is constructed at
-            // request time from provider-specific fields (location, resource_name, etc.)
+            // GoogleAi and VertexAi select their provider-specific default URL
+            // at request time, after any Google AI -> Vertex routing has been
+            // applied. AwsBedrock and AzureOpenAi also construct their URLs at
+            // request time from provider-specific fields.
+            LlmProvider::GoogleAi
+            | LlmProvider::VertexAi
+            | LlmProvider::AwsBedrock
+            | LlmProvider::AzureOpenAi => None,
             _ => None,
         };
     }

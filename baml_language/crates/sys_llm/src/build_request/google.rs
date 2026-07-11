@@ -124,10 +124,7 @@ fn resolve_url(client: &crate::baml_std::PrimitiveClient, provider: LlmProvider)
         // resolved during auth (see auth_request/vertex.rs).
         LlmProvider::VertexAi => {
             let base = match client.options.base_url.as_deref() {
-                // A google-ai client routed to Vertex by GOOGLE_GENAI_USE_VERTEXAI
-                // still carries the google-ai DEFAULT base_url; ignore it and
-                // build a Vertex URL instead.
-                Some(url) if url != GOOGLE_AI_DEFAULT_BASE_URL => url.to_string(),
+                Some(url) => url.to_string(),
                 _ => resolve_vertex_base_url(client),
             };
             format!("{base}/{}:generateContent", client.model)
@@ -194,7 +191,9 @@ fn resolve_vertex_base_url(client: &crate::baml_std::PrimitiveClient) -> String 
 /// Anthropic models on Vertex AI use a different publisher path:
 /// `publishers/anthropic/models` instead of `publishers/google/models`.
 pub(super) fn resolve_vertex_raw_predict_url(client: &crate::baml_std::PrimitiveClient) -> String {
-    // If user provides a base_url, use it as-is (they're responsible for the path)
+    // If the user provides a base_url, use it as-is (they're responsible for
+    // the path). Provider defaults are selected only after routing, so a
+    // google-ai client routed to Vertex does not carry the Google AI default.
     if let Some(url) = client.options.base_url.as_deref() {
         return format!("{url}/{}:rawPredict", client.model);
     }
@@ -314,7 +313,7 @@ mod tests {
 
     use baml_base::MediaKind;
     use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-    use bex_external_types::BexExternalValue;
+    use bex_external_types::{AsBexExternalValue, BexExternalValue};
     use indexmap::IndexMap;
 
     use super::*;
@@ -511,6 +510,31 @@ mod tests {
             !url.contains("publishers/google/models"),
             "Claude on Vertex should NOT use publishers/google, got: {url}"
         );
+        assert_eq!(
+            url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/anthropic/models/claude-sonnet-4-20250514:rawPredict"
+        );
+    }
+
+    #[test]
+    fn google_ai_enterprise_applies_vertex_defaults_before_building_anthropic_url() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                provider_options: crate::baml_std::GoogleAiOptions {
+                    enterprise: Some(true),
+                    location: Some("us-central1".to_string()),
+                    project_id: Some("my-project".to_string()),
+                    ..Default::default()
+                }
+                .into_bex_external_value(),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(client.options.base_url, None);
+        let url = resolve_vertex_raw_predict_url(&client);
         assert_eq!(
             url,
             "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/publishers/anthropic/models/claude-sonnet-4-20250514:rawPredict"

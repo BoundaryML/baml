@@ -108,7 +108,7 @@ struct ProviderConfig {
 ///
 /// This check intentionally compares both field order and type spelling: the
 /// lowering code constructs provider option objects positionally in schema
-/// order, and sys_llm projects Google options into the generated Vertex type.
+/// order, and `sys_llm` projects Google options into the generated Vertex type.
 fn assert_google_vertex_options_match(source: &str) {
     let google = extract_class_shape(source, "GoogleAiOptions");
     let vertex = extract_class_shape(source, "VertexAiOptions");

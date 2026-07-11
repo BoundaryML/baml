@@ -568,7 +568,7 @@ class GoogleAiOptions {
   /// Equivalent to setting `GOOGLE_GENAI_USE_ENTERPRISE=true`.
   enterprise bool | null
   credentials string | null
-  credentials_content baml.json.json | null
+  credentials_content string | null
   location string | null
   project_id string | null
 }
@@ -581,9 +581,8 @@ class VertexAiOptions {
   /// JSON is not supported here; use `credentials_content` for inline
   /// credentials. When neither is set, Application Default Credentials apply.
   credentials string | null
-  /// Inline credential JSON as a `json` object (or a pre-serialized JSON
-  /// string). Used when `credentials` is not set.
-  credentials_content baml.json.json | null
+  /// Inline credential JSON string. Used when `credentials` is not set.
+  credentials_content string | null
   location string | null
   project_id string | null
 }

@@ -1814,6 +1814,37 @@ mod tests {
         }
     }
 
+    /// Environment-driven Vertex routing must discard the Google AI Studio
+    /// default URL for Anthropic partner models as well as Gemini models.
+    #[tokio::test]
+    async fn test_google_ai_use_vertexai_env_routes_claude_through_vertex() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-sonnet-4-20250514".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let io = gcp_adc_io(&[
+            ("GOOGLE_GENAI_USE_VERTEXAI", "true"),
+            ("GOOGLE_CLOUD_PROJECT", "env-project"),
+            ("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        ]);
+
+        let result = build_request(&client, msg("user", "Hello"), Arc::new(io))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result.url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/env-project/locations/us-central1/publishers/anthropic/models/claude-sonnet-4-20250514:rawPredict",
+        );
+        assert_eq!(
+            result.headers.get("authorization").unwrap(),
+            "Bearer ya29.ent-token",
+        );
+    }
+
     /// `GOOGLE_GENAI_USE_ENTERPRISE=true` is an alias for the Vertex backend:
     /// same aiplatform URL + ADC bearer auth as `GOOGLE_GENAI_USE_VERTEXAI`.
     #[tokio::test]
