@@ -80,7 +80,7 @@ export function SiteBanner() {
     >
       <Link
         className="site-banner-cta"
-        href="/blog"
+        href="/eap"
         style={{
           alignItems: 'center',
           color: INK,
@@ -106,11 +106,9 @@ export function SiteBanner() {
           New
         </span>
         <span style={{ color: MUTED }}>
-          {days} {days === 1 ? 'day' : 'days'} until{' '}
-          <span style={{ color: INK, fontWeight: 600 }}>
-            launch
-          </span>
-          {' — join our email list'}
+          {days} {days === 1 ? 'day' : 'days'} to launch{'  ·  '}
+          join a live onboarding,{' '}
+          <span style={{ color: INK, fontWeight: 600 }}>every Thursday</span>
         </span>
         <span
           aria-hidden

@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useState } from 'react';
+import { DiscordCta } from '@/components/discord-cta';
 import { Navbar } from '@/components/navbar';
 import { BamlCode } from '../../learn2/_components/BamlCode';
 import BamlEditor from '../../learn2/_components/BamlEditorLazy';
@@ -210,7 +211,7 @@ const TOC: { id: string; label: string; sub?: boolean }[] = [
   { id: 'testing', label: '3 · Tests', sub: true },
   { id: 'eval', label: '4 · eval / codemode', sub: true },
   { id: 'sandboxing', label: '5 · Sandboxing', sub: true },
-  { id: 'close', label: 'Try it out!' },
+  { id: 'close', label: 'Try BAML out!' },
 ];
 
 /* BAML Tests examples — one at a time, switched with buttons, at text
@@ -617,7 +618,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                       {
                         line: 8,
                         message:
-                          'runtime TypeError: email is undefined — far from here',
+                          'runtime TypeError: email is undefined',
                         severity: 'error',
                       },
                     ]}
@@ -631,7 +632,11 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                   <p className="l6-pane-label l6-pane-label--after">
                     baml — caught at compile time
                   </p>
-                  <BamlEditor filename="load.baml" initialCode={BAML_UNKNOWN} />
+                  <BamlEditor
+                    editHint
+                    filename="load.baml"
+                    initialCode={BAML_UNKNOWN}
+                  />
                 </div>
               </div>
             </Section>
@@ -1263,7 +1268,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
             </Section>
 
             {/* ---- close ---- */}
-            <Section id="close" title="Try it out!">
+            <Section id="close" title="Try BAML out!">
               <TryBaml />
               <p>
                 <a
@@ -1275,18 +1280,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                   boundaryml.com/quickstart →
                 </a>
               </p>
-              <p>
-                {'Join our '}
-                <a
-                  className="l6-link"
-                  href="https://boundaryml.com/discord"
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Discord
-                </a>
-                {'.'}
-              </p>
+              <DiscordCta />
             </Section>
           </>
         )}

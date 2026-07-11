@@ -342,6 +342,11 @@ export interface BamlEditorProps {
   maxHeight?: number;
   /** 1-based lines to softly emphasise (whole-line tint, like BamlCode). */
   highlightLines?: number[];
+  /**
+   * Show a small "try editing me" nudge over the editor (desktop only, hidden
+   * on touch). Dismisses the first time the editor is focused or edited.
+   */
+  editHint?: boolean;
 }
 
 /**
@@ -355,6 +360,7 @@ export function BamlEditor({
   filename,
   maxHeight = 440,
   highlightLines,
+  editHint = false,
 }: BamlEditorProps) {
   const idRef = useRef<string>('');
   if (!idRef.current) idRef.current = `cell${cellCounter++}`;
@@ -383,6 +389,7 @@ export function BamlEditor({
   // shipped code contains a test block get the button.
   const hasTests = /\btest(set)?\s+"/.test(initialCode);
   const [running, setRunning] = useState(false);
+  const [hintOff, setHintOff] = useState(false);
   const runningRef = useRef(false);
   const runAll = useCallback(async () => {
     const handle = handleRef.current;
@@ -491,6 +498,9 @@ export function BamlEditor({
     (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
+      if (editHint) {
+        editor.onDidFocusEditorText(() => setHintOff(true));
+      }
       monaco.editor.setTheme(monacoThemeRef.current);
       const handle = registerCell(idRef.current, codeRef.current);
       handleRef.current = handle;
@@ -531,12 +541,13 @@ export function BamlEditor({
         syncHeight();
       }
     },
-    [applyDiagnostics, autoSize, maxHeight, highlightLines],
+    [applyDiagnostics, autoSize, maxHeight, highlightLines, editHint],
   );
 
   const onChange = useCallback((value?: string) => {
     const next = value ?? '';
     codeRef.current = next;
+    setHintOff(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       handleRef.current?.updateCode(codeRef.current);
@@ -547,6 +558,12 @@ export function BamlEditor({
   // (the playground graph grabs Space/Backspace/etc otherwise).
   return (
     <div className="l2-bamled-wrap nokey">
+      {editHint && !hintOff ? (
+        <span className="l2-edit-hint font-mono" aria-hidden>
+          <span className="l2-edit-hint-emoji">✏️</span>
+          try editing me
+        </span>
+      ) : null}
       <div className="l2-bamled-frame">
         {filename || hasTests ? (
           <div
