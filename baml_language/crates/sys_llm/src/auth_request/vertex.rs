@@ -1138,8 +1138,8 @@ mod tests {
         );
     }
 
-    /// The location placeholder is filled from GOOGLE_CLOUD_LOCATION when
-    /// options.location was not set at URL construction time.
+    /// The location placeholder is filled from `GOOGLE_CLOUD_LOCATION` when
+    /// `options.location` was not set at URL construction time.
     #[tokio::test]
     async fn location_placeholder_resolved_from_env() {
         let adc_json = serde_json::json!({
@@ -1163,10 +1163,7 @@ mod tests {
                     "europe-west4".to_string(),
                 ),
             ]),
-            files: std::collections::HashMap::from([(
-                "/fake/loc-adc.json".to_string(),
-                adc_json,
-            )]),
+            files: std::collections::HashMap::from([("/fake/loc-adc.json".to_string(), adc_json)]),
             token_body: serde_json::json!({
                 "access_token": "ya29.location-token",
                 "token_type": "Bearer",

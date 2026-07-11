@@ -165,7 +165,7 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
             LlmProvider::Ollama => Some("http://localhost:11434".into()),
             LlmProvider::OpenRouter => Some("https://openrouter.ai/api/v1".into()),
             LlmProvider::GoogleAi => {
-                Some("https://generativelanguage.googleapis.com/v1beta".into())
+                Some(crate::build_request::google::GOOGLE_AI_DEFAULT_BASE_URL.into())
             }
             // VertexAi, AwsBedrock, AzureOpenAi: base_url is constructed at
             // request time from provider-specific fields (location, resource_name, etc.)

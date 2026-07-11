@@ -62,9 +62,11 @@ fn auth_google_ai(
     let Some(api_key) = &client.options.api_key else {
         return Err(BuildRequestError::Other(
             "Missing api_key for Google AI. Set options.api_key (e.g. api_key \
-             env.GOOGLE_API_KEY or env.GEMINI_API_KEY), or switch to the vertex-ai \
+             env.GOOGLE_API_KEY or env.GEMINI_API_KEY), switch to the vertex-ai \
              provider with project_id + location to use Google Cloud credentials \
-             (ADC) instead."
+             (ADC) instead, or set GOOGLE_GENAI_USE_VERTEXAI=true (with \
+             GOOGLE_CLOUD_PROJECT + GOOGLE_CLOUD_LOCATION) to route this client \
+             through Vertex AI."
                 .to_string(),
         ));
     };
@@ -396,6 +398,10 @@ mod tests {
         assert!(
             msg.contains("vertex-ai") && msg.contains("project_id + location"),
             "must point at the vertex-ai alternative: {msg}"
+        );
+        assert!(
+            msg.contains("GOOGLE_GENAI_USE_VERTEXAI"),
+            "must mention the env-only route to Vertex: {msg}"
         );
     }
 
