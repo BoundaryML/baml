@@ -10,7 +10,17 @@
 //   prompt: `What is the weather in ${city}?`
 // }
 
-// This is the desugared code for s09_Weather -------------------------------
+// Manual expansion reference for s09_Weather.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s09_Weather_request(...) models the baseline s09_Weather.request(...)
+//   without a call-time tool roster or dispatcher; it performs no I/O.
+// - s09_Weather_agent_request(...) hand-builds that Request<string> after
+//   folding in the s09_Weather.agent(...) roster and dispatcher.
+// - s09_Weather_agent_manual(...) models s09_Weather.agent(...):
+//   root.ai.run_agent(agent_request), preserving its typed outcome union.
+// This scenario intentionally has no plain-call s09_Weather_manual(...) wrapper.
 function s09_Weather_request(
   city: string,
   provider: root.ai.Provider = BepV2ScriptedTools {

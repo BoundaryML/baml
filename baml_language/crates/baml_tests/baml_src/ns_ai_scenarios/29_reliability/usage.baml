@@ -1,6 +1,9 @@
 // Task sketch: s29_Extract(work) -> string.
 
-// This is the desugared code for s29_Extract --------------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s29_Extract`; these helper names are scaffolding, not literal generated names:
+// - `s29_Extract_request` represents `s29_Extract.request(...)`.
+// - `s29_Extract_manual` spells the plain `s29_Extract(...)` lowering through `root.ai.run`.
 function s29_Extract_request(
   work: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "reliable", reply: `"done"`, attributes: {} },

@@ -86,3 +86,32 @@ async fn parse_companion_allows_missing_nullable_alias_field() {
         })
     );
 }
+
+#[tokio::test]
+async fn sap_parse_decodes_a_complete_top_level_json_string() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            baml.sap.parse<string>(`"Fred"`)
+        }
+        "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::String("Fred".into())));
+}
+
+#[tokio::test]
+async fn sap_parse_preserves_plain_llm_text() {
+    let output = baml_test!(
+        r#"
+        function main() -> string {
+            baml.sap.parse<string>("Fred says hello")
+        }
+        "#
+    );
+
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Fred says hello".into()))
+    );
+}

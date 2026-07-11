@@ -13,13 +13,13 @@ class s40_LsArgs { path: string }
 class s40_BuiltinTools {
   function all() -> root.ai.Tool[] throws never {
     [
-      root.ai.Tool.from_type("Read", "Read a file from the workspace.", reflect.type_of<s40_ReadArgs>()),
-      root.ai.Tool.from_type("Edit", "Replace an exact string in a file.", reflect.type_of<s40_EditArgs>()),
-      root.ai.Tool.from_type("Write", "Write a file.", reflect.type_of<s40_WriteArgs>()),
-      root.ai.Tool.from_type("Bash", "Run a shell command in the sandbox.", reflect.type_of<s40_BashArgs>()),
-      root.ai.Tool.from_type("Grep", "Search file contents.", reflect.type_of<s40_GrepArgs>()),
-      root.ai.Tool.from_type("Glob", "Find files by glob.", reflect.type_of<s40_GlobArgs>()),
-      root.ai.Tool.from_type("Ls", "List a directory.", reflect.type_of<s40_LsArgs>()),
+      root.ai.Tool.typed<s40_ReadArgs>("Read", "Read a file from the workspace."),
+      root.ai.Tool.typed<s40_EditArgs>("Edit", "Replace an exact string in a file."),
+      root.ai.Tool.typed<s40_WriteArgs>("Write", "Write a file."),
+      root.ai.Tool.typed<s40_BashArgs>("Bash", "Run a shell command in the sandbox."),
+      root.ai.Tool.typed<s40_GrepArgs>("Grep", "Search file contents."),
+      root.ai.Tool.typed<s40_GlobArgs>("Glob", "Find files by glob."),
+      root.ai.Tool.typed<s40_LsArgs>("Ls", "List a directory."),
     ]
   }
 

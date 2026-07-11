@@ -17,7 +17,10 @@ function s39_default_harness() -> root.ai.Provider throws never {
 //   prompt: `Fix the bug, then ask the code-reviewer sub-agent to check it: ${task}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s39_Fix -------------------------------------
+// Hand-written reference expansion of the compiler task surface for `s39_Fix`.
+// These helper names are scaffolding, not literal generated names:
+// - `s39_Fix_request` represents `s39_Fix.request(...)` with call-time tools.
+// - `s39_Fix_manual` spells the explicit agent-loop consumer of that request.
 function s39_Fix_request(
   task: string,
   provider: root.ai.Provider = s39_default_harness(),
@@ -60,7 +63,11 @@ function s39_Fix_manual(
 //   prompt: `Run the triage skill for issue ${issue_number}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s39_TriageIssue -----------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s39_TriageIssue`; these helper names are scaffolding, not literal generated names:
+// - `s39_TriageIssue_request` represents `s39_TriageIssue.request(...)`.
+// - `s39_TriageIssue_manual` is a custom Skills-capability consumer of that
+//   request, not a compiler-generated companion.
 function s39_TriageIssue_request(
   issue_number: int,
   provider: root.ai.Provider = s39_default_harness(),
@@ -101,7 +108,10 @@ function s39_TriageIssue_manual(
 //   prompt: `Pair with me on: ${task}`
 // }
 
-// This is the desugared code for s39_Pair ------------------------------------
+// Hand-written reference expansion of the compiler task surface for `s39_Pair`.
+// These helper names are scaffolding, not literal generated names:
+// - `s39_Pair_request` represents `s39_Pair.request(...)`.
+// - `s39_Pair_manual` is the explicit live-channel consumer of that request.
 function s39_Pair_request(
   task: string,
   provider: root.ai.Provider = s39_default_harness(),
@@ -132,7 +142,11 @@ function s39_Pair_manual(
 //   prompt: `Summarize: ${doc}`
 // }
 
-// This is the desugared code for s39_Summarize -------------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s39_Summarize`; these helper names are scaffolding, not literal generated names:
+// - `s39_Summarize_request` represents `s39_Summarize.request(...)`.
+// - `s39_Summarize_manual` spells the plain `s39_Summarize(...)` lowering
+//   through `root.ai.run`.
 function s39_Summarize_request(
   doc: string,
   provider: root.ai.Provider = s39_A2aProvider {

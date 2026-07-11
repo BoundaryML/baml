@@ -2137,6 +2137,15 @@ impl<'db> LoweringContext<'db> {
                 .generic_param_bounds
                 .get(name)
                 .and_then(|bound| self.interface_view_for_tir_ty(bound, target_tn)),
+            // Type aliases are transparent to interface lookup. TIR expands
+            // them before proving the bound; MIR must do the same before
+            // matching blanket impls such as `Iterable for T[]`.
+            Tir2Ty::TypeAlias(qtn, _) if !self.resolved_aliases.recursive.contains(qtn) => self
+                .resolved_aliases
+                .aliases
+                .get(qtn)
+                .and_then(|target| self.interface_view_for_tir_ty(target, target_tn))
+                .or_else(|| self.interface_view_from_registry(ty, target_tn)),
             Tir2Ty::AssociatedTypeProjection { .. } => {
                 let resolver =
                     baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
@@ -13836,6 +13845,12 @@ impl LoweringContext<'_> {
             _ => {
                 let ty = self.expr_ty(expr_id);
                 let temp = self.builder.temp(ty);
+                // A projection assignment may use an arbitrary expression as
+                // its base (`store.require().info.title = ...`). Materialize
+                // that base exactly once before projecting through it. Merely
+                // allocating the temp leaves it as `any`, so the VM later
+                // faults when the field projection expects an instance.
+                self.lower_expr(expr_id, Place::Local(temp));
                 Place::Local(temp)
             }
         }

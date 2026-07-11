@@ -9,7 +9,16 @@
 //   prompt: `Diagnose this build failure: ${build_log}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s07_Diagnose -------------------------------
+// Manual expansion reference for s07_Diagnose.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s07_Diagnose_request(...) models s07_Diagnose.request(...): it renders and
+//   packages Request<s07_Diagnosis> without performing I/O.
+// - s07_Diagnose_manual(...) models the plain s07_Diagnose(...) lowering:
+//   root.ai.run(request), returning only the diagnosis.
+// - s07_Diagnose_with_meta_manual(...) models s07_Diagnose.with_meta(...):
+//   root.ai.run_with_meta(request), preserving reasoning metadata.
 function s07_Diagnose_request(
   build_log: string,
   provider: root.ai.Provider = s07_ReasoningFixture {

@@ -1,6 +1,16 @@
 // Task sketch: s26_Ask(instruction) -> string.
 
-// This is the desugared code for s26_Ask ----------------------------------
+// Manual expansion reference for task `s26_Ask`:
+// - `s26_Ask_request(...)` models `s26_Ask.request(...)`.
+// - `s26_Ask_manual(...)` models the plain `s26_Ask(...)` call, lowered
+//   through `root.ai.run`.
+// - `s26_Ask_stream_manual(...)` models `s26_Ask.stream(...)`, lowered through
+//   `root.ai.stream` over the same request.
+// - `s26_Ask_live_manual(...)` models the custom realtime consumer
+//   `root.ai.open_live(s26_Ask.request(...), channel)`; `.live` is not a
+//   compiler task modifier.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s26_Ask_request(
   instruction: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "s26-default", reply: `"unused"`, attributes: {} },
@@ -149,7 +159,7 @@ testset "integ-test-26-transports" {
     let live = s26_Ask_live_manual(
       "Reply with exactly the lowercase word: pong", channel,
       root.ai.OpenAiRealtime {
-        model: "gpt-5.6-luna", voice: "alloy",
+        model: "gpt-realtime", voice: "alloy",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       },
     );

@@ -47,6 +47,8 @@ enum ResponsesContentPart {
         #[serde(skip_serializing_if = "Option::is_none")]
         file_id: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        file_url: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         filename: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         file_data: Option<String>,
@@ -190,13 +192,34 @@ fn responses_media_part(
             let format = audio_format_from_mime(&mime);
             Ok(ResponsesContentPart::InputAudio { data, format })
         }),
-        MediaKind::Pdf => media.read_content(|c| {
-            let data_url = content_to_url_or_data_url(c, &mime)?;
-            Ok(ResponsesContentPart::InputFile {
+        MediaKind::Pdf => media.read_content(|c| match c {
+            MediaContent::Url { url, .. } => Ok(ResponsesContentPart::InputFile {
                 file_id: None,
+                file_url: Some(url.clone()),
                 filename: None,
-                file_data: Some(data_url),
-            })
+                file_data: None,
+            }),
+            MediaContent::Base64 { base64_data } => Ok(ResponsesContentPart::InputFile {
+                file_id: None,
+                file_url: None,
+                filename: Some("input.pdf".to_string()),
+                file_data: Some(format!("data:{mime};base64,{base64_data}")),
+            }),
+            MediaContent::File {
+                file,
+                base64_data: Some(base64_data),
+            } => Ok(ResponsesContentPart::InputFile {
+                file_id: None,
+                file_url: None,
+                filename: Some(media_filename(file, "input.pdf")),
+                file_data: Some(format!("data:{mime};base64,{base64_data}")),
+            }),
+            MediaContent::File {
+                file,
+                base64_data: None,
+            } => Err(crate::build_request::BuildRequestError::FileNotResolved(
+                file.clone(),
+            )),
         }),
         MediaKind::Video => Err(crate::build_request::BuildRequestError::UnsupportedMedia(
             "OpenAI Responses API does not support video content".to_string(),
@@ -205,6 +228,15 @@ fn responses_media_part(
             "generic media kind not supported by OpenAI Responses API".to_string(),
         )),
     }
+}
+
+fn media_filename(path: &str, fallback: &str) -> String {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
 }
 
 // ============================================================================
@@ -367,7 +399,7 @@ mod tests {
             json,
             serde_json::json!({
                 "type": "input_file",
-                "file_data": "https://example.com/doc.pdf"
+                "file_url": "https://example.com/doc.pdf"
             })
         );
     }
@@ -387,6 +419,7 @@ mod tests {
             json,
             serde_json::json!({
                 "type": "input_file",
+                "filename": "input.pdf",
                 "file_data": "data:application/pdf;base64,pdfdata"
             })
         );
@@ -444,6 +477,7 @@ mod tests {
             json,
             serde_json::json!({
                 "type": "input_file",
+                "filename": "doc.pdf",
                 "file_data": "data:application/pdf;base64,resolved_pdf"
             })
         );

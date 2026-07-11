@@ -1,4 +1,13 @@
-// This is the desugared code for s27_ReviewJob ----------------------------
+// Manual expansion reference for task `s27_ReviewJob`:
+// - `s27_ReviewJob_request(...)` models `s27_ReviewJob.request(...)`.
+// - `s27_ReviewJob_manual(...)` models the plain `s27_ReviewJob(...)` call,
+//   lowered through `root.ai.run`.
+// - `s27_ReviewJob_background_manual(...)` models
+//   `s27_ReviewJob.background(...)`, lowered through
+//   `root.ai.submit_background` with BackgroundOptions.
+// Resume, poll, cancel, token, and cleanup are Job resource operations. These
+// helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s27_ReviewJob_request(
   topic: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "s27-default", reply: `"unused"`, attributes: {} },
@@ -66,7 +75,7 @@ test "27: a JobToken survives a string round trip and resumes" {
   let provider = s27_ScriptedJobs { owner: "scripted", remaining_polls: 0 };
   let job = s27_ReviewJob_background_manual("long job", "persist-me", provider);
   let saved = baml.json.to_string<root.ai.JobToken>(job.token());
-  let token = baml.sap.parse<root.ai.JobToken>(saved);
+  let token = baml.json.from_string<root.ai.JobToken>(saved);
   let resumed = provider.resume_job<string>(token);
   assert.equal(s27_poll_label(resumed), "done job-persist-me")
 }

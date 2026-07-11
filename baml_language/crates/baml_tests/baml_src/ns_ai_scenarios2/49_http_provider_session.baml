@@ -75,7 +75,7 @@ class s49_SessionResource {
         self.id,
         history + "\nuser: " + prompt_text + "\nassistant: " + reply,
       );
-      baml.sap.parse<T>(baml.json.to_string<string>(reply)) catch (e) {
+      baml.json.from_string<T>(baml.json.to_string<string>(reply)) catch (e) {
         _ => throw baml.errors.UnknownError { data: e, message: ["session result parse failed"] },
       }
     }
@@ -112,7 +112,13 @@ class s49_SessionResource {
 //   prompt: `${role("user")} ${message}`
 // }
 
-// This is the desugared code for s49_ContinueInSession ----------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s49_ContinueInSession`; the helper name is scaffolding, not a literal
+// generated name:
+// - `s49_ContinueInSession_request` represents
+//   `s49_ContinueInSession.request(...)`.
+// The service's `session.run(request)` and resume logic are application-level
+// consumers of that request, not compiler-generated task companions.
 function s49_ContinueInSession_request(
   message: string,
   provider: root.ai.Provider = s49_SessionProvider { histories: {}, next_id: 0 },

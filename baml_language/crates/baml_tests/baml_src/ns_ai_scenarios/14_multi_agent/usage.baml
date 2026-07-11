@@ -10,7 +10,16 @@
 //   prompt: `Triage this customer question: ${question}`
 // }
 
-// This is the desugared code for s14_Triage -------------------------------
+// Manual expansion reference for s14_Triage.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s14_Triage_request(...) models s14_Triage.request(...) with its call-time
+//   handoff roster and dispatcher.
+// - s14_Triage_agent_manual(...) models s14_Triage.agent(...):
+//   root.ai.run_agent(request), preserving Done | BudgetReached | Handoff.
+// Handoff routing in s14_route is ordinary application code, not a task modifier.
+// This scenario intentionally has no plain-call s14_Triage_manual(...) wrapper.
 function s14_Triage_request(
   question: string,
   provider: root.ai.Provider = BepV2ScriptedTools {

@@ -9,7 +9,12 @@
 //   prompt: `Answer this tax question: ${question}`
 // }
 
-// This is the desugared code for s15_FileTaxes ------------------------------
+// Manual expansion reference for task `s15_FileTaxes`:
+// - `s15_FileTaxes_request(...)` models `s15_FileTaxes.request(...)`.
+// - `s15_FileTaxes_manual(...)` models the plain `s15_FileTaxes(...)` call,
+//   lowered through `root.ai.run`.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s15_FileTaxes_request(
   question: string,
   provider: root.ai.Provider = s15_Guarded {

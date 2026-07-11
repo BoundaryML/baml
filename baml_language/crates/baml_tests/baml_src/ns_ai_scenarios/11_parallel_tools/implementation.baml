@@ -3,7 +3,7 @@ class S11QueryArgs {
 }
 
 function s11_search_tool() -> root.ai.Tool throws baml.errors.Unsupported {
-  root.ai.Tool.from_type("search", "Search one source.", reflect.type_of<S11QueryArgs>())
+  root.ai.Tool.typed<S11QueryArgs>("search", "Search one source.")
 }
 
 function s11_parallel_dispatch(

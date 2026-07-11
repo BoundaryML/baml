@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use baml_db::{
-    baml_compiler2_emit,
     baml_compiler_diagnostics::{Severity, render},
+    baml_compiler2_emit,
 };
 use clap::Args;
 

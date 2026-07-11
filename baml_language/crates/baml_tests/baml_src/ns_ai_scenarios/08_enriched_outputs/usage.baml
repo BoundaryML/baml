@@ -9,7 +9,16 @@
 //   prompt: `Answer ${question}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s08_Research -------------------------------
+// Manual expansion reference for s08_Research.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s08_Research_request(...) models s08_Research.request(...): it renders and
+//   packages Request<s08_Answer> without performing I/O.
+// - s08_Research_manual(...) models the plain s08_Research(...) lowering:
+//   root.ai.run(request), returning only the typed answer.
+// - s08_Research_with_meta_manual(...) models s08_Research.with_meta(...):
+//   root.ai.run_with_meta(request), preserving enrichment from the same call.
 function s08_Research_request(
   question: string,
   provider: root.ai.Provider = s08_EnrichedFixture {

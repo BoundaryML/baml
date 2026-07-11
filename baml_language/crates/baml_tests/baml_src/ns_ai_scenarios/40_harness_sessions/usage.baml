@@ -27,7 +27,11 @@ function s40_default_catalog() -> root.ai.Provider throws never {
 //   prompt: `Fix ${task}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s40_Fix -------------------------------------
+// Hand-written reference expansion of the compiler task surface for `s40_Fix`.
+// These helper names are scaffolding, not literal generated names:
+// - `s40_Fix_request` represents `s40_Fix.request(...)`.
+// - `s40_Fix_manual` is a custom SessionCatalog consumer that adds pickup
+//   policy; it is not a compiler-generated companion or the plain `run` lowering.
 function s40_Fix_request(
   task: string,
   provider: root.ai.Provider = s40_default_catalog(),

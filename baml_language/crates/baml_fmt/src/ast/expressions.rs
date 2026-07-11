@@ -4881,8 +4881,12 @@ impl SpawnExpr {
             return None;
         }
         let header = self.header_single_line_width(input)?;
-        let (_, open_trailing) = input.trivia.get_for_range_split(self.block.open_brace.span());
-        let (close_leading, _) = input.trivia.get_for_range_split(self.block.close_brace.span());
+        let (_, open_trailing) = input
+            .trivia
+            .get_for_range_split(self.block.open_brace.span());
+        let (close_leading, _) = input
+            .trivia
+            .get_for_range_split(self.block.close_brace.span());
         let body = match self.block.expr.as_deref() {
             Some(tail) => {
                 let (tail_leading, tail_trailing) = input.trivia.get_for_element(tail);
@@ -4939,8 +4943,12 @@ impl SpawnExpr {
         }
         printer.print_str(" ");
 
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.block.open_brace.span());
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.block.close_brace.span());
+        let (_, open_trailing) = printer
+            .trivia
+            .get_for_range_split(self.block.open_brace.span());
+        let (close_leading, _) = printer
+            .trivia
+            .get_for_range_split(self.block.close_brace.span());
         match self.block.expr.as_deref() {
             Some(tail) => {
                 printer.print_raw_token(&self.block.open_brace);

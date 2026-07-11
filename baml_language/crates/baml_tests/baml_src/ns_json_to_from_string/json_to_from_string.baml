@@ -185,6 +185,65 @@ test "optional_field_decode_missing" {
     assert.is_true(optional_field_decode_missing_is_null())
 }
 
+// ─── Optional and heterogeneous union serialization ─────────────────────────
+//
+// `to_string<T>` is driven by T's runtime type. A non-null optional class is
+// represented as a union at that boundary, so it must retain the class value
+// rather than falling through the untyped-json converter.
+
+class OptionalUserHolder { user User? }
+
+test "top_level_optional_class_present_to_string" {
+    let user: User? = User { name: "Ada", age: 30 };
+    assert.equal(
+        baml.json.to_string<User?>(user),
+        "{\"name\":\"Ada\",\"age\":30}",
+    )
+}
+
+test "top_level_optional_class_null_to_string" {
+    let user: User? = null;
+    assert.equal(baml.json.to_string<User?>(user), "null")
+}
+
+test "nested_optional_class_present_to_string" {
+    assert.equal(
+        baml.json.to_string<OptionalUserHolder>(OptionalUserHolder {
+            user: User { name: "Ada", age: 30 },
+        }),
+        "{\"user\":{\"name\":\"Ada\",\"age\":30}}",
+    )
+}
+
+test "heterogeneous_union_class_member_to_string" {
+    let value: User | string = User { name: "Ada", age: 30 };
+    assert.equal(
+        baml.json.to_string<User | string>(value),
+        "{\"name\":\"Ada\",\"age\":30}",
+    )
+}
+
+test "optional_enum_to_string" {
+    let color: Color? = Color.Blue;
+    assert.equal(baml.json.to_string<Color?>(color), "\"Blue\"")
+}
+
+test "optional_media_to_string" {
+    let avatar: image? = image.from_url("https://example.com/a.png", "image/png");
+    assert.equal(
+        baml.json.to_string<image?>(avatar),
+        "{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}",
+    )
+}
+
+test "optional_list_of_classes_to_string" {
+    let users: User[]? = [User { name: "Ada", age: 30 }];
+    assert.equal(
+        baml.json.to_string<User[]?>(users),
+        "[{\"name\":\"Ada\",\"age\":30}]",
+    )
+}
+
 // ─── Recursive class round-trip ───────────────────────────────────────────────
 
 class Tree { value int  children Tree[] }

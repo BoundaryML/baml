@@ -1572,7 +1572,11 @@ async fn e2e_client_override_native_provider_mock() {
         BexExternalValue::String("override-pong".into())
     );
     let reqs = server.received_requests().await.unwrap();
-    assert_eq!(reqs.len(), 1, "override provider should receive the request");
+    assert_eq!(
+        reqs.len(),
+        1,
+        "override provider should receive the request"
+    );
 }
 
 /// Phase B: a combinator chain is a Provider too — the override path accepts it.

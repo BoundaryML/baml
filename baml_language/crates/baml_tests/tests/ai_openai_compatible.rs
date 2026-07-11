@@ -13,8 +13,7 @@ use wiremock::{
     matchers::{method, path},
 };
 
-const CHAT_OK: &str =
-    r#"{"choices":[{"message":{"content":"pong"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}"#;
+const CHAT_OK: &str = r#"{"choices":[{"message":{"content":"pong"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}"#;
 
 /// Bearer auth: `Authorization: Bearer <token>` rides the request; the OpenAi
 /// parse pipeline handles the response unchanged.

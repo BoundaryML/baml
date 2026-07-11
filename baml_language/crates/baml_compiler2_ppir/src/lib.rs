@@ -1030,15 +1030,15 @@ fn make_user_drive_companion(
     // its `root.`-absolute form in the driver's namespace. Generic-param slots
     // (`T`/`TPartial`/passthrough) and cross-package (`baml.*`) / already-`root.`
     // paths are left untouched.
-    let generic_names: FxHashSet<&str> =
-        dfn.generic_params.iter().map(|g| g.as_str()).collect();
-    let mut package_names: FxHashSet<String> = baml_compiler2_hir::package::package_dependency_closure(
-        db,
-        PackageId::new(db, driver.package.clone()),
-    )
-    .iter()
-    .map(|p| p.name(db).as_str().to_string())
-    .collect();
+    let generic_names: FxHashSet<&str> = dfn.generic_params.iter().map(|g| g.as_str()).collect();
+    let mut package_names: FxHashSet<String> =
+        baml_compiler2_hir::package::package_dependency_closure(
+            db,
+            PackageId::new(db, driver.package.clone()),
+        )
+        .iter()
+        .map(|p| p.name(db).as_str().to_string())
+        .collect();
     package_names.insert(driver.package.as_str().to_string());
 
     let extras: Option<Vec<(Name, ast::TypeExpr)>> = dfn.params[2..]
@@ -1117,8 +1117,9 @@ fn absolutize_type_paths(
     package_names: &FxHashSet<String>,
 ) -> ast::TypeExpr {
     use ast::TypeExprKind as K;
-    let recur =
-        |inner: &ast::TypeExpr| absolutize_type_paths(inner, driver_ns, generic_names, package_names);
+    let recur = |inner: &ast::TypeExpr| {
+        absolutize_type_paths(inner, driver_ns, generic_names, package_names)
+    };
     let kind = match &te.kind {
         K::Path {
             segments,

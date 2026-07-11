@@ -16,3 +16,15 @@ function s05_image_prompt_template(
     )
   }
 }
+
+function s05_pdf_prompt_template(
+  instruction: string,
+  document: pdf,
+) -> (baml.llm.Context) -> baml.llm.PromptAst throws never {
+  (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+    baml.llm.assemble_prompt_ast(
+      ["", " ", ""],
+      [instruction, document],
+    )
+  }
+}

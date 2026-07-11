@@ -36,7 +36,11 @@ function s42_coder(runtime: string) -> root.ai.Provider throws never {
 //   prompt: `Inspect the repository and summarize the tests, then ${task}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s42_Summarize -------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s42_Summarize`; these helper names are scaffolding, not literal generated names:
+// - `s42_Summarize_request` represents `s42_Summarize.request(...)`.
+// - `s42_Summarize_manual` spells the plain `s42_Summarize(...)` lowering
+//   through `root.ai.run`.
 function s42_Summarize_request(
   task: string,
   provider: root.ai.Provider = S42HarnessAgent {
@@ -81,7 +85,12 @@ function s42_Summarize_manual(
 //   prompt: `Inspect the repo and summarize: ${task}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s42_SummarizeStream -------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s42_SummarizeStream`; these helper names are scaffolding, not literal generated names:
+// - `s42_SummarizeStream_request` represents `s42_SummarizeStream.request(...)`.
+// - `s42_SummarizeStream_manual` is this scenario's custom event-stream
+//   consumer of that request, not a literal generated helper.
+// - `s42_DriveRich_manual` is an application-level rich-UI consumer layered on it.
 function s42_SummarizeStream_request(
   task: string,
   provider: root.ai.Provider = S42HarnessAgent {

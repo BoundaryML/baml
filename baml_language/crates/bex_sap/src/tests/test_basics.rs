@@ -188,7 +188,15 @@ test_deserializer!(
     r#""hello""#,
     baml_tyannotated!(string),
     baml_db! {},
-    "\"hello\""
+    "hello"
+);
+
+test_deserializer!(
+    test_json_string_decodes_escapes,
+    r#""hello\nworld""#,
+    baml_tyannotated!(string),
+    baml_db! {},
+    "hello\nworld"
 );
 
 // --- Bool tests ---

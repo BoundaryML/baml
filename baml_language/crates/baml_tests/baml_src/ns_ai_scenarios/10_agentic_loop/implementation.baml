@@ -3,7 +3,7 @@ class S10SearchArgs {
 }
 
 function s10_search_tool() -> root.ai.Tool throws baml.errors.Unsupported {
-  root.ai.Tool.from_type("search", "Search the documentation.", reflect.type_of<S10SearchArgs>())
+  root.ai.Tool.typed<S10SearchArgs>("search", "Search the documentation.")
 }
 
 function s10_dispatch(calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {

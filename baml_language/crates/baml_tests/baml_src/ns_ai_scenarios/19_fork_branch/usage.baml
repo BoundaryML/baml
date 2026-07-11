@@ -1,7 +1,17 @@
 // Task sketch: s19_ContinueBranch(history, continuation) -> string.
 // Its complete hand-written lowering is the request builder and driver below.
 
-// This is the desugared code for s19_ContinueBranch ------------------------
+// Manual expansion reference for task `s19_ContinueBranch`:
+// - `s19_ContinueBranch_request(...)` models
+//   `s19_ContinueBranch.request(...)`.
+// - `s19_ContinueBranch_manual(...)` models the plain
+//   `s19_ContinueBranch(...)` call, lowered through `root.ai.run`.
+// - A session-bound call below models
+//   `session.run(s19_ContinueBranch.request(...))`; forking is a Session
+//   resource operation, not a task modifier.
+// The branch helpers are ordinary application orchestration. All helper names
+// here are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s19_ContinueBranch_request(
   history: string,
   continuation: string,

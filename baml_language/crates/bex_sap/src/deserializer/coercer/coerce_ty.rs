@@ -141,12 +141,21 @@ where
 
         let result = match value {
             jsonish::Value::AnyOf(candidates, primitive) => match target.ty {
-                TyResolvedRef::String(_) => BamlValueWithFlags::new(
-                    BamlValue::String(BamlString {
-                        value: primitive.clone(),
-                    }),
-                    DeserializerMeta::new(target.clone()),
-                ),
+                TyResolvedRef::String(_) => {
+                    // SAP is parsing an LLM response into the requested type. If
+                    // the entire response is a complete JSON string literal,
+                    // honor that structure and return the decoded string value.
+                    // Plain text, partial strings, objects, arrays, and prose that
+                    // merely contains JSON continue to pass through verbatim.
+                    let value = serde_json::from_str::<String>(primitive.as_ref())
+                        .map(Cow::Owned)
+                        .unwrap_or_else(|_| primitive.clone());
+
+                    BamlValueWithFlags::new(
+                        BamlValue::String(BamlString { value }),
+                        DeserializerMeta::new(target.clone()),
+                    )
+                }
                 TyResolvedRef::Enum(enum_ty) => {
                     let primitive =
                         jsonish::Value::String(primitive.clone(), CompletionState::Complete);

@@ -1,4 +1,9 @@
-// This is the desugared code for s31_Ask ----------------------------------
+// Hand-written reference expansion of the compiler task surface for `s31_Ask`;
+// these helper names are scaffolding, not literal generated names:
+// - `s31_Ask_request` represents `s31_Ask.request(...)`.
+// - `s31_Ask_manual` spells the plain `s31_Ask(...)` lowering through `root.ai.run`.
+// - `s31_Ask_cached_manual` is a custom Cache consumer of the same request, not
+//   a compiler-generated task modifier.
 function s31_Ask_request(
   question: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "s31-default", reply: `"unused"`, attributes: {} },

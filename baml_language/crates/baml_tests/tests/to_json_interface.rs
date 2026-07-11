@@ -256,3 +256,77 @@ async fn enum_renders_as_variant_name() {
     let out = expect_json(&program("enum Color { Red  Green  Blue }", "Color.Green")).await;
     assert_eq!(out, r#""Green""#);
 }
+
+#[tokio::test]
+async fn optional_class_field_serializes_via_typed_to_string() {
+    let out = expect_json(
+        r#"
+        class Token { provider string  id string }
+        class Input { token Token? }
+        function main() -> string {
+            baml.json.to_string(Input {
+                token: Token { provider: "p", id: "session-1" },
+            })
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(out, r#"{"token":{"provider":"p","id":"session-1"}}"#);
+}
+
+#[tokio::test]
+async fn top_level_optional_class_serializes_present_and_null_values() {
+    let present = expect_json(
+        r#"
+        class Token { provider string  id string }
+        function main() -> string {
+            let token: Token? = Token { provider: "p", id: "session-1" }
+            baml.json.to_string<Token?>(token)
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(present, r#"{"provider":"p","id":"session-1"}"#);
+
+    let absent = expect_json(
+        r#"
+        class Token { provider string  id string }
+        function main() -> string {
+            let token: Token? = null
+            baml.json.to_string<Token?>(token)
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(absent, "null");
+}
+
+#[tokio::test]
+async fn heterogeneous_union_serializes_its_class_member() {
+    let out = expect_json(
+        r#"
+        class Token { provider string  id string }
+        function main() -> string {
+            let token: Token | string = Token { provider: "p", id: "session-1" }
+            baml.json.to_string<Token | string>(token)
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(out, r#"{"provider":"p","id":"session-1"}"#);
+}
+
+#[tokio::test]
+async fn optional_list_serializes_nested_class_members() {
+    let out = expect_json(
+        r#"
+        class Token { provider string  id string }
+        function main() -> string {
+            let tokens: Token[]? = [Token { provider: "p", id: "session-1" }]
+            baml.json.to_string<Token[]?>(tokens)
+        }
+        "#,
+    )
+    .await;
+    assert_eq!(out, r#"[{"provider":"p","id":"session-1"}]"#);
+}

@@ -13,7 +13,13 @@ class s37_EditArgs { path: string }
 //   prompt: `Fix the bug: ${task}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s37_Fix -------------------------------
+// Hand-written reference expansion of the compiler task surface for `s37_Fix`.
+// These helper names are scaffolding, not literal generated names:
+// - `s37_Fix_request` represents `s37_Fix.request(...)`.
+// - `s37_Fix_live_manual` and `s37_Fix_drive_manual` are custom live/drive
+//   consumers of that request; they are not compiler-generated companions.
+// - `s37_Fix_agent_request` binds call-time tools to the same task request, and
+//   `s37_Fix_agent_manual` spells its explicit `root.ai.run_agent` lowering.
 function s37_Fix_request(
   task: string,
   provider: root.ai.Provider = s37_claude_harness(),
@@ -43,7 +49,7 @@ function s37_Fix_live_manual(
 }
 
 // A full driver sends the negotiated control events as data, then opens the
-// same desugared request on that guarded channel.
+// the same hand-written request expansion on that guarded channel.
 function s37_Fix_drive_manual(
   task: string,
   channel: root.ai.Channel,
@@ -93,7 +99,7 @@ function s37_Fix_agent_manual(
 }
 
 function s37_edit_tool() -> root.ai.Tool throws never {
-  root.ai.Tool.from_type("edit", "Edit a file", reflect.type_of<s37_EditArgs>())
+  root.ai.Tool.typed<s37_EditArgs>("edit", "Edit a file")
 }
 
 function s37_edit_dispatch(calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {
@@ -224,13 +230,13 @@ test "37: a transport failure carries replay facts, not a retry opinion" {
 }
 
 testset "integ-test-37-harness-basics" {
-  test "37 live: the same desugared task can be driven by a real Realtime provider" {
+  test "37 live: the same hand-written request expansion works with a real Realtime provider" {
     let channel = s37_RecordingChannel { frames: [] };
     let live = s37_Fix_live_manual(
       "Reply with a one-sentence patch plan for a null dereference.",
       channel,
       provider = root.ai.OpenAiRealtime {
-        model: "gpt-5.6-luna",
+        model: "gpt-realtime",
         voice: "alloy",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       },

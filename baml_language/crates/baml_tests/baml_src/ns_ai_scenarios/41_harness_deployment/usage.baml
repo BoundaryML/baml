@@ -14,7 +14,11 @@ class S41Patch {
 //   prompt: `Fix the repository task: ${task}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s41_Fix -------------------------------
+// Hand-written reference expansion of the compiler task surface for `s41_Fix`.
+// These helper names are scaffolding, not literal generated names:
+// - `s41_Fix_request` represents `s41_Fix.request(...)`.
+// - `s41_Fix_manual` is this scenario's custom Generate-or-Drivable consumer
+//   of that request; it is not the compiler's plain-call lowering.
 function s41_Fix_request(
   task: string,
   provider: root.ai.Provider = S41ClaudeJsonl {
@@ -50,7 +54,11 @@ function s41_Fix_manual(
 //   prompt: `Fix via the RPC coding agent: ${task}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s41_FixViaRpc -------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s41_FixViaRpc`; these helper names are scaffolding, not literal generated names:
+// - `s41_FixViaRpc_request` represents `s41_FixViaRpc.request(...)`.
+// - `s41_FixViaRpc_manual` is this scenario's custom Generate-or-Drivable
+//   consumer of that request; it is not the compiler's plain-call lowering.
 function s41_FixViaRpc_request(
   task: string,
   provider: root.ai.Provider = S41PiRpc {
@@ -84,7 +92,11 @@ function s41_FixViaRpc_manual(
 //   prompt: `Translate ${text} to ${language}`
 // }
 
-// This is the desugared code for s41_Translate -------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s41_Translate`; these helper names are scaffolding, not literal generated names:
+// - `s41_Translate_request` represents `s41_Translate.request(...)`.
+// - `s41_Translate_manual` is this scenario's custom Generate-or-Drivable
+//   consumer of that request; it is not the compiler's plain-call lowering.
 function s41_Translate_request(
   text: string,
   language: string,
@@ -166,7 +178,7 @@ test "41: the three host protocols implement one Drivable request contract" {
   assert.equal(gen_patch.summary, "generator")
 }
 
-test "41: every task test calls the hand-written desugared companion" {
+test "41: every task test calls the hand-written task-surface helper" {
   let patch = s41_FixViaRpc_manual("fix the rpc adapter");
   let translation = s41_Translate_manual("hello", "French");
   assert.equal(patch.files_changed.at(0), "rpc.baml")

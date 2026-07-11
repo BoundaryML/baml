@@ -1,6 +1,12 @@
 // Task sketch: VoiceChat(system) -> string.
 
-// This is the desugared code for VoiceChat -------------------------------
+// Manual expansion reference for task `VoiceChat`:
+// - `VoiceChat_request(...)` models `VoiceChat.request(...)`.
+// - `VoiceChat_live_manual(...)` models the custom realtime consumer
+//   `root.ai.open_live(VoiceChat.request(...), channel)`. Live resources are
+//   reached through `.request`; `.live` is not a compiler task modifier.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function VoiceChat_request(
   system: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "s22-default", reply: `"unused"`, attributes: {} },
@@ -58,7 +64,7 @@ testset "integ-test-22-realtime-voice" {
       "Reply with exactly the lowercase word: pong",
       channel,
       provider = root.ai.OpenAiRealtime {
-        model: "gpt-5.6-luna", voice: "alloy",
+        model: "gpt-realtime", voice: "alloy",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       },
     );

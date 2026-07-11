@@ -35,7 +35,7 @@ test_deserializer!(
     r#""hello""#,
     baml_tyannotated!(string),
     baml_db! {},
-    "\"hello\""
+    "hello"
 );
 
 test_deserializer!(

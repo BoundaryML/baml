@@ -5,15 +5,12 @@ class S12TransferArgs {
 }
 
 function s12_transfer_tool() -> root.ai.Tool throws baml.errors.Unsupported {
-  let tool = root.ai.Tool.from_type(
+  let tool = root.ai.Tool.typed<S12TransferArgs>(
     "transfer_to_human",
     "Transfer when a human must take over.",
-    reflect.type_of<S12TransferArgs>(),
   );
   root.ai.Tool {
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters,
+    ...tool,
     handoff: true,
   }
 }
@@ -28,7 +25,15 @@ function s12_transfer_tool() -> root.ai.Tool throws baml.errors.Unsupported {
 //   prompt: `Investigate ${question}.`
 // }
 
-// This is the desugared code for s12_Investigate ----------------------------
+// Manual expansion reference for s12_Investigate.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s12_Investigate_request(...) models s12_Investigate.request(...) with a
+//   call-time handoff-tool roster and the no-op dispatcher run_agent requires.
+// - s12_Investigate_agent_manual(...) models s12_Investigate.agent(...):
+//   root.ai.run_agent(request), returning Handoff before dispatching that call.
+// This scenario intentionally has no plain-call s12_Investigate_manual(...) wrapper.
 function s12_Investigate_request(
   question: string,
   provider: root.ai.Provider = BepV2ScriptedTools {

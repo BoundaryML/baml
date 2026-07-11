@@ -97,7 +97,7 @@ class s50_Job<T> {
       if (state.polls < 2) {
         return root.ai.Pending { retry_after: baml.time.Duration.from_milliseconds(1n) };
       }
-      let value: T = baml.sap.parse<T>(state.result_json) catch (e) {
+      let value: T = baml.json.from_string<T>(state.result_json) catch (e) {
         _ => throw baml.errors.UnknownError { data: e, message: ["background result parse failed"] },
       };
       root.ai.Done<T> {
@@ -138,7 +138,11 @@ class s50_Job<T> {
 //   prompt: `Research ${topic} thoroughly.`
 // }
 
-// This is the desugared code for s50_DeepResearch ---------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s50_DeepResearch`; the helper name is scaffolding, not a literal generated name:
+// - `s50_DeepResearch_request` represents `s50_DeepResearch.request(...)`.
+// `s50_BackgroundService.process` supplies the application-level background
+// submit/resume lifecycle; it is not a compiler-generated helper.
 function s50_DeepResearch_request(
   topic: string,
   provider: root.ai.Provider = s50_BackgroundProvider {

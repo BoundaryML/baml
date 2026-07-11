@@ -1,113 +1,48 @@
-// 06 — a Generate provider may return media instead of prose. The semantic
-// capability stays the same; only this provider's private wire codec differs.
-class s06_Media {
+// 06 — output modality is the task's T. Image generation remains `Generate`
+// because its observable lifecycle is still one request -> one typed response.
+
+/// Deterministic image producer for the offline tier. The fixture already owns
+/// typed data, so its generic bridge uses canonical JSON, not SAP (SAP is for
+/// coercing LLM text output).
+class s06_FixtureImage {
+  base64_data: string,
   mime: string,
-  data: string?,
-  url: string?,
-}
 
-class s06_ImageDatumWire {
-  b64_json: string?,
-  revised_prompt: string?,
-}
-
-class s06_ImageWire {
-  data: s06_ImageDatumWire[],
-}
-
-function s06_messages_text(messages: root.ai.ChatMessage[]) -> string throws never {
-  let out = "";
-  for (let message in messages) {
-    for (let part in message.parts) {
-      out = out + (part.text ?? "");
-    }
+  implements root.ai.Provider {
+    function display_name(self) -> string throws never { "fixture-image" }
   }
-  out
-}
-
-function s06_as<S, T>(value: S) -> T throws baml.errors.UnknownError {
-  let encoded = baml.json.to_string<S>(value) catch (e) {
-    _ => throw baml.errors.UnknownError { data: e, message: ["media encode failed"] },
-  };
-  baml.sap.parse<T>(encoded) catch (e) {
-    _ => throw baml.errors.UnknownError { data: e, message: ["media did not match task output"] },
-  }
-}
-
-class s06_GptImage {
-  model: string,
-  api_key: string,
-  size: string,
-
-  implements root.ai.Provider {}
 
   implements root.ai.Generate {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
-        throws baml.errors.CallError | baml.errors.UnknownError {
-      let body: map<string, baml.json.json> = {
-        "model": self.model,
-        "prompt": s06_messages_text(request.messages()),
-        "size": self.size,
+        throws baml.errors.UnknownError {
+      let generated_image = baml.media.Image.from_base64(self.base64_data, self.mime);
+      let encoded = baml.json.to_string<image>(generated_image) catch (e) {
+        _ => throw baml.errors.UnknownError { data: e, message: ["fixture image encode failed"] },
       };
-      log.info(baml.json.stringify({
-        "event": "llm.image.request",
-        "provider": "openai-images",
-        "model": self.model,
-        "body": baml.json.stringify(body),
-      }));
-      let response = baml.http.send(baml.http.Request {
-        method: "POST",
-        url: "https://api.openai.com/v1/images/generations",
-        headers: {
-          "authorization": "Bearer " + self.api_key,
-          "content-type": "application/json",
+      let value = baml.json.from_string<T>(encoded) catch (e) {
+        _ => throw baml.errors.UnknownError { data: e, message: ["fixture image type mismatch"] },
+      };
+      root.ai.Response<T> {
+        value: value,
+        meta: root.ai.Meta {
+          provider: self.display_name(),
+          model: "fixture-image",
+          request_id: "fixture-image-1",
+          finish_reason: "stop",
+          usage: null,
+          attributes: { "generation_kind": "image" },
+          raw: null,
         },
-        body: baml.json.stringify(body),
-      }) catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["image request failed"] },
-      };
-      let text = response.text() catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["image response read failed"] },
-      };
-      log.info(baml.json.stringify({
-        "event": "llm.image.response",
-        "provider": "openai-images",
-        "model": self.model,
-        "status_code": response.status_code,
-        "body": text,
-      }));
-      if (!response.ok()) {
-        throw baml.errors.UnknownError { data: text, message: ["image provider refused request"] };
-      }
-      let raw = baml.json.parse(text) catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["image response parse failed"] },
-      };
-      let wire: s06_ImageWire = baml.json.from_json<s06_ImageWire>(raw) catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["image response parse failed"] },
-      };
-      let first = wire.data.at(0);
-      match (first) {
-        let image: s06_ImageDatumWire => {
-          let value = s06_Media {
-            mime: "image/png",
-            data: image.b64_json,
-            url: null,
-          };
-          root.ai.Response<T> {
-            value: s06_as<s06_Media, T>(value),
-            meta: root.ai.Meta {
-              provider: "openai-images",
-              model: self.model,
-              request_id: null,
-              finish_reason: "stop",
-              usage: null,
-              attributes: { "revised_prompt": image.revised_prompt },
-              raw: raw,
-            },
-          }
-        },
-        _ => throw baml.errors.UnknownError { data: text, message: ["image response was empty"] },
       }
     }
+  }
+
+  implements root.ai.Capabilities {
+    function structured_output(self) -> root.ai.Support throws never { root.ai.Support.No }
+    function image_input(self) -> root.ai.Support throws never { root.ai.Support.No }
+    function pdf_input(self) -> root.ai.Support throws never { root.ai.Support.No }
+    function image_output(self) -> root.ai.Support throws never { root.ai.Support.Yes }
+    function parallel_tools(self) -> root.ai.Support throws never { root.ai.Support.No }
+    function max_input_tokens(self) -> int throws never { 0 }
   }
 }

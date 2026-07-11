@@ -248,12 +248,40 @@ fn openai_media_part(
             })
         }),
         MediaKind::Pdf => media.read_content(|c| {
-            let data_url = content_to_data_url(c, &mime)?;
+            let (filename, base64_data) = match c {
+                MediaContent::Base64 { base64_data } => {
+                    ("input.pdf".to_string(), base64_data.as_str())
+                }
+                MediaContent::File {
+                    file,
+                    base64_data: Some(base64_data),
+                } => (media_filename(file, "input.pdf"), base64_data.as_str()),
+                MediaContent::Url {
+                    url,
+                    base64_data: Some(base64_data),
+                } => (media_filename(url, "input.pdf"), base64_data.as_str()),
+                MediaContent::File {
+                    file,
+                    base64_data: None,
+                } => {
+                    return Err(crate::build_request::BuildRequestError::FileNotResolved(
+                        file.clone(),
+                    ));
+                }
+                MediaContent::Url {
+                    url,
+                    base64_data: None,
+                } => {
+                    return Err(crate::build_request::BuildRequestError::FileNotResolved(
+                        url.clone(),
+                    ));
+                }
+            };
             Ok(ContentPart::File {
                 file: FileRef {
                     file_id: None,
-                    filename: None,
-                    file_data: Some(data_url),
+                    filename: Some(filename),
+                    file_data: Some(format!("data:{mime};base64,{base64_data}")),
                 },
             })
         }),
@@ -264,6 +292,15 @@ fn openai_media_part(
             "generic media kind not supported by OpenAI Chat Completions".to_string(),
         )),
     }
+}
+
+fn media_filename(path: &str, fallback: &str) -> String {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(fallback)
+        .to_string()
 }
 
 // ============================================================================
@@ -574,16 +611,9 @@ mod tests {
             },
             Some("application/pdf"),
         );
-        // PDF URLs are supported (content_to_data_url returns the URL directly)
-        let part = openai_media_part(&media).unwrap();
-        let json = serde_json::to_value(&part).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({
-                "type": "file",
-                "file": {"file_data": "https://example.com/doc.pdf"}
-            })
-        );
+        let result = openai_media_part(&media);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("doc.pdf"));
     }
 
     #[test]
@@ -596,14 +626,16 @@ mod tests {
             },
             Some("application/pdf"),
         );
-        // When URL has base64, the URL itself is still used (content_to_data_url prefers URL)
         let part = openai_media_part(&media).unwrap();
         let json = serde_json::to_value(&part).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
                 "type": "file",
-                "file": {"file_data": "https://example.com/doc.pdf"}
+                "file": {
+                    "filename": "doc.pdf",
+                    "file_data": "data:application/pdf;base64,prefetched_pdf"
+                }
             })
         );
     }
@@ -624,7 +656,10 @@ mod tests {
             json,
             serde_json::json!({
                 "type": "file",
-                "file": {"file_data": "data:application/pdf;base64,resolved_pdf"}
+                "file": {
+                    "filename": "doc.pdf",
+                    "file_data": "data:application/pdf;base64,resolved_pdf"
+                }
             })
         );
     }
@@ -659,7 +694,10 @@ mod tests {
             json,
             serde_json::json!({
                 "type": "file",
-                "file": {"file_data": "data:application/pdf;base64,pdfdata"}
+                "file": {
+                    "filename": "input.pdf",
+                    "file_data": "data:application/pdf;base64,pdfdata"
+                }
             })
         );
     }

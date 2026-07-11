@@ -17,12 +17,12 @@ use ::core::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
+#[cfg(feature = "heap_debug")]
+use ::std::collections::HashSet;
 use ::std::{
     collections::HashMap,
     sync::{Arc, Weak},
 };
-#[cfg(feature = "heap_debug")]
-use ::std::collections::HashSet;
 
 /// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
 const MAX_PERMITS: u32 = {

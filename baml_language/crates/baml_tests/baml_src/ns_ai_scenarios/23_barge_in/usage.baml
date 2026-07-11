@@ -1,6 +1,12 @@
 // Task sketch: s23_VoiceTurn(system) -> string.
 
-// This is the desugared code for s23_VoiceTurn ----------------------------
+// Manual expansion reference for task `s23_VoiceTurn`:
+// - `s23_VoiceTurn_request(...)` models `s23_VoiceTurn.request(...)`.
+// - `s23_VoiceTurn_live_manual(...)` models the custom realtime consumer
+//   `root.ai.open_live(s23_VoiceTurn.request(...), channel)`. Barge-in acts on
+//   the returned Live resource; it is not a compiler task modifier.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s23_VoiceTurn_request(
   system: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "s23-default", reply: `"unused"`, attributes: {} },

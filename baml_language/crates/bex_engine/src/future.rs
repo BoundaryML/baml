@@ -526,7 +526,6 @@ impl FutureManagerGuard<'_> {
             })
             .collect()
     }
-
 }
 impl TlabHolder for FutureManagerGuard<'_> {
     fn tlab(&self) -> &Tlab {

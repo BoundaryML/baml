@@ -2,7 +2,10 @@ class s35_Summary { topic: string, bullets: string[] }
 
 // Task sketch: s35_Analyze(text) -> s35_Summary.
 
-// This is the desugared code for s35_Analyze -------------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s35_Analyze`; these helper names are scaffolding, not literal generated names:
+// - `s35_Analyze_request` represents `s35_Analyze.request(...)`.
+// - `s35_Analyze_manual` spells the plain `s35_Analyze(...)` lowering through `root.ai.run`.
 function s35_Analyze_request(
   text: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "analysis", reply: `{"topic":"fixture","bullets":[]}`, attributes: {} },

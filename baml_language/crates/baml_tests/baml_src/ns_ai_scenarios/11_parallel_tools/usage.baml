@@ -10,7 +10,16 @@
 //   prompt: `Research ${question}.`
 // }
 
-// This is the desugared code for s11_Research -------------------------------
+// Manual expansion reference for s11_Research.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s11_Research_request(...) models s11_Research.request(...); its optional
+//   tools and dispatcher carry the call-time s11_Research.agent(...) inputs.
+// - s11_Research_agent_manual(...) models s11_Research.agent(...):
+//   root.ai.run_agent(request), preserving the typed outcome union.
+// Parallelism belongs to the supplied dispatcher, not another task modifier.
+// This scenario intentionally has no plain-call s11_Research_manual(...) wrapper.
 function s11_Research_request(
   question: string,
   provider: root.ai.Provider = BepV2ScriptedTools {

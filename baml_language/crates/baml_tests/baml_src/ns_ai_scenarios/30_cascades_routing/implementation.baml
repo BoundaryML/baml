@@ -7,7 +7,10 @@ class s30_CascadeOutcome {
 
 // Task sketch: s30_Answer(question) -> string.
 
-// This is the desugared code for s30_Answer ---------------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s30_Answer`; these helper names are scaffolding, not literal generated names:
+// - `s30_Answer_request` represents `s30_Answer.request(...)`.
+// - `s30_Answer_manual` spells the plain `s30_Answer(...)` lowering through `root.ai.run`.
 function s30_Answer_request(
   question: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "answer", reply: `"fixture"`, attributes: {} },

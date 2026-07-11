@@ -10,7 +10,16 @@
 //   prompt: `Help with this support request: ${question}`
 // }
 
-// This is the desugared code for s13_Support -------------------------------
+// Manual expansion reference for s13_Support.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s13_Support_request(...) models s13_Support.request(...) with its call-time
+//   tool roster and dispatcher.
+// - s13_Support_agent_manual(...) models s13_Support.agent(...):
+//   root.ai.run_agent(request), preserving the typed outcome union.
+// The searchable catalog is ordinary application data, not another task modifier.
+// This scenario intentionally has no plain-call s13_Support_manual(...) wrapper.
 function s13_Support_request(
   question: string,
   provider: root.ai.Provider = BepV2ScriptedTools {

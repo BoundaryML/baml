@@ -3411,7 +3411,12 @@ impl BexEngine {
     /// This fires the `ready` wake and routes the error to any awaiter, so the
     /// await chain resumes instead of parking forever and wedging shutdown.
     async fn settle_spawn_engine_error(self: &Arc<Self>, future_id: FutureId, err: EngineError) {
-        let active = self.heap_permit_manager.new_permit(()).await.acquire().await;
+        let active = self
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
         let mut guard = self.futures.acquire(active.proof()).await;
         if let Err(settle_err) = guard.settle_internal_error_if_pending(future_id, err) {
             tracing::error!(

@@ -1,6 +1,10 @@
 // Task sketch: s34_Classify(text) -> s34_Ticket.
 
-// This is the desugared code for s34_Classify -------------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s34_Classify`; these helper names are scaffolding, not literal generated names:
+// - `s34_Classify_request` represents `s34_Classify.request(...)`.
+// - `s34_Classify_manual` spells the plain `s34_Classify(...)` lowering.
+// - `s34_Classify_with_meta_manual` spells `s34_Classify.with_meta(...)`.
 function s34_Classify_request(
   text: string,
   provider: root.ai.Provider = s34_Metered { reply: `{"category":"other","severity":1,"summary":"fixture"}`, input_tokens: 1, output_tokens: 1 },

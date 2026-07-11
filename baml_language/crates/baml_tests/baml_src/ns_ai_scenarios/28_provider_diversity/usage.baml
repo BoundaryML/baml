@@ -3,7 +3,12 @@ class s28_Profile { name: string, title: string, years: int }
 
 // Task sketch: s28_Extract(bio) -> s28_Profile.
 
-// This is the desugared code for s28_Extract --------------------------------
+// Manual expansion reference for task `s28_Extract`:
+// - `s28_Extract_request(...)` models `s28_Extract.request(...)`.
+// - `s28_Extract_manual(...)` models the plain `s28_Extract(...)` call,
+//   lowered through `root.ai.run`.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s28_Extract_request(
   bio: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "profile", reply: `{"name":"Ada","title":"Analyst","years":12}`, attributes: {} },

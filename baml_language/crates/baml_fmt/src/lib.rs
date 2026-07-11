@@ -442,7 +442,8 @@ mod spawn_and_hug_format_tests {
     /// A spawn body with statements expands into a normal indented block.
     #[test]
     fn test_multi_statement_spawn_body_expands() {
-        let source = "function f() -> int {\n    let a = spawn { let x = 1; x + 1 };\n    await a\n}\n";
+        let source =
+            "function f() -> int {\n    let a = spawn { let x = 1; x + 1 };\n    await a\n}\n";
         let expected = "function f() -> int {\n    let a = spawn {\n        let x = 1;\n        x + 1\n    };\n    await a\n}\n";
         assert_formats_to(source, expected);
     }
@@ -460,8 +461,7 @@ mod spawn_and_hug_format_tests {
     /// would be lost.
     #[test]
     fn test_empty_block_with_comment_stays_multi_line() {
-        let source =
-            "function f(p: string?) -> int {\n    if (p == null) {\n        // nothing to do\n    }\n    0\n}\n";
+        let source = "function f(p: string?) -> int {\n    if (p == null) {\n        // nothing to do\n    }\n    0\n}\n";
         let options = FormatOptions::default();
         let formatted = format(source, &options).expect("formatter should succeed");
         assert!(

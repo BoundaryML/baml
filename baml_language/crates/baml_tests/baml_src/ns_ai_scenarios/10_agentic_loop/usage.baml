@@ -10,7 +10,15 @@
 //   prompt: `Research ${question}.`
 // }
 
-// This is the desugared code for s10_ResearchIt -----------------------------
+// Manual expansion reference for s10_ResearchIt.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s10_ResearchIt_request(...) models s10_ResearchIt.request(...); its optional
+//   tools and dispatcher are the call-time s10_ResearchIt.agent(...) inputs.
+// - s10_ResearchIt_agent_manual(...) models s10_ResearchIt.agent(...):
+//   root.ai.run_agent(request, budget = budget), preserving the outcome union.
+// This scenario intentionally has no plain-call s10_ResearchIt_manual(...) wrapper.
 function s10_ResearchIt_request(
   question: string,
   provider: root.ai.Provider = BepV2ScriptedTools {

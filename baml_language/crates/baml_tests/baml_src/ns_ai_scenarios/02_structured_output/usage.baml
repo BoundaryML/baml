@@ -10,7 +10,14 @@
 //   prompt: `Extract the event from ${text}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s02_ExtractEvent ---------------------------
+// Manual expansion reference for s02_ExtractEvent.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s02_ExtractEvent_request(...) models s02_ExtractEvent.request(...): it
+//   packages Request<S02Event>, including its structured output schema, without I/O.
+// - s02_ExtractEvent_manual(...) models the plain s02_ExtractEvent(...) lowering:
+//   root.ai.run(request), returning the parsed S02Event.
 function s02_ExtractEvent_request(
   text: string,
   provider: root.ai.Provider = BepV2FixtureGenerate {
@@ -52,7 +59,14 @@ function s02_ExtractEvent_manual(
 //   prompt: `Extract the reporting tree from ${text}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s02_ExtractOrg -----------------------------
+// Manual expansion reference for s02_ExtractOrg.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s02_ExtractOrg_request(...) models s02_ExtractOrg.request(...): it packages
+//   Request<S02OrgNode>, including its recursive output schema, without I/O.
+// - s02_ExtractOrg_manual(...) models the plain s02_ExtractOrg(...) lowering:
+//   root.ai.run(request), returning the parsed S02OrgNode.
 function s02_ExtractOrg_request(
   text: string,
   provider: root.ai.Provider = BepV2FixtureGenerate {

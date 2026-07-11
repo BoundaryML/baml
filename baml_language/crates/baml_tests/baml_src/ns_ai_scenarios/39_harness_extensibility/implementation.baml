@@ -34,10 +34,9 @@ class s39_HarnessTool {
 
 function s39_weather_tool() -> s39_HarnessTool throws never {
   s39_HarnessTool {
-    spec: root.ai.Tool.from_type(
+    spec: root.ai.Tool.typed<s39_GeoArgs>(
       "get_temperature",
       "Get the current temperature at a location.",
-      reflect.type_of<s39_GeoArgs>(),
     ),
     source: s39_InProcessSource { handler: "weather" },
   }
@@ -45,10 +44,9 @@ function s39_weather_tool() -> s39_HarnessTool throws never {
 
 function s39_mcp_issue_tool() -> s39_HarnessTool throws never {
   s39_HarnessTool {
-    spec: root.ai.Tool.from_type(
+    spec: root.ai.Tool.typed<s39_SearchArgs>(
       "mcp__github__search_issues",
       "Search issues through the configured GitHub MCP server.",
-      reflect.type_of<s39_SearchArgs>(),
     ),
     source: s39_McpSource {
       server: "github",
@@ -60,7 +58,7 @@ function s39_mcp_issue_tool() -> s39_HarnessTool throws never {
 
 function s39_builtin_tool(name: string) -> s39_HarnessTool throws never {
   s39_HarnessTool {
-    spec: root.ai.Tool.from_type(name, "Harness-owned built-in tool.", reflect.type_of<map<string, string>>()),
+    spec: root.ai.Tool.typed<map<string, string>>(name, "Harness-owned built-in tool."),
     source: s39_ProviderSource {},
   }
 }

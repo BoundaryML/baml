@@ -1,9 +1,16 @@
 // 33 — evaluation is ordinary code around the same task production calls.
-class s33_Verdict { pass: bool, score: int, reasoning: string }
+class s33_Verdict {
+  pass: bool,
+  score: int @description("Integer from 1 (worst) to 5 (best), inclusive."),
+  reasoning: string,
+}
 
 // Task sketch: s33_SupportReply(question) -> string.
 
-// This is the desugared code for s33_SupportReply ---------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s33_SupportReply`; these helper names are scaffolding, not literal generated names:
+// - `s33_SupportReply_request` represents `s33_SupportReply.request(...)`.
+// - `s33_SupportReply_manual` spells the plain `s33_SupportReply(...)` lowering.
 function s33_SupportReply_request(
   question: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "support", reply: `"Please see the refund policy."`, attributes: {} },
@@ -24,7 +31,10 @@ function s33_SupportReply_manual(
 
 // Task sketch: s33_Judge(question, answer) -> s33_Verdict.
 
-// This is the desugared code for s33_Judge ---------------------------------
+// Hand-written reference expansion of the compiler task surface for `s33_Judge`;
+// these helper names are scaffolding, not literal generated names:
+// - `s33_Judge_request` represents `s33_Judge.request(...)`.
+// - `s33_Judge_manual` spells the plain `s33_Judge(...)` lowering.
 function s33_Judge_request(
   question: string,
   answer: string,
@@ -33,7 +43,10 @@ function s33_Judge_request(
   root.ai.task_request<s33_Verdict>(
     provider, "s33_Judge", "ns_ai_scenarios", { "question": question, "answer": answer },
     [], root.ai.RequestOptions {}, {},
-    bepv2_prompt_template(`Judge the answer.\nQuestion: ${question}\nAnswer: ${answer}`, true),
+    bepv2_prompt_template(
+      `Judge the answer. Return score as an integer from 1 to 5 inclusive.\nQuestion: ${question}\nAnswer: ${answer}`,
+      true,
+    ),
   )
 }
 
@@ -54,6 +67,11 @@ test "33: an LLM judge returns a typed verdict" {
   let verdict = s33_Judge_manual("Can I get a refund?", "See the refund policy.");
   assert.is_true(verdict.pass)
   assert.equal(verdict.score, 5)
+}
+
+test "33: the judge request states the score scale" {
+  let prompt = baml.llm.prompt_to_text(s33_Judge_request("q", "a").prompt);
+  assert.contains(prompt, "1 to 5 inclusive")
 }
 
 testset "33 eval suite gates on a pass-rate threshold" with testing.PassRate(0.75) {

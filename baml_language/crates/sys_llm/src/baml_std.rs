@@ -231,8 +231,15 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
             | LlmProvider::AzureOpenAi
             | LlmProvider::Ollama
             | LlmProvider::OpenRouter
-            | LlmProvider::OpenAiResponses
             | LlmProvider::AiGatewayImages => sys_types::generated::owned::llm::MediaUrlHandler {
+                image: Some("send_url".into()),
+                audio: Some("send_base64".into()),
+                video: Some("send_url".into()),
+                // Chat Completions does not accept file URLs. Resolve URL-backed
+                // PDFs before its request encoder runs.
+                pdf: Some("send_base64".into()),
+            },
+            LlmProvider::OpenAiResponses => sys_types::generated::owned::llm::MediaUrlHandler {
                 image: Some("send_url".into()),
                 audio: Some("send_base64".into()),
                 video: Some("send_url".into()),

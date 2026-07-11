@@ -1,6 +1,10 @@
 // Task sketch: s36_Extract(text) -> s36_Report.
 
-// This is the desugared code for s36_Extract --------------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s36_Extract`; these helper names are scaffolding, not literal generated names:
+// - `s36_Extract_request` represents `s36_Extract.request(...)`.
+// - `s36_Extract_manual` spells the plain `s36_Extract(...)` lowering.
+// - `s36_Extract_stream_manual` spells `s36_Extract.stream(...)`.
 function s36_Extract_request(
   text: string,
   provider: root.ai.Provider = s36_DescribedFixture { reply: `{"subject":"fixture","verdict":"ok"}`, support: root.ai.Support.Yes },

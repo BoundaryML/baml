@@ -19,11 +19,11 @@ function s13_catalog() -> S13CatalogEntry[] throws never {
 }
 
 function s13_search_tool() -> root.ai.Tool throws baml.errors.Unsupported {
-  root.ai.Tool.from_type("tool_search", "Search the tool catalog.", reflect.type_of<S13SearchArgs>())
+  root.ai.Tool.typed<S13SearchArgs>("tool_search", "Search the tool catalog.")
 }
 
 function s13_lookup_tool() -> root.ai.Tool throws baml.errors.Unsupported {
-  root.ai.Tool.from_type("lookup_order", "Look up an order by id.", reflect.type_of<S13LookupOrderArgs>())
+  root.ai.Tool.typed<S13LookupOrderArgs>("lookup_order", "Look up an order by id.")
 }
 
 function s13_dispatch(

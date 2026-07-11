@@ -10,7 +10,11 @@ class s38_BashArgs { command: string }
 //   prompt: `Fix the task: ${task}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s38_FixTask ----------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s38_FixTask`; these helper names are scaffolding, not literal generated names:
+// - `s38_FixTask_request` represents `s38_FixTask.request(...)` with call-time tools.
+// - `s38_FixTask_agent_manual` spells the explicit `s38_FixTask.agent(...)`
+//   lowering through `root.ai.run_agent`.
 function s38_FixTask_request(
   task: string,
   provider: root.ai.Provider,
@@ -44,9 +48,9 @@ function s38_FixTask_agent_manual(
 
 function s38_code_tools() -> root.ai.Tool[] throws never {
   [
-    root.ai.Tool.from_type("read_file", "Read a file", reflect.type_of<s38_ReadArgs>()),
-    root.ai.Tool.from_type("write_file", "Write a file", reflect.type_of<s38_WriteArgs>()),
-    root.ai.Tool.from_type("bash", "Run a command inside the configured sandbox", reflect.type_of<s38_BashArgs>()),
+    root.ai.Tool.typed<s38_ReadArgs>("read_file", "Read a file"),
+    root.ai.Tool.typed<s38_WriteArgs>("write_file", "Write a file"),
+    root.ai.Tool.typed<s38_BashArgs>("bash", "Run a command inside the configured sandbox"),
   ]
 }
 

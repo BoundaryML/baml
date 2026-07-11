@@ -63,10 +63,9 @@ class S09WeatherArgs {
 }
 
 function s09_weather_tool() -> root.ai.Tool throws baml.errors.Unsupported {
-  root.ai.Tool.from_type(
+  root.ai.Tool.typed<S09WeatherArgs>(
     "get_weather",
     "Get the current weather for a city.",
-    reflect.type_of<S09WeatherArgs>(),
   )
 }
 

@@ -3,14 +3,22 @@ class s24_WeatherArgs { city: string }
 // Task sketch: s24_WeatherVoice(question) -> string.
 
 function s24_tools() -> root.ai.Tool[] throws never {
-  [root.ai.Tool.from_type("get_weather", "Get weather for a city.", reflect.type_of<s24_WeatherArgs>())]
+  [root.ai.Tool.typed<s24_WeatherArgs>("get_weather", "Get weather for a city.")]
 }
 
 function s24_dispatch(calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {
   calls.map((call) -> { root.ai.invoke_tool<s24_WeatherArgs>(call, (args) -> { `sunny in ${args.city}` }) })
 }
 
-// This is the desugared code for s24_WeatherVoice ---------------------------
+// Manual expansion reference for task `s24_WeatherVoice`:
+// - `s24_WeatherVoice_request(...)` models
+//   `s24_WeatherVoice.request(...)`, with the call-time tool roster and
+//   dispatcher written into the request.
+// - `s24_WeatherVoice_agent_manual(...)` models
+//   `s24_WeatherVoice.agent(...)`, lowered through `root.ai.run_agent` over
+//   that request.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 // No task `tools:` field is used. The call-time roster and dispatcher are
 // written into the Request that the ordinary run_agent driver consumes.
 function s24_WeatherVoice_request(

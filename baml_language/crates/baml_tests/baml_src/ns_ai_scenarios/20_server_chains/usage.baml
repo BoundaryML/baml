@@ -1,7 +1,16 @@
 // Task sketch: s20_ContinueChain(followup) -> string.
 // Its complete hand-written lowering is the request builder and driver below.
 
-// This is the desugared code for s20_ContinueChain -------------------------
+// Manual expansion reference for task `s20_ContinueChain`:
+// - `s20_ContinueChain_request(...)` models
+//   `s20_ContinueChain.request(...)`.
+// - `s20_ContinueChain_manual(...)` models the plain
+//   `s20_ContinueChain(...)` call, lowered through `root.ai.run`.
+// - Calls below of the form `session.run(s20_ContinueChain_request(...))`
+//   model `session.run(s20_ContinueChain.request(...))`; session open, resume,
+//   fork, and cleanup are resource operations rather than task modifiers.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s20_ContinueChain_request(
   followup: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "s20-default", reply: `"unused"`, attributes: {} },
@@ -50,7 +59,7 @@ test "20: a SessionToken survives a string round trip" {
   let session = root.ai.open_session(provider, root.ai.SessionOptions {});
   let _ = session.run<string>(s20_ContinueChain_request("secret code SPARROW-7"));
   let saved = baml.json.to_string<root.ai.SessionToken>(session.token());
-  let token = baml.sap.parse<root.ai.SessionToken>(saved);
+  let token = baml.json.from_string<root.ai.SessionToken>(saved);
   let resumed = provider.resume_session(token);
   let reply = resumed.run<string>(s20_ContinueChain_request("What was the code?"));
   assert.contains(reply, "SPARROW-7")

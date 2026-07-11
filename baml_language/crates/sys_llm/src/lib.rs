@@ -925,7 +925,27 @@ fn all_union_items_are_text(items: &[BexExternalValue]) -> bool {
 }
 
 fn media_to_external(media: std::sync::Arc<baml_builtins2::MediaValue>) -> BexExternalValue {
-    BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media))
+    // Runtime media values are nominal `baml.media.*` instances whose opaque
+    // `_data` field owns the MediaValue. Returning a bare Media ADT lands as
+    // RustData in the VM, which cannot receive methods such as `base64()` or
+    // `mime_type()`. Match the wrapper shape produced by the builtin media
+    // constructors and by sys_ops' PromptAst media conversion.
+    let class_name = match media.kind {
+        baml_base::MediaKind::Audio => "baml.media.Audio",
+        baml_base::MediaKind::Pdf => "baml.media.Pdf",
+        baml_base::MediaKind::Video => "baml.media.Video",
+        baml_base::MediaKind::Image | baml_base::MediaKind::Generic => "baml.media.Image",
+    };
+    let mut fields = indexmap::IndexMap::new();
+    fields.insert(
+        "_data".to_string(),
+        BexExternalValue::RustData(media as std::sync::Arc<dyn std::any::Any + Send + Sync>),
+    );
+    BexExternalValue::Instance {
+        class_name: class_name.to_string(),
+        type_args: vec![],
+        fields,
+    }
 }
 
 fn is_media_type(target: &baml_type::RuntimeTy, kind: baml_base::MediaKind) -> bool {
@@ -1103,6 +1123,25 @@ mod tests {
         serde_json::from_str(&request.body).unwrap()
     }
 
+    fn external_media(value: &BexExternalValue) -> &MediaValue {
+        let BexExternalValue::Instance {
+            class_name, fields, ..
+        } = value
+        else {
+            panic!("expected media wrapper instance, got {value:?}");
+        };
+        assert!(
+            class_name.starts_with("baml.media."),
+            "unexpected media wrapper class: {class_name}"
+        );
+        let Some(BexExternalValue::RustData(data)) = fields.get("_data") else {
+            panic!("media wrapper missing RustData _data field: {value:?}");
+        };
+        data.as_ref()
+            .downcast_ref::<MediaValue>()
+            .expect("media _data must contain MediaValue")
+    }
+
     #[test]
     fn parse_respects_finish_reason_filters() {
         let response_stop = r#"{
@@ -1259,18 +1298,12 @@ mod tests {
         };
         assert_eq!(items.len(), 2);
 
-        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(first)) = &items[0]
-        else {
-            panic!("expected first media item");
-        };
+        let first = external_media(&items[0]);
         assert_eq!(first.kind, baml_base::MediaKind::Image);
         assert_eq!(first.base64(), "aW1hZ2Ux");
         assert_eq!(first.mime_type().as_deref(), Some("image/png"));
 
-        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(second)) = &items[1]
-        else {
-            panic!("expected second media item");
-        };
+        let second = external_media(&items[1]);
         assert_eq!(second.base64(), "aW1hZ2Uy");
         assert_eq!(second.mime_type().as_deref(), Some("image/jpeg"));
     }
@@ -1332,11 +1365,7 @@ mod tests {
         let BexExternalValue::Union { value, .. } = &items[1] else {
             panic!("expected second union item");
         };
-        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media)) =
-            value.as_ref()
-        else {
-            panic!("expected media union value");
-        };
+        let media = external_media(value);
         assert_eq!(media.kind, baml_base::MediaKind::Image);
         assert_eq!(media.base64(), "aW1hZ2U=");
         assert_eq!(media.mime_type().as_deref(), Some("image/webp"));
@@ -1388,11 +1417,7 @@ mod tests {
             metadata.selected_option,
             baml_type::RuntimeTy::Media(baml_base::MediaKind::Image, TyAttr::default())
         );
-        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media)) =
-            value.as_ref()
-        else {
-            panic!("expected media union value");
-        };
+        let media = external_media(&value);
         assert_eq!(media.base64(), "aW1hZ2U=");
         assert_eq!(media.mime_type().as_deref(), Some("image/png"));
     }
@@ -1543,9 +1568,7 @@ mod tests {
         )
         .unwrap();
 
-        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media)) = result else {
-            panic!("expected image media");
-        };
+        let media = external_media(&result);
         assert_eq!(media.kind, baml_base::MediaKind::Image);
         assert_eq!(media.base64(), "aW1hZ2U=");
         assert_eq!(media.mime_type().as_deref(), Some("image/png"));
@@ -1572,11 +1595,7 @@ mod tests {
         let BexExternalValue::Union { value, .. } = result else {
             panic!("expected optional union");
         };
-        let BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(media)) =
-            value.as_ref()
-        else {
-            panic!("expected media");
-        };
+        let media = external_media(&value);
         assert_eq!(media.base64(), "aW1hZ2U=");
 
         let image_null_union = baml_type::RuntimeTy::Union(
@@ -1589,10 +1608,7 @@ mod tests {
         let BexExternalValue::Union { value, .. } = result else {
             panic!("expected image|null union");
         };
-        assert!(matches!(
-            value.as_ref(),
-            BexExternalValue::Adt(bex_external_types::BexExternalAdt::Media(_))
-        ));
+        assert_eq!(external_media(&value).base64(), "aW1hZ2U=");
     }
 
     #[test]

@@ -12,7 +12,16 @@ class s04_Meeting {
 //   prompt: `Write a short haiku about ${topic}.`
 // }
 
-// This is the desugared code for s04_Haiku ----------------------------------
+// Manual expansion reference for s04_Haiku.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s04_Haiku_request(...) models s04_Haiku.request(...): it renders and
+//   packages Request<string> without performing I/O.
+// - s04_Haiku_manual(...) models the plain s04_Haiku(...) lowering:
+//   root.ai.run(request).
+// - s04_stream_tokens(...) exercises s04_Haiku.stream(...) via
+//   root.ai.stream(request), then drains the token stream for the assertion.
 function s04_Haiku_request(
   topic: string,
   provider: root.ai.Provider = BepV2FixtureGenerate {
@@ -66,7 +75,16 @@ function s04_stream_tokens(topic: string, provider: root.ai.Provider) -> string 
 //   prompt: `Extract the meeting from ${blurb}. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s04_ExtractMeeting -------------------------
+// Manual expansion reference for s04_ExtractMeeting.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s04_ExtractMeeting_request(...) models s04_ExtractMeeting.request(...): it
+//   packages Request<s04_Meeting> and its output schema without performing I/O.
+// - s04_ExtractMeeting_manual(...) models the plain s04_ExtractMeeting(...)
+//   lowering: root.ai.run(request).
+// - s04_stream_meeting(...) exercises s04_ExtractMeeting.stream(...) via
+//   root.ai.stream(request), then drains the structured partial stream.
 function s04_ExtractMeeting_request(
   blurb: string,
   provider: root.ai.Provider = BepV2FixtureGenerate {

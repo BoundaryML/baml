@@ -2,7 +2,13 @@
 
 // Task sketch: VoiceReply(transcript) -> string.
 
-// This is the desugared code for VoiceReply ---------------------------------
+// Manual expansion reference for task `VoiceReply`:
+// - `VoiceReply_request(...)` models `VoiceReply.request(...)`.
+// - `VoiceReply_manual(...)` models the plain `VoiceReply(...)` call, lowered
+//   through `root.ai.run`.
+// The STT/TTS cascade is ordinary application orchestration. These helper
+// names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function VoiceReply_request(
   transcript: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "voice-brain", reply: `"hello"`, attributes: {} },

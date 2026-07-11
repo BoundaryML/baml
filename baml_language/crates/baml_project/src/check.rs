@@ -68,8 +68,10 @@ pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     #[cfg(not(target_arch = "wasm32"))]
     let mut diagnostics: Vec<Diagnostic> = {
         use rayon::prelude::*;
-        let mut work: Vec<(ProjectDatabase, SourceFile)> =
-            source_files.iter().map(|file| (db.clone(), *file)).collect();
+        let mut work: Vec<(ProjectDatabase, SourceFile)> = source_files
+            .iter()
+            .map(|file| (db.clone(), *file))
+            .collect();
         // Largest files first: check cost varies wildly per file, and a big
         // file picked up last leaves every other worker idle waiting for it.
         work.sort_by_key(|(_, file)| std::cmp::Reverse(file.text(db).len()));

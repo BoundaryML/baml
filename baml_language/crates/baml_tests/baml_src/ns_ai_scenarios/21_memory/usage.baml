@@ -2,7 +2,13 @@
 
 // Task sketch: s21_ExtractMemories(conversation) -> s21_Memories.
 
-// This is the desugared code for s21_ExtractMemories ------------------------
+// Manual expansion reference for task `s21_ExtractMemories`:
+// - `s21_ExtractMemories_request(...)` models
+//   `s21_ExtractMemories.request(...)`.
+// - `s21_ExtractMemories_manual(...)` models the plain
+//   `s21_ExtractMemories(...)` call, lowered through `root.ai.run`.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s21_ExtractMemories_request(
   conversation: string,
   provider: root.ai.Provider = BepV2FixtureGenerate { name: "memory-extractor", reply: `{"items":[]}`, attributes: {} },
@@ -23,7 +29,13 @@ function s21_ExtractMemories_manual(
 
 // Task sketch: s21_AnswerWithMemory(memories, question) -> string.
 
-// This is the desugared code for s21_AnswerWithMemory -----------------------
+// Manual expansion reference for task `s21_AnswerWithMemory`:
+// - `s21_AnswerWithMemory_request(...)` models
+//   `s21_AnswerWithMemory.request(...)`.
+// - `s21_AnswerWithMemory_manual(...)` models the plain
+//   `s21_AnswerWithMemory(...)` call, lowered through `root.ai.run`.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s21_AnswerWithMemory_request(
   memories: string,
   question: string,

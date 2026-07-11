@@ -10,7 +10,16 @@
 //   prompt: `Summarize this in one sentence: ${work}`
 // }
 
-// This is the desugared code for s01_Summarize ------------------------------
+// Manual expansion reference for s01_Summarize.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s01_Summarize_request(...) models s01_Summarize.request(...): it renders
+//   and packages Request<string> without performing I/O.
+// - s01_Summarize_manual(...) models the plain s01_Summarize(...) lowering:
+//   root.ai.run(request), returning only the typed value.
+// - s01_Summarize_with_meta_manual(...) models s01_Summarize.with_meta(...):
+//   root.ai.run_with_meta(request), preserving metadata from the same call.
 function s01_Summarize_request(
   work: string,
   provider: root.ai.Provider = BepV2FixtureGenerate {

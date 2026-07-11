@@ -5294,6 +5294,66 @@ fn cross_package_requires_satisfied_by_sibling_implements_is_ok() {
 }
 
 #[test]
+fn cross_file_required_parent_is_satisfied_by_in_body_class_impl() {
+    let files = &[
+        (
+            "ns_ai/interfaces.baml",
+            r#"
+                interface Provider {}
+                interface Generate requires Provider {}
+                "#,
+        ),
+        (
+            "ns_ai/providers/openai/provider.baml",
+            r#"
+                class OpenAi {
+                    implements Provider {}
+                }
+                "#,
+        ),
+        (
+            "ns_ai/providers/openai/generate.baml",
+            r#"
+                implements Generate for OpenAi {}
+                "#,
+        ),
+    ];
+    assert_no_compile_errors_multi(files);
+}
+
+#[test]
+fn cross_file_required_parent_is_satisfied_by_out_of_body_impl() {
+    let files = &[
+        (
+            "ns_ai/interfaces.baml",
+            r#"
+                interface Provider {}
+                interface Generate requires Provider {}
+                "#,
+        ),
+        (
+            "ns_ai/providers/openai/provider.baml",
+            r#"
+                class OpenAi {}
+                "#,
+        ),
+        (
+            "ns_ai/providers/openai/provider_capability.baml",
+            r#"
+                implements Provider for OpenAi {}
+                "#,
+        ),
+        (
+            "ns_ai/providers/openai/generate.baml",
+            r#"
+                implements Generate for OpenAi {}
+                "#,
+        ),
+    ];
+    assert_no_compile_errors_multi(files);
+}
+
+#[test]
 fn in_body_inherent_method_does_not_implicitly_satisfy_interface() {
     // `Thing.label` is an inherent method (outside the `implements Label` block),
     // so it does NOT satisfy the abstract `Label.label` — even though the signatures
@@ -12161,7 +12221,10 @@ function main() -> string {
 }
 "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("hit".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("hit".into())
+    );
 }
 
 #[tokio::test]
@@ -12212,5 +12275,8 @@ function main() -> string {
 }
 "#
     );
-    assert_eq!(output.result.unwrap(), BexExternalValue::String("widget".into()));
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("widget".into())
+    );
 }

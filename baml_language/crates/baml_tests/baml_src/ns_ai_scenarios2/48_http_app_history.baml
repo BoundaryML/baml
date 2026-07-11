@@ -79,9 +79,14 @@ class s48_EchoProvider {
 //   `
 // }
 
-// This is the desugared code for s48_ContinueConversation --------------------
-// The task call becomes a request builder plus the ordinary `root.ai.run`
-// driver. Tools are intentionally absent; a caller/provider can add them later.
+// Hand-written reference expansion of the compiler task surface for
+// `s48_ContinueConversation`; these helper names are scaffolding, not literal
+// generated names:
+// - `s48_ContinueConversation_request` represents
+//   `s48_ContinueConversation.request(...)`.
+// - `s48_ContinueConversation_desugared` spells the plain task call through
+//   `root.ai.run`; its `_desugared` suffix exists only in this reference fixture.
+// Tools are intentionally absent; a caller/provider can add them later.
 function s48_ContinueConversation_request(
   history_json: string,
   message: string,

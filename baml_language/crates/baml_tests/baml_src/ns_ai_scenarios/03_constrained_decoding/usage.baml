@@ -6,7 +6,16 @@
 //   prompt: `Classify ${text} as Positive or Negative. ${ctx.output_format}`
 // }
 
-// This is the desugared code for s03_Classify -------------------------------
+// Manual expansion reference for s03_Classify.
+// The helper names below are hand-written reference/test scaffolding, not
+// literal compiler-generated companion names. `provider` stands in for the
+// task's synthetic trailing `client =` argument.
+// - s03_Classify_request(...) models s03_Classify.request(...): it renders and
+//   packages Request<s03_Sentiment> without performing I/O.
+// - s03_Classify_manual(...) models the plain s03_Classify(...) lowering:
+//   root.ai.run(request).
+// - s03_Classify_constrained_manual(...) is a custom constrained-capability
+//   driver over s03_Classify.request(...), not a compiler-provided task modifier.
 function s03_Classify_request(
   text: string,
   provider: root.ai.Provider = s03_ConstrainedFixture { reply: `"Positive"` },

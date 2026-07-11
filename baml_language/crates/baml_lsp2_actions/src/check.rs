@@ -4143,13 +4143,33 @@ fn implements_for_targets_match(
     rhs: &baml_compiler2_ast::TypeExpr,
     rhs_generic_params: &[Name],
 ) -> bool {
+    implements_for_targets_match_in_namespaces(
+        ctx,
+        lhs,
+        ctx.namespace_path,
+        lhs_generic_params,
+        rhs,
+        ctx.namespace_path,
+        rhs_generic_params,
+    )
+}
+
+fn implements_for_targets_match_in_namespaces(
+    ctx: &InterfaceValidationCtx<'_, '_>,
+    lhs: &baml_compiler2_ast::TypeExpr,
+    lhs_namespace_path: &[Name],
+    lhs_generic_params: &[Name],
+    rhs: &baml_compiler2_ast::TypeExpr,
+    rhs_namespace_path: &[Name],
+    rhs_generic_params: &[Name],
+) -> bool {
     let mut lhs_diags = Vec::new();
     let mut rhs_diags = Vec::new();
     let lhs_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
         ctx.db,
         lhs,
         ctx.pkg_items,
-        ctx.namespace_path,
+        lhs_namespace_path,
         lhs_generic_params,
         &mut lhs_diags,
     );
@@ -4157,7 +4177,7 @@ fn implements_for_targets_match(
         ctx.db,
         rhs,
         ctx.pkg_items,
-        ctx.namespace_path,
+        rhs_namespace_path,
         rhs_generic_params,
         &mut rhs_diags,
     );
@@ -4180,16 +4200,18 @@ fn implements_for_targets_match(
             .is_some())
 }
 
-fn implements_for_target_matches_class(
+fn implements_for_target_matches_class_in_namespaces(
     ctx: &InterfaceValidationCtx<'_, '_>,
     target: &baml_compiler2_ast::TypeExpr,
+    target_namespace_path: &[Name],
     target_generic_params: &[Name],
-    class: &baml_compiler2_ast::ClassDef,
+    class: &baml_compiler2_hir::item_tree::Class,
+    class_namespace_path: &[Name],
 ) -> bool {
     use baml_compiler2_hir::contributions::Definition;
 
     let Some(Definition::Class(class_loc)) =
-        ctx.pkg_items.lookup_type(ctx.namespace_path, &class.name)
+        ctx.pkg_items.lookup_type(class_namespace_path, &class.name)
     else {
         return false;
     };
@@ -4212,7 +4234,7 @@ fn implements_for_target_matches_class(
         ctx.db,
         target,
         ctx.pkg_items,
-        ctx.namespace_path,
+        target_namespace_path,
         target_generic_params,
         &mut target_diags,
     );
@@ -4237,63 +4259,84 @@ fn implements_for_target_matches_class(
             .is_some())
 }
 
-fn item_implements_required_parent_for_target(
+fn package_implements_required_parent_for_target(
     ctx: &InterfaceValidationCtx<'_, '_>,
-    item: &baml_compiler2_ast::Item,
+    current_file_id: FileId,
+    current_package: &Name,
     current: &baml_compiler2_ast::ImplementsForDef,
     current_generic_params: &[Name],
     required_parent: &baml_compiler2_ast::TypeExpr,
     required_parent_pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
     required_parent_namespace_path: &[Name],
 ) -> bool {
-    match item {
-        baml_compiler2_ast::Item::ImplementsFor(candidate) => {
-            if candidate.span == current.span {
-                return false;
-            }
-            let candidate_generic_params: Vec<Name> = candidate
-                .generic_params
-                .iter()
-                .map(|(name, _)| name.clone())
-                .collect();
-            implements_for_targets_match(
-                ctx,
-                &candidate.for_target,
-                &candidate_generic_params,
-                &current.for_target,
-                current_generic_params,
-            ) && interface_target_matches_required_parent(
-                ctx,
-                &candidate.interface_target,
-                ctx.namespace_path,
-                &candidate.associated_type_bindings,
-                required_parent,
-                required_parent_pkg_items,
-                required_parent_namespace_path,
-                &candidate_generic_params,
-            )
+    for candidate_file in baml_compiler2_hir::compiler2_all_files(ctx.db) {
+        let candidate_pkg_info =
+            baml_compiler2_hir::file_package::file_package(ctx.db, candidate_file);
+        if candidate_pkg_info.package != *current_package {
+            continue;
         }
-        baml_compiler2_ast::Item::Class(class) => {
-            implements_for_target_matches_class(
-                ctx,
-                &current.for_target,
-                current_generic_params,
-                class,
-            ) && class.implements.iter().any(|candidate| {
-                interface_target_matches_required_parent(
+
+        let candidate_namespace_path = &candidate_pkg_info.namespace_path;
+        let item_tree = baml_compiler2_hir::file_item_tree(ctx.db, candidate_file);
+        for candidate in item_tree.impls.values() {
+            if candidate_file.file_id(ctx.db) == current_file_id && candidate.span == current.span {
+                continue;
+            }
+
+            let (target_matches, candidate_generic_params) = match &candidate.subject {
+                baml_compiler2_hir::item_tree::ImplSubject::Free {
+                    for_target,
+                    generics,
+                } => {
+                    let generic_params: Vec<Name> =
+                        generics.iter().map(|param| param.name.clone()).collect();
+                    (
+                        implements_for_targets_match_in_namespaces(
+                            ctx,
+                            for_target,
+                            candidate_namespace_path,
+                            &generic_params,
+                            &current.for_target,
+                            ctx.namespace_path,
+                            current_generic_params,
+                        ),
+                        generic_params,
+                    )
+                }
+                baml_compiler2_hir::item_tree::ImplSubject::InClass { class, .. } => {
+                    let Some(class) = item_tree.classes.get(class) else {
+                        continue;
+                    };
+                    (
+                        implements_for_target_matches_class_in_namespaces(
+                            ctx,
+                            &current.for_target,
+                            ctx.namespace_path,
+                            current_generic_params,
+                            class,
+                            candidate_namespace_path,
+                        ),
+                        class.generic_params.clone(),
+                    )
+                }
+            };
+            if target_matches
+                && interface_target_matches_required_parent(
                     ctx,
-                    &candidate.target,
-                    ctx.namespace_path,
+                    &candidate.interface_target,
+                    candidate_namespace_path,
                     &candidate.associated_type_bindings,
                     required_parent,
                     required_parent_pkg_items,
                     required_parent_namespace_path,
-                    &class.generic_params,
+                    &candidate_generic_params,
                 )
-            })
+            {
+                return true;
+            }
         }
-        _ => false,
     }
+    false
 }
 
 fn has_sibling_implements_for_origin(
@@ -5000,17 +5043,16 @@ fn validate_implements_for<'db>(
                 })
                 .map(|_| Name::new(required_parent.to_string()))
                 .or_else(|| segments.last().cloned())?;
-                let target_implements_it = all_items.iter().any(|item| {
-                    item_implements_required_parent_for_target(
-                        &ctx,
-                        item,
-                        imp,
-                        &generic_param_names,
-                        &required_parent,
-                        iface_pkg_items,
-                        &iface_namespace_path,
-                    )
-                });
+                let target_implements_it = package_implements_required_parent_for_target(
+                    &ctx,
+                    file_id,
+                    current_package,
+                    imp,
+                    &generic_param_names,
+                    &required_parent,
+                    iface_pkg_items,
+                    &iface_namespace_path,
+                );
                 if target_implements_it {
                     None
                 } else {

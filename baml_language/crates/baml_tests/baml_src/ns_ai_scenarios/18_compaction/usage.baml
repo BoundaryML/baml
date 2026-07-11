@@ -10,7 +10,13 @@
 //   prompt: `Condense this conversation, preserving decisions and open work: ${head}`
 // }
 
-// This is the desugared code for s18_SummarizeHead --------------------------
+// Manual expansion reference for task `s18_SummarizeHead`:
+// - `s18_SummarizeHead_request(...)` models `s18_SummarizeHead.request(...)`.
+// - `s18_SummarizeHead_manual(...)` models the plain
+//   `s18_SummarizeHead(...)` call, lowered through `root.ai.run`.
+// The surrounding compaction logic is ordinary application code. These helper
+// names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s18_SummarizeHead_request(
   head: string,
   provider: root.ai.Provider = BepV2FixtureGenerate {

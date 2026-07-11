@@ -6,7 +6,13 @@ class BepV2FixtureGenerate {
   reply: string,
   attributes: map<string, unknown>,
 
-  implements root.ai.Provider {}
+  implements root.ai.Provider {
+    // Fixture names are observable provider identities, just like the
+    // provider recorded in response metadata. Routing a fixture through a
+    // Provider-typed value must not collapse that identity to the interface's
+    // generic default name.
+    function display_name(self) -> string throws never { self.name }
+  }
 
   implements root.ai.Generate {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>

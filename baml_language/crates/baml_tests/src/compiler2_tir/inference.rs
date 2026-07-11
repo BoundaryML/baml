@@ -941,4 +941,3 @@ fn narrowed_nullable_index_is_accepted() {
         "a nullable index narrowed to non-null must stay allowed"
     );
 }
-

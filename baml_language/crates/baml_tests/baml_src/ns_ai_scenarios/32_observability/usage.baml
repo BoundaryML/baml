@@ -1,6 +1,10 @@
 // Task sketch: s32_Summarize(text) -> string.
 
-// This is the desugared code for s32_Summarize -----------------------------
+// Hand-written reference expansion of the compiler task surface for
+// `s32_Summarize`; these helper names are scaffolding, not literal generated names:
+// - `s32_Summarize_request` represents `s32_Summarize.request(...)`.
+// - `s32_Summarize_manual` spells the plain `s32_Summarize(...)` lowering.
+// - `s32_Summarize_with_meta_manual` spells `s32_Summarize.with_meta(...)`.
 function s32_Summarize_request(
   text: string,
   provider: root.ai.Provider = s32_Metered { name: "default", reply: `"summary"`, input_tokens: 1, output_tokens: 1 },

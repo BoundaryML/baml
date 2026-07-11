@@ -6,7 +6,14 @@
 //   prompt: `Conversation so far:\n${s17_render_history(history)}\nuser: ${latest}`
 // }
 
-// This is the desugared code for s17_Chat -----------------------------------
+// Manual expansion reference for task `s17_Chat`:
+// - `s17_Chat_request(...)` models `s17_Chat.request(...)`.
+// - `s17_Chat_manual(...)` models the plain `s17_Chat(...)` call, lowered
+//   through `root.ai.run`.
+// - `s17_two_turn(...)` is ordinary application orchestration over two task
+//   calls; it is not a synthesized task modifier.
+// These helper names are hand-written reference/test scaffolding, not literal
+// compiler-generated names.
 function s17_Chat_request(
   history: root.ai.ChatMessage[],
   latest: string,
