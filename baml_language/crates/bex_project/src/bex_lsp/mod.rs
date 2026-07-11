@@ -7,6 +7,7 @@ mod request;
 mod multi_project;
 mod position_codec;
 mod protocol;
+pub(crate) mod request_cancellation;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -34,6 +35,16 @@ pub enum LspError {
 
     #[error("Client closed")]
     ClientClosed,
+
+    /// The connection-owned outbound sink cannot accept more frames right
+    /// now (bounded transport backpressure; LSP `RequestFailed`, `-32803`).
+    #[error("LSP outbound sink is saturated")]
+    OutboundSaturated,
+
+    /// The serialized outbound frame exceeds the transport's frame limit
+    /// (LSP `RequestFailed`, `-32803`).
+    #[error("LSP outbound frame exceeds the transport limit")]
+    OutboundOversized,
 
     #[error("Root path not found: {}: {}", .0.as_str(), .1)]
     ProjectRootNotFound(vfs::VfsPath, String),
@@ -63,6 +74,12 @@ pub enum LspError {
 
     #[error("No projects found")]
     NoProjectsFound,
+
+    /// Explicit client cancellation won response ownership while the request
+    /// was queued or running (LSP `RequestCanceled`, `-32800`). Observed only
+    /// at safe handler boundaries — never through Salsa unwinding.
+    #[error("Request canceled: {0}")]
+    RequestCanceled(String),
 
     /// The request's view became stale: sources were mutated while it waited
     /// (LSP `ContentModified`, `-32801`).
@@ -111,17 +128,23 @@ impl LspError {
             // Request before initialize completed.
             LspError::ServerNotInitialized(_) => ErrorCode::ServerNotInitialized,
 
+            // Explicit cancellation claimed the response (B2).
+            LspError::RequestCanceled(_) => ErrorCode::RequestCanceled,
+
             // The request's view became stale under an applied source change.
             LspError::ContentModified(_) => ErrorCode::ContentModified,
 
             // Valid request that cannot be served: unknown project/file,
-            // same-revision busy timeout, overload.
+            // same-revision busy timeout, overload, saturated/oversized
+            // outbound transport.
             LspError::ProjectRootNotFound(..)
             | LspError::ProjectNotFound(_)
             | LspError::FileNotFound(_)
             | LspError::InvalidPath { .. }
             | LspError::InvalidVFSPath { .. }
             | LspError::NoProjectsFound
+            | LspError::OutboundSaturated
+            | LspError::OutboundOversized
             | LspError::RequestFailed(_) => ErrorCode::RequestFailed,
 
             // Internal failures: poison, violated invariants, serialization,
@@ -304,6 +327,17 @@ pub struct PreparedRun {
 // state (e.g. in playground_server's WsState), which must be Clone + Send + Sync.
 #[async_trait]
 pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexLspRequest {
+    /// Create a connection-scoped LSP dispatcher (I7): it shares the
+    /// process-owned project registry but owns a fresh position-encoding
+    /// negotiation (C1) and fresh initialize workspace roots, and writes only
+    /// through `sender` — the connection's revocable outbound sink. Browser
+    /// takeover (D2) revokes that sink, so a retained clone of the old
+    /// session can no longer leak output into the replacement.
+    fn new_lsp_session(
+        &self,
+        sender: Arc<dyn LspClientSenderTrait + Send + Sync>,
+    ) -> Arc<dyn BexLsp>;
+
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
@@ -445,6 +479,10 @@ mod tests {
         use lsp_server::ErrorCode;
 
         assert_eq!(
+            code(&LspError::RequestCanceled("client canceled".into())),
+            ErrorCode::RequestCanceled as i32,
+        );
+        assert_eq!(
             code(&LspError::ContentModified("edit raced".into())),
             ErrorCode::ContentModified as i32,
         );
@@ -483,6 +521,8 @@ mod tests {
             LspError::ProjectNotFound(root.clone()),
             LspError::FileNotFound(root),
             LspError::NoProjectsFound,
+            LspError::OutboundSaturated,
+            LspError::OutboundOversized,
         ] {
             assert_eq!(code(&e), ErrorCode::RequestFailed as i32, "{e}");
         }
@@ -511,11 +551,14 @@ mod tests {
                 message: "m".into(),
             },
             LspError::NoProjectsFound,
+            LspError::RequestCanceled("m".into()),
             LspError::ContentModified("m".into()),
             LspError::RequestFailed("m".into()),
             LspError::Internal("m".into()),
             LspError::InvalidParams("m".into()),
             LspError::ServerNotInitialized("m".into()),
+            LspError::OutboundSaturated,
+            LspError::OutboundOversized,
         ];
         for e in &all {
             assert_ne!(code(e), LEGACY_UNKNOWN, "{e} must not emit -32001");

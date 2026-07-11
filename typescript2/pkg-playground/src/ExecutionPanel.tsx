@@ -13,7 +13,14 @@ import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { encodeRunArgs } from '@b/pkg-proto';
 import type { BamlJsValue } from '@b/pkg-proto';
-import { KeyRound, PanelLeft, Play, Settings, Square } from 'lucide-react';
+import {
+  KeyRound,
+  Loader2,
+  PanelLeft,
+  Play,
+  Settings,
+  Square,
+} from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Input } from './components/ui/input';
@@ -69,7 +76,17 @@ import { GraphView } from './graph/GraphView';
 import { FunctionSidebar } from './FunctionSidebar';
 import { companionFunctionName } from './shared/companion-functions';
 import { createExecutionStore, type ExecutionStore } from './execution-store';
-import { createRunStoreClient } from './run-store-client';
+import {
+  createRunStoreClient,
+  isProjectNotReadyError,
+} from './run-store-client';
+import {
+  NO_NOT_READY_PROJECTS,
+  applyProjectUpdateToGating,
+  isRunGated,
+  markProjectNotReady,
+  type NotReadyProjects,
+} from './run-gating';
 import { createValueBodyCache } from './value-body-cache';
 import type { ValueBodyCache } from './value-body-cache';
 import type { ExecutionStoreSnapshot } from './execution-store';
@@ -739,6 +756,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const [projectUpdates, setProjectUpdates] = useState<
     Record<string, ProjectUpdate>
   >({});
+  // Projects whose last run/preview was refused with `projectNotReady`. The
+  // fail-closed server (D7) rejects runs while a rebuild is pending; the UI
+  // renders that as the transient "Preparing current build…" state and clears
+  // it when the next current ProjectUpdate arrives.
+  const [notReadyProjects, setNotReadyProjects] = useState<NotReadyProjects>(
+    NO_NOT_READY_PROJECTS,
+  );
   const [testTree, setTestTree] = useState<SerializedTestDef[] | null>(null);
   const [collectionCallId, setCollectionCallId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<number>(0);
@@ -1235,6 +1259,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
               break;
             case 'updateProject':
               setProjectUpdates((prev) => ({ ...prev, [n.project]: n.update }));
+              // A current build re-enables run controls automatically after a
+              // fail-closed `projectNotReady` rejection.
+              setNotReadyProjects((prev) =>
+                applyProjectUpdateToGating(prev, n.project, n.update),
+              );
               break;
             case 'testCollectionResult': {
               try {
@@ -1551,6 +1580,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     setArgsJson(baseArgsFor(selectedFn));
   }, [selectedFn, baseArgsFor]);
 
+  // Whether the fail-closed server is (re)building the selected project's
+  // runtime: either the latest ProjectUpdate is stale (isBexCurrent false) or
+  // a run/preview was refused with `projectNotReady`. Derived here — above
+  // the run/preview callbacks that must consult it.
+  const runtimePreparing = isRunGated(
+    notReadyProjects,
+    selectedProject,
+    selectedProject ? projectUpdates[selectedProject] : undefined,
+  );
+
+  const markSelectedProjectNotReady = useCallback((project: string) => {
+    setNotReadyProjects((prev) => markProjectNotReady(prev, project));
+  }, []);
+
   // Auto-refresh prompt/curl preview when args change while tab is active
   useEffect(() => {
     if (activeTab !== 'prompt' && activeTab !== 'curl') return;
@@ -1587,6 +1630,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     ) {
       setPreviewLoading(false);
       setError('Args must be a JSON object');
+      return;
+    }
+
+    // While the server prepares the current build, previews would only be
+    // refused with `projectNotReady`. Skip issuing them; this effect re-runs
+    // when the next ProjectUpdate flips `runtimePreparing` back off.
+    if (runtimePreparing) {
+      setPreviewLoading(false);
       return;
     }
 
@@ -1659,6 +1710,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         setPreviewLoading(false);
       } catch (e) {
         if (cancelled) return;
+        if (isProjectNotReadyError(e)) {
+          // Transient fail-closed rejection — surface it as the "Preparing
+          // current build…" state (not a raw error) and keep the last valid
+          // preview visible. Cleared by the next current ProjectUpdate.
+          markSelectedProjectNotReady(selectedProject);
+          setError(null);
+          setPreviewLoading(false);
+          return;
+        }
         const errMsg = e instanceof Error ? e.message : String(e);
         // Don't clear result — keep last valid prompt visible with error banner above
         setError(errMsg);
@@ -1681,6 +1741,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     executionStore,
     valueBodyCache,
     projectUpdateVersion,
+    runtimePreparing,
+    markSelectedProjectNotReady,
   ]);
 
   // Single write path for args edits (form and raw): the prompt/cURL preview
@@ -1871,6 +1933,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         });
         await waitForTerminalRun(boundaryId);
       } catch (e) {
+        if (isProjectNotReadyError(e)) {
+          // Fail-closed rebuild window: show the transient preparing state
+          // instead of a per-test error; controls re-enable on the next
+          // current ProjectUpdate.
+          markSelectedProjectNotReady(selectedProject);
+          return;
+        }
         setTestStartErrors(
           (prev) =>
             new Map(prev).set(
@@ -1880,7 +1949,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         );
       }
     },
-    [executionStore, generation, selectedProject, waitForTerminalRun],
+    [
+      executionStore,
+      generation,
+      selectedProject,
+      waitForTerminalRun,
+      markSelectedProjectNotReady,
+    ],
   );
 
   useEffect(() => {
@@ -2006,7 +2081,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     ? functions
     : functions.filter((fn) => !isInternalFunction(fn));
   const functionNames = visibleFunctions.map((f) => f.name);
-  const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
   const diags = currentUpdate?.diagnostics ?? [];
 
   const selectedFnInfo = visibleFunctions.find((f) => f.name === selectedFn);
@@ -2159,6 +2233,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
         [boundaryId]: runArgsJson,
       }));
     } catch (e) {
+      if (isProjectNotReadyError(e)) {
+        // Fail-closed rebuild window: render the transient "Preparing current
+        // build…" state instead of a raw error. Run re-enables automatically
+        // when the next ProjectUpdate reports a current build.
+        markSelectedProjectNotReady(selectedProject);
+        return;
+      }
       const errMsg = e instanceof Error ? e.message : String(e);
       setRunValidationError(errMsg);
     }
@@ -2172,6 +2253,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     isRunning,
     executionStore,
     updateArgsJson,
+    markSelectedProjectNotReady,
   ]);
   // Names of LLM functions — only these have a meaningful raw (un-parsed LLM
   // output) vs parsed distinction, so the Parsed/Raw toggle is shown only for
@@ -2415,6 +2497,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
   const errors = diags.filter((d) => d.severity === 'error');
   const warnings = diags.filter((d) => d.severity === 'warning');
   const hasErrors = errors.length > 0;
+  // The fail-closed server refuses runs/previews over compile errors and
+  // while a rebuild is pending; keep runtime-derived controls disabled for
+  // both so users see one consistent gate instead of raw rejections.
+  const runtimeControlsDisabled = hasErrors || runtimePreparing;
 
   // Whether any known-required keys are missing — proactive, not just reactive to pending requests
   const hasMissingKeys = [...knownRequiredKeys].some((k) => !envVars[k]);
@@ -2477,7 +2563,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           // keystroke when nothing will run.
           if (viewingCollection || viewingTestRun) return;
           e.preventDefault();
-          if (!hasErrors) void onRunFunction();
+          if (!runtimeControlsDisabled) void onRunFunction();
         }}
       >
         {/* ──── Combined top bar ──── */}
@@ -2574,7 +2660,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                       size="icon-xs"
                       className="h-7 w-7"
                       aria-label="Run"
-                      disabled={hasErrors || isRunning || !selectedProject}
+                      disabled={
+                        runtimeControlsDisabled || isRunning || !selectedProject
+                      }
                       onClick={onRunFunction}
                     >
                       <Play />
@@ -2701,8 +2789,23 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
           </button>
         )}
 
+        {/* Preparing banner. The sidebar keeps showing the previous
+            function/test catalog, but runtime-derived controls stay disabled
+            until the fail-closed server reports a current build. */}
+        {selectedProject && runtimePreparing && !hasErrors && (
+          <div
+            role="status"
+            className="flex shrink-0 items-center gap-2 border-b border-vsc-border bg-vsc-surface px-2.5 py-1.5"
+          >
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-vsc-accent" />
+            <span className="font-vsc-mono text-[11px] text-vsc-text">
+              Preparing current build…
+            </span>
+          </div>
+        )}
+
         {/* Diagnostics banner */}
-        {(hasErrors || engineStale) && (
+        {hasErrors && (
           <div className="border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
             {diags.length > 0 ? (
               <>
@@ -2730,7 +2833,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                     {warnings.length > 0
                       ? `${warnings.length} warning${warnings.length !== 1 ? 's' : ''}`
                       : ''}
-                    {' — using last successful build'}
+                    {' — current build unavailable'}
                   </span>
                 </button>
                 {diagsExpanded && (
@@ -2754,11 +2857,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   </div>
                 )}
               </>
-            ) : (
-              <div className="px-2.5 py-1 font-vsc-mono text-[10px] text-[#f48771]">
-                Build is stale — using last successful build
-              </div>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -2783,6 +2882,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                   showInternalFunctions={showInternalFunctions}
                   internalFunctionCount={internalFunctionCount}
                   isLoadingProject={isLoadingProject}
+                  runtimeControlsDisabled={runtimeControlsDisabled}
                   testTree={testTree}
                   previewTests={previewTests}
                   selectedPreviewTestKey={selectedPreviewTestKey}
@@ -3213,7 +3313,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
                         size="xs"
                         className="mx-1 my-0.5 shrink-0 text-[11px] font-semibold"
                         aria-label={isRunning ? 'Running' : 'Run'}
-                        disabled={hasErrors || isRunning || !selectedProject}
+                        disabled={
+                          runtimeControlsDisabled ||
+                          isRunning ||
+                          !selectedProject
+                        }
                         onClick={onRunFunction}
                       >
                         {isRunning ? (

@@ -1043,6 +1043,7 @@ dependencies = [
  "sys_native",
  "sys_ops",
  "sys_types",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
  "tower-http",

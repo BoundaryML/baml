@@ -240,10 +240,22 @@ pub(super) fn db_read_error_to_lsp(e: DbReadError) -> LspError {
 }
 
 /// Bounded request-lane read of a project's source gate.
+///
+/// Safe point (B2): right after the gate is acquired — the request may have
+/// waited up to the bounded deadline — the ambient dispatch cancellation is
+/// checked, so a request whose cancellation already owns the response stops
+/// here instead of paying for the database read. The token is observed, not
+/// unwound (abort-profile invariant).
 pub(super) fn read_for_request(project: &BexProject) -> Result<SourceGuard<'_>, LspError> {
-    project
+    let guard = project
         .read_source_for_request()
-        .map_err(db_read_error_to_lsp)
+        .map_err(db_read_error_to_lsp)?;
+    if crate::bex_lsp::request_cancellation::current_request_is_cancelled() {
+        return Err(LspError::RequestCanceled(
+            "request canceled after acquiring the source gate".to_string(),
+        ));
+    }
+    Ok(guard)
 }
 
 enum ProjectRefreshMode {
@@ -277,6 +289,24 @@ impl BexMulitProject {
             fs,
             spawner,
         }
+    }
+
+    /// Connection-scoped dispatcher (I7): shares the process-owned project
+    /// registry (and everything hanging off it) but owns a fresh
+    /// position-encoding negotiation (C1) and fresh initialize workspace
+    /// roots, and writes only through the connection's revocable `sender`.
+    /// After browser takeover (D2) revokes that sender, a retained clone of
+    /// this session fails `send_*` with `ClientClosed` instead of leaking
+    /// into the replacement session.
+    fn connection_scoped_lsp_session(
+        &self,
+        sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
+    ) -> Self {
+        let mut session = self.clone();
+        session.sender = sender;
+        session.negotiated_encoding = std::sync::Arc::new(OnceLock::new());
+        session.workspace_roots = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        session
     }
 
     /// Encoding for request handlers: requests before `initialize` completes
@@ -1667,6 +1697,13 @@ fn ensure_source_belongs_to_project(
 
 #[async_trait::async_trait]
 impl super::BexLsp for BexMulitProject {
+    fn new_lsp_session(
+        &self,
+        sender: Arc<dyn LspClientSenderTrait + Send + Sync>,
+    ) -> Arc<dyn super::BexLsp> {
+        Arc::new(self.connection_scoped_lsp_session(sender))
+    }
+
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
@@ -2233,5 +2270,104 @@ mod tests {
         let mut names: Vec<_> = found.iter().map(vfs::VfsPath::as_str).collect();
         names.sort_unstable();
         assert_eq!(names, vec!["/manifest_proj", "/proj"]);
+    }
+
+    /// The B2 safe point: a request whose cancellation already claimed the
+    /// response stops right after acquiring the source gate with a typed
+    /// `RequestCanceled` instead of paying for the database read.
+    #[test]
+    fn read_for_request_cancels_at_the_source_gate_safe_point() {
+        let ws = TempWorkspace::new("cancel_safe_point");
+        ws.file("proj/baml_src/main.baml", "// main");
+        let root = ws.vfs_path("proj");
+        let project = crate::project::BexProject::new(
+            &root,
+            std::sync::Arc::new(sys_ops::SysOpsBuilder::new().build()),
+        );
+
+        let token = sys_types::CancellationToken::new();
+        let _scope = crate::bex_lsp::request_cancellation::RequestCancellationScope::enter(Some(
+            token.clone(),
+        ));
+        assert!(read_for_request(&project).is_ok());
+
+        token.cancel();
+        assert!(matches!(
+            read_for_request(&project),
+            Err(LspError::RequestCanceled(_))
+        ));
+    }
+
+    struct RecordingSender {
+        notifications: std::sync::Mutex<Vec<lsp_server::Notification>>,
+    }
+
+    impl LspClientSenderTrait for RecordingSender {
+        fn send_notification(&self, msg: lsp_server::Notification) -> Result<(), LspError> {
+            self.notifications.lock().unwrap().push(msg);
+            Ok(())
+        }
+
+        fn send_response_impl(&self, _msg: lsp_server::Response) -> Result<(), LspError> {
+            Ok(())
+        }
+
+        fn make_request(&self, _msg: lsp_server::Request) -> Result<(), LspError> {
+            Ok(())
+        }
+    }
+
+    /// A connection-scoped session shares the project registry but owns its
+    /// own encoding negotiation and workspace roots (I7/C1) and routes output
+    /// through its own sender.
+    #[test]
+    fn connection_scoped_session_is_fresh_but_shares_projects() {
+        use crate::bex_lsp::notification::BexLspNotification as _;
+
+        let sender = Arc::new(RecordingSender {
+            notifications: std::sync::Mutex::new(Vec::new()),
+        });
+        let root = BexMulitProject::new(
+            Arc::new(|_: &vfs::VfsPath| Arc::new(sys_ops::SysOpsBuilder::new().build())),
+            sender.clone(),
+            Arc::new(NoopPlaygroundSender),
+            crate::fs::BamlVFS::new(Arc::new(Box::new(vfs::PhysicalFS::new("/")))),
+            BackgroundSpawner::new(),
+        );
+        let _ = root
+            .negotiated_encoding
+            .set(crate::bex_lsp::position_codec::PositionEncoding::UTF8);
+        root.workspace_roots
+            .lock()
+            .unwrap()
+            .push(vfs::VfsPath::new(vfs::MemoryFS::new()));
+
+        let session_sender = Arc::new(RecordingSender {
+            notifications: std::sync::Mutex::new(Vec::new()),
+        });
+        let session = root.connection_scoped_lsp_session(session_sender.clone());
+
+        // Fresh negotiation and roots; shared project registry.
+        assert!(session.negotiated_encoding.get().is_none());
+        assert!(session.workspace_roots.lock().unwrap().is_empty());
+        assert!(Arc::ptr_eq(&session.projects, &root.projects));
+
+        // Output routes only through the session's own sender.
+        session.handle_notification(lsp_server::Notification::new(
+            "test/unsupported".to_string(),
+            serde_json::Value::Null,
+        ));
+        assert_eq!(session_sender.notifications.lock().unwrap().len(), 1);
+        assert!(sender.notifications.lock().unwrap().is_empty());
+    }
+
+    struct NoopPlaygroundSender;
+
+    impl crate::bex_lsp::PlaygroundSender for NoopPlaygroundSender {
+        fn send_playground_notification(
+            &self,
+            _notification: crate::bex_lsp::PlaygroundNotification,
+        ) {
+        }
     }
 }
