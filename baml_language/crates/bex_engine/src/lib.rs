@@ -4057,8 +4057,12 @@ impl BexEngine {
     /// awaited the future routed through `future_ready`, which takes the
     /// stash entry) are skipped — that error was delivered at the await,
     /// where a `catch` could handle it, and must not re-surface here.
-    /// Returns `None` once the queue is empty. Used by the parent's await
-    /// drain (pre- and post-) for BEP-034 fire-and-forget propagation.
+    /// Returns `None` once the queue is empty. Called only where "never
+    /// awaited" is certain: the root's end-of-run drain and a child thread's
+    /// own `Complete` drain. The `Await` arm does NOT drain here — it only
+    /// trims the awaited future's own entry via
+    /// `vm_thread_consume_pending_child_error_for`, letting that future's
+    /// error flow through `await`/`catch` instead of being surfaced.
     async fn drain_one_pending_child_error(
         &self,
         thread: &mut bex_heap::ActiveHeapPermit<BexThread>,
