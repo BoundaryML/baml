@@ -42,7 +42,7 @@ pub(crate) async fn auth_request(
         LlmProvider::VertexAi => {
             return vertex::auth_vertex(request, client, io).await;
         }
-        LlmProvider::GoogleAi => auth_google_ai(request, client),
+        LlmProvider::GoogleAi => auth_google_ai(request, client)?,
         LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {}
     }
     Ok(())
@@ -52,12 +52,26 @@ pub(crate) async fn auth_request(
 // Google AI (Gemini)
 // ---------------------------------------------------------------------------
 
-fn auth_google_ai(request: &mut HttpRequest, client: &PrimitiveClient) {
-    if let Some(api_key) = &client.options.api_key {
-        request
-            .headers
-            .insert("x-goog-api-key".to_string(), api_key.clone());
-    }
+fn auth_google_ai(
+    request: &mut HttpRequest,
+    client: &PrimitiveClient,
+) -> Result<(), BuildRequestError> {
+    // Google AI is api-key-only; fail at request construction with both ways
+    // out, mirroring the vertex error style (and google-genai's own "Missing
+    // key inputs argument!" error, which points at the Vertex backend).
+    let Some(api_key) = &client.options.api_key else {
+        return Err(BuildRequestError::Other(
+            "Missing api_key for Google AI. Set options.api_key (e.g. api_key \
+             env.GOOGLE_API_KEY or env.GEMINI_API_KEY), or switch to the vertex-ai \
+             provider with project_id + location to use Google Cloud credentials \
+             (ADC) instead."
+                .to_string(),
+        ));
+    };
+    request
+        .headers
+        .insert("x-goog-api-key".to_string(), api_key.clone());
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -356,7 +370,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn google_ai_no_api_key_omits_header() {
+    async fn google_ai_missing_api_key_errors_with_vertex_pointer() {
+        // Google AI is api-key-only: request construction fails fast (instead
+        // of sending an unauthenticated request) and the error offers both
+        // fixes -- set api_key, or use vertex-ai + project_id + location.
         let client = make_client(
             "google-ai",
             PrimitiveClientOptions {
@@ -365,15 +382,21 @@ mod tests {
             },
         );
         let mut req = fake_request();
-        auth_request(
+        let err = auth_request(
             LlmProvider::GoogleAi,
             &mut req,
             &client,
             Arc::new(::sys_types::runtime_io::NoopRuntimeIo),
         )
         .await
-        .unwrap();
-        assert!(!req.headers.contains_key("x-goog-api-key"));
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Missing api_key for Google AI"), "msg={msg}");
+        assert!(msg.contains("env.GOOGLE_API_KEY"), "msg={msg}");
+        assert!(
+            msg.contains("vertex-ai") && msg.contains("project_id + location"),
+            "must point at the vertex-ai alternative: {msg}"
+        );
     }
 
     #[tokio::test]

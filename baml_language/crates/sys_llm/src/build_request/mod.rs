@@ -979,6 +979,7 @@ mod tests {
             "google-ai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gemini-2.0-flash".to_string()),
+                api_key: Some("test-google-key".to_string()),
                 base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
@@ -1009,6 +1010,7 @@ mod tests {
             "google-ai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gemini-2.0-flash".to_string()),
+                api_key: Some("test-google-key".to_string()),
                 base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
@@ -1050,6 +1052,7 @@ mod tests {
             "google-ai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gemini-2.0-flash".to_string()),
+                api_key: Some("test-google-key".to_string()),
                 base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
                 request_body: IndexMap::from([(
                     "generationConfig".to_string(),
@@ -1094,6 +1097,7 @@ mod tests {
             "google-ai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gemini-2.0-flash".to_string()),
+                api_key: Some("test-google-key".to_string()),
                 base_url: Some("https://generativelanguage.googleapis.com/v1beta".to_string()),
                 query_params: IndexMap::from([("key".to_string(), "my-api-key".to_string())]),
                 ..crate::baml_std::PrimitiveClientOptions::default()
