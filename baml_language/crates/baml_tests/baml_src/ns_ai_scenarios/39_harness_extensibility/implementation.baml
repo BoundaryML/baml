@@ -53,7 +53,7 @@ class s39_EventAudit {
 // Tool sources are local data. In-process and MCP tools still lower to the same
 // root.ai.Tool roster consumed by the shared agent loop.
 class s39_InProcessSource { handler: string }
-class s39_McpSource { server: string, wire_name: string, fixture_output: string }
+class s39_McpSource { server: string, wire_name: string, fake_output: string }
 class s39_ProviderSource {}
 type s39_ToolSource = s39_InProcessSource | s39_McpSource | s39_ProviderSource
 
@@ -81,7 +81,7 @@ function s39_mcp_issue_tool() -> s39_HarnessTool throws never {
     source: s39_McpSource {
       server: "github",
       wire_name: "mcp__github__search_issues",
-      fixture_output: "issue 42: login returns 500",
+      fake_output: "issue 42: login returns 500",
     },
   }
 }
@@ -224,7 +224,7 @@ function s39_dispatch_one(
           root.ai.ToolResult { id: call.id, output: "error: unknown in-process handler" }
         }
       },
-      let mcp: s39_McpSource => root.ai.ToolResult { id: call.id, output: mcp.fixture_output },
+      let mcp: s39_McpSource => root.ai.ToolResult { id: call.id, output: mcp.fake_output },
       let owned: s39_ProviderSource => root.ai.ToolResult {
         id: call.id, output: "provider-owned tool: " + call.name,
       },
@@ -403,7 +403,7 @@ class s39_SubAgent {
 }
 
 // A2A is request/response, so it honestly implements Generate. Offline examples
-// use fixture_text; the integration block exercises JSON-RPC over HTTP.
+// use fake_text; the integration block exercises JSON-RPC over HTTP.
 class s39_A2aPart { text: string }
 class s39_A2aMessage { parts: s39_A2aPart[] }
 class s39_A2aResult { message: s39_A2aMessage }
@@ -412,7 +412,7 @@ class s39_A2aEnvelope { result: s39_A2aResult }
 class s39_A2aProvider {
   endpoint: string?,
   headers: map<string, string>,
-  fixture_text: string?,
+  fake_text: string?,
 
   implements root.ai.Provider {
     function display_name(self) -> string throws never { "s39-a2a-peer" }
@@ -422,8 +422,8 @@ class s39_A2aProvider {
   implements root.ai.Generate {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
-      let peer_text = match (self.fixture_text) {
-        let fixture: string => fixture,
+      let peer_text = match (self.fake_text) {
+        let fake: string => fake,
         null => {
           let endpoint = self.endpoint ?? "";
           let prompt_json = baml.json.to_string(baml.llm.prompt_to_text(request.prompt)) catch (e) {

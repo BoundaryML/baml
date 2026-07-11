@@ -1,15 +1,15 @@
 // 06 — output modality is the task's T. Image generation remains `Generate`
 // because its observable lifecycle is still one request -> one typed response.
 
-/// Deterministic image producer for the offline tier. The fixture already owns
+/// Deterministic image producer for the offline tier. The fake already owns
 /// typed data, so its generic bridge uses canonical JSON, not SAP (SAP is for
 /// coercing LLM text output).
-class s06_FixtureImage {
+class s06_FakeImageProvider {
   base64_data: string,
   mime: string,
 
   implements root.ai.Provider {
-    function display_name(self) -> string throws never { "fixture-image" }
+    function display_name(self) -> string throws never { "fake-image" }
   }
 
   implements root.ai.Generate {
@@ -17,17 +17,17 @@ class s06_FixtureImage {
         throws baml.errors.UnknownError {
       let generated_image = baml.media.Image.from_base64(self.base64_data, self.mime);
       let encoded = baml.json.to_string<image>(generated_image) catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["fixture image encode failed"] },
+        _ => throw baml.errors.UnknownError { data: e, message: ["fake image encode failed"] },
       };
       let value = baml.json.from_string<T>(encoded) catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["fixture image type mismatch"] },
+        _ => throw baml.errors.UnknownError { data: e, message: ["fake image type mismatch"] },
       };
       root.ai.Response<T> {
         value: value,
         meta: root.ai.Meta {
           provider: self.display_name(),
-          model: "fixture-image",
-          request_id: "fixture-image-1",
+          model: "fake-image",
+          request_id: "fake-image-1",
           finish_reason: "stop",
           usage: null,
           attributes: { "generation_kind": "image" },

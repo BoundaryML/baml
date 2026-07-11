@@ -6,7 +6,7 @@
 // - `s29_Extract_manual` spells the plain `s29_Extract(...)` lowering through `root.ai.run`.
 function s29_Extract_request(
   work: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "reliable", reply: `"done"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "reliable", reply: `"done"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s29_Extract", "ns_ai_scenarios", { "work": work },
@@ -16,7 +16,7 @@ function s29_Extract_request(
 
 function s29_Extract_manual(
   work: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "reliable", reply: `"done"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "reliable", reply: `"done"`, attributes: {} },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s29_Extract_request(work, provider = provider))
 }
@@ -40,7 +40,7 @@ test "29: may_replay combines the operation policy with failure facts" {
 
 test "29: fallback selects a later provider after a replay-safe failure" {
   let chain = s29_Flaky { reply: `"never"`, fail_until: 99, calls: 0 }.fallback_to(
-    root.ai.FixtureGenerate { name: "backup", reply: `"backup"`, attributes: {} },
+    root.ai.FakeGenerateProvider { name: "backup", reply: `"backup"`, attributes: {} },
   );
   assert.equal(s29_Extract_manual("work", provider = chain), "backup")
 }
@@ -49,7 +49,7 @@ test "29: fallback does not reinterpret a refusal as provider availability" {
   let primary = s29_Refusing { calls: 0 };
   let status = s29_Extract_manual(
     "work",
-    provider = primary.fallback_to(root.ai.fixture(`"backup"`, name = "backup")),
+    provider = primary.fallback_to(root.ai.fake(`"backup"`, name = "backup")),
   ) catch (e) {
     let refusal: s29_Refusal => "refused",
     _ => "wrong-error",

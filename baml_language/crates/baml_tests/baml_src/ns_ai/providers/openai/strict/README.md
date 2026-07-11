@@ -62,7 +62,7 @@ function ClassifyIncident(text: string) -> Incident {
 }
 ```
 
-Until task desugaring is implemented, the scenario fixtures spell the request
+Until task desugaring is implemented, the scenario fakes spell the request
 and execution explicitly:
 
 ```baml

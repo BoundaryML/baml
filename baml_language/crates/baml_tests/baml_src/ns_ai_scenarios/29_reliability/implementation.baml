@@ -33,7 +33,7 @@ class s29_Flaky {
           _ => throw baml.errors.UnknownError { data: e, message: ["flaky parse"] },
         },
         meta: root.ai.Meta {
-          provider: "flaky", model: "fixture", request_id: null, finish_reason: "stop",
+          provider: "flaky", model: "fake", request_id: null, finish_reason: "stop",
           usage: null, attributes: {}, raw: null,
         },
       }
@@ -81,7 +81,7 @@ class s29_Effectful {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
       self.calls = self.calls + 1;
-      root.ai.FixtureGenerate {
+      root.ai.FakeGenerateProvider {
         name: "effectful",
         reply: `"committed"`,
         attributes: {},

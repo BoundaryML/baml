@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s07_Diagnose(build_log: string) -> s07_Diagnosis {
-//   client: s07_ReasoningFixture {
+//   client: s07_FakeReasoningProvider {
 //     reply: `{"root_cause":"race","fix":"serialize writes","confidence":0.9}`,
 //     effort: "high",
 //   }
@@ -21,7 +21,7 @@
 //   root.ai.run_with_meta(request), preserving reasoning metadata.
 function s07_Diagnose_request(
   build_log: string,
-  provider: root.ai.Provider = s07_ReasoningFixture {
+  provider: root.ai.Provider = s07_FakeReasoningProvider {
     reply: `{"root_cause":"race","fix":"serialize writes","confidence":0.9}`,
     effort: "high",
   },
@@ -40,7 +40,7 @@ function s07_Diagnose_request(
 
 function s07_Diagnose_manual(
   build_log: string,
-  provider: root.ai.Provider = s07_ReasoningFixture {
+  provider: root.ai.Provider = s07_FakeReasoningProvider {
     reply: `{"root_cause":"race","fix":"serialize writes","confidence":0.9}`,
     effort: "high",
   },
@@ -62,13 +62,13 @@ test "07: reasoning configuration does not change the typed value" {
 test "07: reasoning metadata returns beside the value" {
   let r = s07_Diagnose_with_meta_manual(
     "parallel-only failure",
-    s07_ReasoningFixture {
+    s07_FakeReasoningProvider {
       reply: `{"root_cause":"race","fix":"serialize writes","confidence":0.9}`,
       effort: "high",
     },
   );
   assert.not_null(r.meta.attributes.get("reasoning_effort"))
-  assert.equal(r.meta.reasoning_blocks().at(0)?.summary, "fixture reasoning summary")
+  assert.equal(r.meta.reasoning_blocks().at(0)?.summary, "fake reasoning summary")
 }
 
 testset "integ-test-07-reasoning" {

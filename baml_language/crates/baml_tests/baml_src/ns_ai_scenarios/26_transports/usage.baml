@@ -13,7 +13,7 @@
 // compiler-generated names.
 function s26_Ask_request(
   instruction: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s26-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "s26-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s26_Ask", "ns_ai_scenarios", { "instruction": instruction },

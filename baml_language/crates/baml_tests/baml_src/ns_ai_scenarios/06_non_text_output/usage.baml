@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s06_DrawFox(subject: string) -> image {
-//   client: s06_FixtureImage {
+//   client: s06_FakeImageProvider {
 //     base64_data: "aW1hZ2U=",
 //     mime: "image/png",
 //   }
@@ -21,7 +21,7 @@
 //   root.ai.run_with_meta(request), preserving media metadata from the same call.
 function s06_DrawFox_request(
   subject: string,
-  provider: root.ai.Provider = s06_FixtureImage {
+  provider: root.ai.Provider = s06_FakeImageProvider {
     base64_data: "aW1hZ2U=",
     mime: "image/png",
   },
@@ -40,7 +40,7 @@ function s06_DrawFox_request(
 
 function s06_DrawFox_manual(
   subject: string,
-  provider: root.ai.Provider = s06_FixtureImage {
+  provider: root.ai.Provider = s06_FakeImageProvider {
     base64_data: "aW1hZ2U=",
     mime: "image/png",
   },
@@ -64,7 +64,7 @@ test "06: an image result uses the builtin media type" {
 test "06: media-specific facts ride response metadata" {
   let response = s06_DrawFox_with_meta_manual(
     "a fox",
-    s06_FixtureImage { base64_data: "aW1hZ2U=", mime: "image/png" },
+    s06_FakeImageProvider { base64_data: "aW1hZ2U=", mime: "image/png" },
   );
   assert.not_null(response.meta.attributes.get("generation_kind"))
 }

@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s02_ExtractEvent(text: string) -> S02Event {
-//   client: root.ai.FixtureGenerate {
+//   client: root.ai.FakeGenerateProvider {
 //     name: "structured-default",
 //     reply: `{"title":"Launch","date":"2026-01-01","attendees":["Ada"]}`,
 //     attributes: {},
@@ -20,7 +20,7 @@
 //   root.ai.run(request), returning the parsed S02Event.
 function s02_ExtractEvent_request(
   text: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "structured-default",
     reply: `{"title":"Launch","date":"2026-01-01","attendees":["Ada"]}`,
     attributes: {},
@@ -40,7 +40,7 @@ function s02_ExtractEvent_request(
 
 function s02_ExtractEvent_manual(
   text: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "structured-default",
     reply: `{"title":"Launch","date":"2026-01-01","attendees":["Ada"]}`,
     attributes: {},
@@ -51,7 +51,7 @@ function s02_ExtractEvent_manual(
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s02_ExtractOrg(text: string) -> S02OrgNode {
-//   client: root.ai.FixtureGenerate {
+//   client: root.ai.FakeGenerateProvider {
 //     name: "recursive-default",
 //     reply: `{"name":"CEO","reports":[]}`,
 //     attributes: {},
@@ -69,7 +69,7 @@ function s02_ExtractEvent_manual(
 //   root.ai.run(request), returning the parsed S02OrgNode.
 function s02_ExtractOrg_request(
   text: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "recursive-default",
     reply: `{"name":"CEO","reports":[]}`,
     attributes: {},
@@ -89,7 +89,7 @@ function s02_ExtractOrg_request(
 
 function s02_ExtractOrg_manual(
   text: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "recursive-default",
     reply: `{"name":"CEO","reports":[]}`,
     attributes: {},

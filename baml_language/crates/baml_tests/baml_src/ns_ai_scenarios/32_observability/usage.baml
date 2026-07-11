@@ -7,7 +7,7 @@
 // - `s32_Summarize_with_meta_manual` spells `s32_Summarize.with_meta(...)`.
 function s32_Summarize_request(
   text: string,
-  provider: root.ai.Provider = root.ai.metered_fixture(`"summary"`, 1, 1, name = "default"),
+  provider: root.ai.Provider = root.ai.metered_fake(`"summary"`, 1, 1, name = "default"),
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s32_Summarize", "ns_ai_scenarios", { "text": text },
@@ -17,14 +17,14 @@ function s32_Summarize_request(
 
 function s32_Summarize_manual(
   text: string,
-  provider: root.ai.Provider = root.ai.metered_fixture(`"summary"`, 1, 1, name = "default"),
+  provider: root.ai.Provider = root.ai.metered_fake(`"summary"`, 1, 1, name = "default"),
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s32_Summarize_request(text, provider = provider))
 }
 
 function s32_Summarize_with_meta_manual(
   text: string,
-  provider: root.ai.Provider = root.ai.metered_fixture(`"summary"`, 1, 1, name = "default"),
+  provider: root.ai.Provider = root.ai.metered_fake(`"summary"`, 1, 1, name = "default"),
 ) -> root.ai.Response<string> throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run_with_meta<string>(s32_Summarize_request(text, provider = provider))
 }
@@ -32,7 +32,7 @@ function s32_Summarize_with_meta_manual(
 test "32: with-meta returns value and normalized usage from one call" {
   let r = s32_Summarize_with_meta_manual(
     "quarter",
-    provider = root.ai.metered_fixture(`"revenue up"`, 120, 40, name = "openai-shaped"),
+    provider = root.ai.metered_fake(`"revenue up"`, 120, 40, name = "openai-shaped"),
   );
   assert.equal(r.value, "revenue up")
   assert.equal(r.meta.usage?.input_tokens, 120)

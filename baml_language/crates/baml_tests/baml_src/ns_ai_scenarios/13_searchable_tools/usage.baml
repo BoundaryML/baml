@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s13_Support(question: string) -> string {
-//   client: root.ai.FixtureTools {
+//   client: root.ai.FakeToolProvider {
 //     call_name: "tool_search",
 //     call_args: `{"query":"order status"}`,
 //     final_json: `"Order 4821 arrives Tuesday."`,
@@ -22,7 +22,7 @@
 // This scenario intentionally has no plain-call s13_Support_manual(...) wrapper.
 function s13_Support_request(
   question: string,
-  provider: root.ai.Provider = root.ai.FixtureTools {
+  provider: root.ai.Provider = root.ai.FakeToolProvider {
     call_name: "tool_search",
     call_args: `{"query":"order status"}`,
     final_json: `"Order 4821 arrives Tuesday."`,
@@ -71,7 +71,7 @@ test "13: the searchable roster drives the manual agent request" {
   let loaded: string[] = [];
   let outcome = s13_Support_agent_manual(
     "Where is order 4821?",
-    root.ai.FixtureTools {
+    root.ai.FakeToolProvider {
       call_name: "tool_search",
       call_args: `{"query":"order status"}`,
       final_json: `"Order 4821 arrives Tuesday."`,

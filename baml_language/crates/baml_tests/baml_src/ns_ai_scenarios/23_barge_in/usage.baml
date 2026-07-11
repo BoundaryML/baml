@@ -9,7 +9,7 @@
 // compiler-generated names.
 function s23_VoiceTurn_request(
   system: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s23-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "s23-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s23_VoiceTurn", "ns_ai_scenarios", { "system": system },

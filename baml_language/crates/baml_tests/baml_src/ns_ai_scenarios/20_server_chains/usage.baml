@@ -13,7 +13,7 @@
 // compiler-generated names.
 function s20_ContinueChain_request(
   followup: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s20-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "s20-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s20_ContinueChain", "ns_ai_scenarios", { "followup": followup },
@@ -23,13 +23,13 @@ function s20_ContinueChain_request(
 
 function s20_ContinueChain_manual(
   followup: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s20-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "s20-default", reply: `"unused"`, attributes: {} },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s20_ContinueChain_request(followup, provider = provider))
 }
 
 function s20_resume_label(
-  provider: root.ai.FixtureSessions,
+  provider: root.ai.FakeSessionProvider,
   token: root.ai.SessionToken,
 ) -> string throws never {
   let session = provider.resume_session(token) catch (e) {
@@ -40,7 +40,7 @@ function s20_resume_label(
 }
 
 test "20: session.run sends only the new request while the resource retains context" {
-  let provider = root.ai.FixtureSessions { name: "scripted", initial_id: "session-1" };
+  let provider = root.ai.FakeSessionProvider { name: "scripted", initial_id: "session-1" };
   let session = root.ai.open_session(provider, root.ai.SessionOptions {});
   let _ = session.run<string>(s20_ContinueChain_request("The capital of France is Paris."));
   let reply = session.run<string>(s20_ContinueChain_request("What was the capital?"));
@@ -49,13 +49,13 @@ test "20: session.run sends only the new request while the resource retains cont
 }
 
 test "20: a foreign-owner token is refused" {
-  let provider = root.ai.FixtureSessions { name: "scripted", initial_id: "session-1" };
+  let provider = root.ai.FakeSessionProvider { name: "scripted", initial_id: "session-1" };
   let label = s20_resume_label(provider, root.ai.SessionToken { provider: "other", id: "x" });
   assert.contains(label, "foreign session token")
 }
 
 test "20: a SessionToken survives a string round trip" {
-  let provider = root.ai.FixtureSessions { name: "scripted", initial_id: "session-1" };
+  let provider = root.ai.FakeSessionProvider { name: "scripted", initial_id: "session-1" };
   let session = root.ai.open_session(provider, root.ai.SessionOptions {});
   let _ = session.run<string>(s20_ContinueChain_request("secret code SPARROW-7"));
   let saved = baml.json.to_string<root.ai.SessionToken>(session.token());
@@ -67,7 +67,7 @@ test "20: a SessionToken survives a string round trip" {
 
 test "20: two forks from one session share the root and not each other" {
   let session = root.ai.open_session(
-    root.ai.FixtureSessions { name: "scripted", initial_id: "session-1" },
+    root.ai.FakeSessionProvider { name: "scripted", initial_id: "session-1" },
     root.ai.SessionOptions {},
   );
   let _ = session.run<string>(s20_ContinueChain_request("root fact: the sky is blue"));

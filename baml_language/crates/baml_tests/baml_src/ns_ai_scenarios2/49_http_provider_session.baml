@@ -86,7 +86,7 @@ class s49_SessionResource {
         value: self.run<T>(request),
         meta: root.ai.Meta {
           provider: self.owner.display_name(),
-          model: "fixture-session",
+          model: "fake-session",
           request_id: self.id,
           finish_reason: "stop",
           usage: null,

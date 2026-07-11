@@ -7,7 +7,7 @@
 // - `s36_Extract_stream_manual` spells `s36_Extract.stream(...)`.
 function s36_Extract_request(
   text: string,
-  provider: root.ai.Provider = s36_DescribedFixture { reply: `{"subject":"fixture","verdict":"ok"}`, support: root.ai.Support.Yes },
+  provider: root.ai.Provider = s36_FakeDescribedProvider { reply: `{"subject":"fake","verdict":"ok"}`, support: root.ai.Support.Yes },
 ) -> root.ai.Request<s36_Report> {
   root.ai.task_request<s36_Report>(
     provider, "s36_Extract", "ns_ai_scenarios", { "text": text },
@@ -17,7 +17,7 @@ function s36_Extract_request(
 
 function s36_Extract_manual(
   text: string,
-  provider: root.ai.Provider = s36_DescribedFixture { reply: `{"subject":"fixture","verdict":"ok"}`, support: root.ai.Support.Yes },
+  provider: root.ai.Provider = s36_FakeDescribedProvider { reply: `{"subject":"fake","verdict":"ok"}`, support: root.ai.Support.Yes },
 ) -> s36_Report throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<s36_Report>(s36_Extract_request(text, provider = provider))
 }
@@ -30,7 +30,7 @@ function s36_Extract_stream_manual(
 }
 
 test "36: binary capability matching and graded support are separate" {
-  let provider: root.ai.Provider = s36_DescribedFixture {
+  let provider: root.ai.Provider = s36_FakeDescribedProvider {
     reply: `{"subject":"Ada","verdict":"approved"}`, support: root.ai.Support.Conditional,
   };
   assert.is_true(provider is root.ai.Generate)
@@ -38,14 +38,14 @@ test "36: binary capability matching and graded support are separate" {
 }
 
 test "36: an ordinary driver negotiates Generate at runtime" {
-  let r = s36_Extract_manual("Ada approved", provider = s36_DescribedFixture {
+  let r = s36_Extract_manual("Ada approved", provider = s36_FakeDescribedProvider {
     reply: `{"subject":"Ada","verdict":"approved"}`, support: root.ai.Support.Yes,
   });
   assert.equal(r.verdict, "approved")
 }
 
 test "36: streaming absence is a typed capability error" {
-  let label = s36_Extract_stream_manual("x", s36_DescribedFixture {
+  let label = s36_Extract_stream_manual("x", s36_FakeDescribedProvider {
     reply: `{"subject":"x","verdict":"ok"}`, support: root.ai.Support.Yes,
   }) catch (e) {
     let u: baml.errors.Unsupported => "unsupported",

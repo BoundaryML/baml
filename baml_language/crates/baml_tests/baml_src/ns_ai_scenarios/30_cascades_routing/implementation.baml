@@ -13,7 +13,7 @@ class s30_CascadeOutcome {
 // - `s30_Answer_manual` spells the plain `s30_Answer(...)` lowering through `root.ai.run`.
 function s30_Answer_request(
   question: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "answer", reply: `"fixture"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "answer", reply: `"fake"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s30_Answer", "ns_ai_scenarios", { "question": question },
@@ -23,7 +23,7 @@ function s30_Answer_request(
 
 function s30_Answer_manual(
   question: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "answer", reply: `"fixture"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "answer", reply: `"fake"`, attributes: {} },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s30_Answer_request(question, provider = provider))
 }

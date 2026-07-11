@@ -223,7 +223,7 @@ test "37: nullable harness metadata does not poison unrelated SAP parses" {
   // type database while asking for an unrelated primitive result.
   let block = root.ai.ToolCallBlock {
     call: root.ai.ToolCall { id: "call_1", name: "noop", args: "{}" },
-    provider_name: "fixture",
+    provider_name: "fake",
     metadata: null,
   };
   assert.equal(block.provider_metadata(), null)

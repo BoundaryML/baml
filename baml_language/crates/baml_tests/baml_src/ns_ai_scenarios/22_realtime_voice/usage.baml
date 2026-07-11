@@ -9,7 +9,7 @@
 // compiler-generated names.
 function VoiceChat_request(
   system: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s22-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "s22-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "VoiceChat", "ns_ai_scenarios", { "system": system },
@@ -20,7 +20,7 @@ function VoiceChat_request(
 function VoiceChat_live_manual(
   system: string,
   channel: root.ai.Channel,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s22-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "s22-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Live throws baml.errors.UnknownError {
   root.ai.open_live<string>(VoiceChat_request(system, provider = provider), channel)
 }

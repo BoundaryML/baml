@@ -8,7 +8,7 @@ class s04_Meeting {
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s04_Haiku(topic: string) -> string {
-//   client: root.ai.FixtureGenerate { name: "text-default", reply: `"owl moon"`, attributes: {} }
+//   client: root.ai.FakeGenerateProvider { name: "text-default", reply: `"owl moon"`, attributes: {} }
 //   prompt: `Write a short haiku about ${topic}.`
 // }
 
@@ -24,7 +24,7 @@ class s04_Meeting {
 //   root.ai.stream(request), then drains the token stream for the assertion.
 function s04_Haiku_request(
   topic: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "text-default",
     reply: `"owl moon"`,
     attributes: {},
@@ -67,7 +67,7 @@ function s04_stream_tokens(topic: string, provider: root.ai.Provider) -> string 
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s04_ExtractMeeting(blurb: string) -> s04_Meeting {
-//   client: root.ai.FixtureGenerate {
+//   client: root.ai.FakeGenerateProvider {
 //     name: "meeting-default",
 //     reply: `{"title":"Lunch","date":"Friday","attendees":["Ada"]}`,
 //     attributes: {},
@@ -87,7 +87,7 @@ function s04_stream_tokens(topic: string, provider: root.ai.Provider) -> string 
 //   root.ai.stream(request), then drains the structured partial stream.
 function s04_ExtractMeeting_request(
   blurb: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "meeting-default",
     reply: `{"title":"Lunch","date":"Friday","attendees":["Ada"]}`,
     attributes: {},
@@ -144,7 +144,7 @@ function s04_stream_meeting(blurb: string, provider: root.ai.Provider) -> s04_Me
 
 test "04: Generate does not silently pretend to stream" {
   assert.equal(
-    s04_stream_tokens("owls", root.ai.FixtureGenerate {
+    s04_stream_tokens("owls", root.ai.FakeGenerateProvider {
       name: "generate-only", reply: `"owl moon"`, attributes: {},
     }),
     "unsupported",
@@ -153,7 +153,7 @@ test "04: Generate does not silently pretend to stream" {
 
 test "04: the same negotiation rule applies to structured partials" {
   assert.equal(
-    s04_stream_meeting("Lunch Friday", root.ai.fixture(`{"title":"Lunch","date":"Friday","attendees":[]}`)).title,
+    s04_stream_meeting("Lunch Friday", root.ai.fake(`{"title":"Lunch","date":"Friday","attendees":[]}`)).title,
     "unsupported",
   )
 }

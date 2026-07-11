@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s14_Triage(question: string) -> string {
-//   client: root.ai.FixtureTools {
+//   client: root.ai.FakeToolProvider {
 //     call_name: "transfer_to_billing",
 //     call_args: `{"reason":"duplicate charge"}`,
 //     final_json: `"unused"`,
@@ -22,7 +22,7 @@
 // This scenario intentionally has no plain-call s14_Triage_manual(...) wrapper.
 function s14_Triage_request(
   question: string,
-  provider: root.ai.Provider = root.ai.FixtureTools {
+  provider: root.ai.Provider = root.ai.FakeToolProvider {
     call_name: "transfer_to_billing",
     call_args: `{"reason":"duplicate charge"}`,
     final_json: `"unused"`,
@@ -60,13 +60,13 @@ function s14_Triage_agent_manual(
 test "14: application code routes a typed handoff to a specialist" {
   let answer = s14_route(
     "I was charged twice.",
-    root.ai.FixtureTools {
+    root.ai.FakeToolProvider {
       call_name: "transfer_to_billing",
       call_args: `{"reason":"duplicate charge"}`,
       final_json: `"unused"`,
     },
     {
-      "transfer_to_billing": root.ai.FixtureTools {
+      "transfer_to_billing": root.ai.FakeToolProvider {
         call_name: null,
         call_args: "{}",
         final_json: `"Your duplicate charge was refunded."`,
@@ -79,7 +79,7 @@ test "14: application code routes a typed handoff to a specialist" {
 test "14: an unknown target stays explicit" {
   let answer = s14_route(
     "I was charged twice.",
-    root.ai.FixtureTools {
+    root.ai.FakeToolProvider {
       call_name: "transfer_to_billing",
       call_args: `{"reason":"duplicate charge"}`,
       final_json: `"unused"`,
@@ -99,7 +99,7 @@ testset "integ-test-14-multi-agent" {
         base_url: null,
       },
       {
-        "transfer_to_billing": root.ai.FixtureTools {
+        "transfer_to_billing": root.ai.FakeToolProvider {
           call_name: null,
           call_args: "{}",
           final_json: `"Your duplicate charge has been refunded."`,

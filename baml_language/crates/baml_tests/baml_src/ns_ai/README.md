@@ -40,7 +40,7 @@ typed wire models are added only where the BAML implementation owns them.
 4. Scenario code owns application policy through out-of-body implementations,
    middleware, dispatchers, observers, and orchestration helpers.
 
-Protocol data such as tool arguments and deterministic fixtures uses strict
+Protocol data such as tool arguments and deterministic fakes uses strict
 JSON decoding. SAP is reserved for unconstrained model text. Reliability
 wrappers replay only providers and failures that explicitly say replay is safe;
 agent and harness providers are effectful by default.

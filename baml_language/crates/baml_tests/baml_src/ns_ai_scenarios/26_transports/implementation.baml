@@ -4,7 +4,7 @@
 
 function s26_response<T>(reply: string, name: string) -> root.ai.Response<T>
     throws baml.errors.UnknownError {
-  let value = root.ai.fixture_value<T, string>(reply);
+  let value = root.ai.fake_value<T, string>(reply);
   root.ai.Response<T> {
     value: value,
     meta: root.ai.Meta {
@@ -51,7 +51,7 @@ class s26_StreamTransport {
         throws baml.errors.StreamError | baml.errors.UnknownError {
       // Pure BAML cannot manufacture the host stream object. Live OpenAi below
       // proves the same request over native SSE.
-      throw baml.errors.UnknownError { data: null, message: ["offline stream fixture has no host stream"] }
+      throw baml.errors.UnknownError { data: null, message: ["offline stream fake has no host stream"] }
     }
   }
   implements root.ai.TransportInfo {

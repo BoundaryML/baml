@@ -138,7 +138,7 @@ function s39_Pair_manual(
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s39_Summarize(doc: string) -> string {
-//   client: s39_A2aProvider { endpoint: null, headers: {}, fixture_text: `"short"` }
+//   client: s39_A2aProvider { endpoint: null, headers: {}, fake_text: `"short"` }
 //   prompt: `Summarize: ${doc}`
 // }
 
@@ -152,7 +152,7 @@ function s39_Summarize_request(
   provider: root.ai.Provider = s39_A2aProvider {
     endpoint: null,
     headers: {},
-    fixture_text: `"short"`,
+    fake_text: `"short"`,
   },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
@@ -172,7 +172,7 @@ function s39_Summarize_manual(
   provider: root.ai.Provider = s39_A2aProvider {
     endpoint: null,
     headers: {},
-    fixture_text: `"short"`,
+    fake_text: `"short"`,
   },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s39_Summarize_request(doc, provider = provider))
@@ -295,7 +295,7 @@ test "39: the live companion returns a resource and the caller owns cleanup" {
 
 test "39: a SubAgent forwards Generate but withholds nested extension capabilities" {
   let child: root.ai.Provider = s39_SubAgent {
-    inner: s39_A2aProvider { endpoint: null, headers: {}, fixture_text: `"reviewed"` },
+    inner: s39_A2aProvider { endpoint: null, headers: {}, fake_text: `"reviewed"` },
     description: "Review only; no nested agents.",
   };
   assert.equal(s39_Summarize_manual("patch", provider = child), "reviewed")
@@ -312,7 +312,7 @@ testset "integ-test-39-harness-extensibility" {
     let peer = s39_A2aProvider {
       endpoint: baml.env.get_or_panic("A2A_AGENT_URL"),
       headers: { "authorization": "Bearer " + baml.env.get_or_panic("A2A_TOKEN") },
-      fixture_text: null,
+      fake_text: null,
     };
     let answer = s39_Summarize_manual("Summarize this integration probe.", provider = peer);
     assert.is_true(answer.length() > 0)

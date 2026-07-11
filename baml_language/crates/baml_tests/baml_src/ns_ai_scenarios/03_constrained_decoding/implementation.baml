@@ -3,7 +3,7 @@ enum s03_Sentiment {
   Negative
 }
 
-class s03_ConstrainedFixture {
+class s03_FakeConstrainedProvider {
   reply: string,
 
   implements root.ai.Provider {}
@@ -11,8 +11,8 @@ class s03_ConstrainedFixture {
   implements root.ai.Generate {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
-      root.ai.FixtureGenerate {
-        name: "constrained-fixture",
+      root.ai.FakeGenerateProvider {
+        name: "constrained-fake",
         reply: self.reply,
         attributes: {},
       }.generate<T>(request)
@@ -25,8 +25,8 @@ class s03_ConstrainedFixture {
       request: root.ai.Request<T>,
       constraint: root.ai.ChoiceConstraint,
     ) -> root.ai.Response<T> throws baml.errors.CallError | baml.errors.UnknownError {
-      root.ai.FixtureGenerate {
-        name: "constrained-fixture",
+      root.ai.FakeGenerateProvider {
+        name: "constrained-fake",
         reply: self.reply,
         attributes: { "constraint_values": constraint.values },
       }.generate<T>(request)

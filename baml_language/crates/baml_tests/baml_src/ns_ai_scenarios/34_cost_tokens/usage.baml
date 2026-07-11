@@ -7,8 +7,8 @@
 // - `s34_Classify_with_meta_manual` spells `s34_Classify.with_meta(...)`.
 function s34_Classify_request(
   text: string,
-  provider: root.ai.Provider = root.ai.metered_fixture(
-    `{"category":"other","severity":1,"summary":"fixture"}`, 1, 1, name = "metered",
+  provider: root.ai.Provider = root.ai.metered_fake(
+    `{"category":"other","severity":1,"summary":"fake"}`, 1, 1, name = "metered",
   ),
 ) -> root.ai.Request<s34_Ticket> {
   root.ai.task_request<s34_Ticket>(
@@ -19,8 +19,8 @@ function s34_Classify_request(
 
 function s34_Classify_manual(
   text: string,
-  provider: root.ai.Provider = root.ai.metered_fixture(
-    `{"category":"other","severity":1,"summary":"fixture"}`, 1, 1, name = "metered",
+  provider: root.ai.Provider = root.ai.metered_fake(
+    `{"category":"other","severity":1,"summary":"fake"}`, 1, 1, name = "metered",
   ),
 ) -> s34_Ticket throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<s34_Ticket>(s34_Classify_request(text, provider = provider))
@@ -28,8 +28,8 @@ function s34_Classify_manual(
 
 function s34_Classify_with_meta_manual(
   text: string,
-  provider: root.ai.Provider = root.ai.metered_fixture(
-    `{"category":"other","severity":1,"summary":"fixture"}`, 1, 1, name = "metered",
+  provider: root.ai.Provider = root.ai.metered_fake(
+    `{"category":"other","severity":1,"summary":"fake"}`, 1, 1, name = "metered",
   ),
 ) -> root.ai.Response<s34_Ticket> throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run_with_meta<s34_Ticket>(s34_Classify_request(text, provider = provider))
@@ -38,7 +38,7 @@ function s34_Classify_with_meta_manual(
 test "34: normalized usage can be priced by application policy" {
   let r = s34_Classify_with_meta_manual(
     "late fee",
-    provider = root.ai.metered_fixture(
+    provider = root.ai.metered_fake(
       `{"category":"billing","severity":3,"summary":"late fee"}`,
       1200,
       400,
@@ -60,7 +60,7 @@ test "34: a batch consumes keyed semantic requests" {
   ];
   let batch = root.ai.submit_batch<s34_Ticket>(provider, requests, (r, i) -> { `ticket-${i}` });
   assert.equal(batch.id, "batch-2")
-  assert.equal(batch.owner, "batch-fixture")
+  assert.equal(batch.owner, "batch-fake")
 }
 
 testset "integ-test-34-cost-tokens" {

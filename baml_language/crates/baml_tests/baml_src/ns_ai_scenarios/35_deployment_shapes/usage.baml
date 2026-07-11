@@ -8,7 +8,7 @@ class s35_Summary { topic: string, bullets: string[] }
 // - `s35_Analyze_manual` spells the plain `s35_Analyze(...)` lowering through `root.ai.run`.
 function s35_Analyze_request(
   text: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "analysis", reply: `{"topic":"fixture","bullets":[]}`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "analysis", reply: `{"topic":"fake","bullets":[]}`, attributes: {} },
 ) -> root.ai.Request<s35_Summary> {
   root.ai.task_request<s35_Summary>(
     provider, "s35_Analyze", "ns_ai_scenarios", { "text": text },
@@ -19,16 +19,16 @@ function s35_Analyze_request(
 
 function s35_Analyze_manual(
   text: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "analysis", reply: `{"topic":"fixture","bullets":[]}`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "analysis", reply: `{"topic":"fake","bullets":[]}`, attributes: {} },
 ) -> s35_Summary throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<s35_Summary>(s35_Analyze_request(text, provider = provider))
 }
 
 test "35: the same task body runs under different deployment homes" {
-  let server = s35_Analyze_manual("launch", provider = root.ai.FixtureGenerate {
+  let server = s35_Analyze_manual("launch", provider = root.ai.FakeGenerateProvider {
     name: "server", reply: `{"topic":"Launch","bullets":["on time"]}`, attributes: {},
   });
-  let local = s35_Analyze_manual("nightly", provider = root.ai.FixtureGenerate {
+  let local = s35_Analyze_manual("nightly", provider = root.ai.FakeGenerateProvider {
     name: "local", reply: `{"topic":"Nightly","bullets":["passed"]}`, attributes: {},
   });
   assert.equal(server.topic, "Launch")

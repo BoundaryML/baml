@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s09_Weather(city: string) -> string {
-//   client: root.ai.FixtureTools {
+//   client: root.ai.FakeToolProvider {
 //     call_name: "get_weather",
 //     call_args: `{"city":"Tokyo"}`,
 //     final_json: `"It is cloudy and 18 C."`,
@@ -23,7 +23,7 @@
 // This scenario intentionally has no plain-call s09_Weather_manual(...) wrapper.
 function s09_Weather_request(
   city: string,
-  provider: root.ai.Provider = root.ai.FixtureTools {
+  provider: root.ai.Provider = root.ai.FakeToolProvider {
     call_name: "get_weather",
     call_args: `{"city":"Tokyo"}`,
     final_json: `"It is cloudy and 18 C."`,
@@ -105,7 +105,7 @@ function s09_MarkComplete_agent_manual(
 test "09: a call-time roster drives a typed tool loop" {
   let outcome = s09_Weather_agent_manual(
     "Tokyo",
-    root.ai.FixtureTools {
+    root.ai.FakeToolProvider {
       call_name: "get_weather",
       call_args: `{"city":"Tokyo"}`,
       final_json: `"It is cloudy and 18 C."`,

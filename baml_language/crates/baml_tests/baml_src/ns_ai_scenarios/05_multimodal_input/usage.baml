@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s05_DescribeImage(img: image) -> s05_Caption {
-//   client: root.ai.FixtureGenerate {
+//   client: root.ai.FakeGenerateProvider {
 //     name: "vision-default",
 //     reply: `{"text":"a red square","tags":["red","square"]}`,
 //     attributes: {},
@@ -20,7 +20,7 @@
 //   lowering: root.ai.run(request).
 function s05_DescribeImage_request(
   img: image,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "vision-default",
     reply: `{"text":"a red square","tags":["red","square"]}`,
     attributes: {},
@@ -47,7 +47,7 @@ function s05_DescribeImage_request(
 
 function s05_DescribeImage_manual(
   img: image,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "vision-default",
     reply: `{"text":"a red square","tags":["red","square"]}`,
     attributes: {},
@@ -96,7 +96,7 @@ testset "integ-test-05-multimodal" {
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s05_ReadPdf(document: pdf) -> string {
-//   client: root.ai.FixtureGenerate {
+//   client: root.ai.FakeGenerateProvider {
 //     name: "pdf-default",
 //     reply: `"ORBIT-27"`,
 //     attributes: {},
@@ -114,7 +114,7 @@ testset "integ-test-05-multimodal" {
 //   root.ai.run(request).
 function s05_ReadPdf_request(
   document: pdf,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "pdf-default",
     reply: `"ORBIT-27"`,
     attributes: {},
@@ -144,7 +144,7 @@ function s05_ReadPdf_request(
 
 function s05_ReadPdf_manual(
   document: pdf,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "pdf-default",
     reply: `"ORBIT-27"`,
     attributes: {},

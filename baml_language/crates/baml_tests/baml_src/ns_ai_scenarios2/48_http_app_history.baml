@@ -45,14 +45,14 @@ class s48_EchoProvider {
       let value: T = baml.sap.parse<T>(self.reply) catch (e) {
         _ => throw baml.errors.UnknownError {
           data: e,
-          message: ["fixture response did not match the requested output type"],
+          message: ["fake response did not match the requested output type"],
         },
       };
       root.ai.Response<T> {
         value: value,
         meta: root.ai.Meta {
           provider: "s48-echo",
-          model: "fixture",
+          model: "fake",
           request_id: null,
           finish_reason: "stop",
           usage: null,
@@ -85,7 +85,7 @@ class s48_EchoProvider {
 // - `s48_ContinueConversation_request` represents
 //   `s48_ContinueConversation.request(...)`.
 // - `s48_ContinueConversation_desugared` spells the plain task call through
-//   `root.ai.run`; its `_desugared` suffix exists only in this reference fixture.
+//   `root.ai.run`; its `_desugared` suffix exists only in this reference fake.
 // Tools are intentionally absent; a caller/provider can add them later.
 function s48_ContinueConversation_request(
   history_json: string,

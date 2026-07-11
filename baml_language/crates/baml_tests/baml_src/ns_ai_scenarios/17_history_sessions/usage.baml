@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s17_Chat(history: root.ai.ChatMessage[], latest: string) -> string {
-//   client: root.ai.FixtureGenerate { name: "chat-default", reply: `"Fred"`, attributes: {} }
+//   client: root.ai.FakeGenerateProvider { name: "chat-default", reply: `"Fred"`, attributes: {} }
 //   prompt: `Conversation so far:\n${root.ai.render_messages(history)}\nuser: ${latest}`
 // }
 
@@ -17,7 +17,7 @@
 function s17_Chat_request(
   history: root.ai.ChatMessage[],
   latest: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "chat-default", reply: `"Fred"`, attributes: {},
   },
 ) -> root.ai.Request<string> {
@@ -39,7 +39,7 @@ function s17_Chat_request(
 function s17_Chat_manual(
   history: root.ai.ChatMessage[],
   latest: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "chat-default", reply: `"Fred"`, attributes: {},
   },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {

@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s11_Research(question: string) -> string {
-//   client: root.ai.FixtureTools {
+//   client: root.ai.FakeToolProvider {
 //     call_name: "search",
 //     call_args: `{"query":"Tokyo"}`,
 //     final_json: `"Tokyo is mild."`,
@@ -22,7 +22,7 @@
 // This scenario intentionally has no plain-call s11_Research_manual(...) wrapper.
 function s11_Research_request(
   question: string,
-  provider: root.ai.Provider = root.ai.FixtureTools {
+  provider: root.ai.Provider = root.ai.FakeToolProvider {
     call_name: "search",
     call_args: `{"query":"Tokyo"}`,
     final_json: `"Tokyo is mild."`,

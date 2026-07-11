@@ -53,7 +53,7 @@ class s27_ScriptedJobs {
     ) -> root.ai.Job<T> throws baml.errors.UnknownError {
       let key = options.idempotency_key ?? "unkeyed";
       let id = "job-" + key;
-      let result = root.ai.fixture_value<T, string>("done " + id);
+      let result = root.ai.fake_value<T, string>("done " + id);
       s27_ScriptedJob<T> {
         id: id, owner: self.owner, result: result,
         remaining_polls: self.remaining_polls, cancelled: false,
@@ -65,7 +65,7 @@ class s27_ScriptedJobs {
       if (token.provider != self.owner) {
         throw baml.errors.UnknownError { data: token, message: ["job token belongs to a different provider"] };
       }
-      let result = root.ai.fixture_value<T, string>("done " + token.id);
+      let result = root.ai.fake_value<T, string>("done " + token.id);
       s27_ScriptedJob<T> {
         id: token.id, owner: self.owner, result: result,
         remaining_polls: 0, cancelled: false,

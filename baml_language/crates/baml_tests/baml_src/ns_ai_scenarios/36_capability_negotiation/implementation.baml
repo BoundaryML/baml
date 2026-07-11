@@ -1,19 +1,19 @@
 // 36 — interfaces answer operation support; descriptors answer graded support.
 class s36_Report { subject: string, verdict: string }
 
-class s36_DescribedFixture {
+class s36_FakeDescribedProvider {
   reply: string,
   support: root.ai.Support,
-  implements root.ai.Provider { function display_name(self) -> string throws never { "described-fixture" } }
+  implements root.ai.Provider { function display_name(self) -> string throws never { "described-fake" } }
   implements root.ai.Generate {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
       root.ai.Response<T> {
         value: baml.json.from_string<T>(self.reply) catch (e) {
-          _ => throw baml.errors.UnknownError { data: e, message: ["descriptor fixture parse"] },
+          _ => throw baml.errors.UnknownError { data: e, message: ["descriptor fake parse"] },
         },
         meta: root.ai.Meta {
-          provider: "described-fixture", model: null, request_id: null, finish_reason: "stop",
+          provider: "described-fake", model: null, request_id: null, finish_reason: "stop",
           usage: null, attributes: {}, raw: null,
         },
       }

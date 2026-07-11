@@ -18,7 +18,7 @@ class EchoProvider {
                 value: value,
                 meta: root.ai.Meta {
                     provider: "echo",
-                    model: "fixture",
+                    model: "fake",
                     request_id: null,
                     finish_reason: "stop",
                     usage: null,

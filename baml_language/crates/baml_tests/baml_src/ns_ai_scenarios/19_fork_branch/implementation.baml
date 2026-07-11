@@ -37,7 +37,7 @@ class s19_ForkEcho {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
       let rendered = baml.llm.prompt_to_text(request.prompt);
-      let value = root.ai.fixture_value<T, string>(rendered);
+      let value = root.ai.fake_value<T, string>(rendered);
       root.ai.Response<T> {
         value: value,
         meta: root.ai.Meta {

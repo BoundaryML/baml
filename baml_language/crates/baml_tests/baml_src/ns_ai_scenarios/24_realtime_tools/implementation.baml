@@ -2,7 +2,7 @@
 class s24_Transcript { called: bool, output: string }
 
 class s24_LiveTools {
-  implements root.ai.Provider { function display_name(self) -> string throws never { "live-tools-fixture" } }
+  implements root.ai.Provider { function display_name(self) -> string throws never { "live-tools-fake" } }
   implements root.ai.Tools {
     type Transcript = s24_Transcript
     function begin<T>(self, request: root.ai.Request<T>) -> s24_Transcript
@@ -16,7 +16,7 @@ class s24_LiveTools {
           id: "weather-1", name: "get_weather", args: `{"city":"Paris"}`,
         }] };
       }
-      root.ai.fixture_value<T, string>(`The weather is ${transcript.output}.`)
+      root.ai.fake_value<T, string>(`The weather is ${transcript.output}.`)
     }
     function submit(self, transcript: s24_Transcript, results: root.ai.ToolResult[]) -> s24_Transcript
         throws baml.errors.ToolError | baml.errors.UnknownError {

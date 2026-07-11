@@ -15,7 +15,7 @@
 function s19_ContinueBranch_request(
   history: string,
   continuation: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s19-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "s19-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s19_ContinueBranch", "ns_ai_scenarios",
@@ -28,7 +28,7 @@ function s19_ContinueBranch_request(
 function s19_ContinueBranch_manual(
   history: string,
   continuation: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s19-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "s19-default", reply: `"unused"`, attributes: {} },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s19_ContinueBranch_request(history, continuation, provider = provider))
 }
@@ -103,7 +103,7 @@ test "19: fan out three branches from a shared prefix and pick a winner" {
 
 test "19: a forkable session produces a distinct resource" {
   let session = root.ai.open_session(
-    root.ai.FixtureSessions { name: "s19-sessions", initial_id: "root" },
+    root.ai.FakeSessionProvider { name: "s19-sessions", initial_id: "root" },
     root.ai.SessionOptions {},
   );
   let id = match (session) {

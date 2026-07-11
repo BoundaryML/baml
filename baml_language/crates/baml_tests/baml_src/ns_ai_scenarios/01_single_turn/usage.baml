@@ -2,9 +2,9 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s01_Summarize(work: string) -> string {
-//   client: root.ai.FixtureGenerate {
+//   client: root.ai.FakeGenerateProvider {
 //     name: "default-summary-model",
-//     reply: `"fixture summary"`,
+//     reply: `"fake summary"`,
 //     attributes: {},
 //   }
 //   prompt: `Summarize this in one sentence: ${work}`
@@ -22,9 +22,9 @@
 //   root.ai.run_with_meta(request), preserving metadata from the same call.
 function s01_Summarize_request(
   work: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "default-summary-model",
-    reply: `"fixture summary"`,
+    reply: `"fake summary"`,
     attributes: {},
   },
 ) -> root.ai.Request<string> {
@@ -42,9 +42,9 @@ function s01_Summarize_request(
 
 function s01_Summarize_manual(
   work: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "default-summary-model",
-    reply: `"fixture summary"`,
+    reply: `"fake summary"`,
     attributes: {},
   },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
@@ -59,20 +59,20 @@ function s01_Summarize_with_meta_manual(
 }
 
 test "01: manual request runs through Generate" {
-  assert.equal(s01_Summarize_manual("a long story"), "fixture summary")
+  assert.equal(s01_Summarize_manual("a long story"), "fake summary")
 }
 
 test "01: with-meta uses the same request and does not make another call" {
   let r = s01_Summarize_with_meta_manual(
     "a long story",
-    root.ai.FixtureGenerate {
-      name: "measured-fixture",
+    root.ai.FakeGenerateProvider {
+      name: "measured-fake",
       reply: `"short"`,
       attributes: { "route": "primary" },
     },
   );
   assert.equal(r.value, "short")
-  assert.equal(r.meta.provider, "measured-fixture")
+  assert.equal(r.meta.provider, "measured-fake")
   assert.equal(r.meta.usage?.output_tokens, 2)
 }
 

@@ -13,7 +13,7 @@ class s33_Verdict {
 // - `s33_SupportReply_manual` spells the plain `s33_SupportReply(...)` lowering.
 function s33_SupportReply_request(
   question: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "support", reply: `"Please see the refund policy."`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "support", reply: `"Please see the refund policy."`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s33_SupportReply", "ns_ai_scenarios", { "question": question },
@@ -24,7 +24,7 @@ function s33_SupportReply_request(
 
 function s33_SupportReply_manual(
   question: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "support", reply: `"Please see the refund policy."`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "support", reply: `"Please see the refund policy."`, attributes: {} },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s33_SupportReply_request(question, provider = provider))
 }
@@ -38,7 +38,7 @@ function s33_SupportReply_manual(
 function s33_Judge_request(
   question: string,
   answer: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "judge", reply: `{"pass":true,"score":5,"reasoning":"fixture"}`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "judge", reply: `{"pass":true,"score":5,"reasoning":"fake"}`, attributes: {} },
 ) -> root.ai.Request<s33_Verdict> {
   root.ai.task_request<s33_Verdict>(
     provider, "s33_Judge", "ns_ai_scenarios", { "question": question, "answer": answer },
@@ -53,7 +53,7 @@ function s33_Judge_request(
 function s33_Judge_manual(
   question: string,
   answer: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "judge", reply: `{"pass":true,"score":5,"reasoning":"fixture"}`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider { name: "judge", reply: `{"pass":true,"score":5,"reasoning":"fake"}`, attributes: {} },
 ) -> s33_Verdict throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<s33_Verdict>(s33_Judge_request(question, answer, provider = provider))
 }
@@ -85,14 +85,14 @@ testset "33 eval suite gates on a pass-rate threshold" with testing.PassRate(0.7
     assert.contains(s33_SupportReply_manual("refund?"), "refund")
   }
   test "33 suite: hours case clears the exact-match scorer" {
-    let out = s33_SupportReply_manual("hours?", provider = root.ai.FixtureGenerate { name: "case", reply: `"9am-5pm"`, attributes: {} });
+    let out = s33_SupportReply_manual("hours?", provider = root.ai.FakeGenerateProvider { name: "case", reply: `"9am-5pm"`, attributes: {} });
     assert.equal(out, "9am-5pm")
   }
   test "33 suite: judge approves a good answer" {
     assert.is_true(s33_Judge_manual("q", "good").pass)
   }
   test "33 suite: a policy regression is tolerated under the threshold" {
-    let out = s33_SupportReply_manual("returns?", provider = root.ai.FixtureGenerate { name: "case", reply: `"whenever"`, attributes: {} });
+    let out = s33_SupportReply_manual("returns?", provider = root.ai.FakeGenerateProvider { name: "case", reply: `"whenever"`, attributes: {} });
     assert.contains(out, "policy")
   }
 }

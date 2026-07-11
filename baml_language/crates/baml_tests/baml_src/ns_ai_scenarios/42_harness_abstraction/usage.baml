@@ -272,7 +272,7 @@ test "42: runtime feature parity leaks through one documented escape hatch" {
 
 test "42: usage aggregates across model turns independently of events" {
   let first = root.ai.Meta {
-    provider: "fixture", model: "m", request_id: "1", finish_reason: "tool_calls",
+    provider: "fake", model: "m", request_id: "1", finish_reason: "tool_calls",
     usage: root.ai.Usage {
       input_tokens: 10, output_tokens: 3, cached_input_tokens: 4,
       reasoning_tokens: 2, cost_usd: 0.01,
@@ -280,7 +280,7 @@ test "42: usage aggregates across model turns independently of events" {
     attributes: {}, raw: null,
   };
   let second = root.ai.Meta {
-    provider: "fixture", model: "m", request_id: "2", finish_reason: "stop",
+    provider: "fake", model: "m", request_id: "2", finish_reason: "stop",
     usage: root.ai.Usage {
       input_tokens: 20, output_tokens: 7, cached_input_tokens: 0,
       reasoning_tokens: 5, cost_usd: 0.02,
@@ -296,7 +296,7 @@ test "42: usage aggregates across model turns independently of events" {
 
 test "42: a HarnessAgent may also wrap a plain Generate provider" {
   let agent: root.ai.Provider = root.ai.HarnessAgent {
-    inner: root.ai.FixtureGenerate {
+    inner: root.ai.FakeGenerateProvider {
       name: "plain-model",
       reply: `{"files_changed":[],"summary":"plain generate"}`,
       attributes: {},

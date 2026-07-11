@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s10_ResearchIt(question: string) -> string {
-//   client: root.ai.FixtureTools {
+//   client: root.ai.FakeToolProvider {
 //     call_name: "search",
 //     call_args: `{"query":"BEPv2"}`,
 //     final_json: `"BEPv2 uses typed requests."`,
@@ -21,7 +21,7 @@
 // This scenario intentionally has no plain-call s10_ResearchIt_manual(...) wrapper.
 function s10_ResearchIt_request(
   question: string,
-  provider: root.ai.Provider = root.ai.FixtureTools {
+  provider: root.ai.Provider = root.ai.FakeToolProvider {
     call_name: "search",
     call_args: `{"query":"BEPv2"}`,
     final_json: `"BEPv2 uses typed requests."`,
@@ -63,7 +63,7 @@ function s10_ResearchIt_agent_manual(
 test "10: a completed loop returns Done<T>" {
   let result = s10_ResearchIt_agent_manual(
     "the request design",
-    root.ai.FixtureTools {
+    root.ai.FakeToolProvider {
       call_name: "search",
       call_args: `{"query":"BEPv2"}`,
       final_json: `"BEPv2 uses typed requests."`,
@@ -80,7 +80,7 @@ test "10: a completed loop returns Done<T>" {
 test "10: a deliberate step limit returns BudgetReached" {
   let result = s10_ResearchIt_agent_manual(
     "the request design",
-    root.ai.FixtureTools {
+    root.ai.FakeToolProvider {
       call_name: "search",
       call_args: `{"query":"BEPv2"}`,
       final_json: `"unused"`,

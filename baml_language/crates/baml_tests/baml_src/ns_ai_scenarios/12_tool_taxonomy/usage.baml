@@ -13,7 +13,7 @@ function s12_transfer_tool() -> root.ai.Tool throws never {
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s12_Investigate(question: string) -> string {
-//   client: root.ai.FixtureTools {
+//   client: root.ai.FakeToolProvider {
 //     call_name: "transfer_to_human",
 //     call_args: `{"reason":"approval required"}`,
 //     final_json: `"unused"`,
@@ -32,7 +32,7 @@ function s12_transfer_tool() -> root.ai.Tool throws never {
 // This scenario intentionally has no plain-call s12_Investigate_manual(...) wrapper.
 function s12_Investigate_request(
   question: string,
-  provider: root.ai.Provider = root.ai.FixtureTools {
+  provider: root.ai.Provider = root.ai.FakeToolProvider {
     call_name: "transfer_to_human",
     call_args: `{"reason":"approval required"}`,
     final_json: `"unused"`,
@@ -69,7 +69,7 @@ function s12_Investigate_agent_manual(
 test "12: a handoff tool yields a typed Handoff without dispatch" {
   let outcome = s12_Investigate_agent_manual(
     "a sensitive refund",
-    root.ai.FixtureTools {
+    root.ai.FakeToolProvider {
       call_name: "transfer_to_human",
       call_args: `{"reason":"approval required"}`,
       final_json: `"unused"`,

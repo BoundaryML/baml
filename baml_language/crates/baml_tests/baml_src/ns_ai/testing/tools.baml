@@ -1,4 +1,4 @@
-class FixtureToolTranscript {
+class FakeToolTranscript {
   turn: int,
   call_name: string?,
   call_args: string,
@@ -6,21 +6,21 @@ class FixtureToolTranscript {
 }
 
 // One optional tool call followed by one exact JSON final value.
-class FixtureTools {
+class FakeToolProvider {
   call_name: string?,
   call_args: string,
   final_json: string,
 
   implements Provider {
-    function display_name(self) -> string throws never { "fixture-tools" }
+    function display_name(self) -> string throws never { "fake-tools" }
   }
 
   implements Tools {
-    type Transcript = FixtureToolTranscript
+    type Transcript = FakeToolTranscript
 
-    function begin<T>(self, request: Request<T>) -> FixtureToolTranscript
+    function begin<T>(self, request: Request<T>) -> FakeToolTranscript
         throws baml.errors.ToolError | baml.errors.UnknownError {
-      FixtureToolTranscript {
+      FakeToolTranscript {
         turn: 0,
         call_name: self.call_name,
         call_args: self.call_args,
@@ -28,7 +28,7 @@ class FixtureTools {
       }
     }
 
-    function step<T>(self, transcript: FixtureToolTranscript) -> T | ToolCalls
+    function step<T>(self, transcript: FakeToolTranscript) -> T | ToolCalls
         throws baml.errors.ToolError | baml.errors.UnknownError {
       match (transcript.call_name) {
         let name: string if transcript.turn == 0 => return ToolCalls {
@@ -39,17 +39,17 @@ class FixtureTools {
       baml.json.from_string<T>(transcript.final_json) catch (e) {
         _ => throw baml.errors.UnknownError {
           data: e,
-          message: ["fixture final value did not match the requested output type"],
+          message: ["fake final value did not match the requested output type"],
         },
       }
     }
 
     function submit(
       self,
-      transcript: FixtureToolTranscript,
+      transcript: FakeToolTranscript,
       results: ToolResult[],
-    ) -> FixtureToolTranscript throws baml.errors.ToolError | baml.errors.UnknownError {
-      FixtureToolTranscript {
+    ) -> FakeToolTranscript throws baml.errors.ToolError | baml.errors.UnknownError {
+      FakeToolTranscript {
         turn: transcript.turn + 1,
         call_name: transcript.call_name,
         call_args: transcript.call_args,

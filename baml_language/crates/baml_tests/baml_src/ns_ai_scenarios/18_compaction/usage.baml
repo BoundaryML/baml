@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s18_SummarizeHead(head: string) -> string {
-//   client: root.ai.FixtureGenerate {
+//   client: root.ai.FakeGenerateProvider {
 //     name: "summary-default",
 //     reply: `"Venue and catering are booked."`,
 //     attributes: {},
@@ -19,7 +19,7 @@
 // compiler-generated names.
 function s18_SummarizeHead_request(
   head: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "summary-default",
     reply: `"Venue and catering are booked."`,
     attributes: {},
@@ -42,7 +42,7 @@ function s18_SummarizeHead_request(
 
 function s18_SummarizeHead_manual(
   head: string,
-  provider: root.ai.Provider = root.ai.FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FakeGenerateProvider {
     name: "summary-default",
     reply: `"Venue and catering are booked."`,
     attributes: {},
@@ -57,7 +57,7 @@ test "18: summarize-and-replace keeps the recent tail verbatim" {
     root.ai.ChatMessage.assistant("venue booked"),
     root.ai.ChatMessage.user("what is left?"),
   ];
-  let compacted = s18_compact_history(history, 1, root.ai.FixtureGenerate {
+  let compacted = s18_compact_history(history, 1, root.ai.FakeGenerateProvider {
     name: "summary",
     reply: `"The venue is booked."`,
     attributes: {},
@@ -68,7 +68,7 @@ test "18: summarize-and-replace keeps the recent tail verbatim" {
 
 test "18: short history is returned without a model call" {
   let history = [root.ai.ChatMessage.user("hi")];
-  assert.equal(s18_compact_history(history, 2, root.ai.fixture(`"unused"`)), history)
+  assert.equal(s18_compact_history(history, 2, root.ai.fake(`"unused"`)), history)
 }
 
 testset "integ-test-18-compaction" {

@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s08_Research(question: string) -> s08_Answer {
-//   client: s08_EnrichedFixture {
+//   client: s08_FakeEnrichedProvider {
 //     reply: `{"text":"Water boils at 100 C at sea level."}`,
 //     source_url: "https://example.test/water",
 //   }
@@ -21,7 +21,7 @@
 //   root.ai.run_with_meta(request), preserving enrichment from the same call.
 function s08_Research_request(
   question: string,
-  provider: root.ai.Provider = s08_EnrichedFixture {
+  provider: root.ai.Provider = s08_FakeEnrichedProvider {
     reply: `{"text":"Water boils at 100 C at sea level."}`,
     source_url: "https://example.test/water",
   },
@@ -40,7 +40,7 @@ function s08_Research_request(
 
 function s08_Research_manual(
   question: string,
-  provider: root.ai.Provider = s08_EnrichedFixture {
+  provider: root.ai.Provider = s08_FakeEnrichedProvider {
     reply: `{"text":"Water boils at 100 C at sea level."}`,
     source_url: "https://example.test/water",
   },
@@ -62,7 +62,7 @@ test "08: enriched output keeps the answer strongly typed" {
 test "08: provider-specific enrichment stays in generic metadata" {
   let r = s08_Research_with_meta_manual(
     "When does water boil?",
-    s08_EnrichedFixture {
+    s08_FakeEnrichedProvider {
       reply: `{"text":"Water boils at 100 C at sea level."}`,
       source_url: "https://example.test/water",
     },

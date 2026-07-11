@@ -23,9 +23,9 @@ class ProviderSession {
   }
 }
 
-// Provider-owned deterministic text session. The public token keeps identity in
-// id and exact fixture continuation state in sealed.
-class FixtureSession {
+// Provider-owned deterministic fake session. The public token keeps identity
+// in id and exact continuation state in sealed.
+class FakeSession {
   id: string,
   history: string,
   owner: Provider,
@@ -34,7 +34,7 @@ class FixtureSession {
     function run<T>(self, request: Request<T>) -> T throws baml.errors.UnknownError {
       let turn = baml.llm.prompt_to_text(request.for_provider(self.owner).prompt);
       self.history = if (self.history == "") { turn } else { self.history + "\n" + turn };
-      fixture_value<T, string>(self.history)
+      fake_value<T, string>(self.history)
     }
     function run_with_meta<T>(self, request: Request<T>) -> Response<T>
         throws baml.errors.UnknownError {
@@ -42,7 +42,7 @@ class FixtureSession {
         value: self.run<T>(request),
         meta: Meta {
           provider: self.owner.display_name(),
-          model: "fixture",
+          model: "fake",
           request_id: self.id,
           finish_reason: "stop",
           usage: null,
@@ -56,7 +56,7 @@ class FixtureSession {
       SessionToken {
         provider: self.owner.display_name(),
         id: self.id,
-        runtime: "fixture-session",
+        runtime: "fake-session",
         sealed: self.history,
       }
     }
@@ -65,12 +65,12 @@ class FixtureSession {
 
   implements ForkableSession {
     function fork(self) -> ForkableSession throws baml.errors.UnknownError {
-      FixtureSession { id: self.id + "-fork", history: self.history, owner: self.owner }
+      FakeSession { id: self.id + "-fork", history: self.history, owner: self.owner }
     }
   }
 }
 
-class FixtureSessions {
+class FakeSessionProvider {
   name: string,
   initial_id: string,
 
@@ -81,7 +81,7 @@ class FixtureSessions {
   implements Sessions {
     function open_session(self, options: SessionOptions) -> Session
         throws baml.errors.UnknownError {
-      FixtureSession { id: self.initial_id, history: "", owner: self }
+      FakeSession { id: self.initial_id, history: "", owner: self }
     }
     function resume_session(self, token: SessionToken) -> Session
         throws baml.errors.UnknownError {
@@ -91,7 +91,7 @@ class FixtureSessions {
           message: ["foreign session token owned by " + token.provider],
         };
       }
-      FixtureSession {
+      FakeSession {
         id: token.id,
         history: token.sealed ?? "",
         owner: self,

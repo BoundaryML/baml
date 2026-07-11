@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s03_Classify(text: string) -> s03_Sentiment {
-//   client: s03_ConstrainedFixture { reply: `"Positive"` }
+//   client: s03_FakeConstrainedProvider { reply: `"Positive"` }
 //   prompt: `Classify ${text} as Positive or Negative. ${ctx.output_format}`
 // }
 
@@ -18,7 +18,7 @@
 //   driver over s03_Classify.request(...), not a compiler-provided task modifier.
 function s03_Classify_request(
   text: string,
-  provider: root.ai.Provider = s03_ConstrainedFixture { reply: `"Positive"` },
+  provider: root.ai.Provider = s03_FakeConstrainedProvider { reply: `"Positive"` },
 ) -> root.ai.Request<s03_Sentiment> {
   root.ai.task_request<s03_Sentiment>(
     provider,
@@ -34,14 +34,14 @@ function s03_Classify_request(
 
 function s03_Classify_manual(
   text: string,
-  provider: root.ai.Provider = s03_ConstrainedFixture { reply: `"Positive"` },
+  provider: root.ai.Provider = s03_FakeConstrainedProvider { reply: `"Positive"` },
 ) -> s03_Sentiment throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<s03_Sentiment>(s03_Classify_request(text, provider = provider))
 }
 
 function s03_Classify_constrained_manual(
   text: string,
-  provider: root.ai.Provider = s03_ConstrainedFixture { reply: `"Positive"` },
+  provider: root.ai.Provider = s03_FakeConstrainedProvider { reply: `"Positive"` },
 ) -> s03_Sentiment throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run_constrained<s03_Sentiment>(
     s03_Classify_request(text, provider = provider),
@@ -60,7 +60,7 @@ test "03: the custom driver negotiates the capability at runtime" {
 test "03: a plain Generate-only provider is a typed Unsupported" {
   let status = s03_Classify_constrained_manual(
     "wonderful",
-    provider = root.ai.FixtureGenerate { name: "plain", reply: `"Positive"`, attributes: {} },
+    provider = root.ai.FakeGenerateProvider { name: "plain", reply: `"Positive"`, attributes: {} },
   ) catch (e) {
     let ignored: baml.errors.Unsupported => "unsupported",
     _ => "wrong-error",

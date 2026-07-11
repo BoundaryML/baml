@@ -104,7 +104,7 @@ class s50_Job<T> {
         value: value,
         meta: root.ai.Meta {
           provider: self.owner.display_name(),
-          model: "fixture-background",
+          model: "fake-background",
           request_id: self.id,
           finish_reason: "stop",
           usage: null,
