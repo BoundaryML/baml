@@ -1004,7 +1004,12 @@ mod tests {
             close.clone(),
             None,
         );
-        let shared_uri = "file:///tmp/shared-overlay.baml".to_string();
+        // A drive-less file URI fails `Url::to_file_path` on Windows.
+        let shared_uri = if cfg!(windows) {
+            "file:///C:/tmp/shared-overlay.baml".to_string()
+        } else {
+            "file:///tmp/shared-overlay.baml".to_string()
+        };
         let shared_identity = canonical_document_identity_str(&shared_uri).unwrap();
         {
             let mut scheduler = runtime.scheduler.lock().unwrap();
