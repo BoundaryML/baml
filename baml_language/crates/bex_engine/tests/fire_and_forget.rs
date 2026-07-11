@@ -1,10 +1,15 @@
-//! BEP-034 fire-and-forget error propagation.
+//! Fire-and-forget error propagation.
 //!
-//! A spawned child's unhandled throw surfaces at the spawner's next `await`
-//! — but ONLY if no other task observed (awaited) the future first. An error
-//! consumed by an awaiter (where a `catch` can handle it) must not re-surface
-//! at the spawner. The engine implements this by DEFERRING the error settle
-//! (see `FutureManagerGuard::defer_error` / `future_ready`).
+//! A spawned child's unhandled throw must surface if no task ever awaits the
+//! future, but must NOT surface if the future is awaited (where a `catch` can
+//! handle it). The engine implements this by DEFERRING the error settle (see
+//! `FutureManagerGuard::defer_error` / `future_ready`): an awaiter consumes the
+//! deferred error through `future_ready`, while a genuinely-never-awaited error
+//! is surfaced only where "never awaited" is certain — the owning thread's
+//! termination (root end-of-run, or a child thread's own completion). Surfacing
+//! is NOT done at every intervening `await`, since that cannot distinguish a
+//! future awaited later from one never awaited, and would pre-empt the former's
+//! `catch`.
 
 mod common;
 
@@ -105,4 +110,52 @@ async fn unobserved_child_error_still_surfaces_at_spawner() {
         }
         other => panic!("expected UnhandledThrow(\"boom\"), got {other:?}"),
     }
+}
+
+/// Regression: an errored future that IS awaited-and-caught must not be
+/// pre-empted by an intervening `await` of an UNRELATED future. `f` throws
+/// and enqueues its fire-and-forget error; `g`'s sleep guarantees `f` has
+/// thrown by the time we `await g`. Surfacing the error at that unrelated
+/// await stole it from under `(await f) catch` and escaped as an uncaught
+/// throw. With surfacing deferred to termination, `await f` routes the error
+/// into the `catch`, which returns 99.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn caught_error_not_preempted_by_unrelated_await() {
+    let source = r#"
+        function bad() -> int throws string { throw "boom" }
+        function slow() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)); 7 }
+        function main() -> int {
+            let f = spawn { bad() };
+            let g = spawn { slow() };
+            let _ = await g;
+            (await f) catch (e) { let e => 99 }
+        }
+    "#;
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(99));
+}
+
+/// Regression for the intermediate-thread drain: a child thread `t` that
+/// spawns its OWN child `gc` which throws, never awaits it, and then
+/// completes must still surface `gc`'s error rather than dropping it. A
+/// child thread has no end-of-run, so the surfacing happens at `t`'s own
+/// completion, propagating up so `main`'s `await t` observes it and catches.
+/// `t`'s sleep lets `gc` throw and enqueue on `t`'s fire-and-forget queue
+/// before `t` completes, so the completion drain deterministically finds it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn intermediate_thread_surfaces_never_awaited_grandchild_error() {
+    let source = r#"
+        function gc_bad() -> int throws string { throw "gc boom" }
+        function t_body() -> int {
+            spawn { gc_bad() };
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+            42
+        }
+        function main() -> int {
+            let t = spawn { t_body() };
+            (await t) catch (e) { let e => -1 }
+        }
+    "#;
+    // `t`'s body reaches 42, but its never-awaited grandchild error surfaces at
+    // `t`'s completion (settling `t` Errored), so `main`'s `await t` catches it.
+    assert_eq!(run_main(source).await.unwrap(), BexExternalValue::Int(-1));
 }

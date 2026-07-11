@@ -4343,6 +4343,26 @@ impl BexEngine {
                     // registry and return SettledChild. The awaiter's
                     // next `Await` instruction picks up `FutureRead::Ready`.
                     if let Some(future_id) = thread.vm_thread_settles_future() {
+                        // A child thread has no "end of run", so this is where
+                        // "never awaited" becomes certain for ITS own spawned
+                        // children. Surface any still-unobserved grandchild
+                        // error before fulfilling: settle this future `Errored`
+                        // (propagating up via the parent's fire-and-forget
+                        // queue) instead of `Fulfilled`. The root path handles
+                        // its own errors in the end-of-run drain below; this
+                        // mirrors that for intermediate threads and closes the
+                        // gap where a child that errored a grandchild and
+                        // completed WITHOUT ever awaiting would drop the error
+                        // silently.
+                        if let Some(err) = self.drain_one_pending_child_error(&mut thread).await? {
+                            self.prof_drain_open_calls(
+                                &mut thread.vm,
+                                bex_events::prof::record::FunctionEndStatus::Errored,
+                            );
+                            self.settle_child_errored(&mut thread, future_id, err)
+                                .await?;
+                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
+                        }
                         let mut guard = self.futures.acquire(thread.proof()).await;
                         guard.fulfill_future(future_id, value)?;
                         return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Fulfilled));
@@ -4923,43 +4943,25 @@ impl BexEngine {
                         }
                         AwaitOutcome::Done(r) => r?,
                     }
-                    // Post-await drain: surface fire-and-forget child errors
-                    // that nobody observed. This is the ONLY drain point — it
-                    // runs after the awaited future settled, by which time a
-                    // legitimate consumer (a sibling `await`, a combinator's
-                    // internal awaits) has consumed any deferred error it was
-                    // going to handle, leaving the stash entry absent and the
-                    // drain skipping it.
-                    //
-                    // Carve-out: the entry for the future we are awaiting must
-                    // not be drained here — its deferred error flows through
+                    // Post-await: trim the awaited future's now-dead queue
+                    // entry. Its deferred error (if any) flowed through
                     // `future_ready` → `FutureRead::Error` → `VmError::Thrown`,
-                    // which user `catch` clauses can handle. Without this, an
-                    // `(await f) catch (e) { … }` where `f` errored would have
-                    // its error pre-empted as an `UnhandledThrow`. Keyed by
-                    // `future_id`: stable across GC moves and producer settles.
+                    // where user `catch` clauses handle it; the stale
+                    // `(future_id, ptr)` queue entry must not linger and be
+                    // re-surfaced as fire-and-forget at thread termination.
+                    // Keyed by `future_id`: stable across GC moves and producer
+                    // settles.
+                    //
+                    // We deliberately do NOT surface OTHER pending child errors
+                    // here. A per-await drain cannot tell a future that will be
+                    // awaited later (`let f = spawn{…}; await g; await f catch
+                    // …`) from one that is genuinely never awaited, so draining
+                    // here stole `f`'s error out from under its `catch` whenever
+                    // the parent awaited an unrelated future first. Fire-and-
+                    // forget surfacing now happens only where "never awaited" is
+                    // certain: the root's end-of-run drain (below) and a child
+                    // thread's own `Complete` drain.
                     thread.vm_thread_consume_pending_child_error_for(future_id);
-                    if let Some(value) = self.drain_one_pending_child_error(&mut thread).await? {
-                        // This terminates the thread WITHOUT unwinding the
-                        // VM (it is parked at its Await opcode with every
-                        // frame open) — drain the open calls like the
-                        // cancel blocks do, with Errored: an unobserved
-                        // child error killed this thread.
-                        self.prof_drain_open_calls(
-                            &mut thread.vm,
-                            bex_events::prof::record::FunctionEndStatus::Errored,
-                        );
-                        if let Some(our_future_id) = thread.vm_thread_settles_future() {
-                            self.settle_child_errored(&mut thread, our_future_id, value)
-                                .await?;
-                            return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
-                        }
-                        let external = self.vm_value_to_owned(thread.proof(), value);
-                        return Err(EngineError::UnhandledThrow {
-                            value: Box::new(external),
-                            trace: Vec::new(),
-                        });
-                    }
                 }
 
                 // BEP-034 `baml.future.__await_any`: park until the FIRST of

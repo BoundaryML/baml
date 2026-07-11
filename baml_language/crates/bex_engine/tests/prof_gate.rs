@@ -2286,15 +2286,19 @@ async fn spawned_child_cancellation_ends_child_cancelled() {
     );
 }
 
-/// An UNOBSERVED fire-and-forget child error (BEP-034) surfaces at the
-/// spawner's next await and terminates the parent thread *without*
-/// unwinding its VM — the parent is parked at the Await opcode with every
-/// frame open. The §7 decision 2 drain (Errored flavor) closes those
-/// frames, so full balance holds. Found by the post-decision adversarial
-/// review: before the fix this was the one remaining systematic
-/// frame-strander (the awaited-future error path in
-/// `spawned_child_error_ends_child_errored` below unwinds VM-side and
-/// never hit it).
+/// An UNOBSERVED fire-and-forget child error (`spawn { uce_bad() }` whose
+/// handle is discarded and never awaited) surfaces at the spawner's END OF
+/// RUN, not at an intervening await of an unrelated future. The root
+/// function itself runs to completion and returns normally — its frame
+/// ends `Ok` — and the end-of-run drain then surfaces the never-awaited
+/// child error as an `UnhandledThrow`, so the *run* ends `Errored` even
+/// though `main` did not. Deferring surfacing to end-of-run (rather than
+/// draining at every await) is what keeps an errored-but-later-awaited
+/// future from being pre-empted before its `catch` installs; the trade-off
+/// is that a genuinely-dropped error surfaces at termination instead of at
+/// the next await. Full frame balance still holds: the child's thrower
+/// unwinds VM-side (`user.uce_bad` ends `Errored`) and the root's frames
+/// close normally via VM completion.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn unobserved_child_error_drains_parent_frames() {
     let _guard = test_lock().await;
@@ -2321,8 +2325,9 @@ async fn unobserved_child_error_drains_parent_frames() {
     let statuses = end_statuses_by_fqn(&header, &events);
     assert_eq!(
         statuses.get("user.main"),
-        Some(&vec![pb::FunctionEndStatus::Errored as i32]),
-        "the drain closes the parent's open root frame Errored: {statuses:?}"
+        Some(&vec![pb::FunctionEndStatus::Ok as i32]),
+        "the root function completes normally; the never-awaited error \
+         surfaces afterward at the end-of-run drain: {statuses:?}"
     );
     assert_eq!(
         statuses.get("user.uce_bad"),

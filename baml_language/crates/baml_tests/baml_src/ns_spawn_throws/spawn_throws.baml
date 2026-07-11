@@ -94,3 +94,22 @@ function racing_successful_spawn_returns_cleanly_fn() -> int {
 test "racing_successful_spawn_returns_cleanly" {
     assert.is_true(baml.deep_equals(racing_successful_spawn_returns_cleanly_fn(), 7))
 }
+
+// Regression: an errored spawn that IS awaited-and-caught must not be pre-empted
+// by an intervening await of an UNRELATED future. `f` throws and enqueues its
+// fire-and-forget error; the `sleep` in `g` guarantees `f` has thrown by the
+// time we `await g`. A per-await drain of that unrelated await used to surface
+// `f`'s error as an uncaught throw before `(await f) catch` could install its
+// handler. Fire-and-forget surfacing must instead defer to thread termination,
+// where "never awaited" is certain — leaving `await f` free to route the error
+// into the `catch`, which returns 99.
+function caught_not_preempted_by_unrelated_await_fn() -> int {
+    let f = spawn { boom_io_x() };
+    let g = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)); 7 };
+    let _ = await g;
+    (await f) catch (e) { baml.errors.Io => 99 }
+}
+
+test "caught_not_preempted_by_unrelated_await" {
+    assert.is_true(baml.deep_equals(caught_not_preempted_by_unrelated_await_fn(), 99))
+}
