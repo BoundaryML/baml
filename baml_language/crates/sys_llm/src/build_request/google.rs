@@ -136,10 +136,18 @@ fn resolve_url(
 /// Resolved during auth when credentials are available.
 pub(crate) const VERTEX_PROJECT_ID_PLACEHOLDER: &str = "__BAML_VERTEX_PROJECT_ID__";
 
+/// Placeholder used when `location` is not yet known at URL construction time.
+/// Resolved during auth from the `GOOGLE_CLOUD_LOCATION` env var.
+///
+/// Lowercase, unlike the project-id placeholder: location appears in the URL
+/// HOST, which `url::Url` normalizes to lowercase when query params are
+/// appended — an uppercase placeholder would dodge the auth-time replacement.
+pub(crate) const VERTEX_LOCATION_PLACEHOLDER: &str = "__baml_vertex_location__";
+
 /// Extract Vertex AI URL components: `(domain, location, project_id)`.
 ///
-/// `location` is required (the old engine errors with "must specify a GCP region").
-/// `project_id` may use a placeholder that gets resolved during auth.
+/// `location` and `project_id` may use placeholders that get resolved during
+/// auth (from `GOOGLE_CLOUD_LOCATION` and the credential/project chain).
 fn vertex_url_components(
     client: &crate::baml_std::PrimitiveClient,
 ) -> Result<(String, String, String), super::BuildRequestError> {
@@ -151,10 +159,7 @@ fn vertex_url_components(
     let location = vertex_opts
         .and_then(|o| o.location.as_deref())
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| super::BuildRequestError::InvalidOption {
-            key: "location".to_string(),
-            reason: "vertex-ai requires either base_url or location (e.g. us-central1)".to_string(),
-        })?;
+        .unwrap_or(VERTEX_LOCATION_PLACEHOLDER);
 
     let project_id = vertex_opts
         .and_then(|o| o.project_id.as_deref())
@@ -409,6 +414,36 @@ mod tests {
         assert_eq!(
             result.url,
             "https://europe-west4-aiplatform.googleapis.com/v1/projects/my-project/locations/europe-west4/publishers/google/models/gemini-2.0-flash:generateContent"
+        );
+    }
+
+    #[test]
+    fn vertex_ai_url_without_location_uses_placeholder() {
+        // No location option: the URL carries a placeholder (host + path) that
+        // auth resolves from GOOGLE_CLOUD_LOCATION.
+        let mut client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                ..Default::default()
+            },
+        );
+        client.provider_options = Some(crate::baml_std::ProviderOptions::VertexAi(
+            crate::baml_std::VertexAiOptions {
+                location: None,
+                project_id: Some("my-project".to_string()),
+                credentials: None,
+                credentials_content: None,
+            },
+        ));
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, &prompt, LlmProvider::VertexAi).unwrap();
+        assert_eq!(
+            result.url,
+            format!(
+                "https://{p}-aiplatform.googleapis.com/v1/projects/my-project/locations/{p}/publishers/google/models/gemini-2.0-flash:generateContent",
+                p = VERTEX_LOCATION_PLACEHOLDER
+            )
         );
     }
 

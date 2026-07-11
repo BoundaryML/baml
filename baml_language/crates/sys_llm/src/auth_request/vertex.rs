@@ -45,8 +45,10 @@ use crate::{
 
 /// Add Google Cloud `OAuth2` auth headers to a Vertex AI request.
 ///
-/// Also resolves `project_id` in the URL if it contains the placeholder
-/// (i.e. `project_id` was not known at URL construction time).
+/// Also resolves the `location` and `project_id` placeholders in the URL if
+/// present (i.e. they were not known at URL construction time): `location`
+/// from the `GOOGLE_CLOUD_LOCATION` env var, `project_id` from the credential
+/// / `GOOGLE_CLOUD_PROJECT` chain.
 ///
 /// Credentials are resolved once, then used for both token and `project_id`
 /// (matching the old engine's single-source principle).
@@ -61,18 +63,51 @@ pub(crate) async fn auth_vertex(
     };
 
     // If an API key is provided as a query param, skip token-based auth
-    // but still resolve the project-id placeholder in the URL.
+    // but still resolve the location / project-id placeholders in the URL.
     let api_key_auth = client.options.query_params.contains_key("key");
+    let needs_location = request
+        .url
+        .contains(crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER);
     let needs_project_id = request
         .url
         .contains(crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER);
 
-    // With API-key auth and no project-id placeholder, no credentials needed.
-    if api_key_auth && !needs_project_id {
+    // With API-key auth and no placeholders, no credentials needed.
+    if api_key_auth && !needs_project_id && !needs_location {
         return Ok(());
     }
 
     let adapter = BamlTokenIo { io: io.clone() };
+
+    // Resolve the location placeholder from GOOGLE_CLOUD_LOCATION if needed
+    // (options.location was unset at URL construction time).
+    if needs_location {
+        let location = adapter
+            .env("GOOGLE_CLOUD_LOCATION")
+            .await
+            .map(|v| v.trim().to_string())
+            .ok_or_else(|| {
+                BuildRequestError::Other(
+                    "Could not resolve location for Vertex AI. Set options.location \
+                     (e.g. us-central1) or the GOOGLE_CLOUD_LOCATION env var."
+                        .to_string(),
+                )
+            })?;
+        // "global" uses the region-less endpoint host.
+        if location == "global" {
+            request.url = request.url.replace(
+                &format!(
+                    "{}-aiplatform.googleapis.com",
+                    crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER
+                ),
+                "aiplatform.googleapis.com",
+            );
+        }
+        request.url = request.url.replace(
+            crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER,
+            &location,
+        );
+    }
 
     // Resolve credentials once (needed for both project-id and token).
     let creds = resolve_credentials(vertex_opts.as_ref())?;
@@ -1100,6 +1135,75 @@ mod tests {
         assert_eq!(
             req.headers.get("x-goog-user-project").unwrap(),
             "my-quota-project",
+        );
+    }
+
+    /// The location placeholder is filled from GOOGLE_CLOUD_LOCATION when
+    /// options.location was not set at URL construction time.
+    #[tokio::test]
+    async fn location_placeholder_resolved_from_env() {
+        let adc_json = serde_json::json!({
+            "client_id": "loc-client-id",
+            "client_secret": "loc-client-secret",
+            "refresh_token": "vertex-location-refresh-token",
+            "type": "authorized_user",
+            "token_uri": "https://fake-oauth.example.com/token",
+        })
+        .to_string();
+
+        let io = AdcIo {
+            http_call_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            env_vars: std::collections::HashMap::from([
+                (
+                    "GOOGLE_APPLICATION_CREDENTIALS".to_string(),
+                    "/fake/loc-adc.json".to_string(),
+                ),
+                (
+                    "GOOGLE_CLOUD_LOCATION".to_string(),
+                    "europe-west4".to_string(),
+                ),
+            ]),
+            files: std::collections::HashMap::from([(
+                "/fake/loc-adc.json".to_string(),
+                adc_json,
+            )]),
+            token_body: serde_json::json!({
+                "access_token": "ya29.location-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            })
+            .to_string(),
+        };
+
+        let client = make_client("vertex-ai");
+        let mut req = fake_request();
+        req.url = format!(
+            "https://{p}-aiplatform.googleapis.com/v1/projects/test/locations/{p}/publishers/google/models/gemini-pro:generateContent",
+            p = crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER
+        );
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
+
+        assert_eq!(
+            req.url,
+            "https://europe-west4-aiplatform.googleapis.com/v1/projects/test/locations/europe-west4/publishers/google/models/gemini-pro:generateContent",
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_location_is_an_actionable_error() {
+        let client = make_client("vertex-ai");
+        let mut req = fake_request();
+        req.url = format!(
+            "https://{p}-aiplatform.googleapis.com/v1/projects/test/locations/{p}/publishers/google/models/gemini-pro:generateContent",
+            p = crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER
+        );
+        let err = auth_vertex(&mut req, &client, Arc::new(NoCredsIo))
+            .await
+            .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("Could not resolve location") && msg.contains("GOOGLE_CLOUD_LOCATION"),
+            "got: {msg}"
         );
     }
 
