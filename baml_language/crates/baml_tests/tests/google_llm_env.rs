@@ -16,6 +16,7 @@ const GOOGLE_ENV_VARS: &[&str] = &[
     "GOOGLE_API_KEY",
     "GEMINI_API_KEY",
     "GOOGLE_GENAI_USE_VERTEXAI",
+    "GOOGLE_GENAI_USE_ENTERPRISE",
     "GOOGLE_CLOUD_PROJECT",
     "GOOGLE_CLOUD_LOCATION",
     "GOOGLE_CLOUD_QUOTA_PROJECT",
@@ -69,8 +70,8 @@ async fn google_and_vertex_env_scenarios() {
         "must name the missing env var: {err}"
     );
 
-    // google-ai with NO api_key at all: request construction fails fast with
-    // the vertex-ai / GOOGLE_GENAI_USE_VERTEXAI pointers.
+    // google-ai with NO api_key at all: request construction fails fast and
+    // points to the Google AI and Vertex provider setup documentation.
     clear_google_env();
     let err = run(r##"
         client<llm> G2 {
@@ -94,8 +95,8 @@ async fn google_and_vertex_env_scenarios() {
         "must fail fast on the missing key: {err}"
     );
     assert!(
-        err.contains("vertex-ai") && err.contains("GOOGLE_GENAI_USE_VERTEXAI"),
-        "must point at both Vertex routes: {err}"
+        err.contains("`baml describe google-ai`") && err.contains("`baml describe vertex-ai`"),
+        "must point at both provider descriptions: {err}"
     );
 
     // ------------------------------------------------------------------
@@ -182,6 +183,85 @@ async fn google_and_vertex_env_scenarios() {
     assert!(
         err.contains("Could not resolve location for Vertex AI"),
         "location is resolved (and fails) first: {err}"
+    );
+
+    // ------------------------------------------------------------------
+    // Scenario 5: google-ai with GOOGLE_GENAI_USE_ENTERPRISE=true routes
+    // through the Vertex/Enterprise backend. Location is unset, so it
+    // defaults to the global endpoint (aiplatform.googleapis.com,
+    // locations/global). Express-mode key keeps this token-free.
+    // ------------------------------------------------------------------
+    clear_google_env();
+    unsafe {
+        std::env::set_var("GOOGLE_GENAI_USE_ENTERPRISE", "true");
+        std::env::set_var("GOOGLE_CLOUD_PROJECT", "env-project");
+    }
+    let url = run(r##"
+        client<llm> G4 {
+            provider google-ai
+            options {
+                model "gemini-2.0-flash"
+                query_params {
+                    key "test-express-key"
+                }
+            }
+        }
+        function F5(input: string) -> string {
+            client G4
+            prompt #"Say hello to ${input}"#
+        }
+        function main() -> string {
+            F5$build_request("world").url
+        }
+    "##)
+    .await
+    .expect("enterprise env must build a global Vertex request");
+    assert_eq!(
+        url,
+        BexExternalValue::String(
+            "https://aiplatform.googleapis.com/v1/projects/env-project/locations/global/publishers/google/models/gemini-2.0-flash:generateContent?key=test-express-key"
+                .to_string()
+                .into()
+        ),
+    );
+
+    // ------------------------------------------------------------------
+    // Scenario 6: google-ai with `options.enterprise true` (no env flag)
+    // routes through Vertex. The Google options use the same explicit
+    // location/project fields as VertexAiOptions, proving those fields are
+    // typed, lowered, and consumed through the shared runtime path.
+    // ------------------------------------------------------------------
+    clear_google_env();
+    let url = run(r##"
+        client<llm> G5 {
+            provider google-ai
+            options {
+                model "gemini-2.0-flash"
+                enterprise true
+                project_id "options-project"
+                location "us-west1"
+                query_params {
+                    key "test-express-key"
+                }
+            }
+        }
+        function F6(input: string) -> string {
+            client G5
+            prompt #"Say hello to ${input}"#
+        }
+        function main() -> string {
+            F6$build_request("world").url
+        }
+    "##)
+    .await
+    .expect("options.enterprise must build a Vertex request");
+    assert_eq!(
+        url,
+        BexExternalValue::String(
+            "https://us-west1-aiplatform.googleapis.com/v1/projects/options-project/locations/us-west1/publishers/google/models/gemini-2.0-flash:generateContent?key=test-express-key"
+                .to_string()
+                .into()
+        ),
     );
 
     clear_google_env();

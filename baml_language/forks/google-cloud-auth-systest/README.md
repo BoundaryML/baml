@@ -39,7 +39,8 @@ scope) and **Cloud Resource Manager** `projects.get` (local scenarios; asserts 2
 expected project). The GCE default service account has no project-get role in the dev
 project, so the metadata tier asserts token validity + scope (resourcemanager status is
 shown but not gated). Vertex AI `generateContent` is an optional check via
-`--vertex-model`/`--vertex-region` (the dev project currently lacks model-garden access).
+`--vertex-model`/`--vertex-region` (e.g. `gemini-2.5-flash` / `us-central1`); when
+supplied, every scenario also gates on `vertex=200`.
 
 ## Running it
 

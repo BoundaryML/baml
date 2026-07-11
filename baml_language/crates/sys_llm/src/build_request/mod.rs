@@ -19,6 +19,43 @@ pub(crate) fn is_anthropic_model(model: &str) -> bool {
     model.starts_with("claude")
 }
 
+/// Truthy test for a `GOOGLE_GENAI_*` boolean env var: `"true"` / `"1"`,
+/// trimmed and case-insensitive (matching the google-genai SDK).
+async fn env_truthy(io: &dyn ::sys_types::runtime_io::RuntimeIo, key: &str) -> bool {
+    matches!(
+        io.env_get(key.to_string()).await.ok().flatten(),
+        Some(v) if matches!(v.trim().to_ascii_lowercase().as_str(), "true" | "1")
+    )
+}
+
+/// Whether the client opts into the Gemini **Enterprise** backend, via
+/// `options.enterprise` or `GOOGLE_GENAI_USE_ENTERPRISE`.
+///
+/// An explicitly-set `options.enterprise` wins over the env var (so
+/// `enterprise false` disables it even when `GOOGLE_GENAI_USE_ENTERPRISE=true`);
+/// only an unset option falls back to the env var.
+///
+/// In google-genai, enterprise is an alias for the Vertex backend that
+/// additionally defaults the location to `"global"` when it is otherwise
+/// unresolved (applied in `auth_vertex`).
+pub(crate) async fn google_use_enterprise(
+    client: &crate::baml_std::PrimitiveClient,
+    io: &dyn ::sys_types::runtime_io::RuntimeIo,
+) -> bool {
+    if client.provider != "google-ai" {
+        return false;
+    }
+
+    let configured = match &client.provider_options {
+        Some(crate::baml_std::ProviderOptions::GoogleAi(options)) => options.enterprise,
+        _ => None,
+    };
+    match configured {
+        Some(explicit) => explicit,
+        None => env_truthy(io, "GOOGLE_GENAI_USE_ENTERPRISE").await,
+    }
+}
+
 /// Build a provider-specific HTTP request from a specialized prompt.
 ///
 /// Returns an owned `HttpRequest` matching the `baml.http.Request` class:
@@ -31,16 +68,16 @@ pub(crate) async fn build_request(
     let mut provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
-    // google-genai parity: GOOGLE_GENAI_USE_VERTEXAI=true routes a google-ai
-    // client through the Vertex backend (URL, Google Cloud credentials, and
-    // auth), like the `vertexai=True` switch in the Python SDK. Location and
-    // project then come from GOOGLE_CLOUD_LOCATION / GOOGLE_CLOUD_PROJECT or
-    // the credential chain.
+    // google-genai parity: route a google-ai client through the Vertex backend
+    // (URL, Google Cloud credentials, and auth) when GOOGLE_GENAI_USE_VERTEXAI
+    // or GOOGLE_GENAI_USE_ENTERPRISE / `options.enterprise` is set. The SDK
+    // treats enterprise as an alias for `vertexai=True` (enterprise additionally
+    // defaults location to "global"; see auth_vertex). Location and project then
+    // come from GOOGLE_CLOUD_LOCATION / GOOGLE_CLOUD_PROJECT or the credential
+    // chain.
     if provider == LlmProvider::GoogleAi
-        && matches!(
-            io.env_get("GOOGLE_GENAI_USE_VERTEXAI".to_string()).await.ok().flatten(),
-            Some(v) if matches!(v.trim().to_ascii_lowercase().as_str(), "true" | "1")
-        )
+        && (google_use_enterprise(client, &*io).await
+            || env_truthy(&*io, "GOOGLE_GENAI_USE_VERTEXAI").await)
     {
         provider = LlmProvider::VertexAi;
     }
@@ -1745,5 +1782,153 @@ mod tests {
             "Bearer ya29.flip-token",
         );
         assert!(!result.headers.contains_key("x-goog-api-key"));
+    }
+
+    /// A `GcpEnvIo` wired for ADC bearer auth (fake authorized-user creds + a
+    /// fake token endpoint), with `extra_env` merged in. Mints `ya29.ent-token`.
+    fn gcp_adc_io(extra_env: &[(&str, &str)]) -> GcpEnvIo {
+        let adc_json = serde_json::json!({
+            "client_id": "ent-cid",
+            "client_secret": "ent-secret",
+            "refresh_token": "google-ai-ent-refresh-token",
+            "type": "authorized_user",
+            "token_uri": "https://fake-oauth.example.com/token",
+        })
+        .to_string();
+        let mut env_vars = std::collections::HashMap::from([(
+            "GOOGLE_APPLICATION_CREDENTIALS".to_string(),
+            "/fake/ent-adc.json".to_string(),
+        )]);
+        for (k, v) in extra_env {
+            env_vars.insert((*k).to_string(), (*v).to_string());
+        }
+        GcpEnvIo {
+            env_vars,
+            files: std::collections::HashMap::from([("/fake/ent-adc.json".to_string(), adc_json)]),
+            token_body: serde_json::json!({
+                "access_token": "ya29.ent-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            })
+            .to_string(),
+        }
+    }
+
+    /// `GOOGLE_GENAI_USE_ENTERPRISE=true` is an alias for the Vertex backend:
+    /// same aiplatform URL + ADC bearer auth as `GOOGLE_GENAI_USE_VERTEXAI`.
+    #[tokio::test]
+    async fn test_google_ai_use_enterprise_env_routes_through_vertex() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let io = gcp_adc_io(&[
+            ("GOOGLE_GENAI_USE_ENTERPRISE", "true"),
+            ("GOOGLE_CLOUD_PROJECT", "env-project"),
+            ("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        ]);
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, prompt, Arc::new(io)).await.unwrap();
+        assert_eq!(
+            result.url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/env-project/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent",
+        );
+        assert_eq!(
+            result.headers.get("authorization").unwrap(),
+            "Bearer ya29.ent-token",
+        );
+        assert!(!result.headers.contains_key("x-goog-api-key"));
+    }
+
+    /// `options.enterprise = true` routes through Vertex with no env flag set.
+    #[tokio::test]
+    async fn test_google_ai_enterprise_option_routes_through_vertex() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                provider_options: crate::baml_std::GoogleAiOptions {
+                    enterprise: Some(true),
+                    credentials: Some("/fake/google-options.json".to_string()),
+                    location: Some("us-central1".to_string()),
+                    project_id: Some("options-project".to_string()),
+                    ..Default::default()
+                }
+                .into_bex_external_value(),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let mut io = gcp_adc_io(&[]);
+        let credentials = io.files.remove("/fake/ent-adc.json").unwrap();
+        io.files
+            .insert("/fake/google-options.json".to_string(), credentials);
+        io.env_vars.remove("GOOGLE_APPLICATION_CREDENTIALS");
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, prompt, Arc::new(io)).await.unwrap();
+        assert_eq!(
+            result.url,
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/options-project/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent",
+        );
+        assert_eq!(
+            result.headers.get("authorization").unwrap(),
+            "Bearer ya29.ent-token",
+        );
+        assert!(!result.headers.contains_key("x-goog-api-key"));
+    }
+
+    /// Enterprise mode defaults an unset location to the global endpoint
+    /// (host `aiplatform.googleapis.com`, `locations/global`), matching
+    /// google-genai — no `GOOGLE_CLOUD_LOCATION` needed.
+    #[tokio::test]
+    async fn test_google_ai_enterprise_defaults_unset_location_to_global() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                provider_options: crate::baml_std::GoogleAiOptions {
+                    enterprise: Some(true),
+                    ..Default::default()
+                }
+                .into_bex_external_value(),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        // GOOGLE_CLOUD_LOCATION intentionally unset.
+        let io = gcp_adc_io(&[("GOOGLE_CLOUD_PROJECT", "env-project")]);
+        let prompt = msg("user", "Hello");
+        let result = build_request(&client, prompt, Arc::new(io)).await.unwrap();
+        assert_eq!(
+            result.url,
+            "https://aiplatform.googleapis.com/v1/projects/env-project/locations/global/publishers/google/models/gemini-2.0-flash:generateContent",
+        );
+    }
+
+    /// Plain vertexai routing (no enterprise signal) still requires a location:
+    /// unlike enterprise, it does NOT silently default to global.
+    #[tokio::test]
+    async fn test_google_ai_vertexai_without_location_does_not_default_global() {
+        let client = make_client(
+            "google-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let io = gcp_adc_io(&[
+            ("GOOGLE_GENAI_USE_VERTEXAI", "true"),
+            ("GOOGLE_CLOUD_PROJECT", "env-project"),
+        ]);
+        let prompt = msg("user", "Hello");
+        let err = build_request(&client, prompt, Arc::new(io))
+            .await
+            .unwrap_err();
+        let err_msg = format!("{err:?}");
+        assert!(
+            err_msg.contains("Could not resolve location"),
+            "vertexai must not silently default to global: {err_msg}"
+        );
     }
 }

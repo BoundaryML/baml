@@ -57,10 +57,10 @@ pub(crate) async fn auth_vertex(
     client: &PrimitiveClient,
     io: Arc<dyn RuntimeIo>,
 ) -> Result<(), BuildRequestError> {
-    let vertex_opts = match &client.provider_options {
-        Some(ProviderOptions::VertexAi(opts)) => Some(opts.clone()),
-        _ => None,
-    };
+    let vertex_opts = client
+        .provider_options
+        .as_ref()
+        .and_then(ProviderOptions::vertex_ai);
 
     // If an API key is provided as a query param, skip token-based auth
     // but still resolve the location / project-id placeholders in the URL.
@@ -82,17 +82,21 @@ pub(crate) async fn auth_vertex(
     // Resolve the location placeholder from GOOGLE_CLOUD_LOCATION if needed
     // (options.location was unset at URL construction time).
     if needs_location {
-        let location = adapter
-            .env("GOOGLE_CLOUD_LOCATION")
-            .await
-            .map(|v| v.trim().to_string())
-            .ok_or_else(|| {
-                BuildRequestError::Other(
+        let location = match adapter.env("GOOGLE_CLOUD_LOCATION").await {
+            Some(v) => v.trim().to_string(),
+            // Enterprise mode defaults an unset location to the global endpoint,
+            // matching google-genai; plain Vertex still requires an explicit one.
+            None if crate::build_request::google_use_enterprise(client, &*io).await => {
+                "global".to_string()
+            }
+            None => {
+                return Err(BuildRequestError::Other(
                     "Could not resolve location for Vertex AI. Set options.location \
                      (e.g. us-central1) or the GOOGLE_CLOUD_LOCATION env var."
                         .to_string(),
-                )
-            })?;
+                ));
+            }
+        };
         // "global" uses the region-less endpoint host.
         if location == "global" {
             request.url = request.url.replace(
@@ -115,7 +119,7 @@ pub(crate) async fn auth_vertex(
     // Resolve project_id placeholder in the URL if needed.
     if needs_project_id {
         let project_id = project_id_from_credentials(&creds, &adapter)
-            .await
+            .await?
             .ok_or_else(|| {
                 BuildRequestError::Other(
                     "Could not resolve project_id for Vertex AI. Set options.project_id, \
@@ -322,26 +326,29 @@ async fn token_from_credentials(
 /// Get `project_id` from the resolved credential source, falling back to the
 /// fork's google-auth-style chain (env vars, credential files, the gcloud
 /// config file, the GCE metadata server).
+///
+/// An unreadable `options.credentials` file is an error, not a fallthrough:
+/// on paths that only need the project id (e.g. express-mode API-key auth),
+/// silently continuing to the ADC chain would mask the misconfiguration.
 async fn project_id_from_credentials(
     creds: &ResolvedCredentials,
     adapter: &BamlTokenIo,
-) -> Option<String> {
+) -> Result<Option<String>, BuildRequestError> {
     match creds {
         ResolvedCredentials::CredentialsJson(json_str) => {
             if let Some(pid) = google_cloud_auth::project_id_from_json(json_str) {
-                return Some(pid);
+                return Ok(Some(pid));
             }
         }
         ResolvedCredentials::CredentialsFile(path) => {
-            if let Some(contents) = adapter.read_file(path).await {
-                if let Some(pid) = google_cloud_auth::project_id_from_json(&contents) {
-                    return Some(pid);
-                }
+            let contents = read_credentials_file(path, &*adapter.io).await?;
+            if let Some(pid) = google_cloud_auth::project_id_from_json(&contents) {
+                return Ok(Some(pid));
             }
         }
         ResolvedCredentials::Adc => {}
     }
-    google_cloud_auth::project_id(adapter).await
+    Ok(google_cloud_auth::project_id(adapter).await)
 }
 
 /// Get the quota project for the resolved credential source
@@ -1135,6 +1142,67 @@ mod tests {
         assert_eq!(
             req.headers.get("x-goog-user-project").unwrap(),
             "my-quota-project",
+        );
+    }
+
+    /// An unreadable `options.credentials` file must fail project-id
+    /// resolution too — on the express-mode (API-key) path no token is ever
+    /// minted, so falling through to the env/ADC project chain would silently
+    /// mask the broken file.
+    #[tokio::test]
+    async fn broken_credentials_file_fails_project_resolution_not_masked() {
+        use bex_external_types::AsBexExternalValue;
+        let client = PrimitiveClient::new(
+            "test-google".to_string(),
+            "vertex-ai".to_string(),
+            PrimitiveClientOptions {
+                model: Some("gemini-pro".to_string()),
+                query_params: indexmap::IndexMap::from([(
+                    "key".to_string(),
+                    "my-api-key".to_string(),
+                )]),
+                provider_options: VertexAiOptions {
+                    credentials: Some("/missing/creds.json".to_string()),
+                    credentials_content: None,
+                    location: None,
+                    project_id: None,
+                }
+                .into_bex_external_value(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        // GOOGLE_CLOUD_PROJECT is set: the fallback COULD resolve a project,
+        // which is exactly the masking this test forbids.
+        let io = AdcIo {
+            http_call_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            env_vars: std::collections::HashMap::from([
+                (
+                    "GOOGLE_CLOUD_PROJECT".to_string(),
+                    "env-project".to_string(),
+                ),
+                (
+                    "GOOGLE_CLOUD_LOCATION".to_string(),
+                    "us-central1".to_string(),
+                ),
+            ]),
+            files: std::collections::HashMap::new(),
+            token_body: String::new(),
+        };
+
+        let mut req = fake_request();
+        req.url = format!(
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/{}/locations/us-central1/publishers/google/models/gemini-pro:generateContent",
+            crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER
+        );
+        let err = auth_vertex(&mut req, &client, Arc::new(io))
+            .await
+            .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("failed to open credentials file"),
+            "broken credentials must not be masked by the project fallback: {msg}"
         );
     }
 

@@ -52,6 +52,8 @@ pub(crate) async fn auth_request(
 // Google AI (Gemini)
 // ---------------------------------------------------------------------------
 
+const GOOGLE_AI_MISSING_API_KEY_MESSAGE: &str = "Missing api_key for Google AI. See `baml describe google-ai` for how to use Google AI Studio, or `baml describe vertex-ai` if you meant to use models hosted on GCP.";
+
 fn auth_google_ai(
     request: &mut HttpRequest,
     client: &PrimitiveClient,
@@ -61,13 +63,7 @@ fn auth_google_ai(
     // key inputs argument!" error, which points at the Vertex backend).
     let Some(api_key) = &client.options.api_key else {
         return Err(BuildRequestError::Other(
-            "Missing api_key for Google AI. Set options.api_key (e.g. api_key \
-             env.GOOGLE_API_KEY or env.GEMINI_API_KEY), switch to the vertex-ai \
-             provider with project_id + location to use Google Cloud credentials \
-             (ADC) instead, or set GOOGLE_GENAI_USE_VERTEXAI=true (with \
-             GOOGLE_CLOUD_PROJECT + GOOGLE_CLOUD_LOCATION) to route this client \
-             through Vertex AI."
-                .to_string(),
+            GOOGLE_AI_MISSING_API_KEY_MESSAGE.to_string(),
         ));
     };
     request
@@ -372,10 +368,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn google_ai_missing_api_key_errors_with_vertex_pointer() {
-        // Google AI is api-key-only: request construction fails fast (instead
-        // of sending an unauthenticated request) and the error offers both
-        // fixes -- set api_key, or use vertex-ai + project_id + location.
+    async fn google_ai_missing_api_key_points_to_provider_docs() {
+        // Google AI is api-key-only: request construction fails fast and
+        // points to the provider-specific setup documentation.
         let client = make_client(
             "google-ai",
             PrimitiveClientOptions {
@@ -392,17 +387,7 @@ mod tests {
         )
         .await
         .unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("Missing api_key for Google AI"), "msg={msg}");
-        assert!(msg.contains("env.GOOGLE_API_KEY"), "msg={msg}");
-        assert!(
-            msg.contains("vertex-ai") && msg.contains("project_id + location"),
-            "must point at the vertex-ai alternative: {msg}"
-        );
-        assert!(
-            msg.contains("GOOGLE_GENAI_USE_VERTEXAI"),
-            "must mention the env-only route to Vertex: {msg}"
-        );
+        assert_eq!(err.to_string(), GOOGLE_AI_MISSING_API_KEY_MESSAGE);
     }
 
     #[tokio::test]

@@ -107,17 +107,36 @@ impl PrimitiveClient {
 
 // Provider option structs are generated from llm_types.baml via sys_types.
 pub use sys_types::generated::owned::llm::{
-    AnthropicOptions, AzureOpenAiOptions, BedrockOptions, VertexAiOptions,
+    AnthropicOptions, AzureOpenAiOptions, BedrockOptions, GoogleAiOptions, VertexAiOptions,
 };
 
 /// Provider-specific options, matching the BAML schema union
-/// `AnthropicOptions | AzureOpenAiOptions | BedrockOptions | VertexAiOptions | null`.
+/// `AnthropicOptions | AzureOpenAiOptions | BedrockOptions | GoogleAiOptions |
+/// VertexAiOptions | null`.
 #[derive(Clone, Debug)]
 pub enum ProviderOptions {
     Anthropic(AnthropicOptions),
     AzureOpenAi(AzureOpenAiOptions),
     Bedrock(BedrockOptions),
+    GoogleAi(GoogleAiOptions),
     VertexAi(VertexAiOptions),
+}
+
+impl ProviderOptions {
+    /// View either Google provider options or native Vertex options as the
+    /// common Vertex configuration used after backend selection.
+    pub(crate) fn vertex_ai(&self) -> Option<VertexAiOptions> {
+        match self {
+            Self::GoogleAi(options) => Some(VertexAiOptions {
+                credentials: options.credentials.clone(),
+                credentials_content: options.credentials_content.clone(),
+                location: options.location.clone(),
+                project_id: options.project_id.clone(),
+            }),
+            Self::VertexAi(options) => Some(options.clone()),
+            _ => None,
+        }
+    }
 }
 
 /// Convert a `BexExternalValue` (from the VM) to a typed `ProviderOptions`.
@@ -136,6 +155,9 @@ pub fn resolve_provider_options(val: &bex_heap::BexExternalValue) -> Option<Prov
         "baml.llm.BedrockOptions" => BedrockOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::Bedrock),
+        "baml.llm.GoogleAiOptions" => GoogleAiOptions::from_external(val.clone())
+            .ok()
+            .map(ProviderOptions::GoogleAi),
         "baml.llm.VertexAiOptions" => VertexAiOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::VertexAi),

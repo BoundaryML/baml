@@ -136,6 +136,31 @@ client:
       }
     }
 
+google-ai:
+  summary: "Uses Gemini models through the Google AI Studio API, or delegates to Vertex AI when configured for Google Cloud."
+  syntax: |
+    client<llm> Gemini {
+      provider google-ai
+      options {
+        model "gemini-3.5-flash"
+        api_key env.GOOGLE_API_KEY
+      }
+    }
+  details: "By default, `provider google-ai` sends requests to the Google AI Studio Gemini API and requires `options.api_key`. Setting `GOOGLE_GENAI_USE_ENTERPRISE=true` makes the client a passthrough to the `vertex-ai` backend: requests use Vertex AI URLs and Google Cloud authentication instead of the Google AI Studio API key. In enterprise mode, `credentials`, `credentials_content`, `project_id`, and `location` have the same meaning as for `provider vertex-ai`; project and location can also be resolved from Google Cloud environment variables, and an otherwise-unset location defaults to `global`. `GOOGLE_GENAI_USE_VERTEXAI=true` also selects the Vertex AI backend, while `options.enterprise` can explicitly enable or disable enterprise mode. See `baml describe vertex-ai` for Vertex AI setup."
+
+vertex-ai:
+  summary: "Uses models hosted on Google Cloud Vertex AI with Google Cloud authentication."
+  syntax: |
+    client<llm> GeminiOnVertex {
+      provider vertex-ai
+      options {
+        model "gemini-3.1-pro-preview"
+        project_id "my-gcp-project"
+        location "global"
+      }
+    }
+  details: "Vertex AI uses Google Cloud credentials rather than a Google AI Studio API key. Set `project_id` and `location` in the client options or use `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION`. Credentials can come from Application Default Credentials, a file path in `credentials`, or inline JSON in `credentials_content`. Use `baml describe google-ai` for the Google AI Studio API and for delegating a `google-ai` client to this backend."
+
 generator:
   summary: "Configures code generation for a target language."
   syntax: |

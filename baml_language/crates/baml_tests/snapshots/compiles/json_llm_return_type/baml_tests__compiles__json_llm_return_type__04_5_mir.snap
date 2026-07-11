@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 14369
 ---
 === MIR2 ===
 fn user.ExtractAny(client: baml.llm.Client) -> int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> {

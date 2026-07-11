@@ -153,19 +153,23 @@ pub(crate) const VERTEX_LOCATION_PLACEHOLDER: &str = "__baml_vertex_location__";
 /// `location` and `project_id` may use placeholders that get resolved during
 /// auth (from `GOOGLE_CLOUD_LOCATION` and the credential/project chain).
 fn vertex_url_components(client: &crate::baml_std::PrimitiveClient) -> (String, String, String) {
-    let vertex_opts = match &client.provider_options {
-        Some(crate::baml_std::ProviderOptions::VertexAi(opts)) => Some(opts),
-        _ => None,
-    };
+    let vertex_opts = client
+        .provider_options
+        .as_ref()
+        .and_then(crate::baml_std::ProviderOptions::vertex_ai);
 
+    // An explicitly-set value is honored as-is, empty included: only an *unset*
+    // (`None`) option falls back to the placeholder, which auth then resolves
+    // from GOOGLE_CLOUD_LOCATION / the credential + GOOGLE_CLOUD_PROJECT chain
+    // (or returns a BuildRequestError if still unresolved). See auth_vertex.
     let location = vertex_opts
+        .as_ref()
         .and_then(|o| o.location.as_deref())
-        .filter(|s| !s.is_empty())
         .unwrap_or(VERTEX_LOCATION_PLACEHOLDER);
 
     let project_id = vertex_opts
+        .as_ref()
         .and_then(|o| o.project_id.as_deref())
-        .filter(|s| !s.is_empty())
         .unwrap_or(VERTEX_PROJECT_ID_PLACEHOLDER);
 
     let domain = if location == "global" {
@@ -442,6 +446,38 @@ mod tests {
                 "https://{VERTEX_LOCATION_PLACEHOLDER}-aiplatform.googleapis.com/v1/projects/my-project/locations/{VERTEX_LOCATION_PLACEHOLDER}/publishers/google/models/gemini-2.0-flash:generateContent"
             )
         );
+    }
+
+    #[test]
+    fn vertex_ai_url_honors_explicitly_empty_location_and_project() {
+        // An explicitly-set empty string is honored as-is, NOT rerouted to the
+        // placeholder / env fallback. The resulting URL is intentionally broken
+        // (empty host label + empty path segment) so the misconfiguration
+        // surfaces instead of being silently masked.
+        let mut client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                ..Default::default()
+            },
+        );
+        client.provider_options = Some(crate::baml_std::ProviderOptions::VertexAi(
+            crate::baml_std::VertexAiOptions {
+                location: Some(String::new()),
+                project_id: Some(String::new()),
+                credentials: None,
+                credentials_content: None,
+            },
+        ));
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, &prompt, LlmProvider::VertexAi).unwrap();
+        assert_eq!(
+            result.url,
+            "https://-aiplatform.googleapis.com/v1/projects//locations//publishers/google/models/gemini-2.0-flash:generateContent"
+        );
+        // Crucially: no placeholder leaked in, so auth won't resolve from env.
+        assert!(!result.url.contains(VERTEX_LOCATION_PLACEHOLDER));
+        assert!(!result.url.contains(VERTEX_PROJECT_ID_PLACEHOLDER));
     }
 
     #[test]
