@@ -317,20 +317,18 @@ async fn quota_project_from_credentials(
 ) -> Option<String> {
     match creds {
         ResolvedCredentials::CredentialsJson(json_str) => {
+            // Set-but-empty is honored, matching the fork: a misconfigured
+            // env var should be visible, not silently skipped.
             if let Some(val) = adapter.env("GOOGLE_CLOUD_QUOTA_PROJECT").await {
-                let val = val.trim().to_string();
-                if !val.is_empty() {
-                    return Some(val);
-                }
+                return Some(val.trim().to_string());
             }
             google_cloud_auth::quota_project_id_from_json(json_str)
         }
         ResolvedCredentials::CredentialsFile(path) => {
+            // Set-but-empty is honored, matching the fork: a misconfigured
+            // env var should be visible, not silently skipped.
             if let Some(val) = adapter.env("GOOGLE_CLOUD_QUOTA_PROJECT").await {
-                let val = val.trim().to_string();
-                if !val.is_empty() {
-                    return Some(val);
-                }
+                return Some(val.trim().to_string());
             }
             let contents = adapter.read_file(path).await?;
             google_cloud_auth::quota_project_id_from_json(&contents)
@@ -883,9 +881,7 @@ mod tests {
     async fn credentials_content_preserialized_json_string() {
         // A `json` string value is treated as pre-serialized JSON text.
         let client = make_client_with_vertex_opts(VertexAiOptions {
-            credentials_content: Some(BexExternalValue::String(
-                test_service_account_json().into(),
-            )),
+            credentials_content: Some(BexExternalValue::String(test_service_account_json().into())),
             credentials: None,
             location: None,
             project_id: None,

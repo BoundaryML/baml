@@ -28,6 +28,11 @@
 //!
 //! Deliberately NOT supported (BAML policy): inline-JSON env vars and
 //! `gcloud` CLI shell-outs.
+//!
+//! Env vars that are set — even to the empty string — are honored verbatim
+//! (a diverge from google-auth, which treats some empty vars as unset): a
+//! misconfigured `GCLOUD_PROJECT=""` produces a visibly broken request or
+//! error instead of being silently skipped.
 
 #![allow(clippy::doc_markdown)]
 
@@ -277,8 +282,9 @@ pub async fn project_id(io: &dyn TokenIo) -> Option<String> {
     for env_key in ["GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT"] {
         if let Some(val) = io.env(env_key).await {
             let val = val.trim().to_string();
-            // Ignore unexpanded `$VAR` placeholders from .env files.
-            if !val.is_empty() && !val.starts_with('$') {
+            // Ignore unexpanded `$VAR` placeholders from .env files. A set-but-
+            // empty var is honored so the misconfiguration is visible.
+            if !val.starts_with('$') {
                 return Some(val);
             }
         }
@@ -323,10 +329,7 @@ pub fn project_id_from_json(json_str: &str) -> Option<String> {
 /// like google-auth's `Credentials.apply`.
 pub async fn quota_project_id(io: &dyn TokenIo) -> Option<String> {
     if let Some(val) = io.env("GOOGLE_CLOUD_QUOTA_PROJECT").await {
-        let val = val.trim().to_string();
-        if !val.is_empty() {
-            return Some(val);
-        }
+        return Some(val.trim().to_string());
     }
     if let Some(path) = gac_path(io).await {
         if let Some(contents) = io.read_file(&path).await {
@@ -814,24 +817,23 @@ fn parse_token_response(body: &str) -> Result<Token, AuthError> {
 // Discovery: ADC paths, gcloud config, project id
 // ---------------------------------------------------------------------------
 
-/// A non-empty `GOOGLE_APPLICATION_CREDENTIALS` value (always a file path;
-/// inline JSON is deliberately not supported).
+/// The `GOOGLE_APPLICATION_CREDENTIALS` value (always a file path; inline
+/// JSON is deliberately not supported). A set-but-empty value is returned
+/// as-is so it fails visibly instead of being silently skipped.
 async fn gac_path(io: &dyn TokenIo) -> Option<String> {
-    io.env("GOOGLE_APPLICATION_CREDENTIALS")
-        .await
-        .filter(|s| !s.is_empty())
+    io.env("GOOGLE_APPLICATION_CREDENTIALS").await
 }
 
 /// The gcloud config directory: `$CLOUDSDK_CONFIG`, `$HOME/.config/gcloud`
-/// (Unix), or `%APPDATA%\gcloud` (Windows).
+/// (Unix), or `%APPDATA%\gcloud` (Windows). Set-but-empty vars are honored.
 async fn gcloud_config_dir(io: &dyn TokenIo) -> Option<String> {
-    if let Some(dir) = io.env("CLOUDSDK_CONFIG").await.filter(|s| !s.is_empty()) {
+    if let Some(dir) = io.env("CLOUDSDK_CONFIG").await {
         return Some(dir);
     }
-    if let Some(home) = io.env("HOME").await.filter(|s| !s.is_empty()) {
+    if let Some(home) = io.env("HOME").await {
         return Some(format!("{home}/.config/gcloud"));
     }
-    if let Some(appdata) = io.env("APPDATA").await.filter(|s| !s.is_empty()) {
+    if let Some(appdata) = io.env("APPDATA").await {
         return Some(format!("{appdata}/gcloud"));
     }
     None
@@ -850,17 +852,12 @@ async fn adc_config_path(io: &dyn TokenIo) -> Option<String> {
 /// shelling out to `gcloud config get-value project`.
 async fn gcloud_config_project(io: &dyn TokenIo) -> Option<String> {
     let dir = gcloud_config_dir(io).await?;
-    let config_name = match io
-        .env("CLOUDSDK_ACTIVE_CONFIG_NAME")
-        .await
-        .filter(|s| !s.is_empty())
-    {
+    let config_name = match io.env("CLOUDSDK_ACTIVE_CONFIG_NAME").await {
         Some(name) => name,
         None => io
             .read_file(&format!("{dir}/active_config"))
             .await
             .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "default".to_string()),
     };
     let contents = io
