@@ -1,0 +1,74 @@
+
+This plan breaks down all the phases we need to work through to implement the Node SDK (both the runtime core and client codegen) for BAML, as implemented in `baml_language/`. `00a-spec-codegen-mappings.md` is the source of truth for Node TypeScript codegen shape. Individual phase plans are detailed in 01-phase1-plan.md, 02-phase2-plan.md, etc. 00b2-overview details how the Python SDK works; it may be also useful to consult the legacy implementation in `engine/` for a reference of how napi wiring works, but Node should follow the language-idiomatic API in `00a` rather than mirroring Python package or naming choices.
+
+Our goal should be to get all the NodeJS `sdk_tests` working, and also work through the generated code and make sure that it looks correct. Use `jj new` at the start of every phase, and fix `mise run clippy && mise run fmt` at the end of every phase. Use `cargo nextest` to run unit tests.
+
+- phase 1: prepare test coverage in sdk_tests/
+	- set up the NodeJS/TypeScript tests in a failing state, and leave them failing. they should slowly turn green as we finish all the phases
+	- port every test:
+		- all the type_shapes roundtrip variants
+			- generics
+			- handles: `baml.media.Image` `baml.media.Video` `baml.media.Audio` `baml.media.Pdf` `baml.llm.Stream`
+			- handles: stateful file handles, stateful http response handle
+		- function_calls
+			- free functions, static functions, instance functions
+			- return / type-checked errors / panics / exit code
+- phase 1: set up the bridge
+	- prioritize going through the `baml_language` bridge interface that feeds Node's napi layer
+		- python uses pyo3, node/ts uses napi because these are well-defined FFI bridges
+	- core API surface:
+		- initialize_runtime()
+		- call into the BAML runtime
+			- in Node/TS, we need both call_function_sync() and call_function_async() for ordinary calls
+			- streaming calls use the generated `$stream_async` API; the sync `$stream` name is reserved and should be omitted from the type surface or throw a clear runtime error if present
+	- special baml-core types
+		- handle wrappers for runtime-owned values
+			- these wrap interactions with the HANDLE_TABLE singleton
+		- media and IO value classes imported/re-exported from `@boundaryml/baml-core-node`, e.g. `Image`, `Audio`, `Video`, `Pdf`, `File`
+		- typed stream wrapper for `BamlStream<lorem.Resume$stream, lorem.Resume>` (stream companion type beside its base type, not in a `stream_types` namespace)
+		- abort controller
+	- auxiliary APIs: context manager, collector, and tracing decorators
+		- these should focus on preserving compatible runtime behavior where it does not conflict with the codegen rules in `00a`
+- phase 2: set up codegen
+	- implement the generated API shape from `00a-spec-codegen-mappings.md`
+		- preserve valid BAML function/method source names and append `_async` for async bindings
+		- emit modular companions as `$build_request`, `$render_prompt`, `$parse`, etc. (preserving the BAML `$` name verbatim); emit stream companions as `$stream_async`
+		- put user symbols under the generated package root, third-party symbols under `vendor`, and stdlib symbols under `baml`; stream companion types live beside their base type in the same namespace module (no `stream_types` namespace)
+		- in ts, generate only `.ts` files (no sibling `.d.ts` — the generated `index.ts` is already fully typed)
+	- generate a typemap
+		- special-case runtime-owned stdlib values such as `baml.media.Image`, `baml.media.Video`, `baml.media.Audio`, `baml.media.Pdf`, and IO values such as `baml.io.File`
+		- `baml.media.Image`, `baml.media.Audio`, `baml.media.Video`, `baml.media.Pdf`, and `baml.llm.Stream` are **unique among generated symbols**: codegen must not emit a generated `class` body for them. Each is re-exported from the runtime/standard library (`@boundaryml/baml-core-node`) because callers need the runtime's constructors, static helpers, and handle identity — a generated structural class would not round-trip. Every other top (user/vendor classes, enums, type aliases, functions, method bindings) is codegen-emitted; these five resolve to a runtime-owned type instead. This mirrors the Python fixture, which re-binds them (`from baml_core.baml_py import BamlImage as Image`, `from baml_core import BamlStream as Stream`). See the "Stdlib Re-Exports" section in `00a-example-ts-codegen-type-shapes.md`.
+		- emit stream companion types beside their base type in the same namespace module (no `stream_types` namespace) and map streaming function returns into the runtime typed stream wrapper
+	- generate the file layout
+		- iterate over everything in the TIR
+		- set up scaffolding for each different top (class, enum, free function, static method, instance method)
+		- don't do anything in handling for individual tops
+	- generate placeholder symbols for each top
+		- e.g. for BAML `class Resume {}` generate TypeScript `export class Resume {}` with constructor/property shape filled in later
+- phase 3: get the meat of codegen working
+	- implement translate_ty
+		- every BAML type expression needs to be converted to a host type expression
+		- this is important for function args, function return types, class fields
+		- use the exhaustive TIR `Ty` conversion table in `00a`
+- phase 4: fill in codegen, now that all the scaffolding is set up
+	- generate the host symbol definitions for each type definition top: type aliases, enums, classes, and stream companion type bodies (emitted beside their base type in the same namespace module, not under `stream_types`)
+	- generate function bindings: free functions, static methods on classes, and instance methods on classes
+		- it's important that function args are correctly typed
+		- it's important that function return values are correctly typed
+		- ordinary functions get sync and async sibling exports (no aggregated `b` client object — the package module is the client, reached via its namespace path): `b.lorem.extract_resume()` and `b.lorem.extract_resume_async()`, or `b.make_foo()` for a root-namespace function
+		- companion functions follow the `00a` naming rules (the BAML `$` name is preserved verbatim), as siblings in the same namespace module: `b.lorem.extract_resume$build_request()`, `b.lorem.extract_resume$build_request_async()`, `b.lorem.extract_resume$stream_async()`
+	- generate imports
+		- figure out how to import relative to the root of `baml_sdk/`
+			- the generated public package name is `baml_sdk` (per `00a` Decisions); if an implementation keeps an alternate public package name, substitute it without changing the API shape
+		- we should prefer referencing symbols in other namespaces/modules using fully-qualified paths relative to the root of `baml_sdk`
+	- wire docstrings from baml_src to the host symbol
+- phase 5: encode and decode call_function args
+	- set up outbound deserialization
+		- baml_outbound.proto values to host lang values
+		- how does union deserialization work?
+		- how does generic deserialization work?
+	- set up inbound serialization
+		- host lang values to baml_inbound.proto values
+- phase 6: set up release workflows
+	- tie into .github/workflows/release-sdk.yaml
+
