@@ -431,6 +431,20 @@
   padding: 0 0.9rem;
   white-space: pre;
 }
+/* Wrap mode: soft-wrap within the column instead of forcing a horizontal
+   scrollbar. Used where a long inline diagnostic would otherwise blow the
+   line past a narrow pair column. */
+.l2-code--wrap .l2-pre code {
+  min-width: 0;
+}
+.l2-code--wrap .l2-line {
+  white-space: pre-wrap;
+}
+.l2-code--wrap .l2-lc {
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 .l2-line-hl {
   background: rgba(109, 40, 217, 0.07);
 }

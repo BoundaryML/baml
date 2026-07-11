@@ -624,6 +624,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                     filename="load.ts"
                     highlightLines={[7]}
                     lang="typescript"
+                    wrap
                   />
                 </div>
                 <div>

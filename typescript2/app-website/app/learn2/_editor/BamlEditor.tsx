@@ -605,6 +605,11 @@ export function BamlEditor({
               tabSize: 2,
               wordWrap: 'on',
               automaticLayout: true,
+              // Render hover/suggest widgets in a viewport-fixed overlay so
+              // they escape the editor's overflow-clipped frame instead of
+              // landing under the file header. Safe because no ancestor sets a
+              // transform/filter (which would re-anchor the fixed widget).
+              fixedOverflowWidgets: true,
               guides: { indentation: false },
               hover: { above: false },
               inlayHints: { enabled: 'on' },

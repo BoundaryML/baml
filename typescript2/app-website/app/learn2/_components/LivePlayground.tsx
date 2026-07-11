@@ -414,6 +414,10 @@ export default function LivePlayground({
                 onMount={onMount}
                 options={{
                   automaticLayout: true,
+                  // Hover/suggest widgets render in a viewport-fixed overlay so
+                  // they escape the editor's overflow-clipped frame instead of
+                  // landing under the file header.
+                  fixedOverflowWidgets: true,
                   fontFamily: 'var(--font-geist-mono), ui-monospace, monospace',
                   fontSize: 13,
                   guides: { indentation: false },

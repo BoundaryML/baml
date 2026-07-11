@@ -40,6 +40,12 @@ export interface BamlCodeProps {
   startLine?: number;
   /** Hide the gutter line numbers. */
   noLineNumbers?: boolean;
+  /**
+   * Soft-wrap long lines within the column instead of scrolling horizontally.
+   * Use in narrow pair columns where a long inline diagnostic would otherwise
+   * force a horizontal scrollbar (matches the Monaco `wordWrap` side).
+   */
+  wrap?: boolean;
 }
 
 /** Metadata for a single slide — serialisable, passed to the client Deck. */

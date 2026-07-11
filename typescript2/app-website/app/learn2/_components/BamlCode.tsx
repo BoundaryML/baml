@@ -46,6 +46,7 @@ export function BamlCode({
   highlightLines = [],
   startLine = 1,
   noLineNumbers = false,
+  wrap = false,
 }: BamlCodeProps) {
   const theme = useCodeTheme();
   const highlighter = use(getLearnHighlighter());
@@ -66,7 +67,7 @@ export function BamlCode({
   const hlSet = new Set(highlightLines);
 
   return (
-    <figure className={`l2-code l2-code--${lang}`}>
+    <figure className={cn(`l2-code l2-code--${lang}`, wrap && 'l2-code--wrap')}>
       {filename ? (
         <figcaption
           className={cn(
