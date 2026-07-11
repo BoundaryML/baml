@@ -66,7 +66,7 @@ interface S41Drivable requires root.ai.Provider {
           match (message.final_json) {
             null => {},
             let raw: string => {
-              let value: T = baml.sap.parse<T>(raw) catch (e) {
+              let value: T = baml.json.from_string<T>(raw) catch (e) {
                 _ => {
                   self.close_drive(drive);
                   throw baml.errors.UnknownError {
@@ -371,7 +371,7 @@ class S41RemoteAgent {
   implements root.ai.Generate {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
-      let value: T = baml.sap.parse<T>(self.reply) catch (e) {
+      let value: T = baml.json.from_string<T>(self.reply) catch (e) {
         _ => throw baml.errors.UnknownError {
           data: e,
           message: ["remote deployment response did not match the task output"],
@@ -389,6 +389,109 @@ class S41RemoteAgent {
           raw: null,
         },
       }
+    }
+  }
+}
+
+// Adapter from the scenario's protocol-oriented Drivable capability to the
+// shared stateful Harness contract. Deployment code can retain its transport
+// framing while application code consumes one common lifecycle API.
+class S41HarnessSession {
+  id: string,
+  status: string,
+  turns: int,
+}
+
+class S41HarnessAdapter {
+  inner: S41Drivable,
+  next_id: int,
+
+  implements root.ai.Provider {
+    function display_name(self) -> string throws never {
+      "harness-adapter:" + self.inner.display_name()
+    }
+    function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+  }
+
+  implements root.ai.Harness {
+    type HarnessSession = S41HarnessSession
+
+    function open(self, options: root.ai.SessionOptions) -> S41HarnessSession
+        throws baml.errors.UnknownError {
+      self.next_id = self.next_id + 1;
+      S41HarnessSession { id: "drive-" + self.next_id.to_string(), status: "open", turns: 0 }
+    }
+
+    function run<T>(self, session: S41HarnessSession, request: root.ai.Request<T>)
+        -> root.ai.AgentRun<T> throws baml.errors.UnknownError {
+      if (session.status == "destroyed") {
+        throw baml.errors.UnknownError { data: session.id, message: ["drive session was destroyed"] };
+      }
+      let response = self.inner.drive<T>(request.for_provider(self.inner));
+      session.turns = session.turns + 1;
+      let done = root.ai.Done<T> { value: response.value, meta: response.meta };
+      root.ai.AgentRun<T> {
+        done: done,
+        budget_reached: null,
+        handoff: null,
+        turns: [root.ai.AgentTurn<T> {
+          index: session.turns,
+          blocks: [],
+          tool_calls: [],
+          tool_results: [],
+          value: response.value,
+          meta: response.meta,
+        }],
+        meta: response.meta,
+        session_token: null,
+        conversation: root.ai.conversation_from_messages(request.messages()),
+      }
+    }
+
+    function stream<T>(self, session: S41HarnessSession, request: root.ai.Request<T>)
+        -> root.ai.AgentEventStream<T> throws baml.errors.UnknownError {
+      let run = self.run<T>(session, request);
+      let events: root.ai.AgentEvent[] = [
+        root.ai.ModelStartedEvent { id: session.id, provider: self.inner.display_name() },
+        root.ai.TextDeltaEvent { id: session.id, text: "transport drive complete", metadata: null },
+        root.ai.TurnFinishedEvent { id: session.id, turn: session.turns },
+        root.ai.RunFinishedEvent { id: session.id, outcome: "done" },
+      ];
+      root.ai.BufferedAgentEventStream<T> { events: events, cursor: 0, result: run }
+    }
+
+    function save_session(self, session: S41HarnessSession) -> root.ai.HarnessSessionToken
+        throws baml.errors.UnknownError {
+      let sealed = baml.json.to_string(session) catch (e) {
+        _ => throw baml.errors.UnknownError { data: e, message: ["failed to seal drive session"] },
+      };
+      root.ai.HarnessSessionToken {
+        provider: self.display_name(),
+        runtime: self.inner.display_name(),
+        session_id: session.id,
+        version: 1,
+        sealed: sealed,
+        expires_at: null,
+      }
+    }
+
+    function restore_session(self, token: root.ai.HarnessSessionToken) -> S41HarnessSession
+        throws baml.errors.UnknownError {
+      if (token.provider != self.display_name() || token.version != 1) {
+        throw baml.errors.UnknownError { data: token, message: ["drive token belongs to another adapter"] };
+      }
+      baml.json.from_string<S41HarnessSession>(token.sealed) catch (e) {
+        _ => throw baml.errors.UnknownError { data: e, message: ["invalid sealed drive session"] },
+      }
+    }
+
+    function stop(self, session: S41HarnessSession) -> null throws baml.errors.UnknownError {
+      session.status = "stopped";
+      null
+    }
+    function destroy(self, session: S41HarnessSession) -> null throws baml.errors.UnknownError {
+      session.status = "destroyed";
+      null
     }
   }
 }

@@ -61,3 +61,8 @@ class ToolResult {
 class ToolCalls {
   calls: ToolCall[],
 }
+
+class ToolStepMeta {
+  blocks: ModelBlock[],
+  meta: Meta,
+}

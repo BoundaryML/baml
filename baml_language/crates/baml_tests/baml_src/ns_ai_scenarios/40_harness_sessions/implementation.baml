@@ -81,7 +81,10 @@ class s40_SessionInfo {
 
 class s40_SessionRecord {
   info: s40_SessionInfo,
+  // Portable application history. Never substitute this for exact provider
+  // continuation state when a HarnessSessionToken is available.
   turns: root.ai.ChatMessage[],
+  continuation: root.ai.HarnessSessionToken?,
 }
 
 // The cwd-keyed JSONL layout is explicit even though unit tests use the memory
@@ -134,6 +137,7 @@ class s40_MemoryStore {
         revision: self.revision, parent_id: parent_id, branch_point: branch_point,
       },
       turns: turns,
+      continuation: null,
     });
     id
   }
@@ -222,6 +226,12 @@ interface s40_SessionCatalog requires root.ai.Provider {
   function list_sessions(self) -> s40_SessionInfo[] throws s40_SessionError | baml.errors.UnknownError
   function session_info(self, id: string) -> s40_SessionInfo throws s40_SessionError | baml.errors.UnknownError
   function session_messages(self, id: string) -> root.ai.ChatMessage[] throws s40_SessionError | baml.errors.UnknownError
+  function session_conversation(self, id: string) -> root.ai.Conversation
+      throws s40_SessionError | baml.errors.UnknownError {
+    root.ai.conversation_from_messages(self.session_messages(id))
+  }
+  function session_token(self, id: string) -> root.ai.HarnessSessionToken?
+      throws s40_SessionError | baml.errors.UnknownError { null }
   function rename_session(self, id: string, title: string) -> null throws s40_SessionError | baml.errors.UnknownError
   function tag_session(self, id: string, tag: string) -> null throws s40_SessionError | baml.errors.UnknownError
   function resolve_pickup(self, pickup: s40_Pickup) -> string throws s40_SessionError | baml.errors.UnknownError
@@ -269,7 +279,7 @@ class s40_ScriptedCatalog {
     }
     function run_with_session<T>(self, request: root.ai.Request<T>, session_id: string) -> T
         throws s40_SessionError | baml.errors.UnknownError {
-      let value: T = baml.sap.parse<T>(self.reply_json) catch (e) {
+      let value: T = baml.json.from_string<T>(self.reply_json) catch (e) {
         _ => throw baml.errors.UnknownError { data: e, message: ["scripted session output parse failed"] },
       };
       self.store.append(

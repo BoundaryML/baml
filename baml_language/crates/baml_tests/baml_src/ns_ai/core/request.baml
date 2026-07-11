@@ -5,6 +5,10 @@ class TaskIdentity {
 
 class RequestOptions {
   dispatch: ((ToolCall[]) -> ToolResult[] throws never)?,
+  tool_middleware: ToolMiddleware[]?,
+  observers: AgentObserver[]?,
+  recorders: AgentRecorder[]?,
+  run_id: string?,
 }
 
 class PromptRenderRecipe {

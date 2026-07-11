@@ -243,6 +243,46 @@ test "39: the handwritten Fix companion drives the shared Tools loop" {
   assert.equal(harness.submitted, ["12.5C @ 52.5,13.4", "issue 42: login returns 500"])
 }
 
+test "39: shared observers record lifecycle events without becoming policy" {
+  let harness = s39_ScriptedHarness {
+    calls: [root.ai.ToolCall {
+      id: "local-1",
+      name: "get_temperature",
+      args: `{"latitude":52.5,"longitude":13.4}`,
+    }],
+    final_json: `{"files_changed":[],"summary":"observed"}`,
+    skill_json: `{}`,
+    skill_commands: [],
+    submitted: [],
+  };
+  let tools = [s39_weather_tool()];
+  let request = s39_Fix_request(
+    "observe the run",
+    provider = harness,
+    tools = s39_tool_specs(tools),
+    dispatch = s39_dispatch(tools, []),
+  );
+  let observer = s39_EventAudit { kinds: [] };
+  let recorder = s39_EventAudit { kinds: [] };
+  request.options.observers = [observer];
+  request.options.recorders = [recorder];
+  let run = root.ai.run_agent_detailed<s39_Patch>(request);
+  assert.equal(root.ai.agent_run_value(run).summary, "observed")
+  assert.is_true(observer.kinds.includes("tool_call_started"))
+  assert.is_true(observer.kinds.includes("run_finished"))
+  assert.is_true(recorder.kinds.includes("record:tool_call_finished"))
+  assert.equal(run.turns.length(), 2)
+}
+
+test "39: provider blocks extend the shared method-only interface out of body" {
+  let block: root.ai.ModelBlock = s39_ThinkingBlock {
+    digest: "considered two patches",
+    signature_hint: "provider-owned",
+  };
+  assert.equal(block.kind(), "s39_thinking")
+  assert.equal(block.provider(), "example-provider")
+}
+
 test "39: a skill is a distinct typed capability over the same Request<T>" {
   let result = s39_TriageIssue_manual(42);
   assert.equal(result.severity, "high")

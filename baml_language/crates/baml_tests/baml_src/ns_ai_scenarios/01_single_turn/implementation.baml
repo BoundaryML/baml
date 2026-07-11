@@ -17,7 +17,9 @@ class BepV2FixtureGenerate {
   implements root.ai.Generate {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
-      let value: T = baml.sap.parse<T>(self.reply) catch (e) {
+      // Fixtures carry exact JSON wire values; SAP is reserved for actual
+      // unconstrained model text in provider adapters.
+      let value: T = baml.json.from_string<T>(self.reply) catch (e) {
         _ => throw baml.errors.UnknownError {
           data: e,
           message: ["fixture response did not match the requested output type"],

@@ -213,6 +213,21 @@ test "40: list, tag, rename, and audit do not run another agent turn" {
   assert.equal(s40_AuditSession(provider, info?.id ?? "missing").length(), 2)
 }
 
+test "40: catalog history is explicitly a portable Conversation view" {
+  let store = s40_new_store();
+  let provider = s40_ScriptedCatalog {
+    store: store,
+    cwd: "/workspace/project",
+    cwd_keyed: true,
+    reply_json: `{"files_changed":[],"summary":"portable"}`,
+  };
+  let _ = s40_Fix_manual("record a portable turn", provider = provider);
+  let id = provider.list_sessions().at(0)?.id ?? "missing";
+  let conversation = provider.session_conversation(id);
+  assert.equal(conversation.messages.length(), 2)
+  assert.equal(provider.session_token(id), null)
+}
+
 testset "integ-test-40-harness-sessions" {
   test "40 integ: the queryable transcript can be materialized as cwd-keyed JSONL" {
     let store = s40_new_store();

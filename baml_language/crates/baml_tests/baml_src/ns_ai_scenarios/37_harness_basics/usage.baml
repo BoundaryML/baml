@@ -133,7 +133,7 @@ function s37_drivable(provider: root.ai.Provider) -> string throws never {
 
 function s37_supports(provider: root.ai.Provider, verb: string) -> bool throws never {
   match (provider) {
-    let control: s37_ControlPlane => control.supported_verbs().includes(verb),
+    let control: root.ai.HarnessControlPlane => control.supported_verbs().includes(verb),
     _ => false,
   }
 }

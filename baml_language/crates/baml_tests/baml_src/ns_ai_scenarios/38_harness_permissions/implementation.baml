@@ -79,7 +79,7 @@ function s38_ask() -> (root.ai.ToolCall) -> s38_ApprovalDecision throws never {
 
 function s38_execute(call: root.ai.ToolCall, sandbox: s38_Sandbox) -> root.ai.ToolResult throws never {
   if (call.name == "bash") {
-    let args = baml.sap.parse<s38_BashArgs>(call.args) catch (e) {
+    let args = baml.json.from_string<s38_BashArgs>(call.args) catch (e) {
       _ => return root.ai.ToolResult { id: call.id, output: "invalid bash arguments" },
     };
     return root.ai.ToolResult { id: call.id, output: sandbox.exec(args.command) };
@@ -149,6 +149,58 @@ function s38_gate(
   results
 }
 
+// Scenario-specific policy expressed through the shared behavioral middleware
+// contract. Sandbox execution remains a separate dispatcher concern.
+class s38_PermissionMiddleware {
+  mode: string,
+  allowed_tools: string[],
+  denied_tools: string[],
+  approve: ((root.ai.ToolCall) -> s38_ApprovalDecision throws never)?,
+
+  implements root.ai.ToolMiddleware {
+    function before_tool(
+      self,
+      context: root.ai.ToolContext,
+      call: root.ai.ToolCall,
+    ) -> root.ai.ToolDecision throws never {
+      if (!self.allowed_tools.includes(call.name) || self.denied_tools.includes(call.name)) {
+        return root.ai.ToolDecision.deny("(" + self.mode + "): tool is outside the declared roster");
+      }
+      if (!s38_is_write_tool(call.name) || self.mode == "full-auto") {
+        return root.ai.ToolDecision.allow(call);
+      }
+      if (self.mode == "read-only" || self.mode == "plan") {
+        return root.ai.ToolDecision.deny("(" + self.mode + "): mode forbids writes");
+      }
+      if (self.mode == "ask") {
+        let decision = match (self.approve) {
+          let callback: (root.ai.ToolCall) -> s38_ApprovalDecision => callback(call),
+          null => s38_ApprovalDecision {
+            behavior: s38_ApprovalBehavior.Deny,
+            updated_args: null,
+            message: "unattended ask defaults to deny",
+          },
+        };
+        match (decision.behavior) {
+          s38_ApprovalBehavior.Allow => root.ai.ToolDecision.allow(root.ai.ToolCall {
+            id: call.id,
+            name: call.name,
+            args: decision.updated_args ?? call.args,
+          }),
+          s38_ApprovalBehavior.Deny => root.ai.ToolDecision.deny(
+            "(" + self.mode + "): " + (decision.message ?? "operator denied"),
+          ),
+          s38_ApprovalBehavior.Ask => root.ai.ToolDecision.deny(
+            "(" + self.mode + "): no interactive approval channel was supplied",
+          ),
+        }
+      } else {
+        root.ai.ToolDecision.deny("(" + self.mode + "): unknown permission mode")
+      }
+    }
+  }
+}
+
 // The Tools loop requires a non-throwing dispatcher. A permission refusal is
 // recoverable loop data, so it becomes ToolResult output for the model.
 function s38_permissioned_dispatch(
@@ -159,18 +211,23 @@ function s38_permissioned_dispatch(
   approve: ((root.ai.ToolCall) -> s38_ApprovalDecision throws never)?,
 ) -> (root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {
   (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
-    s38_gate(calls, mode, allowed_tools, denied_tools, sandbox, approve) catch (e) {
-      let denied: s38_PermissionDenied => {
-        let results: root.ai.ToolResult[] = [];
-        for (let call in calls) {
-          results.push(root.ai.ToolResult {
-            id: call.id,
-            output: "DENIED (" + denied.mode + "): " + denied.reason,
-          });
-        }
-        return results;
-      },
-    }
+    let execute = (approved: root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {
+      approved.map((call: root.ai.ToolCall) -> root.ai.ToolResult { s38_execute(call, sandbox) })
+    };
+    let middleware: root.ai.ToolMiddleware[] = [s38_PermissionMiddleware {
+      mode: mode,
+      allowed_tools: allowed_tools,
+      denied_tools: denied_tools,
+      approve: approve,
+    }];
+    root.ai.dispatch_with_middleware(
+      calls,
+      execute,
+      middleware,
+      [],
+      [],
+      root.ai.ToolContext { run_id: null, turn: 0, provider: "s38-permission-harness" },
+    )
   }
 }
 
@@ -205,7 +262,7 @@ class s38_HarnessAgent {
         throws baml.errors.ToolError | baml.errors.UnknownError {
       match (transcript.remaining.at(0)) {
         let call: root.ai.ToolCall => root.ai.ToolCalls { calls: [call] },
-        null => baml.sap.parse<T>(transcript.final_json) catch (e) {
+        null => baml.json.from_string<T>(transcript.final_json) catch (e) {
           _ => throw baml.errors.UnknownError { data: e, message: ["permission harness final parse failed"] },
         },
       }

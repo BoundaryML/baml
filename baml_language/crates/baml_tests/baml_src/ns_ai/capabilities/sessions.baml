@@ -1,5 +1,18 @@
-class SessionOptions {}
-class SessionToken { provider: string, id: string }
+class SessionOptions {
+  cwd: string?,
+  resume_from: string?,
+  permission_mode: string?,
+  attributes: map<string, string>,
+}
+
+// Portable coordinate only. Provider-specific continuation state belongs in
+// HarnessSessionToken.sealed and must be produced/consumed by the provider.
+class SessionToken {
+  provider: string,
+  id: string,
+  runtime: string?,
+  sealed: string?,
+}
 
 interface Session {
   function run<T>(self, request: Request<T>) -> T throws baml.errors.UnknownError

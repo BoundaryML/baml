@@ -5,8 +5,8 @@ class S42Patch {
   summary: string,
 }
 
-function s42_code_agent() -> S42HarnessAgent throws never {
-  S42HarnessAgent {
+function s42_code_agent() -> root.ai.HarnessAgent throws never {
+  root.ai.HarnessAgent {
     inner: S42ClaudeHarness {
       reply: `{"files_changed":["tests.baml"],"summary":"claude inspected tests"}`,
       next_id: 0,
@@ -15,8 +15,8 @@ function s42_code_agent() -> S42HarnessAgent throws never {
   }
 }
 
-function s42_pi_agent() -> S42HarnessAgent throws never {
-  S42HarnessAgent {
+function s42_pi_agent() -> root.ai.HarnessAgent throws never {
+  root.ai.HarnessAgent {
     inner: S42PiHarness {
       reply: `{"files_changed":["pi.baml"],"summary":"pi inspected tests"}`,
       next_id: 0,
@@ -43,7 +43,7 @@ function s42_coder(runtime: string) -> root.ai.Provider throws never {
 //   through `root.ai.run`.
 function s42_Summarize_request(
   task: string,
-  provider: root.ai.Provider = S42HarnessAgent {
+  provider: root.ai.Provider = root.ai.HarnessAgent {
     inner: S42ClaudeHarness {
       reply: `{"files_changed":["tests.baml"],"summary":"claude inspected tests"}`,
       next_id: 0,
@@ -68,7 +68,7 @@ function s42_Summarize_request(
 
 function s42_Summarize_manual(
   task: string,
-  provider: root.ai.Provider = S42HarnessAgent {
+  provider: root.ai.Provider = root.ai.HarnessAgent {
     inner: S42ClaudeHarness {
       reply: `{"files_changed":["tests.baml"],"summary":"claude inspected tests"}`,
       next_id: 0,
@@ -93,7 +93,7 @@ function s42_Summarize_manual(
 // - `s42_DriveRich_manual` is an application-level rich-UI consumer layered on it.
 function s42_SummarizeStream_request(
   task: string,
-  provider: root.ai.Provider = S42HarnessAgent {
+  provider: root.ai.Provider = root.ai.HarnessAgent {
     inner: S42ClaudeHarness {
       reply: `{"files_changed":["stream.baml"],"summary":"streamed harness events"}`,
       next_id: 0,
@@ -115,15 +115,15 @@ function s42_SummarizeStream_request(
 
 function s42_SummarizeStream_manual(
   task: string,
-  provider: root.ai.Provider = S42HarnessAgent {
+  provider: root.ai.Provider = root.ai.HarnessAgent {
     inner: S42ClaudeHarness {
       reply: `{"files_changed":["stream.baml"],"summary":"streamed harness events"}`,
       next_id: 0,
       sandbox: "container",
     },
   },
-) -> S42EventLog<S42Patch>
-    throws baml.errors.CallError | baml.errors.UnknownError {
+) -> root.ai.AgentEventLog<S42Patch>
+    throws baml.errors.CallError | baml.errors.UnknownError | baml.errors.Unsupported {
   s42_events<S42Patch>(s42_SummarizeStream_request(task, provider = provider))
 }
 
@@ -131,13 +131,13 @@ function s42_SummarizeStream_manual(
 function s42_DriveRich_manual(
   task: string,
   provider: root.ai.Provider,
-) -> S42EventLog<S42Patch>
-    throws baml.errors.CallError | baml.errors.UnknownError {
+) -> root.ai.AgentEventLog<S42Patch>
+    throws baml.errors.CallError | baml.errors.UnknownError | baml.errors.Unsupported {
   s42_SummarizeStream_manual(task, provider = provider)
 }
 
 function s42_build_server(
-  agent: S42HarnessAgent,
+  agent: root.ai.HarnessAgent,
   store: S42HandleStore,
 ) -> S42ServerSession throws never {
   S42ServerSession { agent: agent, store: store }
@@ -147,10 +147,15 @@ function s42_build_server(
 function s42_HandleStart(
   spec: string,
   server: S42ServerSession,
-) -> S42Turn<S42Patch> throws baml.errors.UnknownError {
+) -> S42Turn<S42Patch> throws baml.errors.UnknownError | baml.errors.Unsupported {
   server.open<S42Patch>(
     s42_Summarize_request(spec, provider = server.agent),
-    S42SessionOpts { cwd: "/workspace", resume_from: null, permission_mode: "accept-edits" },
+    root.ai.SessionOptions {
+      cwd: "/workspace",
+      resume_from: null,
+      permission_mode: "accept-edits",
+      attributes: {},
+    },
   )
 }
 
@@ -160,7 +165,7 @@ function s42_HandleContinue(
   id: string,
   follow_up: string,
   server: S42ServerSession,
-) -> S42Turn<S42Patch> throws baml.errors.UnknownError {
+) -> S42Turn<S42Patch> throws baml.errors.UnknownError | baml.errors.Unsupported {
   server.resume<S42Patch>(
     id,
     s42_Summarize_request(follow_up, provider = server.agent),
@@ -168,15 +173,15 @@ function s42_HandleContinue(
 }
 
 function s42_HandleEnd(id: string, server: S42ServerSession) -> null
-    throws baml.errors.UnknownError {
+    throws baml.errors.UnknownError | baml.errors.Unsupported {
   server.close(id)
 }
 
 // Lossy normalization is explicit: ask the facade for its raw provider, then
 // negotiate the provider-specific verb. Claude/container can rewind; Pi cannot.
-function s42_RewindIfPossible(agent: S42HarnessAgent) -> bool throws never {
+function s42_RewindIfPossible(agent: root.ai.HarnessAgent) -> bool throws never {
   match (agent.raw()) {
-    let controls: S42ControlPlane => controls.supported_verbs().includes("rewind_files"),
+    let controls: root.ai.HarnessControlPlane => controls.supported_verbs().includes("rewind_files"),
     _ => false,
   }
 }
@@ -214,16 +219,16 @@ test "42: one hand-written task companion runs against Claude or Pi" {
 
 test "42: the streaming task companion exposes a lossless rich event log" {
   let log = s42_SummarizeStream_manual("show tool work");
-  assert.equal(log.final_value.summary, "streamed harness events")
-  assert.equal(log.events.at(0)?.kind, "text_delta")
-  assert.equal(log.events.at(1)?.kind, "tool_started")
+  assert.equal(root.ai.agent_run_value(log.run).summary, "streamed harness events")
+  assert.equal((log.events[0]).kind(), "model_started")
+  assert.equal((log.events[1]).kind(), "text_delta")
 }
 
 test "42: rich consumers use the same request and preserve tool cards" {
   let log = s42_DriveRich_manual("inspect tests", s42_code_agent());
   let has_tool = false;
   for (let event in log.events) {
-    if (event.kind == "tool_started") { has_tool = true; }
+    if (event.kind() == "tool_call_started") { has_tool = true; }
   }
   assert.is_true(has_tool)
 }
@@ -232,14 +237,14 @@ test "42: a serializable handle continues one session across HTTP requests" {
   let store = S42HandleStore { handles: [] };
   let server = s42_build_server(s42_code_agent(), store);
   let first = s42_HandleStart("inspect the tests", server);
-  let encoded = baml.json.to_string(first.handle);
-  let persisted = baml.json.from_string<S42SessionHandle>(encoded);
+  let encoded = baml.json.to_string(first.token);
+  let persisted = baml.json.from_string<root.ai.HarnessSessionToken>(encoded);
   assert.equal(persisted.runtime, "claude-code")
-  assert.equal(persisted.transcript.length(), 2)
+  assert.equal(first.run.conversation.messages.length(), 2)
 
-  let second = s42_HandleContinue(first.handle.id, "now find flaky cases", server);
-  assert.equal(second.handle.id, first.handle.id)
-  assert.equal(second.handle.transcript.length(), 4)
+  let second = s42_HandleContinue(first.token.session_id, "now find flaky cases", server);
+  assert.equal(second.token.session_id, first.token.session_id)
+  assert.is_true(second.token.sealed != first.token.sealed)
   assert.equal(second.value.summary, "claude inspected tests")
 }
 
@@ -247,12 +252,12 @@ test "42: the server owns expiry and teardown truth" {
   let store = S42HandleStore { handles: [] };
   let server = s42_build_server(s42_pi_agent(), store);
   let first = s42_HandleStart("inspect", server);
-  s42_HandleEnd(first.handle.id, server);
-  let result = s42_HandleContinue(first.handle.id, "continue", server) catch (e) {
+  s42_HandleEnd(first.token.session_id, server);
+  let result = s42_HandleContinue(first.token.session_id, "continue", server) catch (e) {
     _ => "expired",
   };
   let label = match (result) {
-    let turn: S42Turn<S42Patch> => turn.handle.id,
+    let turn: S42Turn<S42Patch> => turn.token.session_id,
     let text: string => text,
   };
   assert.equal(label, "expired")
@@ -261,12 +266,36 @@ test "42: the server owns expiry and teardown truth" {
 test "42: runtime feature parity leaks through one documented escape hatch" {
   assert.is_true(s42_RewindIfPossible(s42_code_agent()))
   assert.is_true(!s42_RewindIfPossible(s42_pi_agent()))
-  assert.is_true(s42_code_agent().supported_verbs().includes("interrupt"))
-  assert.is_true(!s42_pi_agent().supported_verbs().includes("interrupt"))
+  assert.is_true(s42_code_agent().raw() is root.ai.HarnessControlPlane)
+  assert.is_true(s42_pi_agent().raw() is root.ai.HarnessControlPlane)
+}
+
+test "42: usage aggregates across model turns independently of events" {
+  let first = root.ai.Meta {
+    provider: "fixture", model: "m", request_id: "1", finish_reason: "tool_calls",
+    usage: root.ai.Usage {
+      input_tokens: 10, output_tokens: 3, cached_input_tokens: 4,
+      reasoning_tokens: 2, cost_usd: 0.01,
+    },
+    attributes: {}, raw: null,
+  };
+  let second = root.ai.Meta {
+    provider: "fixture", model: "m", request_id: "2", finish_reason: "stop",
+    usage: root.ai.Usage {
+      input_tokens: 20, output_tokens: 7, cached_input_tokens: 0,
+      reasoning_tokens: 5, cost_usd: 0.02,
+    },
+    attributes: {}, raw: null,
+  };
+  let usage = root.ai.aggregate_usage([first, second]);
+  assert.equal(usage?.input_tokens, 30)
+  assert.equal(usage?.output_tokens, 10)
+  assert.equal(usage?.reasoning_tokens, 7)
+  assert.equal(usage?.cost_usd, 0.03)
 }
 
 test "42: a HarnessAgent may also wrap a plain Generate provider" {
-  let agent: root.ai.Provider = S42HarnessAgent {
+  let agent: root.ai.Provider = root.ai.HarnessAgent {
     inner: BepV2FixtureGenerate {
       name: "plain-model",
       reply: `{"files_changed":[],"summary":"plain generate"}`,
@@ -279,7 +308,7 @@ test "42: a HarnessAgent may also wrap a plain Generate provider" {
 
 testset "integ-test-42-harness-abstraction" {
   test "42 live: HarnessAgent forwards Generate to an OpenAI inner provider" {
-    let agent: root.ai.Provider = S42HarnessAgent {
+    let agent: root.ai.Provider = root.ai.HarnessAgent {
       inner: root.ai.OpenAi {
         model: "gpt-5.6-luna",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
@@ -294,7 +323,7 @@ testset "integ-test-42-harness-abstraction" {
   }
 
   test "42 live: the same HarnessAgent forwards canonical Streaming" {
-    let agent: root.ai.Provider = S42HarnessAgent {
+    let agent: root.ai.Provider = root.ai.HarnessAgent {
       inner: root.ai.OpenAi {
         model: "gpt-5.6-luna",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),

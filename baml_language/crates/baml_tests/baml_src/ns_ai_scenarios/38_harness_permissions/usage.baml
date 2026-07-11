@@ -175,7 +175,8 @@ test "38: the non-throwing dispatcher encodes permission refusal as loop data" {
     null,
   );
   let results = dispatch([s38_write_call()]);
-  assert.is_true((results[0]).output.includes("DENIED (read-only)"))
+  assert.is_true((results[0]).output.includes("DENIED"))
+  assert.is_true((results[0]).output.includes("read-only"))
 }
 
 test "38: the handwritten agent companion uses the harness posture at call time" {

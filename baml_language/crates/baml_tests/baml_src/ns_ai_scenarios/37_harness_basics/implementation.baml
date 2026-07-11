@@ -74,11 +74,8 @@ function s37_all_verbs() -> string[] throws never {
   ["Steer", "FollowUp", "Interrupt", "SetModel", "SetPermissionMode", "RewindFiles", "StopTask", "EndSession"]
 }
 
-// A custom capability is an ordinary interface. String verb names are used
-// because the current test-local Channel transports strings.
-interface s37_ControlPlane requires root.ai.Realtime {
-  function supported_verbs(self) -> string[] throws never
-}
+// Control-plane negotiation uses the shared HarnessControlPlane capability.
+// String verb names remain scenario-local because Channel transports strings.
 
 class s37_HarnessSpawnFailure {
   message: string,
@@ -138,7 +135,7 @@ class s37_GuardedChannel {
 
 function s37_guard_channel(provider: root.ai.Provider, channel: root.ai.Channel) -> root.ai.Channel throws never {
   match (provider) {
-    let control: s37_ControlPlane => s37_GuardedChannel {
+    let control: root.ai.HarnessControlPlane => s37_GuardedChannel {
       inner: channel,
       allowed: control.supported_verbs(),
     },
@@ -204,7 +201,7 @@ class s37_ScriptedHarness {
     }
   }
 
-  implements s37_ControlPlane {
+  implements root.ai.HarnessControlPlane {
     function supported_verbs(self) -> string[] throws never { self.verbs }
   }
 
@@ -219,7 +216,7 @@ class s37_ScriptedHarness {
         throws baml.errors.ToolError | baml.errors.UnknownError {
       match (transcript.remaining.at(0)) {
         let call: root.ai.ToolCall => root.ai.ToolCalls { calls: [call] },
-        null => baml.sap.parse<T>(transcript.final_json) catch (e) {
+        null => baml.json.from_string<T>(transcript.final_json) catch (e) {
           _ => throw baml.errors.UnknownError { data: e, message: ["scripted harness final parse failed"] },
         },
       }

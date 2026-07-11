@@ -1,92 +1,153 @@
-// 42 — one harness facade over several runtimes.
-//
-// The BEPv2 rule is kept explicit: a provider owns capabilities; stateful work
-// returns a resource/coordinate. SessionHandle is serializable application data,
-// while the configured provider remains process-local. A server persists the
-// handle and routes it back to the runtime named by `runtime`.
+// 42 — the shared root.ai.Harness contract over two deliberately different
+// external runtimes. Only adapter-specific state and control verbs live here.
 
-class S42SessionOpts {
-  cwd: string?,
-  resume_from: string?,
-  permission_mode: string?,
-}
-
-class S42SessionHandle {
+class S42HarnessSession {
   id: string,
   runtime: string,
   transcript: string[],
   status: string,
 }
 
-class S42AgentEvent {
-  kind: string,
-  text: string?,
-  detail: string?,
-}
-
-class S42EventLog<T> {
-  events: S42AgentEvent[],
-  final_value: T,
-  session: S42SessionHandle?,
-}
-
-// The portable intersection. Provider-specific commands are intentionally not
-// added here; callers negotiate ControlPlane or use HarnessAgent.raw().
-interface S42Harness requires root.ai.Provider {
-  function create_session(self, options: S42SessionOpts) -> S42SessionHandle
-    throws baml.errors.UnknownError
-  function attach<T>(
-    self,
-    handle: S42SessionHandle,
-    request: root.ai.Request<T>,
-  ) -> T throws baml.errors.UnknownError
-  function detach(self, handle: S42SessionHandle) -> S42SessionHandle
-    throws baml.errors.UnknownError
-  function stop(self, handle: S42SessionHandle) -> null throws baml.errors.UnknownError
-  function destroy(self, handle: S42SessionHandle) -> null throws baml.errors.UnknownError
-}
-
-interface S42ControlPlane requires root.ai.Provider {
-  function supported_verbs(self) -> string[] throws never
-}
-
-// Lossless rich events are a custom capability. The source design projects
-// these into baml.llm.Stream at a host boundary; this all-BAML reference keeps
-// them as a deterministic event log and separately forwards canonical Streaming
-// whenever the wrapped provider genuinely implements root.ai.Streaming.
-interface S42AgentStreaming requires root.ai.Provider {
-  function events<T>(
-    self,
-    request: root.ai.Request<T>,
-    handle: S42SessionHandle?,
-  ) -> S42EventLog<T> throws baml.errors.UnknownError
-}
-
-function s42_parse_reply<T>(reply: string, runtime: string) -> T
+function s42_check_session(session: S42HarnessSession, want: string) -> null
     throws baml.errors.UnknownError {
-  baml.sap.parse<T>(reply) catch (e) {
-    _ => throw baml.errors.UnknownError {
-      data: e,
-      message: [runtime + " harness reply did not match the task output"],
-    },
-  }
-}
-
-function s42_check_runtime(handle: S42SessionHandle, want: string) -> null
-    throws baml.errors.UnknownError {
-  if (handle.runtime != want) {
+  if (session.runtime != want) {
     throw baml.errors.UnknownError {
-      data: handle,
-      message: ["stored session belongs to " + handle.runtime + ", not " + want],
+      data: session,
+      message: ["stored session belongs to " + session.runtime + ", not " + want],
     };
   }
-  if (handle.status == "destroyed") {
+  if (session.status == "destroyed") {
     throw baml.errors.UnknownError {
-      data: handle.id,
+      data: session.id,
       message: ["session expired or was destroyed"],
     };
   }
   null
+}
+
+function s42_meta(provider: string, runtime: string, session_id: string) -> root.ai.Meta throws never {
+  root.ai.Meta {
+    provider: provider,
+    model: null,
+    request_id: session_id,
+    finish_reason: "harness_turn_done",
+    usage: root.ai.Usage { input_tokens: 0, output_tokens: 0 },
+    attributes: { "runtime": runtime },
+    raw: null,
+  }
+}
+
+function s42_run<T>(
+  provider: string,
+  runtime: string,
+  reply: string,
+  session: S42HarnessSession,
+  request: root.ai.Request<T>,
+) -> root.ai.AgentRun<T> throws baml.errors.UnknownError {
+  s42_check_session(session, runtime);
+  session.status = "attached";
+  let prompt = baml.llm.prompt_to_text(request.prompt);
+  session.transcript.push("user: " + prompt);
+  session.transcript.push("assistant: " + reply);
+  let value: T = baml.json.from_string<T>(reply) catch (e) {
+    _ => throw baml.errors.UnknownError {
+      data: e,
+      message: [runtime + " harness reply did not match the task output"],
+    },
+  };
+  let meta = s42_meta(provider, runtime, session.id);
+  let blocks: root.ai.ModelBlock[] = [
+    root.ai.TextBlock { text: reply, provider_name: provider, metadata: null },
+  ];
+  let conversation = root.ai.conversation_from_messages(request.messages());
+  conversation.messages.push(root.ai.ConversationMessage {
+    role: "assistant",
+    parts: [root.ai.MessagePart.from_text(reply)],
+    provider_metadata: null,
+  });
+  root.ai.AgentRun<T> {
+    done: root.ai.Done<T> { value: value, meta: meta },
+    budget_reached: null,
+    handoff: null,
+    turns: [root.ai.AgentTurn<T> {
+      index: 1,
+      blocks: blocks,
+      tool_calls: [],
+      tool_results: [],
+      value: value,
+      meta: meta,
+    }],
+    meta: meta,
+    session_token: null,
+    conversation: conversation,
+  }
+}
+
+function s42_save_session(
+  provider: string,
+  session: S42HarnessSession,
+) -> root.ai.HarnessSessionToken throws baml.errors.UnknownError {
+  let sealed = baml.json.to_string(session) catch (e) {
+    _ => throw baml.errors.UnknownError { data: e, message: ["failed to seal harness session"] },
+  };
+  root.ai.HarnessSessionToken {
+    provider: provider,
+    runtime: session.runtime,
+    session_id: session.id,
+    version: 1,
+    sealed: sealed,
+    expires_at: null,
+  }
+}
+
+function s42_restore_session(
+  provider: string,
+  runtime: string,
+  token: root.ai.HarnessSessionToken,
+) -> S42HarnessSession throws baml.errors.UnknownError {
+  if (token.provider != provider || token.runtime != runtime || token.version != 1) {
+    throw baml.errors.UnknownError {
+      data: token,
+      message: ["session token does not belong to this harness adapter"],
+    };
+  }
+  let session = baml.json.from_string<S42HarnessSession>(token.sealed) catch (e) {
+    _ => throw baml.errors.UnknownError { data: e, message: ["invalid sealed harness session"] },
+  };
+  s42_check_session(session, runtime);
+  session
+}
+
+function s42_stream_result<T>(
+  run: root.ai.AgentRun<T>,
+  provider: string,
+  include_tool: bool,
+) -> root.ai.AgentEventStream<T> throws never {
+  let events: root.ai.AgentEvent[] = [
+    root.ai.ModelStartedEvent { id: run.meta.request_id, provider: provider },
+    root.ai.TextDeltaEvent {
+      id: run.meta.request_id,
+      text: "inspecting repository",
+      metadata: null,
+    },
+  ];
+  if (include_tool) {
+    let call = root.ai.ToolCall { id: "read-1", name: "Read", args: `{"path":"tests.baml"}` };
+    events.push(root.ai.ToolCallProposedEvent { id: run.meta.request_id, call: call });
+    events.push(root.ai.ToolCallStartedEvent { id: run.meta.request_id, call: call });
+    events.push(root.ai.ToolCallFinishedEvent {
+      id: run.meta.request_id,
+      call: call,
+      result: root.ai.ToolResult { id: call.id, output: "read ok" },
+    });
+  }
+  events.push(root.ai.UsageUpdatedEvent {
+    id: run.meta.request_id,
+    usage: run.meta.usage ?? root.ai.Usage { input_tokens: 0, output_tokens: 0 },
+  });
+  events.push(root.ai.TurnFinishedEvent { id: run.meta.request_id, turn: 1 });
+  events.push(root.ai.RunFinishedEvent { id: run.meta.request_id, outcome: "done" });
+  root.ai.BufferedAgentEventStream<T> { events: events, cursor: 0, result: run }
 }
 
 class S42ClaudeHarness {
@@ -98,7 +159,7 @@ class S42ClaudeHarness {
     function display_name(self) -> string throws never { "claude-code-harness" }
   }
 
-  implements S42ControlPlane {
+  implements root.ai.HarnessControlPlane {
     function supported_verbs(self) -> string[] throws never {
       if (self.sandbox == "local") {
         ["follow_up", "interrupt", "stop"]
@@ -108,67 +169,46 @@ class S42ClaudeHarness {
     }
   }
 
-  implements S42Harness {
-    function create_session(self, options: S42SessionOpts) -> S42SessionHandle
+  implements root.ai.Harness {
+    type HarnessSession = S42HarnessSession
+
+    function open(self, options: root.ai.SessionOptions) -> S42HarnessSession
         throws baml.errors.UnknownError {
       self.next_id = self.next_id + 1;
-      S42SessionHandle {
+      S42HarnessSession {
         id: "claude-" + self.next_id.to_string(),
         runtime: "claude-code",
         transcript: [],
         status: "parked",
       }
     }
-
-    function attach<T>(
-      self,
-      handle: S42SessionHandle,
-      request: root.ai.Request<T>,
-    ) -> T throws baml.errors.UnknownError {
-      s42_check_runtime(handle, "claude-code");
-      handle.status = "attached";
-      handle.transcript.push("user: " + baml.llm.prompt_to_text(request.prompt));
-      handle.transcript.push("assistant: " + self.reply);
-      s42_parse_reply<T>(self.reply, "claude-code")
+    function run<T>(self, session: S42HarnessSession, request: root.ai.Request<T>)
+        -> root.ai.AgentRun<T> throws baml.errors.UnknownError {
+      s42_run<T>(self.display_name(), "claude-code", self.reply, session, request)
     }
-
-    function detach(self, handle: S42SessionHandle) -> S42SessionHandle
+    function stream<T>(self, session: S42HarnessSession, request: root.ai.Request<T>)
+        -> root.ai.AgentEventStream<T> throws baml.errors.UnknownError {
+      s42_stream_result<T>(self.run<T>(session, request), self.display_name(), true)
+    }
+    function save_session(self, session: S42HarnessSession) -> root.ai.HarnessSessionToken
         throws baml.errors.UnknownError {
-      s42_check_runtime(handle, "claude-code");
-      handle.status = "parked";
-      handle
+      session.status = "parked";
+      s42_save_session(self.display_name(), session)
     }
-
-    function stop(self, handle: S42SessionHandle) -> null throws baml.errors.UnknownError {
-      s42_check_runtime(handle, "claude-code");
-      handle.status = "stopped";
+    function restore_session(self, token: root.ai.HarnessSessionToken) -> S42HarnessSession
+        throws baml.errors.UnknownError {
+      s42_restore_session(self.display_name(), "claude-code", token)
+    }
+    function stop(self, session: S42HarnessSession) -> null throws baml.errors.UnknownError {
+      s42_check_session(session, "claude-code");
+      session.status = "stopped";
       null
     }
-
-    function destroy(self, handle: S42SessionHandle) -> null throws baml.errors.UnknownError {
-      s42_check_runtime(handle, "claude-code");
-      handle.status = "destroyed";
-      handle.transcript = [];
+    function destroy(self, session: S42HarnessSession) -> null throws baml.errors.UnknownError {
+      s42_check_session(session, "claude-code");
+      session.status = "destroyed";
+      session.transcript = [];
       null
-    }
-  }
-
-  implements S42AgentStreaming {
-    function events<T>(
-      self,
-      request: root.ai.Request<T>,
-      handle: S42SessionHandle?,
-    ) -> S42EventLog<T> throws baml.errors.UnknownError {
-      let value = s42_parse_reply<T>(self.reply, "claude-code");
-      S42EventLog<T> {
-        events: [
-          S42AgentEvent { kind: "text_delta", text: "inspecting repository", detail: null },
-          S42AgentEvent { kind: "tool_started", text: null, detail: "Read" },
-          S42AgentEvent { kind: "turn_done", text: null, detail: null },
-        ],
-        final_value: value,
-        session: handle,
-      }
     }
   }
 }
@@ -181,17 +221,17 @@ class S42PiHarness {
     function display_name(self) -> string throws never { "pi-harness" }
   }
 
-  implements S42ControlPlane {
-    function supported_verbs(self) -> string[] throws never {
-      ["steer", "follow_up"]
-    }
+  implements root.ai.HarnessControlPlane {
+    function supported_verbs(self) -> string[] throws never { ["steer", "follow_up"] }
   }
 
-  implements S42Harness {
-    function create_session(self, options: S42SessionOpts) -> S42SessionHandle
+  implements root.ai.Harness {
+    type HarnessSession = S42HarnessSession
+
+    function open(self, options: root.ai.SessionOptions) -> S42HarnessSession
         throws baml.errors.UnknownError {
       self.next_id = self.next_id + 1;
-      S42SessionHandle {
+      S42HarnessSession {
         id: "pi-node-" + self.next_id.to_string(),
         runtime: "pi",
         transcript: match (options.resume_from) {
@@ -201,245 +241,107 @@ class S42PiHarness {
         status: "parked",
       }
     }
-
-    function attach<T>(
-      self,
-      handle: S42SessionHandle,
-      request: root.ai.Request<T>,
-    ) -> T throws baml.errors.UnknownError {
-      s42_check_runtime(handle, "pi");
-      handle.status = "attached";
-      handle.transcript.push("user: " + baml.llm.prompt_to_text(request.prompt));
-      handle.transcript.push("assistant: " + self.reply);
-      s42_parse_reply<T>(self.reply, "pi")
+    function run<T>(self, session: S42HarnessSession, request: root.ai.Request<T>)
+        -> root.ai.AgentRun<T> throws baml.errors.UnknownError {
+      s42_run<T>(self.display_name(), "pi", self.reply, session, request)
     }
-
-    function detach(self, handle: S42SessionHandle) -> S42SessionHandle
+    function stream<T>(self, session: S42HarnessSession, request: root.ai.Request<T>)
+        -> root.ai.AgentEventStream<T> throws baml.errors.UnknownError {
+      s42_stream_result<T>(self.run<T>(session, request), self.display_name(), false)
+    }
+    function save_session(self, session: S42HarnessSession) -> root.ai.HarnessSessionToken
         throws baml.errors.UnknownError {
-      s42_check_runtime(handle, "pi");
-      handle.status = "parked";
-      handle
+      session.status = "parked";
+      s42_save_session(self.display_name(), session)
     }
-
-    // Pi cannot interrupt the server-side turn. Stop parks the subscription but
-    // may not cancel work; the weaker semantic is explicit in the verb roster.
-    function stop(self, handle: S42SessionHandle) -> null throws baml.errors.UnknownError {
-      s42_check_runtime(handle, "pi");
-      handle.status = "parked-after-stop";
+    function restore_session(self, token: root.ai.HarnessSessionToken) -> S42HarnessSession
+        throws baml.errors.UnknownError {
+      s42_restore_session(self.display_name(), "pi", token)
+    }
+    function stop(self, session: S42HarnessSession) -> null throws baml.errors.UnknownError {
+      s42_check_session(session, "pi");
+      session.status = "parked-after-stop";
       null
     }
-
-    function destroy(self, handle: S42SessionHandle) -> null throws baml.errors.UnknownError {
-      s42_check_runtime(handle, "pi");
-      handle.status = "destroyed";
-      handle.transcript = [];
+    function destroy(self, session: S42HarnessSession) -> null throws baml.errors.UnknownError {
+      s42_check_session(session, "pi");
+      session.status = "destroyed";
+      session.transcript = [];
       null
-    }
-  }
-
-  implements S42AgentStreaming {
-    function events<T>(
-      self,
-      request: root.ai.Request<T>,
-      handle: S42SessionHandle?,
-    ) -> S42EventLog<T> throws baml.errors.UnknownError {
-      S42EventLog<T> {
-        events: [
-          S42AgentEvent { kind: "text_delta", text: "pi is working", detail: null },
-          S42AgentEvent { kind: "turn_done", text: null, detail: null },
-        ],
-        final_value: s42_parse_reply<T>(self.reply, "pi"),
-        session: handle,
-      }
     }
   }
 }
 
-// The unifying facade is itself a Provider. It can wrap a harness or an ordinary
-// model; it claims only interactions it can honestly forward or normalize.
-class S42HarnessAgent {
-  inner: root.ai.Provider,
-
-  implements root.ai.Provider {
-    function display_name(self) -> string throws never { "harness-agent:" + self.inner.display_name() }
-    function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
-  }
-
-  implements root.ai.Generate {
-    function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
-        throws baml.errors.CallError | baml.errors.UnknownError {
-      match (self.inner) {
-        let generate: root.ai.Generate => generate.generate<T>(request.for_provider(self.inner)),
-        let harness: S42Harness => {
-          let handle = harness.create_session(S42SessionOpts {
-            cwd: null, resume_from: null, permission_mode: null,
-          });
-          let value = harness.attach<T>(handle, request.for_provider(self.inner));
-          let parked = harness.detach(handle);
-          root.ai.Response<T> {
-            value: value,
-            meta: root.ai.Meta {
-              provider: self.inner.display_name(),
-              model: null,
-              request_id: parked.id,
-              finish_reason: "harness_turn_done",
-              usage: null,
-              attributes: { "runtime": parked.runtime },
-              raw: null,
-            },
-          }
-        },
-        _ => throw baml.errors.Unsupported {
-          message: "inner provider is neither Generate nor S42Harness",
-        },
-      }
-    }
-  }
-
-  // Canonical stream forwarding makes an agent over a normal streaming model
-  // fit exactly the same UI consumer. Harness event projection remains the
-  // explicit S42AgentStreaming seam until a BAML stream constructor exists.
-  implements root.ai.Streaming {
-    function stream<TPartial, T>(
-      self,
-      request: root.ai.Request<T>,
-    ) -> baml.llm.Stream<TPartial, T>
-        throws baml.errors.StreamError | baml.errors.UnknownError {
-      match (self.inner) {
-        let streaming: root.ai.Streaming => streaming.stream<TPartial, T>(request.for_provider(self.inner)),
-        _ => throw baml.errors.Unsupported {
-          message: "inner harness exposes rich events but no canonical stream projection",
-        },
-      }
-    }
-  }
-
-  implements S42Harness {
-    function create_session(self, options: S42SessionOpts) -> S42SessionHandle
-        throws baml.errors.UnknownError {
-      match (self.inner) {
-        let harness: S42Harness => harness.create_session(options),
-        _ => throw baml.errors.UnknownError {
-          data: self.inner,
-          message: ["inner provider has no cross-request harness lifecycle"],
-        },
-      }
-    }
-
-    function attach<T>(
-      self,
-      handle: S42SessionHandle,
-      request: root.ai.Request<T>,
-    ) -> T throws baml.errors.UnknownError {
-      match (self.inner) {
-        let harness: S42Harness => harness.attach<T>(handle, request.for_provider(self.inner)),
-        _ => throw baml.errors.UnknownError {
-          data: self.inner,
-          message: ["inner provider cannot attach a harness session"],
-        },
-      }
-    }
-
-    function detach(self, handle: S42SessionHandle) -> S42SessionHandle
-        throws baml.errors.UnknownError {
-      match (self.inner) {
-        let harness: S42Harness => harness.detach(handle),
-        _ => throw baml.errors.UnknownError { data: self.inner, message: ["cannot detach"] },
-      }
-    }
-
-    function stop(self, handle: S42SessionHandle) -> null throws baml.errors.UnknownError {
-      match (self.inner) {
-        let harness: S42Harness => harness.stop(handle),
-        _ => throw baml.errors.UnknownError { data: self.inner, message: ["cannot stop"] },
-      }
-    }
-
-    function destroy(self, handle: S42SessionHandle) -> null throws baml.errors.UnknownError {
-      match (self.inner) {
-        let harness: S42Harness => harness.destroy(handle),
-        _ => throw baml.errors.UnknownError { data: self.inner, message: ["cannot destroy"] },
-      }
-    }
-  }
-
-  implements S42ControlPlane {
-    function supported_verbs(self) -> string[] throws never {
-      match (self.inner) {
-        let controls: S42ControlPlane => controls.supported_verbs(),
-        _ => [],
-      }
-    }
-  }
-
-  implements S42AgentStreaming {
-    function events<T>(
-      self,
-      request: root.ai.Request<T>,
-      handle: S42SessionHandle?,
-    ) -> S42EventLog<T> throws baml.errors.UnknownError {
-      match (self.inner) {
-        let rich: S42AgentStreaming => rich.events<T>(request.for_provider(self.inner), handle),
-        _ => throw baml.errors.UnknownError {
-          data: self.inner,
-          message: ["inner provider has no rich agent event stream"],
-        },
-      }
-    }
-  }
-
-  function raw(self) -> root.ai.Provider throws never { self.inner }
-}
-
-function s42_events<T>(request: root.ai.Request<T>) -> S42EventLog<T>
-    throws baml.errors.CallError | baml.errors.UnknownError {
-  match (request.provider) {
-    let rich: S42AgentStreaming => rich.events<T>(request, null),
+function s42_events<T>(request: root.ai.Request<T>) -> root.ai.AgentEventLog<T>
+    throws baml.errors.CallError | baml.errors.UnknownError | baml.errors.Unsupported {
+  let provider = match (request.provider) {
+    let agent: root.ai.HarnessAgent => agent.raw(),
+    _ => request.provider,
+  };
+  let rebound = request.for_provider(provider);
+  match (provider) {
+    let harness: root.ai.Harness => {
+      root.ai.collect_agent_stream<T>(root.ai.stream_harness<T>(rebound))
+    },
     let generate: root.ai.Generate => {
-      let response = generate.generate<T>(request);
-      S42EventLog<T> {
-        events: [S42AgentEvent { kind: "turn_done", text: null, detail: "generate fallback" }],
-        final_value: response.value,
-        session: null,
+      let response = generate.generate<T>(rebound);
+      let done = root.ai.Done<T> { value: response.value, meta: response.meta };
+      let run = root.ai.AgentRun<T> {
+        done: done,
+        budget_reached: null,
+        handoff: null,
+        turns: [root.ai.AgentTurn<T> {
+          index: 1,
+          blocks: [],
+          tool_calls: [],
+          tool_results: [],
+          value: response.value,
+          meta: response.meta,
+        }],
+        meta: response.meta,
+        session_token: null,
+        conversation: root.ai.conversation_from_messages(request.messages()),
+      };
+      root.ai.AgentEventLog<T> {
+        events: [root.ai.RunFinishedEvent { id: response.meta.request_id, outcome: "done" }],
+        run: run,
       }
     },
     _ => throw baml.errors.Unsupported {
-      message: "provider has neither rich agent events nor Generate",
+      message: "provider has neither Harness nor Generate",
     },
   }
 }
 
-// Server-authoritative storage owns handles, not providers or credentials.
+// Server-authoritative storage persists only provider-controlled tokens.
 class S42HandleStore {
-  handles: S42SessionHandle[],
+  handles: root.ai.HarnessSessionToken[],
 
-  function put(self, handle: S42SessionHandle) -> null throws never {
+  function put(self, token: root.ai.HarnessSessionToken) -> null throws never {
+    let updated: root.ai.HarnessSessionToken[] = [];
+    let replaced = false;
     for (let saved in self.handles) {
-      if (saved.id == handle.id) {
-        saved.runtime = handle.runtime;
-        saved.transcript = handle.transcript;
-        saved.status = handle.status;
-        return null;
+      if (saved.session_id == token.session_id) {
+        updated.push(token);
+        replaced = true;
+      } else {
+        updated.push(saved);
       }
     }
-    self.handles.push(handle);
+    if (!replaced) { updated.push(token); }
+    self.handles = updated;
     null
   }
-
-  function get(self, id: string) -> S42SessionHandle throws baml.errors.UnknownError {
+  function get(self, id: string) -> root.ai.HarnessSessionToken throws baml.errors.UnknownError {
     for (let saved in self.handles) {
-      if (saved.id == id) { return saved; }
+      if (saved.session_id == id) { return saved; }
     }
-    throw baml.errors.UnknownError {
-      data: id,
-      message: ["session handle expired or was not found"],
-    }
+    throw baml.errors.UnknownError { data: id, message: ["session token expired or was not found"] }
   }
-
   function drop(self, id: string) -> null throws never {
-    let kept: S42SessionHandle[] = [];
+    let kept: root.ai.HarnessSessionToken[] = [];
     for (let saved in self.handles) {
-      if (saved.id != id) { kept.push(saved); }
+      if (saved.session_id != id) { kept.push(saved); }
     }
     self.handles = kept;
     null
@@ -447,41 +349,33 @@ class S42HandleStore {
 }
 
 class S42Turn<T> {
-  handle: S42SessionHandle,
+  token: root.ai.HarnessSessionToken,
   value: T,
+  run: root.ai.AgentRun<T>,
 }
 
 class S42ServerSession {
-  agent: S42HarnessAgent,
+  agent: root.ai.HarnessAgent,
   store: S42HandleStore,
 
-  function open<T>(
-    self,
-    request: root.ai.Request<T>,
-    options: S42SessionOpts,
-  ) -> S42Turn<T> throws baml.errors.UnknownError {
-    let handle = self.agent.create_session(options);
-    let value = self.agent.attach<T>(handle, request);
-    let parked = self.agent.detach(handle);
-    self.store.put(parked);
-    S42Turn<T> { handle: parked, value: value }
+  function open<T>(self, request: root.ai.Request<T>, options: root.ai.SessionOptions)
+      -> S42Turn<T> throws baml.errors.UnknownError | baml.errors.Unsupported {
+    let run = root.ai.run_harness<T>(request.for_provider(self.agent.raw()), options = options);
+    let token = run.session_token ?? baml.sys.panic("harness did not return a session token");
+    self.store.put(token);
+    S42Turn<T> { token: token, value: root.ai.agent_run_value(run), run: run }
   }
-
-  function resume<T>(
-    self,
-    id: string,
-    request: root.ai.Request<T>,
-  ) -> S42Turn<T> throws baml.errors.UnknownError {
-    let handle = self.store.get(id);
-    let value = self.agent.attach<T>(handle, request);
-    let parked = self.agent.detach(handle);
-    self.store.put(parked);
-    S42Turn<T> { handle: parked, value: value }
+  function resume<T>(self, id: string, request: root.ai.Request<T>)
+      -> S42Turn<T> throws baml.errors.UnknownError | baml.errors.Unsupported {
+    let token = self.store.get(id);
+    let run = root.ai.resume_harness<T>(request.for_provider(self.agent.raw()), token);
+    let next = run.session_token ?? baml.sys.panic("harness did not return a session token");
+    self.store.put(next);
+    S42Turn<T> { token: next, value: root.ai.agent_run_value(run), run: run }
   }
-
-  function close(self, id: string) -> null throws baml.errors.UnknownError {
-    let handle = self.store.get(id);
-    self.agent.destroy(handle);
+  function close(self, id: string) -> null
+      throws baml.errors.UnknownError | baml.errors.Unsupported {
+    root.ai.destroy_harness(self.agent.raw(), self.store.get(id));
     self.store.drop(id);
     null
   }

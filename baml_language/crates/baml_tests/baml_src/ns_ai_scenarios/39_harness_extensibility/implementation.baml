@@ -20,6 +20,36 @@ class s39_Triage {
   summary: string,
 }
 
+// Provider-specific observable data extends the shared block interface without
+// changing root.ai or becoming continuation state.
+class s39_ThinkingBlock {
+  digest: string,
+  signature_hint: string,
+}
+
+implements root.ai.ModelBlock for s39_ThinkingBlock {
+  function kind(self) -> string throws never { "s39_thinking" }
+  function provider(self) -> string? throws never { "example-provider" }
+}
+
+class s39_EventAudit {
+  kinds: string[],
+
+  implements root.ai.AgentObserver {
+    function on_event(self, event: root.ai.AgentEvent) -> null throws never {
+      self.kinds.push(event.kind());
+      null
+    }
+  }
+
+  implements root.ai.AgentRecorder {
+    function record(self, event: root.ai.AgentEvent) -> null throws never {
+      self.kinds.push("record:" + event.kind());
+      null
+    }
+  }
+}
+
 // Tool sources are local data. In-process and MCP tools still lower to the same
 // root.ai.Tool roster consumed by the shared agent loop.
 class s39_InProcessSource { handler: string }
@@ -126,6 +156,49 @@ function s39_run_hooks(hooks: s39_Hook[], event: s39_HookEvent) -> s39_HookVerdi
   s39_HookVerdict { block: false, replacement: replacement, reason: null }
 }
 
+// Compatibility adapter: the scenario's richer hook vocabulary extends the
+// shared middleware seam instead of creating a second agent-loop abstraction.
+class s39_HookMiddleware {
+  hook: s39_Hook,
+
+  implements root.ai.ToolMiddleware {
+    function before_tool(
+      self,
+      context: root.ai.ToolContext,
+      call: root.ai.ToolCall,
+    ) -> root.ai.ToolDecision throws never {
+      let verdict = self.hook.on_event(s39_HookEvent {
+        kind: "pre_tool",
+        tool_name: call.name,
+        payload: call.args,
+      });
+      if (verdict.block) {
+        root.ai.ToolDecision.deny(verdict.reason ?? "blocked by policy hook")
+      } else {
+        root.ai.ToolDecision.allow(root.ai.ToolCall {
+          id: call.id,
+          name: call.name,
+          args: verdict.replacement ?? call.args,
+        })
+      }
+    }
+
+    function after_tool(
+      self,
+      context: root.ai.ToolContext,
+      call: root.ai.ToolCall,
+      result: root.ai.ToolResult,
+    ) -> root.ai.ToolResult throws never {
+      let verdict = self.hook.on_event(s39_HookEvent {
+        kind: "post_tool",
+        tool_name: call.name,
+        payload: result.output,
+      });
+      root.ai.ToolResult { id: result.id, output: verdict.replacement ?? result.output }
+    }
+  }
+}
+
 function s39_dispatch_one(
   tools: s39_HarnessTool[],
   hooks: s39_Hook[],
@@ -168,9 +241,22 @@ function s39_dispatch(
   hooks: s39_Hook[],
 ) -> (root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {
   (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
-    calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
-      s39_dispatch_one(tools, hooks, call)
-    })
+    let raw_dispatch = (approved: root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {
+      approved.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
+        s39_dispatch_one(tools, [], call)
+      })
+    };
+    let middleware: root.ai.ToolMiddleware[] = hooks.map((hook: s39_Hook) -> root.ai.ToolMiddleware {
+      s39_HookMiddleware { hook: hook }
+    });
+    root.ai.dispatch_with_middleware(
+      calls,
+      raw_dispatch,
+      middleware,
+      [],
+      [],
+      root.ai.ToolContext { run_id: null, turn: 0, provider: "s39-scripted-harness" },
+    )
   }
 }
 
@@ -227,7 +313,7 @@ class s39_ScriptedHarness {
           }
           root.ai.ToolCalls { calls: [call] }
         },
-        null => baml.sap.parse<T>(transcript.final_json) catch (e) {
+        null => baml.json.from_string<T>(transcript.final_json) catch (e) {
           _ => throw baml.errors.UnknownError { data: e, message: ["harness final parse failed"] },
         },
       }
@@ -257,7 +343,7 @@ class s39_ScriptedHarness {
       if (!self.skill_commands.includes(name)) {
         throw baml.errors.UnknownError { data: name, message: ["unknown harness skill"] };
       }
-      baml.sap.parse<T>(self.skill_json) catch (e) {
+      baml.json.from_string<T>(self.skill_json) catch (e) {
         _ => throw baml.errors.UnknownError { data: e, message: ["skill output parse failed"] },
       }
     }
@@ -360,7 +446,9 @@ class s39_A2aProvider {
           envelope.result.message.parts.at(0)?.text ?? ""
         },
       };
-      let value: T = baml.sap.parse<T>(peer_text) catch (e) {
+      // The A2A contract in this scenario requires the peer message part to
+      // contain the task's JSON value, rather than free-form model prose.
+      let value: T = baml.json.from_string<T>(peer_text) catch (e) {
         _ => throw baml.errors.UnknownError { data: e, message: ["a2a result did not match task output"] },
       };
       root.ai.Response<T> {

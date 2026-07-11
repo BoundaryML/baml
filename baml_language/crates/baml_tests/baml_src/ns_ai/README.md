@@ -8,6 +8,8 @@ available as `root.ai.*`.
 - `capabilities/`: the public capability interfaces and their dispatch helpers.
 - `providers/`: one directory per provider family.
 - `tools/`: provider-independent tool definitions and agent-loop orchestration.
+- `harness/`: external agent runtimes, exact continuation tokens, rich events,
+  tool middleware, observers, and the `HarnessAgent` task facade.
 - `reliability/`: failures, replay policy, retries, fallback, and tracing.
 
 Within a provider directory, `provider.baml` owns configuration and provider

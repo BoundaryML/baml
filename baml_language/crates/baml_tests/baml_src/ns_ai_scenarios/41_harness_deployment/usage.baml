@@ -244,6 +244,20 @@ test "41: supervision preserves the Drivable capability" {
   assert.equal(patch.summary, "restarted")
 }
 
+test "41: a transport adapter plugs into the shared Harness lifecycle" {
+  let adapter: root.ai.Provider = S41HarnessAdapter {
+    inner: S41PiRpc {
+      final_json: `{"files_changed":["shared.baml"],"summary":"shared harness"}`,
+    },
+    next_id: 0,
+  };
+  let request = s41_Fix_request("use the common harness", provider = adapter);
+  let run = root.ai.run_harness<S41Patch>(request);
+  assert.equal(root.ai.agent_run_value(run).summary, "shared harness")
+  assert.equal(run.session_token?.runtime, "pi-json-rpc")
+  assert.equal(run.turns.length(), 1)
+}
+
 test "41: the remote deployment is just another Generate provider" {
   let response = s41_Translate_manual(
     "hello",
