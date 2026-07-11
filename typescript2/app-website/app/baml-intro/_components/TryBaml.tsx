@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useState } from 'react';
 import styles from './try-baml.module.css';
 
 // Shared "Try BAML" install unit used by /quickstart and the /explore
@@ -241,18 +241,20 @@ function Section({ lines, label }: { lines: Line[]; label: string }) {
     .join('\n');
   return (
     <div className={styles.sect}>
-      {lines.map((l) =>
-        l.cmd ? (
-          <div className={styles.row} key={l.cmd}>
-            <span className={styles.sh}>$ </span>
-            {l.cmd}
-          </div>
-        ) : (
-          <div className={`${styles.row} ${styles.cmt}`} key={l.note}>
-            {l.note}
-          </div>
-        ),
-      )}
+      {lines.map((l) => (
+        // Comments always render on their own line above the command.
+        <Fragment key={l.cmd ?? l.note}>
+          {l.note ? (
+            <div className={`${styles.row} ${styles.cmt}`}>{l.note}</div>
+          ) : null}
+          {l.cmd ? (
+            <div className={styles.row}>
+              <span className={styles.sh}>$ </span>
+              {l.cmd}
+            </div>
+          ) : null}
+        </Fragment>
+      ))}
       <button
         aria-label={label}
         className={`${styles.sectCopy}${ok ? ` ${styles.ok}` : ''}`}
@@ -317,8 +319,10 @@ export function TryBaml() {
 
   const project: Line[] = [
     { cmd: 'baml init' },
-    { cmd: 'baml agent install' },
-    { note: '# sets up skills for Claude Code, Codex, and more' },
+    {
+      cmd: 'baml agent install',
+      note: '# sets up skills for Claude Code, Codex, and more',
+    },
     { cmd: 'baml run main' },
   ];
 
