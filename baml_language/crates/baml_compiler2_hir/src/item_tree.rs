@@ -86,12 +86,6 @@ pub struct Function {
     /// Mirrors `ast::FunctionDef::is_tagged_template_tag` so TIR can validate
     /// tagged-template tags without re-reading the CST.
     pub is_tagged_template_tag: bool,
-    /// Set when the fn def had a `//baml:llm_companion(<suffix>)` marker:
-    /// this fn is the capability driver behind the generated `Foo$<suffix>`
-    /// LLM-function companions. Mirrors
-    /// `ast::FunctionDef::llm_companion_suffix` so the capability registry
-    /// can be assembled from item trees without re-reading the CST.
-    pub llm_companion_suffix: Option<Name>,
     /// Full source span of the function.
     pub span: TextRange,
 }
@@ -299,11 +293,6 @@ pub struct Interface {
     pub default_methods: Vec<LocalItemId<FunctionMarker>>,
     /// Required methods (no body). Implementing classes must provide a body.
     pub required_methods: Vec<InterfaceMethodSig>,
-    /// Set when the interface decl had a `//baml:llm_capability` marker,
-    /// registering it as an LLM capability. Mirrors
-    /// `ast::InterfaceDef::is_llm_capability` so the capability registry can
-    /// be assembled from item trees without re-reading the CST.
-    pub is_llm_capability: bool,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
     pub span: TextRange,
@@ -536,7 +525,6 @@ impl ItemTree {
                 origin: f.origin,
                 docstring: f.docstring.clone(),
                 is_tagged_template_tag: f.is_tagged_template_tag,
-                llm_companion_suffix: f.llm_companion_suffix.clone(),
                 span: f.span,
             },
         );
@@ -761,7 +749,6 @@ impl ItemTree {
                 associated_types: i.associated_types.clone(),
                 default_methods: default_method_ids,
                 required_methods,
-                is_llm_capability: i.is_llm_capability,
                 attributes: i.attributes.iter().map(Attribute::from).collect(),
                 docstring: i.docstring.clone(),
                 span: i.span,

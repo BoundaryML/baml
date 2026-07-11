@@ -14,89 +14,53 @@ class user.FieldAttributes {
   state: string
   multiple: string?
 }
-function user.GetMixedList(client: baml.ai.Provider = GPT4) -> int | string[]  [llm] {
-  baml.ai.drive_call(client, GetMixedList$render_prompt(client = client))
+function user.GetMixedList(client: baml.llm.Client = GPT4) -> int | string[]  [llm] {
+  baml.llm.call_llm_function(client, "GetMixedList", map {  })
 }
-function user.GetMixedList$build_request(client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
+function user.GetMixedList$build_request(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GetMixedList", map {  })
 }
-function user.GetMixedList$build_request_stream(client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
+function user.GetMixedList$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GetMixedList", map {  })
 }
-function user.GetMixedList$live(io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript  [expr] {
-  baml.ai.drive_live(client, GetMixedList$render_prompt(client = client), io)
-}
-function user.GetMixedList$render_prompt(client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst  [expr] {
+function user.GetMixedList$render_prompt(client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GetMixedList", map {  })
 }
-function user.GetMixedList$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> int | string[] | baml.ai.Budget<int | string[]> | baml.ai.HandoffRequest  [expr] {
-  baml.ai.drive_run_tools(client, GetMixedList$render_prompt(client = client), tools, dispatch, stop_when = stop_when)
+function user.GetMixedMap(client: baml.llm.Client = GPT4) -> map<string, int | string>  [llm] {
+  baml.llm.call_llm_function(client, "GetMixedMap", map {  })
 }
-function user.GetMixedList$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<int | string[], V>  [expr] {
-  baml.ai.drive_with(client, GetMixedList$render_prompt(client = client), project)
-}
-function user.GetMixedMap(client: baml.ai.Provider = GPT4) -> map<string, int | string>  [llm] {
-  baml.ai.drive_call(client, GetMixedMap$render_prompt(client = client))
-}
-function user.GetMixedMap$build_request(client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
+function user.GetMixedMap$build_request(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GetMixedMap", map {  })
 }
-function user.GetMixedMap$build_request_stream(client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
+function user.GetMixedMap$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GetMixedMap", map {  })
 }
-function user.GetMixedMap$live(io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript  [expr] {
-  baml.ai.drive_live(client, GetMixedMap$render_prompt(client = client), io)
-}
-function user.GetMixedMap$render_prompt(client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst  [expr] {
+function user.GetMixedMap$render_prompt(client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GetMixedMap", map {  })
 }
-function user.GetMixedMap$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> map<string, int | string> | baml.ai.Budget<map<string, int | string>> | baml.ai.HandoffRequest  [expr] {
-  baml.ai.drive_run_tools(client, GetMixedMap$render_prompt(client = client), tools, dispatch, stop_when = stop_when)
+function user.GetStatus(client: baml.llm.Client = GPT4) -> Status  [llm] {
+  baml.llm.call_llm_function(client, "GetStatus", map {  })
 }
-function user.GetMixedMap$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<map<string, int | string>, V>  [expr] {
-  baml.ai.drive_with(client, GetMixedMap$render_prompt(client = client), project)
-}
-function user.GetStatus(client: baml.ai.Provider = GPT4) -> Status  [llm] {
-  baml.ai.drive_call(client, GetStatus$render_prompt(client = client))
-}
-function user.GetStatus$build_request(client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
+function user.GetStatus$build_request(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GetStatus", map {  })
 }
-function user.GetStatus$build_request_stream(client: baml.ai.Provider = GPT4) -> baml.http.Request  [expr] {
+function user.GetStatus$build_request_stream(client: baml.llm.Client = GPT4) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GetStatus", map {  })
 }
-function user.GetStatus$live(io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript  [expr] {
-  baml.ai.drive_live(client, GetStatus$render_prompt(client = client), io)
-}
-function user.GetStatus$render_prompt(client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst  [expr] {
+function user.GetStatus$render_prompt(client: baml.llm.Client = GPT4) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GetStatus", map {  })
 }
-function user.GetStatus$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = GPT4) -> Status | baml.ai.Budget<Status> | baml.ai.HandoffRequest  [expr] {
-  baml.ai.drive_run_tools(client, GetStatus$render_prompt(client = client), tools, dispatch, stop_when = stop_when)
+function user.GetUser(id: int, client: baml.llm.Client = ...) -> User  [llm] {
+  baml.llm.call_llm_function(client, "GetUser", map { "id": id })
 }
-function user.GetStatus$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<Status, V>  [expr] {
-  baml.ai.drive_with(client, GetStatus$render_prompt(client = client), project)
-}
-function user.GetUser(id: int, client: baml.ai.Provider = ...) -> User  [llm] {
-  baml.ai.drive_call(client, GetUser$render_prompt(id = id, client = client))
-}
-function user.GetUser$build_request(id: int, client: baml.ai.Provider = ...) -> baml.http.Request  [expr] {
+function user.GetUser$build_request(id: int, client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "GetUser", map { "id": id })
 }
-function user.GetUser$build_request_stream(id: int, client: baml.ai.Provider = ...) -> baml.http.Request  [expr] {
+function user.GetUser$build_request_stream(id: int, client: baml.llm.Client = ...) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "GetUser", map { "id": id })
 }
-function user.GetUser$live(id: int, io: baml.ai.Channel, client: baml.ai.Provider = ...) -> baml.ai.Transcript  [expr] {
-  baml.ai.drive_live(client, GetUser$render_prompt(id = id, client = client), io)
-}
-function user.GetUser$render_prompt(id: int, client: baml.ai.Provider = ...) -> baml.llm.PromptAst  [expr] {
+function user.GetUser$render_prompt(id: int, client: baml.llm.Client = ...) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "GetUser", map { "id": id })
-}
-function user.GetUser$run_tools(id: int, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = ...) -> User | baml.ai.Budget<User> | baml.ai.HandoffRequest  [expr] {
-  baml.ai.drive_run_tools(client, GetUser$render_prompt(id = id, client = client), tools, dispatch, stop_when = stop_when)
-}
-function user.GetUser$with(id: int, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<User, V>  [expr] {
-  baml.ai.drive_with(client, GetUser$render_prompt(id = id, client = client), project)
 }
 class user.User {
   id: int

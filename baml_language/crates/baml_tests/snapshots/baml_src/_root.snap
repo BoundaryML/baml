@@ -1,90 +1,19 @@
 ---
 source: crates/baml_tests/tests/baml_src.rs
 ---
-function $init() -> null {
-    call $init_let_0
-    store_global user.ai_custom_capability.DeadModerated
-    call $init_let_1
-    store_global user.ai_scenarios.DeadS01
-    call $init_let_2
-    store_global user.ai_scenarios.DeadS02
-    call $init_let_3
-    store_global user.ai_scenarios.DeadS03
-    call $init_let_4
-    store_global user.ai_scenarios.DeadS04
-    call $init_let_5
-    store_global user.ai_scenarios.s06_Dead
-    call $init_let_6
-    store_global user.ai_scenarios.DeadS07
-    call $init_let_7
-    store_global user.ai_scenarios.DeadS08
-    call $init_let_8
-    store_global user.ai_scenarios.s09_Dead
-    call $init_let_9
-    store_global user.ai_scenarios.DeadDeclared
-    call $init_let_10
-    store_global user.ai_scenarios.s11_Dead
-    call $init_let_11
-    store_global user.ai_scenarios.s12_Dead
-    call $init_let_12
-    store_global user.ai_scenarios.s13_Dead
-    call $init_let_13
-    store_global user.ai_scenarios.s15_Dead
-    call $init_let_14
-    store_global user.ai_scenarios.s16_Dead
-    call $init_let_15
-    store_global user.ai_scenarios.s17_DeadChat
-    call $init_let_16
-    store_global user.ai_scenarios.DeadS18
-    call $init_let_17
-    store_global user.ai_scenarios.s21_DeadChat
-    call $init_let_18
-    store_global user.ai_scenarios.s22_DeadVoice
-    call $init_let_19
-    store_global user.ai_scenarios.s23_DeadVoice
-    call $init_let_20
-    store_global user.ai_scenarios.s25_DeadBrain
-    call $init_let_21
-    store_global user.ai_scenarios.s26_Dead
-    call $init_let_22
-    store_global user.ai_scenarios.DeadS28
-    call $init_let_23
-    store_global user.ai_scenarios.DeadS29
-    call $init_let_24
-    store_global user.ai_scenarios.S29DeadPrimitive
-    call $init_let_25
-    store_global user.ai_scenarios.S29Retry1
-    call $init_let_26
-    store_global user.ai_scenarios.S29DeclaredRetry
-    call $init_let_27
-    store_global user.ai_scenarios.S29DeclaredFallback
-    call $init_let_28
-    store_global user.ai_scenarios.DeadS30
-    call $init_let_29
-    store_global user.ai_scenarios.DeadS31
-    call $init_let_30
-    store_global user.ai_scenarios.DeadObs
-    call $init_let_31
-    store_global user.ai_scenarios.s33_Dead
-    call $init_let_32
-    store_global user.ai_scenarios.s34_DeadClient
-    call $init_let_33
-    store_global user.ai_scenarios.DeadS35
-    call $init_let_34
-    store_global user.ai_scenarios.DeadS36
-    call $init_let_35
-    store_global user.ai_scenarios.s37_Dead
-    call $init_let_36
-    store_global user.ai_scenarios.s38_Dead
-    call $init_let_37
-    store_global user.ai_scenarios.DeadS39
-    call $init_let_38
-    store_global user.type_reflection.TestClient
-    load_const null
-    return
-}
-
 function $init_test(registry: unknown) -> null {
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
+    load_var ?1
+    call ?
+    pop 1
     load_var ?1
     call ?
     pop 1

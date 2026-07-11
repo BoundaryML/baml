@@ -55,26 +55,17 @@ function user.HostEntry(query: string, max_results: int = 10, filter: string | n
       }
   }
 }
-function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> string throws never {
-  baml.ai.drive_call<T>(client, AskDocs$render_prompt(query = query, max_results = max_results, filter = filter, client = client)) : string
+function user.AskDocs(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : string
 }
-function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst throws never {
+function user.AskDocs$render_prompt(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.PromptAst
 }
-function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.http.Request throws never {
+function user.AskDocs$build_request(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
 }
-function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.http.Request throws never {
+function user.AskDocs$build_request_stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.http.Request
-}
-function user.AskDocs$with<V, E2>(query: string, project: (baml.ai.ResponseMeta) -> V throws E2, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<string, V> throws never {
-  baml.ai.drive_with<V, E2>(client, AskDocs$render_prompt(query = query, max_results = max_results, filter = filter, client = client), project) : baml.ai.CallResult<string, V>
-}
-function user.AskDocs$run_tools(query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, max_results: int = 10, filter: string = DefaultFilter(), stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = TestClient) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest throws never {
-  baml.ai.drive_run_tools<T>(client, AskDocs$render_prompt(query = query, max_results = max_results, filter = filter, client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string> | baml.ai.HandoffRequest
-}
-function user.AskDocs$live(query: string, io: baml.ai.Channel, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.ai.Transcript throws never {
-  baml.ai.drive_live(client, AskDocs$render_prompt(query = query, max_results = max_results, filter = filter, client = client), io) : baml.ai.Transcript
 }
 class user.SearchService {
   base: string
@@ -91,13 +82,13 @@ function user.SearchService.Docs(self: user.SearchService, query: string, filter
 }
 type user.Searcher$stream = unknown
 type user.NarrowSearcher$stream = unknown
-function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.ai.Provider = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.ai.drive_stream(client, AskDocs$render_prompt(query = query, max_results = max_results, filter = filter, client = client)) : baml.llm.Stream<string | null, string>
+function user.AskDocs$stream(query: string, max_results: int = 10, filter: string = DefaultFilter(), client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "AskDocs", map { "query": query, "max_results": max_results, "filter": filter }) : baml.llm.Stream<string | null, string>
 }
-function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>
+function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
 }
-function user.AskDocs$parse(json: string, client: baml.ai.Provider = TestClient) -> string throws never {
+function user.AskDocs$parse(json: string, client: baml.llm.Client = TestClient) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
 }
 class user.SearchService$stream {

@@ -188,9 +188,13 @@ Note what lives where:
   `ChatMessage[]` — roles and media survive structurally; nothing is
   flattened to a string.
 - Schema strategy is the provider's choice: this one renders a schema
-  string; a strict provider sends native JSON-schema `response_format`; a
-  constrained decoder compiles a grammar. All are `Generate`, because the
-  observable shape is unchanged.
+  string; a strict provider sends native JSON Schema either as
+  `response_format` or as a forced synthetic output tool; a constrained
+  decoder compiles a grammar. The `OpenAiStrict` reference uses the synthetic
+  tool form so top-level BAML unions can live under an object-valued `value`
+  parameter (OpenAI does not accept root-level `anyOf`). All are `Generate`,
+  because the observable shape is unchanged and the synthetic tool is a wire
+  codec detail, not an application `Tools` capability.
 - `_build_chat_request` / `_content_of` / `_meta_of` are private helpers.
   HTTP codecs are implementation details, not capabilities — a wrapper or a
   local model implements `generate` without them.

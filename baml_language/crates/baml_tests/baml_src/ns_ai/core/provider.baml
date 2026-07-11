@@ -5,6 +5,9 @@
 interface Provider {
   function display_name(self) -> string throws never { "provider" }
   function render_shorthand(self) -> string throws never { "openai/gpt-5.6-luna" }
+  // True when blindly repeating Generate may duplicate externally visible
+  // work. Reliability wrappers refuse effectful providers by default.
+  function is_effectful(self) -> bool throws never { false }
   function with_retry(self, max: int) -> Retry throws never {
     Retry { inner: self, max: max }
   }

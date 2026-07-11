@@ -19,3 +19,14 @@ function create_cache(provider: Provider, content: ChatMessage[], options: Cache
   };
   managed.create_cache(content, options)
 }
+
+function with_cache<R, E>(
+  provider: Provider,
+  content: ChatMessage[],
+  options: CacheOptions,
+  body: (Cache) -> R throws E,
+) -> R throws baml.errors.UnknownError | E {
+  let cache = create_cache(provider, content, options);
+  defer { cache.cleanup() }
+  body(cache)
+}

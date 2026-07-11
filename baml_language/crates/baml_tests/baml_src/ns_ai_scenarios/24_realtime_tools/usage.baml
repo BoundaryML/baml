@@ -28,7 +28,7 @@ function s24_WeatherVoice_request(
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s24_WeatherVoice", "ns_ai_scenarios", { "question": question },
-    tools, root.ai.RequestOptions { dispatch: s24_dispatch }, {}, bepv2_prompt_template(question, false),
+    tools, root.ai.RequestOptions { dispatch: s24_dispatch }, {}, root.ai.prompt_template(question, false),
   )
 }
 

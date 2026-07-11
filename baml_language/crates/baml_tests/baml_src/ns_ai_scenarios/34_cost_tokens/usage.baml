@@ -7,34 +7,45 @@
 // - `s34_Classify_with_meta_manual` spells `s34_Classify.with_meta(...)`.
 function s34_Classify_request(
   text: string,
-  provider: root.ai.Provider = s34_Metered { reply: `{"category":"other","severity":1,"summary":"fixture"}`, input_tokens: 1, output_tokens: 1 },
+  provider: root.ai.Provider = root.ai.metered_fixture(
+    `{"category":"other","severity":1,"summary":"fixture"}`, 1, 1, name = "metered",
+  ),
 ) -> root.ai.Request<s34_Ticket> {
   root.ai.task_request<s34_Ticket>(
     provider, "s34_Classify", "ns_ai_scenarios", { "text": text },
-    [], root.ai.RequestOptions {}, {}, bepv2_prompt_template(`Classify the ticket.\n${text}`, true),
+    [], root.ai.RequestOptions {}, {}, root.ai.prompt_template(`Classify the ticket.\n${text}`, true),
   )
 }
 
 function s34_Classify_manual(
   text: string,
-  provider: root.ai.Provider = s34_Metered { reply: `{"category":"other","severity":1,"summary":"fixture"}`, input_tokens: 1, output_tokens: 1 },
+  provider: root.ai.Provider = root.ai.metered_fixture(
+    `{"category":"other","severity":1,"summary":"fixture"}`, 1, 1, name = "metered",
+  ),
 ) -> s34_Ticket throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<s34_Ticket>(s34_Classify_request(text, provider = provider))
 }
 
 function s34_Classify_with_meta_manual(
   text: string,
-  provider: root.ai.Provider = s34_Metered { reply: `{"category":"other","severity":1,"summary":"fixture"}`, input_tokens: 1, output_tokens: 1 },
+  provider: root.ai.Provider = root.ai.metered_fixture(
+    `{"category":"other","severity":1,"summary":"fixture"}`, 1, 1, name = "metered",
+  ),
 ) -> root.ai.Response<s34_Ticket> throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run_with_meta<s34_Ticket>(s34_Classify_request(text, provider = provider))
 }
 
 test "34: normalized usage can be priced by application policy" {
-  let r = s34_Classify_with_meta_manual("late fee", provider = s34_Metered {
-    reply: `{"category":"billing","severity":3,"summary":"late fee"}`,
-    input_tokens: 1200, output_tokens: 400,
-  });
-  let cost = s34_price(r.meta.usage ?? root.ai.Usage { input_tokens: 0, output_tokens: 0 }, s34_Price {
+  let r = s34_Classify_with_meta_manual(
+    "late fee",
+    provider = root.ai.metered_fixture(
+      `{"category":"billing","severity":3,"summary":"late fee"}`,
+      1200,
+      400,
+      name = "metered",
+    ),
+  );
+  let cost = (r.meta.usage ?? root.ai.Usage { input_tokens: 0, output_tokens: 0 }).estimated_cost(root.ai.TokenPrice {
     input_per_million: 0.4, output_per_million: 1.6,
   });
   assert.equal(r.value.category, "billing")
@@ -58,7 +69,10 @@ testset "integ-test-34-cost-tokens" {
       model: "gpt-5.6-luna", api_key: baml.env.get_or_panic("OPENAI_API_KEY"), base_url: null,
     });
     let usage = r.meta.usage ?? root.ai.Usage { input_tokens: 0, output_tokens: 0 };
-    let cost = s34_price(usage, s34_Price { input_per_million: 0.4, output_per_million: 1.6 });
+    let cost = usage.estimated_cost(root.ai.TokenPrice {
+      input_per_million: 0.4,
+      output_per_million: 1.6,
+    });
     assert.is_true(usage.input_tokens > 0)
     assert.is_true(cost > 0.0)
   }

@@ -200,7 +200,7 @@ function run_agent_detailed<T>(
           recorders,
           ToolContext { run_id: request.options.run_id, turn: steps, provider: request.provider_name() },
         );
-        let blocks: ModelBlock[] = provider_step.blocks;
+        let blocks: ModelBlock[] = provider_step.blocks.slice(0, provider_step.blocks.length());
         for (let call in calls.calls) {
           blocks.push(ToolCallBlock { call: call, provider_name: request.provider_name(), metadata: null });
         }

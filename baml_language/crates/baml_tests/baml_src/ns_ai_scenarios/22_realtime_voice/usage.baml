@@ -9,32 +9,32 @@
 // compiler-generated names.
 function VoiceChat_request(
   system: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "s22-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s22-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "VoiceChat", "ns_ai_scenarios", { "system": system },
-    [], root.ai.RequestOptions {}, {}, bepv2_prompt_template(system, false),
+    [], root.ai.RequestOptions {}, {}, root.ai.prompt_template(system, false),
   )
 }
 
 function VoiceChat_live_manual(
   system: string,
   channel: root.ai.Channel,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "s22-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s22-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Live throws baml.errors.UnknownError {
   root.ai.open_live<string>(VoiceChat_request(system, provider = provider), channel)
 }
 
 test "22: the live companion opens a resource and transcript deltas accumulate" {
-  let channel = s22_RecordingChannel { events: [] };
+  let channel = root.ai.RecordingChannel { frames: [] };
   let live = VoiceChat_live_manual("be brief", channel, provider = ScriptedRealtime { transcript: "pong" });
-  assert.equal(s22_collect_text(live), "pong")
-  assert.is_true(channel.events.length() > 0)
+  assert.equal(root.ai.collect_live_text(live), "pong")
+  assert.is_true(channel.frames.length() > 0)
   live.cleanup();
 }
 
 test "22: live on a non-realtime client reports unsupported execution" {
-  let label = VoiceChat_live_manual("be brief", NullChannel {}) catch (e) {
+  let label = VoiceChat_live_manual("be brief", root.ai.NullChannel {}) catch (e) {
     let u: baml.errors.UnknownError => "unsupported",
   };
   assert.equal(label, "unsupported")
@@ -51,15 +51,15 @@ test "22: a realtime provider does not need to implement Generate" {
 }
 
 test "22: interruption controls belong to the opened Live resource" {
-  let live = VoiceChat_live_manual("be brief", NullChannel {}, provider = ScriptedRealtime { transcript: "x" });
+  let live = VoiceChat_live_manual("be brief", root.ai.NullChannel {}, provider = ScriptedRealtime { transcript: "x" });
   live.cancel_response();
   live.truncate_assistant_audio(250);
-  assert.equal(s22_collect_text(live), "x")
+  assert.equal(root.ai.collect_live_text(live), "x")
 }
 
 testset "integ-test-22-realtime-voice" {
   test "22 live: VoiceChat$live drives a real OpenAiRealtime text exchange" {
-    let channel = s22_RecordingChannel { events: [] };
+    let channel = root.ai.RecordingChannel { frames: [] };
     let live = VoiceChat_live_manual(
       "Reply with exactly the lowercase word: pong",
       channel,
@@ -68,8 +68,8 @@ testset "integ-test-22-realtime-voice" {
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       },
     );
-    assert.contains(s22_collect_text(live).to_lower_case(), "pong")
-    assert.is_true(channel.events.length() > 0)
+    assert.contains(root.ai.collect_live_text(live).to_lower_case(), "pong")
+    assert.is_true(channel.frames.length() > 0)
     live.cleanup();
   }
 }

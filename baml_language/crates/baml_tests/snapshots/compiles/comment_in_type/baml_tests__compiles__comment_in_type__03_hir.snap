@@ -2,47 +2,29 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
-function user.CommentAfterArrow(client: baml.ai.Provider = TestClient) -> string  [llm] {
-  baml.ai.drive_call(client, CommentAfterArrow$render_prompt(client = client))
+function user.CommentAfterArrow(client: baml.llm.Client = TestClient) -> string  [llm] {
+  baml.llm.call_llm_function(client, "CommentAfterArrow", map {  })
 }
-function user.CommentAfterArrow$build_request(client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
+function user.CommentAfterArrow$build_request(client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "CommentAfterArrow", map {  })
 }
-function user.CommentAfterArrow$build_request_stream(client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
+function user.CommentAfterArrow$build_request_stream(client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "CommentAfterArrow", map {  })
 }
-function user.CommentAfterArrow$live(io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript  [expr] {
-  baml.ai.drive_live(client, CommentAfterArrow$render_prompt(client = client), io)
-}
-function user.CommentAfterArrow$render_prompt(client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst  [expr] {
+function user.CommentAfterArrow$render_prompt(client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "CommentAfterArrow", map {  })
 }
-function user.CommentAfterArrow$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = TestClient) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
-  baml.ai.drive_run_tools(client, CommentAfterArrow$render_prompt(client = client), tools, dispatch, stop_when = stop_when)
+function user.FunctionWithComments(a: string, b: int, client: baml.llm.Client = TestClient) -> string  [llm] {
+  baml.llm.call_llm_function(client, "FunctionWithComments", map { "a": a, "b": b })
 }
-function user.CommentAfterArrow$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<string, V>  [expr] {
-  baml.ai.drive_with(client, CommentAfterArrow$render_prompt(client = client), project)
-}
-function user.FunctionWithComments(a: string, b: int, client: baml.ai.Provider = TestClient) -> string  [llm] {
-  baml.ai.drive_call(client, FunctionWithComments$render_prompt(a = a, b = b, client = client))
-}
-function user.FunctionWithComments$build_request(a: string, b: int, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
+function user.FunctionWithComments$build_request(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "FunctionWithComments", map { "a": a, "b": b })
 }
-function user.FunctionWithComments$build_request_stream(a: string, b: int, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
+function user.FunctionWithComments$build_request_stream(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "FunctionWithComments", map { "a": a, "b": b })
 }
-function user.FunctionWithComments$live(a: string, b: int, io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript  [expr] {
-  baml.ai.drive_live(client, FunctionWithComments$render_prompt(a = a, b = b, client = client), io)
-}
-function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst  [expr] {
+function user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "FunctionWithComments", map { "a": a, "b": b })
-}
-function user.FunctionWithComments$run_tools(a: string, b: int, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = TestClient) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
-  baml.ai.drive_run_tools(client, FunctionWithComments$render_prompt(a = a, b = b, client = client), tools, dispatch, stop_when = stop_when)
-}
-function user.FunctionWithComments$with(a: string, b: int, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<string, V>  [expr] {
-  baml.ai.drive_with(client, FunctionWithComments$render_prompt(a = a, b = b, client = client), project)
 }
 function user.TestClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }

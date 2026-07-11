@@ -7,32 +7,33 @@
 // - `s32_Summarize_with_meta_manual` spells `s32_Summarize.with_meta(...)`.
 function s32_Summarize_request(
   text: string,
-  provider: root.ai.Provider = s32_Metered { name: "default", reply: `"summary"`, input_tokens: 1, output_tokens: 1 },
+  provider: root.ai.Provider = root.ai.metered_fixture(`"summary"`, 1, 1, name = "default"),
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s32_Summarize", "ns_ai_scenarios", { "text": text },
-    [], root.ai.RequestOptions {}, {}, bepv2_prompt_template(`Summarize: ${text}`, false),
+    [], root.ai.RequestOptions {}, {}, root.ai.prompt_template(`Summarize: ${text}`, false),
   )
 }
 
 function s32_Summarize_manual(
   text: string,
-  provider: root.ai.Provider = s32_Metered { name: "default", reply: `"summary"`, input_tokens: 1, output_tokens: 1 },
+  provider: root.ai.Provider = root.ai.metered_fixture(`"summary"`, 1, 1, name = "default"),
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s32_Summarize_request(text, provider = provider))
 }
 
 function s32_Summarize_with_meta_manual(
   text: string,
-  provider: root.ai.Provider = s32_Metered { name: "default", reply: `"summary"`, input_tokens: 1, output_tokens: 1 },
+  provider: root.ai.Provider = root.ai.metered_fixture(`"summary"`, 1, 1, name = "default"),
 ) -> root.ai.Response<string> throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run_with_meta<string>(s32_Summarize_request(text, provider = provider))
 }
 
 test "32: with-meta returns value and normalized usage from one call" {
-  let r = s32_Summarize_with_meta_manual("quarter", provider = s32_Metered {
-    name: "openai-shaped", reply: `"revenue up"`, input_tokens: 120, output_tokens: 40,
-  });
+  let r = s32_Summarize_with_meta_manual(
+    "quarter",
+    provider = root.ai.metered_fixture(`"revenue up"`, 120, 40, name = "openai-shaped"),
+  );
   assert.equal(r.value, "revenue up")
   assert.equal(r.meta.usage?.input_tokens, 120)
   assert.equal(r.meta.finish_reason, "stop")

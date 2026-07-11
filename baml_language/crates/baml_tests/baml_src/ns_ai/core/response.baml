@@ -4,6 +4,17 @@ class Usage {
   cached_input_tokens: int?,
   reasoning_tokens: int?,
   cost_usd: float?,
+
+  function estimated_cost(self, price: TokenPrice) -> float throws never {
+    let input = float.parse(self.input_tokens.to_string()) catch (e) { _ => 0.0 };
+    let output = float.parse(self.output_tokens.to_string()) catch (e) { _ => 0.0 };
+    (input * price.input_per_million + output * price.output_per_million) / 1000000.0
+  }
+}
+
+class TokenPrice {
+  input_per_million: float,
+  output_per_million: float,
 }
 
 class Meta {
@@ -14,6 +25,30 @@ class Meta {
   usage: Usage?,
   attributes: map<string, unknown>,
   raw: json?,
+  blocks: ModelBlock[]?,
+  citations: Citation[]?,
+  logprobs: Logprob[]?,
+
+  function reasoning_blocks(self) -> ReasoningBlock[] throws never {
+    let reasoning: ReasoningBlock[] = [];
+    for (let block in self.blocks ?? []) {
+      match (block) {
+        let value: ReasoningBlock => reasoning.push(value),
+        _ => {},
+      }
+    }
+    reasoning
+  }
+}
+
+class Citation {
+  url: string,
+  title: string?,
+}
+
+class Logprob {
+  token: string,
+  logprob: float,
 }
 
 class Response<T> {

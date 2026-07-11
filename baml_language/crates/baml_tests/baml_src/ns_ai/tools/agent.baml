@@ -7,22 +7,23 @@ class Agent {
   implements Provider {
     function display_name(self) -> string throws never { "agent" }
     function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+    function is_effectful(self) -> bool throws never { true }
   }
 
   implements Generate {
     function generate<T>(self, request: Request<T>) -> Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
-      let bound = Request<T> {
-        provider: self.inner,
-        prompt: request.for_provider(self.inner).prompt,
-        identity: request.identity,
-        arguments: request.arguments,
-        tools: self.tools,
-        options: RequestOptions { dispatch: self.dispatch },
-        tags: request.tags,
-        _render: request._render,
-        _messages: request._messages,
-      };
+      let tools = merge_tools(request.tools, self.tools);
+      let dispatch = compose_tool_dispatch(
+        request.tools,
+        request.options.dispatch,
+        self.tools,
+        self.dispatch,
+      );
+      let bound = request
+        .for_provider(self.inner)
+        .with_tools(tools)
+        .with_dispatch(dispatch);
       let budget = Budget { max_steps: null, stop_when: self.stop_when };
       let outcome = run_agent<T>(bound, budget = budget) catch (e) {
         let unknown: baml.errors.UnknownError => throw unknown,

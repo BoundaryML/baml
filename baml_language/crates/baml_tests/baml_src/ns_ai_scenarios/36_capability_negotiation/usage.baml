@@ -11,7 +11,7 @@ function s36_Extract_request(
 ) -> root.ai.Request<s36_Report> {
   root.ai.task_request<s36_Report>(
     provider, "s36_Extract", "ns_ai_scenarios", { "text": text },
-    [], root.ai.RequestOptions {}, {}, bepv2_prompt_template(`Extract a report.\n${text}`, true),
+    [], root.ai.RequestOptions {}, {}, root.ai.prompt_template(`Extract a report.\n${text}`, true),
   )
 }
 
@@ -55,7 +55,7 @@ test "36: streaming absence is a typed capability error" {
 }
 
 testset "integ-test-36-capability-negotiation" {
-  test "36 live: OpenAi negotiates Streaming + Capabilities; OpenAiStrict lacks both" {
+  test "36 live: OpenAiStrict advertises its implemented strict capabilities" {
     let open: root.ai.Provider = root.ai.OpenAi {
       model: "gpt-5.6-luna", api_key: baml.env.get_or_panic("OPENAI_API_KEY"), base_url: null,
     };
@@ -64,6 +64,8 @@ testset "integ-test-36-capability-negotiation" {
     };
     assert.is_true(open is root.ai.Streaming)
     assert.is_true(open is root.ai.Capabilities)
+    assert.is_true(strict is root.ai.Capabilities)
+    assert.is_true(strict is root.ai.Tools)
     assert.is_true(!(strict is root.ai.Streaming))
   }
 

@@ -128,7 +128,7 @@ implements ToolError for CannotRetry {
   function is_network_error(self) -> bool { false }
 }
 
-/// Thrown when a `root.ai.ToolLoop` stop policy halts the loop before the model
+/// Thrown when a tool-loop stop policy halts the loop before the model
 /// produced a final value on the plain call path (whose return type has no partial
 /// arm). Use `ToolLoop.run_to_budget` to receive the `Budget<T>` outcome instead.
 /// A deliberate stop: not retryable (re-driving replays tool side effects).

@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s01_Summarize(work: string) -> string {
-//   client: BepV2FixtureGenerate {
+//   client: root.ai.FixtureGenerate {
 //     name: "default-summary-model",
 //     reply: `"fixture summary"`,
 //     attributes: {},
@@ -22,7 +22,7 @@
 //   root.ai.run_with_meta(request), preserving metadata from the same call.
 function s01_Summarize_request(
   work: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "default-summary-model",
     reply: `"fixture summary"`,
     attributes: {},
@@ -36,13 +36,13 @@ function s01_Summarize_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Summarize this in one sentence: ${work}`, false),
+    root.ai.prompt_template(`Summarize this in one sentence: ${work}`, false),
   )
 }
 
 function s01_Summarize_manual(
   work: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "default-summary-model",
     reply: `"fixture summary"`,
     attributes: {},
@@ -65,7 +65,7 @@ test "01: manual request runs through Generate" {
 test "01: with-meta uses the same request and does not make another call" {
   let r = s01_Summarize_with_meta_manual(
     "a long story",
-    BepV2FixtureGenerate {
+    root.ai.FixtureGenerate {
       name: "measured-fixture",
       reply: `"short"`,
       attributes: { "route": "primary" },

@@ -46,7 +46,7 @@ function user.TestClient$new() -> null {
     return
 }
 
-function user.TestFunc(input: string, client: baml.ai.Provider) -> string {
+function user.TestFunc(input: string, client: baml.llm.Client) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -55,16 +55,20 @@ function user.TestFunc(input: string, client: baml.ai.Provider) -> string {
     store_var client
 
   L0:
-    load_var2 1 2
-    call user.TestFunc$render_prompt
-    store_var _4
     load_type string
-    load_var2 2 3
-    call baml.ai.drive_call
+    load_var client
+    load_const "TestFunc"
+    load_var input
+    load_const "input"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.call_llm_function
     return
 }
 
-function user.TestFunc$build_request(input: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.TestFunc$build_request(input: string, client: baml.llm.Client) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -85,7 +89,7 @@ function user.TestFunc$build_request(input: string, client: baml.ai.Provider) ->
     return
 }
 
-function user.TestFunc$build_request_stream(input: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.TestFunc$build_request_stream(input: string, client: baml.llm.Client) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -106,26 +110,7 @@ function user.TestFunc$build_request_stream(input: string, client: baml.ai.Provi
     return
 }
 
-function user.TestFunc$live(input: string, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
-
-  L0:
-    load_var2 1 3
-    call user.TestFunc$render_prompt
-    store_var _5
-    load_type string
-    load_var2 3 4
-    load_var io
-    call baml.ai.drive_live
-    return
-}
-
-function user.TestFunc$parse(json: string, client: baml.ai.Provider) -> string {
+function user.TestFunc$parse(json: string, client: baml.llm.Client) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -141,7 +126,7 @@ function user.TestFunc$parse(json: string, client: baml.ai.Provider) -> string {
     return
 }
 
-function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
+function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -153,11 +138,11 @@ function user.TestFunc$parse_stream(sse: baml.http.SseStream, client: baml.ai.Pr
     load_type string | null
     load_type string
     load_var2 2 1
-    call baml.llm.make_stream_for
+    call baml.llm.Client.__make_stream
     return
 }
 
-function user.TestFunc$render_prompt(input: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
+function user.TestFunc$render_prompt(input: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -178,35 +163,7 @@ function user.TestFunc$render_prompt(input: string, client: baml.ai.Provider) ->
     return
 }
 
-function user.TestFunc$run_tools(input: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
-    load_var stop_when
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var stop_when
-
-  L0:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    load_global user.TestClient
-    store_var client
-
-  L1:
-    load_var2 1 5
-    call user.TestFunc$render_prompt
-    store_var _8
-    load_type string
-    load_var2 5 6
-    load_var2 2 3
-    load_var stop_when
-    call baml.ai.drive_run_tools
-    return
-}
-
-function user.TestFunc$stream(input: string, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
+function user.TestFunc$stream(input: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -215,34 +172,17 @@ function user.TestFunc$stream(input: string, client: baml.ai.Provider) -> baml.l
     store_var client
 
   L0:
-    load_var2 1 2
-    call user.TestFunc$render_prompt
-    store_var _4
     load_type string | null
     load_type string
-    load_var2 2 3
-    call baml.ai.drive_stream
-    return
-}
-
-function user.TestFunc$with(input: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<string, V> {
     load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.TestClient
-    store_var client
-
-  L0:
-    load_var2 1 3
-    call user.TestFunc$render_prompt
-    store_var _5
+    load_const "TestFunc"
+    load_var input
+    load_const "input"
     load_type string
-    load_type #0
-    load_type #1
-    load_var2 3 4
-    load_var project
-    call baml.ai.drive_with
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.stream_llm_function
     return
 }
 

@@ -4,6 +4,27 @@ interface Channel {
   function close(self) -> null throws never
 }
 
+class RecordingChannel {
+  frames: string[],
+
+  implements Channel {
+    function on(self, handler: (string) -> null throws never) -> null throws never { null }
+    function send(self, data: string) -> null throws baml.errors.Io {
+      self.frames.push(data);
+      null
+    }
+    function close(self) -> null throws never { null }
+  }
+}
+
+class NullChannel {
+  implements Channel {
+    function on(self, handler: (string) -> null throws never) -> null throws never { null }
+    function send(self, data: string) -> null throws baml.errors.Io { null }
+    function close(self) -> null throws never { null }
+  }
+}
+
 class TranscriptDelta { text: string }
 class UserSpeechStarted { played_ms: int }
 class LiveClosed {}
@@ -16,6 +37,30 @@ interface Live {
   function truncate_assistant_audio(self, played_ms: int) -> null throws baml.errors.UnknownError
   function close(self) -> null throws never
   function cleanup(self) -> null throws never
+}
+
+class BufferedLive {
+  items: LiveEvent[],
+  channel: Channel,
+
+  implements Live {
+    function events(self) -> LiveEventStream throws never { self.items }
+    function cancel_response(self) -> null throws baml.errors.UnknownError { null }
+    function truncate_assistant_audio(self, played_ms: int) -> null throws baml.errors.UnknownError { null }
+    function close(self) -> null throws never { self.channel.close() }
+    function cleanup(self) -> null throws never { self.close() }
+  }
+}
+
+function collect_live_text(live: Live) -> string throws never {
+  let text = "";
+  for (let event in live.events()) {
+    match (event) {
+      let delta: TranscriptDelta => { text = text + delta.text; },
+      _ => {},
+    }
+  }
+  text
 }
 
 interface Realtime requires Provider {

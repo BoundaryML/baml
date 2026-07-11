@@ -77,33 +77,3 @@ pub fn has_baml_marker(node: &SyntaxNode, marker: &str) -> bool {
     }
     false
 }
-
-/// Return the parenthesized argument of a `//baml:<marker>(<arg>)` directive
-/// in the leading comment trivia of `node` — e.g. `//baml:llm_companion(stream)`
-/// yields `Some("stream")`. Walks the same children prefix as
-/// [`has_baml_marker`], so the same "immediately attached" semantics apply.
-///
-/// Returns `None` when the marker is absent or has no `( … )` argument; a
-/// bare `//baml:<marker>` is *not* matched here (check `has_baml_marker` for
-/// argument-less forms). The argument is whitespace-trimmed but otherwise
-/// unvalidated — callers enforce identifier rules and report diagnostics.
-pub fn baml_marker_arg(node: &SyntaxNode, marker: &str) -> Option<String> {
-    let prefix = format!("//baml:{marker}(");
-    for child in node.children_with_tokens() {
-        match child {
-            rowan::NodeOrToken::Token(tok) => match tok.kind() {
-                SyntaxKind::LINE_COMMENT => {
-                    if let Some(rest) = tok.text().trim_end().strip_prefix(&prefix) {
-                        if let Some(arg) = rest.strip_suffix(')') {
-                            return Some(arg.trim().to_string());
-                        }
-                    }
-                }
-                SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE => {}
-                _ => return None,
-            },
-            rowan::NodeOrToken::Node(_) => return None,
-        }
-    }
-    None
-}

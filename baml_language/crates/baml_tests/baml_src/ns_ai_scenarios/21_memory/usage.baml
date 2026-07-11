@@ -11,18 +11,18 @@
 // compiler-generated names.
 function s21_ExtractMemories_request(
   conversation: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "memory-extractor", reply: `{"items":[]}`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "memory-extractor", reply: `{"items":[]}`, attributes: {} },
 ) -> root.ai.Request<s21_Memories> {
   root.ai.task_request<s21_Memories>(
     provider, "s21_ExtractMemories", "ns_ai_scenarios", { "conversation": conversation },
     [], root.ai.RequestOptions {}, {},
-    bepv2_prompt_template(`Extract durable facts.\n${conversation}`, true),
+    root.ai.prompt_template(`Extract durable facts.\n${conversation}`, true),
   )
 }
 
 function s21_ExtractMemories_manual(
   conversation: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "memory-extractor", reply: `{"items":[]}`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "memory-extractor", reply: `{"items":[]}`, attributes: {} },
 ) -> s21_Memories throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<s21_Memories>(s21_ExtractMemories_request(conversation, provider = provider))
 }
@@ -39,19 +39,19 @@ function s21_ExtractMemories_manual(
 function s21_AnswerWithMemory_request(
   memories: string,
   question: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "memory-answerer", reply: `"unknown"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "memory-answerer", reply: `"unknown"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s21_AnswerWithMemory", "ns_ai_scenarios",
     { "memories": memories, "question": question }, [], root.ai.RequestOptions {}, {},
-    bepv2_prompt_template(`Use these memories:\n${memories}\n\nUser: ${question}`, false),
+    root.ai.prompt_template(`Use these memories:\n${memories}\n\nUser: ${question}`, false),
   )
 }
 
 function s21_AnswerWithMemory_manual(
   memories: string,
   question: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "memory-answerer", reply: `"unknown"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "memory-answerer", reply: `"unknown"`, attributes: {} },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s21_AnswerWithMemory_request(memories, question, provider = provider))
 }
@@ -59,7 +59,7 @@ function s21_AnswerWithMemory_manual(
 test "21: extractor returns typed memory values" {
   let memories = s21_ExtractMemories_manual(
     "I am vegetarian and my dog is Bella.",
-    provider = BepV2FixtureGenerate {
+    provider = root.ai.FixtureGenerate {
       name: "fixture", reply: `{"items":[{"subject":"user","fact":"is vegetarian"},{"subject":"user","fact":"has a dog named Bella"}]}`, attributes: {},
     },
   );

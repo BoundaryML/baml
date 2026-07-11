@@ -19,4 +19,5 @@ class OpenAiToolTranscript {
   base_url: string?,
   tools: json[],
   messages: json[],
+  response_format: map<string, json>?,
 }

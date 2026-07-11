@@ -25,7 +25,6 @@ pub use ast::*;
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
 pub use companions::llm_parse as llm_parse_companion;
-pub use companions::{DriveCompanionSpec, make_drive_companion};
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
 pub use lower_cst::{
@@ -2400,105 +2399,5 @@ function Demo(name: string) -> string {
             &body.exprs[*lhs2],
             Expr::Literal(baml_base::Literal::String(s)) if s == "Hello, "
         ));
-    }
-
-    fn first_interface(items: Vec<Item>) -> crate::ast::InterfaceDef {
-        items
-            .into_iter()
-            .find_map(|item| {
-                if let Item::Interface(i) = item {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
-            .expect("expected an InterfaceDef")
-    }
-
-    #[test]
-    fn llm_capability_marker_sets_interface_flag() {
-        let source = r#"
-//baml:llm_capability
-interface Streaming requires Provider {
-  function stream_it(self) -> string
-}
-"#;
-        let iface = first_interface(parse_and_lower(source));
-        assert!(iface.is_llm_capability);
-    }
-
-    #[test]
-    fn interface_without_marker_is_not_llm_capability() {
-        let source = r#"
-// a plain comment, not a marker
-interface Plain {
-  function f(self) -> string
-}
-"#;
-        let iface = first_interface(parse_and_lower(source));
-        assert!(!iface.is_llm_capability);
-    }
-
-    #[test]
-    fn llm_companion_marker_captures_suffix() {
-        let source = r#"
-//baml:llm_companion(stream)
-function drive_stream(client: string, prompt: string) -> string {
-  let p = prompt;
-  p
-}
-"#;
-        let f = first_function(parse_and_lower(source));
-        assert_eq!(
-            f.llm_companion_suffix.as_ref().map(|n| n.as_str()),
-            Some("stream")
-        );
-    }
-
-    #[test]
-    fn llm_companion_marker_arg_is_trimmed() {
-        let source = r#"
-//baml:llm_companion( run_tools )
-function drive_run_tools(client: string, prompt: string) -> string {
-  let p = prompt;
-  p
-}
-"#;
-        let f = first_function(parse_and_lower(source));
-        assert_eq!(
-            f.llm_companion_suffix.as_ref().map(|n| n.as_str()),
-            Some("run_tools")
-        );
-    }
-
-    #[test]
-    fn bare_llm_companion_marker_without_arg_is_ignored() {
-        let source = r#"
-//baml:llm_companion
-function drive_something(client: string, prompt: string) -> string {
-  let p = prompt;
-  p
-}
-"#;
-        let f = first_function(parse_and_lower(source));
-        assert_eq!(f.llm_companion_suffix, None);
-    }
-
-    #[test]
-    fn detached_llm_capability_marker_does_not_attach() {
-        // A non-marker comment after the marker detaches it from the decl,
-        // mirroring `extract_docstring` / `has_baml_marker` semantics.
-        let source = r#"
-//baml:llm_capability
-
-function unrelated() -> string { "x" }
-
-interface Plain {
-  function f(self) -> string
-}
-"#;
-        let items = parse_and_lower(source);
-        let iface = first_interface(items);
-        assert!(!iface.is_llm_capability);
     }
 }

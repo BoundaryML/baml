@@ -327,22 +327,6 @@ pub enum DiagnosticId {
     /// never matched, so `ctx.output_format` renders duplicate keys and a
     /// required shadowed field can never be parsed (Linear B-615).
     DuplicateFieldAlias,
-
-    // LLM capability registry (E0150–E0152)
-    /// `//baml:llm_capability` marks an interface that does not (transitively)
-    /// `requires baml.ai.Provider` — every LLM capability must hang off the
-    /// Provider marker.
-    LlmCapabilityMissingProvider,
-    /// `//baml:llm_companion(<suffix>)` marks a function that does not match
-    /// the driver convention: a top-level function whose generic params
-    /// include `T` (the return-type slot; `TPartial` optionally the
-    /// stream-expanded slot, others passthrough) and whose first two
-    /// parameters are `client: baml.ai.Provider` and
-    /// `prompt: baml.llm.PromptAst`.
-    LlmCompanionDriverInvalid,
-    /// Two driver functions register the same companion suffix (including a
-    /// user package shadowing a stdlib suffix). First declaration wins.
-    LlmCompanionSuffixDuplicate,
 }
 
 impl DiagnosticId {
@@ -549,11 +533,6 @@ impl DiagnosticId {
 
             // Serialized-key collision
             DiagnosticId::DuplicateFieldAlias => "E0149",
-
-            // LLM capability registry
-            DiagnosticId::LlmCapabilityMissingProvider => "E0150",
-            DiagnosticId::LlmCompanionDriverInvalid => "E0151",
-            DiagnosticId::LlmCompanionSuffixDuplicate => "E0152",
         }
     }
 }

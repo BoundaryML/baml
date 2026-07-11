@@ -13,11 +13,11 @@
 // compiler-generated names.
 function s26_Ask_request(
   instruction: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "s26-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s26-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s26_Ask", "ns_ai_scenarios", { "instruction": instruction },
-    [], root.ai.RequestOptions {}, {}, bepv2_prompt_template(instruction, false),
+    [], root.ai.RequestOptions {}, {}, root.ai.prompt_template(instruction, false),
   )
 }
 
@@ -46,17 +46,17 @@ function s26_Ask_live_manual(
 
 function s26_describe_transport(provider: root.ai.Provider) -> string throws never {
   match (provider) {
-    let info: s26_TransportInfo => {
-      let wire = match (info.wire()) {
-        s26_Wire.Http => "http",
-        s26_Wire.HttpSse => "http+sse",
-        s26_Wire.WebSocket => "websocket",
-        s26_Wire.WebRtc => "webrtc",
+    let info: root.ai.TransportInfo => {
+      let wire = match (info.transport()) {
+        root.ai.TransportKind.Http => "http",
+        root.ai.TransportKind.HttpSse => "http+sse",
+        root.ai.TransportKind.WebSocket => "websocket",
+        root.ai.TransportKind.WebRtc => "webrtc",
       };
-      let state = match (info.state_location()) {
-        s26_State.ClientOwned => "client-owned",
-        s26_State.ServerStoredById => "server-stored-by-id",
-        s26_State.ServerSession => "server-session",
+      let state = match (info.state_ownership()) {
+        root.ai.StateOwnership.ClientOwned => "client-owned",
+        root.ai.StateOwnership.ServerStoredById => "server-stored-by-id",
+        root.ai.StateOwnership.ServerSession => "server-session",
       };
       wire + " / " + state
     },
@@ -84,26 +84,15 @@ function s26_collect_stream(instruction: string, provider: root.ai.Provider) -> 
   stream.final() catch (e) { _ => "stream-final-error" }
 }
 
-function s26_collect_live(live: root.ai.Live) -> string throws never {
-  let text = "";
-  for (let event in live.events()) {
-    match (event) {
-      let delta: root.ai.TranscriptDelta => { text = text + delta.text; },
-      _ => null,
-    }
-  }
-  text
-}
-
 test "26: one request rides HTTP request-response" {
   assert.equal(s26_Ask_manual("q", s26_HttpTransport { reply: "pong" }), "pong")
 }
 
 test "26: the same request opens a WebSocket realtime resource" {
-  let channel = s26_RecordingChannel { events: [] };
+  let channel = root.ai.RecordingChannel { frames: [] };
   let live = s26_Ask_live_manual("q", channel, s26_RealtimeTransport { reply: "pong" });
-  assert.equal(s26_collect_live(live), "pong")
-  assert.is_true(channel.events.length() > 0)
+  assert.equal(root.ai.collect_live_text(live), "pong")
+  assert.is_true(channel.frames.length() > 0)
 }
 
 test "26: streaming is a capability independent of the HTTP+SSE wire label" {
@@ -155,7 +144,7 @@ testset "integ-test-26-transports" {
   }
 
   test "26 live: the SAME function runs a WebSocket duplex session (transport 3/3)" {
-    let channel = s26_RecordingChannel { events: [] };
+    let channel = root.ai.RecordingChannel { frames: [] };
     let live = s26_Ask_live_manual(
       "Reply with exactly the lowercase word: pong", channel,
       root.ai.OpenAiRealtime {
@@ -163,8 +152,8 @@ testset "integ-test-26-transports" {
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       },
     );
-    assert.contains(s26_collect_live(live).to_lower_case(), "pong")
-    assert.is_true(channel.events.length() > 0)
+    assert.contains(root.ai.collect_live_text(live).to_lower_case(), "pong")
+    assert.is_true(channel.frames.length() > 0)
     live.cleanup();
   }
 }

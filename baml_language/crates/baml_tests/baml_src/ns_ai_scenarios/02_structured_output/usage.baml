@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s02_ExtractEvent(text: string) -> S02Event {
-//   client: BepV2FixtureGenerate {
+//   client: root.ai.FixtureGenerate {
 //     name: "structured-default",
 //     reply: `{"title":"Launch","date":"2026-01-01","attendees":["Ada"]}`,
 //     attributes: {},
@@ -20,7 +20,7 @@
 //   root.ai.run(request), returning the parsed S02Event.
 function s02_ExtractEvent_request(
   text: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "structured-default",
     reply: `{"title":"Launch","date":"2026-01-01","attendees":["Ada"]}`,
     attributes: {},
@@ -34,13 +34,13 @@ function s02_ExtractEvent_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Extract the event from ${text}.`, true),
+    root.ai.prompt_template(`Extract the event from ${text}.`, true),
   )
 }
 
 function s02_ExtractEvent_manual(
   text: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "structured-default",
     reply: `{"title":"Launch","date":"2026-01-01","attendees":["Ada"]}`,
     attributes: {},
@@ -51,7 +51,7 @@ function s02_ExtractEvent_manual(
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s02_ExtractOrg(text: string) -> S02OrgNode {
-//   client: BepV2FixtureGenerate {
+//   client: root.ai.FixtureGenerate {
 //     name: "recursive-default",
 //     reply: `{"name":"CEO","reports":[]}`,
 //     attributes: {},
@@ -69,7 +69,7 @@ function s02_ExtractEvent_manual(
 //   root.ai.run(request), returning the parsed S02OrgNode.
 function s02_ExtractOrg_request(
   text: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "recursive-default",
     reply: `{"name":"CEO","reports":[]}`,
     attributes: {},
@@ -83,19 +83,47 @@ function s02_ExtractOrg_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Extract the reporting tree from ${text}.`, true),
+    root.ai.prompt_template(`Extract the reporting tree from ${text}.`, true),
   )
 }
 
 function s02_ExtractOrg_manual(
   text: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "recursive-default",
     reply: `{"name":"CEO","reports":[]}`,
     attributes: {},
   },
 ) -> S02OrgNode throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<S02OrgNode>(s02_ExtractOrg_request(text, provider = provider))
+}
+
+// Manual expansion reference for a top-level union return. OpenAiStrict wraps
+// this union under the synthetic strict output tool's `value` parameter.
+function s02_ClassifyDecision_request(
+  text: string,
+  provider: root.ai.Provider,
+) -> root.ai.Request<S02Decision> {
+  root.ai.task_request<S02Decision>(
+    provider,
+    "s02_ClassifyDecision",
+    "ns_ai_scenarios",
+    { "text": text },
+    [],
+    root.ai.RequestOptions {},
+    {},
+    root.ai.prompt_template(
+      `Classify the decision in this text. Use kind "approved" for approvals and kind "rejected" for rejections. ${text}`,
+      true,
+    ),
+  )
+}
+
+function s02_ClassifyDecision_manual(
+  text: string,
+  provider: root.ai.Provider,
+) -> S02Decision throws baml.errors.CallError | baml.errors.UnknownError {
+  root.ai.run<S02Decision>(s02_ClassifyDecision_request(text, provider))
 }
 
 test "02: the manual request preserves the typed return schema" {
@@ -109,7 +137,7 @@ test "02: recursive schemas are ordinary typed results" {
 }
 
 testset "integ-test-02-structured" {
-  test "02 live: structured extraction via OpenAI strict json_schema" {
+  test "02 live: structured extraction via OpenAI strict output tool" {
     let source = "Ada and Bob meet for Launch on 2026-01-01.";
     let openai = s02_ExtractEvent_manual(source, provider = root.ai.OpenAiStrict {
       model: "gpt-5.6-luna",
@@ -119,6 +147,50 @@ testset "integ-test-02-structured" {
       extra_body: null,
     });
     assert.equal(openai.date, "2026-01-01")
+  }
+
+  test "02 live: OpenAI strict output tool returns the approved union branch" {
+    let decision = s02_ClassifyDecision_manual(
+      "The release board approved launch after all checks passed.",
+      root.ai.OpenAiStrict {
+        model: "gpt-5.6-luna",
+        api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+        base_url: null,
+        extra_headers: null,
+        extra_body: null,
+      },
+    );
+    assert.is_true(decision is S02Approved)
+  }
+
+  test "02 live: OpenAI strict output tool returns the rejected union branch" {
+    let decision = s02_ClassifyDecision_manual(
+      "The release board rejected launch because the security review failed.",
+      root.ai.OpenAiStrict {
+        model: "gpt-5.6-luna",
+        api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+        base_url: null,
+        extra_headers: null,
+        extra_body: null,
+      },
+    );
+    assert.is_true(decision is S02Rejected)
+  }
+
+  test "02 live: OpenAI strict output tool follows a recursive org schema" {
+    let org = s02_ExtractOrg_manual(
+      "CEO Ada has one direct report, CTO Grace. Grace has no direct reports.",
+      provider = root.ai.OpenAiStrict {
+        model: "gpt-5.6-luna",
+        api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+        base_url: null,
+        extra_headers: null,
+        extra_body: null,
+      },
+    );
+    assert.equal(org.name, "Ada");
+    assert.equal(org.reports.length(), 1);
+    assert.equal(org.reports[0].name, "Grace")
   }
 
   test "02 live: the same type through OpenAI Responses text.format" {

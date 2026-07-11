@@ -211,23 +211,6 @@ pub enum Hir2Diagnostic {
     },
     /// An interface's `extends` chain forms a cycle (`A extends B`, `B extends A`).
     InterfaceExtendsCycle { chain: Vec<Name>, span: TextRange },
-    /// E0150: `//baml:llm_capability` on an interface that does not
-    /// (transitively) `requires baml.ai.Provider`.
-    LlmCapabilityMissingProvider { name: Name, span: TextRange },
-    /// E0151: `//baml:llm_companion(<suffix>)` on a function that does not
-    /// match the driver convention. `reason` states the specific violation.
-    LlmCompanionDriverInvalid {
-        name: Name,
-        reason: String,
-        span: TextRange,
-    },
-    /// E0152: a companion suffix registered by more than one driver function.
-    /// `existing` names the driver that registered it first.
-    LlmCompanionSuffixDuplicate {
-        suffix: Name,
-        existing: Name,
-        span: TextRange,
-    },
     /// An interface inherits conflicting types for the same field name from
     /// two parent interfaces in its `extends` list.
     InterfaceExtendsFieldConflict {
@@ -821,55 +804,6 @@ impl Hir2Diagnostic {
                 )
                 .with_phase(DiagnosticPhase::Hir)
             }
-            Hir2Diagnostic::LlmCapabilityMissingProvider { name, span } => Diagnostic::error(
-                DiagnosticId::LlmCapabilityMissingProvider,
-                format!(
-                    "interface `{name}` is marked `//baml:llm_capability` but does not \
-                     (transitively) `requires baml.ai.Provider`"
-                ),
-            )
-            .with_primary(
-                Span {
-                    file_id,
-                    range: *span,
-                },
-                "add `requires baml.ai.Provider` (directly or via a required parent)",
-            )
-            .with_phase(DiagnosticPhase::Hir),
-            Hir2Diagnostic::LlmCompanionDriverInvalid { name, reason, span } => Diagnostic::error(
-                DiagnosticId::LlmCompanionDriverInvalid,
-                format!(
-                    "`//baml:llm_companion` driver `{name}` does not match the driver \
-                     convention: {reason}"
-                ),
-            )
-            .with_primary(
-                Span {
-                    file_id,
-                    range: *span,
-                },
-                "expected a top-level `fn<T>(client: baml.ai.Provider, prompt: baml.llm.PromptAst, ...)` \
-                 (or `<TPartial, T>` for stream-shaped drivers)",
-            )
-            .with_phase(DiagnosticPhase::Hir),
-            Hir2Diagnostic::LlmCompanionSuffixDuplicate {
-                suffix,
-                existing,
-                span,
-            } => Diagnostic::error(
-                DiagnosticId::LlmCompanionSuffixDuplicate,
-                format!(
-                    "companion suffix `{suffix}` is already registered by driver `{existing}`"
-                ),
-            )
-            .with_primary(
-                Span {
-                    file_id,
-                    range: *span,
-                },
-                "pick a different suffix — the first registration wins",
-            )
-            .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::InterfaceExtendsFieldConflict {
                 interface_name,
                 field_name,

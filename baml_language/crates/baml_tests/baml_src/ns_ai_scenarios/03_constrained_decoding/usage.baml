@@ -28,7 +28,7 @@ function s03_Classify_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Classify ${text} as Positive or Negative.`, true),
+    root.ai.prompt_template(`Classify ${text} as Positive or Negative.`, true),
   )
 }
 
@@ -43,9 +43,9 @@ function s03_Classify_constrained_manual(
   text: string,
   provider: root.ai.Provider = s03_ConstrainedFixture { reply: `"Positive"` },
 ) -> s03_Sentiment throws baml.errors.CallError | baml.errors.UnknownError {
-  s03_run_constrained<s03_Sentiment>(
+  root.ai.run_constrained<s03_Sentiment>(
     s03_Classify_request(text, provider = provider),
-    s03_ChoiceConstraint { values: ["Positive", "Negative"] },
+    root.ai.ChoiceConstraint { values: ["Positive", "Negative"] },
   )
 }
 
@@ -60,7 +60,7 @@ test "03: the custom driver negotiates the capability at runtime" {
 test "03: a plain Generate-only provider is a typed Unsupported" {
   let status = s03_Classify_constrained_manual(
     "wonderful",
-    provider = BepV2FixtureGenerate { name: "plain", reply: `"Positive"`, attributes: {} },
+    provider = root.ai.FixtureGenerate { name: "plain", reply: `"Positive"`, attributes: {} },
   ) catch (e) {
     let ignored: baml.errors.Unsupported => "unsupported",
     _ => "wrong-error",

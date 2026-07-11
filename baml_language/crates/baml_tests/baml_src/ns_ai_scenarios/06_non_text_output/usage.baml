@@ -34,7 +34,7 @@ function s06_DrawFox_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Draw ${subject}.`, false),
+    root.ai.prompt_template(`Draw ${subject}.`, false),
   )
 }
 

@@ -4,11 +4,8 @@ implements Tools for OpenAi {
   function begin<T>(self, request: Request<T>) -> OpenAiToolTranscript
       throws baml.errors.ToolError | baml.errors.UnknownError {
     let tools_json: json[] = request.tools.map((tool: Tool) -> json {
-      let schema_text = baml.schema.json_schema(tool.parameters, false) catch (e) {
+      let schema = openai_strict_schema(tool.parameters) catch (e) {
         _ => throw baml.errors.UnknownError { data: e, message: ["tool schema generation failed"] },
-      };
-      let schema = baml.json.parse(schema_text) catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["tool schema JSON was invalid"] },
       };
       {
         "type": "function",
@@ -16,6 +13,7 @@ implements Tools for OpenAi {
           "name": tool.name,
           "description": tool.description,
           "parameters": schema,
+          "strict": true,
         },
       }
     });
@@ -25,18 +23,34 @@ implements Tools for OpenAi {
       base_url: self.base_url,
       tools: tools_json,
       messages: [{ "role": "user", "content": baml.llm.prompt_to_text(request.prompt) }],
+      response_format: if (
+        request.output_type() == reflect.type_of<string>()
+        || request.output_type() == reflect.type_of<null>()
+      ) {
+        null
+      } else {
+        openai_chat_response_format(
+          request.output_type(), request.identity?.name ?? "output",
+        ) catch (e) {
+          _ => throw baml.errors.UnknownError { data: e, message: ["final output schema generation failed"] },
+        }
+      },
     }
   }
 
   function step<T>(self, transcript: OpenAiToolTranscript) -> T | ToolCalls
       throws baml.errors.UnknownError {
-    let body: json = {
+    let body: map<string, json> = {
       "model": transcript.model,
       "messages": transcript.messages,
       "tools": transcript.tools,
       "tool_choice": "auto",
       "reasoning_effort": "none",
     };
+    match (transcript.response_format) {
+      let response_format: map<string, json> => { body.set("response_format", response_format); },
+      null => {},
+    }
     log.info(baml.json.stringify({
       "event": "llm.tools.request",
       "provider": "openai",
@@ -84,8 +98,21 @@ implements Tools for OpenAi {
           }),
         }
       },
-      null => baml.sap.parse<T>(message.content ?? "") catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["openai tools final parse failed"] },
+      null => match (transcript.response_format) {
+        let ignored: map<string, json> => baml.json.from_string<T>(message.content ?? "") catch (e) {
+          _ => throw baml.errors.UnknownError { data: e, message: ["openai tools strict final parse failed"] },
+        },
+        null => if (reflect.type_of<T>() == reflect.type_of<null>()) {
+          // A side-effect-only task has no model payload to decode. Reaching a
+          // non-tool assistant turn is its successful completion signal.
+          baml.json.from_string<T>("null") catch (e) {
+            _ => throw baml.errors.UnknownError { data: e, message: ["openai tools null final decode failed"] },
+          }
+        } else {
+          baml.sap.parse<T>(message.content ?? "") catch (e) {
+            _ => throw baml.errors.UnknownError { data: e, message: ["openai tools final parse failed"] },
+          }
+        },
       },
     }
   }

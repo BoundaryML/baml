@@ -10,12 +10,12 @@
 // compiler-generated names.
 function s27_ReviewJob_request(
   topic: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "s27-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s27-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s27_ReviewJob", "ns_ai_scenarios", { "topic": topic },
     [], root.ai.RequestOptions {}, {},
-    bepv2_prompt_template(`Review ${topic} and return a concise result.`, false),
+    root.ai.prompt_template(`Review ${topic} and return a concise result.`, false),
   )
 }
 

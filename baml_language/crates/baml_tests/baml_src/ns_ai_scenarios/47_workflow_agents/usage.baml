@@ -10,7 +10,7 @@ function s47_step_run_agent(agent: root.ai.Provider, task: string) -> string
 
 test "47: a workflow step runs a nested agent (Agent as Provider)" {
   let agent = root.ai.Agent {
-    inner: BepV2ScriptedTools {
+    inner: root.ai.FixtureTools {
       call_name: "get_weather",
       call_args: "{\"city\":\"Paris\"}",
       final_json: `"nested agent done"`,

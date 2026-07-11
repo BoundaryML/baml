@@ -2,7 +2,7 @@
 // `$rust_type` handle behind an async-aware split sink/stream, `next()` awaiting the
 // next text frame, and `close()` releasing the connection. Text frames only for now
 // (Binary frames are lossily UTF-8 decoded; Ping/Pong are handled transparently by
-// tungstenite). The duplex transport this unlocks is what makes `baml.ai.OpenAiRealtime`
+// tungstenite). The duplex transport this unlocks makes realtime providers
 // run live (scenario 22).
 
 /// A WebSocket connection. Text frames only for now.

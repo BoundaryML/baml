@@ -7,18 +7,7 @@ class UsageMeter {
   }
   function calls(self) -> int throws never { self.entries.length() }
   function total(self) -> Usage throws never {
-    let input = 0;
-    let output = 0;
-    for (let entry in self.entries) {
-      match (entry.usage) {
-        let usage: Usage => {
-          input = input + usage.input_tokens;
-          output = output + usage.output_tokens;
-        },
-        null => {},
-      }
-    }
-    Usage { input_tokens: input, output_tokens: output }
+    aggregate_usage(self.entries) ?? Usage { input_tokens: 0, output_tokens: 0 }
   }
 }
 
@@ -29,6 +18,7 @@ class Traced {
   implements Provider {
     function display_name(self) -> string throws never { "traced" }
     function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+    function is_effectful(self) -> bool throws never { self.inner.is_effectful() }
   }
 
   implements Generate {

@@ -88,27 +88,6 @@ class s37_HarnessSpawnFailure {
   }
 }
 
-class s37_RecordingChannel {
-  frames: string[],
-
-  implements root.ai.Channel {
-    function on(self, handler: (string) -> null throws never) -> null throws never { null }
-    function send(self, data: string) -> null throws baml.errors.Io {
-      self.frames.push(data);
-      null
-    }
-    function close(self) -> null throws never { null }
-  }
-}
-
-class s37_NullChannel {
-  implements root.ai.Channel {
-    function on(self, handler: (string) -> null throws never) -> null throws never { null }
-    function send(self, data: string) -> null throws baml.errors.Io { null }
-    function close(self) -> null throws never { null }
-  }
-}
-
 // The driver-side guard rejects unsupported control verbs before they reach
 // the subprocess transport.
 class s37_GuardedChannel {
@@ -150,21 +129,6 @@ function s37_try_send(channel: root.ai.Channel, event: s37_OutEvent) -> bool thr
   true
 }
 
-class s37_CompletedLive {
-  text: string,
-  channel: root.ai.Channel,
-
-  implements root.ai.Live {
-    function events(self) -> root.ai.LiveEventStream throws never {
-      [root.ai.TranscriptDelta { text: self.text }, root.ai.LiveClosed {}]
-    }
-    function cancel_response(self) -> null throws baml.errors.UnknownError { null }
-    function truncate_assistant_audio(self, played_ms: int) -> null throws baml.errors.UnknownError { null }
-    function close(self) -> null throws never { self.channel.close() }
-    function cleanup(self) -> null throws never { self.close() }
-  }
-}
-
 class s37_HarnessState {
   remaining: root.ai.ToolCall[],
   final_json: string,
@@ -197,7 +161,10 @@ class s37_ScriptedHarness {
       channel.send("TurnStart:") catch (e) { _ => null };
       channel.send("TextDelta:" + self.reply) catch (e) { _ => null };
       channel.send("TurnDone:msg_1") catch (e) { _ => null };
-      s37_CompletedLive { text: self.reply, channel: channel }
+      root.ai.BufferedLive {
+        items: [root.ai.TranscriptDelta { text: self.reply }, root.ai.LiveClosed {}],
+        channel: channel,
+      }
     }
   }
 

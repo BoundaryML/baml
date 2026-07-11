@@ -1,15 +1,15 @@
-// JSON Schema lowering for BAML `type` values. The one leaf host function here
-// (`json_schema`) walks a runtime type and emits a JSON Schema string. With
-// `strict: true` the schema follows OpenAI structured-output ("strict mode")
-// rules — this is what `baml.ai.OpenAiStrict` sends as `response_format`.
+// Provider-neutral JSON Schema lowering for BAML `type` values. Provider
+// implementations can inspect and transform the returned JSON tree for their
+// own schema dialect instead of parsing a serialized schema string.
 
-/// Lower a BAML `type` to a JSON Schema string. With `strict: true` the schema follows
-/// OpenAI strict-mode rules: every object gets `"additionalProperties": false` and ALL
-/// fields listed in `required` (optional BAML fields become `{"type": [..., "null"]}`
-/// unions instead of being omitted from required).
+/// Lower a BAML `type` to ordinary JSON Schema. Optional BAML fields are omitted
+/// from `required`; maps use schema-valued `additionalProperties`; unions use
+/// `anyOf`; recursive class graphs use `$defs` and `$ref`. Providers with a
+/// restricted dialect should transform this value at their wire boundary and
+/// reject shapes that their API cannot represent.
 ///
 /// Throws `root.errors.Unsupported` when the type contains a construct with no JSON
 /// Schema representation (functions, opaque rust types, unresolved generic params).
-function json_schema(t: type, strict: bool) -> string throws root.errors.Unsupported {
+function json_schema(t: type) -> root.json.json throws root.errors.Unsupported {
     $rust_io_function
 }

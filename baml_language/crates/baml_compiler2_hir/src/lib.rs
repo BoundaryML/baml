@@ -14,7 +14,6 @@
 
 pub mod body;
 mod builder;
-pub mod capability_registry;
 pub mod contributions;
 pub mod diagnostic;
 pub mod file_package;

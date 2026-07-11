@@ -2,37 +2,28 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.TypeBuilderFn(from_text: string, client: baml.ai.Provider = ...) -> user.Resume throws never {
-  baml.ai.drive_call<T>(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client)) : user.Resume
+function user.TypeBuilderFn(from_text: string, client: baml.llm.Client = ...) -> user.Resume throws never {
+  baml.llm.call_llm_function<T>(client, "TypeBuilderFn", map { "from_text": from_text }) : user.Resume
 }
-function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.ai.Provider = ...) -> baml.llm.PromptAst throws never {
+function user.TypeBuilderFn$render_prompt(from_text: string, client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.llm.PromptAst
 }
-function user.TypeBuilderFn$build_request(from_text: string, client: baml.ai.Provider = ...) -> baml.http.Request throws never {
+function user.TypeBuilderFn$build_request(from_text: string, client: baml.llm.Client = ...) -> baml.http.Request throws never {
   baml.llm.build_request(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.http.Request
 }
-function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.ai.Provider = ...) -> baml.http.Request throws never {
+function user.TypeBuilderFn$build_request_stream(from_text: string, client: baml.llm.Client = ...) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.http.Request
-}
-function user.TypeBuilderFn$with<V, E2>(from_text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<user.Resume, V> throws never {
-  baml.ai.drive_with<V, E2>(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client), project) : baml.ai.CallResult<user.Resume, V>
-}
-function user.TypeBuilderFn$run_tools(from_text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = ...) -> user.Resume | baml.ai.Budget<user.Resume> | baml.ai.HandoffRequest throws never {
-  baml.ai.drive_run_tools<T>(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client), tools, dispatch, stop_when = stop_when) : user.Resume | baml.ai.Budget<user.Resume> | baml.ai.HandoffRequest
-}
-function user.TypeBuilderFn$live(from_text: string, io: baml.ai.Channel, client: baml.ai.Provider = ...) -> baml.ai.Transcript throws never {
-  baml.ai.drive_live(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client), io) : baml.ai.Transcript
 }
 class user.Resume {
   name: string
 }
-function user.TypeBuilderFn$stream(from_text: string, client: baml.ai.Provider = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
-  baml.ai.drive_stream(client, TypeBuilderFn$render_prompt(from_text = from_text, client = client)) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
+function user.TypeBuilderFn$stream(from_text: string, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
+  baml.llm.stream_llm_function(client, "TypeBuilderFn", map { "from_text": from_text }) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
 }
-function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
-  baml.llm.make_stream_for(client, sse) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
+function user.TypeBuilderFn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<user.Resume$stream | null, user.Resume> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<user.Resume$stream | null, user.Resume>
 }
-function user.TypeBuilderFn$parse(json: string, client: baml.ai.Provider = ...) -> user.Resume throws never {
+function user.TypeBuilderFn$parse(json: string, client: baml.llm.Client = ...) -> user.Resume throws never {
   baml.llm.parse<TFinal>(json) : user.Resume
 }
 class user.Resume$stream {

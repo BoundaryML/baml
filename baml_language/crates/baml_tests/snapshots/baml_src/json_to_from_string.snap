@@ -93,86 +93,128 @@ function json_to_from_string.$init_test_ns_json_to_from_string_json_to_from_stri
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "recursive_class_roundtrip"
+    load_const "top_level_optional_class_present_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 15)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "parse_throws_on_bad_json"
+    load_const "top_level_optional_class_null_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 16)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "decode_throws_on_missing_field"
+    load_const "nested_optional_class_present_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 17)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "serialize_throws_uint8array"
+    load_const "heterogeneous_union_class_member_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 18)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "decode_error_path_points_at_missing_field"
+    load_const "optional_enum_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 19)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "enum_variant_roundtrip"
+    load_const "optional_media_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 20)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "media_field_to_string"
+    load_const "optional_list_of_classes_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 21)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "media_field_roundtrip"
+    load_const "recursive_class_roundtrip"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 22)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "alias_field_uses_raw_name_in_json"
+    load_const "parse_throws_on_bad_json"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 23)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "alias_field_decodes_raw_name"
+    load_const "decode_throws_on_missing_field"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 24)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "skip_field_still_emitted_in_json"
+    load_const "serialize_throws_uint8array"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "from_string_json_passthrough_int"
+    load_const "decode_error_path_points_at_missing_field"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 26)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "from_string_json_passthrough_object"
+    load_const "enum_variant_roundtrip"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 27)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "to_string_json_passthrough"
+    load_const "media_field_to_string"
     make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 28)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "media_field_roundtrip"
+    make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 29)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "alias_field_uses_raw_name_in_json"
+    make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 30)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "alias_field_decodes_raw_name"
+    make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 31)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "skip_field_still_emitted_in_json"
+    make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 32)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "from_string_json_passthrough_int"
+    make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 33)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "from_string_json_passthrough_object"
+    make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 34)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "to_string_json_passthrough"
+    make_closure .<lambda($init_test_ns_json_to_from_string_json_to_from_string, 35)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1

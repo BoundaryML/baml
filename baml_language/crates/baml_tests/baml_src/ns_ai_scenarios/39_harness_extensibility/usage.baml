@@ -201,8 +201,8 @@ test "39: local and MCP tools share one roster and one hook-gated dispatcher" {
   assert.equal(results.at(0)?.output, "12.5C @ 52.5,13.4")
   assert.equal(results.at(1)?.output, "issue 42: login returns 500")
   assert.equal(audit, [
-    "pre_tool:get_temperature", "post_tool:get_temperature",
-    "pre_tool:mcp__github__search_issues", "post_tool:mcp__github__search_issues",
+    "pre_tool:get_temperature", "pre_tool:mcp__github__search_issues",
+    "post_tool:get_temperature", "post_tool:mcp__github__search_issues",
   ])
 }
 
@@ -256,16 +256,14 @@ test "39: shared observers record lifecycle events without becoming policy" {
     submitted: [],
   };
   let tools = [s39_weather_tool()];
+  let observer = s39_EventAudit { kinds: [] };
+  let recorder = s39_EventAudit { kinds: [] };
   let request = s39_Fix_request(
     "observe the run",
     provider = harness,
     tools = s39_tool_specs(tools),
     dispatch = s39_dispatch(tools, []),
-  );
-  let observer = s39_EventAudit { kinds: [] };
-  let recorder = s39_EventAudit { kinds: [] };
-  request.options.observers = [observer];
-  request.options.recorders = [recorder];
+  ).with_observers([observer]).with_recorders([recorder]);
   let run = root.ai.run_agent_detailed<s39_Patch>(request);
   assert.equal(root.ai.agent_run_value(run).summary, "observed")
   assert.is_true(observer.kinds.includes("tool_call_started"))

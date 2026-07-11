@@ -3,12 +3,42 @@ function _primitive_generate<T>(
   request: Request<T>,
   provider_name: string,
   model: string,
+  body_overrides: map<string, json>? = null,
+  strict_json_output: bool = false,
+  strict_tool_output_name: string? = null,
 ) -> Response<T> throws baml.errors.UnknownError {
   let specialized = primitive.specialize_prompt(request.prompt) catch (e) {
     _ => throw baml.errors.UnknownError { data: e, message: [provider_name + " prompt specialization failed"] },
   };
-  let http_request = primitive.build_request(specialized, request.output_type()) catch (e) {
+  let built_request = primitive.build_request(specialized, request.output_type()) catch (e) {
     _ => throw baml.errors.UnknownError { data: e, message: [provider_name + " request build failed"] },
+  };
+  let http_request = match (body_overrides) {
+    null => built_request,
+    let overrides: map<string, json> => {
+      let body = baml.json.parse(built_request.body) catch (e) {
+        _ => throw baml.errors.UnknownError {
+          data: e,
+          message: [provider_name + " request body was not JSON"],
+        },
+      };
+      let object = match (body) {
+        let value: map<string, json> => value,
+        _ => throw baml.errors.UnknownError {
+          data: body,
+          message: [provider_name + " request body was not an object"],
+        },
+      };
+      for (let key in overrides.keys()) {
+        object.set(key, overrides[key]);
+      }
+      baml.http.Request {
+        method: built_request.method,
+        url: built_request.url,
+        headers: built_request.headers,
+        body: baml.json.stringify(object),
+      }
+    },
   };
   log.info(baml.json.stringify({
     "event": "llm.request",
@@ -35,10 +65,96 @@ function _primitive_generate<T>(
       message: [provider_name + " http " + http_response.status_code.to_string()],
     };
   }
-  let value: T = primitive.parse<T>(body) catch (e) {
-    _ => throw baml.errors.UnknownError { data: e, message: [provider_name + " typed parse failed"] },
-  };
   let raw: json? = baml.json.parse(body) catch (e) { _ => null };
+  let value: T = match (strict_tool_output_name) {
+    let output_tool_name: string => {
+      let envelope = match (raw) {
+        null => throw baml.errors.UnknownError {
+          data: body,
+          message: [provider_name + " response was not JSON"],
+        },
+        let value: json => value,
+      };
+      let refusal = baml.json.path_or<string?>(envelope, ".choices[0].message.refusal", null);
+      match (refusal) {
+        let message: string => throw baml.errors.UnknownError {
+          data: envelope,
+          message: [provider_name + " refused: " + message],
+        },
+        null => {},
+      }
+      let call = baml.json.path<json>(envelope, ".choices[0].message.tool_calls[0]") catch (e) {
+        _ => throw baml.errors.UnknownError {
+          data: envelope,
+          message: [provider_name + " response had no output tool call"],
+        },
+      };
+      let actual_name = baml.json.path_or<string>(call, ".function.name", "");
+      if (actual_name != output_tool_name) {
+        throw baml.errors.UnknownError {
+          data: call,
+          message: [provider_name + " called unexpected output tool " + actual_name],
+        };
+      }
+      let arguments = baml.json.path<string>(call, ".function.arguments") catch (e) {
+        _ => throw baml.errors.UnknownError {
+          data: call,
+          message: [provider_name + " output tool had no arguments"],
+        },
+      };
+      let wrapper = baml.json.parse(arguments) catch (e) {
+        _ => throw baml.errors.UnknownError {
+          data: e,
+          message: [provider_name + " output tool arguments were not JSON"],
+        },
+      };
+      let output = baml.json.path<json>(wrapper, ".value") catch (e) {
+        _ => throw baml.errors.UnknownError {
+          data: wrapper,
+          message: [provider_name + " output tool arguments had no value"],
+        },
+      };
+      baml.json.from_string<T>(baml.json.stringify(output)) catch (e) {
+        _ => throw baml.errors.UnknownError {
+          data: e,
+          message: [provider_name + " strict output tool decode failed"],
+        },
+      }
+    },
+    null => if (strict_json_output) {
+    let envelope = match (raw) {
+      null => throw baml.errors.UnknownError {
+        data: body,
+        message: [provider_name + " response was not JSON"],
+      },
+      let value: json => value,
+    };
+    let refusal = baml.json.path_or<string?>(envelope, ".choices[0].message.refusal", null);
+    match (refusal) {
+      let message: string => throw baml.errors.UnknownError {
+        data: envelope,
+        message: [provider_name + " refused: " + message],
+      },
+      null => {},
+    }
+    let content = baml.json.path<string>(envelope, ".choices[0].message.content") catch (e) {
+      _ => throw baml.errors.UnknownError {
+        data: envelope,
+        message: [provider_name + " response had no message content"],
+      },
+    };
+    baml.json.from_string<T>(content) catch (e) {
+      _ => throw baml.errors.UnknownError {
+        data: e,
+        message: [provider_name + " strict JSON decode failed"],
+      },
+    }
+    } else {
+    primitive.parse<T>(body) catch (e) {
+      _ => throw baml.errors.UnknownError { data: e, message: [provider_name + " typed parse failed"] },
+    }
+    },
+  };
   let usage = match (raw) {
     null => null,
     let value: json => {

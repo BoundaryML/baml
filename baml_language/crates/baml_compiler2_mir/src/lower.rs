@@ -1503,8 +1503,7 @@ fn package_lowering_data<'db>(
     }
 
     // Open-world implementors: an interface `match` compiled inside a
-    // DEPENDENCY package (e.g. a `baml.ai` capability driver negotiating
-    // `Tools` against a user-authored provider) expands to the static
+    // DEPENDENCY package and matching a user-authored implementation expands to the static
     // implementor set in `emit_is_type_branch` — which must therefore span
     // every package in the session, not just this package + its own deps,
     // or downstream classes are silently invisible to stdlib matches. Only

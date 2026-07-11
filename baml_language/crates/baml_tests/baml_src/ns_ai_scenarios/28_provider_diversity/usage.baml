@@ -11,17 +11,17 @@ class s28_Profile { name: string, title: string, years: int }
 // compiler-generated names.
 function s28_Extract_request(
   bio: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "profile", reply: `{"name":"Ada","title":"Analyst","years":12}`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "profile", reply: `{"name":"Ada","title":"Analyst","years":12}`, attributes: {} },
 ) -> root.ai.Request<s28_Profile> {
   root.ai.task_request<s28_Profile>(
     provider, "s28_Extract", "ns_ai_scenarios", { "bio": bio },
-    [], root.ai.RequestOptions {}, {}, bepv2_prompt_template(`Extract a profile.\n${bio}`, true),
+    [], root.ai.RequestOptions {}, {}, root.ai.prompt_template(`Extract a profile.\n${bio}`, true),
   )
 }
 
 function s28_Extract_manual(
   bio: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "profile", reply: `{"name":"Ada","title":"Analyst","years":12}`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "profile", reply: `{"name":"Ada","title":"Analyst","years":12}`, attributes: {} },
 ) -> s28_Profile throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<s28_Profile>(s28_Extract_request(bio, provider = provider))
 }
@@ -29,7 +29,7 @@ function s28_Extract_manual(
 test "28: one task runs through a swapped provider" {
   let r = s28_Extract_manual(
     "Alan Turing was a cryptographer.",
-    provider = BepV2FixtureGenerate { name: "anthropic-shaped", reply: `{"name":"Alan Turing","title":"Cryptographer","years":15}`, attributes: {} },
+    provider = root.ai.FixtureGenerate { name: "anthropic-shaped", reply: `{"name":"Alan Turing","title":"Cryptographer","years":15}`, attributes: {} },
   );
   assert.equal(r.name, "Alan Turing")
   assert.equal(r.years, 15)

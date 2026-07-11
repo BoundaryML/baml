@@ -11,3 +11,15 @@ class S02OrgNode {
   name: string,
   reports: S02OrgNode[],
 }
+
+class S02Approved {
+  kind: "approved",
+  summary: string,
+}
+
+class S02Rejected {
+  kind: "rejected",
+  reason: string,
+}
+
+type S02Decision = S02Approved | S02Rejected

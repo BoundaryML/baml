@@ -15,11 +15,16 @@ class s08_EnrichedFixture {
   implements root.ai.Generate {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
-      BepV2FixtureGenerate {
+      let response = root.ai.FixtureGenerate {
         name: "enriched-fixture",
         reply: self.reply,
         attributes: { "source_url": self.source_url, "confidence": 0.97 },
-      }.generate<T>(request)
+      }.generate<T>(request);
+      response.meta.citations = [root.ai.Citation {
+        url: self.source_url,
+        title: "fixture source",
+      }];
+      response
     }
   }
 }

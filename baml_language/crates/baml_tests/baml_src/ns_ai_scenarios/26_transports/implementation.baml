@@ -2,19 +2,9 @@
 // what the application may do; a separate descriptive interface says which wire
 // and state location this particular provider uses.
 
-enum s26_Wire { Http, HttpSse, WebSocket, WebRtc }
-enum s26_State { ClientOwned, ServerStoredById, ServerSession }
-
-interface s26_TransportInfo requires root.ai.Provider {
-  function wire(self) -> s26_Wire throws never
-  function state_location(self) -> s26_State throws never
-}
-
 function s26_response<T>(reply: string, name: string) -> root.ai.Response<T>
     throws baml.errors.UnknownError {
-  let value = baml.sap.parse<T>(reply) catch (e) {
-    _ => throw baml.errors.UnknownError { data: e, message: ["s26 fixture parse failed"] },
-  };
+  let value = root.ai.fixture_value<T, string>(reply);
   root.ai.Response<T> {
     value: value,
     meta: root.ai.Meta {
@@ -37,9 +27,9 @@ class s26_HttpTransport {
       s26_response<T>(self.reply, self.display_name())
     }
   }
-  implements s26_TransportInfo {
-    function wire(self) -> s26_Wire throws never { s26_Wire.Http }
-    function state_location(self) -> s26_State throws never { s26_State.ClientOwned }
+  implements root.ai.TransportInfo {
+    function transport(self) -> root.ai.TransportKind throws never { root.ai.TransportKind.Http }
+    function state_ownership(self) -> root.ai.StateOwnership throws never { root.ai.StateOwnership.ClientOwned }
   }
 }
 
@@ -64,9 +54,9 @@ class s26_StreamTransport {
       throw baml.errors.UnknownError { data: null, message: ["offline stream fixture has no host stream"] }
     }
   }
-  implements s26_TransportInfo {
-    function wire(self) -> s26_Wire throws never { s26_Wire.HttpSse }
-    function state_location(self) -> s26_State throws never { s26_State.ClientOwned }
+  implements root.ai.TransportInfo {
+    function transport(self) -> root.ai.TransportKind throws never { root.ai.TransportKind.HttpSse }
+    function state_ownership(self) -> root.ai.StateOwnership throws never { root.ai.StateOwnership.ClientOwned }
   }
 }
 
@@ -83,37 +73,9 @@ class s26_WarmSocketTransport {
       s26_response<T>(self.reply, self.display_name())
     }
   }
-  implements s26_TransportInfo {
-    function wire(self) -> s26_Wire throws never { s26_Wire.WebSocket }
-    function state_location(self) -> s26_State throws never { s26_State.ServerStoredById }
-  }
-}
-
-class s26_RecordingChannel {
-  events: string[],
-
-  implements root.ai.Channel {
-    function on(self, handler: (string) -> null throws never) -> null throws never { null }
-    function send(self, data: string) -> null throws baml.errors.Io {
-      self.events.push(data);
-      null
-    }
-    function close(self) -> null throws never { null }
-  }
-}
-
-class s26_Live {
-  reply: string,
-  channel: root.ai.Channel,
-
-  implements root.ai.Live {
-    function events(self) -> root.ai.LiveEventStream throws never {
-      [root.ai.TranscriptDelta { text: self.reply }, root.ai.LiveClosed {}]
-    }
-    function cancel_response(self) -> null throws baml.errors.UnknownError { null }
-    function truncate_assistant_audio(self, played_ms: int) -> null throws baml.errors.UnknownError { null }
-    function close(self) -> null throws never { self.channel.close() }
-    function cleanup(self) -> null throws never { self.close() }
+  implements root.ai.TransportInfo {
+    function transport(self) -> root.ai.TransportKind throws never { root.ai.TransportKind.WebSocket }
+    function state_ownership(self) -> root.ai.StateOwnership throws never { root.ai.StateOwnership.ServerStoredById }
   }
 }
 
@@ -131,11 +93,14 @@ class s26_RealtimeTransport {
       channel: root.ai.Channel,
     ) -> root.ai.Live throws baml.errors.UnknownError {
       channel.send(`{"type":"response.output_text.delta","delta":"${self.reply}"}`) catch (e) { _ => null };
-      s26_Live { reply: self.reply, channel: channel }
+      root.ai.BufferedLive {
+        items: [root.ai.TranscriptDelta { text: self.reply }, root.ai.LiveClosed {}],
+        channel: channel,
+      }
     }
   }
-  implements s26_TransportInfo {
-    function wire(self) -> s26_Wire throws never { s26_Wire.WebSocket }
-    function state_location(self) -> s26_State throws never { s26_State.ServerSession }
+  implements root.ai.TransportInfo {
+    function transport(self) -> root.ai.TransportKind throws never { root.ai.TransportKind.WebSocket }
+    function state_ownership(self) -> root.ai.StateOwnership throws never { root.ai.StateOwnership.ServerSession }
   }
 }

@@ -29,7 +29,7 @@ function s38_FixTask_request(
     tools,
     root.ai.RequestOptions { dispatch: dispatch },
     {},
-    bepv2_prompt_template("Fix the task, using tools as needed: " + task, true),
+    root.ai.prompt_template("Fix the task, using tools as needed: " + task, true),
   )
 }
 

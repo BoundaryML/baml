@@ -2,15 +2,11 @@ class S14TransferArgs {
   reason: string,
 }
 
-function s14_billing_handoff_tool() -> root.ai.Tool throws baml.errors.Unsupported {
-  let tool = root.ai.Tool.typed<S14TransferArgs>(
+function s14_billing_handoff_tool() -> root.ai.Tool throws never {
+  root.ai.Tool.typed<S14TransferArgs>(
     "transfer_to_billing",
     "Transfer billing, refund, and charge questions.",
-  );
-  root.ai.Tool {
-    ...tool,
-    handoff: true,
-  }
+  ).as_handoff()
 }
 
 function s14_noop_dispatch(calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never { [] }

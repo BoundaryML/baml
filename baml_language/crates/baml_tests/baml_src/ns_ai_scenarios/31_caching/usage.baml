@@ -6,11 +6,11 @@
 //   a compiler-generated task modifier.
 function s31_Ask_request(
   question: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "s31-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s31-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s31_Ask", "ns_ai_scenarios", { "question": question },
-    [], root.ai.RequestOptions {}, {}, bepv2_prompt_template(question, false),
+    [], root.ai.RequestOptions {}, {}, root.ai.prompt_template(question, false),
   )
 }
 
@@ -79,8 +79,9 @@ test "31: using a deleted cache throws the typed expired error" {
 
 test "31: with_cache reuses one resource and always cleans it up" {
   let fake = s31_fresh_fake();
-  let answers = s31_with_cache(
+  let answers = root.ai.with_cache(
     fake, [root.ai.ChatMessage.system("reference")],
+    root.ai.CacheOptions { ttl: baml.time.Duration.from_hours(1) },
     (cache) -> string[] {
       [s31_Ask_cached_manual("one", cache), s31_Ask_cached_manual("two", cache)]
     },
@@ -91,8 +92,9 @@ test "31: with_cache reuses one resource and always cleans it up" {
 
 test "31: with_cache cleans the resource when the body throws" {
   let fake = s31_fresh_fake();
-  let label = s31_with_cache(
+  let label = root.ai.with_cache(
     fake, [root.ai.ChatMessage.system("reference")],
+    root.ai.CacheOptions { ttl: baml.time.Duration.from_hours(1) },
     (cache) -> string throws baml.errors.UnknownError {
       throw baml.errors.UnknownError { data: null, message: ["body failed"] }
     },
@@ -105,13 +107,13 @@ test "31: with_cache cleans the resource when the body throws" {
 
 test "31: ManagedCache is negotiated separately from Generate" {
   let managed: root.ai.Provider = s31_fresh_fake();
-  let plain: root.ai.Provider = BepV2FixtureGenerate { name: "plain", reply: `"plain"`, attributes: {} };
+  let plain: root.ai.Provider = root.ai.FixtureGenerate { name: "plain", reply: `"plain"`, attributes: {} };
   assert.is_true(s31_supports_managed_cache(managed))
   assert.is_true(!s31_supports_managed_cache(plain))
 }
 
 test "31: an app can degrade to a plain run when ManagedCache is absent" {
-  let plain: root.ai.Provider = BepV2FixtureGenerate { name: "plain", reply: `"degraded answer"`, attributes: {} };
+  let plain: root.ai.Provider = root.ai.FixtureGenerate { name: "plain", reply: `"degraded answer"`, attributes: {} };
   let answer = match (plain) {
     let managed: root.ai.ManagedCache => "used managed cache",
     _ => s31_Ask_manual("q", plain),

@@ -5,26 +5,17 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.TestClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: "http://localhost:...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "test-key", provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
-function user.TestFunc(input: string, client: baml.ai.Provider = TestClient) -> string  [llm] {
-  baml.ai.drive_call(client, TestFunc$render_prompt(input = input, client = client))
+function user.TestFunc(input: string, client: baml.llm.Client = TestClient) -> string  [llm] {
+  baml.llm.call_llm_function(client, "TestFunc", map { "input": input })
 }
-function user.TestFunc$build_request(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
+function user.TestFunc$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "TestFunc", map { "input": input })
 }
-function user.TestFunc$build_request_stream(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
+function user.TestFunc$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "TestFunc", map { "input": input })
 }
-function user.TestFunc$live(input: string, io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript  [expr] {
-  baml.ai.drive_live(client, TestFunc$render_prompt(input = input, client = client), io)
-}
-function user.TestFunc$render_prompt(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst  [expr] {
+function user.TestFunc$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "TestFunc", map { "input": input })
-}
-function user.TestFunc$run_tools(input: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = TestClient) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
-  baml.ai.drive_run_tools(client, TestFunc$render_prompt(input = input, client = client), tools, dispatch, stop_when = stop_when)
-}
-function user.TestFunc$with(input: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<string, V>  [expr] {
-  baml.ai.drive_with(client, TestFunc$render_prompt(input = input, client = client), project)
 }
 function user.call_stream_inferred() -> baml.llm.Stream<null | string, string>  [expr] {
   {  } baml.llm.stream_llm_function(TestClient, "TestFunc", map { "input": "world" })

@@ -9,16 +9,28 @@ class Fallback {
         null => "openai/gpt-5.6-luna",
       }
     }
+    function is_effectful(self) -> bool throws never {
+      self.members.filter((member: Provider) -> bool { member.is_effectful() }).length() > 0
+    }
   }
 
   implements Generate {
     function generate<T>(self, request: Request<T>) -> Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
       for (let member in self.members) {
+        if (member.is_effectful()) {
+          throw baml.errors.Unsupported {
+            message: "fallback refuses effectful members without a durable replay contract",
+          };
+        }
         match (member) {
           let generate: Generate => {
             let response = generate.generate<T>(request.for_provider(member)) catch (e) {
-              _ => continue,
+              _ => {
+                let replayable = thrown_error_is_replayable(e);
+                if (replayable) { continue; }
+                throw e;
+              },
             };
             return response;
           },

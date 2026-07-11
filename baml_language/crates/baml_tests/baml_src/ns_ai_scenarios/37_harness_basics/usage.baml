@@ -32,7 +32,7 @@ function s37_Fix_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template("Fix the bug: " + task, true),
+    root.ai.prompt_template("Fix the bug: " + task, true),
   )
 }
 
@@ -80,7 +80,7 @@ function s37_Fix_agent_request(
     tools,
     root.ai.RequestOptions { dispatch: dispatch },
     {},
-    bepv2_prompt_template("Fix the bug: " + task, true),
+    root.ai.prompt_template("Fix the bug: " + task, true),
   )
 }
 
@@ -111,17 +111,6 @@ function s37_edit_dispatch(calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] th
     results.push(result);
   }
   results
-}
-
-function s37_collect_live_text(live: root.ai.Live) -> string throws never {
-  let text = "";
-  for (let event in live.events()) {
-    match (event) {
-      let delta: root.ai.TranscriptDelta => { text = text + delta.text; },
-      _ => null,
-    }
-  }
-  text
 }
 
 function s37_drivable(provider: root.ai.Provider) -> string throws never {
@@ -162,7 +151,7 @@ test "37: divergent harnesses advertise different control verbs" {
 }
 
 test "37: the guard rejects a Pi rewind before it reaches the channel" {
-  let recording = s37_RecordingChannel { frames: [] };
+  let recording = root.ai.RecordingChannel { frames: [] };
   let guarded = s37_guard_channel(s37_pi_harness(), recording);
   assert.is_true(!s37_try_send(guarded, s37_RewindFiles { to_user_message_id: "msg_1", dry_run: false }))
   assert.is_true(s37_try_send(guarded, s37_Steer { text: "use the existing logger" }))
@@ -171,15 +160,15 @@ test "37: the guard rejects a Pi rewind before it reaches the channel" {
 }
 
 test "37: the handwritten live companion drives a fresh harness session" {
-  let recording = s37_RecordingChannel { frames: [] };
+  let recording = root.ai.RecordingChannel { frames: [] };
   let live = s37_Fix_live_manual("auth.py null dereference", recording, provider = s37_claude_harness());
-  assert.equal(s37_collect_live_text(live), "patched null dereference")
+  assert.equal(root.ai.collect_live_text(live), "patched null dereference")
   assert.is_true(recording.frames.join("|").includes("TurnDone:msg_1"))
   live.cleanup();
 }
 
 test "37: the full driver lands Claude rewind but rejects the same Pi control" {
-  let claude_frames = s37_RecordingChannel { frames: [] };
+  let claude_frames = root.ai.RecordingChannel { frames: [] };
   let claude_live = s37_Fix_drive_manual(
     "fix auth.py",
     claude_frames,
@@ -192,7 +181,7 @@ test "37: the full driver lands Claude rewind but rejects the same Pi control" {
   assert.is_true(claude_frames.frames.join("|").includes("RewindFiles:msg_1"))
   claude_live.cleanup();
 
-  let pi_frames = s37_RecordingChannel { frames: [] };
+  let pi_frames = root.ai.RecordingChannel { frames: [] };
   let pi_live = s37_Fix_drive_manual(
     "fix auth.py",
     pi_frames,
@@ -231,7 +220,7 @@ test "37: a transport failure carries replay facts, not a retry opinion" {
 
 testset "integ-test-37-harness-basics" {
   test "37 live: the same hand-written request expansion works with a real Realtime provider" {
-    let channel = s37_RecordingChannel { frames: [] };
+    let channel = root.ai.RecordingChannel { frames: [] };
     let live = s37_Fix_live_manual(
       "Reply with a one-sentence patch plan for a null dereference.",
       channel,
@@ -241,7 +230,7 @@ testset "integ-test-37-harness-basics" {
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
       },
     );
-    assert.is_true(s37_collect_live_text(live).length() > 0)
+    assert.is_true(root.ai.collect_live_text(live).length() > 0)
     live.cleanup();
   }
 }

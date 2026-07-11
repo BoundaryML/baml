@@ -9,6 +9,12 @@ class HarnessAgent {
       "harness-agent:" + self.inner.display_name()
     }
     function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
+    function is_effectful(self) -> bool throws never {
+      match (self.inner) {
+        let harness: Harness => true,
+        _ => self.inner.is_effectful(),
+      }
+    }
   }
 
   implements Generate {

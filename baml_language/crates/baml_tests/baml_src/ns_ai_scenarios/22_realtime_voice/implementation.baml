@@ -1,19 +1,6 @@
 // 22 — realtime voice. The connection is a Live resource; Channel is only the
 // input/output adapter passed when that resource is opened.
 
-class s22_RecordingChannel {
-  events: string[],
-
-  implements root.ai.Channel {
-    function on(self, handler: (string) -> null throws never) -> null throws never { null }
-    function send(self, data: string) -> null throws baml.errors.Io {
-      self.events.push(data);
-      null
-    }
-    function close(self) -> null throws never { null }
-  }
-}
-
 class s22_Live {
   script: root.ai.LiveEvent[],
   channel: root.ai.Channel,
@@ -61,23 +48,4 @@ class ScriptedRealtime {
       }
     }
   }
-}
-
-class NullChannel {
-  implements root.ai.Channel {
-    function on(self, handler: (string) -> null throws never) -> null throws never { null }
-    function send(self, data: string) -> null throws baml.errors.Io { null }
-    function close(self) -> null throws never { null }
-  }
-}
-
-function s22_collect_text(live: root.ai.Live) -> string throws never {
-  let text = "";
-  for (let event in live.events()) {
-    match (event) {
-      let delta: root.ai.TranscriptDelta => { text = text + delta.text; },
-      _ => null,
-    }
-  }
-  text
 }

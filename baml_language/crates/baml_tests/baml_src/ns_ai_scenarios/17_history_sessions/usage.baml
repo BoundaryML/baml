@@ -2,8 +2,8 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s17_Chat(history: root.ai.ChatMessage[], latest: string) -> string {
-//   client: BepV2FixtureGenerate { name: "chat-default", reply: `"Fred"`, attributes: {} }
-//   prompt: `Conversation so far:\n${s17_render_history(history)}\nuser: ${latest}`
+//   client: root.ai.FixtureGenerate { name: "chat-default", reply: `"Fred"`, attributes: {} }
+//   prompt: `Conversation so far:\n${root.ai.render_messages(history)}\nuser: ${latest}`
 // }
 
 // Manual expansion reference for task `s17_Chat`:
@@ -17,7 +17,7 @@
 function s17_Chat_request(
   history: root.ai.ChatMessage[],
   latest: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "chat-default", reply: `"Fred"`, attributes: {},
   },
 ) -> root.ai.Request<string> {
@@ -29,8 +29,8 @@ function s17_Chat_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(
-      `Conversation so far:\n${s17_render_history(history)}\nuser: ${latest}`,
+    root.ai.prompt_template(
+      `Conversation so far:\n${root.ai.render_messages(history)}\nuser: ${latest}`,
       false,
     ),
   )
@@ -39,7 +39,7 @@ function s17_Chat_request(
 function s17_Chat_manual(
   history: root.ai.ChatMessage[],
   latest: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "chat-default", reply: `"Fred"`, attributes: {},
   },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
@@ -65,14 +65,14 @@ test "17: the second request contains application-owned history" {
     root.ai.ChatMessage.assistant("ok"),
   ];
   let request = s17_Chat_request(history, "What is my name?");
-  assert.is_true(s17_text_of(request.messages().at(0) ?? root.ai.ChatMessage.user("missing")).includes("Fred"))
+  assert.is_true((request.messages().at(0) ?? root.ai.ChatMessage.user("missing")).text().includes("Fred"))
 }
 
 test "17: the app can serialize its history between requests" {
   let history = [root.ai.ChatMessage.user("remember this")];
   let encoded = baml.json.to_string(history);
   let decoded = baml.json.from_string<root.ai.ChatMessage[]>(encoded);
-  assert.equal(s17_text_of(decoded.at(0) ?? root.ai.ChatMessage.user("missing")), "remember this")
+  assert.equal((decoded.at(0) ?? root.ai.ChatMessage.user("missing")).text(), "remember this")
 }
 
 testset "integ-test-17-history-sessions" {

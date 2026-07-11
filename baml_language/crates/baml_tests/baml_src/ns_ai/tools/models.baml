@@ -45,6 +45,16 @@ class Tool {
     };
     true
   }
+
+  function as_handoff(self) -> Tool throws never {
+    Tool {
+      name: self.name,
+      description: self.description,
+      parameters: self.parameters,
+      handoff: true,
+      _strict_validator: self._strict_validator,
+    }
+  }
 }
 
 class ToolCall {
@@ -56,6 +66,13 @@ class ToolCall {
 class ToolResult {
   id: string,
   output: string,
+
+  function ok(call: ToolCall, output: string) -> ToolResult throws never {
+    ToolResult { id: call.id, output: output }
+  }
+  function error(call: ToolCall, message: string) -> ToolResult throws never {
+    ToolResult { id: call.id, output: "error: " + message }
+  }
 }
 
 class ToolCalls {

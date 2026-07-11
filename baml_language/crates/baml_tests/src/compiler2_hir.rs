@@ -561,12 +561,12 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Seven conflicts: greet plus its six AST-level companions
-        // ($render_prompt, $build_request, $build_request_stream, and the
-        // capability-driver companions $with, $run_tools, $live), all
+        // Four conflicts: greet plus its three AST-level companions
+        // ($render_prompt, $build_request, and $build_request_stream), all
         // duplicated across 3 files. ($stream, $parse_stream, and $parse are
-        // PPIR-level and don't appear here.)
-        assert_eq!(ns.conflicts().len(), 7);
+        // PPIR-level and don't appear here.) Provider-capability companions are
+        // deliberately deferred until the BEPv2 desugaring pass is designed.
+        assert_eq!(ns.conflicts().len(), 4);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }

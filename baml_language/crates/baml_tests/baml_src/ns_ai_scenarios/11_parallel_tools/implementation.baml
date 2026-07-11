@@ -2,8 +2,16 @@ class S11QueryArgs {
   query: string,
 }
 
-function s11_search_tool() -> root.ai.Tool throws baml.errors.Unsupported {
+class S11LookupArgs {
+  id: string,
+}
+
+function s11_search_tool() -> root.ai.Tool throws never {
   root.ai.Tool.typed<S11QueryArgs>("search", "Search one source.")
+}
+
+function s11_lookup_tool() -> root.ai.Tool throws never {
+  root.ai.Tool.typed<S11LookupArgs>("lookup", "Look up one record.")
 }
 
 function s11_parallel_dispatch(

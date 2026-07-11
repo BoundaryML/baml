@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s09_Weather(city: string) -> string {
-//   client: BepV2ScriptedTools {
+//   client: root.ai.FixtureTools {
 //     call_name: "get_weather",
 //     call_args: `{"city":"Tokyo"}`,
 //     final_json: `"It is cloudy and 18 C."`,
@@ -23,7 +23,7 @@
 // This scenario intentionally has no plain-call s09_Weather_manual(...) wrapper.
 function s09_Weather_request(
   city: string,
-  provider: root.ai.Provider = BepV2ScriptedTools {
+  provider: root.ai.Provider = root.ai.FixtureTools {
     call_name: "get_weather",
     call_args: `{"city":"Tokyo"}`,
     final_json: `"It is cloudy and 18 C."`,
@@ -37,7 +37,7 @@ function s09_Weather_request(
     [],
     root.ai.RequestOptions { dispatch: null },
     {},
-    bepv2_prompt_template(`What is the weather in ${city}?`, false),
+    root.ai.prompt_template(`What is the weather in ${city}?`, false),
   )
 }
 
@@ -55,7 +55,7 @@ function s09_Weather_agent_request(
     tools,
     root.ai.RequestOptions { dispatch: dispatch },
     {},
-    bepv2_prompt_template(`What is the weather in ${city}?`, false),
+    root.ai.prompt_template(`What is the weather in ${city}?`, false),
   )
 }
 
@@ -69,10 +69,43 @@ function s09_Weather_agent_manual(
   root.ai.run_agent<string>(s09_Weather_agent_request(city, provider, tools, dispatch))
 }
 
+// Manual expansion reference for a deferred side-effect-only
+// `s09_MarkComplete(task_id: string) -> null` LLM function with tools supplied
+// at call time. A non-tool assistant turn completes the loop; its text is
+// intentionally discarded because the declared result carries no payload.
+function s09_MarkComplete_agent_request(
+  task_id: string,
+  provider: root.ai.Provider,
+  dispatch: (root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never,
+) -> root.ai.Request<null> {
+  root.ai.task_request<null>(
+    provider,
+    "s09_MarkComplete",
+    "ns_ai_scenarios",
+    { "task_id": task_id },
+    [s09_completion_tool()],
+    root.ai.RequestOptions { dispatch: dispatch },
+    {},
+    root.ai.prompt_template(
+      `Call mark_complete for task ${task_id} with completed=true. After the tool succeeds, finish.`,
+      false,
+    ),
+  )
+}
+
+function s09_MarkComplete_agent_manual(
+  task_id: string,
+  provider: root.ai.Provider,
+  dispatch: (root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never,
+) -> root.ai.Done<null> | root.ai.BudgetReached | root.ai.Handoff
+    throws baml.errors.ToolError | baml.errors.UnknownError {
+  root.ai.run_agent<null>(s09_MarkComplete_agent_request(task_id, provider, dispatch))
+}
+
 test "09: a call-time roster drives a typed tool loop" {
   let outcome = s09_Weather_agent_manual(
     "Tokyo",
-    BepV2ScriptedTools {
+    root.ai.FixtureTools {
       call_name: "get_weather",
       call_args: `{"city":"Tokyo"}`,
       final_json: `"It is cloudy and 18 C."`,
@@ -98,7 +131,7 @@ testset "integ-test-09-tool-calling" {
     let dispatch = (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
       let out: root.ai.ToolResult[] = [];
       for (let call in calls) {
-        let args: S09WeatherArgs = baml.sap.parse<S09WeatherArgs>(call.args) catch (e) {
+        let args: S09WeatherArgs = baml.json.from_string<S09WeatherArgs>(call.args) catch (e) {
           _ => S09WeatherArgs { city: "unknown" },
         };
         seen.push(args.city);
@@ -119,6 +152,36 @@ testset "integ-test-09-tool-calling" {
     assert.is_true(seen.length() > 0)
     match (outcome) {
       let done: root.ai.Done<string> => assert.is_true(done.value.length() > 0),
+      _ => assert.is_true(false),
+    }
+  }
+
+
+  test "09 live: OpenAI strict completes a null-returning tool task" {
+    let completed_ids: string[] = [];
+    let dispatch = (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
+      calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
+        let args: S09CompletionArgs = baml.json.from_string<S09CompletionArgs>(call.args) catch (e) {
+          _ => return root.ai.ToolResult { id: call.id, output: "invalid arguments" },
+        };
+        if (args.completed) { completed_ids.push(args.task_id); }
+        root.ai.ToolResult { id: call.id, output: "task marked complete" }
+      })
+    };
+    let outcome = s09_MarkComplete_agent_manual(
+      "task-42",
+      root.ai.OpenAiStrict {
+        model: "gpt-5.6-luna",
+        api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
+        base_url: null,
+        extra_headers: null,
+        extra_body: null,
+      },
+      dispatch,
+    );
+    assert.equal(completed_ids, ["task-42"]);
+    match (outcome) {
+      let done: root.ai.Done<null> => assert.equal(done.value, null),
       _ => assert.is_true(false),
     }
   }

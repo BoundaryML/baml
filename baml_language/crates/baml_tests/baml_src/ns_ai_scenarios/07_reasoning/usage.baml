@@ -34,7 +34,7 @@ function s07_Diagnose_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Diagnose this build failure: ${build_log}.`, true),
+    root.ai.prompt_template(`Diagnose this build failure: ${build_log}.`, true),
   )
 }
 
@@ -68,6 +68,7 @@ test "07: reasoning metadata returns beside the value" {
     },
   );
   assert.not_null(r.meta.attributes.get("reasoning_effort"))
+  assert.equal(r.meta.reasoning_blocks().at(0)?.summary, "fixture reasoning summary")
 }
 
 testset "integ-test-07-reasoning" {

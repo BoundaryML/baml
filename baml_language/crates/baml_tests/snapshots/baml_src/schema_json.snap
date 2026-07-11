@@ -1,0 +1,133 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function schema_json.$init_test_ns_schema_json_schema_json(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "json_schema returns standard mutable JSON"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "json_schema preserves recursive class constraints with refs"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "json_schema preserves mutually recursive class constraints"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI transformation closes objects and requires nullable fields"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI transformation preserves and closes recursive definitions"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI Chat response_format wraps the transformed schema"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI strict output tool wraps top-level unions under value"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI strict output tool lifts recursive definitions beside value"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "OpenAI transformation rejects standard map schemas instead of weakening them"
+    make_closure .<lambda($init_test_ns_schema_json_schema_json, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function schema_json.schema_json_customized() -> baml.json.json {
+    call user.schema_json.schema_json_standard
+    store_var schema
+    load_var schema
+    is_type map<string, baml.json.json>
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var schema
+    jump L2
+
+  L1:
+    load_var schema
+    store_var object
+    load_type string
+    load_type baml.json.json
+    load_var object
+    load_const "x-provider-dialect"
+    load_const "weird-v1"
+    call baml.Map.set
+    pop 1
+    load_var object
+
+  L2:
+    return
+}
+
+function schema_json.schema_json_mutually_recursive() -> baml.json.json {
+    load_type schema_json.SchemaMutualA
+    sys_op baml.schema.json_schema
+    return
+}
+
+function schema_json.schema_json_openai_map_error() -> string {
+    load_type map<string, int>
+    call user.ai.openai_strict_schema
+    pop 1
+    jump L2
+    load_var e
+    is_type baml.errors.Unsupported
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_var e
+    load_field .message
+    jump L3
+
+  L2:
+    load_const "missing error"
+
+  L3:
+    return
+}
+
+function schema_json.schema_json_recursive() -> baml.json.json {
+    load_type schema_json.SchemaRecursiveEmployee
+    sys_op baml.schema.json_schema
+    return
+}
+
+function schema_json.schema_json_standard() -> baml.json.json {
+    load_type schema_json.SchemaJsonExample
+    sys_op baml.schema.json_schema
+    return
+}

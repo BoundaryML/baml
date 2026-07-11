@@ -929,7 +929,6 @@ impl LoweringContext {
                         attributes: Vec::new(),
                         docstring: None,
                         is_tagged_template_tag: false,
-                        llm_companion_suffix: None,
                         span: child.span_range(),
                         name_span: child.span_range(),
                     }
@@ -4286,7 +4285,6 @@ impl LoweringContext {
             attributes: Vec::new(),
             docstring: None,
             is_tagged_template_tag: false,
-            llm_companion_suffix: None,
             span: node.span_range(),
             name_span: node.span_range(), // synthetic: use the lambda span
         };
@@ -4820,7 +4818,6 @@ impl LoweringContext {
             attributes: vec![],
             docstring: None,
             is_tagged_template_tag: false,
-            llm_companion_suffix: None,
             span,
             name_span: span,
         };
@@ -4920,7 +4917,6 @@ impl LoweringContext {
             attributes: vec![],
             docstring: None,
             is_tagged_template_tag: false,
-            llm_companion_suffix: None,
             span,
             name_span: span,
         };

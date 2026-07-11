@@ -3,7 +3,7 @@
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s15_FileTaxes(question: string) -> string {
 //   client: s15_Guarded {
-//     inner: BepV2FixtureGenerate { name: "tax-model", reply: `"four"`, attributes: {} },
+//     inner: root.ai.FixtureGenerate { name: "tax-model", reply: `"four"`, attributes: {} },
 //     blocked_phrase: "SSN",
 //   }
 //   prompt: `Answer this tax question: ${question}`
@@ -18,7 +18,7 @@
 function s15_FileTaxes_request(
   question: string,
   provider: root.ai.Provider = s15_Guarded {
-    inner: BepV2FixtureGenerate { name: "tax-model", reply: `"four"`, attributes: {} },
+    inner: root.ai.FixtureGenerate { name: "tax-model", reply: `"four"`, attributes: {} },
     blocked_phrase: "SSN",
   },
 ) -> root.ai.Request<string> {
@@ -30,14 +30,14 @@ function s15_FileTaxes_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Answer this tax question: ${question}`, false),
+    root.ai.prompt_template(`Answer this tax question: ${question}`, false),
   )
 }
 
 function s15_FileTaxes_manual(
   question: string,
   provider: root.ai.Provider = s15_Guarded {
-    inner: BepV2FixtureGenerate { name: "tax-model", reply: `"four"`, attributes: {} },
+    inner: root.ai.FixtureGenerate { name: "tax-model", reply: `"four"`, attributes: {} },
     blocked_phrase: "SSN",
   },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {

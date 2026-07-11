@@ -2,7 +2,7 @@ class S10SearchArgs {
   query: string,
 }
 
-function s10_search_tool() -> root.ai.Tool throws baml.errors.Unsupported {
+function s10_search_tool() -> root.ai.Tool throws never {
   root.ai.Tool.typed<S10SearchArgs>("search", "Search the documentation.")
 }
 

@@ -59,7 +59,7 @@ function s42_Summarize_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(
+    root.ai.prompt_template(
       `Inspect the repository and summarize the test setup, then: ${task}.`,
       true,
     ),
@@ -109,7 +109,7 @@ function s42_SummarizeStream_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Inspect the repo and summarize: ${task}.`, true),
+    root.ai.prompt_template(`Inspect the repo and summarize: ${task}.`, true),
   )
 }
 
@@ -296,7 +296,7 @@ test "42: usage aggregates across model turns independently of events" {
 
 test "42: a HarnessAgent may also wrap a plain Generate provider" {
   let agent: root.ai.Provider = root.ai.HarnessAgent {
-    inner: BepV2FixtureGenerate {
+    inner: root.ai.FixtureGenerate {
       name: "plain-model",
       reply: `{"files_changed":[],"summary":"plain generate"}`,
       attributes: {},

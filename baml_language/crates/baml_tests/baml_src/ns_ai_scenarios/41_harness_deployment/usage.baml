@@ -34,7 +34,7 @@ function s41_Fix_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Inspect the repository and fix this task: ${task}.`, true),
+    root.ai.prompt_template(`Inspect the repository and fix this task: ${task}.`, true),
   )
 }
 
@@ -73,7 +73,7 @@ function s41_FixViaRpc_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Fix via the RPC coding agent: ${task}.`, true),
+    root.ai.prompt_template(`Fix via the RPC coding agent: ${task}.`, true),
   )
 }
 
@@ -114,7 +114,7 @@ function s41_Translate_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Translate the following text to ${language}: ${text}`, false),
+    root.ai.prompt_template(`Translate the following text to ${language}: ${text}`, false),
   )
 }
 

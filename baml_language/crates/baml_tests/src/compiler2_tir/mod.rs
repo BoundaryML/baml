@@ -9,8 +9,6 @@ mod explicit_type_args;
 #[cfg(test)]
 mod inference;
 #[cfg(test)]
-mod phase3a;
-mod phase3a_recursion;
 #[cfg(test)]
 mod phase5;
 #[cfg(test)]

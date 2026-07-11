@@ -15,20 +15,20 @@
 function s19_ContinueBranch_request(
   history: string,
   continuation: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "s19-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s19-default", reply: `"unused"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s19_ContinueBranch", "ns_ai_scenarios",
     { "history": history, "continuation": continuation },
     [], root.ai.RequestOptions {}, {},
-    bepv2_prompt_template(`Conversation so far:\n${history}\n\nContinue with: ${continuation}`, false),
+    root.ai.prompt_template(`Conversation so far:\n${history}\n\nContinue with: ${continuation}`, false),
   )
 }
 
 function s19_ContinueBranch_manual(
   history: string,
   continuation: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "s19-default", reply: `"unused"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "s19-default", reply: `"unused"`, attributes: {} },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s19_ContinueBranch_request(history, continuation, provider = provider))
 }
@@ -40,7 +40,7 @@ function s19_run_branch(
   continuation: string,
 ) -> s19_Branch throws baml.errors.CallError | baml.errors.UnknownError {
   let messages = s19_fork(prefix, continuation);
-  let history = prefix.map((message) -> { `${message.role}: ${s19_text_of(message)}` }).join("\n");
+  let history = prefix.map((message) -> { `${message.role}: ${message.text()}` }).join("\n");
   let reply = s19_ContinueBranch_manual(history, continuation, provider = provider);
   s19_Branch { id: id, messages: messages, reply: reply }
 }
@@ -88,7 +88,7 @@ test "19: forking anywhere drops later turns from the branch, not the trunk" {
   ];
   let branch = s19_fork_at(history, 3, "Keep it understated.");
   assert.equal(branch.length(), 4)
-  assert.is_true(!branch.map((message) -> { s19_text_of(message) }).join(" ").includes("call to action"))
+  assert.is_true(!branch.map((message) -> { message.text() }).join(" ").includes("call to action"))
   assert.equal(history.length(), 5)
 }
 
@@ -102,7 +102,10 @@ test "19: fan out three branches from a shared prefix and pick a winner" {
 }
 
 test "19: a forkable session produces a distinct resource" {
-  let session = root.ai.open_session(s19_SessionProvider {}, root.ai.SessionOptions {});
+  let session = root.ai.open_session(
+    root.ai.FixtureSessions { name: "s19-sessions", initial_id: "root" },
+    root.ai.SessionOptions {},
+  );
   let id = match (session) {
     let forkable: root.ai.ForkableSession => forkable.fork().token().id,
     _ => "not forkable",
@@ -111,7 +114,10 @@ test "19: a forkable session produces a distinct resource" {
 }
 
 test "19: a plain session cannot be narrowed to ForkableSession" {
-  let session: root.ai.Session = s19_PlainSession { owner: s19_ForkEcho {} };
+  let session: root.ai.Session = root.ai.ProviderSession {
+    owner: s19_ForkEcho {},
+    id: "plain",
+  };
   let label = match (session) {
     let forkable: root.ai.ForkableSession => "forkable",
     _ => "plain",

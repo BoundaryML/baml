@@ -361,22 +361,37 @@ fn lower_function(
             .as_ref()
             .map(|rt| vec![rt.clone()])
             .unwrap_or_default();
-        // BEP-049 M5: for a new-mode (backtick) prompt, pre-build the
-        // render_prompt / build_request / build_request_stream companion bodies
-        // from the backtick now, while the CST is in hand, each carrying the
-        // compiled `prompt`…`` closure — the playground preview/cURL render
-        // through the closure exactly like execution. Read back by
-        // `make_llm_companion`. The MAIN body (below) is mode-agnostic and
-        // carries no closure, so the prompt's interp diagnostics / `env.X`
-        // refs are taken from the FIRST companion build (the later builds
-        // duplicate them — drop those).
+        // New-mode (BEP-049 M5f): a backtick prompt compiles to a `prompt`…``
+        // closure passed to `call_llm_function`; the orchestrator invokes it
+        // per attempt. Legacy `#"..."#` Jinja prompts keep the three-argument
+        // path (the closure defaults to `null`).
         let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
-        if let Some(backtick) = &prompt_backtick {
-            for (i, target) in ["render_prompt", "build_request", "build_request_stream"]
-                .iter()
-                .enumerate()
-            {
-                let (c_body, c_sm, mut c_diags, mut c_env_refs) =
+        let (expr_body, source_map) = if let Some(backtick) = &prompt_backtick {
+            let (body, sm, mut closure_diags, mut closure_env_refs) =
+                lower_expr_body::synthesize_llm_call_with_prompt(
+                    "call_llm_function",
+                    name.as_str(),
+                    &param_names,
+                    client_arg_name,
+                    call_type_args,
+                    backtick,
+                    llm_body_def.span,
+                );
+            diags.append(&mut closure_diags);
+            env_var_refs.append(&mut closure_env_refs);
+            let (stream_body, stream_sm, _diags, _env_refs) =
+                lower_expr_body::synthesize_llm_call_with_prompt(
+                    "stream_llm_function",
+                    name.as_str(),
+                    &param_names,
+                    client_arg_name,
+                    Vec::new(),
+                    backtick,
+                    llm_body_def.span,
+                );
+            llm_body_def.stream_body = Some((stream_body, stream_sm));
+            for target in ["render_prompt", "build_request", "build_request_stream"] {
+                let (c_body, c_sm, _diags, _env_refs) =
                     lower_expr_body::synthesize_llm_call_with_prompt(
                         target,
                         name.as_str(),
@@ -386,26 +401,21 @@ fn lower_function(
                         backtick,
                         llm_body_def.span,
                     );
-                if i == 0 {
-                    diags.append(&mut c_diags);
-                    env_var_refs.append(&mut c_env_refs);
-                }
                 llm_body_def
                     .companion_bodies
                     .push((target.to_string(), (c_body, c_sm)));
             }
-        }
-        // The desugared main body (DCP §1.3, Phase C.3): negotiation lives in
-        // the stdlib driver, prompt-mode dispatch in `$render_prompt`.
-        //   `baml.ai.drive_call<T>(client, Foo$render_prompt(args…, client = client))`
-        let (expr_body, source_map) = synthesize_llm_drive_call(
-            "drive_call",
-            name.as_str(),
-            &param_names,
-            client_arg_name,
-            call_type_args,
-            llm_body_def.span,
-        );
+            (body, sm)
+        } else {
+            synthesize_llm_builtin_call(
+                "call_llm_function",
+                name.as_str(),
+                &param_names,
+                client_arg_name,
+                call_type_args,
+                llm_body_def.span,
+            )
+        };
         (
             Some(FunctionBodyDef::Expr(expr_body, source_map)),
             Some(DeclarativeMeta::Llm(llm_body_def)),
@@ -427,8 +437,6 @@ fn lower_function(
     let attributes = lower_attributes_from_node(node);
     let docstring = crate::docstring::extract_docstring(node);
     let is_tagged_template_tag = crate::docstring::has_baml_marker(node, "tagged_string");
-    let llm_companion_suffix =
-        crate::docstring::baml_marker_arg(node, "llm_companion").map(|s| Name::new(&s));
 
     Some(FunctionDef {
         name,
@@ -444,7 +452,6 @@ fn lower_function(
         attributes,
         docstring,
         is_tagged_template_tag,
-        llm_companion_suffix,
         span: node.span_range(),
         name_span,
     })
@@ -611,15 +618,9 @@ pub(crate) fn append_default_client_param(
     client_is_call: bool,
     span: text_size::TextRange,
 ) {
-    // DCP §1.1 (Phase B): the injected parameter is the NEW-model existential
-    // `baml.ai.Provider`, so call sites can swap in any provider
-    // (`Foo(x, client = Anthropic { … })`). The declared legacy config rides
-    // as the default unchanged — `baml.llm.Client` itself implements
-    // `Provider`/`HttpProvider` (out-of-body blocks in `ns_ai/core/legacy.baml`),
-    // which also keeps legacy call-site overrides (`client = OtherClient`)
-    // working. The call form `client Gpt()` (DCP §1.4) makes the default a
-    // call to a user function returning `Provider` — the declared-custom-client
-    // path.
+    // The declared client is the default value for the injected legacy
+    // `baml.llm.Client` parameter. The call form `client Gpt()` makes that
+    // default a zero-argument call instead of a binding reference.
     let default_expr = if client_is_call {
         let callee = {
             let id = defaults
@@ -643,7 +644,7 @@ pub(crate) fn append_default_client_param(
         name: Name::new("client"),
         type_expr: Some(
             TypeExprKind::Path {
-                segments: vec![Name::new("baml"), Name::new("ai"), Name::new("Provider")],
+                segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Client")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
                 attrs: vec![],
@@ -753,6 +754,7 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         client_is_call,
         prompt,
         // Filled in by the LLM-function branch once param names are known.
+        stream_body: None,
         companion_bodies: Vec::new(),
         span,
     }
@@ -880,92 +882,6 @@ pub fn synthesize_llm_builtin_call(
     (body, source_map)
 }
 
-/// Build the desugared LLM main body (DCP §1.3, Phase C.3):
-///
-/// `baml.ai.<driver><type_args>(client, Foo$render_prompt(p1 = p1, …, client = client))`
-///
-/// The `$render_prompt` companion owns prompt-mode dispatch (backtick closure
-/// vs legacy Jinja) and client-keyed specialization, so this body is
-/// mode-agnostic and carries no prompt closure. All user args ride BY NAME
-/// (defaulted params reject positional passing, E0005). `client_name` mirrors
-/// `synthesize_llm_builtin_call`: after default-client parameter synthesis it
-/// is always `Some("client")`; `None` (no declared client) degrades to
-/// `Expr::Null`, preserving the legacy no-client shape.
-pub(crate) fn synthesize_llm_drive_call(
-    driver_name: &str,
-    function_name: &str,
-    param_names: &[Name],
-    client_name: Option<&str>,
-    type_args: Vec<crate::ast::TypeExpr>,
-    span: text_size::TextRange,
-) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
-    use la_arena::Arena;
-
-    use crate::ast::{AstSourceMap, Expr, ExprBody};
-
-    let mut exprs = Arena::new();
-    let mut expr_spans = Arena::new();
-    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
-        let id = exprs.alloc(expr);
-        expr_spans.alloc(span);
-        id
-    };
-
-    // Foo$render_prompt(p1 = p1, …, client = client)
-    let render_callee = alloc(Expr::Path(vec![Name::new(format!(
-        "{function_name}$render_prompt"
-    ))]));
-    let mut render_args: Vec<CallArg> = param_names
-        .iter()
-        .map(|name| {
-            let arg = alloc(Expr::Path(vec![name.clone()]));
-            CallArg::named(name.clone(), arg)
-        })
-        .collect();
-    if let Some(client) = client_name {
-        let client_for_render = alloc(Expr::Path(vec![Name::new(client)]));
-        render_args.push(CallArg::named("client", client_for_render));
-    }
-    let rendered = alloc(Expr::Call {
-        callee: render_callee,
-        type_args: vec![],
-        args: render_args,
-    });
-
-    let client_arg = match client_name {
-        Some(client) => alloc(Expr::Path(vec![Name::new(client)])),
-        None => alloc(Expr::Null),
-    };
-    let driver_callee = alloc(Expr::Path(vec![
-        Name::new("baml"),
-        Name::new("ai"),
-        Name::new(driver_name),
-    ]));
-    let call = alloc(Expr::Call {
-        callee: driver_callee,
-        type_args,
-        args: vec![
-            CallArg::positional(client_arg),
-            CallArg::positional(rendered),
-        ],
-    });
-
-    let body = ExprBody {
-        exprs,
-        stmts: Arena::new(),
-        patterns: Arena::new(),
-        match_arms: Arena::new(),
-        catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
-        root_expr: Some(call),
-    };
-    let source_map = AstSourceMap {
-        expr_spans,
-        ..Default::default()
-    };
-    (body, source_map)
-}
-
 /// Synthesize a `baml.llm.parse<STREAM_EXPANDED, ORIGINAL>(json)` call.
 ///
 /// Unlike `synthesize_llm_builtin_call`, there is no client argument and
@@ -1083,23 +999,16 @@ pub fn synthesize_llm_make_stream_call(
         alloc(Expr::Path(vec![Name::new(client_name)]))
     };
 
-    // 3. Callee: `baml.llm.make_stream_for` — a free fn that unwraps the
-    // Provider-typed client back to the legacy Client (the param is
-    // `baml.ai.Provider` since DCP §1.1, so a direct `.__make_stream`
-    // member call no longer typechecks).
-    let callee = alloc(Expr::Path(vec![
-        Name::new("baml"),
-        Name::new("llm"),
-        Name::new("make_stream_for"),
-    ]));
+    // 3. Callee: CLIENT.__make_stream (method call on the client)
+    let callee = alloc(Expr::MemberAccess {
+        base: client_arg,
+        member: Name::new("__make_stream"),
+    });
 
     let call = alloc(Expr::Call {
         callee,
         type_args,
-        args: vec![
-            CallArg::positional(client_arg),
-            CallArg::positional(sse_expr),
-        ],
+        args: vec![CallArg::positional(sse_expr)],
     });
 
     let body = ExprBody {
@@ -1569,7 +1478,6 @@ fn lower_interface(
         associated_types,
         required_methods,
         default_methods,
-        is_llm_capability: crate::docstring::has_baml_marker(node, "llm_capability"),
         attributes: lower_attributes_from_node(node),
         docstring: crate::docstring::extract_docstring(node),
         span: node.span_range(),
@@ -2177,7 +2085,6 @@ fn synthesize_init_test_function(
         attributes: vec![],
         docstring: None,
         is_tagged_template_tag: false,
-        llm_companion_suffix: None,
         span,
         name_span: span,
     }
@@ -2218,7 +2125,6 @@ fn synthesize_register_call(
                 attributes: vec![],
                 docstring: None,
                 is_tagged_template_tag: false,
-                llm_companion_suffix: None,
                 span,
                 name_span: span,
             };
@@ -2302,7 +2208,6 @@ fn synthesize_register_call(
                 attributes: vec![],
                 docstring: None,
                 is_tagged_template_tag: false,
-                llm_companion_suffix: None,
                 span,
                 name_span: span,
             };
@@ -2673,86 +2578,53 @@ fn synthesize_client_let(
         }
     }
 
-    // The inner provider value (DCP Phase C): strategy configs lower to the
-    // new-model combinators (`baml.ai.Fallback` / `baml.ai.RoundRobin`) over
-    // their member client refs; a primitive stays a legacy `baml.llm.Client`,
-    // which IS a `baml.ai.Provider` via the bridge implements blocks.
-    let inner = if is_fallback {
-        let members_expr = alloc(Expr::Array {
-            elements: sub_client_exprs,
-        });
-        alloc(Expr::Object {
-            type_name: TypePath::from_dotted("baml.ai.Fallback"),
-            type_args: vec![],
-            fields: vec![(Name::new("members"), members_expr)],
-            spreads: vec![],
-        })
+    // name: "MyClient"
+    let name_expr = alloc(Expr::Literal(Literal::String(client_name.to_string())));
+
+    // client_type: baml.llm.ClientType.Primitive (or Fallback / RoundRobin)
+    let variant_name = if is_fallback {
+        "Fallback"
     } else if is_round_robin {
-        let members_expr = alloc(Expr::Array {
-            elements: sub_client_exprs,
-        });
-        // `options { start N }` seeds the round-robin cursor.
-        let counter_expr = alloc(Expr::Literal(Literal::Int(round_robin_start)));
-        alloc(Expr::Object {
-            type_name: TypePath::from_dotted("baml.ai.RoundRobin"),
-            type_args: vec![],
-            fields: vec![
-                (Name::new("members"), members_expr),
-                (Name::new("counter"), counter_expr),
-            ],
-            spreads: vec![],
-        })
+        "RoundRobin"
     } else {
-        let name_expr = alloc(Expr::Literal(Literal::String(client_name.to_string())));
-        let client_type_expr = alloc(Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("llm"),
-            Name::new("ClientType"),
-            Name::new("Primitive"),
-        ]));
-        let sub_clients_expr = alloc(Expr::Array { elements: vec![] });
-        let retry_expr = alloc(Expr::Null);
-        let counter_expr = alloc(Expr::Literal(Literal::Int(0)));
-        alloc(Expr::Object {
-            type_name: TypePath::from_dotted("baml.llm.Client"),
-            type_args: vec![],
-            fields: vec![
-                (Name::new("name"), name_expr),
-                (Name::new("client_type"), client_type_expr),
-                (Name::new("sub_clients"), sub_clients_expr),
-                (Name::new("retry"), retry_expr),
-                (Name::new("counter"), counter_expr),
-            ],
-            spreads: vec![],
-        })
+        "Primitive"
+    };
+    let client_type_expr = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("ClientType"),
+        Name::new(variant_name),
+    ]));
+
+    // sub_clients: [A, B, ...] for composites, [] for primitive
+    let sub_clients_expr = alloc(Expr::Array {
+        elements: sub_client_exprs,
+    });
+
+    // retry: MyRetry (path reference) or null
+    let retry_expr = if let Some(rp_name) = retry_policy_name {
+        alloc(Expr::Path(vec![Name::new(&rp_name)]))
+    } else {
+        alloc(Expr::Null)
     };
 
-    // `retry_policy MyRetry` wraps the whole config in `baml.ai.Retry`
-    // (legacy semantics: the policy re-drives the entire strategy plan).
-    // max_retries -> max; initial_delay_ms -> base_delay_ms (the new Retry
-    // doubles per attempt; multiplier/max_delay_ms have no combinator knob).
-    let root = if let Some(rp_name) = retry_policy_name {
-        let max_expr = alloc(Expr::Path(vec![
-            Name::new(&rp_name),
-            Name::new("max_retries"),
-        ]));
-        let delay_expr = alloc(Expr::Path(vec![
-            Name::new(&rp_name),
-            Name::new("initial_delay_ms"),
-        ]));
-        alloc(Expr::Object {
-            type_name: TypePath::from_dotted("baml.ai.Retry"),
-            type_args: vec![],
-            fields: vec![
-                (Name::new("inner"), inner),
-                (Name::new("max"), max_expr),
-                (Name::new("base_delay_ms"), delay_expr),
-            ],
-            spreads: vec![],
-        })
-    } else {
-        inner
-    };
+    // counter: round_robin_start for RR clients, 0 otherwise
+    let counter_val = if is_round_robin { round_robin_start } else { 0 };
+    let counter_expr = alloc(Expr::Literal(Literal::Int(counter_val)));
+
+    // baml.llm.Client { name, client_type, sub_clients, retry, counter }
+    let root = alloc(Expr::Object {
+        type_name: TypePath::from_dotted("baml.llm.Client"),
+        type_args: vec![],
+        fields: vec![
+            (Name::new("name"), name_expr),
+            (Name::new("client_type"), client_type_expr),
+            (Name::new("sub_clients"), sub_clients_expr),
+            (Name::new("retry"), retry_expr),
+            (Name::new("counter"), counter_expr),
+        ],
+        spreads: vec![],
+    });
 
     let body = ExprBody {
         exprs,
@@ -3038,7 +2910,6 @@ fn synthesize_client_new_companion(
         attributes: vec![],
         docstring: None,
         is_tagged_template_tag: false,
-        llm_companion_suffix: None,
         span,
         name_span: name_token.text_range(),
     }

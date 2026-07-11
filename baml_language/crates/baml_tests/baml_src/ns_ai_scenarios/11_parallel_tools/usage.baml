@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s11_Research(question: string) -> string {
-//   client: BepV2ScriptedTools {
+//   client: root.ai.FixtureTools {
 //     call_name: "search",
 //     call_args: `{"query":"Tokyo"}`,
 //     final_json: `"Tokyo is mild."`,
@@ -22,7 +22,7 @@
 // This scenario intentionally has no plain-call s11_Research_manual(...) wrapper.
 function s11_Research_request(
   question: string,
-  provider: root.ai.Provider = BepV2ScriptedTools {
+  provider: root.ai.Provider = root.ai.FixtureTools {
     call_name: "search",
     call_args: `{"query":"Tokyo"}`,
     final_json: `"Tokyo is mild."`,
@@ -38,7 +38,7 @@ function s11_Research_request(
     tools,
     root.ai.RequestOptions { dispatch: dispatch },
     {},
-    bepv2_prompt_template(`Research ${question}.`, false),
+    root.ai.prompt_template(`Research ${question}.`, false),
   )
 }
 
@@ -66,6 +66,44 @@ test "11: a parallel dispatcher returns results in call order" {
   ]);
   assert.equal(results.map((r: root.ai.ToolResult) -> string { r.id }), ["a", "b"])
   assert.equal(audit.length(), 2)
+}
+
+test "11: composed dispatch preserves owner batches and provider call order" {
+  let audit: string[] = [];
+  let task_dispatch = (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
+    audit.push("task:" + calls.length().to_string());
+    calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
+      root.ai.ToolResult.ok(call, "task")
+    })
+  };
+  let agent_dispatch = (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
+    audit.push("agent:" + calls.length().to_string());
+    calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
+      root.ai.ToolResult.ok(call, "agent")
+    })
+  };
+  let dispatch = root.ai.compose_tool_dispatch(
+    [s11_search_tool()],
+    task_dispatch,
+    [s11_lookup_tool()],
+    agent_dispatch,
+  );
+  let results = dispatch([
+    root.ai.ToolCall { id: "a", name: "lookup", args: `{"id":"1"}` },
+    root.ai.ToolCall { id: "b", name: "search", args: `{"query":"Paris"}` },
+    root.ai.ToolCall { id: "c", name: "lookup", args: `{"id":"2"}` },
+  ]);
+  assert.equal(audit, ["agent:2", "task:1"])
+  assert.equal(results.map((result: root.ai.ToolResult) -> string { result.id }), ["a", "b", "c"])
+  assert.equal(results.map((result: root.ai.ToolResult) -> string { result.output }), ["agent", "task", "agent"])
+}
+
+test "11: duplicate tool names are rejected before an agent runs" {
+  let message = root.ai.merge_tools([s11_search_tool()], [s11_search_tool()]) catch (e) {
+    let unsupported: baml.errors.Unsupported => unsupported.message,
+    _ => "wrong error",
+  };
+  assert.equal(message, "duplicate tool name: search")
 }
 
 testset "integ-test-11-parallel-tools" {

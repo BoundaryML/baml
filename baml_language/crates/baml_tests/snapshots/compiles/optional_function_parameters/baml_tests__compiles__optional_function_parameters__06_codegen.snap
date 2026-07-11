@@ -17,7 +17,7 @@ function boundary.id() -> boundary.LocalId {
 function boundary.id.current() -> string {
 }
 
-function user.AskDocs(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> string {
+function user.AskDocs(query: string, max_results: int, filter: string, client: baml.llm.Client) -> string {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -42,17 +42,23 @@ function user.AskDocs(query: string, max_results: int, filter: string, client: b
     store_var client
 
   L2:
-    load_var2 1 2
-    load_var2 3 4
-    call user.AskDocs$render_prompt
-    store_var _8
     load_type string
-    load_var2 4 5
-    call baml.ai.drive_call
+    load_var client
+    load_const "AskDocs"
+    load_var2 1 2
+    load_var filter
+    load_const "query"
+    load_const "max_results"
+    load_const "filter"
+    load_type string
+    load_type unknown
+    alloc_map 3
+    load_const <omitted>
+    call baml.llm.call_llm_function
     return
 }
 
-function user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.AskDocs$build_request(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -92,7 +98,7 @@ function user.AskDocs$build_request(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.AskDocs$build_request_stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.http.Request {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -132,43 +138,7 @@ function user.AskDocs$build_request_stream(query: string, max_results: int, filt
     return
 }
 
-function user.AskDocs$live(query: string, io: baml.ai.Channel, max_results: int, filter: string, client: baml.ai.Provider) -> baml.ai.Transcript {
-    load_var max_results
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const 10
-    store_var max_results
-
-  L0:
-    load_var filter
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    call user.DefaultFilter
-    store_var filter
-
-  L1:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L2
-    load_global user.TestClient
-    store_var client
-
-  L2:
-    load_var2 1 3
-    load_var2 4 5
-    call user.AskDocs$render_prompt
-    store_var _9
-    load_type string
-    load_var2 5 6
-    load_var io
-    call baml.ai.drive_live
-    return
-}
-
-function user.AskDocs$parse(json: string, client: baml.ai.Provider) -> string {
+function user.AskDocs$parse(json: string, client: baml.llm.Client) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -184,7 +154,7 @@ function user.AskDocs$parse(json: string, client: baml.ai.Provider) -> string {
     return
 }
 
-function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
+function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -196,11 +166,11 @@ function user.AskDocs$parse_stream(sse: baml.http.SseStream, client: baml.ai.Pro
     load_type string | null
     load_type string
     load_var2 2 1
-    call baml.llm.make_stream_for
+    call baml.llm.Client.__make_stream
     return
 }
 
-function user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
+function user.AskDocs$render_prompt(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -240,52 +210,7 @@ function user.AskDocs$render_prompt(query: string, max_results: int, filter: str
     return
 }
 
-function user.AskDocs$run_tools(query: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, max_results: int, filter: string, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
-    load_var max_results
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const 10
-    store_var max_results
-
-  L0:
-    load_var filter
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    call user.DefaultFilter
-    store_var filter
-
-  L1:
-    load_var stop_when
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L2
-    load_const null
-    store_var stop_when
-
-  L2:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L3
-    load_global user.TestClient
-    store_var client
-
-  L3:
-    load_var2 1 4
-    load_var2 5 7
-    call user.AskDocs$render_prompt
-    store_var _12
-    load_type string
-    load_var2 7 8
-    load_var2 2 3
-    load_var stop_when
-    call baml.ai.drive_run_tools
-    return
-}
-
-function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
+function user.AskDocs$stream(query: string, max_results: int, filter: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var max_results
     load_const <omitted>
     cmp_op ==
@@ -310,52 +235,20 @@ function user.AskDocs$stream(query: string, max_results: int, filter: string, cl
     store_var client
 
   L2:
-    load_var2 1 2
-    load_var2 3 4
-    call user.AskDocs$render_prompt
-    store_var _8
     load_type string | null
     load_type string
-    load_var2 4 5
-    call baml.ai.drive_stream
-    return
-}
-
-function user.AskDocs$with(query: string, project: (baml.ai.ResponseMeta) -> V throws E2, max_results: int, filter: string, client: baml.ai.Provider) -> baml.ai.CallResult<string, V> {
-    load_var max_results
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const 10
-    store_var max_results
-
-  L0:
-    load_var filter
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    call user.DefaultFilter
-    store_var filter
-
-  L1:
     load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L2
-    load_global user.TestClient
-    store_var client
-
-  L2:
-    load_var2 1 3
-    load_var2 4 5
-    call user.AskDocs$render_prompt
-    store_var _9
+    load_const "AskDocs"
+    load_var2 1 2
+    load_var filter
+    load_const "query"
+    load_const "max_results"
+    load_const "filter"
     load_type string
-    load_type #0
-    load_type #1
-    load_var2 5 6
-    load_var project
-    call baml.ai.drive_with
+    load_type unknown
+    alloc_map 3
+    load_const <omitted>
+    call baml.llm.stream_llm_function
     return
 }
 

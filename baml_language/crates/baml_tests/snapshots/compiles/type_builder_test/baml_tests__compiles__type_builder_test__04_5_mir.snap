@@ -2,13 +2,13 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Fn(client: baml.ai.Provider) -> string {
+fn user.Fn(client: baml.llm.Client) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.ai.Provider // client // param
+    let _1: baml.llm.Client // client // param
     let _2: bool
     let _3: baml.llm.Client[]
-    let _4: baml.llm.PromptAst
+    let _4: map<string, unknown>
     let _5: type
 
     bb0: {
@@ -23,23 +23,20 @@ fn user.Fn(client: baml.ai.Provider) -> string {
     }
 
     bb2: {
-        _4 = call const fn user.Fn$render_prompt(copy _1) -> [bb3];
+        _4 = {  }: map<string, unknown>;
+        _5 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _1, const "Fn", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _5 = load_type(string);
-        _0 = call const fn baml.ai.drive_call<copy _5>(copy _1, copy _4) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
 
-fn user.Fn$build_request(client: baml.ai.Provider) -> baml.http.Request {
+fn user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: baml.ai.Provider // client // param
+    let _1: baml.llm.Client // client // param
     let _2: bool
     let _3: baml.llm.Client[]
     let _4: map<string, unknown>
@@ -65,10 +62,10 @@ fn user.Fn$build_request(client: baml.ai.Provider) -> baml.http.Request {
     }
 }
 
-fn user.Fn$build_request_stream(client: baml.ai.Provider) -> baml.http.Request {
+fn user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: baml.ai.Provider // client // param
+    let _1: baml.llm.Client // client // param
     let _2: bool
     let _3: baml.llm.Client[]
     let _4: map<string, unknown>
@@ -94,45 +91,10 @@ fn user.Fn$build_request_stream(client: baml.ai.Provider) -> baml.http.Request {
     }
 }
 
-fn user.Fn$live(io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
-    // Locals:
-    let _0: baml.ai.Transcript // _0 // return
-    let _1: baml.ai.Channel // io // param
-    let _2: baml.ai.Provider // client // param
-    let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: baml.llm.PromptAst
-    let _6: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = call const fn user.Fn$render_prompt(copy _2) -> [bb3];
-    }
-
-    bb3: {
-        _6 = load_type(string);
-        _0 = call const fn baml.ai.drive_live<copy _6>(copy _2, copy _5, copy _1) -> [bb4];
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.Fn$render_prompt(client: baml.ai.Provider) -> baml.llm.PromptAst {
+fn user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
-    let _1: baml.ai.Provider // client // param
+    let _1: baml.llm.Client // client // param
     let _2: bool
     let _3: baml.llm.Client[]
     let _4: map<string, unknown>
@@ -154,93 +116,6 @@ fn user.Fn$render_prompt(client: baml.ai.Provider) -> baml.llm.PromptAst {
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.Fn$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
-    // Locals:
-    let _0: string | baml.ai.Budget<string> | baml.ai.HandoffRequest // _0 // return
-    let _1: baml.ai.Tool[] // tools // param
-    let _2: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _3: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
-    let _4: baml.ai.Provider // client // param
-    let _5: bool
-    let _6: bool
-    let _7: baml.llm.Client[]
-    let _8: baml.llm.PromptAst
-    let _9: type
-
-    bb0: {
-        _5 = copy _3 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _6 = copy _4 == const <omitted>;
-        branch copy _6 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _7 = []: baml.llm.Client[];
-        _4 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _7, const null, const 0_i64 };
-        goto -> bb4;
-    }
-
-    bb4: {
-        _8 = call const fn user.Fn$render_prompt(copy _4) -> [bb5];
-    }
-
-    bb5: {
-        _9 = load_type(string);
-        _0 = call const fn baml.ai.drive_run_tools<copy _9>(copy _4, copy _8, copy _1, copy _2, copy _3) -> [bb6];
-    }
-
-    bb6: {
-        return;
-    }
-}
-
-fn user.Fn$with(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<string, V> {
-    // Locals:
-    let _0: baml.ai.CallResult<string, V> // _0 // return
-    let _1: (baml.ai.ResponseMeta) -> V throws E2 // project // param
-    let _2: baml.ai.Provider // client // param
-    let _3: bool
-    let _4: baml.llm.Client[]
-    let _5: baml.llm.PromptAst
-    let _6: type
-    let _7: type
-    let _8: type
-
-    bb0: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = []: baml.llm.Client[];
-        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _4, const null, const 0_i64 };
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = call const fn user.Fn$render_prompt(copy _2) -> [bb3];
-    }
-
-    bb3: {
-        _6 = load_type(string);
-        _7 = load_type(#0);
-        _8 = load_type(#1);
-        _0 = call const fn baml.ai.drive_with<copy _6, copy _7, copy _8>(copy _2, copy _5, copy _1) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }

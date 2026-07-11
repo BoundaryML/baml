@@ -11,26 +11,26 @@
 // compiler-generated names.
 function VoiceReply_request(
   transcript: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "voice-brain", reply: `"hello"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "voice-brain", reply: `"hello"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "VoiceReply", "ns_ai_scenarios", { "transcript": transcript },
     [], root.ai.RequestOptions {}, {},
-    bepv2_prompt_template(`Reply to this caller in one short sentence: ${transcript}`, false),
+    root.ai.prompt_template(`Reply to this caller in one short sentence: ${transcript}`, false),
   )
 }
 
 function VoiceReply_manual(
   transcript: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "voice-brain", reply: `"hello"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "voice-brain", reply: `"hello"`, attributes: {} },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(VoiceReply_request(transcript, provider = provider))
 }
 
 function s25_cascaded_voice(
-  stt: s25_Stt,
+  stt: root.ai.SpeechToText,
   brain: root.ai.Provider,
-  tts: s25_Tts,
+  tts: root.ai.TextToSpeech,
   audio: string,
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   let transcript = stt.transcribe(audio);
@@ -41,7 +41,7 @@ function s25_cascaded_voice(
 test "25: the pipeline composes STT, one semantic request, and TTS" {
   let out = s25_cascaded_voice(
     s25_FakeStt { transcript: "connect me to billing" },
-    BepV2FixtureGenerate { name: "brain", reply: `"Connecting you now."`, attributes: {} },
+    root.ai.FixtureGenerate { name: "brain", reply: `"Connecting you now."`, attributes: {} },
     s25_FakeTts {},
     "call.wav",
   );

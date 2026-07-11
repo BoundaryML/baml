@@ -15,11 +15,19 @@ class s07_ReasoningFixture {
   implements root.ai.Generate {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
-      BepV2FixtureGenerate {
+      let response = root.ai.FixtureGenerate {
         name: "reasoning-fixture",
         reply: self.reply,
         attributes: { "reasoning_effort": self.effort },
-      }.generate<T>(request)
+      }.generate<T>(request);
+      let blocks: root.ai.ModelBlock[] = [root.ai.ReasoningBlock {
+        summary: "fixture reasoning summary",
+        redacted: false,
+        provider_name: "reasoning-fixture",
+        metadata: null,
+      }];
+      response.meta.blocks = blocks;
+      response
     }
   }
 }

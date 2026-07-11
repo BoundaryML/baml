@@ -16,9 +16,7 @@ class s24_LiveTools {
           id: "weather-1", name: "get_weather", args: `{"city":"Paris"}`,
         }] };
       }
-      baml.sap.parse<T>(`The weather is ${transcript.output}.`) catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["tool result parse"] },
-      }
+      root.ai.fixture_value<T, string>(`The weather is ${transcript.output}.`)
     }
     function submit(self, transcript: s24_Transcript, results: root.ai.ToolResult[]) -> s24_Transcript
         throws baml.errors.ToolError | baml.errors.UnknownError {

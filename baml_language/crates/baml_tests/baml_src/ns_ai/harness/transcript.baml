@@ -15,7 +15,7 @@ function conversation_from_messages(messages: ChatMessage[]) -> Conversation thr
     messages: messages.map((message: ChatMessage) -> ConversationMessage {
       ConversationMessage {
         role: message.role,
-        parts: message.parts,
+        parts: message.parts.slice(0, message.parts.length()),
         provider_metadata: null,
       }
     }),

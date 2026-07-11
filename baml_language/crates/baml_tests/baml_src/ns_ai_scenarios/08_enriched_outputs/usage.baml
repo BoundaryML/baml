@@ -34,7 +34,7 @@ function s08_Research_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(`Answer ${question}.`, true),
+    root.ai.prompt_template(`Answer ${question}.`, true),
   )
 }
 
@@ -68,6 +68,7 @@ test "08: provider-specific enrichment stays in generic metadata" {
     },
   );
   assert.not_null(r.meta.attributes.get("source_url"))
+  assert.equal(r.meta.citations?.at(0)?.url, "https://example.test/water")
 }
 
 testset "integ-test-08-enriched-outputs" {

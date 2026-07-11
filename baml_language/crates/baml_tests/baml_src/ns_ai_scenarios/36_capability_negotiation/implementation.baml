@@ -9,7 +9,7 @@ class s36_DescribedFixture {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
       root.ai.Response<T> {
-        value: baml.sap.parse<T>(self.reply) catch (e) {
+        value: baml.json.from_string<T>(self.reply) catch (e) {
           _ => throw baml.errors.UnknownError { data: e, message: ["descriptor fixture parse"] },
         },
         meta: root.ai.Meta {

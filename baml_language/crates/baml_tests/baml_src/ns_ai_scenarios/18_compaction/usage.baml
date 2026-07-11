@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s18_SummarizeHead(head: string) -> string {
-//   client: BepV2FixtureGenerate {
+//   client: root.ai.FixtureGenerate {
 //     name: "summary-default",
 //     reply: `"Venue and catering are booked."`,
 //     attributes: {},
@@ -19,7 +19,7 @@
 // compiler-generated names.
 function s18_SummarizeHead_request(
   head: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "summary-default",
     reply: `"Venue and catering are booked."`,
     attributes: {},
@@ -33,7 +33,7 @@ function s18_SummarizeHead_request(
     [],
     root.ai.RequestOptions {},
     {},
-    bepv2_prompt_template(
+    root.ai.prompt_template(
       `Condense this conversation, preserving decisions and open work: ${head}`,
       false,
     ),
@@ -42,7 +42,7 @@ function s18_SummarizeHead_request(
 
 function s18_SummarizeHead_manual(
   head: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate {
+  provider: root.ai.Provider = root.ai.FixtureGenerate {
     name: "summary-default",
     reply: `"Venue and catering are booked."`,
     attributes: {},
@@ -57,18 +57,18 @@ test "18: summarize-and-replace keeps the recent tail verbatim" {
     root.ai.ChatMessage.assistant("venue booked"),
     root.ai.ChatMessage.user("what is left?"),
   ];
-  let compacted = s18_compact_history(history, 1, BepV2FixtureGenerate {
+  let compacted = s18_compact_history(history, 1, root.ai.FixtureGenerate {
     name: "summary",
     reply: `"The venue is booked."`,
     attributes: {},
   });
   assert.equal(compacted.length(), 2)
-  assert.equal(s18_text_of(compacted.at(1) ?? root.ai.ChatMessage.user("missing")), "what is left?")
+  assert.equal((compacted.at(1) ?? root.ai.ChatMessage.user("missing")).text(), "what is left?")
 }
 
 test "18: short history is returned without a model call" {
   let history = [root.ai.ChatMessage.user("hi")];
-  assert.equal(s18_compact_history(history, 2, bepv2_fixture(`"unused"`)), history)
+  assert.equal(s18_compact_history(history, 2, root.ai.fixture(`"unused"`)), history)
 }
 
 testset "integ-test-18-compaction" {
@@ -86,7 +86,7 @@ testset "integ-test-18-compaction" {
       base_url: null,
     });
     assert.equal(compacted.length(), 2)
-    assert.equal(s18_text_of(compacted.at(1) ?? root.ai.ChatMessage.user("missing")), "Now: what's the next task?")
-    assert.is_true(s18_text_of(compacted.at(0) ?? root.ai.ChatMessage.user("missing")).length() > 0)
+    assert.equal((compacted.at(1) ?? root.ai.ChatMessage.user("missing")).text(), "Now: what's the next task?")
+    assert.is_true((compacted.at(0) ?? root.ai.ChatMessage.user("missing")).text().length() > 0)
   }
 }

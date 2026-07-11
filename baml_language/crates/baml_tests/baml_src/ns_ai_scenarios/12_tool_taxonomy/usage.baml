@@ -4,20 +4,16 @@ class S12TransferArgs {
   reason: string,
 }
 
-function s12_transfer_tool() -> root.ai.Tool throws baml.errors.Unsupported {
-  let tool = root.ai.Tool.typed<S12TransferArgs>(
+function s12_transfer_tool() -> root.ai.Tool throws never {
+  root.ai.Tool.typed<S12TransferArgs>(
     "transfer_to_human",
     "Transfer when a human must take over.",
-  );
-  root.ai.Tool {
-    ...tool,
-    handoff: true,
-  }
+  ).as_handoff()
 }
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s12_Investigate(question: string) -> string {
-//   client: BepV2ScriptedTools {
+//   client: root.ai.FixtureTools {
 //     call_name: "transfer_to_human",
 //     call_args: `{"reason":"approval required"}`,
 //     final_json: `"unused"`,
@@ -36,7 +32,7 @@ function s12_transfer_tool() -> root.ai.Tool throws baml.errors.Unsupported {
 // This scenario intentionally has no plain-call s12_Investigate_manual(...) wrapper.
 function s12_Investigate_request(
   question: string,
-  provider: root.ai.Provider = BepV2ScriptedTools {
+  provider: root.ai.Provider = root.ai.FixtureTools {
     call_name: "transfer_to_human",
     call_args: `{"reason":"approval required"}`,
     final_json: `"unused"`,
@@ -53,7 +49,7 @@ function s12_Investigate_request(
       dispatch: (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] { [] },
     },
     {},
-    bepv2_prompt_template(`Investigate ${question}.`, false),
+    root.ai.prompt_template(`Investigate ${question}.`, false),
   )
 }
 
@@ -73,7 +69,7 @@ function s12_Investigate_agent_manual(
 test "12: a handoff tool yields a typed Handoff without dispatch" {
   let outcome = s12_Investigate_agent_manual(
     "a sensitive refund",
-    BepV2ScriptedTools {
+    root.ai.FixtureTools {
       call_name: "transfer_to_human",
       call_args: `{"reason":"approval required"}`,
       final_json: `"unused"`,

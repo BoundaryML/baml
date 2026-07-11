@@ -2,7 +2,7 @@
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s10_ResearchIt(question: string) -> string {
-//   client: BepV2ScriptedTools {
+//   client: root.ai.FixtureTools {
 //     call_name: "search",
 //     call_args: `{"query":"BEPv2"}`,
 //     final_json: `"BEPv2 uses typed requests."`,
@@ -21,7 +21,7 @@
 // This scenario intentionally has no plain-call s10_ResearchIt_manual(...) wrapper.
 function s10_ResearchIt_request(
   question: string,
-  provider: root.ai.Provider = BepV2ScriptedTools {
+  provider: root.ai.Provider = root.ai.FixtureTools {
     call_name: "search",
     call_args: `{"query":"BEPv2"}`,
     final_json: `"BEPv2 uses typed requests."`,
@@ -37,7 +37,7 @@ function s10_ResearchIt_request(
     tools,
     root.ai.RequestOptions { dispatch: dispatch },
     {},
-    bepv2_prompt_template(`Research ${question}.`, false),
+    root.ai.prompt_template(`Research ${question}.`, false),
   )
 }
 
@@ -63,7 +63,7 @@ function s10_ResearchIt_agent_manual(
 test "10: a completed loop returns Done<T>" {
   let result = s10_ResearchIt_agent_manual(
     "the request design",
-    BepV2ScriptedTools {
+    root.ai.FixtureTools {
       call_name: "search",
       call_args: `{"query":"BEPv2"}`,
       final_json: `"BEPv2 uses typed requests."`,
@@ -80,7 +80,7 @@ test "10: a completed loop returns Done<T>" {
 test "10: a deliberate step limit returns BudgetReached" {
   let result = s10_ResearchIt_agent_manual(
     "the request design",
-    BepV2ScriptedTools {
+    root.ai.FixtureTools {
       call_name: "search",
       call_args: `{"query":"BEPv2"}`,
       final_json: `"unused"`,

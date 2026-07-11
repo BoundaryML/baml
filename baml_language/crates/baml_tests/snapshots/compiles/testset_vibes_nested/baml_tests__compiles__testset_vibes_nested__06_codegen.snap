@@ -36,7 +36,7 @@ function user.$init_test_main(registry: testing.TestCollector) -> null {
     return
 }
 
-function user.ClassifySentiment(text: string, client: baml.ai.Provider) -> Sentiment {
+function user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -45,16 +45,20 @@ function user.ClassifySentiment(text: string, client: baml.ai.Provider) -> Senti
     store_var client
 
   L0:
-    load_var2 1 2
-    call user.ClassifySentiment$render_prompt
-    store_var _4
     load_type Sentiment
-    load_var2 2 3
-    call baml.ai.drive_call
+    load_var client
+    load_const "ClassifySentiment"
+    load_var text
+    load_const "text"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.call_llm_function
     return
 }
 
-function user.ClassifySentiment$build_request(text: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.ClassifySentiment$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -75,7 +79,7 @@ function user.ClassifySentiment$build_request(text: string, client: baml.ai.Prov
     return
 }
 
-function user.ClassifySentiment$build_request_stream(text: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -96,26 +100,7 @@ function user.ClassifySentiment$build_request_stream(text: string, client: baml.
     return
 }
 
-function user.ClassifySentiment$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.GPT4o
-    store_var client
-
-  L0:
-    load_var2 1 3
-    call user.ClassifySentiment$render_prompt
-    store_var _5
-    load_type Sentiment
-    load_var2 3 4
-    load_var io
-    call baml.ai.drive_live
-    return
-}
-
-function user.ClassifySentiment$parse(json: string, client: baml.ai.Provider) -> Sentiment {
+function user.ClassifySentiment$parse(json: string, client: baml.llm.Client) -> Sentiment {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -131,7 +116,7 @@ function user.ClassifySentiment$parse(json: string, client: baml.ai.Provider) ->
     return
 }
 
-function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
+function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -143,11 +128,11 @@ function user.ClassifySentiment$parse_stream(sse: baml.http.SseStream, client: b
     load_type Sentiment$stream | null
     load_type Sentiment
     load_var2 2 1
-    call baml.llm.make_stream_for
+    call baml.llm.Client.__make_stream
     return
 }
 
-function user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
+function user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -168,35 +153,7 @@ function user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Prov
     return
 }
 
-function user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Sentiment | baml.ai.Budget<Sentiment> | baml.ai.HandoffRequest {
-    load_var stop_when
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var stop_when
-
-  L0:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    load_global user.GPT4o
-    store_var client
-
-  L1:
-    load_var2 1 5
-    call user.ClassifySentiment$render_prompt
-    store_var _8
-    load_type Sentiment
-    load_var2 5 6
-    load_var2 2 3
-    load_var stop_when
-    call baml.ai.drive_run_tools
-    return
-}
-
-function user.ClassifySentiment$stream(text: string, client: baml.ai.Provider) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
+function user.ClassifySentiment$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<Sentiment$stream | null, Sentiment> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -205,56 +162,43 @@ function user.ClassifySentiment$stream(text: string, client: baml.ai.Provider) -
     store_var client
 
   L0:
-    load_var2 1 2
-    call user.ClassifySentiment$render_prompt
-    store_var _4
     load_type Sentiment$stream | null
     load_type Sentiment
-    load_var2 2 3
-    call baml.ai.drive_stream
-    return
-}
-
-function user.ClassifySentiment$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<Sentiment, V> {
     load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.GPT4o
-    store_var client
-
-  L0:
-    load_var2 1 3
-    call user.ClassifySentiment$render_prompt
-    store_var _5
-    load_type Sentiment
-    load_type #0
-    load_type #1
-    load_var2 3 4
-    load_var project
-    call baml.ai.drive_with
-    return
-}
-
-function user.ClassifySentiment2(text: string, client: baml.ai.Provider) -> string {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.GPT4o
-    store_var client
-
-  L0:
-    load_var2 1 2
-    call user.ClassifySentiment2$render_prompt
-    store_var _4
+    load_const "ClassifySentiment"
+    load_var text
+    load_const "text"
     load_type string
-    load_var2 2 3
-    call baml.ai.drive_call
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.stream_llm_function
     return
 }
 
-function user.ClassifySentiment2$build_request(text: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
+    load_var client
+    load_const <omitted>
+    cmp_op ==
+    pop_jump_if_false L0
+    load_global user.GPT4o
+    store_var client
+
+  L0:
+    load_type string
+    load_var client
+    load_const "ClassifySentiment2"
+    load_var text
+    load_const "text"
+    load_type string
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -275,7 +219,7 @@ function user.ClassifySentiment2$build_request(text: string, client: baml.ai.Pro
     return
 }
 
-function user.ClassifySentiment2$build_request_stream(text: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -296,26 +240,7 @@ function user.ClassifySentiment2$build_request_stream(text: string, client: baml
     return
 }
 
-function user.ClassifySentiment2$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.GPT4o
-    store_var client
-
-  L0:
-    load_var2 1 3
-    call user.ClassifySentiment2$render_prompt
-    store_var _5
-    load_type string
-    load_var2 3 4
-    load_var io
-    call baml.ai.drive_live
-    return
-}
-
-function user.ClassifySentiment2$parse(json: string, client: baml.ai.Provider) -> string {
+function user.ClassifySentiment2$parse(json: string, client: baml.llm.Client) -> string {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -331,7 +256,7 @@ function user.ClassifySentiment2$parse(json: string, client: baml.ai.Provider) -
     return
 }
 
-function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
+function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -343,11 +268,11 @@ function user.ClassifySentiment2$parse_stream(sse: baml.http.SseStream, client: 
     load_type string | null
     load_type string
     load_var2 2 1
-    call baml.llm.make_stream_for
+    call baml.llm.Client.__make_stream
     return
 }
 
-function user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
+function user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -368,35 +293,7 @@ function user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Pro
     return
 }
 
-function user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
-    load_var stop_when
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var stop_when
-
-  L0:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    load_global user.GPT4o
-    store_var client
-
-  L1:
-    load_var2 1 5
-    call user.ClassifySentiment2$render_prompt
-    store_var _8
-    load_type string
-    load_var2 5 6
-    load_var2 2 3
-    load_var stop_when
-    call baml.ai.drive_run_tools
-    return
-}
-
-function user.ClassifySentiment2$stream(text: string, client: baml.ai.Provider) -> baml.llm.Stream<string | null, string> {
+function user.ClassifySentiment2$stream(text: string, client: baml.llm.Client) -> baml.llm.Stream<string | null, string> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -405,34 +302,17 @@ function user.ClassifySentiment2$stream(text: string, client: baml.ai.Provider) 
     store_var client
 
   L0:
-    load_var2 1 2
-    call user.ClassifySentiment2$render_prompt
-    store_var _4
     load_type string | null
     load_type string
-    load_var2 2 3
-    call baml.ai.drive_stream
-    return
-}
-
-function user.ClassifySentiment2$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<string, V> {
     load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.GPT4o
-    store_var client
-
-  L0:
-    load_var2 1 3
-    call user.ClassifySentiment2$render_prompt
-    store_var _5
+    load_const "ClassifySentiment2"
+    load_var text
+    load_const "text"
     load_type string
-    load_type #0
-    load_type #1
-    load_var2 3 4
-    load_var project
-    call baml.ai.drive_with
+    load_type unknown
+    alloc_map 1
+    load_const <omitted>
+    call baml.llm.stream_llm_function
     return
 }
 
@@ -497,7 +377,7 @@ function user.GPT4o$new() -> null {
     return
 }
 
-function user.GenerateTests(count: int, topic: string, client: baml.ai.Provider) -> string[] {
+function user.GenerateTests(count: int, topic: string, client: baml.llm.Client) -> string[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -506,17 +386,21 @@ function user.GenerateTests(count: int, topic: string, client: baml.ai.Provider)
     store_var client
 
   L0:
-    load_var2 1 2
-    load_var client
-    call user.GenerateTests$render_prompt
-    store_var _5
     load_type string[]
-    load_var2 3 4
-    call baml.ai.drive_call
+    load_var client
+    load_const "GenerateTests"
+    load_var2 1 2
+    load_const "count"
+    load_const "topic"
+    load_type string
+    load_type unknown
+    alloc_map 2
+    load_const <omitted>
+    call baml.llm.call_llm_function
     return
 }
 
-function user.GenerateTests$build_request(count: int, topic: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -538,7 +422,7 @@ function user.GenerateTests$build_request(count: int, topic: string, client: bam
     return
 }
 
-function user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.ai.Provider) -> baml.http.Request {
+function user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -560,27 +444,7 @@ function user.GenerateTests$build_request_stream(count: int, topic: string, clie
     return
 }
 
-function user.GenerateTests$live(count: int, topic: string, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.GPT4o
-    store_var client
-
-  L0:
-    load_var2 1 2
-    load_var client
-    call user.GenerateTests$render_prompt
-    store_var _6
-    load_type string[]
-    load_var2 4 5
-    load_var io
-    call baml.ai.drive_live
-    return
-}
-
-function user.GenerateTests$parse(json: string, client: baml.ai.Provider) -> string[] {
+function user.GenerateTests$parse(json: string, client: baml.llm.Client) -> string[] {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -596,7 +460,7 @@ function user.GenerateTests$parse(json: string, client: baml.ai.Provider) -> str
     return
 }
 
-function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider) -> baml.llm.Stream<string[], string[]> {
+function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client) -> baml.llm.Stream<string[], string[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -608,11 +472,11 @@ function user.GenerateTests$parse_stream(sse: baml.http.SseStream, client: baml.
     load_type string[]
     load_type string[]
     load_var2 2 1
-    call baml.llm.make_stream_for
+    call baml.llm.Client.__make_stream
     return
 }
 
-function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
+function user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -634,36 +498,7 @@ function user.GenerateTests$render_prompt(count: int, topic: string, client: bam
     return
 }
 
-function user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string[] | baml.ai.Budget<string[]> | baml.ai.HandoffRequest {
-    load_var stop_when
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_const null
-    store_var stop_when
-
-  L0:
-    load_var client
-    load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L1
-    load_global user.GPT4o
-    store_var client
-
-  L1:
-    load_var2 1 2
-    load_var client
-    call user.GenerateTests$render_prompt
-    store_var _9
-    load_type string[]
-    load_var2 6 7
-    load_var2 3 4
-    load_var stop_when
-    call baml.ai.drive_run_tools
-    return
-}
-
-function user.GenerateTests$stream(count: int, topic: string, client: baml.ai.Provider) -> baml.llm.Stream<string[], string[]> {
+function user.GenerateTests$stream(count: int, topic: string, client: baml.llm.Client) -> baml.llm.Stream<string[], string[]> {
     load_var client
     load_const <omitted>
     cmp_op ==
@@ -672,35 +507,17 @@ function user.GenerateTests$stream(count: int, topic: string, client: baml.ai.Pr
     store_var client
 
   L0:
+    load_type string[]
+    load_type string[]
+    load_var client
+    load_const "GenerateTests"
     load_var2 1 2
-    load_var client
-    call user.GenerateTests$render_prompt
-    store_var _5
-    load_type string[]
-    load_type string[]
-    load_var2 3 4
-    call baml.ai.drive_stream
-    return
-}
-
-function user.GenerateTests$with(count: int, topic: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<string[], V> {
-    load_var client
+    load_const "count"
+    load_const "topic"
+    load_type string
+    load_type unknown
+    alloc_map 2
     load_const <omitted>
-    cmp_op ==
-    pop_jump_if_false L0
-    load_global user.GPT4o
-    store_var client
-
-  L0:
-    load_var2 1 2
-    load_var client
-    call user.GenerateTests$render_prompt
-    store_var _6
-    load_type string[]
-    load_type #0
-    load_type #1
-    load_var2 4 5
-    load_var project
-    call baml.ai.drive_with
+    call baml.llm.stream_llm_function
     return
 }

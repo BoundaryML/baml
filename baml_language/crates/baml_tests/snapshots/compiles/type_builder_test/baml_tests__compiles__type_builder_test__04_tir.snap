@@ -2,38 +2,29 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.Fn(client: baml.ai.Provider = ...) -> string throws never {
-  baml.ai.drive_call<T>(client, Fn$render_prompt(client = client)) : string
+function user.Fn(client: baml.llm.Client = ...) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "Fn", map {  }) : string
 }
-function user.Fn$render_prompt(client: baml.ai.Provider = ...) -> baml.llm.PromptAst throws never {
+function user.Fn$render_prompt(client: baml.llm.Client = ...) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "Fn", map {  }) : baml.llm.PromptAst
 }
-function user.Fn$build_request(client: baml.ai.Provider = ...) -> baml.http.Request throws never {
+function user.Fn$build_request(client: baml.llm.Client = ...) -> baml.http.Request throws never {
   baml.llm.build_request(client, "Fn", map {  }) : baml.http.Request
 }
-function user.Fn$build_request_stream(client: baml.ai.Provider = ...) -> baml.http.Request throws never {
+function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "Fn", map {  }) : baml.http.Request
-}
-function user.Fn$with<V, E2>(project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = ...) -> baml.ai.CallResult<string, V> throws never {
-  baml.ai.drive_with<V, E2>(client, Fn$render_prompt(client = client), project) : baml.ai.CallResult<string, V>
-}
-function user.Fn$run_tools(tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = ...) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest throws never {
-  baml.ai.drive_run_tools<T>(client, Fn$render_prompt(client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string> | baml.ai.HandoffRequest
-}
-function user.Fn$live(io: baml.ai.Channel, client: baml.ai.Provider = ...) -> baml.ai.Transcript throws never {
-  baml.ai.drive_live(client, Fn$render_prompt(client = client), io) : baml.ai.Transcript
 }
 class user.TopLevelClass {
   a: string
 }
 enum user.TopLevelEnum
-function user.Fn$stream(client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
-  baml.ai.drive_stream(client, Fn$render_prompt(client = client)) : baml.llm.Stream<string | null, string>
+function user.Fn$stream(client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "Fn", map {  }) : baml.llm.Stream<string | null, string>
 }
-function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = ...) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>
+function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = ...) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
 }
-function user.Fn$parse(json: string, client: baml.ai.Provider = ...) -> string throws never {
+function user.Fn$parse(json: string, client: baml.llm.Client = ...) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
 }
 class user.TopLevelClass$stream {

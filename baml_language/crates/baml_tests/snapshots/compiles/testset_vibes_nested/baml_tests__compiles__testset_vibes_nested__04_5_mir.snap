@@ -861,13 +861,13 @@ fn .<lambda(<lambda(<lambda(<lambda($init_test_main, 0)>, 3)>, 4)>, 5)>() -> nul
     }
 }
 
-fn user.ClassifySentiment(text: string, client: baml.ai.Provider) -> Sentiment {
+fn user.ClassifySentiment(text: string, client: baml.llm.Client) -> Sentiment {
     // Locals:
     let _0: Sentiment // _0 // return
     let _1: string // text // param
-    let _2: baml.ai.Provider // client // param
+    let _2: baml.llm.Client // client // param
     let _3: bool
-    let _4: baml.llm.PromptAst
+    let _4: map<string, unknown>
     let _5: type
 
     bb0: {
@@ -881,24 +881,21 @@ fn user.ClassifySentiment(text: string, client: baml.ai.Provider) -> Sentiment {
     }
 
     bb2: {
-        _4 = call const fn user.ClassifySentiment$render_prompt(copy _1, copy _2) -> [bb3];
+        _4 = { const "text": copy _1 }: map<string, unknown>;
+        _5 = load_type(Sentiment);
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _5 = load_type(Sentiment);
-        _0 = call const fn baml.ai.drive_call<copy _5>(copy _2, copy _4) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
 
-fn user.ClassifySentiment$build_request(text: string, client: baml.ai.Provider) -> baml.http.Request {
+fn user.ClassifySentiment$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // text // param
-    let _2: baml.ai.Provider // client // param
+    let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -922,11 +919,11 @@ fn user.ClassifySentiment$build_request(text: string, client: baml.ai.Provider) 
     }
 }
 
-fn user.ClassifySentiment$build_request_stream(text: string, client: baml.ai.Provider) -> baml.http.Request {
+fn user.ClassifySentiment$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // text // param
-    let _2: baml.ai.Provider // client // param
+    let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -950,45 +947,11 @@ fn user.ClassifySentiment$build_request_stream(text: string, client: baml.ai.Pro
     }
 }
 
-fn user.ClassifySentiment$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
-    // Locals:
-    let _0: baml.ai.Transcript // _0 // return
-    let _1: string // text // param
-    let _2: baml.ai.Channel // io // param
-    let _3: baml.ai.Provider // client // param
-    let _4: bool
-    let _5: baml.llm.PromptAst
-    let _6: type
-
-    bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = call const fn user.ClassifySentiment$render_prompt(copy _1, copy _3) -> [bb3];
-    }
-
-    bb3: {
-        _6 = load_type(Sentiment);
-        _0 = call const fn baml.ai.drive_live<copy _6>(copy _3, copy _5, copy _2) -> [bb4];
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
+fn user.ClassifySentiment$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // text // param
-    let _2: baml.ai.Provider // client // param
+    let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -1012,98 +975,13 @@ fn user.ClassifySentiment$render_prompt(text: string, client: baml.ai.Provider) 
     }
 }
 
-fn user.ClassifySentiment$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> Sentiment | baml.ai.Budget<Sentiment> | baml.ai.HandoffRequest {
-    // Locals:
-    let _0: Sentiment | baml.ai.Budget<Sentiment> | baml.ai.HandoffRequest // _0 // return
-    let _1: string // text // param
-    let _2: baml.ai.Tool[] // tools // param
-    let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _4: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
-    let _5: baml.ai.Provider // client // param
-    let _6: bool
-    let _7: bool
-    let _8: baml.llm.PromptAst
-    let _9: type
-
-    bb0: {
-        _6 = copy _4 == const <omitted>;
-        branch copy _6 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _7 = copy _5 == const <omitted>;
-        branch copy _7 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _5 = const fn user.GPT4o;
-        goto -> bb4;
-    }
-
-    bb4: {
-        _8 = call const fn user.ClassifySentiment$render_prompt(copy _1, copy _5) -> [bb5];
-    }
-
-    bb5: {
-        _9 = load_type(Sentiment);
-        _0 = call const fn baml.ai.drive_run_tools<copy _9>(copy _5, copy _8, copy _2, copy _3, copy _4) -> [bb6];
-    }
-
-    bb6: {
-        return;
-    }
-}
-
-fn user.ClassifySentiment$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<Sentiment, V> {
-    // Locals:
-    let _0: baml.ai.CallResult<Sentiment, V> // _0 // return
-    let _1: string // text // param
-    let _2: (baml.ai.ResponseMeta) -> V throws E2 // project // param
-    let _3: baml.ai.Provider // client // param
-    let _4: bool
-    let _5: baml.llm.PromptAst
-    let _6: type
-    let _7: type
-    let _8: type
-
-    bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = call const fn user.ClassifySentiment$render_prompt(copy _1, copy _3) -> [bb3];
-    }
-
-    bb3: {
-        _6 = load_type(Sentiment);
-        _7 = load_type(#0);
-        _8 = load_type(#1);
-        _0 = call const fn baml.ai.drive_with<copy _6, copy _7, copy _8>(copy _3, copy _5, copy _2) -> [bb4];
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.ClassifySentiment2(text: string, client: baml.ai.Provider) -> string {
+fn user.ClassifySentiment2(text: string, client: baml.llm.Client) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
-    let _2: baml.ai.Provider // client // param
+    let _2: baml.llm.Client // client // param
     let _3: bool
-    let _4: baml.llm.PromptAst
+    let _4: map<string, unknown>
     let _5: type
 
     bb0: {
@@ -1117,24 +995,21 @@ fn user.ClassifySentiment2(text: string, client: baml.ai.Provider) -> string {
     }
 
     bb2: {
-        _4 = call const fn user.ClassifySentiment2$render_prompt(copy _1, copy _2) -> [bb3];
+        _4 = { const "text": copy _1 }: map<string, unknown>;
+        _5 = load_type(string);
+        _0 = call const fn baml.llm.call_llm_function<copy _5>(copy _2, const "ClassifySentiment2", copy _4, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _5 = load_type(string);
-        _0 = call const fn baml.ai.drive_call<copy _5>(copy _2, copy _4) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
 
-fn user.ClassifySentiment2$build_request(text: string, client: baml.ai.Provider) -> baml.http.Request {
+fn user.ClassifySentiment2$build_request(text: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // text // param
-    let _2: baml.ai.Provider // client // param
+    let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -1158,11 +1033,11 @@ fn user.ClassifySentiment2$build_request(text: string, client: baml.ai.Provider)
     }
 }
 
-fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.ai.Provider) -> baml.http.Request {
+fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: string // text // param
-    let _2: baml.ai.Provider // client // param
+    let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -1186,45 +1061,11 @@ fn user.ClassifySentiment2$build_request_stream(text: string, client: baml.ai.Pr
     }
 }
 
-fn user.ClassifySentiment2$live(text: string, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
-    // Locals:
-    let _0: baml.ai.Transcript // _0 // return
-    let _1: string // text // param
-    let _2: baml.ai.Channel // io // param
-    let _3: baml.ai.Provider // client // param
-    let _4: bool
-    let _5: baml.llm.PromptAst
-    let _6: type
-
-    bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = call const fn user.ClassifySentiment2$render_prompt(copy _1, copy _3) -> [bb3];
-    }
-
-    bb3: {
-        _6 = load_type(string);
-        _0 = call const fn baml.ai.drive_live<copy _6>(copy _3, copy _5, copy _2) -> [bb4];
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
+fn user.ClassifySentiment2$render_prompt(text: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // text // param
-    let _2: baml.ai.Provider // client // param
+    let _2: baml.llm.Client // client // param
     let _3: bool
     let _4: map<string, unknown>
 
@@ -1244,91 +1085,6 @@ fn user.ClassifySentiment2$render_prompt(text: string, client: baml.ai.Provider)
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.ClassifySentiment2$run_tools(text: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest {
-    // Locals:
-    let _0: string | baml.ai.Budget<string> | baml.ai.HandoffRequest // _0 // return
-    let _1: string // text // param
-    let _2: baml.ai.Tool[] // tools // param
-    let _3: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _4: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
-    let _5: baml.ai.Provider // client // param
-    let _6: bool
-    let _7: bool
-    let _8: baml.llm.PromptAst
-    let _9: type
-
-    bb0: {
-        _6 = copy _4 == const <omitted>;
-        branch copy _6 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _7 = copy _5 == const <omitted>;
-        branch copy _7 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _5 = const fn user.GPT4o;
-        goto -> bb4;
-    }
-
-    bb4: {
-        _8 = call const fn user.ClassifySentiment2$render_prompt(copy _1, copy _5) -> [bb5];
-    }
-
-    bb5: {
-        _9 = load_type(string);
-        _0 = call const fn baml.ai.drive_run_tools<copy _9>(copy _5, copy _8, copy _2, copy _3, copy _4) -> [bb6];
-    }
-
-    bb6: {
-        return;
-    }
-}
-
-fn user.ClassifySentiment2$with(text: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<string, V> {
-    // Locals:
-    let _0: baml.ai.CallResult<string, V> // _0 // return
-    let _1: string // text // param
-    let _2: (baml.ai.ResponseMeta) -> V throws E2 // project // param
-    let _3: baml.ai.Provider // client // param
-    let _4: bool
-    let _5: baml.llm.PromptAst
-    let _6: type
-    let _7: type
-    let _8: type
-
-    bb0: {
-        _4 = copy _3 == const <omitted>;
-        branch copy _4 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _3 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _5 = call const fn user.ClassifySentiment2$render_prompt(copy _1, copy _3) -> [bb3];
-    }
-
-    bb3: {
-        _6 = load_type(string);
-        _7 = load_type(#0);
-        _8 = load_type(#1);
-        _0 = call const fn baml.ai.drive_with<copy _6, copy _7, copy _8>(copy _3, copy _5, copy _2) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
@@ -1406,14 +1162,14 @@ fn user.GPT4o$new() -> null {
     }
 }
 
-fn user.GenerateTests(count: int, topic: string, client: baml.ai.Provider) -> string[] {
+fn user.GenerateTests(count: int, topic: string, client: baml.llm.Client) -> string[] {
     // Locals:
     let _0: string[] // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
-    let _3: baml.ai.Provider // client // param
+    let _3: baml.llm.Client // client // param
     let _4: bool
-    let _5: baml.llm.PromptAst
+    let _5: map<string, unknown>
     let _6: type
 
     bb0: {
@@ -1427,25 +1183,22 @@ fn user.GenerateTests(count: int, topic: string, client: baml.ai.Provider) -> st
     }
 
     bb2: {
-        _5 = call const fn user.GenerateTests$render_prompt(copy _1, copy _2, copy _3) -> [bb3];
+        _5 = { const "count": copy _1, const "topic": copy _2 }: map<string, unknown>;
+        _6 = load_type(string[]);
+        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "GenerateTests", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
-        _6 = load_type(string[]);
-        _0 = call const fn baml.ai.drive_call<copy _6>(copy _3, copy _5) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }
 
-fn user.GenerateTests$build_request(count: int, topic: string, client: baml.ai.Provider) -> baml.http.Request {
+fn user.GenerateTests$build_request(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
-    let _3: baml.ai.Provider // client // param
+    let _3: baml.llm.Client // client // param
     let _4: bool
     let _5: map<string, unknown>
 
@@ -1469,12 +1222,12 @@ fn user.GenerateTests$build_request(count: int, topic: string, client: baml.ai.P
     }
 }
 
-fn user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.ai.Provider) -> baml.http.Request {
+fn user.GenerateTests$build_request_stream(count: int, topic: string, client: baml.llm.Client) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
-    let _3: baml.ai.Provider // client // param
+    let _3: baml.llm.Client // client // param
     let _4: bool
     let _5: map<string, unknown>
 
@@ -1498,47 +1251,12 @@ fn user.GenerateTests$build_request_stream(count: int, topic: string, client: ba
     }
 }
 
-fn user.GenerateTests$live(count: int, topic: string, io: baml.ai.Channel, client: baml.ai.Provider) -> baml.ai.Transcript {
-    // Locals:
-    let _0: baml.ai.Transcript // _0 // return
-    let _1: int // count // param
-    let _2: string // topic // param
-    let _3: baml.ai.Channel // io // param
-    let _4: baml.ai.Provider // client // param
-    let _5: bool
-    let _6: baml.llm.PromptAst
-    let _7: type
-
-    bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _6 = call const fn user.GenerateTests$render_prompt(copy _1, copy _2, copy _4) -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(string[]);
-        _0 = call const fn baml.ai.drive_live<copy _7>(copy _4, copy _6, copy _3) -> [bb4];
-    }
-
-    bb4: {
-        return;
-    }
-}
-
-fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.Provider) -> baml.llm.PromptAst {
+fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.llm.Client) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: int // count // param
     let _2: string // topic // param
-    let _3: baml.ai.Provider // client // param
+    let _3: baml.llm.Client // client // param
     let _4: bool
     let _5: map<string, unknown>
 
@@ -1558,93 +1276,6 @@ fn user.GenerateTests$render_prompt(count: int, topic: string, client: baml.ai.P
     }
 
     bb3: {
-        return;
-    }
-}
-
-fn user.GenerateTests$run_tools(count: int, topic: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null, client: baml.ai.Provider) -> string[] | baml.ai.Budget<string[]> | baml.ai.HandoffRequest {
-    // Locals:
-    let _0: string[] | baml.ai.Budget<string[]> | baml.ai.HandoffRequest // _0 // return
-    let _1: int // count // param
-    let _2: string // topic // param
-    let _3: baml.ai.Tool[] // tools // param
-    let _4: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never // dispatch // param
-    let _5: ((baml.ai.LoopInfo) -> bool throws never) | null // stop_when // param
-    let _6: baml.ai.Provider // client // param
-    let _7: bool
-    let _8: bool
-    let _9: baml.llm.PromptAst
-    let _10: type
-
-    bb0: {
-        _7 = copy _5 == const <omitted>;
-        branch copy _7 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _5 = const null;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _8 = copy _6 == const <omitted>;
-        branch copy _8 -> [bb3, bb4];
-    }
-
-    bb3: {
-        _6 = const fn user.GPT4o;
-        goto -> bb4;
-    }
-
-    bb4: {
-        _9 = call const fn user.GenerateTests$render_prompt(copy _1, copy _2, copy _6) -> [bb5];
-    }
-
-    bb5: {
-        _10 = load_type(string[]);
-        _0 = call const fn baml.ai.drive_run_tools<copy _10>(copy _6, copy _9, copy _3, copy _4, copy _5) -> [bb6];
-    }
-
-    bb6: {
-        return;
-    }
-}
-
-fn user.GenerateTests$with(count: int, topic: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider) -> baml.ai.CallResult<string[], V> {
-    // Locals:
-    let _0: baml.ai.CallResult<string[], V> // _0 // return
-    let _1: int // count // param
-    let _2: string // topic // param
-    let _3: (baml.ai.ResponseMeta) -> V throws E2 // project // param
-    let _4: baml.ai.Provider // client // param
-    let _5: bool
-    let _6: baml.llm.PromptAst
-    let _7: type
-    let _8: type
-    let _9: type
-
-    bb0: {
-        _5 = copy _4 == const <omitted>;
-        branch copy _5 -> [bb1, bb2];
-    }
-
-    bb1: {
-        _4 = const fn user.GPT4o;
-        goto -> bb2;
-    }
-
-    bb2: {
-        _6 = call const fn user.GenerateTests$render_prompt(copy _1, copy _2, copy _4) -> [bb3];
-    }
-
-    bb3: {
-        _7 = load_type(string[]);
-        _8 = load_type(#0);
-        _9 = load_type(#1);
-        _0 = call const fn baml.ai.drive_with<copy _7, copy _8, copy _9>(copy _4, copy _6, copy _3) -> [bb4];
-    }
-
-    bb4: {
         return;
     }
 }

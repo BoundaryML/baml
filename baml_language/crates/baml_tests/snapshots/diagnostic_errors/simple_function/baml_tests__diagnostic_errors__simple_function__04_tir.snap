@@ -2,59 +2,37 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.HelloWorld(name: string, client: baml.ai.Provider = GPT4) -> string throws never {
-  baml.ai.drive_call<T>(client, HelloWorld$render_prompt(name = name, client = client)) : string
+function user.HelloWorld(name: string, client: baml.llm.Client = GPT4) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "HelloWorld", map { "name": name }) : string
   !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
-function user.HelloWorld$render_prompt(name: string, client: baml.ai.Provider = GPT4) -> baml.llm.PromptAst throws never {
+function user.HelloWorld$render_prompt(name: string, client: baml.llm.Client = GPT4) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "HelloWorld", map { "name": name }) : baml.llm.PromptAst
   !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
-function user.HelloWorld$build_request(name: string, client: baml.ai.Provider = GPT4) -> baml.http.Request throws never {
+function user.HelloWorld$build_request(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request(client, "HelloWorld", map { "name": name }) : baml.http.Request
   !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
-function user.HelloWorld$build_request_stream(name: string, client: baml.ai.Provider = GPT4) -> baml.http.Request throws never {
+function user.HelloWorld$build_request_stream(name: string, client: baml.llm.Client = GPT4) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "HelloWorld", map { "name": name }) : baml.http.Request
   !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
-}
-function user.HelloWorld$with<V, E2>(name: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = GPT4) -> baml.ai.CallResult<string, V> throws never {
-  baml.ai.drive_with<V, E2>(client, HelloWorld$render_prompt(name = name, client = client), project) : baml.ai.CallResult<string, V>
-  !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
-}
-function user.HelloWorld$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = GPT4) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest throws never {
-  baml.ai.drive_run_tools<T>(client, HelloWorld$render_prompt(name = name, client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string> | baml.ai.HandoffRequest
-  !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
-}
-function user.HelloWorld$live(name: string, io: baml.ai.Channel, client: baml.ai.Provider = GPT4) -> baml.ai.Transcript throws never {
-  baml.ai.drive_live(client, HelloWorld$render_prompt(name = name, client = client), io) : baml.ai.Transcript
-  !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
 class user.User {
   name: string
   age: int
 }
-function user.HelloWorld$stream(name: string, client: baml.ai.Provider = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.ai.drive_stream(client, HelloWorld$render_prompt(name = name, client = client)) : baml.llm.Stream<string | null, string>
+function user.HelloWorld$stream(name: string, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "HelloWorld", map { "name": name }) : baml.llm.Stream<string | null, string>
   !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
-function user.HelloWorld$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = GPT4) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>
+function user.HelloWorld$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = GPT4) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
   !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
-function user.HelloWorld$parse(json: string, client: baml.ai.Provider = GPT4) -> string throws never {
+function user.HelloWorld$parse(json: string, client: baml.llm.Client = GPT4) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
   !! 44..104: unresolved name: GPT4
-  !! 44..104: type mismatch: expected baml.ai.Provider, got unknown
 }
 class user.User$stream {
   name: string | null

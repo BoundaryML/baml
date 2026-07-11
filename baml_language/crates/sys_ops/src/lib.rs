@@ -630,220 +630,6 @@ impl<T> io::IoClassLlmContext for T {
     }
 }
 
-impl<T> io::IoNamespaceAi for T {
-    fn prompt_to_messages(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        prompt: BexExternalValue,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<io::owned::ai::ChatMessage>> {
-        // The cross-namespace param arrives untyped. Depending on the boundary it is
-        // either the PromptAst ADT itself, or a `baml.llm.PromptAst` instance whose
-        // `_data` field carries the handle (as an ADT or a raw RustData).
-        fn extract_ast(v: &BexExternalValue) -> Option<bex_vm_types::PromptAst> {
-            match v {
-                BexExternalValue::Adt(::bex_external_types::BexExternalAdt::PromptAst(a)) => {
-                    Some(a.clone())
-                }
-                BexExternalValue::RustData(data) => {
-                    data.clone().downcast::<baml_builtins2::PromptAst>().ok()
-                }
-                BexExternalValue::Instance { fields, .. } => {
-                    fields.get("_data").and_then(extract_ast)
-                }
-                BexExternalValue::Union { value, .. } => extract_ast(value),
-                _ => None,
-            }
-        }
-        let Some(ast) = extract_ast(&prompt) else {
-            return SysOpOutput::err(VmBamlError::InvalidArgument {
-                message: "prompt_to_messages: expected a baml.llm.PromptAst".to_string(),
-            });
-        };
-        SysOpOutput::ok(prompt_ast_to_chat_messages(&ast))
-    }
-
-    fn messages_to_prompt(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        messages: Vec<io::owned::ai::ChatMessage>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        use std::sync::Arc;
-
-        use baml_builtins2::{PromptAst, PromptAstSimple};
-
-        // Media slots arrive as `baml.media.*` instances whose `_data` carries the
-        // `Arc<MediaValue>` (the boundary form `prompt_ast_to_chat_messages` emits).
-        fn extract_media(v: &BexExternalValue) -> Option<Arc<baml_builtins2::MediaValue>> {
-            match v {
-                BexExternalValue::RustData(data) => {
-                    data.clone().downcast::<baml_builtins2::MediaValue>().ok()
-                }
-                BexExternalValue::Instance { fields, .. } => {
-                    fields.get("_data").and_then(extract_media)
-                }
-                BexExternalValue::Union { value, .. } => extract_media(value),
-                _ => None,
-            }
-        }
-
-        let mut nodes: Vec<Arc<PromptAst>> = Vec::new();
-        for m in messages {
-            let mut parts: Vec<Arc<PromptAstSimple>> = Vec::new();
-            for p in m.parts {
-                if let Some(t) = p.text
-                    && !t.is_empty()
-                {
-                    parts.push(Arc::new(PromptAstSimple::String(t)));
-                }
-                for slot in [&p.image, &p.audio, &p.pdf, &p.video] {
-                    if let Some(v) = slot
-                        && let Some(mv) = extract_media(v)
-                    {
-                        parts.push(Arc::new(PromptAstSimple::Media(mv)));
-                    }
-                }
-            }
-            let content = if parts.len() == 1 {
-                parts.pop().expect("len checked")
-            } else if parts.is_empty() {
-                // Preserve an empty message rather than dropping it (mirror of
-                // the forward direction's empty-part handling).
-                Arc::new(PromptAstSimple::String(String::new()))
-            } else {
-                Arc::new(PromptAstSimple::Multiple(parts))
-            };
-            nodes.push(Arc::new(PromptAst::Message {
-                role: m.role,
-                content,
-                metadata: serde_json::Value::Object(serde_json::Map::new()),
-            }));
-        }
-        let ast: Arc<PromptAst> = if nodes.len() == 1 {
-            nodes.pop().expect("len checked")
-        } else {
-            Arc::new(PromptAst::Vec(nodes))
-        };
-        SysOpOutput::ok(
-            io::owned::llm::PromptAst {
-                _data: ast as Arc<dyn std::any::Any + Send + Sync>,
-            }
-            .into_bex_external_value(),
-        )
-    }
-}
-
-/// Convert a `PromptAst` into native `baml.ai.ChatMessage` values: roles preserved,
-/// text and media parts interleaved. Role-less content becomes a `"user"` message
-/// (the specialize pass has normally wrapped simples with the client default role
-/// already, so this is a fallback).
-fn prompt_ast_to_chat_messages(ast: &baml_builtins2::PromptAst) -> Vec<io::owned::ai::ChatMessage> {
-    use baml_builtins2::{PromptAst, PromptAstSimple};
-
-    fn empty_part() -> io::owned::ai::MessagePart {
-        io::owned::ai::MessagePart {
-            text: None,
-            image: None,
-            audio: None,
-            pdf: None,
-            video: None,
-        }
-    }
-
-    fn text_part(t: String) -> io::owned::ai::MessagePart {
-        let mut p = empty_part();
-        p.text = Some(t);
-        p
-    }
-
-    fn media_part(m: &std::sync::Arc<baml_builtins2::MediaValue>) -> io::owned::ai::MessagePart {
-        // Runtime media values are `baml.media.*` instances carrying the MediaValue in
-        // `_data` (mirrors bex_vm's `copy::media` constructors) — not a bare media ADT.
-        fn media_instance(
-            class_name: &str,
-            m: &std::sync::Arc<baml_builtins2::MediaValue>,
-        ) -> BexExternalValue {
-            let mut fields = ::indexmap::IndexMap::new();
-            fields.insert(
-                "_data".to_string(),
-                BexExternalValue::RustData(
-                    m.clone() as std::sync::Arc<dyn std::any::Any + Send + Sync>
-                ),
-            );
-            BexExternalValue::Instance {
-                class_name: class_name.to_string(),
-                type_args: vec![],
-                fields,
-            }
-        }
-        let mut p = empty_part();
-        match m.kind {
-            ::bex_external_types::MediaKind::Audio => {
-                p.audio = Some(media_instance("baml.media.Audio", m));
-            }
-            ::bex_external_types::MediaKind::Pdf => {
-                p.pdf = Some(media_instance("baml.media.Pdf", m));
-            }
-            ::bex_external_types::MediaKind::Video => {
-                p.video = Some(media_instance("baml.media.Video", m));
-            }
-            // `Generic` ("could be any") defaults to the image slot — the dominant case.
-            ::bex_external_types::MediaKind::Image | ::bex_external_types::MediaKind::Generic => {
-                p.image = Some(media_instance("baml.media.Image", m));
-            }
-        }
-        p
-    }
-
-    fn simple_to_parts(s: &PromptAstSimple, out: &mut Vec<io::owned::ai::MessagePart>) {
-        match s {
-            PromptAstSimple::String(t) => {
-                if !t.is_empty() {
-                    out.push(text_part(t.clone()));
-                }
-            }
-            PromptAstSimple::Media(m) => out.push(media_part(m)),
-            PromptAstSimple::Multiple(items) => {
-                for it in items {
-                    simple_to_parts(it, out);
-                }
-            }
-        }
-    }
-
-    fn mk_message(role: &str, content: &PromptAstSimple) -> io::owned::ai::ChatMessage {
-        let mut parts = Vec::new();
-        simple_to_parts(content, &mut parts);
-        if parts.is_empty() {
-            // Preserve an empty message rather than dropping it.
-            parts.push(text_part(String::new()));
-        }
-        io::owned::ai::ChatMessage {
-            role: role.to_string(),
-            parts,
-        }
-    }
-
-    fn walk(ast: &PromptAst, out: &mut Vec<io::owned::ai::ChatMessage>) {
-        match ast {
-            PromptAst::Simple(s) => out.push(mk_message("user", s)),
-            PromptAst::Message { role, content, .. } => out.push(mk_message(role, content)),
-            PromptAst::Vec(items) => {
-                for it in items {
-                    walk(it, out);
-                }
-            }
-        }
-    }
-
-    let mut out = Vec::new();
-    walk(ast, &mut out);
-    out
-}
-
 // ============================================================================
 // `baml.schema` — JSON Schema lowering (P7)
 // ============================================================================
@@ -854,182 +640,254 @@ impl<T> io::IoNamespaceSchema for T {
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         t: baml_type::RuntimeTy,
-        strict: bool,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        let mut ancestry: Vec<baml_type::Name> = Vec::new();
-        match schema::ty_to_json_schema(&t, strict, ctx, &mut ancestry) {
-            Ok(value) => {
-                SysOpOutput::ok(serde_json::to_string(&value).unwrap_or_else(|_| "{}".to_string()))
-            }
+    ) -> SysOpOutput<BexExternalValue> {
+        match schema::json_schema(&t, ctx) {
+            Ok(value) => SysOpOutput::ok(schema::json_to_bex(value)),
             Err(message) => SysOpOutput::err(VmBamlError::Unsupported { message }),
         }
     }
 }
 
-/// JSON Schema lowering of a `baml_type::RuntimeTy`. In `strict` mode the emitted
-/// schema follows `OpenAI` structured-output rules: every object closes with
-/// `"additionalProperties": false` and lists ALL fields in `required` (optional
-/// BAML fields keep their `null`-inclusive union schema rather than being dropped
-/// from `required`).
+/// Provider-neutral JSON Schema lowering of a `baml_type::RuntimeTy`.
 mod schema {
+    use std::collections::HashSet;
+
     use baml_type::RuntimeTy;
+    use bex_external_types::BexExternalValue;
     use serde_json::{Value, json};
     use sys_types::SysOpContext;
 
-    /// Lower `ty` to a JSON Schema value. Returns `Err(message)` for constructs
-    /// with no JSON Schema representation (functions, opaque rust types,
-    /// unresolved generic params) — the caller surfaces it as
-    /// `baml.errors.Unsupported`.
-    pub(super) fn ty_to_json_schema(
-        ty: &RuntimeTy,
-        strict: bool,
-        ctx: &SysOpContext,
-        ancestry: &mut Vec<baml_type::Name>,
-    ) -> Result<Value, String> {
-        match ty {
-            RuntimeTy::Int { .. } | RuntimeTy::Bigint { .. } => Ok(json!({ "type": "integer" })),
-            RuntimeTy::Float { .. } => Ok(json!({ "type": "number" })),
-            RuntimeTy::String { .. } => Ok(json!({ "type": "string" })),
-            RuntimeTy::Bool { .. } => Ok(json!({ "type": "boolean" })),
-            RuntimeTy::Null { .. } => Ok(json!({ "type": "null" })),
-            // Binary payloads travel as base64 strings on the JSON wire.
-            RuntimeTy::Uint8Array { .. } => Ok(json!({ "type": "string" })),
-            RuntimeTy::Literal(lit, _, _) => Ok(literal_schema(lit)),
-            RuntimeTy::List(inner, _) => Ok(json!({
-                "type": "array",
-                "items": ty_to_json_schema(inner, strict, ctx, ancestry)?,
-            })),
-            RuntimeTy::Map { value, .. } => Ok(json!({
-                "type": "object",
-                "additionalProperties": ty_to_json_schema(value, strict, ctx, ancestry)?,
-            })),
-            RuntimeTy::Union(members, _) => union_schema(members, strict, ctx, ancestry),
-            RuntimeTy::Enum(name, _) => enum_schema(name, ctx),
-            RuntimeTy::Class(name, _, _) => class_schema(name, strict, ctx, ancestry),
-            RuntimeTy::TypeAlias(name, _) => {
-                if let Some(target) = find_type_alias_definition(ctx, name) {
-                    ty_to_json_schema(&target.clone(), strict, ctx, ancestry)
+    pub(super) fn json_to_bex(value: Value) -> BexExternalValue {
+        match value {
+            Value::Null => BexExternalValue::Null,
+            Value::Bool(value) => BexExternalValue::Bool(value),
+            Value::Number(value) => match value.as_i64() {
+                Some(value) => BexExternalValue::Int(value),
+                None => BexExternalValue::Float(value.as_f64().unwrap_or_default()),
+            },
+            Value::String(value) => BexExternalValue::String(value.into()),
+            Value::Array(items) => BexExternalValue::Array {
+                element_type: RuntimeTy::unknown(),
+                items: items.into_iter().map(json_to_bex).collect(),
+            },
+            Value::Object(entries) => BexExternalValue::Map {
+                key_type: RuntimeTy::string(),
+                value_type: RuntimeTy::unknown(),
+                entries: entries
+                    .into_iter()
+                    .map(|(key, value)| (key, json_to_bex(value)))
+                    .collect(),
+            },
+        }
+    }
+
+    /// Lower `ty` to a complete JSON Schema document. Class definitions reached
+    /// through fields are stored in `$defs`; recursive edges point back to them
+    /// with `$ref` instead of losing their field constraints.
+    pub(super) fn json_schema(ty: &RuntimeTy, ctx: &SysOpContext) -> Result<Value, String> {
+        let mut builder = SchemaBuilder {
+            ctx,
+            definitions: serde_json::Map::new(),
+            building: HashSet::new(),
+            referenced: HashSet::new(),
+        };
+
+        // Keep a top-level class inline for compatibility with consumers that
+        // require an object root (including OpenAI Structured Outputs). Nested
+        // and recursive classes use `$defs`/`$ref`.
+        let (mut root, root_class_key) = match ty {
+            RuntimeTy::Class(name, _, _) => {
+                let key = definition_key(name);
+                builder.building.insert(key.clone());
+                let schema = builder.class_object(name)?;
+                builder.building.remove(&key);
+                (schema, Some(key))
+            }
+            _ => (builder.ty_schema(ty)?, None),
+        };
+
+        // A recursive edge may point back to the inline root. Publish an exact
+        // copy of that root in `$defs` so the reference has a concrete target.
+        if let Some(key) = root_class_key
+            && builder.referenced.contains(&key)
+        {
+            builder.definitions.insert(key, root.clone());
+        }
+
+        if !builder.definitions.is_empty() {
+            let Value::Object(root_object) = &mut root else {
+                return Err("json_schema: schema root must be a JSON object".to_string());
+            };
+            root_object.insert("$defs".to_string(), Value::Object(builder.definitions));
+        }
+        Ok(root)
+    }
+
+    struct SchemaBuilder<'a> {
+        ctx: &'a SysOpContext,
+        definitions: serde_json::Map<String, Value>,
+        building: HashSet<String>,
+        referenced: HashSet<String>,
+    }
+
+    impl SchemaBuilder<'_> {
+        /// Lower `ty` to a JSON Schema value. Returns `Err(message)` for constructs
+        /// with no JSON Schema representation (functions, opaque rust types,
+        /// unresolved generic params) — the caller surfaces it as
+        /// `baml.errors.Unsupported`.
+        fn ty_schema(&mut self, ty: &RuntimeTy) -> Result<Value, String> {
+            match ty {
+                RuntimeTy::Int { .. } | RuntimeTy::Bigint { .. } => {
+                    Ok(json!({ "type": "integer" }))
+                }
+                RuntimeTy::Float { .. } => Ok(json!({ "type": "number" })),
+                RuntimeTy::String { .. } => Ok(json!({ "type": "string" })),
+                RuntimeTy::Bool { .. } => Ok(json!({ "type": "boolean" })),
+                RuntimeTy::Null { .. } => Ok(json!({ "type": "null" })),
+                // Binary payloads travel as base64 strings on the JSON wire.
+                RuntimeTy::Uint8Array { .. } => Ok(json!({ "type": "string" })),
+                RuntimeTy::Literal(lit, _, _) => Ok(Self::literal_schema(lit)),
+                RuntimeTy::List(inner, _) => Ok(json!({
+                    "type": "array",
+                        "items": self.ty_schema(inner)?,
+                })),
+                RuntimeTy::Map { value, .. } => Ok(json!({
+                    "type": "object",
+                        "additionalProperties": self.ty_schema(value)?,
+                })),
+                RuntimeTy::Union(members, _) => self.union_schema(members),
+                RuntimeTy::Enum(name, _) => Self::enum_schema(name, self.ctx),
+                RuntimeTy::Class(name, _, _) => self.class_ref(name),
+                RuntimeTy::TypeAlias(name, _) => {
+                    if let Some(target) = find_type_alias_definition(self.ctx, name) {
+                        self.ty_schema(&target.clone())
+                    } else {
+                        // Opaque / recursive alias (e.g. `baml.json.json`): accept any JSON.
+                        Ok(json!({}))
+                    }
+                }
+                // `unknown` accepts any JSON value.
+                RuntimeTy::BuiltinUnknown { .. } => Ok(json!({})),
+                other => Err(format!(
+                    "json_schema: no JSON Schema representation for `{}`",
+                    other.render_user_facing()
+                )),
+            }
+        }
+
+        fn literal_schema(lit: &baml_base::Literal) -> Value {
+            use baml_base::Literal;
+            match lit {
+                Literal::Int(i) => json!({ "type": "integer", "const": i }),
+                Literal::Bigint(n) => json!({ "type": "integer", "const": n.to_string() }),
+                Literal::Float(s) => {
+                    json!({ "type": "number", "const": s.parse::<f64>().unwrap_or(0.0) })
+                }
+                Literal::String(s) => json!({ "type": "string", "const": s }),
+                Literal::Bool(b) => json!({ "type": "boolean", "const": b }),
+            }
+        }
+
+        fn union_schema(&mut self, members: &[RuntimeTy]) -> Result<Value, String> {
+            let has_null = members.iter().any(RuntimeTy::is_null);
+            let non_null: Vec<&RuntimeTy> = members.iter().filter(|m| !m.is_null()).collect();
+            if non_null.is_empty() {
+                return Ok(json!({ "type": "null" }));
+            }
+            let mut schemas: Vec<Value> = non_null
+                .iter()
+                .map(|m| self.ty_schema(m))
+                .collect::<Result<Vec<_>, _>>()?;
+            if schemas.len() == 1 {
+                let base = schemas.pop().unwrap_or_else(|| json!({}));
+                return Ok(if has_null {
+                    Self::with_null(base)
                 } else {
-                    // Opaque / recursive alias (e.g. `baml.json.json`): accept any JSON.
-                    Ok(json!({}))
+                    base
+                });
+            }
+            if has_null {
+                schemas.push(json!({ "type": "null" }));
+            }
+            Ok(json!({ "anyOf": schemas }))
+        }
+
+        /// Widen a single-typed schema to also admit `null`. A schema whose `"type"`
+        /// is a plain string becomes a `["<type>", "null"]` array; anything richer
+        /// falls back to `anyOf`.
+        fn with_null(base: Value) -> Value {
+            if let Value::Object(mut obj) = base {
+                if let Some(Value::String(t)) = obj.get("type") {
+                    let widened = json!([t, "null"]);
+                    obj.insert("type".to_string(), widened);
+                    return Value::Object(obj);
+                }
+                return json!({ "anyOf": [Value::Object(obj), { "type": "null" }] });
+            }
+            json!({ "anyOf": [base, { "type": "null" }] })
+        }
+
+        fn enum_schema(name: &baml_type::TypeName, ctx: &SysOpContext) -> Result<Value, String> {
+            let enum_def = find_enum_definition(ctx, name)
+                .ok_or_else(|| format!("json_schema: unknown enum `{}`", name.display_name()))?;
+            let variants: Vec<Value> = enum_def
+                .variants
+                .iter()
+                .map(|v| json!(v.alias.clone().unwrap_or_else(|| v.name.clone())))
+                .collect();
+            Ok(json!({ "type": "string", "enum": variants }))
+        }
+
+        fn class_ref(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
+            let key = definition_key(name);
+            self.referenced.insert(key.clone());
+
+            if !self.definitions.contains_key(&key) && !self.building.contains(&key) {
+                self.building.insert(key.clone());
+                let definition = self.class_object(name)?;
+                self.building.remove(&key);
+                self.definitions.insert(key.clone(), definition);
+            }
+
+            Ok(json!({ "$ref": format!("#/$defs/{}", json_pointer_escape(&key)) }))
+        }
+
+        fn class_object(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
+            let class_def = find_class_definition(self.ctx, name)
+                .ok_or_else(|| format!("json_schema: unknown class `{}`", name.display_name()))?
+                .clone();
+
+            let mut properties = serde_json::Map::new();
+            let mut required: Vec<Value> = Vec::new();
+            for field in &class_def.fields {
+                if field.skip {
+                    continue;
+                }
+                let prop_name = field.alias.clone().unwrap_or_else(|| field.name.clone());
+                let field_schema = self.ty_schema(&field.field_type)?;
+                properties.insert(prop_name.clone(), field_schema);
+                let is_optional =
+                    field.field_type.is_nullable_union() || field.field_type.is_null();
+                if !is_optional {
+                    required.push(json!(prop_name));
                 }
             }
-            // `unknown` accepts any JSON value.
-            RuntimeTy::BuiltinUnknown { .. } => Ok(json!({})),
-            other => Err(format!(
-                "json_schema: no JSON Schema representation for `{}`",
-                other.render_user_facing()
-            )),
+
+            let mut obj = serde_json::Map::new();
+            obj.insert("type".to_string(), json!("object"));
+            obj.insert("properties".to_string(), Value::Object(properties));
+            obj.insert("required".to_string(), Value::Array(required));
+            Ok(Value::Object(obj))
         }
     }
 
-    fn literal_schema(lit: &baml_base::Literal) -> Value {
-        use baml_base::Literal;
-        match lit {
-            Literal::Int(i) => json!({ "type": "integer", "const": i }),
-            Literal::Bigint(n) => json!({ "type": "integer", "const": n.to_string() }),
-            Literal::Float(s) => {
-                json!({ "type": "number", "const": s.parse::<f64>().unwrap_or(0.0) })
-            }
-            Literal::String(s) => json!({ "type": "string", "const": s }),
-            Literal::Bool(b) => json!({ "type": "boolean", "const": b }),
-        }
+    fn definition_key(name: &baml_type::TypeName) -> String {
+        name.display_name().to_string()
     }
 
-    fn union_schema(
-        members: &[RuntimeTy],
-        strict: bool,
-        ctx: &SysOpContext,
-        ancestry: &mut Vec<baml_type::Name>,
-    ) -> Result<Value, String> {
-        let has_null = members.iter().any(RuntimeTy::is_null);
-        let non_null: Vec<&RuntimeTy> = members.iter().filter(|m| !m.is_null()).collect();
-        if non_null.is_empty() {
-            return Ok(json!({ "type": "null" }));
-        }
-        let mut schemas: Vec<Value> = non_null
-            .iter()
-            .map(|m| ty_to_json_schema(m, strict, ctx, ancestry))
-            .collect::<Result<Vec<_>, _>>()?;
-        if schemas.len() == 1 {
-            let base = schemas.pop().unwrap_or_else(|| json!({}));
-            return Ok(if has_null { with_null(base) } else { base });
-        }
-        if has_null {
-            schemas.push(json!({ "type": "null" }));
-        }
-        Ok(json!({ "anyOf": schemas }))
-    }
-
-    /// Widen a single-typed schema to also admit `null`. A schema whose `"type"`
-    /// is a plain string becomes a `["<type>", "null"]` array (`OpenAI` strict's
-    /// preferred nullable form); anything richer falls back to `anyOf`.
-    fn with_null(base: Value) -> Value {
-        if let Value::Object(mut obj) = base {
-            if let Some(Value::String(t)) = obj.get("type") {
-                let widened = json!([t, "null"]);
-                obj.insert("type".to_string(), widened);
-                return Value::Object(obj);
-            }
-            return json!({ "anyOf": [Value::Object(obj), { "type": "null" }] });
-        }
-        json!({ "anyOf": [base, { "type": "null" }] })
-    }
-
-    fn enum_schema(name: &baml_type::TypeName, ctx: &SysOpContext) -> Result<Value, String> {
-        let enum_def = find_enum_definition(ctx, name)
-            .ok_or_else(|| format!("json_schema: unknown enum `{}`", name.display_name()))?;
-        let variants: Vec<Value> = enum_def
-            .variants
-            .iter()
-            .map(|v| json!(v.alias.clone().unwrap_or_else(|| v.name.clone())))
-            .collect();
-        Ok(json!({ "type": "string", "enum": variants }))
-    }
-
-    fn class_schema(
-        name: &baml_type::TypeName,
-        strict: bool,
-        ctx: &SysOpContext,
-        ancestry: &mut Vec<baml_type::Name>,
-    ) -> Result<Value, String> {
-        let key = name.display_name();
-        // Recursive class: OpenAI strict mode has no `$defs`/`$ref` support here,
-        // so a cycle degrades to a permissive object rather than diverging.
-        if ancestry.contains(&key) {
-            return Ok(json!({ "type": "object" }));
-        }
-        let class_def = find_class_definition(ctx, name)
-            .ok_or_else(|| format!("json_schema: unknown class `{}`", name.display_name()))?;
-
-        ancestry.push(key);
-        let mut properties = serde_json::Map::new();
-        let mut required: Vec<Value> = Vec::new();
-        for field in &class_def.fields {
-            if field.skip {
-                continue;
-            }
-            let prop_name = field.alias.clone().unwrap_or_else(|| field.name.clone());
-            let field_schema = ty_to_json_schema(&field.field_type, strict, ctx, ancestry)?;
-            properties.insert(prop_name.clone(), field_schema);
-            let is_optional = field.field_type.is_nullable_union() || field.field_type.is_null();
-            // Strict mode: EVERY field is required (optionals keep their nullable
-            // union schema). Otherwise only non-optional fields are required.
-            if strict || !is_optional {
-                required.push(json!(prop_name));
-            }
-        }
-        ancestry.pop();
-
-        let mut obj = serde_json::Map::new();
-        obj.insert("type".to_string(), json!("object"));
-        obj.insert("properties".to_string(), Value::Object(properties));
-        obj.insert("required".to_string(), Value::Array(required));
-        if strict {
-            obj.insert("additionalProperties".to_string(), json!(false));
-        }
-        Ok(Value::Object(obj))
+    fn json_pointer_escape(value: &str) -> String {
+        value.replace('~', "~0").replace('/', "~1")
     }
 
     fn find_class_definition<'a>(

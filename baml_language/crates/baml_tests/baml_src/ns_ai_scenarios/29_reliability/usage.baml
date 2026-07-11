@@ -6,17 +6,17 @@
 // - `s29_Extract_manual` spells the plain `s29_Extract(...)` lowering through `root.ai.run`.
 function s29_Extract_request(
   work: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "reliable", reply: `"done"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "reliable", reply: `"done"`, attributes: {} },
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
     provider, "s29_Extract", "ns_ai_scenarios", { "work": work },
-    [], root.ai.RequestOptions {}, {}, bepv2_prompt_template(work, false),
+    [], root.ai.RequestOptions {}, {}, root.ai.prompt_template(work, false),
   )
 }
 
 function s29_Extract_manual(
   work: string,
-  provider: root.ai.Provider = BepV2FixtureGenerate { name: "reliable", reply: `"done"`, attributes: {} },
+  provider: root.ai.Provider = root.ai.FixtureGenerate { name: "reliable", reply: `"done"`, attributes: {} },
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.run<string>(s29_Extract_request(work, provider = provider))
 }
@@ -40,9 +40,32 @@ test "29: may_replay combines the operation policy with failure facts" {
 
 test "29: fallback selects a later provider after a replay-safe failure" {
   let chain = s29_Flaky { reply: `"never"`, fail_until: 99, calls: 0 }.fallback_to(
-    BepV2FixtureGenerate { name: "backup", reply: `"backup"`, attributes: {} },
+    root.ai.FixtureGenerate { name: "backup", reply: `"backup"`, attributes: {} },
   );
   assert.equal(s29_Extract_manual("work", provider = chain), "backup")
+}
+
+test "29: fallback does not reinterpret a refusal as provider availability" {
+  let primary = s29_Refusing { calls: 0 };
+  let status = s29_Extract_manual(
+    "work",
+    provider = primary.fallback_to(root.ai.fixture(`"backup"`, name = "backup")),
+  ) catch (e) {
+    let refusal: s29_Refusal => "refused",
+    _ => "wrong-error",
+  };
+  assert.equal(status, "refused")
+  assert.equal(primary.calls, 1)
+}
+
+test "29: retry refuses effectful providers before replaying anything" {
+  let effectful = s29_Effectful { calls: 0 };
+  let status = s29_Extract_manual("work", provider = effectful.with_retry(2)) catch (e) {
+    let unsupported: baml.errors.Unsupported => "unsupported",
+    _ => "wrong-error",
+  };
+  assert.equal(status, "unsupported")
+  assert.equal(effectful.calls, 0)
 }
 
 testset "integ-test-29-reliability" {

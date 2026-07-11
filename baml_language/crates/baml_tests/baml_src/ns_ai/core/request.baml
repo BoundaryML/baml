@@ -70,6 +70,82 @@ class Request<T> {
       _messages: self._messages,
     }
   }
+  function with_options(self, options: RequestOptions) -> Request<T> throws never {
+    Request<T> {
+      provider: self.provider,
+      prompt: self.prompt,
+      identity: self.identity,
+      arguments: self.arguments,
+      tools: self.tools,
+      options: options,
+      tags: self.tags,
+      _render: self._render,
+      _messages: self._messages,
+    }
+  }
+  function with_dispatch(
+    self,
+    dispatch: (ToolCall[]) -> ToolResult[] throws never,
+  ) -> Request<T> throws never {
+    self.with_options(RequestOptions {
+      dispatch: dispatch,
+      tool_middleware: self.options.tool_middleware,
+      observers: self.options.observers,
+      recorders: self.options.recorders,
+      run_id: self.options.run_id,
+    })
+  }
+  function with_tool_middleware(self, middleware: ToolMiddleware[]) -> Request<T> throws never {
+    self.with_options(RequestOptions {
+      dispatch: self.options.dispatch,
+      tool_middleware: middleware,
+      observers: self.options.observers,
+      recorders: self.options.recorders,
+      run_id: self.options.run_id,
+    })
+  }
+  function with_observers(self, observers: AgentObserver[]) -> Request<T> throws never {
+    self.with_options(RequestOptions {
+      dispatch: self.options.dispatch,
+      tool_middleware: self.options.tool_middleware,
+      observers: observers,
+      recorders: self.options.recorders,
+      run_id: self.options.run_id,
+    })
+  }
+  function with_recorders(self, recorders: AgentRecorder[]) -> Request<T> throws never {
+    self.with_options(RequestOptions {
+      dispatch: self.options.dispatch,
+      tool_middleware: self.options.tool_middleware,
+      observers: self.options.observers,
+      recorders: recorders,
+      run_id: self.options.run_id,
+    })
+  }
+  function with_run_id(self, run_id: string) -> Request<T> throws never {
+    self.with_options(RequestOptions {
+      dispatch: self.options.dispatch,
+      tool_middleware: self.options.tool_middleware,
+      observers: self.options.observers,
+      recorders: self.options.recorders,
+      run_id: run_id,
+    })
+  }
+}
+
+// Shared lazy prompt recipe for the hand-written task companions. Compiler
+// desugaring will eventually synthesize this recipe directly.
+function prompt_template(
+  text: string,
+  with_output_format: bool,
+) -> (baml.llm.Context) -> baml.llm.PromptAst throws never {
+  (ctx: baml.llm.Context) -> baml.llm.PromptAst {
+    if (with_output_format) {
+      baml.llm.assemble_prompt_ast(["", "\n", ""], [text, ctx.output_format])
+    } else {
+      baml.llm.assemble_prompt_ast(["", ""], [text])
+    }
+  }
 }
 
 function request<T>(

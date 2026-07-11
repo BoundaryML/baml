@@ -12,18 +12,15 @@ function wf_fetch_doc(url: string) -> WfDoc throws never {
 }
 
 function wf_model_text(
-    p: baml.ai.Provider,
+    p: root.ai.Provider,
     prompt: string,
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
-    match (p) {
-        let h: baml.ai.HttpProvider => h.call<string>(prompt),
-        _ => throw baml.errors.Unsupported { message: "client cannot produce a value" },
-    }
+    root.ai.run<string>(root.ai.request<string>(p, root.ai.prompt_template(prompt, false)))
 }
 
 // fetch, then summarize + label in parallel, then combine.
 function wf_doc_pipeline(
-    p: baml.ai.Provider,
+    p: root.ai.Provider,
     url: string,
 ) -> string throws baml.errors.CallError | baml.errors.UnknownError {
     let doc = wf_fetch_doc(url);

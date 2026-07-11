@@ -1140,9 +1140,8 @@ impl ClientField {
             .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
-    /// True when the client value is the call form — `client Gpt()` — which
-    /// references a client FUNCTION returning `baml.ai.Provider` rather than
-    /// a `client<llm>` config binding (DCP §1.4). Zero-arg only for now.
+    /// True when the client value is the call form — `client Gpt()` — rather
+    /// than a `client<llm>` config binding. Zero-argument calls only for now.
     pub fn is_call(&self) -> bool {
         self.syntax
             .children_with_tokens()

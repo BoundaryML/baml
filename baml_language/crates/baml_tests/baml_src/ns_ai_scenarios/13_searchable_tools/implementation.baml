@@ -18,11 +18,11 @@ function s13_catalog() -> S13CatalogEntry[] throws never {
   ]
 }
 
-function s13_search_tool() -> root.ai.Tool throws baml.errors.Unsupported {
+function s13_search_tool() -> root.ai.Tool throws never {
   root.ai.Tool.typed<S13SearchArgs>("tool_search", "Search the tool catalog.")
 }
 
-function s13_lookup_tool() -> root.ai.Tool throws baml.errors.Unsupported {
+function s13_lookup_tool() -> root.ai.Tool throws never {
   root.ai.Tool.typed<S13LookupOrderArgs>("lookup_order", "Look up an order by id.")
 }
 

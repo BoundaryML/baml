@@ -121,33 +121,24 @@ function user.NestedControlFlow(x: int) -> string throws never {
 function user.TestClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
-function user.LlmFunction(input: string, client: baml.ai.Provider = TestClient) -> string throws never {
-  baml.ai.drive_call<T>(client, LlmFunction$render_prompt(input = input, client = client)) : string
+function user.LlmFunction(input: string, client: baml.llm.Client = TestClient) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "LlmFunction", map { "input": input }) : string
 }
-function user.LlmFunction$render_prompt(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst throws never {
+function user.LlmFunction$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "LlmFunction", map { "input": input }) : baml.llm.PromptAst
 }
-function user.LlmFunction$build_request(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request throws never {
+function user.LlmFunction$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request(client, "LlmFunction", map { "input": input }) : baml.http.Request
 }
-function user.LlmFunction$build_request_stream(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request throws never {
+function user.LlmFunction$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "LlmFunction", map { "input": input }) : baml.http.Request
 }
-function user.LlmFunction$with<V, E2>(input: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<string, V> throws never {
-  baml.ai.drive_with<V, E2>(client, LlmFunction$render_prompt(input = input, client = client), project) : baml.ai.CallResult<string, V>
+function user.LlmFunction$stream(input: string, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "LlmFunction", map { "input": input }) : baml.llm.Stream<string | null, string>
 }
-function user.LlmFunction$run_tools(input: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = TestClient) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest throws never {
-  baml.ai.drive_run_tools<T>(client, LlmFunction$render_prompt(input = input, client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string> | baml.ai.HandoffRequest
+function user.LlmFunction$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = TestClient) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
 }
-function user.LlmFunction$live(input: string, io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript throws never {
-  baml.ai.drive_live(client, LlmFunction$render_prompt(input = input, client = client), io) : baml.ai.Transcript
-}
-function user.LlmFunction$stream(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.ai.drive_stream(client, LlmFunction$render_prompt(input = input, client = client)) : baml.llm.Stream<string | null, string>
-}
-function user.LlmFunction$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = TestClient) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>
-}
-function user.LlmFunction$parse(json: string, client: baml.ai.Provider = TestClient) -> string throws never {
+function user.LlmFunction$parse(json: string, client: baml.llm.Client = TestClient) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
 }

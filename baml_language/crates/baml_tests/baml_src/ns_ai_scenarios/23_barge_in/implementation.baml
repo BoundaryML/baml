@@ -1,19 +1,6 @@
 // 23 — barge-in. Cancellation and audio truncation target the specific Live
 // resource, so they cannot accidentally steer another provider session.
 
-class s23_RecordingChannel {
-  events: string[],
-
-  implements root.ai.Channel {
-    function on(self, handler: (string) -> null throws never) -> null throws never { null }
-    function send(self, data: string) -> null throws baml.errors.Io {
-      self.events.push(data);
-      null
-    }
-    function close(self) -> null throws never { null }
-  }
-}
-
 class s23_ScriptedLive {
   script: root.ai.LiveEvent[],
   channel: root.ai.Channel,

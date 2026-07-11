@@ -5,33 +5,24 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.Fast$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "Fast", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o-mini", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
-function user.Greet(name: string, client: baml.ai.Provider = Fast) -> string throws never {
-  baml.ai.drive_call<T>(client, Greet$render_prompt(name = name, client = client)) : string
+function user.Greet(name: string, client: baml.llm.Client = Fast) -> string throws never {
+  baml.llm.call_llm_function<T>(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : string
 }
-function user.Greet$render_prompt(name: string, client: baml.ai.Provider = Fast) -> baml.llm.PromptAst throws never {
+function user.Greet$render_prompt(name: string, client: baml.llm.Client = Fast) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.llm.PromptAst
 }
-function user.Greet$build_request(name: string, client: baml.ai.Provider = Fast) -> baml.http.Request throws never {
+function user.Greet$build_request(name: string, client: baml.llm.Client = Fast) -> baml.http.Request throws never {
   baml.llm.build_request(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
 }
-function user.Greet$build_request_stream(name: string, client: baml.ai.Provider = Fast) -> baml.http.Request throws never {
+function user.Greet$build_request_stream(name: string, client: baml.llm.Client = Fast) -> baml.http.Request throws never {
   baml.llm.build_request_stream(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.http.Request
 }
-function user.Greet$with<V, E2>(name: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = Fast) -> baml.ai.CallResult<string, V> throws never {
-  baml.ai.drive_with<V, E2>(client, Greet$render_prompt(name = name, client = client), project) : baml.ai.CallResult<string, V>
+function user.Greet$stream(name: string, client: baml.llm.Client = Fast) -> baml.llm.Stream<string | null, string> throws never {
+  baml.llm.stream_llm_function(client, "Greet", map { "name": name }, prompt_closure = baml.llm.prompt`...`) : baml.llm.Stream<string | null, string>
 }
-function user.Greet$run_tools(name: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: ((baml.ai.LoopInfo) -> bool throws never) | null = null, client: baml.ai.Provider = Fast) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest throws never {
-  baml.ai.drive_run_tools<T>(client, Greet$render_prompt(name = name, client = client), tools, dispatch, stop_when = stop_when) : string | baml.ai.Budget<string> | baml.ai.HandoffRequest
+function user.Greet$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client = Fast) -> baml.llm.Stream<string | null, string> throws never {
+  client.__make_stream(sse) : baml.llm.Stream<string | null, string>
 }
-function user.Greet$live(name: string, io: baml.ai.Channel, client: baml.ai.Provider = Fast) -> baml.ai.Transcript throws never {
-  baml.ai.drive_live(client, Greet$render_prompt(name = name, client = client), io) : baml.ai.Transcript
-}
-function user.Greet$stream(name: string, client: baml.ai.Provider = Fast) -> baml.llm.Stream<string | null, string> throws never {
-  baml.ai.drive_stream(client, Greet$render_prompt(name = name, client = client)) : baml.llm.Stream<string | null, string>
-}
-function user.Greet$parse_stream(sse: baml.http.SseStream, client: baml.ai.Provider = Fast) -> baml.llm.Stream<string | null, string> throws never {
-  baml.llm.make_stream_for(client, sse) : baml.llm.Stream<string | null, string>
-}
-function user.Greet$parse(json: string, client: baml.ai.Provider = Fast) -> string throws never {
+function user.Greet$parse(json: string, client: baml.llm.Client = Fast) -> string throws never {
   baml.llm.parse<TFinal>(json) : string
 }

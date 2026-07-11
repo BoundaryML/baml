@@ -25,3 +25,18 @@ function may_replay(policy: ReplayPolicy, failure: Failure) -> bool throws never
     ReplayKind.Never => false,
   }
 }
+
+// Bridge for the language's built-in thrown-error surface. Provider adapters
+// should expose richer root.ai.Failure facts when possible; combinators can
+// still conservatively honor the standard Failure predicates here.
+function thrown_error_is_replayable(error: baml.errors.CallError | baml.errors.UnknownError) -> bool throws never {
+  match (error) {
+    let failure: baml.errors.Failure => {
+      failure.is_retryable()
+        && !failure.is_effectful()
+        && !failure.is_policy_refusal()
+        && !failure.is_unsupported()
+    },
+    _ => false,
+  }
+}

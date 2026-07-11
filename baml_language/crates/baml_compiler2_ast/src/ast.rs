@@ -1484,16 +1484,6 @@ pub struct FunctionDef {
     /// tags (a tag name immediately followed by a backtick literal), and
     /// their first parameter must be `body: (...) -> TaggedString`.
     pub is_tagged_template_tag: bool,
-    /// `Some(suffix)` when this fn is preceded by a
-    /// `//baml:llm_companion(<suffix>)` marker comment: it is the capability
-    /// *driver* that the generated `Foo$<suffix>` companion of every LLM
-    /// function delegates to. Signature convention (validated semantically,
-    /// not here): `fn<T, …>(client: Provider, prompt: PromptAst, …extra) -> R`
-    /// where the generic param named `T` is the LLM fn's return-type slot,
-    /// `TPartial` (optional) the stream-expanded slot, and any other generic
-    /// params are passthrough (inferred at the call site). See
-    /// `_plan/llm-desugar-capabilities-plan.md` §1.2.
-    pub llm_companion_suffix: Option<Name>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1545,12 +1535,14 @@ pub enum BuiltinKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBodyDef {
     pub client: Option<Name>,
-    /// True for the call form `client Gpt()` (DCP §1.4): the name references
-    /// a user function returning `baml.ai.Provider`, and the injected client
-    /// param's default becomes the call `Gpt()` instead of a binding
-    /// reference. Zero-arg only.
+    /// True for the call form `client Gpt()`: the injected client parameter's
+    /// default becomes the call `Gpt()` instead of a binding reference.
+    /// Zero-argument calls only.
     pub client_is_call: bool,
     pub prompt: Option<RawPrompt>,
+    /// Pre-lowered `$stream` body for backtick prompts. It carries the same
+    /// compiled prompt closure as the one-shot path.
+    pub stream_body: Option<(ExprBody, AstSourceMap)>,
     /// BEP-049 M5: for a new-mode (backtick) prompt, the pre-lowered bodies of
     /// the `render_prompt` / `build_request` / `build_request_stream` companions,
     /// keyed by target name. Each is a `<target>(client, fn, args,
@@ -1561,9 +1553,7 @@ pub struct LlmBodyDef {
     /// by `make_llm_companion`. Each closure captures the companion's params, so
     /// bodies can't share `ExprId`s — every entry is an independent arena. Empty
     /// for legacy Jinja `#"..."#` prompts (their companions use the 3-arg Jinja
-    /// path). The MAIN body and the `$stream` companion no longer carry a
-    /// closure at all (DCP §1.3 Phase C.3): both desugar onto
-    /// `baml.ai.drive_call` / `drive_stream` over `$render_prompt`.
+    /// path).
     pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
     pub span: TextRange,
 }
@@ -1650,11 +1640,6 @@ pub struct InterfaceDef {
     pub required_methods: Vec<MethodSigDef>,
     /// Default methods (with body). Implementing classes inherit unless they override.
     pub default_methods: Vec<FunctionDef>,
-    /// True when this interface is preceded by a `//baml:llm_capability`
-    /// marker comment, registering it as an LLM capability (it must
-    /// transitively `requires baml.ai.Provider`; validated semantically).
-    /// See `_plan/llm-desugar-capabilities-plan.md` §1.2.
-    pub is_llm_capability: bool,
     pub attributes: Vec<RawAttribute>,
     pub docstring: Option<std::string::String>,
     pub span: TextRange,

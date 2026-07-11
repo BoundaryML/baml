@@ -11,26 +11,17 @@ function user.Headers() -> string  [expr] {
 function user.IfElseWithHeaders(flag: bool) -> string  [expr] {
   { // [1] Check flag } if (flag) { // [1] True branch } "yes" else { // [1] False branch } "no"
 }
-function user.LlmFunction(input: string, client: baml.ai.Provider = TestClient) -> string  [llm] {
-  baml.ai.drive_call(client, LlmFunction$render_prompt(input = input, client = client))
+function user.LlmFunction(input: string, client: baml.llm.Client = TestClient) -> string  [llm] {
+  baml.llm.call_llm_function(client, "LlmFunction", map { "input": input })
 }
-function user.LlmFunction$build_request(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
+function user.LlmFunction$build_request(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request(client, "LlmFunction", map { "input": input })
 }
-function user.LlmFunction$build_request_stream(input: string, client: baml.ai.Provider = TestClient) -> baml.http.Request  [expr] {
+function user.LlmFunction$build_request_stream(input: string, client: baml.llm.Client = TestClient) -> baml.http.Request  [expr] {
   baml.llm.build_request_stream(client, "LlmFunction", map { "input": input })
 }
-function user.LlmFunction$live(input: string, io: baml.ai.Channel, client: baml.ai.Provider = TestClient) -> baml.ai.Transcript  [expr] {
-  baml.ai.drive_live(client, LlmFunction$render_prompt(input = input, client = client), io)
-}
-function user.LlmFunction$render_prompt(input: string, client: baml.ai.Provider = TestClient) -> baml.llm.PromptAst  [expr] {
+function user.LlmFunction$render_prompt(input: string, client: baml.llm.Client = TestClient) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "LlmFunction", map { "input": input })
-}
-function user.LlmFunction$run_tools(input: string, tools: baml.ai.Tool[], dispatch: (baml.ai.ToolCall[]) -> baml.ai.ToolResult[] throws never, stop_when: (baml.ai.LoopInfo) -> bool throws never? = null, client: baml.ai.Provider = TestClient) -> string | baml.ai.Budget<string> | baml.ai.HandoffRequest  [expr] {
-  baml.ai.drive_run_tools(client, LlmFunction$render_prompt(input = input, client = client), tools, dispatch, stop_when = stop_when)
-}
-function user.LlmFunction$with(input: string, project: (baml.ai.ResponseMeta) -> V throws E2, client: baml.ai.Provider = TestClient) -> baml.ai.CallResult<string, V>  [expr] {
-  baml.ai.drive_with(client, LlmFunction$render_prompt(input = input, client = client), project)
 }
 function user.MatchExpression(x: int) -> string  [expr] {
   {  } match (x) { 1 => { // [1] One } "one", 2 => { // [1] Two } "two", _ => { // [1] Default } "other" }

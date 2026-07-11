@@ -37,7 +37,7 @@ class s31_ManagedResource {
       let rebound = request.for_provider(self.owner);
       self.ledger.last_prompt = self.prefix + "\n" + baml.llm.prompt_to_text(rebound.prompt);
       self.ledger.cached_input_tokens = self.ledger.cached_input_tokens + 10;
-      baml.sap.parse<T>(self.reply) catch (e) {
+      baml.json.from_string<T>(self.reply) catch (e) {
         _ => throw baml.errors.UnknownError { data: e, message: ["s31 cached parse failed"] },
       }
     }
@@ -73,7 +73,7 @@ class s31_ManagedFake {
     function generate<T>(self, request: root.ai.Request<T>) -> root.ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
       self.ledger.cold_input_tokens = self.ledger.cold_input_tokens + 1000;
-      let value = baml.sap.parse<T>(self.reply) catch (e) {
+      let value = baml.json.from_string<T>(self.reply) catch (e) {
         _ => throw baml.errors.UnknownError { data: e, message: ["s31 cold parse failed"] },
       };
       root.ai.Response<T> {
@@ -106,7 +106,7 @@ class s31_ManagedFake {
   }
 }
 
-function s31_fresh_fake(reply: string = "cached answer") -> s31_ManagedFake throws never {
+function s31_fresh_fake(reply: string = `"cached answer"`) -> s31_ManagedFake throws never {
   s31_ManagedFake {
     reply: reply,
     ledger: s31_Ledger {
@@ -121,17 +121,4 @@ function s31_supports_managed_cache(provider: root.ai.Provider) -> bool throws n
     let managed: root.ai.ManagedCache => true,
     _ => false,
   }
-}
-
-function s31_with_cache<R, E>(
-  provider: root.ai.Provider,
-  content: root.ai.ChatMessage[],
-  body: (root.ai.Cache) -> R throws E,
-) -> R throws baml.errors.UnknownError | E {
-  let cache = root.ai.create_cache(
-    provider, content,
-    root.ai.CacheOptions { ttl: baml.time.Duration.from_hours(1) },
-  );
-  defer { cache.cleanup() }
-  body(cache)
 }

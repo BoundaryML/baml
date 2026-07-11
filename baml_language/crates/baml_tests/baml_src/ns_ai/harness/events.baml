@@ -57,6 +57,16 @@ class ToolCallStartedEvent {
   }
 }
 
+class ToolCallBlockedEvent {
+  id: string?,
+  call: ToolCall,
+  reason: string,
+  implements AgentEvent {
+    function kind(self) -> string throws never { "tool_call_blocked" }
+    function run_id(self) -> string? throws never { self.id }
+  }
+}
+
 class ToolCallFinishedEvent {
   id: string?,
   call: ToolCall,
