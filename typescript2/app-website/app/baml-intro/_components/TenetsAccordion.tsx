@@ -56,7 +56,7 @@ const TENETS: Tenet[] = [
       { c: 'cm', t: '// a typo like "opne" will not compile' },
       { t: '\n}' },
     ],
-    title: 'Make undesired state unrepresentable.',
+    title: "If it's wrong, it can't compile.",
     why: "An agent sampling tokens will eventually write an invalid state. If it can't compile, it can't ship, and no human has to catch it.",
   },
   {
