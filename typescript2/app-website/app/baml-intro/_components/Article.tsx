@@ -894,7 +894,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               </div>
               <p className="l6-note">
                 {
-                  "The reference list is the part grep can't give you: every call site, resolved — handy for spotting near-duplicates before writing a second copy of a function. We'll keep making improvements to this tool."
+                  "The usage list is the part grep can't give you: every call site, resolved (--view usage prints the full list) — handy for spotting near-duplicates before writing a second copy of a function. We'll keep making improvements to this tool."
                 }
               </p>
             </Section>
