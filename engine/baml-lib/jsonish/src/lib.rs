@@ -4,7 +4,7 @@ pub mod tests;
 use anyhow::Result;
 use indexmap::IndexMap;
 pub mod deserializer;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 pub mod jsonish;
 
 use baml_types::{
@@ -249,7 +249,7 @@ pub fn from_str(
             value => vec![value],
         };
         candidates.extend(toon_values);
-        candidates.dedup();
+        deduplicate_candidates(&mut candidates);
         value = Value::AnyOf(candidates, raw_string.to_string());
     }
 
@@ -290,6 +290,25 @@ pub fn from_str(
     // parsed_value.clear_flags();
 
     Ok(parsed_value)
+}
+
+fn deduplicate_candidates(candidates: &mut Vec<Value>) {
+    let mut seen = HashSet::new();
+    candidates.retain(|candidate| seen.insert(candidate.clone()));
+}
+
+#[cfg(test)]
+mod toon_candidate_tests {
+    use super::*;
+
+    #[test]
+    fn deduplicates_all_candidates_in_first_seen_order() {
+        let mut candidates = vec![Value::Boolean(true), Value::Null, Value::Boolean(true)];
+
+        deduplicate_candidates(&mut candidates);
+
+        assert_eq!(candidates, vec![Value::Boolean(true), Value::Null]);
+    }
 }
 
 impl ResponseBamlValue {

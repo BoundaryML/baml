@@ -184,17 +184,16 @@ fn fenced_toon_blocks(input: &str) -> Vec<&str> {
     let mut blocks = Vec::new();
     let mut offset = 0;
 
-    while let Some(open) = input[offset..].find("```") {
-        let after_open = offset + open + 3;
+    while let Some(open) = find_line_start_fence(input, offset) {
+        let after_open = open + 3;
         let Some(line_end) = input[after_open..].find('\n') else {
             break;
         };
         let tag = input[after_open..after_open + line_end].trim();
         let content_start = after_open + line_end + 1;
-        let Some(close) = input[content_start..].find("```") else {
+        let Some(content_end) = find_line_start_fence(input, content_start) else {
             break;
         };
-        let content_end = content_start + close;
 
         if tag.is_empty() || tag.eq_ignore_ascii_case("toon") {
             blocks.push(input[content_start..content_end].trim());
@@ -203,6 +202,18 @@ fn fenced_toon_blocks(input: &str) -> Vec<&str> {
     }
 
     blocks
+}
+
+fn find_line_start_fence(input: &str, offset: usize) -> Option<usize> {
+    input[offset..]
+        .match_indices("```")
+        .map(|(index, _)| offset + index)
+        .find(|&index| {
+            let line_start = input[..index]
+                .rfind('\n')
+                .map_or(0, |line_end| line_end + 1);
+            input[line_start..index].chars().all(char::is_whitespace)
+        })
 }
 
 #[cfg(test)]
@@ -275,5 +286,12 @@ mod tests {
             repair_inline_array_lengths("items[2]{name,age}:\n  Ada,36"),
             "items[2]{name,age}:\n  Ada,36"
         );
+    }
+
+    #[test]
+    fn ignores_inline_backticks_when_pairing_fenced_toon_blocks() {
+        let blocks = fenced_toon_blocks("A stray ``` in prose.\n  ```toon\n  name: Ada\n  ```\n");
+
+        assert_eq!(blocks, vec!["name: Ada"]);
     }
 }
