@@ -117,9 +117,12 @@ jobs:
 
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/textmate_baml -o IdentitiesOnly=yes"
           cd /tmp/mirror-repo
+          # -A, not commit -a: newly assembled files (dist/, package.json, the
+          # publish workflow) are untracked in the mirror and -a would drop them.
+          git add -A
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -am "Sync from BoundaryML/baml@${SOURCE_SHA} (v${next})"
+              commit -m "Sync from BoundaryML/baml@${SOURCE_SHA} (v${next})"
           git push origin main
           echo "version=${next}" >> "$GITHUB_OUTPUT"
 
