@@ -467,8 +467,11 @@ const GREP_EVENTS: TermEvent[] = [
 ];
 
 const DESCRIBE_EVENTS: TermEvent[] = [
-  { cmd: 'baml describe greet' },
+  { cmd: 'baml describe greet --agent' },
   { text: 'function greet  baml_src/main.baml:5-7', tone: 'accent' },
+  { text: 'depends on class Greeting  baml_src/main.baml:1' },
+  { text: 'used at baml_src/main.baml:10  greet("world").message' },
+  { text: 'used at baml_src/main.baml:18  assert.equal(greet("bob")…' },
   { text: '' },
   { text: 'signature' },
   { text: '  greet(name: string) -> Greeting' },
@@ -485,7 +488,7 @@ const DESCRIBE_EVENTS: TermEvent[] = [
   { text: '  }' },
   { text: '' },
   {
-    text: '✓ one call: signature, deps, usage, implementation',
+    text: '✓ one call: signature, deps, every call site',
     tone: 'ok',
     pause: 0.3,
   },

@@ -190,11 +190,15 @@ export const GREP_EVENTS: TermEvent[] = [
   { text: '# caller list is still just text matches', tone: 'dim' },
 ];
 
-// Captured from `baml describe greet` (default overview view) on the
-// agent-oriented describe CLI.
+// Captured from `baml describe greet --agent` on the agent-oriented
+// describe CLI (PR #3989): compact facts first, then the overview
+// sections.
 export const DESCRIBE_EVENTS: TermEvent[] = [
-  { cmd: 'baml describe greet' },
+  { cmd: 'baml describe greet --agent' },
   { text: 'function greet  baml_src/main.baml:5-7', tone: 'accent' },
+  { text: 'depends on class Greeting  baml_src/main.baml:1' },
+  { text: 'used at baml_src/main.baml:10  greet("world").message' },
+  { text: 'used at baml_src/main.baml:18  assert.equal(greet("bob")…' },
   { text: '' },
   { text: 'signature' },
   { text: '  greet(name: string) -> Greeting' },
@@ -212,7 +216,7 @@ export const DESCRIBE_EVENTS: TermEvent[] = [
   { text: '' },
   {
     pause: 0.3,
-    text: '✓ signature, deps, usage, implementation — in one call',
+    text: '✓ signature, deps, every call site — in one call',
     tone: 'ok',
   },
 ];
