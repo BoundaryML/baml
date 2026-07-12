@@ -211,21 +211,21 @@ impl minijinja::value::Object for OutputFormat {
         };
 
         let format = if kwargs.has("format") {
-            match kwargs
-                .get::<String>("format")
-                .map(|s| OutputFormatKind::from_str(s.as_str()))
-            {
-                Ok(Ok(format)) => Some(format),
-                Ok(Err(e)) => {
-                    return Err(Error::new(
-                        ErrorKind::SyntaxError,
-                        format!(
-                            "Invalid value for format (expected one of {}): {}",
-                            OutputFormatKind::VARIANTS.join(", "),
-                            e
-                        ),
-                    ))
-                }
+            match kwargs.get::<Option<String>>("format") {
+                Ok(Some(format)) => match OutputFormatKind::from_str(format.as_str()) {
+                    Ok(format) => Some(format),
+                    Err(e) => {
+                        return Err(Error::new(
+                            ErrorKind::SyntaxError,
+                            format!(
+                                "Invalid value for format (expected one of {}): {}",
+                                OutputFormatKind::VARIANTS.join(", "),
+                                e
+                            ),
+                        ))
+                    }
+                },
+                Ok(None) => None,
                 Err(e) => {
                     return Err(Error::new(
                         ErrorKind::SyntaxError,

@@ -1220,7 +1220,7 @@ mod render_tests {
         )?;
 
         let rendered = render_prompt(
-            "{{ ctx.output_format(prefix=null) }}",
+            "{{ ctx.output_format(prefix=null, format=none) }}",
             &args,
             RenderContext {
                 client: RenderContext_Client {
