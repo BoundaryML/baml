@@ -1,5 +1,6 @@
 ---
-source: crates/baml_lsp2_actions/src/grep_tests.rs
+source: crates/baml_lsp2_actions/src/project_search_tests.rs
+assertion_line: 135
 expression: output
 ---
 enum Color  types.baml:7

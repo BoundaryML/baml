@@ -3,14 +3,16 @@
 //! These tests exercise the real `write_description` and `write_listing`
 //! functions to verify the exact CLI output format agents will see.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use baml_db::baml_compiler2_hir;
 use baml_lsp2_actions::ResolvedTarget;
 use baml_project::ProjectDatabase;
 
 use crate::describe_command::{
-    definition_line_range, dispatch, write_description, write_keyword, write_listing,
+    DescribeArgs, DescribeView, definition_line_range, dispatch, parse_grep_terms,
+    parse_kind_filter, path_matches, write_batch_output, write_description, write_keyword,
+    write_listing,
 };
 
 // ── Test helpers ────────────────────────────────────────────────────────────
@@ -1330,4 +1332,557 @@ fn dispatch_root_prefix_nonexistent() {
         output.starts_with("NOT FOUND:"),
         "expected NOT FOUND, got: {output}"
     );
+}
+
+// ── Overview / usage / impact view tests ────────────────────────────────────
+//
+// Ported from the `dhilan-atb-rewrite` prototype and adapted to the combined
+// renderer: depth-aware dependency expansion, cycle protection, and the
+// shared line budget across all views.
+
+use crate::describe_command::{
+    MAX_BUDGET_OVERRUN, write_impact_view, write_overview, write_usage_view,
+};
+
+/// Capture `write_overview` output as a String.
+fn capture_overview(
+    db: &ProjectDatabase,
+    desc: &baml_lsp2_actions::SymbolDescription,
+    budget: usize,
+    depth: usize,
+) -> String {
+    let files = baml_compiler2_hir::compiler2_all_files(db);
+    let mut buf = Vec::new();
+    write_overview(
+        &mut buf,
+        db,
+        &files,
+        desc,
+        budget,
+        depth,
+        Path::new("/test"),
+    )
+    .unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+fn describe_one(db: &ProjectDatabase, name: &str) -> baml_lsp2_actions::SymbolDescription {
+    let files = baml_compiler2_hir::compiler2_all_files(db);
+    baml_lsp2_actions::describe(db, &files, name)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| panic!("no description for {name}"))
+}
+
+#[test]
+fn overview_expands_direct_function_dependencies_and_keeps_usage() {
+    let db = make_db(&[(
+        "main.baml",
+        r#"
+class Request {
+    text: string,
+}
+
+class Result {
+    answer: string,
+}
+
+function Plan(req: Request) -> Result {
+    Result { answer: req.text }
+}
+
+test PlanTest {
+    let result = Plan(Request { text: "hello" });
+    assert.equal(result.answer, "hello")
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Plan");
+
+    let output = capture_overview(&db, &desc, 30, 1);
+
+    assert!(output.contains("signature"), "missing signature: {output}");
+    assert!(
+        output.contains("input Request"),
+        "missing input section: {output}"
+    );
+    assert!(
+        output.contains("class Request {"),
+        "input shape not expanded: {output}"
+    );
+    assert!(
+        output.contains("output Result"),
+        "missing output section: {output}"
+    );
+    assert!(
+        output.contains("class Result {"),
+        "output shape not expanded: {output}"
+    );
+    assert!(output.contains("usage (1"), "missing usage: {output}");
+    // The 3-line body fits the leftover budget, so it renders whole.
+    assert!(
+        output.contains("implementation (3 lines)"),
+        "missing implementation preview: {output}"
+    );
+}
+
+#[test]
+fn overview_depth_zero_lists_dependency_names_without_shapes() {
+    let db = simple_project();
+    let desc = describe_one(&db, "ExtractPoint");
+
+    let output = capture_overview(&db, &desc, 30, 0);
+
+    assert!(
+        output.contains("output Point"),
+        "dependency name must stay discoverable at depth 0: {output}"
+    );
+    assert!(
+        !output.contains("class Point {"),
+        "depth 0 must not expand shapes: {output}"
+    );
+}
+
+#[test]
+fn overview_depth_two_expands_nested_dependencies() {
+    let db = make_db(&[(
+        "nested.baml",
+        r#"
+class Inner {
+    value: string,
+}
+
+class Outer {
+    inner: Inner,
+}
+
+function Use(outer: Outer) -> string {
+    outer.inner.value
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Use");
+
+    let depth1 = capture_overview(&db, &desc, 40, 1);
+    assert!(
+        !depth1.contains("class Inner {"),
+        "depth 1 must not expand nested shapes: {depth1}"
+    );
+
+    let depth2 = capture_overview(&db, &desc, 40, 2);
+    assert!(
+        depth2.contains("dependency Inner"),
+        "depth 2 must name nested dependencies: {depth2}"
+    );
+    assert!(
+        depth2.contains("class Inner {"),
+        "depth 2 must expand nested shapes: {depth2}"
+    );
+}
+
+#[test]
+fn overview_marks_cycles_instead_of_recursing() {
+    let db = make_db(&[(
+        "cycle.baml",
+        r#"
+class Alpha {
+    value: string,
+    beta: Beta?,
+}
+
+class Beta {
+    alpha: Alpha?,
+}
+
+function First(alpha: Alpha) -> string {
+    alpha.value
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "First");
+
+    let output = capture_overview(&db, &desc, 60, 3);
+
+    assert!(
+        output.contains("shown above"),
+        "cycle must be marked, not re-expanded: {output}"
+    );
+    assert_eq!(
+        output.matches("class Alpha {").count(),
+        1,
+        "cyclic shape must render exactly once: {output}"
+    );
+}
+
+#[test]
+fn overview_interface_separates_required_and_default_methods() {
+    let db = make_db(&[(
+        "processor.baml",
+        r#"
+interface Processor {
+    function config(self) -> string
+    function process(self, raw: string) -> int
+    function run(self) -> int {
+        0
+    }
+}
+
+class Worker {
+    implements Processor {
+        function config(self) -> string { "worker" }
+        function process(self, raw: string) -> int { raw.length() }
+    }
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Processor");
+
+    let output = capture_overview(&db, &desc, 30, 1);
+
+    assert!(
+        output.contains("requires (2)"),
+        "missing required methods group: {output}"
+    );
+    assert!(output.contains("function config(self) -> string"));
+    assert!(output.contains("function process(self, raw: string) -> int"));
+    assert!(
+        output.contains("default methods (1)"),
+        "missing default methods group: {output}"
+    );
+    assert!(output.contains("function run(self) -> int"));
+    assert!(
+        !output.contains("default methods (1)\n  function config"),
+        "required methods must not appear under defaults: {output}"
+    );
+}
+
+/// A project with one function referenced from many call sites, for
+/// budget-adherence tests on the relationship views.
+fn many_refs_project() -> ProjectDatabase {
+    let mut callers = String::new();
+    for i in 0..12 {
+        callers.push_str(&format!(
+            "function Caller{i}() -> int {{\n    Target({i})\n}}\n\n"
+        ));
+    }
+    make_db(&[
+        (
+            "target.baml",
+            "function Target(n: int) -> int {\n    n\n}\n",
+        ),
+        ("callers.baml", &callers),
+        (
+            "tests.baml",
+            r#"
+test TargetTest {
+    assert.equal(Target(1), 1)
+}
+"#,
+        ),
+    ])
+}
+
+fn capture_usage(
+    db: &ProjectDatabase,
+    desc: &baml_lsp2_actions::SymbolDescription,
+    budget: usize,
+) -> String {
+    let mut buf = Vec::new();
+    write_usage_view(&mut buf, db, desc, budget, Path::new("/test")).unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+fn capture_impact(
+    db: &ProjectDatabase,
+    desc: &baml_lsp2_actions::SymbolDescription,
+    budget: usize,
+) -> String {
+    let mut buf = Vec::new();
+    write_impact_view(&mut buf, db, desc, budget, Path::new("/test")).unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+#[test]
+fn usage_view_honors_budget_and_reports_omissions() {
+    let db = many_refs_project();
+    let desc = describe_one(&db, "Target");
+    let total = desc.references.len();
+    assert!(total >= 12, "fixture must produce many references");
+
+    let budget = 8;
+    let output = capture_usage(&db, &desc, budget);
+
+    assert!(
+        output.lines().count() <= budget + MAX_BUDGET_OVERRUN,
+        "usage view exceeded budget {budget}: {} lines\n{output}",
+        output.lines().count()
+    );
+    assert!(
+        output.contains(&format!("({total} references)")),
+        "total count must always render: {output}"
+    );
+    assert!(
+        output.contains("more references — re-run with --budget"),
+        "omissions must name a recovering budget: {output}"
+    );
+    // Tests rank first within the sample.
+    assert!(
+        output.contains("tests (1)"),
+        "test group must render: {output}"
+    );
+}
+
+#[test]
+fn usage_view_unbudgeted_shows_everything() {
+    let db = many_refs_project();
+    let desc = describe_one(&db, "Target");
+    let total = desc.references.len();
+
+    let output = capture_usage(&db, &desc, 100);
+
+    assert!(!output.contains("more references"));
+    assert_eq!(
+        output.matches("Target(").count(),
+        total,
+        "every reference must render when budget allows: {output}"
+    );
+}
+
+#[test]
+fn impact_view_honors_budget_and_reports_omissions() {
+    let db = many_refs_project();
+    let desc = describe_one(&db, "Target");
+    let total = desc.references.len();
+
+    let budget = 8;
+    let output = capture_impact(&db, &desc, budget);
+
+    assert!(
+        output.lines().count() <= budget + MAX_BUDGET_OVERRUN,
+        "impact view exceeded budget {budget}: {} lines\n{output}",
+        output.lines().count()
+    );
+    assert!(
+        output.contains(&format!("({total} sites in")),
+        "total counts must always render: {output}"
+    );
+    assert!(
+        output.contains("more sites — re-run with --budget"),
+        "omissions must name a recovering budget: {output}"
+    );
+}
+
+#[test]
+fn overview_large_enum_respects_budget() {
+    let mut body = String::from("enum Big {\n");
+    for i in 0..40 {
+        body.push_str(&format!("    Variant{i},\n"));
+    }
+    body.push_str("}\n");
+    let db = make_db(&[("big.baml", &body)]);
+    let desc = describe_one(&db, "Big");
+
+    let budget = 15;
+    let output = capture_overview(&db, &desc, budget, 1);
+
+    assert!(
+        output.lines().count() <= budget + MAX_BUDGET_OVERRUN,
+        "enum overview exceeded budget {budget}: {} lines\n{output}",
+        output.lines().count()
+    );
+    assert!(
+        output.contains("more lines — --view source"),
+        "elision must name the recovery command: {output}"
+    );
+}
+
+#[test]
+fn overview_duplicate_dependency_renders_once() {
+    let db = make_db(&[(
+        "dup.baml",
+        r#"
+class Shared {
+    value: string,
+}
+
+function Pair(a: Shared, b: Shared) -> Shared {
+    a
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Pair");
+
+    let output = capture_overview(&db, &desc, 40, 1);
+
+    assert_eq!(
+        output.matches("class Shared {").count(),
+        1,
+        "duplicate dependency shape must render once: {output}"
+    );
+}
+
+fn batch_args(budget: usize) -> DescribeArgs {
+    DescribeArgs {
+        names: Vec::new(),
+        grep_queries: Vec::new(),
+        symbols: false,
+        kind: Vec::new(),
+        file: Vec::new(),
+        limit: 12,
+        ignore_case: false,
+        agent: false,
+        from: Some(PathBuf::from("/test")),
+        view: DescribeView::Source,
+        budget,
+        depth: 0,
+        json: false,
+    }
+}
+
+#[test]
+fn grep_terms_support_repeated_flags_and_quoted_or() {
+    let terms = parse_grep_terms(&[
+        "parse_trophy || TrophyReport".to_string(),
+        "slack_post_message".to_string(),
+    ])
+    .unwrap();
+    assert_eq!(
+        terms,
+        ["parse_trophy", "TrophyReport", "slack_post_message"]
+    );
+}
+
+#[test]
+fn grep_terms_reject_empty_or_branches() {
+    assert!(parse_grep_terms(&["parse_trophy ||".to_string()]).is_err());
+    assert!(parse_grep_terms(&["|| TrophyReport".to_string()]).is_err());
+}
+
+#[test]
+fn discovery_filters_parse_and_match() {
+    let kinds = parse_kind_filter(&["function".to_string(), "class".to_string()]).unwrap();
+    assert_eq!(kinds.len(), 2);
+    assert!(parse_kind_filter(&["unknown".to_string()]).is_err());
+    assert!(path_matches("flows/trophy.baml", &["trophy".to_string()]));
+    assert!(!path_matches("flows/slack.baml", &["trophy".to_string()]));
+}
+
+#[test]
+fn batch_output_deduplicates_symbols_and_obeys_global_budget() {
+    let db = make_db(&[(
+        "flow.baml",
+        r#"
+class TrophyReport { winner: string, reason: string, }
+function parse_trophy(raw: string) -> TrophyReport {
+    TrophyReport { winner: raw, reason: "ok" }
+}
+"#,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descriptions = vec![
+        describe_one(&db, "parse_trophy"),
+        describe_one(&db, "TrophyReport"),
+    ];
+    let args = batch_args(7);
+    let mut output = Vec::new();
+    write_batch_output(
+        &mut output,
+        &db,
+        &files,
+        &descriptions,
+        &[],
+        &[],
+        &args,
+        Path::new("/test"),
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert!(output.lines().count() <= 7, "{output}");
+    assert_eq!(
+        output
+            .lines()
+            .filter(|line| line.starts_with("function parse_trophy  "))
+            .count(),
+        1,
+        "{output}"
+    );
+    assert_eq!(
+        output
+            .lines()
+            .filter(|line| line.starts_with("class TrophyReport  "))
+            .count(),
+        1,
+        "{output}"
+    );
+}
+
+#[test]
+fn agent_batch_caps_output_without_recommending_redundant_expansion() {
+    let mut source =
+        String::from("class First { value: string, }\nclass Second { value: string, }\n");
+    source.push_str("function first() -> First {\n");
+    for _ in 0..60 {
+        source.push_str("    let value = \"first\";\n");
+    }
+    source.push_str("    First { value: value }\n}\nfunction second() -> Second {\n");
+    for _ in 0..60 {
+        source.push_str("    let value = \"second\";\n");
+    }
+    source.push_str("    Second { value: value }\n}\n");
+    let db = make_db(&[("agent.baml", &source)]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descriptions = vec![describe_one(&db, "first"), describe_one(&db, "second")];
+    let mut args = batch_args(240);
+    args.agent = true;
+    let mut output = Vec::new();
+    write_batch_output(
+        &mut output,
+        &db,
+        &files,
+        &descriptions,
+        &[],
+        &[],
+        &args,
+        Path::new("/test"),
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert!(output.lines().count() <= 80, "{output}");
+    assert!(!output.contains("next: baml describe"), "{output}");
+    assert!(!output.contains("lines omitted —"), "{output}");
+    assert!(output.contains("\"first\""), "{output}");
+    assert!(output.contains("\"second\""), "{output}");
+    assert!(output.contains("depends on class First"), "{output}");
+    assert!(output.contains("depends on class Second"), "{output}");
+}
+
+#[test]
+fn agent_batch_emits_one_next_command_when_symbols_receive_no_content() {
+    let db = make_db(&[(
+        "tiny.baml",
+        r#"
+function first() -> string { "first" }
+function second() -> string { "second" }
+"#,
+    )]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descriptions = vec![describe_one(&db, "first"), describe_one(&db, "second")];
+    let mut args = batch_args(3);
+    args.agent = true;
+    let mut output = Vec::new();
+    write_batch_output(
+        &mut output,
+        &db,
+        &files,
+        &descriptions,
+        &[],
+        &[],
+        &args,
+        Path::new("/test"),
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert_eq!(output.lines().count(), 3, "{output}");
+    assert_eq!(output.matches("next: baml describe").count(), 1, "{output}");
+    assert!(output.contains("first second"), "{output}");
 }

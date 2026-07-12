@@ -17,7 +17,6 @@ pub(crate) mod describe_command;
 mod describe_command_tests;
 pub(crate) mod format;
 pub(crate) mod generate;
-pub(crate) mod grep_command;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
 pub(crate) mod lsp;

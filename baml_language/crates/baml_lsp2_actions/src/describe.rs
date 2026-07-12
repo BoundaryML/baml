@@ -116,6 +116,84 @@ pub struct RefSite {
     pub line_number: usize,
 }
 
+/// Controls which expensive parts of a symbol description are computed.
+///
+/// The default preserves the complete description used by IDE and JSON
+/// consumers. CLI views can request only the data they render.
+#[derive(Clone, Copy, Debug)]
+pub struct DescribeOptions {
+    pub shape: bool,
+    pub docstring: bool,
+    pub dependencies: bool,
+    pub resolved_type: bool,
+    pub references: bool,
+    pub methods: bool,
+    pub full_body: bool,
+}
+
+impl DescribeOptions {
+    pub const fn source() -> Self {
+        Self {
+            shape: false,
+            docstring: false,
+            dependencies: false,
+            resolved_type: false,
+            references: false,
+            methods: false,
+            full_body: true,
+        }
+    }
+
+    pub const fn usage() -> Self {
+        Self {
+            shape: false,
+            docstring: false,
+            dependencies: false,
+            resolved_type: false,
+            references: true,
+            methods: false,
+            full_body: false,
+        }
+    }
+
+    /// The minimum semantic data needed to expand a dependency shape in an
+    /// overview. In particular, skip project-wide reference discovery and
+    /// source-body reconstruction for every nested type.
+    pub const fn dependency_shape() -> Self {
+        Self {
+            shape: true,
+            docstring: false,
+            dependencies: true,
+            resolved_type: false,
+            references: false,
+            methods: false,
+            full_body: false,
+        }
+    }
+
+    pub const fn overview() -> Self {
+        Self::default_const()
+    }
+
+    pub const fn default_const() -> Self {
+        Self {
+            shape: true,
+            docstring: true,
+            dependencies: true,
+            resolved_type: true,
+            references: true,
+            methods: true,
+            full_body: true,
+        }
+    }
+}
+
+impl Default for DescribeOptions {
+    fn default() -> Self {
+        Self::default_const()
+    }
+}
+
 // ── describe ─────────────────────────────────────────────────────────────────
 
 /// Describe a symbol by exact name.
@@ -170,6 +248,15 @@ pub fn describe_by_definition(
     files: &[SourceFile],
     definition: Definition<'_>,
 ) -> Option<SymbolDescription> {
+    describe_by_definition_with_options(db, files, definition, DescribeOptions::default())
+}
+
+pub fn describe_by_definition_with_options(
+    db: &dyn Db,
+    files: &[SourceFile],
+    definition: Definition<'_>,
+    options: DescribeOptions,
+) -> Option<SymbolDescription> {
     let (file, name_span) = crate::utils::definition_span(db, definition)?;
 
     // Extract the name text from the source.
@@ -188,7 +275,27 @@ pub fn describe_by_definition(
         container_name: None,
     };
 
-    describe_top_level(db, files, &sym)
+    describe_top_level(db, files, &sym, Some(definition), options)
+}
+
+/// Describe a dependency that has already been semantically resolved.
+///
+/// This avoids repeating a project-wide name search when the caller already
+/// has the dependency's exact file, span, name, and kind.
+pub fn describe_dependency(
+    db: &dyn Db,
+    files: &[SourceFile],
+    dependency: &DepRef,
+    options: DescribeOptions,
+) -> Option<SymbolDescription> {
+    let sym = SymbolInfo {
+        name: dependency.name.clone(),
+        kind: dependency.kind,
+        file: dependency.file,
+        name_span: dependency.name_span,
+        container_name: None,
+    };
+    describe_top_level(db, files, &sym, None, options)
 }
 
 /// Describe a member (field, variant) within a known parent item.
@@ -250,7 +357,7 @@ fn describe_symbol(
     if sym.kind.is_member() {
         describe_member(db, files, sym)
     } else {
-        describe_top_level(db, files, sym)
+        describe_top_level(db, files, sym, None, DescribeOptions::default())
     }
 }
 
@@ -259,6 +366,8 @@ fn describe_top_level(
     db: &dyn Db,
     files: &[SourceFile],
     sym: &SymbolInfo,
+    known_definition: Option<Definition<'_>>,
+    options: DescribeOptions,
 ) -> Option<SymbolDescription> {
     let file = sym.file;
 
@@ -267,26 +376,47 @@ fn describe_top_level(
 
     // Resolve the symbol's definition once; every downstream helper reuses it
     // instead of re-running name resolution.
-    let definition = resolve_definition(db, file, sym);
+    let definition = known_definition.or_else(|| resolve_definition(db, file, sym));
 
     // ── Shape generation ─────────────────────────────────────────────────────
-    let shape = build_shape(db, sym, definition);
+    let shape = if options.shape {
+        build_shape(db, sym, definition)
+    } else {
+        format!("{} {}", sym.kind.as_str(), sym.name)
+    };
 
     // ── Docstring extraction ─────────────────────────────────────────────────
-    let docstring = extract_docstring(db, file, item_range);
+    let docstring = options
+        .docstring
+        .then(|| extract_docstring(db, file, item_range))
+        .flatten();
 
     // ── Dependency discovery ─────────────────────────────────────────────────
-    let dependencies = find_dependencies(db, files, file, sym, definition);
+    let dependencies = if options.dependencies {
+        find_dependencies(db, files, file, sym, definition)
+    } else {
+        Vec::new()
+    };
 
     // ── Resolved type ────────────────────────────────────────────────────────
-    let resolved_type = resolve_type_for_item(db, definition);
+    let resolved_type = options
+        .resolved_type
+        .then(|| resolve_type_for_item(db, definition))
+        .flatten();
 
     // ── Reference finding ────────────────────────────────────────────────────
-    let references = find_references(db, files, file, sym.name_span, item_range);
+    let references = if options.references {
+        find_references(db, files, file, sym.name_span, item_range)
+    } else {
+        Vec::new()
+    };
 
     // ── Methods + canonical FQN (classes) ────────────────────────────────────
-    let (instance_methods, static_methods, canonical_fqn) =
-        class_methods_and_fqn(db, sym, definition);
+    let (instance_methods, static_methods, canonical_fqn) = if options.methods {
+        class_methods_and_fqn(db, sym, definition)
+    } else {
+        (Vec::new(), Vec::new(), None)
+    };
 
     // Body block, with non-doc comments removed (CST-token based, so `//`
     // inside string/prompt literals is never touched):
@@ -294,7 +424,9 @@ fn describe_top_level(
     //   prefixed with the full `///` docstring;
     // - builtin function: the signature only, never the native body block;
     // - everything else: the real source body.
-    let full_body = if matches!(sym.kind, DefinitionKind::Class) {
+    let full_body = if !options.full_body {
+        String::new()
+    } else if matches!(sym.kind, DefinitionKind::Class) && options.shape {
         let mut body = String::new();
         if let Some(doc) = &docstring {
             for line in doc.lines() {
