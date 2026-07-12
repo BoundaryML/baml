@@ -411,7 +411,7 @@ fn resolve_field_access_at(
         }
         MemberResolution::BoundMethod { func_loc, .. }
         | MemberResolution::UnboundMethod { func_loc, .. }
-        | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
             // Methods are not in FileSymbolContributions — use ItemTreeSourceMap.
             let target_file = func_loc.file(db);
             let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
@@ -423,6 +423,11 @@ fn resolve_field_access_at(
                 range: *name_range,
             })
         }
+        // A virtual interface method/field resolves only to a slot (the interface
+        // and the member name), not to a statically-known body or class field, so
+        // there is no single definition site to jump to.
+        MemberResolution::InterfaceVirtualMethod { .. }
+        | MemberResolution::InterfaceVirtualField { .. } => None,
     }
 }
 

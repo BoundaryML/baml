@@ -45,9 +45,6 @@ pub struct NativePlaygroundSender {
     lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
     playground_port: u16,
     open_in_browser: bool,
-    /// Browser-mode session token; carried on the opened URL so the page can
-    /// authorize its /api requests.
-    session_token: Option<Arc<str>>,
     /// Last requested open target, shared with the WS server for replay.
     current_open_target: SharedOpenTarget,
     /// When we last spawned a browser window, to debounce double-opens.
@@ -60,7 +57,6 @@ impl NativePlaygroundSender {
         lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync>,
         playground_port: u16,
         open_in_browser: bool,
-        session_token: Option<Arc<str>>,
         current_open_target: SharedOpenTarget,
     ) -> Self {
         Self {
@@ -68,7 +64,6 @@ impl NativePlaygroundSender {
             lsp_sender,
             playground_port,
             open_in_browser,
-            session_token,
             current_open_target,
             last_browser_open: Mutex::new(None),
         }
@@ -121,12 +116,7 @@ impl bex_project::PlaygroundSender for NativePlaygroundSender {
                 // debounce avoids a second window while the first is still
                 // loading (before it connects and bumps `receiver_count`).
                 if self.broadcast_tx.receiver_count() == 0 && self.claim_browser_open() {
-                    let url = match &self.session_token {
-                        Some(token) => {
-                            format!("http://localhost:{}/?token={token}", self.playground_port)
-                        }
-                        None => format!("http://localhost:{}", self.playground_port),
-                    };
+                    let url = format!("http://localhost:{}", self.playground_port);
                     // `webbrowser::open` can block until a text-mode browser
                     // (lynx/w3m) exits on headless hosts; never hold up the
                     // server on it.
@@ -201,7 +191,6 @@ mod tests {
             Arc::new(NoopLspSender),
             4265,
             true, // browser mode
-            None,
             target,
         )
     }

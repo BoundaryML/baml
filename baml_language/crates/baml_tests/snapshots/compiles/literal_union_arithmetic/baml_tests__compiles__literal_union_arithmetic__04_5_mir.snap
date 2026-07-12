@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18643
 ---
 === MIR2 ===
 fn user.bothSidesUnion() -> int {
@@ -139,7 +140,7 @@ fn user.matchAdd(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
-    let _2: 10 | 20 | 0
+    let _2: 0 | 10 | 20
 
     bb0: {
         switch copy _1 [1: bb3, 2: bb2, otherwise: bb1];
@@ -173,7 +174,7 @@ fn user.matchAdd(x: int) -> int {
 fn user.subtractUnion() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: 7 | 3
+    let _1: 3 | 7
 
     bb0: {
         branch const true -> [bb2, bb1];

@@ -1286,14 +1286,21 @@ fn local_variable_ty(
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                     sig.params.get(param_idx).map(|param| {
                         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                        let pkg_id = PackageId::new(db, pkg_info.package);
+                        let pkg_id = PackageId::new(db, pkg_info.package.clone());
                         let pkg = package_items(db, pkg_id);
                         let mut diags = Vec::new();
                         baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                            db,
                             &param.ty,
-                            pkg,
-                            &[],
+                            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: pkg,
+                                ns_context: &pkg_info.namespace_path,
+                                generic_params: &[],
+                                bounds:
+                                    &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(
+                                    ),
+                                self_ty: None,
+                            },
                             &mut diags,
                         )
                     })

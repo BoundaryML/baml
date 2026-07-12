@@ -14,12 +14,12 @@ class Person {
 
 //----
 //- diagnostics
-// error: interface `Named` has no field `title`
+// error: interface `Named` has no field `title` to link
 //     ╭─[ interface_error_unknown_interface_field_link.baml:11:5 ]
 //     │
 //  11 │     title as name
-//     │     ──┬──  
-//     │       ╰──── not a field of the interface
-//     │ 
+//     │     ──┬──
+//     │       ╰──── interface `Named` has no field `title` to link
+//     │
 //     │ Note: Error code: E0128
 // ────╯

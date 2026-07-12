@@ -252,6 +252,19 @@ mod tests {
         fn enum_variants(&self, _: &QualifiedTypeName) -> Option<Vec<Name>> {
             None
         }
+        fn associated_type_bound(&self, _: &Interface, _: Name) -> Vec<Interface> {
+            // Context-free: no interface declarations, so no declared bounds.
+            Vec::new()
+        }
+        fn project(
+            &self,
+            _: &baml_type::Ty,
+            _: &Interface,
+            _: &Name,
+        ) -> baml_type::normalize::ProjectionStep {
+            // Context-free: no impls to reduce through; projections stay opaque.
+            baml_type::normalize::ProjectionStep::Opaque
+        }
     }
 
     /// `template_relates` over the empty context, covariant at the top level.

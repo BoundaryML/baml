@@ -15,9 +15,9 @@ fn user.MyClient$new(lenient: bool) -> null {
     let _8: string[]
     let _9: string[]
     let _10: int[]
-    let _11: map<string, string | string[] | int>
+    let _11: map<string, int | string | string[]>
     let _12: string[]
-    let _13: (map<string, string | map<string, string>> | map<string, string>)[]
+    let _13: (map<string, string> | map<string, string | map<string, string>>)[]
     let _14: map<string, string | map<string, string>>
     let _15: map<string, string>
     let _16: map<string, string>

@@ -59,7 +59,6 @@ tokio-tungstenite = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-uuid = { workspace = true }
 vfs = { workspace = true }
 webbrowser = { workspace = true }
 

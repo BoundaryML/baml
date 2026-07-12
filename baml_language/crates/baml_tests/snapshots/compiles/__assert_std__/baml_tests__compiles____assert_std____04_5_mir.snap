@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4168
 ---
 === MIR2 ===
 
@@ -225,10 +226,10 @@ fn assert.is_true(condition: bool) -> null {
     }
 }
 
-fn assert.not_null(value: unknown | null) -> null {
+fn assert.not_null(value: unknown) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: unknown | null // value // param
+    let _1: unknown // value // param
     let _2: bool
 
     bb0: {

@@ -373,8 +373,9 @@ async fn while_let_union_typed_binding_dispatches_across_iterations() -> anyhow:
     // (Regression: before the union-binding fix the first member never matched.)
     assert_engine_executes(EngineProgram {
         source: r#"
-            class WlA { v int }
-            class WlB { v int }
+            interface WlHasV { v int }
+            class WlA { v int  implements WlHasV {} }
+            class WlB { v int  implements WlHasV {} }
             class WlStop {}
 
             function alternate() -> int {

@@ -202,6 +202,74 @@ impl Ty {
         }
     }
 
+    /// Whether this is a **concrete** type per the TYPE_SYSTEM.md taxonomy: a type
+    /// every value of which has exactly one run-time representation that method
+    /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
+    /// enums, the containers `T[]` / `map<K, V>` (with their inference-time `Evolving*`
+    /// forms), function types, `Future`, the builtin handles `Type` / `Resource` /
+    /// `PromptAst`, the native `RustType`, and the compiler-internal `WatchAccessor`.
+    ///
+    /// NOT concrete — the doc's *abstract* and *literal* categories, plus `never`:
+    ///   - `Union` and `Interface` (existential) — the union of several concrete
+    ///     types, so no single run-time representation;
+    ///   - the top type `BuiltinUnknown` (`unknown`) — the union of all types;
+    ///   - `Literal` / `EnumVariant` — literal types, subsets of a concrete base that
+    ///     dispatch through it rather than being a concrete type of their own;
+    ///   - `Never` — the empty type (no values);
+    ///   - `Void`;
+    ///   - `TypeVar` and `AssociatedTypeProjection` — symbolic stand-ins whose
+    ///     concreteness, when required, is a separate *inductive* obligation on their
+    ///     own bound, not a property of the type as written here;
+    ///   - `TypeAlias` — callers resolve aliases first, so a survivor is unresolved;
+    ///   - the recovery sentinels `Unknown` / `Error` / `Infer`.
+    ///
+    /// Distinct from [`Self::is_valid_impl_subject`]: that asks whether a type may be a
+    /// *written impl's* for-type (rejecting `Function`/`Future`/`RustType`, which are
+    /// concrete yet undispatchable as impl targets, and admitting `Never`/`TypeVar`/a
+    /// projection). This asks the broader "is it a run-time concrete type" the taxonomy
+    /// defines — used to gate an interface-bounded type-parameter argument (an
+    /// interface bound admits only a single run-time type, so dispatch is well-defined).
+    ///
+    /// Exhaustive (no wildcard) so a new `Ty` variant must be classified here.
+    pub fn is_concrete(&self) -> bool {
+        match self {
+            Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Class(..)
+            | Ty::Enum(..)
+            | Ty::List(..)
+            | Ty::Map { .. }
+            | Ty::EvolvingList(..)
+            | Ty::EvolvingMap(..)
+            | Ty::Function { .. }
+            | Ty::Future(..)
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. }
+            | Ty::RustType { .. }
+            | Ty::WatchAccessor(..) => true,
+            Ty::Union(..)
+            | Ty::Interface(..)
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Literal(..)
+            | Ty::EnumVariant(..)
+            | Ty::Never { .. }
+            | Ty::Void { .. }
+            | Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. }
+            | Ty::TypeAlias(..)
+            | Ty::Unknown { .. }
+            | Ty::Error { .. }
+            | Ty::Infer { .. } => false,
+        }
+    }
+
     // --- Primitive constructors (default TyAttr) ---
 
     /// `int` with default attributes.
@@ -1194,6 +1262,95 @@ mod tests {
                 !ty.is_valid_impl_subject(),
                 "{ty:?} should not be implementable"
             );
+        }
+    }
+
+    #[test]
+    fn is_concrete_classifies_variants() {
+        let qtn = |n: &str| QualifiedTypeName::local(Name::new(n));
+        let boxed = |t: Ty| Box::new(t);
+
+        // Concrete: a single run-time representation dispatch can key on. Note the
+        // differences from `is_valid_impl_subject` — `Function`/`Future`/`RustType`/
+        // `WatchAccessor` are concrete types even though they are not written-impl
+        // targets, and the `Evolving*` inference forms are lists/maps.
+        let concrete = [
+            ty_int(),
+            Ty::Bigint {
+                attr: TyAttr::default(),
+            },
+            ty_float(),
+            ty_string(),
+            ty_bool(),
+            Ty::null(),
+            Ty::class("Foo"),
+            Ty::Enum(qtn("Color"), TyAttr::default()),
+            Ty::list(ty_int()),
+            Ty::Map {
+                key: boxed(ty_string()),
+                value: boxed(ty_int()),
+                attr: TyAttr::default(),
+            },
+            Ty::EvolvingList(boxed(ty_int()), TyAttr::default()),
+            Ty::Function {
+                params: vec![],
+                ret: boxed(Ty::null()),
+                throws: boxed(Ty::null()),
+                attr: TyAttr::default(),
+            },
+            Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
+            Ty::Type {
+                attr: TyAttr::default(),
+            },
+            Ty::resource(),
+            Ty::prompt_ast(),
+            Ty::RustType {
+                attr: TyAttr::default(),
+            },
+            Ty::WatchAccessor(boxed(ty_int()), TyAttr::default()),
+        ];
+        for ty in &concrete {
+            assert!(ty.is_concrete(), "{ty:?} should be concrete");
+        }
+
+        // Abstract (unions, existentials, `unknown`), literal types (`Literal`,
+        // `EnumVariant`), the empty type `never`, the symbolic stand-ins whose
+        // concreteness is an inductive obligation elsewhere (`TypeVar`, a
+        // projection), and the alias/sentinel non-types — all not concrete.
+        let not_concrete = [
+            Ty::union([ty_int(), ty_string()]),
+            Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
+            Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            },
+            Ty::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default()),
+            Ty::EnumVariant(qtn("Color"), Name::new("Red"), TyAttr::default()),
+            Ty::Never {
+                attr: TyAttr::default(),
+            },
+            Ty::Void {
+                attr: TyAttr::default(),
+            },
+            Ty::TypeVar(Name::new("T"), TyAttr::default()),
+            Ty::AssociatedTypeProjection {
+                base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
+                interface: None,
+                member: Name::new("Item"),
+                attr: TyAttr::default(),
+            },
+            Ty::TypeAlias(qtn("A"), TyAttr::default()),
+            Ty::Unknown {
+                attr: TyAttr::default(),
+            },
+            Ty::Error {
+                attr: TyAttr::default(),
+            },
+            Ty::Infer {
+                attr: TyAttr::default(),
+            },
+        ];
+        for ty in &not_concrete {
+            assert!(!ty.is_concrete(), "{ty:?} should not be concrete");
         }
     }
 

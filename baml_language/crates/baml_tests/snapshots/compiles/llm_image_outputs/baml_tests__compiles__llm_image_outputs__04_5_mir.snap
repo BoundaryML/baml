@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 19341
 ---
 === MIR2 ===
 fn user.GenerateImage(prompt: string, client: baml.llm.Client) -> image {
@@ -230,9 +231,9 @@ fn user.GenerateImageSet$render_prompt(prompt: string, client: baml.llm.Client) 
     }
 }
 
-fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> (image | string)[] {
+fn user.GenerateMixedImageNarrative(prompt: string, client: baml.llm.Client) -> (string | image)[] {
     // Locals:
-    let _0: (image | string)[] // _0 // return
+    let _0: (string | image)[] // _0 // return
     let _1: string // prompt // param
     let _2: baml.llm.Client // client // param
     let _3: bool

@@ -2,11 +2,11 @@
 // `d.as<Swimmer>.swim()` when `Dog` only implements `Animal`.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 interface Swimmer {
-  function swim(self) -> string
+  function swim(self) -> string throws never
 }
 
 class Dog {
