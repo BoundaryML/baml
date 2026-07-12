@@ -1152,7 +1152,7 @@ mod render_tests {
         assert_eq!(
             rendered,
             RenderedPrompt::Completion(
-                "Answer in XML using this template:\n<Person>\n  <name>string</name>\n</Person>"
+                "Answer in XML using this structure:\n<Person>\n  <name>string</name>\n</Person>"
                     .to_string()
             )
         );

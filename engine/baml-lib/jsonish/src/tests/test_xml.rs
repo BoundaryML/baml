@@ -52,6 +52,10 @@ class Habitat {
   featured Cat | Dog | Bird
 }
 
+class Directory {
+  addresses Address[]
+}
+
 class NullableRecord {
   required string
   optionalText string?
@@ -73,8 +77,10 @@ test_deserializer!(
     <item>programming</item>
   </tags>
   <address>
-    <city>London</city>
-    <zip>12345</zip>
+    <Address>
+      <city>London</city>
+      <zip>12345</zip>
+    </Address>
   </address>
   <metadata>
     <entry><key>score</key><value>10</value></entry>
@@ -97,7 +103,7 @@ test_deserializer!(
 test_deserializer!(
     xml_top_level_list,
     XML_TYPES,
-    r#"<items><item>one</item><item>two</item></items>"#,
+    r#"<list><item>one</item><item>two</item></list>"#,
     TypeIR::list(TypeIR::string()),
     ["one", "two"]
 );
@@ -117,7 +123,7 @@ test_deserializer!(
   <name>Grace Hopper</name>
   <status>ACTIVE</status>
   <tags></tags>
-  <address><city>New York</city><zip>10001</zip></address>
+  <address><Address><city>New York</city><zip>10001</zip></Address></address>
   <nickname>null</nickname>
   <metadata></metadata>
   <verified>1</verified>
@@ -141,8 +147,10 @@ test_deserializer!(
 <Node>
   <value>1</value>
   <next>
-    <value>2</value>
-    <next>null</next>"#,
+    <Node>
+      <value>2</value>
+      <next>null</next>
+    </Node>"#,
     TypeIR::class("Node"),
     {"value": 1, "next": {"value": 2, "next": null}}
 );
@@ -153,17 +161,25 @@ test_deserializer!(
     r#"<Node>
   <value>1</value>
   <next>
-    <value>2</value>
-    <next>
-      <value>3</value>
+    <Node>
+      <value>2</value>
       <next>
-        <value>4</value>
-        <next>
-          <value>5</value>
-          <next>null</next>
-        </next>
+        <Node>
+          <value>3</value>
+          <next>
+            <Node>
+              <value>4</value>
+              <next>
+                <Node>
+                  <value>5</value>
+                  <next>null</next>
+                </Node>
+              </next>
+            </Node>
+          </next>
+        </Node>
       </next>
-    </next>
+    </Node>
   </next>
 </Node>"#,
     TypeIR::class("Node"),
@@ -185,11 +201,11 @@ test_deserializer!(
 test_deserializer!(
     xml_array_of_classes,
     XML_TYPES,
-    r#"<items>
-  <item><city>London</city><zip>12345</zip></item>
-  <item><city>Paris</city><zip>75001</zip></item>
-  <item><city>Tokyo</city><zip>100</zip></item>
-</items>"#,
+    r#"<AddressList>
+  <Address><city>London</city><zip>12345</zip></Address>
+  <Address><city>Paris</city><zip>75001</zip></Address>
+  <Address><city>Tokyo</city><zip>100</zip></Address>
+</AddressList>"#,
     TypeIR::list(TypeIR::class("Address")),
     [
         {"city": "London", "zip": 12345},
@@ -201,11 +217,11 @@ test_deserializer!(
 test_deserializer!(
     xml_array_of_class_unions,
     XML_TYPES,
-    r#"<items>
-  <item><name>Milo</name><lives>9</lives></item>
-  <item><name>Rex</name><trained>true</trained></item>
-  <item><species>macaw</species><canFly>true</canFly></item>
-</items>"#,
+    r#"<list>
+  <Cat><name>Milo</name><lives>9</lives></Cat>
+  <Dog><name>Rex</name><trained>true</trained></Dog>
+  <Bird><species>macaw</species><canFly>true</canFly></Bird>
+</list>"#,
     TypeIR::list(TypeIR::union(vec![
         TypeIR::class("Cat"),
         TypeIR::class("Dog"),
@@ -221,12 +237,12 @@ test_deserializer!(
 test_deserializer!(
     xml_nested_arrays,
     XML_TYPES,
-    r#"<items>
+    r#"<list>
   <item><item>1</item><item>2</item><item>3</item></item>
   <item><item>4</item><item>5</item></item>
   <item><item>6</item></item>
   <item></item>
-</items>"#,
+</list>"#,
     TypeIR::list(TypeIR::list(TypeIR::int())),
     [[1, 2, 3], [4, 5], [6], []]
 );
@@ -248,11 +264,11 @@ test_deserializer!(
     XML_TYPES,
     r#"<Habitat>
   <residents>
-    <item><name>Milo</name><lives>9</lives></item>
-    <item><name>Rex</name><trained>false</trained></item>
-    <item><species>penguin</species><canFly>false</canFly></item>
+    <Cat><name>Milo</name><lives>9</lives></Cat>
+    <Dog><name>Rex</name><trained>false</trained></Dog>
+    <Bird><species>penguin</species><canFly>false</canFly></Bird>
   </residents>
-  <featured><species>owl</species><canFly>true</canFly></featured>
+  <featured><Bird><species>owl</species><canFly>true</canFly></Bird></featured>
 </Habitat>"#,
     TypeIR::class("Habitat"),
     {
@@ -262,6 +278,26 @@ test_deserializer!(
             {"species": "penguin", "canFly": false}
         ],
         "featured": {"species": "owl", "canFly": true}
+    }
+);
+
+test_deserializer!(
+    xml_class_with_class_list_field,
+    XML_TYPES,
+    r#"<Directory>
+  <addresses>
+    <AddressList>
+      <Address><city>London</city><zip>12345</zip></Address>
+      <Address><city>Paris</city><zip>75001</zip></Address>
+    </AddressList>
+  </addresses>
+</Directory>"#,
+    TypeIR::class("Directory"),
+    {
+        "addresses": [
+            {"city": "London", "zip": 12345},
+            {"city": "Paris", "zip": 75001}
+        ]
     }
 );
 
@@ -284,16 +320,35 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    xml_optional_class_field_with_class_wrapper,
+    XML_TYPES,
+    r#"<NullableRecord>
+  <required>present</required>
+  <optionalAddress>
+    <Address><city>London</city><zip>12345</zip></Address>
+  </optionalAddress>
+</NullableRecord>"#,
+    TypeIR::class("NullableRecord"),
+    {
+        "required": "present",
+        "optionalText": null,
+        "optionalAddress": {"city": "London", "zip": 12345},
+        "nullablePet": null,
+        "omittedPet": null
+    }
+);
+
+test_deserializer!(
     xml_map_with_class_values,
     XML_TYPES,
     r#"<map>
   <entry>
     <key>home</key>
-    <value><city>London</city><zip>12345</zip></value>
+    <value><Address><city>London</city><zip>12345</zip></Address></value>
   </entry>
   <entry>
     <key>office</key>
-    <value><city>Paris</city><zip>75001</zip></value>
+    <value><Address><city>Paris</city><zip>75001</zip></Address></value>
   </entry>
 </map>"#,
     TypeIR::map(TypeIR::string(), TypeIR::class("Address")),
@@ -311,10 +366,12 @@ test_deserializer!(
 <Node>
   <value>10</value>
   <next>
-    <value>20</value>
-    <next>
-      <value>30</value>
-      <next>null</next>"#,
+    <Node>
+      <value>20</value>
+      <next>
+        <Node>
+          <value>30</value>
+          <next>null</next>"#,
     TypeIR::class("Node"),
     {"value": 10, "next": {"value": 20, "next": {"value": 30, "next": null}}}
 );

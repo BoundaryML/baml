@@ -77,11 +77,13 @@ fn root_matches_target(
                     || (node.children.len() == 1 && matches_class(&node.children[0]))
             })
         }
-        TypeIR::List(_, _) => {
+        TypeIR::List(item, _) => {
             same_name(&node.name, "items")
                 || same_name(&node.name, "list")
                 || same_name(&node.name, "array")
                 || same_name(&node.name, "item")
+                || class_list_wrapper_matches(output_format, item, node)
+                || root_matches_target(output_format, item, node)
         }
         TypeIR::Map(_, _, _) => same_name(&node.name, "map"),
         TypeIR::Union(items, _) => {
@@ -207,10 +209,7 @@ fn node_to_value(
             let class = output_format.find_class(mode, name)?;
             let expected_names = [class.name.real_name(), class.name.rendered_name()];
 
-            if !expected_names
-                .iter()
-                .any(|name| same_name(name, &node.name))
-                && node.children.len() == 1
+            if node.children.len() == 1
                 && expected_names
                     .iter()
                     .any(|name| same_name(name, &node.children[0].name))
@@ -242,7 +241,24 @@ fn node_to_value(
                     .children
                     .iter()
                     .all(|child| same_name(&child.name, "item"));
-            let items = if same_name(&node.name, "item") && !is_nested_list {
+            let class_list = class_list_wrapper_matches(output_format, item, node);
+            let nested_class_list = node.children.len() == 1
+                && class_list_wrapper_matches(output_format, item, &node.children[0]);
+            let items = if class_list {
+                node.children
+                    .iter()
+                    .map(|child| node_to_value(output_format, item, child, is_done))
+                    .collect::<Result<Vec<_>>>()?
+            } else if nested_class_list {
+                node.children[0]
+                    .children
+                    .iter()
+                    .map(|child| node_to_value(output_format, item, child, is_done))
+                    .collect::<Result<Vec<_>>>()?
+            } else if (same_name(&node.name, "item") && !is_nested_list)
+                || (!is_generic_list_wrapper(node)
+                    && root_matches_target(output_format, item, node))
+            {
                 vec![node_to_value(output_format, item, node, is_done)?]
             } else {
                 node.children
@@ -290,7 +306,26 @@ fn node_to_value(
             Value::Object(entries, completion)
         }
         TypeIR::Union(_, _) if is_null_node(node) => Value::Null,
-        TypeIR::Union(_, _) => node_to_untyped(node, is_done),
+        TypeIR::Union(items, _) => {
+            let variants = items.iter_include_null();
+            if let Some(variant) = variants
+                .iter()
+                .find(|variant| root_matches_target(output_format, variant, node))
+            {
+                node_to_value(output_format, variant, node, is_done)?
+            } else if node.children.len() == 1 {
+                if let Some(variant) = variants
+                    .iter()
+                    .find(|variant| root_matches_target(output_format, variant, &node.children[0]))
+                {
+                    node_to_value(output_format, variant, &node.children[0], is_done)?
+                } else {
+                    node_to_untyped(node, is_done)
+                }
+            } else {
+                node_to_untyped(node, is_done)
+            }
+        }
         TypeIR::RecursiveTypeAlias { name, .. } => node_to_value(
             output_format,
             output_format.find_recursive_alias_target(name)?,
@@ -375,6 +410,31 @@ fn is_null_node(node: &XmlNode) -> bool {
 
 fn same_name(left: &str, right: &str) -> bool {
     normalized_name(left) == normalized_name(right)
+}
+
+fn class_list_wrapper_matches(
+    output_format: &OutputFormatContent,
+    item: &TypeIR,
+    node: &XmlNode,
+) -> bool {
+    match item {
+        TypeIR::Class { name, mode, .. } => {
+            output_format.find_class(mode, name).is_ok_and(|class| {
+                same_name(&node.name, &format!("{}List", class.name.real_name()))
+                    || same_name(&node.name, &format!("{}List", class.name.rendered_name()))
+            })
+        }
+        TypeIR::RecursiveTypeAlias { name, .. } => output_format
+            .find_recursive_alias_target(name)
+            .is_ok_and(|target| class_list_wrapper_matches(output_format, target, node)),
+        _ => false,
+    }
+}
+
+fn is_generic_list_wrapper(node: &XmlNode) -> bool {
+    same_name(&node.name, "items")
+        || same_name(&node.name, "list")
+        || same_name(&node.name, "array")
 }
 
 fn normalized_name(name: &str) -> String {

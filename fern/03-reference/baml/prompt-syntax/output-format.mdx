@@ -72,14 +72,16 @@ For example, a `Resume` class is rendered as an element whose fields are child
 elements:
 
 ```xml
-Answer in XML using this template:
+Answer in XML using this structure:
 <Resume>
   <name>string</name>
   <education>
-    <item>
-      <school>string</school>
-      <graduation_year>int</graduation_year>
-    </item>
+    <EducationList>
+      <Education>
+        <school>string</school>
+        <graduation_year>int</graduation_year>
+      </Education>
+    </EducationList>
   </education>
 </Resume>
 ```
@@ -91,12 +93,12 @@ text, insignificant whitespace, and missing trailing close tags are tolerated.
 
 | BAML type | XML representation |
 | --- | --- |
-| Class | One element with a child element for each field |
+| Class | A class-named element with a child element for each field; nested class fields keep the field element around the class element |
 | Enum | Element text containing one enum value |
-| List | A wrapper element containing repeated `<item>` elements |
+| List | `<list>` with `<item>` elements for scalar values; class arrays use `<ClassNameList>` with `<ClassName>` elements |
 | Map | A wrapper containing repeated `<entry><key>…</key><value>…</value></entry>` elements |
-| Optional | Omit the element for `null`, or use `null` as its text |
-| Union | Use exactly one of the rendered alternative element templates |
+| Optional | Append `or null` to the field's rendered type; responses may omit the element or use `null` as its text |
+| Union | Class alternatives use their own class elements, separated by a bare `OR` line in the prompt |
 
 XML field names use [`@alias`](/ref/attributes/alias) when present. Characters
 that are not valid in XML element names are replaced with underscores in the
