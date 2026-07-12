@@ -12,14 +12,38 @@ and compiled to JSON. You edit the typed sources, never the JSON.
   highlighting.
 - `language-configuration.json` — brackets/comments/auto-close pairs for
   editor integrations (this one is hand-edited; it has no typed source).
+- `syntaxes/baml.xml` — hand-authored KDE KSyntaxHighlighting definition
+  (Kate, KDE apps, and Pandoc via skylighting). Rule-based, so it cannot be
+  generated from the TextMate source; update it alongside grammar changes.
 
 Generated artifacts (do not edit by hand):
 
 - `baml.tmLanguage.json` — emitted by the build, imported directly by consumers.
+- `baml.sublime-syntax` — converted from the emitted JSON by
+  `scripts/emit-sublime.ts`; consumed by Sublime Text and syntect (`bat`,
+  `delta`).
 - `dist/index.js` + `dist/index.d.ts` — ESM module with the grammar inlined as
   a JS object literal, typed as a Shiki `LanguageRegistration`. This is what
   npm consumers import, so they never need JSON import attributes
   (`with { type: "json" }`), which some bundlers (Metro) can't parse.
+
+## The grammar family
+
+Ports of the grammar to engines that cannot consume TextMate live in sibling
+packages, mirrored to their own read-only repos by the same
+`sync-grammar-mirror` workflow:
+
+- **`pkg-grammar-hljs`** → [BoundaryML/baml-highlightjs](https://github.com/BoundaryML/baml-highlightjs)
+  (npm `@boundaryml/baml-highlightjs`) — highlight.js.
+- **`pkg-grammar-treesitter`** → [BoundaryML/baml-treesitter](https://github.com/BoundaryML/baml-treesitter)
+  — tree-sitter, for Neovim/Zed/Helix/Emacs.
+
+The conformance contract tying them together: every port's test suite runs
+against this package's `tests/fixtures/*.baml`. When the language grows, add a
+fixture here and every port's CI tells you which ports need updating.
+`tests/fixtures/showcase__golden_sample.baml` is the canonical showcase sample
+(shipped in the mirror as `samples/baml.sample` and used for registry
+submissions); extend it when the language grows a new surface.
 
 ## Authoring
 
@@ -47,14 +71,22 @@ the JSON and `language-configuration.json` into the app-vscode-ext mirror.
 - **[BoundaryML/textMate-baml](https://github.com/BoundaryML/textMate-baml)**
   is an external mirror assembled by `scripts/assemble-mirror.mjs` from the
   templates in `mirror/` and pushed by the `sync-grammar-mirror` workflow on
-  every grammar change on `canary`. It is never edited by hand. It serves
-  three consumers at once:
+  every grammar change on `canary`. It is never edited by hand. Every content
+  change gets a patch version and a `v<version>` git tag. It serves several
+  consumers at once:
   - **npm**: the mirror's own publish workflow releases it as
     [`@boundaryml/baml-grammar`](https://www.npmjs.com/package/@boundaryml/baml-grammar).
   - **GitHub Linguist** vendors it as a submodule for `.baml` highlighting on
     github.com (picked up automatically at each Linguist release, roughly
     quarterly).
   - **Shiki's grammar registry** fetches the raw grammar from it weekly.
+  - **bat / Sublime Package Control** consume `grammars/baml.sublime-syntax`
+    (bat as a submodule pinned to the version tags).
+  - **KDE / Pandoc**: `syntaxes/baml.xml` is the staging copy for the
+    KSyntaxHighlighting upstream submission.
+
+  The mirror's file paths and `scopeName: source.baml` are frozen API —
+  external registries fetch them by URL; renames are breaking changes.
 
 ## Don't break github.com
 

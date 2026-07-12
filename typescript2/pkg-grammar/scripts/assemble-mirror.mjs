@@ -56,10 +56,26 @@ cpSync(distDir, resolve(out, 'dist'), { recursive: true });
 cpSync(resolve(pkgRoot, 'baml.tmLanguage.json'), resolve(out, 'grammars/baml.tmLanguage.json'));
 cpSync(resolve(pkgRoot, 'language-configuration.json'), resolve(out, 'language-configuration.json'));
 
+// Derived grammar formats. The mirror paths are frozen API — bat/Package
+// Control consume grammars/baml.sublime-syntax, and the KDE upstream PR
+// tracks syntaxes/baml.xml.
+cpSync(resolve(pkgRoot, 'baml.sublime-syntax'), resolve(out, 'grammars/baml.sublime-syntax'));
+mkdirSync(resolve(out, 'syntaxes'), { recursive: true });
+cpSync(resolve(pkgRoot, 'syntaxes/baml.xml'), resolve(out, 'syntaxes/baml.xml'));
+
+// Canonical sample: the fixture every grammar port validates against, at a
+// stable path registries (Shiki samples/, hljs demos) can reference.
+mkdirSync(resolve(out, 'samples'), { recursive: true });
+cpSync(
+  resolve(pkgRoot, 'tests/fixtures/showcase__golden_sample.baml'),
+  resolve(out, 'samples/baml.sample'),
+);
+
 // Repo scaffolding. Linguist's license check needs LICENSE; publish.yml is the
 // mirror's own npm release workflow.
 cpSync(resolve(repoRoot, 'LICENSE'), resolve(out, 'LICENSE'));
 cpSync(resolve(pkgRoot, 'mirror/README.md'), resolve(out, 'README.md'));
+cpSync(resolve(pkgRoot, 'mirror/SUPPORT.md'), resolve(out, 'SUPPORT.md'));
 cpSync(resolve(pkgRoot, 'mirror/publish.yml'), resolve(out, '.github/workflows/publish.yml'));
 
 // package.json, with the version stamped in.

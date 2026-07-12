@@ -1,22 +1,35 @@
-# Sync the BAML TextMate grammar to the BoundaryML/textMate-baml mirror repo.
+# Sync the BAML grammar packages to their read-only mirror repos.
 #
-# The mirror is the single external artifact for every third-party consumer of
-# the grammar: it is the npm package @boundaryml/baml-grammar (published by the
-# mirror's own publish.yml, which this sync also ships), the repo GitHub
-# Linguist vendors for .baml highlighting on github.com, and the source URL the
-# Shiki grammar registry fetches from. Grammar edits land in
-# typescript2/pkg-grammar; this workflow propagates them, so the mirror must
-# never be edited by hand.
+# The mirrors are the single external artifacts for every third-party consumer
+# of BAML syntax highlighting. Grammar edits land in typescript2/pkg-grammar*
+# packages; this workflow propagates them, so the mirrors must never be edited
+# by hand:
 #
-# Auth: the TEXTMATE_BAML_DEPLOY_KEY secret holds an SSH private key whose
-# public half is a write-access deploy key on BoundaryML/textMate-baml.
-# (A deploy key, not a PAT, so pushes may update the mirror's workflow files.)
+#   pkg-grammar            → BoundaryML/textMate-baml
+#       npm @boundaryml/baml-grammar (published by the mirror's own
+#       publish.yml, which this sync also ships), the repo GitHub Linguist
+#       vendors for .baml highlighting on github.com, the source URL the Shiki
+#       grammar registry fetches from, and grammars/baml.sublime-syntax for
+#       bat/Sublime Package Control.
+#   pkg-grammar-hljs       → BoundaryML/baml-highlightjs
+#       npm @boundaryml/baml-highlightjs (same publish.yml pattern).
+#   pkg-grammar-treesitter → BoundaryML/baml-treesitter
+#       consumed as a git repo (nvim-treesitter revisions, Zed grammar pins,
+#       Helix); ships the generated src/parser.c.
+#
+# Auth: each *_DEPLOY_KEY secret holds an SSH private key whose public half is
+# a write-access deploy key on the matching mirror repo. (A deploy key, not a
+# PAT, so pushes may update the mirror's workflow files.)
+#
+# Versioning: npm-published mirrors get a patch bump + a v<version> git tag on
+# every content change. The treesitter mirror is consumed by commit pin, so it
+# gets commits only.
 #
 # Bootstrap note: npm OIDC trusted publishing cannot create a brand-new
 # package. The first-ever npm publish must be done once by hand from a mirror
-# checkout, then the trusted publisher (repo BoundaryML/textMate-baml, workflow
-# publish.yml) configured in the npm package settings. Until then the final
-# verify step here fails; that is expected and is the reminder to finish setup.
+# checkout, then the trusted publisher (mirror repo + workflow publish.yml)
+# configured in the npm package settings. Until then the final verify step
+# fails; that is expected and is the reminder to finish setup.
 
 name: Sync grammar mirror
 
@@ -25,6 +38,8 @@ on:
     branches: [canary]
     paths:
       - "typescript2/pkg-grammar/**"
+      - "typescript2/pkg-grammar-hljs/**"
+      - "typescript2/pkg-grammar-treesitter/**"
       - ".github/actions/setup-node2/**"
       - ".github/workflows/sync-grammar-mirror.yml"
   workflow_dispatch:
@@ -38,7 +53,7 @@ defaults:
     shell: bash
 
 jobs:
-  sync:
+  sync-textmate:
     name: Sync to BoundaryML/textMate-baml
     runs-on: ubuntu-latest
     steps:
@@ -66,10 +81,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/textmate_baml
-          chmod 600 ~/.ssh/textmate_baml
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror_key
+          chmod 600 ~/.ssh/mirror_key
           ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/textmate_baml -o IdentitiesOnly=yes"
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
           git clone --depth 50 git@github.com:BoundaryML/textMate-baml.git /tmp/mirror-repo
 
       - name: Assemble and diff against mirror
@@ -93,7 +108,7 @@ jobs:
           fi
           echo "current=${current}" >> "$GITHUB_OUTPUT"
 
-      - name: Stamp next version and push
+      - name: Stamp next version, push, and tag
         id: push
         if: steps.diff.outputs.changed == 'true'
         env:
@@ -115,7 +130,7 @@ jobs:
           jq --arg v "$next" '.version = $v' /tmp/mirror-repo/package.json > /tmp/pkg.json
           mv /tmp/pkg.json /tmp/mirror-repo/package.json
 
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/textmate_baml -o IdentitiesOnly=yes"
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
           cd /tmp/mirror-repo
           # -A, not commit -a: newly assembled files (dist/, package.json, the
           # publish workflow) are untracked in the mirror and -a would drop them.
@@ -124,6 +139,12 @@ jobs:
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -m "Sync from BoundaryML/baml@${SOURCE_SHA} (v${next})"
           git push origin main
+          # Tag every published version: bat submodules, Package Control, and
+          # Linguist bumps all want stable tags to pin.
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "v${next}" -m "v${next}"
+          git push origin "v${next}"
           echo "version=${next}" >> "$GITHUB_OUTPUT"
 
       - name: Verify npm publish landed
@@ -147,3 +168,158 @@ jobs:
             "run 'npm publish --access public' once from a mirror checkout, then configure the" \
             "trusted publisher (repo BoundaryML/textMate-baml, workflow publish.yml) in the npm package settings."
           exit 1
+
+  sync-highlightjs:
+    name: Sync to BoundaryML/baml-highlightjs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js for typescript2
+        uses: ./.github/actions/setup-node2
+
+      - name: Run highlight.js grammar tests
+        working-directory: typescript2
+        run: pnpm --filter @b/pkg-grammar-hljs test
+
+      - name: Clone mirror
+        env:
+          DEPLOY_KEY: ${{ secrets.BAML_HIGHLIGHTJS_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror_key
+          chmod 600 ~/.ssh/mirror_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
+          git clone --depth 50 git@github.com:BoundaryML/baml-highlightjs.git /tmp/mirror-repo
+
+      - name: Assemble and diff against mirror
+        id: diff
+        run: |
+          set -euo pipefail
+          current="$(jq -r '.version // empty' /tmp/mirror-repo/package.json 2>/dev/null || true)"
+          node typescript2/pkg-grammar-hljs/scripts/assemble-mirror.mjs \
+            --out /tmp/mirror-package \
+            ${current:+--version "$current"}
+          rsync -a --delete --exclude .git /tmp/mirror-package/ /tmp/mirror-repo/
+          if [ -n "$(git -C /tmp/mirror-repo status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git -C /tmp/mirror-repo status --porcelain
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Mirror already up to date."
+          fi
+          echo "current=${current}" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp next version, push, and tag
+        id: push
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          CURRENT: ${{ steps.diff.outputs.current }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          latest="$(npm view @boundaryml/baml-highlightjs version 2>/dev/null || true)"
+          base="$(printf '%s\n%s\n' "$latest" "$CURRENT" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
+          if [ -z "$base" ]; then
+            next="0.1.0"
+          else
+            next="$(echo "$base" | awk -F. '{printf "%d.%d.%d", $1, $2, $3 + 1}')"
+          fi
+          echo "version: base=${base:-<none>} next=${next}"
+          jq --arg v "$next" '.version = $v' /tmp/mirror-repo/package.json > /tmp/pkg.json
+          mv /tmp/pkg.json /tmp/mirror-repo/package.json
+
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
+          cd /tmp/mirror-repo
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "Sync from BoundaryML/baml@${SOURCE_SHA} (v${next})"
+          git push origin main
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              tag -a "v${next}" -m "v${next}"
+          git push origin "v${next}"
+          echo "version=${next}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify npm publish landed
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.push.outputs.version }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for @boundaryml/baml-highlightjs@${VERSION} to appear on npm (published by the mirror's publish.yml)..."
+          for i in $(seq 1 40); do
+            existing="$(npm view "@boundaryml/baml-highlightjs@${VERSION}" version 2>/dev/null || true)"
+            if [ "$existing" = "$VERSION" ]; then
+              echo "Published: @boundaryml/baml-highlightjs@${VERSION}"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::@boundaryml/baml-highlightjs@${VERSION} did not appear on npm within 10 minutes." \
+            "Check the publish workflow run in BoundaryML/baml-highlightjs." \
+            "If this is the first publish: npm OIDC cannot create a new package —" \
+            "run 'npm publish --access public' once from a mirror checkout, then configure the" \
+            "trusted publisher (repo BoundaryML/baml-highlightjs, workflow publish.yml) in the npm package settings."
+          exit 1
+
+  sync-treesitter:
+    name: Sync to BoundaryML/baml-treesitter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js for typescript2
+        uses: ./.github/actions/setup-node2
+
+      - name: Run tree-sitter grammar tests
+        working-directory: typescript2
+        run: pnpm --filter @b/pkg-grammar-treesitter test
+
+      - name: Clone mirror
+        env:
+          DEPLOY_KEY: ${{ secrets.BAML_TREESITTER_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror_key
+          chmod 600 ~/.ssh/mirror_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
+          git clone --depth 50 git@github.com:BoundaryML/baml-treesitter.git /tmp/mirror-repo
+
+      - name: Assemble and diff against mirror
+        id: diff
+        run: |
+          set -euo pipefail
+          node typescript2/pkg-grammar-treesitter/scripts/assemble-mirror.mjs \
+            --out /tmp/mirror-package
+          rsync -a --delete --exclude .git /tmp/mirror-package/ /tmp/mirror-repo/
+          if [ -n "$(git -C /tmp/mirror-repo status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git -C /tmp/mirror-repo status --porcelain
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Mirror already up to date."
+          fi
+
+      - name: Push
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/mirror_key -o IdentitiesOnly=yes"
+          cd /tmp/mirror-repo
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "Sync from BoundaryML/baml@${SOURCE_SHA}"
+          git push origin main

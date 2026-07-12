@@ -19,7 +19,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsx scripts/build.ts && node scripts/sync.mjs",
+    "build": "tsx scripts/build.ts && tsx scripts/emit-sublime.ts && node scripts/sync.mjs",
     "sync": "node scripts/sync.mjs",
     "check": "node scripts/sync.mjs --check",
     "assemble": "node scripts/assemble-mirror.mjs",
