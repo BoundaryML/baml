@@ -480,6 +480,9 @@ importers:
 
   pkg-grammar:
     devDependencies:
+      '@shikijs/types':
+        specifier: ^3.0.0
+        version: 3.23.0
       shiki:
         specifier: ^3.0.0
         version: 3.23.0

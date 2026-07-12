@@ -1,0 +1,40 @@
+{
+  "name": "@boundaryml/baml-grammar",
+  "version": "0.0.0-dev",
+  "type": "module",
+  "description": "TextMate grammar for the BAML language, with a ready-to-use Shiki LanguageRegistration export.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BoundaryML/textMate-baml.git"
+  },
+  "homepage": "https://www.boundaryml.com",
+  "bugs": {
+    "url": "https://github.com/BoundaryML/baml/issues"
+  },
+  "keywords": [
+    "baml",
+    "textmate",
+    "tmlanguage",
+    "shiki",
+    "syntax-highlighting",
+    "grammar"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./baml.tmLanguage.json": "./grammars/baml.tmLanguage.json",
+    "./language-configuration.json": "./language-configuration.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "grammars",
+    "language-configuration.json"
+  ],
+  "dependencies": {
+    "@shikijs/types": "^3.0.0"
+  }
+}
