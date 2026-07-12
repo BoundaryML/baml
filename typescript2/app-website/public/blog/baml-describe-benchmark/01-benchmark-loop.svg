@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760">
+  <defs>
+    <filter id="shadow"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-opacity=".12"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#42464d"/></marker>
+    <style>
+      .t{font-family:Arial,sans-serif;font-size:38px;font-weight:700;fill:#17191d}.s{font-family:Arial,sans-serif;font-size:20px;font-weight:500;fill:#555b66}.h{font-family:Arial,sans-serif;font-size:22px;font-weight:700;fill:#252830}.b{font-family:Arial,sans-serif;font-size:17px;font-weight:500;fill:#373b44}.m{font-family:Menlo,monospace;font-size:17px;font-weight:700;fill:#252830}.box{stroke:#343942;stroke-width:2.5;rx:20;filter:url(#shadow)}.a{stroke:#42464d;stroke-width:3;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1400" height="760" fill="#fffdf8"/>
+  <text x="700" y="58" text-anchor="middle" class="t">The benchmark loop</text>
+  <text x="700" y="92" text-anchor="middle" class="s">Real codebase questions in. Correctness, time, calls, tokens, and cost out.</text>
+  <rect x="55" y="185" width="245" height="230" fill="#e8f3ff" class="box"/>
+  <text x="178" y="230" text-anchor="middle" class="h">Questions</text>
+  <text x="82" y="275" class="b">Cross-file behavior</text><text x="82" y="310" class="b">Exact citations</text><text x="82" y="345" class="b">Hand-verified keys</text><text x="82" y="380" class="b">Real BAML repos</text>
+  <path d="M300 300 H385" class="a"/>
+  <rect x="385" y="130" width="390" height="350" fill="#f3ecff" class="box"/>
+  <text x="580" y="175" text-anchor="middle" class="h">Isolated agent conditions</text>
+  <rect x="425" y="210" width="310" height="62" rx="13" fill="#fff" stroke="#7652c8" stroke-width="2"/><text x="580" y="248" text-anchor="middle" class="m">grep-only</text>
+  <rect x="425" y="292" width="310" height="62" rx="13" fill="#fff" stroke="#7652c8" stroke-width="2"/><text x="580" y="330" text-anchor="middle" class="m">guided describe</text>
+  <rect x="425" y="374" width="310" height="62" rx="13" fill="#fff" stroke="#7652c8" stroke-width="2"/><text x="580" y="412" text-anchor="middle" class="m">navigator subagent</text>
+  <path d="M775 300 H865" class="a"/>
+  <rect x="865" y="185" width="220" height="230" fill="#fff0e5" class="box"/>
+  <text x="975" y="230" text-anchor="middle" class="h">Blinded judge</text>
+  <text x="893" y="278" class="b">3 votes / answer</text><text x="893" y="315" class="b">Coverage</text><text x="893" y="352" class="b">Precision</text><text x="893" y="389" class="b">Hand-check ties</text>
+  <path d="M1085 300 H1170" class="a"/>
+  <rect x="1170" y="150" width="180" height="300" fill="#e6f7ea" class="box"/>
+  <text x="1260" y="198" text-anchor="middle" class="h">Results</text>
+  <text x="1200" y="250" class="b">Wall time</text><text x="1200" y="292" class="b">Tool calls</text><text x="1200" y="334" class="b">Tokens</text><text x="1200" y="376" class="b">Cost</text><text x="1200" y="418" class="b">Correctness</text>
+  <rect x="225" y="575" width="950" height="105" rx="24" fill="#fff3bf" stroke="#e0a800" stroke-width="2.5"/>
+  <text x="700" y="620" text-anchor="middle" class="h">45 first-round runs • Claude Code + Codex • frozen binary • clean configs</text>
+  <text x="700" y="655" text-anchor="middle" class="s">The condition changes. The question, repository, model, and scoring stay fixed.</text>
+</svg>
