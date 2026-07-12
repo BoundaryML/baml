@@ -1065,33 +1065,9 @@ function arrays.$init_test_ns_arrays_sum(registry: testing.TestCollector) -> nul
     return
 }
 
-function arrays.ComparableFlaky$stream.baml.Comparable.compare(self: arrays.ComparableFlaky$stream, other: arrays.ComparableFlaky$stream) -> int {
-    load_var self
-    load_field .0
-    store_var_load_var _3
-    is_type int
-    pop_jump_if_false L0
-    load_var other
-    load_field .0
-    store_var_load_var _6
-    is_type int
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "cannot compare null"
-    init_instance user.arrays.ComparableCompareError .message
-    throw
-
-  L1:
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
 function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableFlaky, other: arrays.ComparableFlaky) -> int {
     load_var self
-    load_field .0
+    load_field .value
     store_var_load_var _3
     is_type int
     pop_jump_if_false L0
@@ -1108,80 +1084,51 @@ function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableF
     throw
 
   L1:
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
-function arrays.ComparableScore$stream.baml.Comparable.compare(self: arrays.ComparableScore$stream, other: arrays.ComparableScore$stream) -> int {
-    load_var self
-    load_field .0
-    store_var _3
-    load_var other
-    load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
+    load_var2 4 5
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.ComparableScore.baml.Comparable.compare(self: arrays.ComparableScore, other: arrays.ComparableScore) -> int {
     load_var self
-    load_field .0
-    store_var _3
+    load_field .points
     load_var other
     load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
-function arrays.OutOfBodyScore$stream.baml.Comparable.compare(self: arrays.OutOfBodyScore$stream, other: arrays.OutOfBodyScore$stream) -> int {
-    load_var self
-    load_field .0
-    store_var _3
-    load_var other
-    load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.OutOfBodyScore.baml.Comparable.compare(self: arrays.OutOfBodyScore, other: arrays.OutOfBodyScore) -> int {
     load_var self
-    load_field .0
-    store_var _3
+    load_field .points
     load_var other
     load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
-function arrays.SortableItem$stream.baml.Comparable.compare(self: arrays.SortableItem$stream, other: arrays.SortableItem$stream) -> int {
-    load_var self
-    load_field .0
-    store_var _3
-    load_var other
-    load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.SortableItem.baml.Comparable.compare(self: arrays.SortableItem, other: arrays.SortableItem) -> int {
     load_var self
-    load_field .0
-    store_var _3
+    load_field .rank
     load_var other
     load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -1262,51 +1209,72 @@ function arrays.run_sort_generic_ints() -> int[] {
 }
 
 function arrays.sort_bigints(xs: bigint[]) -> bigint[] {
-    load_type bigint
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (bigint as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_flaky(xs: arrays.ComparableFlaky[]) -> arrays.ComparableFlaky[] {
-    load_type arrays.ComparableFlaky
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (arrays.ComparableFlaky as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_floats(xs: float[]) -> float[] {
-    load_type float
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (float as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_generic(xs: U[]) -> U[] {
-    load_type #0
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (#0 as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_ints(xs: int[]) -> int[] {
-    load_type int
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (int as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_items(xs: arrays.SortableItem[]) -> arrays.SortableItem[] {
-    load_type arrays.SortableItem
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (arrays.SortableItem as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_strings(xs: string[]) -> string[] {
-    load_type string
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (string as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -1314,7 +1282,10 @@ function arrays.sum_int_overflow_(a: int, b: int) -> int {
     load_var2 1 2
     load_type int
     alloc_array 2
-    call baml.Summable$for$int[].sum
+    load_type baml.Summable<Sum = int>
+    load_const "sum"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
     jump L2
     load_var e
     is_type baml.panics.IntegerOverflow
@@ -1328,8 +1299,10 @@ function arrays.sum_int_overflow_(a: int, b: int) -> int {
   L1:
     load_const 1
     unary_op -
+    store_var _0
 
   L2:
+    load_var _0
     return
 }
 
@@ -1337,6 +1310,10 @@ function arrays.sum_int_two_(a: int, b: int) -> int {
     load_var2 1 2
     load_type int
     alloc_array 2
-    call baml.Summable$for$int[].sum
+    load_type baml.Summable<Sum = int>
+    load_const "sum"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }

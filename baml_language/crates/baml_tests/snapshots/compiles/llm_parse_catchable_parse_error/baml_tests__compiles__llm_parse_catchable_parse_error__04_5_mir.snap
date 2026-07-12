@@ -144,9 +144,9 @@ fn user.GPT4o$new(lenient: bool) -> null {
     }
 }
 
-fn user.TryExtract(json: string) -> Invoice | null {
+fn user.TryExtract(json: string) -> null | Invoice {
     // Locals:
-    let _0: Invoice | null // _0 // return
+    let _0: null | Invoice // _0 // return
     let _1: string // json // param
     let _2: unknown // _
     let _3: bool

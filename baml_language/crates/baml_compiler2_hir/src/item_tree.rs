@@ -154,18 +154,6 @@ pub struct ImplementsBlock {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplementsFor {
-    pub generic_params: Vec<Name>,
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
-    pub interface_target: ast::TypeExpr,
-    pub for_target: ast::TypeExpr,
-    pub field_links: Vec<InterfaceFieldLink>,
-    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
-    pub methods: Vec<LocalItemId<FunctionMarker>>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceFieldLink {
     pub interface_field: Name,
     pub class_field: Name,
@@ -403,20 +391,18 @@ pub struct ItemTree {
     pub template_strings: FxHashMap<LocalItemId<TemplateStringMarker>, TemplateString>,
     pub retry_policies: FxHashMap<LocalItemId<RetryPolicyMarker>, RetryPolicy>,
     pub lets: FxHashMap<LocalItemId<LetMarker>, Let>,
-    pub implements_for: Vec<ImplementsFor>,
 
     /// Unified store for every `implements` block (both in-body and
-    /// out-of-body), keyed by a stable `ImplMarker` id. Populated alongside the
-    /// legacy `Class::implements` / `implements_for` representation; downstream
-    /// queries (`impl_data`) read this map.
+    /// out-of-body), keyed by a stable `ImplMarker` id. Downstream queries
+    /// (`impl_data`) read this map; `class_to_impls` / `free_impls` index it.
     pub impls: FxHashMap<LocalItemId<ImplMarker>, ImplBlock>,
     /// Index from a class to the impls whose subject is that class
     /// (`ImplSubject::InClass`), in source order. Lets "impls for class C" be
     /// answered without a scan; parallel to `Class::implements`.
     pub class_to_impls: FxHashMap<LocalItemId<ClassMarker>, Vec<LocalItemId<ImplMarker>>>,
-    /// Out-of-body (`ImplSubject::Free`) impl ids in source order, parallel to
-    /// `implements_for`. Gives consumers a deterministic iteration order over
-    /// free impls (the unified `impls` map is unordered).
+    /// Out-of-body (`ImplSubject::Free`) impl ids in source order. Gives consumers a
+    /// deterministic iteration order over free impls (the unified `impls` map is unordered) —
+    /// e.g. resolving the enclosing out-of-body impl of a method.
     pub free_impls: Vec<LocalItemId<ImplMarker>>,
 
     /// BEP-044: for a class method declared inside an `implements I {}`
@@ -452,7 +438,6 @@ impl ItemTree {
             template_strings: FxHashMap::default(),
             retry_policies: FxHashMap::default(),
             lets: FxHashMap::default(),
-            implements_for: Vec::new(),
             impls: FxHashMap::default(),
             class_to_impls: FxHashMap::default(),
             free_impls: Vec::new(),
@@ -558,34 +543,6 @@ impl ItemTree {
         if let Some(class) = self.classes.get_mut(&class_id) {
             class.methods = methods;
         }
-    }
-
-    pub fn add_implements_for(
-        &mut self,
-        imp: &ast::ImplementsForDef,
-        methods: Vec<LocalItemId<FunctionMarker>>,
-    ) {
-        let field_links = imp
-            .field_links
-            .iter()
-            .map(InterfaceFieldLink::from_ast)
-            .collect();
-        self.implements_for.push(ImplementsFor {
-            generic_params: imp.generic_params.iter().map(|(n, _)| n.clone()).collect(),
-            // Legacy single-bound representation: the first `&`-bound only. The
-            // full bound set lives on the new `ImplBlock` (`GenericParam.bounds`).
-            generic_param_bounds: imp
-                .generic_params
-                .iter()
-                .map(|(_, bounds)| bounds.first().cloned())
-                .collect(),
-            interface_target: imp.interface_target.clone(),
-            for_target: imp.for_target.clone(),
-            field_links,
-            associated_type_bindings: imp.associated_type_bindings.clone(),
-            methods,
-            span: imp.span,
-        });
     }
 
     /// Allocate a stable id for an `implements` block and store it in the

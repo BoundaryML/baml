@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 46995
 ---
 === TIR2 ===
 function user.binding_leak_scope() -> int throws never {
@@ -49,12 +50,13 @@ function user.unresolved_generic_arg(v: user.WrapGeneric<int>) -> bool throws ne
   { : bool
     v is WrapGeneric<Missing> : bool
   }
-  !! 1290..1297: unresolved type: Missing
+  !! 1278..1298: unresolved type: Missing
 }
 function user.unresolved_type_pattern(v: int | string) -> bool throws never {
   { : bool
     v is Frobnitz : bool
   }
+  !! 1439..1447: unresolved type: Frobnitz
   !! 1439..1447: unresolved type: Frobnitz
 }
 class user.WrapNonGeneric$stream {

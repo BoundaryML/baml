@@ -7644,6 +7644,93 @@ impl BexVm {
                     self.stack.push(Value::object(ptr));
                 }
 
+                // ── MakeVirtualBoundMethod ────────────────────────────────────
+                // The value analogue of `VirtualCall`: resolve the interface
+                // method from the receiver's concrete `Self` at *bind* time (the
+                // receiver value — and hence its type — is fixed here), producing
+                // a regular `BoundMethod` that additionally carries the impl's
+                // realized frame type args (a blanket impl's or inherited
+                // default's frame, which the receiver's class args can't express).
+                // Stack (top last): `[receiver, type_args…, iface_type, method_name]`.
+                OpCode::MakeVirtualBoundMethod => {
+                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                    let method_value = self.stack.ensure_pop();
+                    let method_name = self.as_string(&method_value)?.to_string();
+                    let iface_value = self.stack.ensure_pop();
+                    let (iface_qtn, iface_args) = {
+                        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+                        match self.get_object(iface_ptr) {
+                            Object::Type(ty) => match ty.as_ref() {
+                                baml_type::RuntimeTy::Interface(qtn, args, _assoc, _attr) => {
+                                    (qtn.clone(), args.clone())
+                                }
+                                other => unreachable!(
+                                    "MakeVirtualBoundMethod interface operand must be an \
+                                     Interface type, found {other:?}"
+                                ),
+                            },
+                            other => unreachable!(
+                                "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                                ObjectType::of(other)
+                            ),
+                        }
+                    };
+                    // The method-level type args (a generic interface method's own
+                    // generics, specialized at the reference site) sit below the
+                    // interface type; they append to the resolved impl frame.
+                    let mut method_type_args: Vec<baml_type::RuntimeTy> =
+                        Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop();
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        method_type_args.push(*ty.clone());
+                    }
+                    method_type_args.reverse();
+                    let receiver = self.stack.ensure_pop();
+                    // The resolver operates on the loose `RuntimeTy`; widen back
+                    // from the value's concrete-realized type.
+                    let self_ty = baml_type::RuntimeTy::from(
+                        self.value_concrete_ty(receiver).unwrap_or_else(|| {
+                            unreachable!(
+                                "value of kind {:?} cannot be a virtual bound-method receiver",
+                                self.type_of(&receiver)
+                            )
+                        }),
+                    );
+                    let (function_ptr, type_args) = {
+                        let (rule, bound_args) = crate::package_baml::resolve_implements_rule(
+                            self,
+                            &self_ty,
+                            &iface_qtn,
+                            &iface_args,
+                        )
+                        .ok_or_else(|| {
+                            VmInternalError::UnresolvedVirtualCall {
+                                method: method_name.clone(),
+                            }
+                        })?;
+                        let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
+                            VmInternalError::UnresolvedVirtualCall {
+                                method: method_name.clone(),
+                            }
+                        })?;
+                        let mut frame =
+                            crate::package_baml::realize_frame(&method.frame, &bound_args);
+                        frame.extend(method_type_args);
+                        (method.fqn, frame)
+                    };
+                    let bound = Object::BoundMethod(BoundMethod {
+                        function: function_ptr,
+                        receiver,
+                        type_args: type_args.into_boxed_slice(),
+                    });
+                    let ptr = self.tlab.alloc(bound);
+                    self.stack.push(Value::object(ptr));
+                }
+
                 // ── MakeGenericFunction ───────────────────────────────────────
                 OpCode::MakeGenericFunction => {
                     let raw = { read_u32_unchecked(code, pc) };

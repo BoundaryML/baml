@@ -1377,8 +1377,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.pop_scope();
         }
         self.class_depth -= 1;
-        self.item_tree.add_implements_for(imp, method_ids.clone());
-        // Dual-write: also record this out-of-body impl under a stable `ImplId`.
+        // Record this out-of-body impl under a stable `ImplId` in the unified `impls` store.
         let iface_head = impl_head_name(&imp.interface_target);
         let for_head = impl_head_name(&imp.for_target);
         let generics = imp

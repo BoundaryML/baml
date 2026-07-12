@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13481
 ---
 === TIR2 ===
 class user.Wrapper {
@@ -36,13 +37,13 @@ function user.ReturnString() -> baml.json.json throws never {
   }
 }
 function user.ReturnArray() -> baml.json.json throws never {
-  { : int[]
-    [1, 2, 3] : int[]
+  { : baml.json.json[]
+    [1, 2, 3] : baml.json.json[]
   }
 }
 function user.ReturnMap() -> baml.json.json throws never {
-  { : map<string, string>
-    map { "key": "value" } : map<string, string>
+  { : map<string, baml.json.json>
+    map { "key": "value" } : map<string, baml.json.json>
   }
 }
 function user.MatchJson(j: baml.json.json) -> string throws never {

@@ -104,6 +104,23 @@ impl TypeContext for RuntimeTypeContext<'_> {
         }
     }
 
-    // `associated_type_bound` uses the trait default (`Vec::new()`): symbolic
-    // associated projections don't arise over realized runtime values.
+    fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
+        // Explicitly empty: symbolic associated projections don't arise over
+        // realized runtime values, so there is never a `(_ as I).assoc` for the
+        // subtype rule to bound here. (The trait requires this method precisely so
+        // this "no bounds" decision is deliberate, not a forgotten default.)
+        Vec::new()
+    }
+
+    fn project(
+        &self,
+        _base: &Ty,
+        _interface: &Interface,
+        _member: &Name,
+    ) -> baml_type::normalize::ProjectionStep {
+        // Explicitly opaque: for the same reason as `associated_type_bound` — a
+        // realized runtime value never carries a symbolic `(_ as I).member`
+        // projection for the algebra to reduce.
+        baml_type::normalize::ProjectionStep::Opaque
+    }
 }

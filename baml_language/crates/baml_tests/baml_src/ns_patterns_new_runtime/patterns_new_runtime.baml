@@ -253,20 +253,29 @@ class RefineB {
 }
 
 // match_or_class_patterns_should_refine_parent_union_scrutinee
+// `ABCDE_A..D` share an `int field`; accessing it on the refined union scrutinee
+// (`(ABCDE_A | ABCDE_B | ABCDE_C | ABCDE_D).field`) goes through the interface
+// they implement. `ABCDE_E` has a `string field`, so it stays out of the union.
+interface HasIntField { field int }
+
 class ABCDE_A {
     field int
+    implements HasIntField {}
 }
 
 class ABCDE_B {
     field int
+    implements HasIntField {}
 }
 
 class ABCDE_C {
     field int
+    implements HasIntField {}
 }
 
 class ABCDE_D {
     field int
+    implements HasIntField {}
 }
 
 class ABCDE_E {

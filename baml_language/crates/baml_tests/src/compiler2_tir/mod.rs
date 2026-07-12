@@ -39,7 +39,7 @@ pub(crate) mod support {
             ScopeInference, infer_scope_types, render_scope_diagnostics, resolve_class_fields,
             resolve_type_alias,
         },
-        lower_type_expr::lower_type_expr_in_ns,
+        lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr},
     };
     use baml_project::ProjectDatabase;
 
@@ -1185,6 +1185,17 @@ pub(crate) mod support {
                         // `<...>` below still shows only the function's own.)
                         let mut sig_generics: Vec<baml_base::Name> = enclosing_class_generics;
                         sig_generics.extend(gp.iter().cloned());
+                        // One lowering scope shared by the param/return/throws sites
+                        // below (a display helper — no type-var bounds threaded).
+                        let sig_bounds = TypeVarBoundsMap::default();
+                        let sig_scope = ScopeCtx {
+                            db,
+                            package_items: pkg_items,
+                            ns_context: ns,
+                            generic_params: &sig_generics,
+                            bounds: &sig_bounds,
+                            self_ty: None,
+                        };
                         let generics_display = if gp.is_empty() {
                             String::new()
                         } else {
@@ -1211,14 +1222,7 @@ pub(crate) mod support {
                                     )
                                 } else {
                                     let mut diags = Vec::new();
-                                    lower_type_expr_in_ns(
-                                        db,
-                                        &param.ty,
-                                        pkg_items,
-                                        ns,
-                                        &sig_generics,
-                                        &mut diags,
-                                    )
+                                    lower_type_expr(&param.ty, &sig_scope, &mut diags)
                                 };
                                 let default_suffix = default_ref_suffix(
                                     parameter_defaults.param_default(index),
@@ -1237,15 +1241,7 @@ pub(crate) mod support {
                             .as_ref()
                             .map(|t| {
                                 let mut diags = Vec::new();
-                                lower_type_expr_in_ns(
-                                    db,
-                                    t,
-                                    pkg_items,
-                                    ns,
-                                    &sig_generics,
-                                    &mut diags,
-                                )
-                                .render_canonical()
+                                lower_type_expr(t, &sig_scope, &mut diags).render_canonical()
                             })
                             .unwrap_or_else(|| "?".into());
                         // Compute inferred throws from transitive throw set
@@ -1263,15 +1259,8 @@ pub(crate) mod support {
 
                         let throws = if let Some(t) = &sig.throws {
                             let mut diags = Vec::new();
-                            let declared = lower_type_expr_in_ns(
-                                db,
-                                t,
-                                pkg_items,
-                                ns,
-                                &sig_generics,
-                                &mut diags,
-                            )
-                            .render_canonical();
+                            let declared =
+                                lower_type_expr(t, &sig_scope, &mut diags).render_canonical();
                             match &inferred_throws {
                                 Some(inferred) => {
                                     format!(" throws {declared} infers {inferred}")
