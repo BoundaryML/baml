@@ -251,11 +251,7 @@ fn detect_install_root() -> Result<PathBuf> {
 /// Outside a git repo the walk stops before the user's home directory —
 /// a stray `~/baml_src` must not pull installs into `$HOME` — and falls back
 /// to the current directory. All inputs must be pre-canonicalized.
-fn detect_install_root_in(
-    cwd: &Path,
-    git_toplevel: Option<&Path>,
-    home: Option<&Path>,
-) -> PathBuf {
+fn detect_install_root_in(cwd: &Path, git_toplevel: Option<&Path>, home: Option<&Path>) -> PathBuf {
     // A toplevel that doesn't contain cwd (e.g. an exported
     // GIT_DIR/GIT_WORK_TREE pointing at a dotfiles worktree in $HOME) is not
     // the project being worked in; ignore it rather than install there.
@@ -359,7 +355,8 @@ fn skills_from_archive(archive: &[u8]) -> Result<LoadedSkills> {
 fn pax_comment_sha(entry: &mut impl Read) -> Option<String> {
     let mut body = Vec::new();
     entry.take(4096).read_to_end(&mut body).ok()?;
-    let comment = pax_records(&body).find_map(|(key, value)| (key == "comment").then_some(value))?;
+    let comment =
+        pax_records(&body).find_map(|(key, value)| (key == "comment").then_some(value))?;
     let sha = comment.trim();
     let looks_like_sha =
         (7..=64).contains(&sha.len()) && sha.chars().all(|c| c.is_ascii_hexdigit());
@@ -881,8 +878,10 @@ mod tests {
     fn archive_pax_global_header_comment_becomes_commit() {
         let sha = "0123456789abcdef0123456789abcdef01234567";
         let content = skill("baml-core");
-        let archive =
-            make_archive_with_pax(&[("skills/baml-core/SKILL.md", content.as_str())], Some(sha));
+        let archive = make_archive_with_pax(
+            &[("skills/baml-core/SKILL.md", content.as_str())],
+            Some(sha),
+        );
 
         let loaded = skills_from_archive(&archive).unwrap();
 
