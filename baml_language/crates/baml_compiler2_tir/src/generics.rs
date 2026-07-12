@@ -81,9 +81,7 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(substitute_ty(base, bindings)),
-            interface: interface
-                .as_ref()
-                .map(|interface| Box::new(interface.map_tys(|t| substitute_ty(t, bindings)))),
+            interface: Box::new(interface.map_tys(|t| substitute_ty(t, bindings))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -175,12 +173,7 @@ pub fn contains_typevar(ty: &Ty) -> bool {
         Ty::TypeVar(_, _) => true,
         Ty::AssociatedTypeProjection {
             base, interface, ..
-        } => {
-            contains_typevar(base)
-                || interface
-                    .as_ref()
-                    .is_some_and(|interface| interface.tys().any(contains_typevar))
-        }
+        } => contains_typevar(base) || interface.tys().any(contains_typevar),
         Ty::List(inner, _) | Ty::EvolvingList(inner, _) => contains_typevar(inner),
         Ty::Map {
             key: k, value: v, ..
@@ -325,9 +318,7 @@ pub fn contains_typevar_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> bool {
             base, interface, ..
         } => {
             contains_typevar_where(base, pred)
-                || interface.as_ref().is_some_and(|interface| {
-                    interface.tys().any(|t| contains_typevar_where(t, pred))
-                })
+                || interface.tys().any(|t| contains_typevar_where(t, pred))
         }
         _ => false,
     }
@@ -420,9 +411,7 @@ pub fn erase_typevars_where(ty: &Ty, pred: &dyn Fn(&Name) -> bool) -> Ty {
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(erase_typevars_where(base, pred)),
-            interface: interface
-                .as_ref()
-                .map(|interface| Box::new(interface.map_tys(|t| erase_typevars_where(t, pred)))),
+            interface: Box::new(interface.map_tys(|t| erase_typevars_where(t, pred))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -489,9 +478,7 @@ pub fn erase_unresolved_typevars(
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(erase_unresolved_typevars(base, diagnostics)),
-            interface: interface.as_ref().map(|interface| {
-                Box::new(interface.map_tys(|t| erase_unresolved_typevars(t, diagnostics)))
-            }),
+            interface: Box::new(interface.map_tys(|t| erase_unresolved_typevars(t, diagnostics))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -603,9 +590,7 @@ pub fn erase_typevars_matching(ty: &Ty, should_erase: &impl Fn(&Name) -> bool) -
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(erase_typevars_matching(base, should_erase)),
-            interface: interface.as_ref().map(|interface| {
-                Box::new(interface.map_tys(|t| erase_typevars_matching(t, should_erase)))
-            }),
+            interface: Box::new(interface.map_tys(|t| erase_typevars_matching(t, should_erase))),
             member: member.clone(),
             attr: attr.clone(),
         },

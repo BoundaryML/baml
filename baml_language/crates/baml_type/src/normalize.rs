@@ -628,7 +628,11 @@ enum NormalTy {
     Future(Box<NormalTy>, Box<NormalTy>),
     AssociatedTypeProjection {
         base: Box<NormalTy>,
-        interface: Option<Box<NormalTy>>,
+        /// The declaring interface (a normalized `NormalTy::Interface`), always
+        /// present — mirrors the non-optional `Ty::AssociatedTypeProjection`
+        /// qualifier it is built from, and is what makes a realized-base
+        /// projection reducible via [`TypeContext::project`].
+        interface: Box<NormalTy>,
         member: Name,
     },
     // Recursion
@@ -770,27 +774,18 @@ impl NormalTy {
                 // *is* the type the impl binds (like `1 + 1` *is* `2`). Reduce it to
                 // that whenever the context can determine it — the reduced type
                 // becomes the canonical form, so the projection compares equal to /
-                // is assignable from its realization. Only a `Some(interface)`
-                // projection is reducible (the qualifier names the impl); fuel guards
-                // a cyclic reduction.
-                if let Some(iface) = interface
-                    && fuel > 0
-                    && let ProjectionStep::Reduced(reduced) = ctx.project(base, iface, member)
+                // is assignable from its realization. The qualifier always names the
+                // impl; fuel guards a cyclic reduction.
+                if fuel > 0
+                    && let ProjectionStep::Reduced(reduced) = ctx.project(base, interface, member)
                 {
                     return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
                 }
-                // Not reducible — symbolic base, an unresolved `(T as ?).M` qualifier,
-                // or exhausted fuel: an opaque leaf, equal only to a
-                // structurally-identical projection. The two spellings `(T as ?).M`
-                // and `(T as I).M` of the same associated type are deliberately NOT
-                // equated here; the TIR must resolve the interface to `Some(I)` before
-                // an equivalence/subtype check relies on it (pinned by
-                // `projection_with_unresolved_interface_is_opaque`).
+                // Not reducible — symbolic base or exhausted fuel: an opaque leaf,
+                // equal only to a structurally-identical projection.
                 NormalTy::AssociatedTypeProjection {
                     base: Box::new(Self::from_ty(base, ctx, expanding, fuel)),
-                    interface: interface
-                        .as_ref()
-                        .map(|i| Box::new(Self::from_ty(&i.to_ty(), ctx, expanding, fuel))),
+                    interface: Box::new(Self::from_ty(&interface.to_ty(), ctx, expanding, fuel)),
                     member: member.clone(),
                 }
             }
@@ -862,10 +857,7 @@ impl NormalTy {
             }
             NormalTy::AssociatedTypeProjection {
                 base, interface, ..
-            } => {
-                base.mentions_rec_var(var)
-                    || interface.as_ref().is_some_and(|i| i.mentions_rec_var(var))
-            }
+            } => base.mentions_rec_var(var) || interface.mentions_rec_var(var),
             NormalTy::Int
             | NormalTy::Bigint
             | NormalTy::Float
@@ -927,7 +919,7 @@ impl NormalTy {
                 member,
             } => NormalTy::AssociatedTypeProjection {
                 base: Box::new(base.canonicalize(ctx)),
-                interface: interface.map(|i| Box::new(i.canonicalize(ctx))),
+                interface: Box::new(interface.canonicalize(ctx)),
                 member,
             },
             NormalTy::Function {
@@ -1022,7 +1014,7 @@ impl NormalTy {
         let (member, value) = pin;
         let NormalTy::AssociatedTypeProjection {
             base,
-            interface: Some(iface),
+            interface: iface,
             member: proj_member,
         } = value
         else {
@@ -1139,16 +1131,14 @@ impl NormalTy {
 
             // A still-symbolic associated-type projection is a subtype of `sup` if
             // any of its associated type's declared bounds is — the projection
-            // analogue of the `TypeVar` rule above. Fires only when the projection
-            // carries a resolved interface; an unresolved one (`interface: None`)
-            // stays opaque (equal only to itself, via reflexivity). A realized-base
-            // projection is intended to be resolved to a concrete type by an
-            // upstream pre-pass before reaching here. Must precede the interface
-            // arms below, which would otherwise ask `implements_interface` about a
-            // non-concrete projection.
+            // analogue of the `TypeVar` rule above. The projection always carries
+            // its declaring interface; a realized-base projection is intended to be
+            // resolved to a concrete type by an upstream pre-pass before reaching
+            // here. Must precede the interface arms below, which would otherwise ask
+            // `implements_interface` about a non-concrete projection.
             (
                 NormalTy::AssociatedTypeProjection {
-                    interface: Some(iface),
+                    interface: iface,
                     member,
                     ..
                 },
@@ -1311,7 +1301,13 @@ impl NormalTy {
                 member,
             } => Ty::AssociatedTypeProjection {
                 base: Box::new(base.into_ty()),
-                interface: interface.and_then(|i| i.into_interface()).map(Box::new),
+                // The projection's qualifier is always a normalized interface, so
+                // it round-trips back to an `Interface` here.
+                interface: Box::new(
+                    interface
+                        .into_interface()
+                        .unwrap_or_else(|| unreachable!("projection qualifier is an interface")),
+                ),
                 member,
                 attr,
             },
@@ -1544,9 +1540,7 @@ impl NormalTy {
                 member,
             } => NormalTy::AssociatedTypeProjection {
                 base: Box::new(base.substitute(var, replacement)),
-                interface: interface
-                    .as_ref()
-                    .map(|i| Box::new(i.substitute(var, replacement))),
+                interface: Box::new(interface.substitute(var, replacement)),
                 member: member.clone(),
             },
             // A nested μ binding the same name shadows it; do not substitute inside.

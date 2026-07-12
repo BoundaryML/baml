@@ -1390,13 +1390,13 @@ fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
             base, interface, ..
         } => template_max_type_arg_ref(base)
             .into_iter()
-            .chain(interface.iter().flat_map(|iface| {
-                iface
+            .chain(
+                interface
                     .generics
                     .iter()
-                    .chain(iface.associated_types.iter().map(|(_, t)| t))
-                    .filter_map(template_max_type_arg_ref)
-            }))
+                    .chain(interface.associated_types.iter().map(|(_, t)| t))
+                    .filter_map(template_max_type_arg_ref),
+            )
             .max(),
         // Realized leaves and `Wildcard` carry no frame ref.
         _ => None,

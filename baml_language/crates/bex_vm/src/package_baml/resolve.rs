@@ -629,11 +629,7 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
                 member: bmember,
                 ..
             },
-        ) => {
-            amember == bmember
-                && ty_equivalent(abase, bbase)
-                && opt_iface_equivalent(aiface.as_deref(), biface.as_deref())
-        }
+        ) => amember == bmember && ty_equivalent(abase, bbase) && iface_equivalent(aiface, biface),
         (
             RuntimeTy::Function {
                 params: ap,
@@ -663,16 +659,10 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
 /// an associated-type projection), mirroring the `RuntimeTy::Interface` arm of
 /// [`ty_equivalent`]: same name, equivalent generic arguments, and exactly
 /// equivalent associated-type bindings.
-fn opt_iface_equivalent(a: Option<&RuntimeInterface>, b: Option<&RuntimeInterface>) -> bool {
-    match (a, b) {
-        (Some(x), Some(y)) => {
-            x.name == y.name
-                && ty_args_equivalent(&x.generics, &y.generics)
-                && associated_bindings_exactly_equivalent(&x.associated_types, &y.associated_types)
-        }
-        (None, None) => true,
-        (Some(_), None) | (None, Some(_)) => false,
-    }
+fn iface_equivalent(x: &RuntimeInterface, y: &RuntimeInterface) -> bool {
+    x.name == y.name
+        && ty_args_equivalent(&x.generics, &y.generics)
+        && associated_bindings_exactly_equivalent(&x.associated_types, &y.associated_types)
 }
 
 pub(super) fn associated_bindings_equivalent(
@@ -835,14 +825,18 @@ fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
             base, interface, ..
         } => max_type_arg_ref(base)
             .into_iter()
-            .chain(interface.iter().flat_map(|iface| {
-                iface.generics.iter().filter_map(max_type_arg_ref).chain(
-                    iface
-                        .associated_types
-                        .iter()
-                        .filter_map(|(_, t)| max_type_arg_ref(t)),
-                )
-            }))
+            .chain(
+                interface
+                    .generics
+                    .iter()
+                    .filter_map(max_type_arg_ref)
+                    .chain(
+                        interface
+                            .associated_types
+                            .iter()
+                            .filter_map(|(_, t)| max_type_arg_ref(t)),
+                    ),
+            )
             .max(),
         // Realized leaves and `Wildcard` carry no frame ref.
         _ => None,
@@ -878,13 +872,11 @@ fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
             base, interface, ..
         } => {
             template_has_type_arg_ref(base)
-                || interface.as_ref().is_some_and(|iface| {
-                    iface.generics.iter().any(template_has_type_arg_ref)
-                        || iface
-                            .associated_types
-                            .iter()
-                            .any(|(_, t)| template_has_type_arg_ref(t))
-                })
+                || interface.generics.iter().any(template_has_type_arg_ref)
+                || interface
+                    .associated_types
+                    .iter()
+                    .any(|(_, t)| template_has_type_arg_ref(t))
         }
         // Realized leaves and `Wildcard` carry no frame ref.
         _ => false,

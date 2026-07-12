@@ -406,10 +406,7 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
             attr,
         } => RuntimeTy::AssociatedTypeProjection {
             base: Box::new(lower_to_runtime(base, resolved)?),
-            interface: interface
-                .as_ref()
-                .map(|i| lower_interface_to_runtime(i, resolved).map(Box::new))
-                .transpose()?,
+            interface: Box::new(lower_interface_to_runtime(interface, resolved)?),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -539,11 +536,11 @@ mod tests {
     fn round_trip_associated_type_projection() {
         let ty = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::TypeVar(Name::new("T"), def())),
-            interface: Some(Box::new(Interface {
+            interface: Box::new(Interface {
                 name: qtn("Iterator"),
                 generics: vec![],
                 associated_types: vec![],
-            })),
+            }),
             member: Name::new("Item"),
             attr: def(),
         };

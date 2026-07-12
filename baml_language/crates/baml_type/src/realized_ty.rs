@@ -135,11 +135,11 @@ mod tests {
         // it has no realized form — the conversion rejects it at the top level.
         let ty = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::TypeVar(Name::new("T"), def())),
-            interface: Some(Box::new(Interface {
+            interface: Box::new(Interface {
                 name: qtn("Iterator"),
                 generics: vec![],
                 associated_types: vec![],
-            })),
+            }),
             member: Name::new("Item"),
             attr: def(),
         };

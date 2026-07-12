@@ -109,7 +109,7 @@ pub(crate) fn lower_projection(
             } else {
                 Ty::AssociatedTypeProjection {
                     base: Box::new(base),
-                    interface: Some(Box::new(interface)),
+                    interface: Box::new(interface),
                     member,
                     attr: TyAttr::default(),
                 }
@@ -280,20 +280,15 @@ fn determine_interface(
             interface: inner_interface,
             member: inner_member,
             ..
-        } => {
-            let inner_interface = inner_interface.as_ref().unwrap_or_else(|| {
-                unreachable!("a symbolic projection base always carries its determined interface")
-            });
-            determine_chained(
-                ctx,
-                &base,
-                inner_base,
-                inner_interface,
-                inner_member,
-                explicit,
-                member,
-            )
-        }
+        } => determine_chained(
+            ctx,
+            &base,
+            inner_base,
+            inner_interface,
+            inner_member,
+            explicit,
+            member,
+        ),
         // Already-errored bases — and the unfilled `_` inference hole, which the
         // fill machinery resolves or diagnoses — propagate without a fresh diagnostic.
         Ty::Error { .. } | Ty::Unknown { .. } | Ty::BuiltinUnknown { .. } | Ty::Infer { .. } => {
@@ -608,7 +603,7 @@ fn associated_type_bound_interface(
             .map(|(_, pin)| pin.clone())
             .unwrap_or_else(|| Ty::AssociatedTypeProjection {
                 base: Box::new(self_ty.clone()),
-                interface: Some(Box::new(realized.clone())),
+                interface: Box::new(realized.clone()),
                 member: assoc.name.clone(),
                 attr: TyAttr::default(),
             });

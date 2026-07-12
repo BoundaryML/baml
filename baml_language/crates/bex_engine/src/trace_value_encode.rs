@@ -662,13 +662,12 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             ..
         } => BamlTyVariant::AssociatedTypeProjection(BamlTyAssociatedTypeProjection {
             base: Some(Box::new(runtime_ty_to_proto_ty(base))),
-            interface: interface.as_deref().map(|interface| {
-                Box::new(interface_to_proto_ty(
-                    &interface.name,
-                    &interface.generics,
-                    &interface.associated_types,
-                ))
-            }),
+            // Always present on the Rust side; the wire field stays optional.
+            interface: Some(Box::new(interface_to_proto_ty(
+                &interface.name,
+                &interface.generics,
+                &interface.associated_types,
+            ))),
             member: member.as_str().to_string(),
         }),
         RuntimeTy::BuiltinUnknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),

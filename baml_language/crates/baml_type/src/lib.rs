@@ -913,16 +913,12 @@ impl Ty {
                 member,
                 ..
             } => {
-                if let Some(interface) = interface {
-                    format!(
-                        "({} as {}).{}",
-                        base.render_with(s),
-                        interface.to_ty().render_with(s),
-                        member
-                    )
-                } else {
-                    format!("{}.{}", base.render_with(s), member)
-                }
+                format!(
+                    "({} as {}).{}",
+                    base.render_with(s),
+                    interface.to_ty().render_with(s),
+                    member
+                )
             }
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
@@ -1124,10 +1120,7 @@ impl fmt::Display for Ty {
                 interface,
                 member,
                 ..
-            } => match interface {
-                Some(iface) => write!(f, "({base} as {}).{member}", iface.to_ty()),
-                None => write!(f, "{base}.{member}"),
-            },
+            } => write!(f, "({base} as {}).{member}", interface.to_ty()),
             Ty::Never { .. } => write!(f, "never"),
             Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "<error>"),
@@ -1209,7 +1202,7 @@ mod tests {
             Ty::TypeVar(Name::new("T"), TyAttr::default()),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
-                interface: None,
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },
@@ -1325,7 +1318,7 @@ mod tests {
             Ty::TypeVar(Name::new("T"), TyAttr::default()),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
-                interface: None,
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },

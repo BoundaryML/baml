@@ -151,9 +151,7 @@ impl TyTemplate {
                 attr,
             } => RuntimeTy::AssociatedTypeProjection {
                 base: Box::new(base.substitute(type_args)),
-                interface: interface
-                    .as_ref()
-                    .map(|iface| Box::new(iface.substitute(type_args))),
+                interface: Box::new(interface.substitute(type_args)),
                 member: member.clone(),
                 attr: attr.clone(),
             },
@@ -212,13 +210,11 @@ impl TyTemplate {
                 base, interface, ..
             } => {
                 base.contains_wildcard()
-                    || interface.as_ref().is_some_and(|iface| {
-                        iface.generics.iter().any(Self::contains_wildcard)
-                            || iface
-                                .associated_types
-                                .iter()
-                                .any(|(_, ty)| ty.contains_wildcard())
-                    })
+                    || interface.generics.iter().any(Self::contains_wildcard)
+                    || interface
+                        .associated_types
+                        .iter()
+                        .any(|(_, ty)| ty.contains_wildcard())
             }
             // Realized leaves carry no nested type positions.
             Self::Int { .. }
@@ -342,16 +338,14 @@ impl TyTemplate {
                 attr,
             } => Ty::AssociatedTypeProjection {
                 base: Box::new(base.to_display_ty()),
-                interface: interface.as_ref().map(|iface| {
-                    Box::new(crate::Interface {
-                        name: iface.name.clone(),
-                        generics: iface.generics.iter().map(Self::to_display_ty).collect(),
-                        associated_types: iface
-                            .associated_types
-                            .iter()
-                            .map(|(n, t)| (n.clone(), t.to_display_ty()))
-                            .collect(),
-                    })
+                interface: Box::new(crate::Interface {
+                    name: interface.name.clone(),
+                    generics: interface.generics.iter().map(Self::to_display_ty).collect(),
+                    associated_types: interface
+                        .associated_types
+                        .iter()
+                        .map(|(n, t)| (n.clone(), t.to_display_ty()))
+                        .collect(),
                 }),
                 member: member.clone(),
                 attr: attr.clone(),

@@ -812,22 +812,20 @@ pub fn tir2_to_template(
             // consumer to resolve. Never an error, never erased.
             .unwrap_or_else(|| TyTemplate::AssociatedTypeProjection {
                 base: Box::new(tir2_to_template(base, resolved, generic_params)),
-                interface: interface.as_ref().map(|iface| {
-                    Box::new(baml_type::TyTemplateInterface {
-                        name: iface.name.clone(),
-                        generics: iface
-                            .generics
-                            .iter()
-                            .map(|g| tir2_to_template(g, resolved, generic_params))
-                            .collect(),
-                        associated_types: iface
-                            .associated_types
-                            .iter()
-                            .map(|(name, ty)| {
-                                (name.clone(), tir2_to_template(ty, resolved, generic_params))
-                            })
-                            .collect(),
-                    })
+                interface: Box::new(baml_type::TyTemplateInterface {
+                    name: interface.name.clone(),
+                    generics: interface
+                        .generics
+                        .iter()
+                        .map(|g| tir2_to_template(g, resolved, generic_params))
+                        .collect(),
+                    associated_types: interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| {
+                            (name.clone(), tir2_to_template(ty, resolved, generic_params))
+                        })
+                        .collect(),
                 }),
                 member: member.clone(),
                 attr: TyAttr::default(),
@@ -3263,9 +3261,9 @@ impl<'db> LoweringContext<'db> {
                 // associated-type bindings); erase compiler-only types within them
                 // too, matching the `Tir2Ty::Interface` arm above. (The field is an
                 // `Interface` after the interface-object refactor, not a `Ty`.)
-                interface: interface.map(|iface| {
-                    Box::new(iface.map_tys(|ty| Self::erase_compiler_only_ty(ty.clone())))
-                }),
+                interface: Box::new(
+                    interface.map_tys(|ty| Self::erase_compiler_only_ty(ty.clone())),
+                ),
                 member,
                 attr,
             },
@@ -10643,7 +10641,7 @@ impl<'db> LoweringContext<'db> {
     fn resolve_projection_bound(&self, ty: &Tir2Ty) -> Option<Tir2Ty> {
         use baml_type::normalize::TypeContext;
         let Tir2Ty::AssociatedTypeProjection {
-            interface: Some(iface),
+            interface: iface,
             member,
             ..
         } = ty

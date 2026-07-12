@@ -146,20 +146,26 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
             base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),
             // The projection's interface constraint is wired as a `Ty` and must
             // decode to an interface existential, from which the constraint
-            // (`RuntimeInterface`) is recovered.
-            interface: match p.interface.as_deref() {
-                Some(ty) => match proto_ty_to_runtime_ty(ty)? {
-                    RuntimeTy::Interface(name, generics, associated_types, _) => Some(Box::new(
-                        RuntimeInterface::new(name, generics, associated_types),
-                    )),
+            // (`RuntimeInterface`) is recovered. A projection always carries its
+            // declaring interface, so an absent wire field is a malformed message —
+            // reject it rather than fabricate an unqualified projection.
+            interface: {
+                let ty = p.interface.as_deref().ok_or_else(|| {
+                    CtypesError::InternalError(
+                        "AssociatedTypeProjection.interface is required".to_string(),
+                    )
+                })?;
+                match proto_ty_to_runtime_ty(ty)? {
+                    RuntimeTy::Interface(name, generics, associated_types, _) => {
+                        Box::new(RuntimeInterface::new(name, generics, associated_types))
+                    }
                     _ => {
                         return Err(CtypesError::InternalError(
                             "AssociatedTypeProjection.interface did not decode to an interface type"
                                 .to_string(),
                         ));
                     }
-                },
-                None => None,
+                }
             },
             member: Name::new(&p.member),
             attr: TyAttr::default(),
