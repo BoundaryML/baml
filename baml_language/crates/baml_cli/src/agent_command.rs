@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
 
-use crate::{ExitCode, project_load::find_project_root_from};
+use crate::ExitCode;
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -39,8 +39,10 @@ pub(crate) enum AgentCommand {
 pub(crate) struct AgentInstallArgs {
     /// Directory where project-local agent skills should be installed.
     ///
-    /// When omitted, BAML installs at the nearest ancestor with baml.toml,
-    /// then the git root, then the current directory.
+    /// When omitted, BAML installs at the nearest ancestor with baml.toml or
+    /// baml_src within the current git repo (else the repo root); outside a
+    /// git repo, at the nearest such ancestor below your home directory, else
+    /// the current directory.
     #[arg(long, value_name = "PATH")]
     pub dir: Option<PathBuf>,
 
@@ -234,26 +236,79 @@ fn detect_install_root() -> Result<PathBuf> {
     let canonical = cwd
         .canonicalize()
         .with_context(|| format!("failed to resolve {}", cwd.display()))?;
+    Ok(detect_install_root_in(
+        &canonical,
+        git_toplevel(&canonical).as_deref(),
+        user_home_dir().as_deref(),
+    ))
+}
 
-    if let Some(root) = find_project_root_from(Some(&canonical))? {
-        return Ok(root);
-    }
+/// Pick the install root for project-local agent skills.
+///
+/// Inside a git repo, the nearest baml.toml (else baml_src) owner wins, but
+/// the walk never leaves the repo; with no project marker the repo root is
+/// used, since that is where agent harnesses discover `.claude/skills/`.
+/// Outside a git repo the walk stops before the user's home directory —
+/// a stray `~/baml_src` must not pull installs into `$HOME` — and falls back
+/// to the current directory. All inputs must be pre-canonicalized.
+fn detect_install_root_in(
+    cwd: &Path,
+    git_toplevel: Option<&Path>,
+    home: Option<&Path>,
+) -> PathBuf {
+    // A toplevel that doesn't contain cwd (e.g. an exported
+    // GIT_DIR/GIT_WORK_TREE pointing at a dotfiles worktree in $HOME) is not
+    // the project being worked in; ignore it rather than install there.
+    let git_toplevel = git_toplevel.filter(|toplevel| cwd.starts_with(toplevel));
+    let ancestors: Vec<PathBuf> = match git_toplevel {
+        Some(toplevel) => cwd
+            .ancestors()
+            .take_while(|dir| dir.starts_with(toplevel))
+            .map(Path::to_path_buf)
+            .collect(),
+        None => cwd
+            .ancestors()
+            .take_while(|dir| Some(*dir) != home)
+            .map(Path::to_path_buf)
+            .collect(),
+    };
+    baml_workspace::find_baml_project_root_from_ancestors(
+        ancestors,
+        |dir| dir.join(baml_workspace::BAML_TOML).is_file(),
+        |dir| dir.join(baml_workspace::BAML_SRC_DIR).is_dir(),
+    )
+    .unwrap_or_else(|| match git_toplevel {
+        Some(toplevel) => toplevel.to_path_buf(),
+        None => cwd.to_path_buf(),
+    })
+}
 
-    if let Ok(output) = Command::new("git")
+/// Canonicalized toplevel of the git repo containing `dir`, if any.
+fn git_toplevel(dir: &Path) -> Option<PathBuf> {
+    let output = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
-        .current_dir(&canonical)
+        .current_dir(dir)
         .output()
-    {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let root = stdout.trim();
-            if !root.is_empty() {
-                return Ok(PathBuf::from(root));
-            }
-        }
+        .ok()?;
+    if !output.status.success() {
+        return None;
     }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let root = stdout.trim();
+    if root.is_empty() {
+        return None;
+    }
+    PathBuf::from(root).canonicalize().ok()
+}
 
-    Ok(canonical)
+/// The user's canonicalized home directory (`HOME`, or `USERPROFILE` on
+/// Windows). Not [`baml_release::baml_home`], which is `~/.baml` state
+/// storage and overridable via `BAML_HOME`.
+fn user_home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .and_then(|home| home.canonicalize().ok())
 }
 
 fn skills_from_archive(archive: &[u8]) -> Result<LoadedSkills> {
@@ -852,6 +907,94 @@ mod tests {
         );
 
         assert_eq!(skills_from_archive(&archive).unwrap().commit, None);
+    }
+
+    #[test]
+    fn install_root_prefers_baml_toml_within_git_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let toplevel = tmp.path().canonicalize().unwrap();
+        let project = toplevel.join("services/x");
+        let cwd = project.join("deep");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(project.join("baml.toml"), "[package]\nname = \"x\"\n").unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&toplevel), None);
+
+        assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_never_escapes_git_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let outer = tmp.path().canonicalize().unwrap();
+        // A baml_src above the repo must not pull the install outside it.
+        fs::create_dir_all(outer.join("baml_src")).unwrap();
+        let toplevel = outer.join("repo");
+        let cwd = toplevel.join("sub");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&toplevel), None);
+
+        assert_eq!(root, toplevel);
+    }
+
+    #[test]
+    fn install_root_ignores_git_toplevel_that_is_not_an_ancestor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().canonicalize().unwrap();
+        // Dotfiles bare-repo pattern: exported GIT_DIR/GIT_WORK_TREE make git
+        // report a worktree (often $HOME) unrelated to the directory the user
+        // is actually in. The project markers next to cwd must still win.
+        let foreign_worktree = base.join("home");
+        let project = base.join("opt/project");
+        let cwd = project.join("sub");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(&foreign_worktree).unwrap();
+        fs::write(project.join("baml.toml"), "[package]\nname = \"x\"\n").unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&foreign_worktree), None);
+
+        assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_ignores_stray_baml_src_at_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        // Regression: a stray ~/baml_src used to make installs from ~/some/dir
+        // land the skills in $HOME.
+        fs::create_dir_all(home.join("baml_src")).unwrap();
+        let cwd = home.join("nomad");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, None, Some(&home));
+
+        assert_eq!(root, cwd);
+    }
+
+    #[test]
+    fn install_root_accepts_baml_src_owner_below_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        let project = home.join("work");
+        let cwd = project.join("sub");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(project.join("baml_src")).unwrap();
+
+        let root = detect_install_root_in(&cwd, None, Some(&home));
+
+        assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_in_home_itself_is_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        fs::create_dir_all(home.join("baml_src")).unwrap();
+
+        let root = detect_install_root_in(&home, None, Some(&home));
+
+        assert_eq!(root, home);
     }
 
     #[test]
