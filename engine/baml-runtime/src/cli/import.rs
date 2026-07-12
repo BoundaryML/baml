@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
+use internal_baml_core::baml_keywords;
 use serde_json::{Map, Value};
 
 #[derive(Clone, Debug, clap::ValueEnum)]
@@ -552,7 +553,7 @@ fn type_identifier(value: &str) -> String {
     if identifier.starts_with(|character: char| character.is_ascii_digit()) {
         identifier.insert_str(0, "Type");
     }
-    if identifier == "BamlClient" {
+    if identifier == "BamlClient" || baml_keywords().contains(identifier.as_str()) {
         identifier.push('_');
     }
     identifier
@@ -575,7 +576,9 @@ fn field_identifier(value: &str) -> String {
     if identifier.starts_with(|character: char| character.is_ascii_digit()) {
         identifier.insert_str(0, "field_");
     }
-    if PYTHON_KEYWORDS.contains(&identifier.as_str()) {
+    if PYTHON_KEYWORDS.contains(&identifier.as_str())
+        || baml_keywords().contains(identifier.as_str())
+    {
         identifier.push('_');
     }
     identifier
@@ -677,6 +680,30 @@ mod tests {
         });
         let baml = json_schema_to_baml(&schema, "schema").expect("schema should convert");
         assert_eq!(baml, "type Result = string | 1 | 2 | 3 | null\n");
+        assert_valid_baml(&baml);
+    }
+
+    #[test]
+    fn escapes_baml_reserved_identifiers() {
+        let schema = json!({
+            "title": "Self",
+            "type": "object",
+            "required": ["class", "enum", "function", "true", "int"],
+            "properties": {
+                "class": {"type": "string"},
+                "enum": {"type": "string"},
+                "function": {"type": "string"},
+                "true": {"type": "boolean"},
+                "int": {"type": "integer"}
+            }
+        });
+
+        let baml = json_schema_to_baml(&schema, "schema").expect("schema should convert");
+        assert!(baml.contains("class Self_"));
+        for field in ["class", "enum", "function", "true", "int"] {
+            assert!(baml.contains(&format!("{field}_ ")));
+            assert!(baml.contains(&format!("@alias(\"{field}\")")));
+        }
         assert_valid_baml(&baml);
     }
 
