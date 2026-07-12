@@ -3,7 +3,7 @@ title: ctx.output_format
 ---
 
 
-`{{ ctx.output_format }}` is used within a prompt template (or in any template_string) to print out the function's output schema into the prompt. It describes to the LLM how to generate a structure BAML can parse (usually JSON).
+`{{ ctx.output_format }}` is used within a prompt template (or in any template_string) to print out the function's output schema into the prompt. It describes to the LLM how to generate a structure BAML can parse. JSON is the default, and TOON is also supported.
 
 Here's an example of a function with `{{ ctx.output_format }}`, and how it gets rendered by BAML before sending it to the LLM.
 
@@ -57,6 +57,32 @@ Answer in JSON using this schema:
 ```
 
 Here's the parameters:
+<ParamField path="format" type="'json' | 'toon'">
+
+**Default: `"json"`**
+
+Controls the serialization format requested from the model. Use TOON
+([Token-Oriented Object Notation](https://toonformat.dev)) for a more compact,
+token-efficient response:
+
+```baml
+{{ ctx.output_format(format="toon") }}
+```
+
+For example, a class containing a list renders a TOON-shaped schema like this:
+
+```text
+Answer in TOON using this schema. Replace every N in an array header with the actual array length:
+name: string
+tags[N]: string
+```
+
+The model must replace `N` with the number of array items in its response. BAML
+decodes the TOON response and applies the same schema-aware parsing and coercion
+used for JSON responses.
+
+</ParamField>
+
 <ParamField path="prefix" type="string">
 The prefix instruction to use before printing out the schema. 
 
