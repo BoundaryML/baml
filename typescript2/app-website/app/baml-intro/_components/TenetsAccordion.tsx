@@ -47,7 +47,7 @@ const TENETS: Tenet[] = [
       { t: '\n' },
       { c: 'ok', t: 'function ExtractUser(text: string) -> User' },
     ],
-    title: 'Read like TypeScript, without the footguns.',
+    title: 'Read like TypeScript, without the escape hatches.',
     why: 'Agents love TypeScript, and humans do too. Types, unions, generics, give me more. But TypeScript is bandaging up broken JavaScript, so it has real escape hatches agents love to abuse.',
   },
   {
