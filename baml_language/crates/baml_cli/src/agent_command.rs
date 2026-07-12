@@ -249,24 +249,34 @@ fn detect_install_root() -> Result<PathBuf> {
 /// the walk never leaves the repo; with no project marker the repo root is
 /// used, since that is where agent harnesses discover `.claude/skills/`.
 /// Outside a git repo the walk stops before the user's home directory —
-/// a stray `~/baml_src` must not pull installs into `$HOME` — and falls back
-/// to the current directory. All inputs must be pre-canonicalized.
+/// a stray `~/baml_src` must not pull installs into `$HOME` — or, when no
+/// home directory is known, doesn't leave the current directory at all; the
+/// fallback is always the current directory. All inputs must be
+/// pre-canonicalized.
 fn detect_install_root_in(cwd: &Path, git_toplevel: Option<&Path>, home: Option<&Path>) -> PathBuf {
-    // A toplevel that doesn't contain cwd (e.g. an exported
-    // GIT_DIR/GIT_WORK_TREE pointing at a dotfiles worktree in $HOME) is not
-    // the project being worked in; ignore it rather than install there.
-    let git_toplevel = git_toplevel.filter(|toplevel| cwd.starts_with(toplevel));
-    let ancestors: Vec<PathBuf> = match git_toplevel {
-        Some(toplevel) => cwd
+    // A toplevel that doesn't contain cwd (an exported GIT_DIR/GIT_WORK_TREE
+    // pointing at a dotfiles worktree in $HOME) is not the project being
+    // worked in; neither is one rooted at — or containing — the home
+    // directory itself, which would reopen the stray-~/baml_src hole this
+    // function exists to close. Ignore both rather than install there.
+    let git_toplevel = git_toplevel.filter(|toplevel| {
+        cwd.starts_with(toplevel) && !home.is_some_and(|home| home.starts_with(toplevel))
+    });
+    let ancestors: Vec<PathBuf> = match (git_toplevel, home) {
+        (Some(toplevel), _) => cwd
             .ancestors()
             .take_while(|dir| dir.starts_with(toplevel))
             .map(Path::to_path_buf)
             .collect(),
-        None => cwd
+        (None, Some(home)) => cwd
             .ancestors()
-            .take_while(|dir| Some(*dir) != home)
+            .take_while(|dir| *dir != home)
             .map(Path::to_path_buf)
             .collect(),
+        // No git scope and no known home boundary: a walk could climb
+        // arbitrarily far and adopt a stray marker directory, so don't walk
+        // at all. Installing at cwd is always safe.
+        (None, None) => vec![cwd.to_path_buf()],
     };
     baml_workspace::find_baml_project_root_from_ancestors(
         ancestors,
@@ -951,9 +961,38 @@ mod tests {
         fs::create_dir_all(&foreign_worktree).unwrap();
         fs::write(project.join("baml.toml"), "[package]\nname = \"x\"\n").unwrap();
 
-        let root = detect_install_root_in(&cwd, Some(&foreign_worktree), None);
+        let root = detect_install_root_in(&cwd, Some(&foreign_worktree), Some(&foreign_worktree));
 
         assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_ignores_git_toplevel_at_or_above_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        // A repo rooted at $HOME (dotfiles-as-git-repo) must not turn the
+        // stray-marker hole back on: the home boundary still applies.
+        fs::create_dir_all(home.join("baml_src")).unwrap();
+        let cwd = home.join("nomad");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&home), Some(&home));
+
+        assert_eq!(root, cwd);
+    }
+
+    #[test]
+    fn install_root_without_known_home_stays_at_cwd() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().canonicalize().unwrap();
+        // No git scope and no home boundary: never adopt a marker above cwd.
+        fs::create_dir_all(base.join("baml_src")).unwrap();
+        let cwd = base.join("a/b");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, None, None);
+
+        assert_eq!(root, cwd);
     }
 
     #[test]
@@ -1133,7 +1172,7 @@ mod tests {
                     .append_data(&mut header, "pax_global_header", record.as_bytes())
                     .unwrap();
             }
-            for (path, content) in entries.iter().copied() {
+            for &(path, content) in entries {
                 let mut header = tar::Header::new_gnu();
                 header.set_size(content.len() as u64);
                 header.set_mode(0o644);
