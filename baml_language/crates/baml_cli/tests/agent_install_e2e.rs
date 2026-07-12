@@ -1,11 +1,12 @@
-//! End-to-end test for `baml-cli agent install`'s default path: resolve the
-//! skill repo head commit, download the tarball at that commit, install the
-//! skills, and record provenance in `state.toml`.
+//! End-to-end test for `baml-cli agent install`'s default path: download the
+//! skill repo's main-branch tarball, install the skills, and record the
+//! commit embedded in the tarball's pax global header as provenance in
+//! `state.toml`.
 //!
-//! GitHub is stubbed with a local HTTP server via the
-//! `BAML_AGENT_SKILLS_COMMITS_URL` / `BAML_AGENT_SKILLS_ARCHIVE_BASE_URL`
-//! overrides, so the test exercises the real fetch/parse/install/record flow
-//! without network access.
+//! The tarball host is stubbed with a local HTTP server via the
+//! `BAML_AGENT_SKILLS_ARCHIVE_BASE_URL` override. Deliberately, no GitHub
+//! commits API stub exists: the default install must never touch the REST
+//! API (whose unauthenticated rate limit used to hard-block installs).
 
 use std::{
     fs,
@@ -16,12 +17,35 @@ use std::{
 
 const COMMIT: &str = "0123456789abcdef0123456789abcdef01234567";
 
-fn skill_archive() -> Vec<u8> {
+/// A codeload-shaped tarball: pax global header carrying the source commit
+/// (as `git archive` writes it), then the skill files.
+fn skill_archive(pax_comment: Option<&str>) -> Vec<u8> {
     let content = "---\nname: baml-core\ndescription: test skill\n---\n# Core\n";
     let mut bytes = Vec::new();
     {
         let encoder = flate2::write::GzEncoder::new(&mut bytes, flate2::Compression::default());
         let mut builder = tar::Builder::new(encoder);
+        if let Some(comment) = pax_comment {
+            let record_content = format!("comment={comment}\n");
+            let mut total = record_content.len();
+            // The length prefix counts itself: grow until it stabilizes.
+            loop {
+                let with_prefix = total.to_string().len() + 1 + record_content.len();
+                if with_prefix == total {
+                    break;
+                }
+                total = with_prefix;
+            }
+            let record = format!("{total} {record_content}");
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::XGlobalHeader);
+            header.set_size(record.len() as u64);
+            header.set_mode(0o666);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, "pax_global_header", record.as_bytes())
+                .unwrap();
+        }
         let mut header = tar::Header::new_gnu();
         header.set_size(content.len() as u64);
         header.set_mode(0o644);
@@ -29,7 +53,7 @@ fn skill_archive() -> Vec<u8> {
         builder
             .append_data(
                 &mut header,
-                format!("baml-skill-{COMMIT}/skills/baml-core/SKILL.md"),
+                "baml-skill-main/skills/baml-core/SKILL.md",
                 content.as_bytes(),
             )
             .unwrap();
@@ -38,9 +62,9 @@ fn skill_archive() -> Vec<u8> {
     bytes
 }
 
-/// Serve canned GitHub-shaped responses: commit JSON for `/commits/main`,
-/// the tarball for `/archive/<commit>`. Returns the server's base URL.
-fn spawn_stub_github() -> String {
+/// Serve the tarball at `/archive/<ref>`; everything else (including any
+/// attempt to hit a commits API) 404s. Returns the server's base URL.
+fn spawn_stub_codeload(archive: Vec<u8>) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     std::thread::spawn(move || {
@@ -51,48 +75,47 @@ fn spawn_stub_github() -> String {
             let request = String::from_utf8_lossy(&buf[..read]).to_string();
             let path = request.split_whitespace().nth(1).unwrap_or("").to_string();
 
-            let (content_type, body): (&str, Vec<u8>) = if path.starts_with("/commits") {
-                (
-                    "application/json",
-                    format!(r#"{{"sha":"{COMMIT}"}}"#).into_bytes(),
-                )
-            } else if path.starts_with("/archive/") {
-                ("application/gzip", skill_archive())
-            } else {
+            if !path.starts_with("/archive/") {
                 let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n");
                 continue;
-            };
+            }
             let _ = stream.write_all(
                 format!(
-                    "HTTP/1.1 200 OK\r\ncontent-type: {content_type}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
-                    body.len()
+                    "HTTP/1.1 200 OK\r\ncontent-type: application/gzip\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                    archive.len()
                 )
                 .as_bytes(),
             );
-            let _ = stream.write_all(&body);
+            let _ = stream.write_all(&archive);
         }
     });
     base
 }
 
-#[test]
-fn default_install_fetches_head_and_records_provenance() {
-    let server = spawn_stub_github();
-    let home = tempfile::tempdir().unwrap();
-    let project = tempfile::tempdir().unwrap();
-
-    let output = Command::new(env!("CARGO_BIN_EXE_baml-cli"))
+fn install_command(server: &str, home: &std::path::Path, dir: &std::path::Path) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_baml-cli"));
+    command
         .args(["agent", "install", "--dir"])
-        .arg(project.path())
-        .env("BAML_HOME", home.path())
-        .env(
-            "BAML_AGENT_SKILLS_COMMITS_URL",
-            format!("{server}/commits/main"),
-        )
+        .arg(dir)
+        .env("BAML_HOME", home)
         .env(
             "BAML_AGENT_SKILLS_ARCHIVE_BASE_URL",
             format!("{server}/archive"),
         )
+        // The default install must work for a brand-new user with no GitHub
+        // credentials of any kind.
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("GH_TOKEN");
+    command
+}
+
+#[test]
+fn default_install_needs_no_github_api_and_records_pax_provenance() {
+    let server = spawn_stub_codeload(skill_archive(Some(COMMIT)));
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+
+    let output = install_command(&server, home.path(), project.path())
         .output()
         .unwrap();
     assert!(
@@ -108,7 +131,7 @@ fn default_install_fetches_head_and_records_provenance() {
         assert!(content.contains("name: baml-core"), "{content}");
     }
 
-    // Provenance recorded in state.toml.
+    // Provenance recorded in state.toml from the tarball's pax header.
     let state = fs::read_to_string(home.path().join("state.toml")).unwrap();
     assert!(state.contains("[skills]"), "{state}");
     assert!(
@@ -122,4 +145,44 @@ fn default_install_fetches_head_and_records_provenance() {
     let cache =
         fs::read_to_string(home.path().join("manifest-cache/skills/latest-commit.json")).unwrap();
     assert_eq!(cache, format!(r#"{{"sha":"{COMMIT}"}}"#));
+}
+
+#[test]
+fn headerless_archive_installs_without_provenance() {
+    let server = spawn_stub_codeload(skill_archive(None));
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+
+    let output = install_command(&server, home.path(), project.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "agent install failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let skill = project.path().join(".claude/skills/baml-core/SKILL.md");
+    assert!(skill.is_file());
+
+    // No commit identity → no [skills] provenance recorded.
+    let state = fs::read_to_string(home.path().join("state.toml")).unwrap_or_default();
+    assert!(!state.contains("[skills]"), "{state}");
+}
+
+#[test]
+fn unreachable_archive_fails_with_from_hint() {
+    let server = spawn_stub_codeload(skill_archive(Some(COMMIT)));
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+
+    let mut command = install_command(&server, home.path(), project.path());
+    command.env(
+        "BAML_AGENT_SKILLS_ARCHIVE_BASE_URL",
+        format!("{server}/missing"),
+    );
+    let output = command.output().unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--from"), "{stderr}");
 }

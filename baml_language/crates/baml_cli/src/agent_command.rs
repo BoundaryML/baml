@@ -93,11 +93,15 @@ impl AgentInstallArgs {
     }
 }
 
+#[derive(Debug)]
 struct LoadedSkills {
     skills: Vec<Skill>,
-    /// Head commit of the skill repo, present only when installing from the
-    /// default source (the repo's main branch). Custom `--from` sources have
-    /// no commit identity to record.
+    /// Commit of the skill repo the installed content came from, recovered
+    /// from the tarball's pax global header (`comment=<sha>`, written by
+    /// `git archive` and present in GitHub codeload tarballs). Present only
+    /// when installing from the default source; custom `--from` sources have
+    /// no commit identity to record, and archives without the header (or with
+    /// a non-SHA comment) install fine with no recorded provenance.
     commit: Option<String>,
 }
 
@@ -106,7 +110,7 @@ fn load_skills(args: &AgentInstallArgs) -> Result<LoadedSkills> {
         if is_http_url(source) {
             let archive = fetch_url_bytes(source)?;
             return Ok(LoadedSkills {
-                skills: skills_from_archive(&archive)?,
+                skills: skills_from_archive(&archive)?.skills,
                 commit: None,
             });
         }
@@ -126,20 +130,29 @@ fn load_skills(args: &AgentInstallArgs) -> Result<LoadedSkills> {
             )
         })?;
         return Ok(LoadedSkills {
-            skills: skills_from_archive(&archive)?,
+            skills: skills_from_archive(&archive)?.skills,
             commit: None,
         });
     }
 
-    // Default: install the current head of the skill repo. The commit is
-    // resolved first and the tarball downloaded at that exact commit, so the
-    // recorded provenance always matches the installed content.
-    let commit = baml_release::skills::fetch_latest_skill_commit(HTTP_TIMEOUT)
-        .context("failed to resolve the latest BAML agent skills commit")?;
-    let archive = fetch_url_bytes(&baml_release::skills::skill_archive_url(&commit))?;
+    // Default: download the main-branch tarball from codeload. Deliberately
+    // NOT the GitHub REST API: the tarball endpoint needs no credentials and
+    // is not subject to the unauthenticated 60-requests/hour API rate limit
+    // that used to hard-block installs. The tarball embeds the commit it was
+    // cut from in its pax global header, which becomes the recorded
+    // provenance; a mirror that omits the header just skips provenance.
+    let url = baml_release::skills::skill_archive_url("main");
+    let archive = fetch_url_bytes(&url).with_context(|| {
+        format!(
+            "could not download the BAML agent skills from {url}; if GitHub is \
+             unreachable, install from a local copy with \
+             `baml agent install --from <url-or-path>`"
+        )
+    })?;
+    let loaded = skills_from_archive(&archive)?;
     Ok(LoadedSkills {
-        skills: skills_from_archive(&archive)?,
-        commit: Some(commit),
+        skills: loaded.skills,
+        commit: loaded.commit,
     })
 }
 
@@ -169,9 +182,10 @@ fn record_installed_commit(commit: &str) {
     }
 }
 
-/// Installs from custom `--from` sources have no commit identity. Drop any
-/// previously recorded provenance so the wrapper doesn't report the custom
-/// content as up to date with (or behind) the official skill repo.
+/// Installs with no commit identity (custom `--from` sources, or a default
+/// archive whose pax header carried no commit) drop any previously recorded
+/// provenance so the wrapper doesn't report the installed content as up to
+/// date with (or behind) the official skill repo.
 fn clear_installed_commit() {
     if let Err(err) = baml_release::skills::clear_skills_state(&baml_release::skills::state_path())
     {
@@ -242,13 +256,20 @@ fn detect_install_root() -> Result<PathBuf> {
     Ok(canonical)
 }
 
-fn skills_from_archive(archive: &[u8]) -> Result<Vec<Skill>> {
+fn skills_from_archive(archive: &[u8]) -> Result<LoadedSkills> {
     let decoder = flate2::read::GzDecoder::new(Cursor::new(archive));
     let mut archive = tar::Archive::new(decoder);
     let mut raw = Vec::new();
+    let mut commit = None;
 
     for entry in archive.entries().context("failed to read skill archive")? {
         let mut entry = entry.context("failed to read skill archive entry")?;
+        if entry.header().entry_type() == tar::EntryType::XGlobalHeader {
+            if commit.is_none() {
+                commit = pax_comment_sha(&mut entry);
+            }
+            continue;
+        }
         if !entry.header().entry_type().is_file() {
             continue;
         }
@@ -269,7 +290,47 @@ fn skills_from_archive(archive: &[u8]) -> Result<Vec<Skill>> {
         raw.push(raw_skill(skill_path, content, path));
     }
 
-    normalize_skills(raw)
+    Ok(LoadedSkills {
+        skills: normalize_skills(raw)?,
+        commit,
+    })
+}
+
+/// Extract the commit SHA a codeload tarball was cut from: `git archive`
+/// records it as a `comment=<sha>` record in the pax global header entry.
+/// Returns `None` (rather than erroring) for archives without the header or
+/// with a comment that doesn't look like a git SHA, so custom mirrors and
+/// hand-rolled archives still install — they just record no provenance.
+fn pax_comment_sha(entry: &mut impl Read) -> Option<String> {
+    let mut body = Vec::new();
+    entry.take(4096).read_to_end(&mut body).ok()?;
+    let comment = pax_records(&body).find_map(|(key, value)| (key == "comment").then_some(value))?;
+    let sha = comment.trim();
+    let looks_like_sha =
+        (7..=64).contains(&sha.len()) && sha.chars().all(|c| c.is_ascii_hexdigit());
+    looks_like_sha.then(|| sha.to_string())
+}
+
+/// Iterate `<len> <key>=<value>\n` records in a pax extended header body,
+/// skipping anything malformed.
+fn pax_records(body: &[u8]) -> impl Iterator<Item = (&str, &str)> {
+    let mut rest = body;
+    std::iter::from_fn(move || {
+        loop {
+            let text = std::str::from_utf8(rest).ok()?;
+            let (len_text, _) = text.split_once(' ')?;
+            let record_len: usize = len_text.parse().ok()?;
+            if record_len <= len_text.len() + 1 {
+                return None;
+            }
+            let record = text.get(..record_len)?;
+            rest = &rest[record_len..];
+            let content = &record[len_text.len() + 1..];
+            if let Some((key, value)) = content.trim_end_matches('\n').split_once('=') {
+                return Some((key, value));
+            }
+        }
+    })
 }
 
 fn skills_from_dir(root: &Path) -> Result<Vec<Skill>> {
@@ -636,7 +697,7 @@ mod tests {
     fn direct_archive_layout_is_loaded() {
         let content = skill("baml-core");
         let archive = make_archive(&[("skills/baml-core/SKILL.md", content.as_str())]);
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "baml-core");
@@ -649,7 +710,7 @@ mod tests {
             direct_skill_entries(&["baml-core", "baml-bridges", "baml-serving", "baml-testing"]);
         let archive = make_archive(&entry_refs(&entries));
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
         let names = skills
             .iter()
             .map(|skill| skill.name.as_str())
@@ -669,7 +730,7 @@ mod tests {
             ("skills/baml-core/._SKILL.md", &[0xff, 0xfe]),
         ]);
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "baml-core");
@@ -688,7 +749,7 @@ mod tests {
             .collect::<Vec<_>>();
         let archive = make_archive(&entry_refs(&entries));
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
         let core = skills
             .iter()
             .find(|skill| skill.name == "baml-core")
@@ -716,7 +777,7 @@ mod tests {
         let content = "---\r\nname: baml-core\r\ndescription: test\r\n---\r\n# Core\r\n";
         let archive = make_archive(&[("skills/baml-core/SKILL.md", content)]);
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "baml-core");
@@ -759,6 +820,38 @@ mod tests {
                     .to_string_lossy()
                     .starts_with(".baml-agent-install-backup-"))
         );
+    }
+
+    #[test]
+    fn archive_pax_global_header_comment_becomes_commit() {
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        let content = skill("baml-core");
+        let archive =
+            make_archive_with_pax(&[("skills/baml-core/SKILL.md", content.as_str())], Some(sha));
+
+        let loaded = skills_from_archive(&archive).unwrap();
+
+        assert_eq!(loaded.commit.as_deref(), Some(sha));
+        assert_eq!(loaded.skills.len(), 1);
+    }
+
+    #[test]
+    fn archive_without_pax_header_has_no_commit() {
+        let content = skill("baml-core");
+        let archive = make_archive(&[("skills/baml-core/SKILL.md", content.as_str())]);
+
+        assert_eq!(skills_from_archive(&archive).unwrap().commit, None);
+    }
+
+    #[test]
+    fn archive_with_non_sha_pax_comment_has_no_commit() {
+        let content = skill("baml-core");
+        let archive = make_archive_with_pax(
+            &[("skills/baml-core/SKILL.md", content.as_str())],
+            Some("not a commit sha"),
+        );
+
+        assert_eq!(skills_from_archive(&archive).unwrap().commit, None);
     }
 
     #[test]
@@ -867,6 +960,53 @@ mod tests {
             .map(|(path, content)| (*path, content.as_bytes()))
             .collect::<Vec<_>>();
         make_archive_bytes(&entries)
+    }
+
+    /// Like [`make_archive`], but prepends a pax global header carrying
+    /// `comment=<value>` the way `git archive` (and GitHub codeload) does.
+    fn make_archive_with_pax(entries: &[(&str, &str)], pax_comment: Option<&str>) -> Vec<u8> {
+        let mut archive_bytes = Vec::new();
+        {
+            let encoder =
+                flate2::write::GzEncoder::new(&mut archive_bytes, flate2::Compression::default());
+            let mut builder = tar::Builder::new(encoder);
+            if let Some(comment) = pax_comment {
+                let record_content = format!("comment={comment}\n");
+                let mut total = record_content.len();
+                // The pax length prefix counts itself: grow until stable.
+                loop {
+                    let with_prefix = total.to_string().len() + 1 + record_content.len();
+                    if with_prefix == total {
+                        break;
+                    }
+                    total = with_prefix;
+                }
+                let record = format!("{total} {record_content}");
+                let mut header = tar::Header::new_gnu();
+                header.set_entry_type(tar::EntryType::XGlobalHeader);
+                header.set_size(record.len() as u64);
+                header.set_mode(0o666);
+                header.set_cksum();
+                builder
+                    .append_data(&mut header, "pax_global_header", record.as_bytes())
+                    .unwrap();
+            }
+            for (path, content) in entries.iter().copied() {
+                let mut header = tar::Header::new_gnu();
+                header.set_size(content.len() as u64);
+                header.set_mode(0o644);
+                header.set_cksum();
+                builder
+                    .append_data(
+                        &mut header,
+                        format!("baml-skill-main/{path}"),
+                        content.as_bytes(),
+                    )
+                    .unwrap();
+            }
+            builder.finish().unwrap();
+        }
+        archive_bytes
     }
 
     fn make_archive_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {
