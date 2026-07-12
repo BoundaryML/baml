@@ -191,7 +191,7 @@ impl Builder {
 }
 
 #[derive(Default)]
-enum RenderSetting<T> {
+pub(super) enum RenderSetting<T> {
     #[default]
     Auto,
     Always(T),
@@ -205,6 +205,19 @@ pub(crate) enum MapStyle {
 
     #[strum(serialize = "object")]
     ObjectLiteral,
+}
+
+/// The wire format requested from the model.
+///
+/// Rendering is dispatched through this enum so additional backends can be
+/// added without changing the template-call surface again.
+#[derive(Clone, Copy, Debug, Default, strum::EnumString, strum::VariantNames)]
+pub(crate) enum OutputFormatKind {
+    #[default]
+    #[strum(serialize = "json")]
+    Json,
+    #[strum(serialize = "xml")]
+    Xml,
 }
 
 /// Hoist classes setting.
@@ -224,7 +237,7 @@ pub(crate) enum HoistClasses {
 const INLINE_RENDER_ENUM_MAX_VALUES: usize = 6;
 
 pub struct RenderOptions {
-    prefix: RenderSetting<String>,
+    pub(super) prefix: RenderSetting<String>,
     pub(crate) or_splitter: String,
     enum_value_prefix: RenderSetting<String>,
     hoisted_class_prefix: RenderSetting<String>,
@@ -232,7 +245,8 @@ pub struct RenderOptions {
     always_hoist_enums: RenderSetting<bool>,
     map_style: MapStyle,
     quote_class_fields: bool,
-    render_null_as: RenderSetting<String>,
+    pub(super) render_null_as: RenderSetting<String>,
+    format: OutputFormatKind,
 }
 
 impl Default for RenderOptions {
@@ -247,6 +261,7 @@ impl Default for RenderOptions {
             map_style: MapStyle::TypeParameters,
             quote_class_fields: false,
             render_null_as: RenderSetting::Auto,
+            format: OutputFormatKind::Json,
         }
     }
 }
@@ -272,6 +287,7 @@ impl RenderOptions {
         hoist_classes: Option<HoistClasses>,
         quote_class_fields: Option<bool>,
         render_null_as: Option<Option<String>>,
+        format: Option<OutputFormatKind>,
     ) -> Self {
         Self {
             prefix: prefix.map_or(RenderSetting::Auto, |p| {
@@ -292,6 +308,7 @@ impl RenderOptions {
             render_null_as: render_null_as
                 .flatten()
                 .map_or(RenderSetting::Auto, RenderSetting::Always),
+            format: format.unwrap_or_default(),
         }
     }
 
@@ -821,6 +838,13 @@ impl OutputFormatContent {
     }
 
     pub fn render(&self, options: RenderOptions) -> Result<Option<String>, minijinja::Error> {
+        match options.format {
+            OutputFormatKind::Json => self.render_json(options),
+            OutputFormatKind::Xml => super::xml::render(self, &options),
+        }
+    }
+
+    fn render_json(&self, options: RenderOptions) -> Result<Option<String>, minijinja::Error> {
         // Render context. Only contains hoisted types for now.
         let mut render_ctx = RenderCtx {
             hoisted_enums: IndexSet::new(),
@@ -1124,6 +1148,7 @@ mod tests {
                 None,
                 None,
                 Some(Some("omit".to_string())),
+                None,
             ))
             .unwrap();
         assert_eq!(rendered, Some("string or omit".into()));
@@ -1143,6 +1168,7 @@ mod tests {
                 None,
                 None,
                 Some(Some("omit".to_string())),
+                None,
             ))
             .unwrap()
             .unwrap();
@@ -1162,6 +1188,111 @@ mod tests {
             rendered,
             Some("Answer with a JSON Array using this schema:\nstring[]".to_string())
         );
+    }
+
+    #[test]
+    fn render_xml_class_collections_optional_and_union() {
+        let enums = vec![Enum {
+            name: Name::new("Status".to_string()),
+            values: vec![
+                (Name::new("ACTIVE".to_string()), None),
+                (Name::new("INACTIVE".to_string()), None),
+            ],
+            constraints: Vec::new(),
+        }];
+        let classes = vec![Class {
+            name: Name::new("Person".to_string()),
+            description: None,
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![
+                (
+                    Name::new("status".to_string()),
+                    TypeIR::r#enum("Status"),
+                    None,
+                    false,
+                ),
+                (
+                    Name::new("tags".to_string()),
+                    TypeIR::list(TypeIR::string()),
+                    None,
+                    false,
+                ),
+                (
+                    Name::new("metadata".to_string()),
+                    TypeIR::map(TypeIR::string(), TypeIR::int()),
+                    None,
+                    false,
+                ),
+                (
+                    Name::new("nickname".to_string()),
+                    TypeIR::optional(TypeIR::string()),
+                    None,
+                    false,
+                ),
+                (
+                    Name::new("verified".to_string()),
+                    TypeIR::union(vec![TypeIR::bool(), TypeIR::int()]),
+                    None,
+                    false,
+                ),
+            ],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }];
+        let content = OutputFormatContent::target(TypeIR::class("Person"))
+            .enums(enums)
+            .classes(classes)
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert!(rendered.starts_with("Answer in XML using this template:\n<Person>"));
+        assert!(rendered.contains("<status>ACTIVE | INACTIVE</status>"));
+        assert!(rendered.contains("<tags>\n    <item>string</item>\n  </tags>"));
+        assert!(rendered.contains("<entry>\n      <key>string</key>"));
+        assert!(rendered.contains("Optional: omit this element"));
+        assert!(rendered
+            .contains("<verified>bool</verified>\n  <!-- OR -->\n  <verified>int</verified>"));
+    }
+
+    #[test]
+    fn render_xml_recursive_class_uses_reference() {
+        let classes = vec![Class {
+            name: Name::new("Node".to_string()),
+            description: None,
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![
+                (Name::new("value".to_string()), TypeIR::int(), None, false),
+                (
+                    Name::new("next".to_string()),
+                    TypeIR::optional(TypeIR::class("Node")),
+                    None,
+                    false,
+                ),
+            ],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }];
+        let content = OutputFormatContent::target(TypeIR::class("Node"))
+            .classes(classes)
+            .recursive_classes(IndexSet::from(["Node".to_string()]))
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert!(rendered.contains("Repeat the Node shape recursively here"));
     }
 
     #[test]
@@ -3559,6 +3690,7 @@ Answer in JSON using this schema: Ret"#
             None,       // hoist_classes
             None,       // quote_class_fields
             None,       // render_null_as
+            None,       // format
         );
 
         let rendered = content.render(options).unwrap().unwrap();
