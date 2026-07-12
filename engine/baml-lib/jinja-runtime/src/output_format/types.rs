@@ -1299,6 +1299,101 @@ mod tests {
     }
 
     #[test]
+    fn render_xml_rejects_colliding_sanitized_field_tags() {
+        let content = OutputFormatContent::target(TypeIR::class("Person"))
+            .classes(vec![Class {
+                name: Name::new("Person".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (
+                        Name::new("first name".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("first_name".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            }])
+            .build();
+
+        let error = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap_err();
+
+        assert_eq!(error.kind(), minijinja::ErrorKind::BadSerialization);
+        assert!(error
+            .to_string()
+            .contains("multiple fields use the <first_name> tag"));
+    }
+
+    #[test]
+    fn render_xml_includes_root_and_nested_class_descriptions() {
+        let content = OutputFormatContent::target(TypeIR::class("Person"))
+            .classes(vec![
+                Class {
+                    name: Name::new("Person".to_string()),
+                    description: Some("A person record".to_string()),
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![(
+                        Name::new("address".to_string()),
+                        TypeIR::class("Address"),
+                        None,
+                        false,
+                    )],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+                Class {
+                    name: Name::new("Address".to_string()),
+                    description: Some("A mailing address".to_string()),
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![(
+                        Name::new("street".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    )],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+            ])
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using this structure:
+<Person>
+  <!-- A person record -->
+  <address>
+    <Address>
+      <!-- A mailing address -->
+      <street>string</street>
+    </Address>
+  </address>
+</Person>"#
+        );
+    }
+
+    #[test]
     fn render_xml_recursive_class_uses_reference() {
         let classes = vec![Class {
             name: Name::new("Node".to_string()),
@@ -1676,6 +1771,78 @@ OR
     }
 
     #[test]
+    fn render_xml_resolves_alias_variants_before_rendering() {
+        let content = OutputFormatContent::target(TypeIR::union(vec![
+            TypeIR::recursive_type_alias("Values"),
+            TypeIR::class("Fallback"),
+        ]))
+        .classes(vec![Class {
+            name: Name::new("Fallback".to_string()),
+            description: None,
+            namespace: baml_types::StreamingMode::NonStreaming,
+            fields: vec![(Name::new("value".to_string()), TypeIR::int(), None, false)],
+            constraints: Vec::new(),
+            streaming_behavior: Default::default(),
+        }])
+        .structural_recursive_aliases(IndexMap::from([(
+            "Values".to_string(),
+            TypeIR::list(TypeIR::string()),
+        )]))
+        .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            rendered,
+            r#"Answer in XML using any of these structures:
+<list>
+  <item>string</item>
+</list>
+
+OR
+
+<Fallback>
+  <value>int</value>
+</Fallback>"#
+        );
+    }
+
+    #[test]
+    fn render_xml_rejects_unsupported_union_variants() {
+        let unsupported = [
+            (
+                TypeIR::tuple(vec![TypeIR::string()]),
+                "Tuple type is not supported in outputs",
+            ),
+            (
+                TypeIR::arrow(vec![TypeIR::string()], TypeIR::string()),
+                "Arrow type is not supported in LLM function outputs",
+            ),
+            (TypeIR::top(), "Top type is not supported in outputs"),
+        ];
+
+        for (variant, message) in unsupported {
+            let content =
+                OutputFormatContent::target(TypeIR::union(vec![variant, TypeIR::string()])).build();
+            let error = content
+                .render(RenderOptions {
+                    format: OutputFormatKind::Xml,
+                    ..Default::default()
+                })
+                .unwrap_err();
+
+            assert_eq!(error.kind(), minijinja::ErrorKind::BadSerialization);
+            assert!(error.to_string().contains(message));
+        }
+    }
+
+    #[test]
     fn render_xml_hoists_recursive_nested_class_with_prefix() {
         let classes = vec![
             Class {
@@ -1777,6 +1944,7 @@ Answer in XML using this structure:
         let rendered = content
             .render(RenderOptions {
                 format: OutputFormatKind::Xml,
+                or_splitter: " & < ".to_string(),
                 ..Default::default()
             })
             .unwrap()
@@ -1789,7 +1957,7 @@ Answer in XML using this structure:
   <address>
     <Address>
       <street>string</street>
-    </Address> or null
+    </Address> &amp; &lt; null
   </address>
 </Person>"#
         );

@@ -1,6 +1,58 @@
 use baml_types::ir_type::UnionConstructor;
+use internal_baml_jinja::{render_prompt, RenderContext, RenderContext_Client, RenderedPrompt};
 
 use super::*;
+
+fn render_xml_schema(
+    file_content: &str,
+    mut target_type: TypeIR,
+) -> (OutputFormatContent, TypeIR, String) {
+    let ir = crate::helpers::load_test_ir(file_content);
+    ir.finalize_type(&mut target_type);
+    let output_format = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
+    let rendered = render_prompt(
+        "{{ ctx.output_format(format='xml', prefix=null) }}",
+        &BamlValue::Map(Default::default()),
+        RenderContext {
+            client: RenderContext_Client {
+                name: "test".to_string(),
+                provider: "test".to_string(),
+                default_role: "system".to_string(),
+                allowed_roles: vec!["system".to_string()],
+                remap_role: HashMap::new(),
+                options: IndexMap::new(),
+            },
+            output_format: output_format.clone(),
+            tags: HashMap::new(),
+        },
+        &[],
+        &ir,
+        &HashMap::new(),
+    )
+    .unwrap();
+    let RenderedPrompt::Completion(rendered) = rendered else {
+        panic!("expected completion prompt");
+    };
+
+    (output_format, target_type, rendered)
+}
+
+fn rendered_map(schema: &str) -> &str {
+    let start = schema
+        .find("<map>")
+        .expect("rendered schema contains a map");
+    let end = schema[start..]
+        .find("</map>")
+        .map(|offset| start + offset + "</map>".len())
+        .expect("rendered map is closed");
+    &schema[start..end]
+}
 
 const XML_TYPES: &str = r#"
 enum Status {
@@ -358,6 +410,51 @@ test_deserializer!(
     }
 );
 
+#[test_log::test]
+fn xml_rendered_map_or_null_round_trips_as_typed_map() {
+    let (output_format, target_type, schema) = render_xml_schema(
+        r#"
+class OptionalMap {
+  data map<string, string>?
+}
+"#,
+        TypeIR::class("OptionalMap"),
+    );
+    assert!(schema.contains("<data>\n    <map>"));
+
+    let parsed = from_str(&output_format, &target_type, &schema, true).unwrap();
+    let BamlValueWithFlags::Class(_, _, _, fields) = &parsed else {
+        panic!("expected a typed class");
+    };
+    assert!(matches!(
+        fields.get("data"),
+        Some(BamlValueWithFlags::Map(..))
+    ));
+    let value: BamlValue = parsed.into();
+    assert_json_diff::assert_json_eq!(json!(value), json!({"data": {"string": "string"}}));
+}
+
+#[test_log::test]
+fn xml_rendered_map_or_class_round_trips_as_typed_map() {
+    let (output_format, target_type, schema) = render_xml_schema(
+        r#"
+class Record {
+  value string
+}
+"#,
+        TypeIR::union(vec![
+            TypeIR::map(TypeIR::string(), TypeIR::string()),
+            TypeIR::class("Record"),
+        ]),
+    );
+    let map = rendered_map(&schema);
+
+    let parsed = from_str(&output_format, &target_type, map, true).unwrap();
+    assert!(matches!(&parsed, BamlValueWithFlags::Map(..)));
+    let value: BamlValue = parsed.into();
+    assert_json_diff::assert_json_eq!(json!(value), json!({"string": "string"}));
+}
+
 test_deserializer!(
     xml_recoverable_deep_missing_close_tags_with_preamble,
     XML_TYPES,
@@ -391,4 +488,61 @@ test_deserializer!(
     r#"<International><prénom>Ada</prénom></International>"#,
     TypeIR::class("International"),
     {"name": "Ada"}
+);
+
+const XML_MAP_UNION_TYPES: &str = r#"
+class Cat {
+  name string
+  lives int
+}
+
+class Holder {
+  featured map<string, int> | Cat
+  scores map<string, int>?
+}
+"#;
+
+// A `map | class` union field where the model answers with the map variant.
+// The map is emitted under a `<map>` tag (finding 3) so the parser's variant
+// disambiguation recognizes it; the single-child unwrap resolves it inside the
+// field wrapper.
+test_deserializer!(
+    xml_union_map_variant_round_trips,
+    XML_MAP_UNION_TYPES,
+    r#"<Holder>
+  <featured>
+    <map>
+      <entry><key>alpha</key><value>1</value></entry>
+      <entry><key>beta</key><value>2</value></entry>
+    </map>
+  </featured>
+  <scores>
+    <map>
+      <entry><key>x</key><value>9</value></entry>
+    </map>
+  </scores>
+</Holder>"#,
+    TypeIR::class("Holder"),
+    {
+        "featured": {"alpha": 1, "beta": 2},
+        "scores": {"x": 9}
+    }
+);
+
+// The same `map | class` union field where the model answers with the class
+// variant, and the optional `map | null` field is null.
+test_deserializer!(
+    xml_union_class_variant_and_null_map_round_trip,
+    XML_MAP_UNION_TYPES,
+    r#"<Holder>
+  <featured>
+    <Cat><name>Whiskers</name><lives>9</lives></Cat>
+  </featured>
+  <scores>null</scores>
+</Holder>"#,
+    TypeIR::class("Holder"),
+    {
+        "featured": {"name": "Whiskers", "lives": 9},
+        "scores": null
+    }
 );

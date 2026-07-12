@@ -228,7 +228,21 @@ fn render_class_block(
         return Ok(leaf(&indent, class_tag, class_tag));
     }
 
-    let mut fields = Vec::new();
+    let mut field_tags = HashSet::with_capacity(class.fields.len());
+    for (field_name, _, _, _) in &class.fields {
+        let field_tag = xml_tag_name(field_name.rendered_name());
+        if !field_tags.insert(field_tag.clone()) {
+            return Err(unsupported(&format!(
+                "Class {name} cannot be rendered as XML because multiple fields use the <{field_tag}> tag"
+            )));
+        }
+    }
+
+    let mut fields = class
+        .description
+        .as_deref()
+        .map(|description| xml_comments(description, depth + 1))
+        .unwrap_or_default();
     for (field_name, field_type, description, _) in &class.fields {
         if let Some(description) = description {
             fields.extend(xml_comments(description, depth + 1));
@@ -335,7 +349,13 @@ fn render_optional_field(
     }
 
     let rendered = if non_null.len() == 1 {
-        render_field(content, non_null[0], field_name, depth, options, ctx)?
+        if matches!(non_null[0], TypeIR::Map(_, _, _)) {
+            let body =
+                render_union_variant(content, non_null[0], depth + 1, "value", options, ctx)?;
+            container(&"  ".repeat(depth), field_name, &body)
+        } else {
+            render_field(content, non_null[0], field_name, depth, options, ctx)?
+        }
     } else {
         let body = render_union_blocks(content, &non_null, depth + 1, "value", options, ctx)?;
         container(&"  ".repeat(depth), field_name, &body)
@@ -417,13 +437,41 @@ fn render_union_variant(
             let rendered = render_top_level_list(content, item, options, ctx)?;
             indent_block(&rendered, depth)
         }
-        TypeIR::Map(key, value, _) => {
-            render_map(content, key, value, fallback_tag, depth, options, ctx)?
+        TypeIR::Map(key, value, _) => render_map(content, key, value, "map", depth, options, ctx)?,
+        TypeIR::RecursiveTypeAlias { name, .. } => {
+            if !ctx.visiting_aliases.insert(name.clone()) {
+                leaf(&"  ".repeat(depth), fallback_tag, name)
+            } else {
+                let alias_target = content
+                    .find_recursive_alias_target(name)
+                    .map_err(serialization_error)?;
+                let rendered =
+                    render_union_variant(content, alias_target, depth, fallback_tag, options, ctx)?;
+                ctx.visiting_aliases.remove(name);
+                rendered
+            }
         }
-        _ => leaf(
+        TypeIR::Union(items, _) => {
+            let variants = items.iter_include_null();
+            if let Some(text) = scalar_union_text(content, &variants, options, ctx)? {
+                leaf(&"  ".repeat(depth), fallback_tag, &text)
+            } else {
+                render_union_blocks(content, &variants, depth, fallback_tag, options, ctx)?
+            }
+        }
+        TypeIR::Tuple(_, _) => return Err(unsupported("Tuple type is not supported in outputs")),
+        TypeIR::Arrow(_, _) => {
+            return Err(unsupported(
+                "Arrow type is not supported in LLM function outputs",
+            ));
+        }
+        TypeIR::Top(_) => {
+            return Err(unsupported("Top type is not supported in outputs"));
+        }
+        TypeIR::Primitive(_, _) | TypeIR::Literal(_, _) => leaf(
             &"  ".repeat(depth),
             fallback_tag,
-            &scalar_text(content, variant, options, ctx)?.unwrap_or_else(|| variant.to_string()),
+            &scalar_text(content, variant, options, ctx)?.expect("scalar"),
         ),
     })
 }
@@ -668,17 +716,18 @@ fn append_to_field_content(
     depth: usize,
     suffix: &str,
 ) -> String {
+    let suffix = escape_xml_text(suffix);
     let closing = format!("\n{}</{}>", "  ".repeat(depth), xml_tag_name(field_name));
     if let Some(closing_start) = rendered.rfind(&closing) {
-        rendered.insert_str(closing_start, suffix);
+        rendered.insert_str(closing_start, &suffix);
         return rendered;
     }
 
     let closing = format!("</{}>", xml_tag_name(field_name));
     if let Some(closing_start) = rendered.rfind(&closing) {
-        rendered.insert_str(closing_start, suffix);
+        rendered.insert_str(closing_start, &suffix);
     } else {
-        rendered.push_str(suffix);
+        rendered.push_str(&suffix);
     }
     rendered
 }
