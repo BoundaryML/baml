@@ -76,7 +76,7 @@ const TENETS: Tenet[] = [
   },
   {
     title: 'Build tools for agents, not just IDEs.',
-    why: "Humans still need their IDEs. But most code is now read and written by agents, and an agent can't hover, click, or read a tooltip.",
+    why: "Humans still need their IDEs. But most code is now read and written by agents — and while an agent can drive a browser to hover and click, it shouldn't have to. Put what the tooltip knows in plain text.",
   },
 ];
 
