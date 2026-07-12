@@ -235,7 +235,14 @@ fn node_to_value(
             Value::Object(fields, completion)
         }
         TypeIR::List(item, _) => {
-            let items = if same_name(&node.name, "item") {
+            // A nested list uses its outer `<item>` as a container for inner
+            // `<item>` elements. An empty container represents an empty list.
+            let is_nested_list = node.text.trim().is_empty()
+                && node
+                    .children
+                    .iter()
+                    .all(|child| same_name(&child.name, "item"));
+            let items = if same_name(&node.name, "item") && !is_nested_list {
                 vec![node_to_value(output_format, item, node, is_done)?]
             } else {
                 node.children

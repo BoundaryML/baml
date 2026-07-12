@@ -1296,6 +1296,140 @@ mod tests {
     }
 
     #[test]
+    fn render_xml_nested_arrays_and_map_with_class_values() {
+        let content = OutputFormatContent::target(TypeIR::class("AddressBook"))
+            .classes(vec![
+                Class {
+                    name: Name::new("AddressBook".to_string()),
+                    description: None,
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![
+                        (
+                            Name::new("matrix".to_string()),
+                            TypeIR::list(TypeIR::list(TypeIR::int())),
+                            None,
+                            false,
+                        ),
+                        (
+                            Name::new("addresses".to_string()),
+                            TypeIR::list(TypeIR::class("Address")),
+                            None,
+                            false,
+                        ),
+                        (
+                            Name::new("byName".to_string()),
+                            TypeIR::map(TypeIR::string(), TypeIR::class("Address")),
+                            None,
+                            false,
+                        ),
+                    ],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+                Class {
+                    name: Name::new("Address".to_string()),
+                    description: None,
+                    namespace: baml_types::StreamingMode::NonStreaming,
+                    fields: vec![
+                        (Name::new("city".to_string()), TypeIR::string(), None, false),
+                        (Name::new("zip".to_string()), TypeIR::int(), None, false),
+                    ],
+                    constraints: Vec::new(),
+                    streaming_behavior: Default::default(),
+                },
+            ])
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert!(rendered
+            .contains("<matrix>\n    <item>\n      <item>int</item>\n    </item>\n  </matrix>"));
+        assert!(rendered.contains(
+            "<addresses>\n    <item>\n      <city>string</city>\n      <zip>int</zip>\n    </item>\n  </addresses>"
+        ));
+        assert!(rendered.contains(
+            "<byName>\n    <entry>\n      <key>string</key>\n      <value>\n        <city>string</city>\n        <zip>int</zip>\n      </value>"
+        ));
+    }
+
+    #[test]
+    fn render_xml_arrays_and_unions_with_multiple_class_variants() {
+        let classes = vec![
+            Class {
+                name: Name::new("Cat".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (Name::new("name".to_string()), TypeIR::string(), None, false),
+                    (Name::new("lives".to_string()), TypeIR::int(), None, false),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+            Class {
+                name: Name::new("Dog".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (Name::new("name".to_string()), TypeIR::string(), None, false),
+                    (
+                        Name::new("trained".to_string()),
+                        TypeIR::bool(),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+            Class {
+                name: Name::new("Bird".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![
+                    (
+                        Name::new("species".to_string()),
+                        TypeIR::string(),
+                        None,
+                        false,
+                    ),
+                    (Name::new("canFly".to_string()), TypeIR::bool(), None, false),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            },
+        ];
+        let variants = TypeIR::union(vec![
+            TypeIR::class("Cat"),
+            TypeIR::class("Dog"),
+            TypeIR::class("Bird"),
+        ]);
+        let content = OutputFormatContent::target(TypeIR::list(variants))
+            .classes(classes)
+            .build();
+
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatKind::Xml,
+                ..Default::default()
+            })
+            .unwrap()
+            .unwrap();
+
+        assert!(rendered.starts_with("Answer in XML using this template:\n<items>"));
+        assert!(rendered.contains("<lives>int</lives>"));
+        assert!(rendered.contains("<trained>bool</trained>"));
+        assert!(rendered.contains("<canFly>bool</canFly>"));
+        assert_eq!(rendered.matches("<!-- OR -->").count(), 2);
+    }
+
+    #[test]
     fn render_enum() {
         let enums = vec![Enum {
             name: Name::new("Color".to_string()),
