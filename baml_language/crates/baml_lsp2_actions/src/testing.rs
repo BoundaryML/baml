@@ -310,7 +310,7 @@ impl ProjectTest {
         crate::describe::describe(&self.db, &files, name)
     }
 
-    /// Run `grep()` and return the result.
+    /// Search the project with `project_search::search_project()`.
     pub(crate) fn search_project(&self, pattern: &str) -> ProjectSearchResult {
         let opts = ProjectSearchOptions {
             pattern,
@@ -320,7 +320,7 @@ impl ProjectTest {
         crate::project_search::search_project(&self.db, &self.files, &opts)
     }
 
-    /// Run `grep()` with case-insensitive matching.
+    /// Search the project case-insensitively with `project_search::search_project()`.
     pub(crate) fn grep_case_insensitive(&self, pattern: &str) -> ProjectSearchResult {
         let opts = ProjectSearchOptions {
             pattern,
@@ -330,12 +330,12 @@ impl ProjectTest {
         crate::project_search::search_project(&self.db, &self.files, &opts)
     }
 
-    /// Run `list_symbols()` and return the result.
+    /// List symbols with `project_search::list_symbols()`.
     pub(crate) fn list_symbols(&self) -> Vec<SymbolInfo> {
         crate::project_search::list_symbols(&self.db, &self.files, &[])
     }
 
-    /// Run `list_symbols()` using the compiler2-visible file set.
+    /// List symbols from the compiler2-visible file set with `project_search::list_symbols()`.
     #[allow(dead_code)]
     pub(crate) fn list_symbols_compiler2_visible(&self) -> Vec<SymbolInfo> {
         let files = baml_compiler2_hir::compiler2_all_files(&self.db);
