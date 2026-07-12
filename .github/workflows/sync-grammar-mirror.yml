@@ -1,0 +1,146 @@
+# Sync the BAML TextMate grammar to the BoundaryML/textMate-baml mirror repo.
+#
+# The mirror is the single external artifact for every third-party consumer of
+# the grammar: it is the npm package @boundaryml/baml-grammar (published by the
+# mirror's own publish.yml, which this sync also ships), the repo GitHub
+# Linguist vendors for .baml highlighting on github.com, and the source URL the
+# Shiki grammar registry fetches from. Grammar edits land in
+# typescript2/pkg-grammar; this workflow propagates them, so the mirror must
+# never be edited by hand.
+#
+# Auth: the TEXTMATE_BAML_DEPLOY_KEY secret holds an SSH private key whose
+# public half is a write-access deploy key on BoundaryML/textMate-baml.
+# (A deploy key, not a PAT, so pushes may update the mirror's workflow files.)
+#
+# Bootstrap note: npm OIDC trusted publishing cannot create a brand-new
+# package. The first-ever npm publish must be done once by hand from a mirror
+# checkout, then the trusted publisher (repo BoundaryML/textMate-baml, workflow
+# publish.yml) configured in the npm package settings. Until then the final
+# verify step here fails; that is expected and is the reminder to finish setup.
+
+name: Sync grammar mirror
+
+on:
+  push:
+    branches: [canary]
+    paths:
+      - "typescript2/pkg-grammar/**"
+      - ".github/actions/setup-node2/**"
+      - ".github/workflows/sync-grammar-mirror.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-grammar-mirror
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  sync:
+    name: Sync to BoundaryML/textMate-baml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js for typescript2
+        uses: ./.github/actions/setup-node2
+
+      - name: Build grammar artifacts
+        working-directory: typescript2
+        run: pnpm --filter @b/pkg-grammar build
+
+      - name: Committed artifacts must match src/
+        run: git diff --exit-code -- typescript2/pkg-grammar typescript2/app-vscode-ext
+
+      - name: Run grammar tests
+        working-directory: typescript2
+        run: pnpm --filter @b/pkg-grammar test
+
+      - name: Clone mirror
+        env:
+          DEPLOY_KEY: ${{ secrets.TEXTMATE_BAML_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/textmate_baml
+          chmod 600 ~/.ssh/textmate_baml
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/textmate_baml -o IdentitiesOnly=yes"
+          git clone --depth 50 git@github.com:BoundaryML/textMate-baml.git /tmp/mirror-repo
+
+      - name: Assemble and diff against mirror
+        id: diff
+        run: |
+          set -euo pipefail
+          # Stamp with the mirror's current version first, so the version field
+          # alone never registers as a content change (otherwise every rerun
+          # would bump and republish).
+          current="$(jq -r '.version // empty' /tmp/mirror-repo/package.json 2>/dev/null || true)"
+          node typescript2/pkg-grammar/scripts/assemble-mirror.mjs \
+            --out /tmp/mirror-package \
+            ${current:+--version "$current"}
+          rsync -a --delete --exclude .git /tmp/mirror-package/ /tmp/mirror-repo/
+          if [ -n "$(git -C /tmp/mirror-repo status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git -C /tmp/mirror-repo status --porcelain
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Mirror already up to date."
+          fi
+          echo "current=${current}" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp next version and push
+        id: push
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          CURRENT: ${{ steps.diff.outputs.current }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Next version: patch bump on whichever is ahead of npm latest and
+          # the mirror's own package.json (they can diverge if a publish
+          # failed); 0.1.0 if the package has never existed anywhere.
+          latest="$(npm view @boundaryml/baml-grammar version 2>/dev/null || true)"
+          base="$(printf '%s\n%s\n' "$latest" "$CURRENT" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
+          if [ -z "$base" ]; then
+            next="0.1.0"
+          else
+            next="$(echo "$base" | awk -F. '{printf "%d.%d.%d", $1, $2, $3 + 1}')"
+          fi
+          echo "version: base=${base:-<none>} next=${next}"
+          jq --arg v "$next" '.version = $v' /tmp/mirror-repo/package.json > /tmp/pkg.json
+          mv /tmp/pkg.json /tmp/mirror-repo/package.json
+
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/textmate_baml -o IdentitiesOnly=yes"
+          cd /tmp/mirror-repo
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -am "Sync from BoundaryML/baml@${SOURCE_SHA} (v${next})"
+          git push origin main
+          echo "version=${next}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify npm publish landed
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.push.outputs.version }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for @boundaryml/baml-grammar@${VERSION} to appear on npm (published by the mirror's publish.yml)..."
+          for i in $(seq 1 40); do
+            existing="$(npm view "@boundaryml/baml-grammar@${VERSION}" version 2>/dev/null || true)"
+            if [ "$existing" = "$VERSION" ]; then
+              echo "Published: @boundaryml/baml-grammar@${VERSION}"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::@boundaryml/baml-grammar@${VERSION} did not appear on npm within 10 minutes." \
+            "Check the publish workflow run in BoundaryML/textMate-baml." \
+            "If this is the first publish: npm OIDC cannot create a new package —" \
+            "run 'npm publish --access public' once from a mirror checkout, then configure the" \
+            "trusted publisher (repo BoundaryML/textMate-baml, workflow publish.yml) in the npm package settings."
+          exit 1
