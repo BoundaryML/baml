@@ -586,6 +586,39 @@ mod tests {
     }
 
     #[test]
+    fn init_spread_without_watch_does_not_populate_watch_graph() {
+        let mut vm = test_vm(vec![test_class(1)]);
+        let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        let old_value = vm.tlab.alloc_string("old".to_string());
+        let new_value = vm.tlab.alloc_string("new".to_string());
+        let source_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::object(new_value)],
+        )));
+        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Vec::new(),
+            vec![Value::object(old_value)],
+        )));
+
+        let result = vm
+            .init_spread(
+                Value::object(dest_ptr),
+                Value::object(source_ptr),
+                &FieldCopySet {
+                    fields: vec![FieldCopy { source: 0, dest: 0 }],
+                },
+            )
+            .expect("spread should succeed");
+
+        assert!(result.is_none());
+        let mut watch_roots = Vec::new();
+        vm.watch.collect_roots(&mut watch_roots);
+        assert!(watch_roots.is_empty());
+    }
+
+    #[test]
     fn trampoline_function_survives_gc_while_frame_is_active() {
         let (mut vm, native_ptr) = vm_with_native_entry();
 
@@ -2623,6 +2656,8 @@ impl BexVm {
         // stack and call stack should be empty.
         self.stack.clear();
         self.frames.clear();
+        self.watched_vars.clear();
+        self.watch = Watch::new();
         self.pending_call_captures.clear();
         self.seen_throw_values.clear();
         self.thrown_value_causes.clear();
@@ -3938,6 +3973,7 @@ impl BexVm {
             let popped = self.frames.pop().expect("frame stack is not empty");
             match popped {
                 Frame::Bytecode(bf) => {
+                    self.unregister_frame_watches(bf.locals_offset);
                     self.stack.drain(bf.locals_offset..);
                     // Unwound frames close with the unwind status (Errored /
                     // Cancelled / Exited by thrown class); native frames emit
@@ -5244,6 +5280,22 @@ impl BexVm {
         old_value: Value,
         new_value: Value,
     ) {
+        let Some(snapshot) = self.snapshot_watched_node(watched_node) else {
+            return;
+        };
+        self.finish_watched_node_update(watched_node, path, old_value, new_value, snapshot);
+    }
+
+    /// Copies the roots affected by `watched_node` before a mutation occurs.
+    ///
+    /// Array and map element stores must release their object lock before
+    /// walking/deep-copying the graph, so they take this snapshot before the
+    /// atomic locked mutation and finish the topology update afterward.
+    fn snapshot_watched_node(&mut self, watched_node: NodeId) -> Option<(Vec<NodeId>, Vec<Value>)> {
+        if !self.watch.is_watched(watched_node) {
+            return None;
+        }
+
         // Deep-copy previous root values so the notification filter can diff
         // old vs new. Two-pass because `baml_deep_copy` needs `&mut self`,
         // which conflicts with borrowing `self.watch` for root_state.
@@ -5257,6 +5309,17 @@ impl BexVm {
             }
         }
 
+        Some((roots, old_roots_copies))
+    }
+
+    fn finish_watched_node_update(
+        &mut self,
+        watched_node: NodeId,
+        path: watch::Path,
+        old_value: Value,
+        new_value: Value,
+        (roots, old_roots_copies): (Vec<NodeId>, Vec<Value>),
+    ) {
         self.update_watched_node_dependencies(watched_node, path, old_value, new_value);
 
         for (&root, old_value) in roots.iter().zip(old_roots_copies) {
@@ -5273,6 +5336,10 @@ impl BexVm {
         old_value: Value,
         new_value: Value,
     ) {
+        if !self.watch.is_watched(watched_node) {
+            return;
+        }
+
         if let Some(old) = old_value.as_object_ptr() {
             self.watch
                 .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
@@ -5281,6 +5348,36 @@ impl BexVm {
         if let Some(new) = new_value.as_object_ptr() {
             watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
         }
+    }
+
+    /// Removes Watch roots owned by the bytecode frame whose locals begin at
+    /// `locals_offset`.
+    ///
+    /// MIR normally emits `Unwatch` before a watched local leaves scope. This
+    /// is the VM's lifetime backstop for non-local exits (for example, a native
+    /// panic unwinding the frame before its explicit `Unwatch` executes).
+    fn unregister_frame_watches(&mut self, locals_offset: StackIndex) {
+        if self.watched_vars.is_empty() {
+            return;
+        }
+
+        let locals_offset = locals_offset.raw();
+        let frame_watches: Vec<StackIndex> = self
+            .watched_vars
+            .keys()
+            .copied()
+            .filter(|index| index.raw() >= locals_offset)
+            .collect();
+
+        if frame_watches.is_empty() {
+            return;
+        }
+
+        for &local_var_index in &frame_watches {
+            self.watched_vars.remove(&local_var_index);
+        }
+        self.watch
+            .unregister_roots(frame_watches.into_iter().map(NodeId::LocalVar));
     }
 
     /// Load the function object for the given frame.
@@ -6629,14 +6726,6 @@ impl BexVm {
                     if self.watched_vars.remove(&local_var_index).is_some() {
                         let var_node = NodeId::LocalVar(local_var_index);
                         self.watch.unregister_root(var_node);
-                        let value = self.stack[local_var_index];
-                        if let Some(object_index) = value.as_object_ptr() {
-                            self.watch.unlink_edge(
-                                var_node,
-                                watch::Path::Binding,
-                                NodeId::HeapObject(object_index),
-                            );
-                        }
                     }
                     if self.early_yield.should_early_yield() {
                         return Ok(Some(VmExecState::EarlyYield));
@@ -7032,6 +7121,7 @@ impl BexVm {
                         capture_mask,
                         result,
                     );
+                    self.unregister_frame_watches(locals_offset);
                     self.stack.drain(locals_offset..);
                     self.stack.push(result);
                     self.frames.pop();
@@ -7554,6 +7644,93 @@ impl BexVm {
                     self.stack.push(Value::object(ptr));
                 }
 
+                // ── MakeVirtualBoundMethod ────────────────────────────────────
+                // The value analogue of `VirtualCall`: resolve the interface
+                // method from the receiver's concrete `Self` at *bind* time (the
+                // receiver value — and hence its type — is fixed here), producing
+                // a regular `BoundMethod` that additionally carries the impl's
+                // realized frame type args (a blanket impl's or inherited
+                // default's frame, which the receiver's class args can't express).
+                // Stack (top last): `[receiver, type_args…, iface_type, method_name]`.
+                OpCode::MakeVirtualBoundMethod => {
+                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                    let method_value = self.stack.ensure_pop();
+                    let method_name = self.as_string(&method_value)?.to_string();
+                    let iface_value = self.stack.ensure_pop();
+                    let (iface_qtn, iface_args) = {
+                        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+                        match self.get_object(iface_ptr) {
+                            Object::Type(ty) => match ty.as_ref() {
+                                baml_type::RuntimeTy::Interface(qtn, args, _assoc, _attr) => {
+                                    (qtn.clone(), args.clone())
+                                }
+                                other => unreachable!(
+                                    "MakeVirtualBoundMethod interface operand must be an \
+                                     Interface type, found {other:?}"
+                                ),
+                            },
+                            other => unreachable!(
+                                "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                                ObjectType::of(other)
+                            ),
+                        }
+                    };
+                    // The method-level type args (a generic interface method's own
+                    // generics, specialized at the reference site) sit below the
+                    // interface type; they append to the resolved impl frame.
+                    let mut method_type_args: Vec<baml_type::RuntimeTy> =
+                        Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop();
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        method_type_args.push(*ty.clone());
+                    }
+                    method_type_args.reverse();
+                    let receiver = self.stack.ensure_pop();
+                    // The resolver operates on the loose `RuntimeTy`; widen back
+                    // from the value's concrete-realized type.
+                    let self_ty = baml_type::RuntimeTy::from(
+                        self.value_concrete_ty(receiver).unwrap_or_else(|| {
+                            unreachable!(
+                                "value of kind {:?} cannot be a virtual bound-method receiver",
+                                self.type_of(&receiver)
+                            )
+                        }),
+                    );
+                    let (function_ptr, type_args) = {
+                        let (rule, bound_args) = crate::package_baml::resolve_implements_rule(
+                            self,
+                            &self_ty,
+                            &iface_qtn,
+                            &iface_args,
+                        )
+                        .ok_or_else(|| {
+                            VmInternalError::UnresolvedVirtualCall {
+                                method: method_name.clone(),
+                            }
+                        })?;
+                        let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
+                            VmInternalError::UnresolvedVirtualCall {
+                                method: method_name.clone(),
+                            }
+                        })?;
+                        let mut frame =
+                            crate::package_baml::realize_frame(&method.frame, &bound_args);
+                        frame.extend(method_type_args);
+                        (method.fqn, frame)
+                    };
+                    let bound = Object::BoundMethod(BoundMethod {
+                        function: function_ptr,
+                        receiver,
+                        type_args: type_args.into_boxed_slice(),
+                    });
+                    let ptr = self.tlab.alloc(bound);
+                    self.stack.push(Value::object(ptr));
+                }
+
                 // ── MakeGenericFunction ───────────────────────────────────────
                 OpCode::MakeGenericFunction => {
                     let raw = { read_u32_unchecked(code, pc) };
@@ -7915,12 +8092,11 @@ impl BexVm {
                     };
                     let new_value_u8: Option<u8> =
                         new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
+                    let watched_node = NodeId::HeapObject(array_object_index);
+                    let watch_snapshot = self.snapshot_watched_node(watched_node);
                     // Acquire the array's write lock for bounds-check + old
-                    // read + new write atomically. Guard drops at end of
-                    // inner scope before any `&mut self` ops. A negative index
-                    // counts from the end; the resolved offset flows out for the
-                    // watch path below, while an out-of-range index reports the
-                    // original index in the panic.
+                    // read + new write atomically. The Watch snapshot above is
+                    // taken before the mutation without holding this lock.
                     let store_result: Result<(Value, usize), (i64, usize)> = {
                         match self.get_object(array_object_index) {
                             Object::Array(arr) => {
@@ -7974,13 +8150,15 @@ impl BexVm {
                             )));
                         }
                     };
-                    let watched_node = NodeId::HeapObject(array_object_index);
-                    self.update_watched_node(
-                        watched_node,
-                        watch::Path::ArrayIndex(index),
-                        old_value,
-                        new_value,
-                    );
+                    if let Some(snapshot) = watch_snapshot {
+                        self.finish_watched_node_update(
+                            watched_node,
+                            watch::Path::ArrayIndex(index),
+                            old_value,
+                            new_value,
+                            snapshot,
+                        );
+                    }
                     self.heap.write_barrier(array_object_index, new_value);
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {
@@ -7997,8 +8175,11 @@ impl BexVm {
                     let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?.clone();
                     let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                    // Take the map's write lock for capture-old + insert-new
-                    // atomically. Guard drops before any `&mut self` ops.
+                    let watched_node = NodeId::HeapObject(map_index);
+                    let watch_snapshot = self.snapshot_watched_node(watched_node);
+                    // Keep capture-old + insert-new atomic. The Watch snapshot
+                    // above is taken before the mutation without holding this
+                    // lock.
                     let store_result: Result<Value, ObjectType> = {
                         match self.get_object(map_index) {
                             Object::Map(map) => {
@@ -8020,13 +8201,15 @@ impl BexVm {
                             .into());
                         }
                     };
-                    let watched_node = NodeId::HeapObject(map_index);
-                    self.update_watched_node(
-                        watched_node,
-                        watch::Path::MapKey(key.to_string()),
-                        old_value,
-                        new_value,
-                    );
+                    if let Some(snapshot) = watch_snapshot {
+                        self.finish_watched_node_update(
+                            watched_node,
+                            watch::Path::MapKey(key.to_string()),
+                            old_value,
+                            new_value,
+                            snapshot,
+                        );
+                    }
                     self.heap.write_barrier(map_index, new_value);
                     let notifications = self.process_notifications(watched_node)?;
                     if !notifications.is_empty() {

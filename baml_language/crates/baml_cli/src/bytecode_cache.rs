@@ -620,10 +620,13 @@ fn syntactic_type_names(db: &ProjectDatabase, file: SourceFile) -> HashSet<Strin
     }
     for imp in item_tree.impls.values() {
         add_type_display(&imp.interface_target, &mut names);
-    }
-    for imp in &item_tree.implements_for {
-        add_type_display(&imp.interface_target, &mut names);
-        add_type_display(&imp.for_target, &mut names);
+        // Out-of-body (`Free`) impls carry an explicit for-target `TypeExpr`; an
+        // in-class impl's for-target is the class itself (no `TypeExpr` to
+        // display). `names` is a set, so the interface_target added above is not
+        // double-counted for free impls.
+        if let baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } = &imp.subject {
+            add_type_display(for_target, &mut names);
+        }
     }
     names
 }
@@ -648,9 +651,10 @@ fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
 /// (and thus a coherence verdict), so an impl-free edit never trips the fallback.
 fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    !item_tree.impls.is_empty()
-        || !item_tree.implements_for.is_empty()
-        || item_tree.classes.values().any(|c| !c.implements.is_empty())
+    // The unified `impls` map holds both in-class and out-of-body impl blocks, so
+    // it subsumes the removed flat `implements_for` view; a class `implements`
+    // block is a distinct construct still worth a separate check.
+    !item_tree.impls.is_empty() || item_tree.classes.values().any(|c| !c.implements.is_empty())
 }
 
 /// Whether `function`'s bytecode bakes a type's layout through an operand that
@@ -685,6 +689,7 @@ fn bakes_type_layout(function: &bex_vm_types::types::Function) -> bool {
                 | I::LoadType(_)
                 | I::VirtualCall { .. }
                 | I::VirtualCallWithRuntimeId { .. }
+                | I::MakeVirtualBoundMethod { .. }
         )
     })
 }

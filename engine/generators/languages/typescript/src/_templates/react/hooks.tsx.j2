@@ -50,7 +50,7 @@ export type HookInput<FunctionName extends FunctionNames = FunctionNames, Option
   stream?: Options['stream']
   onStreamData?: Options['stream'] extends false ? never : (response?: StreamDataType<FunctionName>) => void
   onFinalData?: (response?: FinalDataType<FunctionName>) => void
-  onData?: (response?: Options['stream'] extends false ? FinalDataType<FunctionName> : FinalDataType<FunctionName> | StreamDataType<FunctionName>) => void
+  onData?: (response?: Options['stream'] extends false ? FinalDataType<FunctionName> : StreamDataType<FunctionName>) => void
   onError?: (error: BamlErrors) => void
 }
 
@@ -65,7 +65,7 @@ export type HookStatus<Options extends { stream?: boolean } = { stream?: true }>
  * Return type for BAML React hooks.
  */
 export type HookOutput<FunctionName extends FunctionNames = FunctionNames, Options extends { stream?: boolean } = { stream?: true }> = {
-  data?: Options['stream'] extends false ? FinalDataType<FunctionName> : FinalDataType<FunctionName> | StreamDataType<FunctionName>
+  data?: Options['stream'] extends false ? FinalDataType<FunctionName> : StreamDataType<FunctionName>
   finalData?: FinalDataType<FunctionName>
   streamData?: Options['stream'] extends false ? never : StreamDataType<FunctionName>
   isLoading: boolean

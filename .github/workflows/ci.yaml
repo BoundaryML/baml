@@ -218,7 +218,11 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':typescript2/pkg-grammar/**' \
+            ':typescript2/pkg-grammar-hljs/**' \
+            ':typescript2/pkg-grammar-treesitter/**' \
+            ':typescript2/pnpm-workspace.yaml' \
             ':typescript2/app-vscode-ext/syntaxes/**' \
+            ':typescript2/app-vscode-ext/language-configuration.json' \
             ':typescript2/app-vscode-ext/package.json' \
             ':typescript2/pnpm-lock.yaml' \
             ':.github/actions/setup-node2/**' \
@@ -502,9 +506,89 @@ jobs:
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
 
-      - name: "Run grammar snapshot tests"
+      - name: "Build grammar artifacts"
+        run: pnpm --filter @b/pkg-grammar build
+        working-directory: typescript2
+
+      - name: "Committed artifacts must match src/"
+        # build regenerates baml.tmLanguage.json (+ the app-vscode-ext copies
+        # via sync.mjs); any diff means someone edited src/ without committing
+        # the regenerated artifacts, or edited an artifact by hand.
+        run: git diff --exit-code -- typescript2/pkg-grammar typescript2/app-vscode-ext
+
+      - name: "Run grammar tests"
         run: pnpm --filter @b/pkg-grammar test
         working-directory: typescript2
+
+      - name: "Run highlight.js grammar tests"
+        # The hljs port validates against pkg-grammar's fixtures, so a grammar
+        # change that the port doesn't handle fails here (conformance gate).
+        run: pnpm --filter @b/pkg-grammar-hljs test
+        working-directory: typescript2
+
+      - name: "Run tree-sitter grammar tests"
+        # Generates the parser and runs the corpus + fixture parse gate.
+        run: pnpm --filter @b/pkg-grammar-treesitter test
+        working-directory: typescript2
+
+  linguist-compile-gate:
+    name: "Linguist grammar-compiler gate"
+    runs-on: ubuntu-latest
+    needs: determine_changes
+    if: needs.determine_changes.outputs.grammar == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    steps:
+      - name: "Checkout Branch"
+        uses: useblacksmith/checkout@v1
+        with:
+          persist-credentials: false
+
+      - name: "Setup Node.js for typescript2"
+        uses: ./.github/actions/setup-node2
+
+      - name: "Build grammar artifacts"
+        run: pnpm --filter @b/pkg-grammar build
+        working-directory: typescript2
+
+      - name: "Checkout github-linguist/linguist"
+        env:
+          # GitHub's release process compiles every vendored grammar with this
+          # tool; running the same compile here means a grammar that passes CI
+          # cannot break .baml highlighting on github.com when Linguist next
+          # pulls the BoundaryML/textMate-baml mirror. Bump the ref alongside
+          # Linguist releases.
+          LINGUIST_REF: v9.6.0
+        run: |
+          git clone --depth 1 --branch "$LINGUIST_REF" \
+            https://github.com/github-linguist/linguist.git /tmp/linguist
+
+      - name: "Stage candidate grammar as the textMate-baml vendor dir"
+        run: |
+          set -euo pipefail
+          # Drop the registered entry for our vendor dir so the compiler treats
+          # the staged grammar as a fresh add (avoids duplicate-scope errors
+          # against the currently-vendored copy).
+          python3 - <<'EOF'
+          import re
+          path = "/tmp/linguist/grammars.yml"
+          with open(path) as f:
+              content = f.read()
+          content = re.sub(r"vendor/grammars/textMate-baml:\n(- [^\n]+\n)+", "", content)
+          with open(path, "w") as f:
+              f.write(content)
+          EOF
+          rm -rf /tmp/linguist/vendor/grammars/textMate-baml
+          mkdir -p /tmp/linguist/vendor/grammars/textMate-baml/grammars
+          cp typescript2/pkg-grammar/baml.tmLanguage.json \
+            /tmp/linguist/vendor/grammars/textMate-baml/grammars/
+
+      - name: "Compile with Linguist's grammar-compiler"
+        working-directory: /tmp/linguist
+        run: |
+          set -euo pipefail
+          export USER="${USER:-$(whoami)}"
+          # No -f: any regex that Linguist's Oniguruma->PCRE conversion cannot
+          # handle must fail this job, not surface at Linguist's next release.
+          script/grammar-compiler add vendor/grammars/textMate-baml
 
   miri-tests:
     name: "Miri (unsafe code verification)"
@@ -958,6 +1042,7 @@ jobs:
       - docs
       - webview-tests
       - grammar-tests
+      - linguist-compile-gate
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
       - prof-concurrency
       - proto-sync
@@ -984,6 +1069,7 @@ jobs:
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| grammar-tests | ${{ needs.grammar-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| linguist-compile-gate | ${{ needs.linguist-compile-gate.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
           echo "| prof-concurrency | ${{ needs.prof-concurrency.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY

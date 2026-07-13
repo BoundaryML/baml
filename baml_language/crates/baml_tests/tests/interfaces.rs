@@ -170,7 +170,7 @@ fn basic_interface_parses() {
         interface Animal {
             name: string
             age: int
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
 
         class Dog {
@@ -209,7 +209,7 @@ fn interface_default_method_inherited() {
     assert_no_interface_errors(
         r#"
         interface Printable {
-            function display(self) -> string {
+            function display(self) -> string throws never {
                 return "<printable>"
             }
         }
@@ -229,7 +229,7 @@ fn interface_requires_aggregates_contracts() {
         interface Aged { age: int }
         interface Person requires Named, Aged {
             occupation: string
-            function introduce(self) -> string
+            function introduce(self) -> string throws never
         }
 
         class Employee {
@@ -254,7 +254,7 @@ fn generic_interface_parses() {
     assert_no_interface_errors(
         r#"
         interface Container<T> {
-            function size(self) -> int {
+            function size(self) -> int throws never {
                 return 0
             }
         }
@@ -272,10 +272,10 @@ fn class_can_implement_multiple_interfaces() {
     assert_no_interface_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         interface Swimmer {
-            function swim(self) -> string
+            function swim(self) -> string throws never
         }
 
         class Duck {
@@ -298,7 +298,7 @@ fn missing_required_method_is_compile_error() {
     assert_compile_error_code(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
 
         class Incomplete {
@@ -314,13 +314,13 @@ fn missing_required_method_message_names_method_and_interface() {
     assert_compile_error_contains(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Mute {
             implements Animal {}
         }
         "#,
-        "required method `speak` of interface `Animal`",
+        "method `speak` required by interface `Animal`",
     );
 }
 
@@ -332,7 +332,9 @@ fn implements_unknown_interface_is_compile_error() {
             implements DoesNotExist {}
         }
         "#,
-        "E0112",
+        // Unknown interface in `implements` surfaces as the general unresolved-type
+        // error (E0002 `unresolved type: DoesNotExist`), not a dedicated E0112.
+        "E0002",
     );
 }
 
@@ -403,7 +405,7 @@ fn unknown_method_in_implements_block_is_compile_error() {
     assert_compile_error_code(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -423,7 +425,7 @@ fn duplicate_implements_block_is_compile_error() {
     assert_compile_error_code(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
 
         class Dog {
@@ -435,7 +437,7 @@ fn duplicate_implements_block_is_compile_error() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -444,7 +446,7 @@ fn duplicate_same_generic_interface_instantiation_is_compile_error() {
     assert_compile_error_code(
         r#"
         interface Converter<T> {
-            function convert(self) -> T
+            function convert(self) -> T throws never
         }
 
         class MultiFormat {
@@ -456,7 +458,7 @@ fn duplicate_same_generic_interface_instantiation_is_compile_error() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -468,7 +470,7 @@ fn duplicate_generic_interface_instantiation_via_alias_is_compile_error() {
     assert_compile_error_code(
         r#"
         interface Converter<T> {
-            function convert(self) -> T
+            function convert(self) -> T throws never
         }
 
         type IntAlias = int
@@ -482,7 +484,7 @@ fn duplicate_generic_interface_instantiation_via_alias_is_compile_error() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -497,7 +499,7 @@ fn nested_alias_duplicate_implements_is_detected() {
     assert_compile_error_code(
         r#"
         interface Converter<T> {
-            function convert(self) -> T
+            function convert(self) -> T throws never
         }
 
         type IntList = int[]
@@ -511,7 +513,7 @@ fn nested_alias_duplicate_implements_is_detected() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -655,7 +657,7 @@ fn implementing_requires_chain_satisfies_parent_required_methods() {
         interface Aged { age: int }
         interface Person requires Named, Aged {
             occupation: string
-            function introduce(self) -> string
+            function introduce(self) -> string throws never
         }
 
         class Employee {
@@ -663,18 +665,19 @@ fn implementing_requires_chain_satisfies_parent_required_methods() {
             implements Person {}
         }
         "#,
-        "required method `introduce` of interface `Person`",
+        "method `introduce` required by interface `Person`",
     );
 }
 
 #[test]
 fn requires_chain_required_method_must_be_provided() {
-    // `Person` requires `Greeter`, which has a required method `greet`.
-    // Implementing `Person` should require `greet`.
+    // `Person` requires `Greeter`. Implementing `Person` without an explicit
+    // `implements Greeter` is rejected: the required parent must be implemented
+    // (E0125), which is what carries `Greeter`'s `greet` obligation.
     assert_compile_error_contains(
         r#"
         interface Greeter {
-            function greet(self) -> string
+            function greet(self) -> string throws never
         }
         interface Person requires Greeter {
             name: string
@@ -684,7 +687,7 @@ fn requires_chain_required_method_must_be_provided() {
             implements Person {}
         }
         "#,
-        "required method `greet`",
+        "also requires implementing `Greeter`",
     );
 }
 
@@ -695,8 +698,8 @@ fn empty_implements_block_with_all_defaults_is_ok() {
     assert_no_interface_errors(
         r#"
         interface Printable {
-            function display(self) -> string { return "x" }
-            function verbose(self) -> string { return "y" }
+            function display(self) -> string throws never { return "x" }
+            function verbose(self) -> string throws never { return "y" }
         }
 
         class Item {
@@ -711,7 +714,7 @@ fn interface_with_only_required_methods_parses() {
     assert_no_interface_errors(
         r#"
         interface Closeable {
-            function close(self) -> null
+            function close(self) -> null throws never
         }
 
         class File {
@@ -730,7 +733,7 @@ fn class_can_have_methods_outside_of_implements() {
     assert_no_interface_errors(
         r#"
         interface Speaker {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
 
         class Dog {
@@ -748,15 +751,18 @@ fn class_can_have_methods_outside_of_implements() {
 
 #[test]
 fn diagnostic_codes_in_expected_range() {
-    // Regression: every interface diagnostic code we emit must be in the
-    // E0112+ range we reserved in `baml_compiler_diagnostics`.
+    // Regression: interface-specific diagnostics we emit stay in the E0112+
+    // range we reserved in `baml_compiler_diagnostics`. (Unknown target names
+    // are a general name-resolution failure and surface as E0002 instead.)
     let bad_cases: &[(&str, &str)] = &[
         // (snippet, expected code)
         (
             "interface I { function f(self) -> string } class C { implements I {} }",
             "E0113",
         ),
-        ("class C { implements Missing {} }", "E0112"),
+        // Unknown interface names surface as the general E0002 unresolved-type
+        // error rather than a dedicated interface-range code.
+        ("class C { implements Missing {} }", "E0002"),
         ("class X { x: int } class C { implements X {} }", "E0119"),
     ];
     for (source, code) in bad_cases {
@@ -776,7 +782,7 @@ fn class_can_be_passed_to_interface_param_when_implements() {
     assert_no_interface_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -803,7 +809,7 @@ fn class_without_implements_cannot_satisfy_interface_param() {
     assert_compile_error_contains(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         // Note: no `implements Animal`.
         class Robot {
@@ -828,7 +834,7 @@ fn method_signature_mismatch_return_type() {
     assert_compile_error_code(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Robot {
             implements Animal {
@@ -845,7 +851,7 @@ fn method_signature_mismatch_param_type() {
     assert_compile_error_code(
         r#"
         interface Adder {
-            function add(self, a: int, b: int) -> int
+            function add(self, a: int, b: int) -> int throws never
         }
         class BadAdder {
             implements Adder {
@@ -858,8 +864,12 @@ fn method_signature_mismatch_param_type() {
 }
 
 #[test]
-fn method_signature_mismatch_missing_throws_annotation() {
-    assert_compile_error_code(
+fn impl_may_narrow_interface_method_throws() {
+    // Throws is covariant in method conformance: an impl that throws *less* than the
+    // interface method declares still conforms. Here the interface's `run` declares
+    // `throws IoError` but the impl's `run` is infallible (`throws never`), which is a
+    // subtype — so this is accepted, not an E0120 signature mismatch.
+    assert_zero_compile_errors(
         r#"
         class IoError {
             message: string
@@ -877,7 +887,6 @@ fn method_signature_mismatch_missing_throws_annotation() {
             }
         }
         "#,
-        "E0120",
     );
 }
 
@@ -886,7 +895,7 @@ fn method_signature_match_is_ok() {
     assert_no_interface_errors(
         r#"
         interface Adder {
-            function add(self, a: int, b: int) -> int
+            function add(self, a: int, b: int) -> int throws never
         }
         class GoodAdder {
             implements Adder {
@@ -925,7 +934,7 @@ fn interface_default_method_body_gets_exhaustiveness_checking() {
     let errors = collect_compile_errors(
         r#"
         interface Labels {
-            function label(self, value: bool) -> string {
+            function label(self, value: bool) -> string throws never {
                 return match (value) {
                     true => "yes"
                 }
@@ -958,7 +967,7 @@ fn calling_method_through_interface_typed_param() {
         r#"
         interface Animal {
             name: string
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
 
         class Dog {
@@ -991,10 +1000,10 @@ fn class_with_same_named_methods_from_two_interfaces_compiles() {
     assert_no_interface_errors(
         r#"
         interface Serializer {
-            function encode(self) -> string
+            function encode(self) -> string throws never
         }
         interface BinarySerializer {
-            function encode(self) -> string
+            function encode(self) -> string throws never
         }
 
         class Hybrid {
@@ -1017,10 +1026,10 @@ fn unqualified_call_on_ambiguous_class_errors() {
     let errors = collect_compile_errors(
         r#"
         interface Serializer {
-            function encode(self) -> string
+            function encode(self) -> string throws never
         }
         interface BinarySerializer {
-            function encode(self) -> string
+            function encode(self) -> string throws never
         }
         class Hybrid {
             implements Serializer {
@@ -1053,13 +1062,13 @@ fn three_way_unqualified_call_lists_every_source() {
     let errors = collect_compile_errors(
         r#"
         interface A {
-            function id(self) -> string
+            function id(self) -> string throws never
         }
         interface B {
-            function id(self) -> string
+            function id(self) -> string throws never
         }
         interface C {
-            function id(self) -> string
+            function id(self) -> string throws never
         }
 
         class Tri {
@@ -1094,10 +1103,10 @@ fn class_own_method_does_not_resolve_ambiguous_interface_method_call() {
     assert_compile_error_code(
         r#"
         interface Serializer {
-            function encode(self) -> string
+            function encode(self) -> string throws never
         }
         interface BinarySerializer {
-            function encode(self) -> string
+            function encode(self) -> string throws never
         }
         class Hybrid {
             function encode(self) -> string { return "class" }
@@ -1122,10 +1131,10 @@ fn distinct_method_names_across_interfaces_is_not_ambiguous() {
     assert_no_interface_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         interface Swimmer {
-            function swim(self) -> string
+            function swim(self) -> string throws never
         }
 
         class Duck {
@@ -1149,7 +1158,7 @@ fn match_with_catchall_on_interface_is_exhaustive() {
     assert_no_interface_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -1173,7 +1182,7 @@ fn match_without_catchall_on_interface_is_compile_error() {
     let errors = collect_compile_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -1212,7 +1221,7 @@ fn match_narrows_interface_to_concrete_class() {
     assert_zero_compile_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             breed: string
@@ -1239,7 +1248,7 @@ fn reflect_class_implements_interface() {
     assert_no_interface_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -1261,7 +1270,7 @@ fn reflect_implemented_by_is_reverse() {
     assert_no_interface_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -1285,7 +1294,7 @@ fn reflect_implementors_returns_type_array() {
     assert_no_interface_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -1314,7 +1323,7 @@ fn calling_implements_block_method_works() {
     assert_no_interface_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
 
         class Dog {
@@ -1340,7 +1349,7 @@ fn nominal_subtype_via_requires_chain() {
         r#"
         interface Named { name: string }
         interface Person requires Named {
-            function introduce(self) -> string
+            function introduce(self) -> string throws never
         }
 
         class Employee {
@@ -1715,7 +1724,7 @@ fn generic_interface_method_swapped_type_var_impls_overlap() {
     assert_compile_error_code(
         r#"
         interface Reporter<T, E> {
-            function show(self) -> T
+            function show(self) -> T throws never
         }
         class Pair<L, R> {
             left: L
@@ -1777,7 +1786,7 @@ async fn default_call_from_override_returns_string() {
     let output = baml_test!(
         r#"
         interface Logger {
-            function log(self, msg: string) -> string {
+            function log(self, msg: string) -> string throws never {
                 return "[LOG] " + msg
             }
         }
@@ -1808,10 +1817,10 @@ async fn default_resolves_to_current_block() {
     let output = baml_test!(
         r#"
         interface A {
-            function tag(self) -> string { return "A" }
+            function tag(self) -> string throws never { return "A" }
         }
         interface B {
-            function tag(self) -> string { return "B" }
+            function tag(self) -> string throws never { return "B" }
         }
         class X {
             implements A {
@@ -1842,10 +1851,10 @@ async fn as_projection_same_signature_runtime() {
     let output = baml_test!(
         r#"
         interface Serializer {
-            function encode(self) -> string
+            function encode(self) -> string throws never
         }
         interface BinarySerializer {
-            function encode(self) -> string
+            function encode(self) -> string throws never
         }
         class Hybrid {
             implements Serializer {
@@ -1872,7 +1881,7 @@ async fn as_projection_works_when_unambiguous_runtime() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -1896,10 +1905,10 @@ async fn self_as_projection_call_inside_unrelated_block() {
     let output = baml_test!(
         r#"
         interface Greeter {
-            function greet(self) -> string
+            function greet(self) -> string throws never
         }
         interface Farewell {
-            function bye(self) -> string
+            function bye(self) -> string throws never
         }
         class Polite {
             name: string
@@ -1931,13 +1940,13 @@ async fn diamond_as_projection_call_runtime() {
     let output = baml_test!(
         r#"
         interface Base {
-            function foo(self) -> string { return "Base" }
+            function foo(self) -> string throws never { return "Base" }
         }
         interface Left requires Base {
-            function foo(self) -> string { return "Left" }
+            function foo(self) -> string throws never { return "Left" }
         }
         interface Right requires Base {
-            function foo(self) -> string { return "Right" }
+            function foo(self) -> string throws never { return "Right" }
         }
         class D {
             implements Base {}
@@ -1961,7 +1970,7 @@ fn old_interface_qualified_projection_is_compile_error() {
     assert_compile_error_contains(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -1973,7 +1982,9 @@ fn old_interface_qualified_projection_is_compile_error() {
             return d.Animal.speak()
         }
         "#,
-        ".as<Animal>",
+        // The old `d.Interface.method()` syntax is not special-cased: `Animal`
+        // is simply not a member of `Dog`, so this is a plain no-member error.
+        "has no member `Animal`",
     );
 }
 
@@ -1984,7 +1995,7 @@ async fn interface_typed_var_dispatches_to_concrete() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Cat {
             implements Animal {
@@ -2008,7 +2019,7 @@ async fn heterogeneous_interface_array_dispatches() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -2038,7 +2049,7 @@ async fn cast_to_parent_interface_via_requires_runtime() {
         r#"
         interface Named { name: string }
         interface Person requires Named {
-            function introduce(self) -> string
+            function introduce(self) -> string throws never
         }
         class Employee {
             name: string
@@ -2066,8 +2077,8 @@ async fn default_method_dispatch_through_interface_var() {
         r#"
         interface Animal {
             name: string
-            function speak(self) -> string
-            function describe(self) -> string {
+            function speak(self) -> string throws never
+            function describe(self) -> string throws never {
                 return "animal: " + self.name
             }
         }
@@ -2100,8 +2111,8 @@ async fn interface_default_method_calls_self_param_method() {
     let output = baml_test!(
         r#"
         interface Equatable {
-            function eq(self, other: Self) -> bool
-            function neq(self, other: Self) -> bool {
+            function eq(self, other: Self) -> bool throws never
+            function neq(self, other: Self) -> bool throws never {
                 return !self.eq(other)
             }
         }
@@ -2130,7 +2141,7 @@ async fn generic_bound_self_param_method_call() {
     let output = baml_test!(
         r#"
         interface Equatable {
-            function eq(self, other: Self) -> bool
+            function eq(self, other: Self) -> bool throws never
         }
         class Pair {
             a: int
@@ -2157,7 +2168,7 @@ fn self_param_method_rejects_heterogeneous_generic_args() {
     assert_compile_error_contains(
         r#"
         interface Equatable {
-            function eq(self, other: Self) -> bool
+            function eq(self, other: Self) -> bool throws never
         }
         function cmp<S extends Equatable, U extends Equatable>(x: S, y: U) -> bool {
             return x.eq(y)
@@ -2175,7 +2186,7 @@ fn self_param_method_rejects_mismatched_literal_arg() {
     assert_compile_error_contains(
         r#"
         interface Equatable {
-            function eq(self, other: Self) -> bool
+            function eq(self, other: Self) -> bool throws never
         }
         function bad<T extends Equatable>(x: T) -> bool {
             return x.eq(5)
@@ -2214,7 +2225,7 @@ fn self_param_method_rejects_nested_self_mismatch() {
     assert_compile_error_contains(
         r#"
         interface Adder {
-            function addAll(self, others: Self[]) -> int
+            function addAll(self, others: Self[]) -> int throws never
         }
         function cross<T extends Adder, U extends Adder>(x: T, ys: U[]) -> int {
             return x.addAll(ys)
@@ -2231,7 +2242,7 @@ async fn self_param_method_accepts_matching_nested_self() {
     let output = baml_test!(
         r#"
         interface Adder {
-            function addAll(self, others: Self[]) -> int
+            function addAll(self, others: Self[]) -> int throws never
         }
         class Acc {
             base: int
@@ -2261,7 +2272,7 @@ fn bound_self_method_value_rejects_heterogeneous_arg() {
     assert_compile_error_contains(
         r#"
         interface Adder {
-            function addOne(self, other: Self) -> int
+            function addOne(self, other: Self) -> int throws never
         }
         function cross<T extends Adder, U extends Adder>(x: T, y: U) -> int {
             let f = x.addOne
@@ -2281,7 +2292,7 @@ async fn bound_self_method_value_accepts_matching_arg() {
     let output = baml_test!(
         r#"
         interface Adder {
-            function addOne(self, other: Self) -> int
+            function addOne(self, other: Self) -> int throws never
         }
         class Acc {
             base: int
@@ -2308,7 +2319,7 @@ async fn interface_default_method_reference_accepts_explicit_receiver() {
     let output = baml_test!(
         r#"
         interface Describable {
-            function describe(self) -> string {
+            function describe(self) -> string throws never {
                 return "default"
             }
         }
@@ -2368,7 +2379,7 @@ async fn override_dispatched_not_default() {
         r#"
         interface Animal {
             name: string
-            function describe(self) -> string {
+            function describe(self) -> string throws never {
                 return "default:" + self.name
             }
         }
@@ -2399,7 +2410,7 @@ async fn match_narrows_to_concrete_field_access() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             breed: string
@@ -2428,7 +2439,7 @@ async fn match_destructures_interface_fields() {
         r#"
         interface Animal {
             name: string
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             name: string
@@ -2462,7 +2473,7 @@ async fn match_destructures_interface_fields_directly() {
         r#"
         interface Animal {
             name: string
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             name: string
@@ -2882,7 +2893,7 @@ async fn match_destructures_concrete_implementor_fields() {
         r#"
         interface Animal {
             name: string
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             name: string
@@ -2921,7 +2932,7 @@ async fn match_open_interface_with_wildcard_works() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -2955,9 +2966,9 @@ async fn generic_interface_concrete_type_param_runtime() {
     let output = baml_test!(
         r#"
         interface Container<T> {
-            function add(self, item: T) -> null
-            function get(self, index: int) -> T?
-            function size(self) -> int
+            function add(self, item: T) -> null throws never
+            function get(self, index: int) -> T? throws never
+            function size(self) -> int throws never
         }
         class IntStack {
             items: int[]
@@ -2990,7 +3001,7 @@ async fn same_generic_interface_different_type_params_disambiguated_with_as_proj
     let output = baml_test!(
         r#"
         interface Converter<T> {
-            function convert(self) -> T
+            function convert(self) -> T throws never
         }
         class MultiFormat {
             data: string
@@ -3052,7 +3063,7 @@ async fn reflect_type_of_interface_to_string() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         function main() -> string {
             return reflect.type_of<Animal>().to_string()
@@ -3070,7 +3081,7 @@ async fn reflect_implements_true_for_implementor() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -3090,7 +3101,7 @@ async fn reflect_implements_false_for_non_implementor() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Rock {
             mass: int
@@ -3108,7 +3119,7 @@ async fn reflect_implemented_by_inverse_runtime() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -3131,7 +3142,7 @@ async fn reflect_implements_transitive_via_requires() {
         r#"
         interface Named { name: string }
         interface Person requires Named {
-            function introduce(self) -> string
+            function introduce(self) -> string throws never
         }
         class Employee {
             name: string
@@ -3156,7 +3167,7 @@ async fn reflect_implementors_lists_lexicographic_order_and_identity() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -3211,7 +3222,7 @@ async fn reflect_implements_inside_generic_function() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -3235,7 +3246,7 @@ async fn reflect_interface_does_not_implement_itself() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         function main() -> bool {
             return reflect.type_of<Animal>().implements(reflect.type_of<Animal>())
@@ -3252,7 +3263,7 @@ async fn class_own_method_callable_from_implements_block() {
     let output = baml_test!(
         r#"
         interface Configurable {
-            function configure(self) -> string
+            function configure(self) -> string throws never
         }
         class Server {
             host: string
@@ -3290,7 +3301,7 @@ async fn class_inherent_method_does_not_override_interface_default_through_exist
     let output = baml_test!(
         r#"
         interface Greeter {
-            function greet(self) -> string {
+            function greet(self) -> string throws never {
                 return "default"
             }
         }
@@ -3328,7 +3339,7 @@ fn class_inherent_method_does_not_satisfy_interface_method() {
     assert_compile_error_code(
         r#"
         interface Greeter {
-            function greet(self) -> string
+            function greet(self) -> string throws never
         }
 
         class Person {
@@ -3427,7 +3438,7 @@ fn generic_bound_alias_syntax_is_compile_error() {
     assert_compile_error_contains(
         r#"
         interface Converter<T> {
-            function convert(self) -> T
+            function convert(self) -> T throws never
         }
         function read_int<T extends Converter<int> as Ints>(m: T) -> int {
             return m.as<Converter<int>>.convert()
@@ -3442,7 +3453,7 @@ async fn generic_bound_as_projection_selects_generic_interface_instantiation() {
     let output = baml_test!(
         r#"
         interface Converter<T> {
-            function convert(self) -> T
+            function convert(self) -> T throws never
         }
         class MultiFormat {
             data: string
@@ -3469,7 +3480,7 @@ async fn generic_bound_direct_method_call_dispatches_through_interface() {
     let output = baml_test!(
         r#"
         interface Converter<T> {
-            function convert(self) -> T
+            function convert(self) -> T throws never
         }
         class IntBox {
             value: int
@@ -3493,7 +3504,7 @@ fn same_interface_different_type_args_is_not_assignable() {
     assert_compile_error_contains(
         r#"
         interface Box<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         function bad(x: Box<int>) -> Box<string> {
             return x
@@ -3508,7 +3519,7 @@ async fn generic_interface_method_preserves_method_type_param() {
     let output = baml_test!(
         r#"
         interface Echo<T> {
-            function echo<U>(self, value: U) -> U
+            function echo<U>(self, value: U) -> U throws never
         }
         class Echoer {
             implements Echo<int> {
@@ -3534,7 +3545,7 @@ fn generic_interface_method_explicit_type_args_are_checked() {
     assert_compile_error_contains(
         r#"
         interface Echo<T> {
-            function echo<U>(self, value: U) -> U
+            function echo<U>(self, value: U) -> U throws never
         }
         class Echoer {
             implements Echo<int> {
@@ -3618,7 +3629,7 @@ fn in_body_implements_rejects_wrong_interface_generic_arg_count() {
     assert_compile_error_contains(
         r#"
         interface Label<T> {
-            function label(self) -> T
+            function label(self) -> T throws never
         }
         class Thing {
             implements Label<int, string> {
@@ -3637,7 +3648,7 @@ fn in_body_implements_rejects_too_few_explicit_interface_generic_arg_count() {
     assert_compile_error_contains(
         r#"
         interface PairLabel<L, R> {
-            function label(self) -> L
+            function label(self) -> L throws never
         }
         class Thing {
             implements PairLabel<int> {
@@ -3656,7 +3667,7 @@ fn out_of_body_implements_rejects_wrong_interface_generic_arg_count() {
     assert_compile_error_contains(
         r#"
         interface Label<T> {
-            function label(self) -> T
+            function label(self) -> T throws never
         }
         class Thing {}
         implements Label<int, string> for Thing {
@@ -3674,7 +3685,7 @@ fn out_of_body_implements_rejects_too_few_explicit_interface_generic_arg_count()
     assert_compile_error_contains(
         r#"
         interface PairLabel<L, R> {
-            function label(self) -> L
+            function label(self) -> L throws never
         }
         class Thing {}
         implements PairLabel<int> for Thing {
@@ -3722,7 +3733,7 @@ fn required_interface_method_generic_bound_mismatch_is_error() {
         r#"
         interface Named { name: string }
         interface Reader {
-            function read<T>(self, value: T) -> string
+            function read<T>(self, value: T) -> string throws never
         }
         class ReaderImpl {
             implements Reader {
@@ -3737,22 +3748,19 @@ fn required_interface_method_generic_bound_mismatch_is_error() {
 }
 
 #[test]
-fn generic_bounds_accept_compound_type_expressions() {
-    assert_zero_compile_errors(
+fn generic_bounds_reject_compound_type_expressions() {
+    // Bounds are interfaces only — a union, list, or optional type is not an interface,
+    // so none can be a function generic bound.
+    assert_compile_error_contains(
         r#"
         function keep_union<T extends int | string>(x: T) -> int {
             return 1
         }
-        function len_list<T extends int[]>(xs: T) -> int {
-            return 1
-        }
-        function keep_optional<T extends string?>(x: T) -> int {
-            return 1
-        }
         function main() -> int {
-            return keep_union<int>(1) + len_list<int[]>([1, 2, 3])
+            return 1
         }
         "#,
+        "is not an interface",
     );
 }
 
@@ -3800,7 +3808,7 @@ fn llm_function_can_return_interface_type() {
     assert_no_interface_errors(
         r##"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -3838,7 +3846,7 @@ fn llm_function_returning_interface_enumerates_implementors_in_schema() {
             options { model "gpt-4o" }
         }
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -3870,7 +3878,7 @@ async fn self_return_type_carries_concrete_class() {
     let output = baml_test!(
         r#"
         interface Cloneable {
-            function clone(self) -> Self
+            function clone(self) -> Self throws never
         }
         class Box {
             value: int
@@ -3896,7 +3904,7 @@ async fn self_return_on_interface_typed_receiver_collapses_to_interface() {
         r#"
         interface Cloneable {
             value: int
-            function clone(self) -> Self
+            function clone(self) -> Self throws never
         }
         class Box {
             value: int
@@ -3921,7 +3929,7 @@ async fn multi_self_method_accepts_concrete_receiver() {
     let output = baml_test!(
         r#"
         interface Equatable {
-            function same(self, other: Self) -> bool
+            function same(self, other: Self) -> bool throws never
         }
         class Box {
             value: int
@@ -3946,7 +3954,7 @@ fn multi_self_method_rejected_on_interface_typed_receiver() {
     assert_compile_error_contains(
         r#"
         interface Equatable {
-            function same(self, other: Self) -> bool
+            function same(self, other: Self) -> bool throws never
         }
         class Box {
             value: int
@@ -3973,8 +3981,8 @@ async fn concrete_receiver_inherited_default_self_param_method() {
     let output = baml_test!(
         r#"
         interface Equals {
-            function eq(self, other: Self) -> bool
-            function neq(self, other: Self) -> bool {
+            function eq(self, other: Self) -> bool throws never
+            function neq(self, other: Self) -> bool  throws never {
                 return !self.eq(other)
             }
         }
@@ -4000,8 +4008,8 @@ fn concrete_receiver_self_param_method_rejects_wrong_arg() {
     assert_compile_error_contains(
         r#"
         interface Equals {
-            function eq(self, other: Self) -> bool
-            function neq(self, other: Self) -> bool {
+            function eq(self, other: Self) -> bool throws never
+            function neq(self, other: Self) -> bool throws never {
                 return !self.eq(other)
             }
         }
@@ -4030,7 +4038,7 @@ fn unbounded_generic_forwarded_to_bounded_call_is_rejected() {
     assert_compile_error_contains(
         r#"
         interface Equatable {
-            function eq(self, other: Self) -> bool
+            function eq(self, other: Self) -> bool throws never
         }
         function same<T extends Equatable>(x: T) -> bool {
             return x.eq(x)
@@ -4049,7 +4057,7 @@ fn unbounded_generic_forwarded_through_container_is_rejected() {
     assert_compile_error_contains(
         r#"
         interface Equatable {
-            function eq(self, other: Self) -> bool
+            function eq(self, other: Self) -> bool throws never
         }
         function firstEq<T extends Equatable>(xs: T[]) -> bool {
             return xs[0].eq(xs[0])
@@ -4069,7 +4077,7 @@ async fn bounded_generic_forwarded_to_bounded_call_is_accepted() {
     let output = baml_test!(
         r#"
         interface Equatable {
-            function eq(self, other: Self) -> bool
+            function eq(self, other: Self) -> bool throws never
         }
         class Pair {
             a: int
@@ -4092,11 +4100,15 @@ async fn bounded_generic_forwarded_to_bounded_call_is_accepted() {
 }
 
 #[test]
-fn default_method_returning_self_is_compile_error() {
-    assert_compile_error_contains(
+fn default_method_returning_self_is_allowed() {
+    // A default (or required) method may return `Self`: inside the body `Self` is the
+    // abstract receiver, so `-> Self { return self }` is sound. The old "default
+    // method may not return Self" check was dropped as an over-restrictive
+    // inheritance-model artifact.
+    assert_zero_compile_errors(
         r#"
         interface Cloneable {
-            function clone(self) -> Self {
+            function clone(self) -> Self throws never {
                 return self
             }
         }
@@ -4109,7 +4121,6 @@ fn default_method_returning_self_is_compile_error() {
             }
         }
         "#,
-        "Self",
     );
 }
 
@@ -4134,10 +4145,10 @@ fn cast_from_one_interface_to_another_when_class_implements_both_is_error() {
     assert_compile_error_contains(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         interface Swimmer {
-            function swim(self) -> string
+            function swim(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -4166,10 +4177,10 @@ async fn interface_to_interface_conversion_via_unknown_match_narrowing() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         interface Swimmer {
-            function swim(self) -> string
+            function swim(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -4225,10 +4236,10 @@ fn as_rejects_interface_downcast() {
     assert_compile_error_contains(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         interface Swimmer {
-            function swim(self) -> string
+            function swim(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -4252,7 +4263,7 @@ fn as_requires_interface_target() {
     assert_compile_error_contains(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -4276,7 +4287,7 @@ async fn dispatch_through_function_call_result() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Cat {
             implements Animal {
@@ -4303,7 +4314,7 @@ async fn dispatch_through_array_index_with_field_access() {
         r#"
         interface Animal {
             name: string
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Cat {
             name: string
@@ -4330,7 +4341,7 @@ async fn dispatch_through_field_access_chain() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Cat {
             implements Animal {
@@ -4358,7 +4369,7 @@ async fn dispatch_through_field_access_chain() {
 async fn requires_chain_four_levels_deep() {
     let output = baml_test!(
         r#"
-        interface A { function tag(self) -> string }
+        interface A { function tag(self) -> string throws never }
         interface B requires A {}
         interface C requires B {}
         interface D requires C {}
@@ -4386,9 +4397,9 @@ async fn diamond_call_through_interface_typed_var() {
     // the static type picks the vtable. No qualifier needed.
     let output = baml_test!(
         r#"
-        interface Base { function foo(self) -> string { return "Base" } }
-        interface Left requires Base { function foo(self) -> string { return "Left" } }
-        interface Right requires Base { function foo(self) -> string { return "Right" } }
+        interface Base { function foo(self) -> string  throws never { return "Base" } }
+        interface Left requires Base { function foo(self) -> string  throws never { return "Left" } }
+        interface Right requires Base { function foo(self) -> string  throws never { return "Right" } }
         class D {
             implements Base {}
             implements Left {}
@@ -4416,7 +4427,7 @@ fn default_keyword_outside_implements_block_is_compile_error() {
     assert_compile_error_contains(
         r#"
         interface Logger {
-            function log(self, msg: string) -> string { return msg }
+            function log(self, msg: string) -> string throws never { return msg }
         }
         function rogue(msg: string) -> string {
             return default.log(msg)
@@ -4432,7 +4443,7 @@ fn default_keyword_inside_class_method_outside_implements_is_compile_error() {
     assert_compile_error_contains(
         r#"
         interface Logger {
-            function log(self, msg: string) -> string { return msg }
+            function log(self, msg: string) -> string throws never { return msg }
         }
         class Helper {
             function rogue(self, msg: string) -> string {
@@ -4457,7 +4468,7 @@ async fn dispatch_chained_three_function_calls_returning_interfaces() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Cat {
             implements Animal {
@@ -4490,8 +4501,8 @@ async fn dispatch_chained_methods_returning_interface_each_level() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
-            function next(self) -> Animal { return self }
+            function speak(self) -> string throws never
+            function next(self) -> Animal throws never { return self }
         }
         class Cat {
             implements Animal {
@@ -4519,7 +4530,7 @@ async fn dispatch_through_nested_array_of_arrays() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -4552,7 +4563,7 @@ async fn dispatch_through_field_of_array_of_interface() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -4585,7 +4596,7 @@ async fn dispatch_through_five_level_field_chain() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Cat {
             implements Animal {
@@ -4616,7 +4627,7 @@ async fn dispatch_through_map_value_field_then_method() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Cat {
             implements Animal {
@@ -4645,7 +4656,7 @@ async fn dispatch_through_branch_assigned_interface() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -4683,7 +4694,7 @@ async fn dispatch_for_loop_over_interface_array_collects_results() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -4725,7 +4736,7 @@ async fn diamond_six_level_requires_chain() {
     // leaf's method.
     let output = baml_test!(
         r#"
-        interface A { function tag(self) -> string }
+        interface A { function tag(self) -> string throws never }
         interface B requires A {}
         interface C requires B {}
         interface D requires C {}
@@ -4765,9 +4776,9 @@ async fn diamond_with_overrides_at_each_level() {
     // `"Base"`, `m: Mid` reads `"Mid"`, and `t: Tip` reads `"Tip"`.
     let output = baml_test!(
         r#"
-        interface Base { function name(self) -> string { return "Base" } }
-        interface Mid requires Base { function name(self) -> string { return "Mid" } }
-        interface Tip requires Mid { function name(self) -> string { return "Tip" } }
+        interface Base { function name(self) -> string  throws never { return "Base" } }
+        interface Mid requires Base { function name(self) -> string  throws never { return "Mid" } }
+        interface Tip requires Mid { function name(self) -> string  throws never { return "Tip" } }
         class Concrete {
             implements Base {}
             implements Mid {}
@@ -4800,11 +4811,11 @@ async fn double_diamond_two_independent_inheritance_paths() {
     let output = baml_test!(
         r#"
         interface BaseTag {}
-        interface Left requires BaseTag { function left_tag(self) -> string }
-        interface Right requires BaseTag { function right_tag(self) -> string }
+        interface Left requires BaseTag { function left_tag(self) -> string throws never }
+        interface Right requires BaseTag { function right_tag(self) -> string throws never }
         interface BaseNote {}
-        interface X requires BaseNote { function x_note(self) -> string }
-        interface Y requires BaseNote { function y_note(self) -> string }
+        interface X requires BaseNote { function x_note(self) -> string throws never }
+        interface Y requires BaseNote { function y_note(self) -> string throws never }
         class Hub {
             implements BaseTag {}
             implements Left {
@@ -4842,7 +4853,7 @@ async fn default_called_twice_in_one_override_body() {
     let output = baml_test!(
         r#"
         interface Logger {
-            function log(self, msg: string) -> string {
+            function log(self, msg: string) -> string throws never {
                 return "[L] " + msg
             }
         }
@@ -4874,7 +4885,7 @@ async fn default_call_with_computed_argument_expression() {
     let output = baml_test!(
         r#"
         interface Wrapper {
-            function decorate(self, body: string) -> string {
+            function decorate(self, body: string) -> string throws never {
                 return "[" + body + "]"
             }
         }
@@ -4908,7 +4919,7 @@ fn default_keyword_inside_lambda_inside_implements_block() {
     assert_compile_error_contains(
         r#"
         interface Logger {
-            function log(self, msg: string) -> string { return msg }
+            function log(self, msg: string) -> string throws never { return msg }
         }
         class L {
             implements Logger {
@@ -4931,7 +4942,7 @@ async fn default_keyword_shadowed_by_local_variable_resolves_to_local() {
     let output = baml_test!(
         r#"
         interface Logger {
-            function log(self, msg: string) -> string { return msg }
+            function log(self, msg: string) -> string throws never { return msg }
         }
         class L {
             implements Logger {
@@ -4963,7 +4974,7 @@ fn llm_function_with_interface_array_return_compiles() {
     assert_no_interface_errors(
         r##"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -4988,7 +4999,7 @@ fn llm_function_with_interface_in_union_return_compiles() {
     assert_no_interface_errors(
         r##"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -5017,7 +5028,7 @@ fn llm_function_takes_interface_typed_parameter_compiles() {
         r##"
         interface Animal {
             name: string
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             name: string
@@ -5072,7 +5083,7 @@ fn interface_fields_auto_link_with_method() {
         interface Animal {
             name: string
             age: int
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             name: string
@@ -5092,7 +5103,7 @@ fn interface_field_links_can_surround_methods() {
         r#"
         interface Widget {
             id: string
-            function render(self) -> string
+            function render(self) -> string throws never
             label: string
         }
         class Button {
@@ -5275,7 +5286,7 @@ fn in_body_inherent_method_does_not_implicitly_satisfy_interface() {
     assert_compile_error_code(
         r#"
         interface Label {
-            function label(self, name: string) -> string
+            function label(self, name: string) -> string throws never
         }
 
         class Thing {
@@ -5298,7 +5309,7 @@ fn out_of_body_inherent_method_does_not_implicitly_satisfy_interface() {
     assert_compile_error_code(
         r#"
         interface Label {
-            function label(self, name: string) -> string
+            function label(self, name: string) -> string throws never
         }
 
         class Thing {
@@ -5332,7 +5343,7 @@ fn required_parent_lookup_uses_declaring_interface_namespace() {
             "ns_contracts/interfaces.baml",
             r#"
                 interface Parent {
-                    function label(self) -> string
+                    function label(self) -> string throws never
                 }
                 interface Child requires Parent {}
                 "#,
@@ -5378,7 +5389,7 @@ async fn requires_chain_parent_field_in_default_method() {
         interface Named { name: string }
         interface Person requires Named {
             occupation: string
-            function introduce(self) -> string {
+            function introduce(self) -> string throws never {
                 return self.name + " the " + self.occupation
             }
         }
@@ -5423,8 +5434,13 @@ fn user_scenario_requires_field_check() {
 }
 
 #[test]
-fn interface_requires_conflicting_field_types_is_error() {
-    assert_compile_error_code(
+fn interface_requires_same_named_fields_of_different_types_is_allowed() {
+    // Interfaces are traits, not inheritance: `X.id` and `Y.id` are distinct
+    // per-interface obligations (like `<T as X>::id` vs `<T as Y>::id`), each
+    // satisfiable independently via field links. So `Z requires X, Y` with
+    // conflicting `id` types is NOT a declaration error — the old E0122
+    // requires-field-conflict check was dropped as an inheritance-model artifact.
+    assert_zero_compile_errors(
         r#"
         interface X {
             id: string
@@ -5434,7 +5450,6 @@ fn interface_requires_conflicting_field_types_is_error() {
         }
         interface Z requires X, Y {}
         "#,
-        "E0122",
     );
 }
 
@@ -5445,7 +5460,7 @@ fn out_of_body_implements_for_class_compiles() {
     assert_zero_compile_errors(
         r#"
         interface ToJson {
-            function to_json(self) -> string
+            function to_json(self) -> string throws never
         }
         class Dog { breed: string }
         implements ToJson for Dog {
@@ -5465,7 +5480,7 @@ fn out_of_body_empty_implements_for_generic_class_does_not_satisfy_via_inherent_
             "main.baml",
             r#"
                 interface Printable {
-                    function label(self) -> string
+                    function label(self) -> string throws never
                 }
 
                 implements Printable for root.models.Box<int> {}
@@ -5495,7 +5510,7 @@ fn out_of_body_empty_implements_does_not_satisfy_abstract_via_inherent_method() 
     assert_compile_error_code(
         r#"
         interface Printable {
-            function label(self) -> string
+            function label(self) -> string throws never
         }
 
         class Box {
@@ -5520,7 +5535,7 @@ fn out_of_body_empty_implements_inherent_method_with_wrong_sig_does_not_satisfy(
     assert_compile_error_code(
         r#"
         interface Printable {
-            function label(self) -> string
+            function label(self) -> string throws never
         }
 
         class Box {
@@ -5541,7 +5556,7 @@ fn out_of_body_implements_field_bearing_interface_is_error() {
         r#"
         interface Named {
             name: string
-            function greet(self) -> string
+            function greet(self) -> string throws never
         }
         class Robot { model: string }
         implements Named for Robot {
@@ -5559,7 +5574,7 @@ fn out_of_body_implements_field_bearing_interface_is_error_even_without_redeclar
         r#"
         interface Named {
             name: string
-            function greet(self) -> string
+            function greet(self) -> string throws never
         }
         class Robot { model: string }
         implements Named for Robot {
@@ -5571,7 +5586,11 @@ fn out_of_body_implements_field_bearing_interface_is_error_even_without_redeclar
 }
 
 #[test]
-fn out_of_body_implements_inherited_field_bearing_interface_is_error() {
+fn out_of_body_implements_inherited_field_bearing_interface_requires_parent() {
+    // `Child requires Named`, but `Robot` never implements `Named`, so the
+    // missing-required-parent check fires first (E0125). (The out-of-body
+    // field-bearing rejection E0126 is covered directly by the sibling tests
+    // that implement the field-bearing interface itself.)
     assert_compile_error_code(
         r#"
         interface Named {
@@ -5582,7 +5601,7 @@ fn out_of_body_implements_inherited_field_bearing_interface_is_error() {
 
         implements Child for Robot {}
         "#,
-        "E0126",
+        "E0125",
     );
 }
 
@@ -5591,7 +5610,7 @@ async fn out_of_body_implements_is_visible_to_reflection_registry() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {}
         implements Animal for Dog {
@@ -5613,7 +5632,7 @@ fn out_of_body_and_in_body_for_same_interface_is_error() {
     assert_compile_error_code(
         r#"
         interface ToJson {
-            function to_json(self) -> string
+            function to_json(self) -> string throws never
         }
         class Dog {
             implements ToJson {
@@ -5624,7 +5643,7 @@ fn out_of_body_and_in_body_for_same_interface_is_error() {
             function to_json(self) -> string { return "bark" }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 
@@ -5633,7 +5652,7 @@ fn out_of_body_implements_for_unknown_target_is_error() {
     let errors = collect_compile_errors(
         r#"
         interface ToJson {
-            function to_json(self) -> string
+            function to_json(self) -> string throws never
         }
         implements ToJson for Nonexistent {
             function to_json(self) -> string { return "?" }
@@ -5652,7 +5671,7 @@ fn out_of_body_implement_singular_keyword_compiles() {
     assert_zero_compile_errors(
         r#"
         interface ToJson {
-            function to_json(self) -> string
+            function to_json(self) -> string throws never
         }
         class Cat { color: string }
         implement ToJson for Cat {
@@ -5667,7 +5686,7 @@ fn out_of_body_implements_for_primitive_method_only_compiles() {
     assert_zero_compile_errors(
         r#"
         interface Debuggable {
-            function debug(self) -> string
+            function debug(self) -> string throws never
         }
         implements Debuggable for int {
             function debug(self) -> string { return "int" }
@@ -5681,7 +5700,7 @@ fn out_of_body_implements_for_primitive_satisfies_interface_type() {
     assert_zero_compile_errors(
         r#"
         interface Debuggable {
-            function debug(self) -> string
+            function debug(self) -> string throws never
         }
         implements Debuggable for int {
             function debug(self) -> string { return "int" }
@@ -5713,7 +5732,7 @@ fn out_of_body_implements_for_primitive_as_projection_compiles() {
     assert_zero_compile_errors(
         r#"
         interface Debuggable {
-            function debug(self) -> string
+            function debug(self) -> string throws never
         }
         implements Debuggable for int {
             function debug(self) -> string { return "int" }
@@ -5731,7 +5750,7 @@ async fn out_of_body_implements_for_primitive_as_projection_runtime() {
     let output = baml_test!(
         r#"
         interface Debuggable {
-            function debug(self) -> string
+            function debug(self) -> string throws never
         }
         implements Debuggable for int {
             function debug(self) -> string { return "int" }
@@ -5754,7 +5773,7 @@ async fn default_call_from_out_of_body_override_runtime() {
     let output = baml_test!(
         r#"
         interface Logger {
-            function log(self, msg: string) -> string {
+            function log(self, msg: string) -> string throws never {
                 return "[L] " + msg
             }
         }
@@ -5783,7 +5802,7 @@ async fn default_call_from_generic_out_of_body_override_runtime() {
     let output = baml_test!(
         r#"
         interface Logger {
-            function log(self, msg: string) -> string {
+            function log(self, msg: string) -> string throws never {
                 return "[L] " + msg
             }
         }
@@ -5813,7 +5832,7 @@ async fn generic_out_of_body_override_preserves_method_type_args_runtime() {
     let output = baml_test!(
         r#"
         interface Describer<T> {
-            function describe<U>(self, value: U) -> string
+            function describe<U>(self, value: U) -> string throws never
         }
 
         class Box<T> {
@@ -5843,7 +5862,7 @@ async fn generic_requires_parent_args_dispatch_on_class_implementor() {
     let output = baml_test!(
         r#"
         interface Parent<T> {
-            function describe(self) -> string
+            function describe(self) -> string throws never
         }
         interface Child<T> requires Parent<T> {}
         class Box {
@@ -5985,7 +6004,7 @@ async fn generic_requires_parent_args_dispatch_on_type_implementor() {
     let output = baml_test!(
         r#"
         interface Parent<T> {
-            function describe(self) -> string
+            function describe(self) -> string throws never
         }
         interface Child<T> requires Parent<T> {}
         implements Parent<int> for int {
@@ -6009,7 +6028,7 @@ async fn requires_closure_preserves_multiple_parent_instantiations_runtime() {
     let output = baml_test!(
         r#"
         interface Parent<T> {
-            function describe(self) -> string
+            function describe(self) -> string throws never
         }
         interface NeedsInt requires Parent<int> {}
         interface NeedsString requires Parent<string> {}
@@ -6040,7 +6059,7 @@ fn generic_interface_default_method_reference_compiles() {
     assert_no_compile_errors(
         r#"
         interface Label<T> {
-            function label(self) -> string {
+            function label(self) -> string throws never {
                 return "ok"
             }
         }
@@ -6060,7 +6079,7 @@ fn out_of_body_implements_for_primitive_field_bearing_interface_is_error() {
         r#"
         interface Named {
             name: string
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         implements Named for int {
             function display(self) -> string { return "int" }
@@ -6090,7 +6109,7 @@ fn out_of_body_method_callable_on_instance() {
     assert_zero_compile_errors(
         r#"
         interface Describable {
-            function describe(self) -> string
+            function describe(self) -> string throws never
         }
         class Car { make: string }
         implements Describable for Car {
@@ -6109,7 +6128,7 @@ fn out_of_body_dispatch_through_interface_typed_var() {
     assert_zero_compile_errors(
         r#"
         interface Speakable {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Parrot { phrase: string }
         implements Speakable for Parrot {
@@ -6129,10 +6148,10 @@ fn cross_interface_assignment_is_compile_error() {
     assert_compile_error_contains(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         interface Swimmer {
-            function swim(self) -> string
+            function swim(self) -> string throws never
         }
         class Duck {
             implements Animal {
@@ -6157,7 +6176,7 @@ fn same_interface_assignment_is_ok() {
     assert_zero_compile_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -6205,7 +6224,7 @@ fn form1_syntax_parses_without_errors() {
     assert_no_interface_errors(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -6225,7 +6244,7 @@ fn form1_bounded_syntax_parses_without_errors() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Wrapper<T> {
             inner: T
@@ -6245,7 +6264,7 @@ fn form2_syntax_parses_without_errors() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         implements<T extends Named> Printable for T {
             function display(self) -> string { return "named thing" }
@@ -6259,7 +6278,7 @@ fn existing_concrete_implements_for_still_works() {
     assert_no_interface_errors(
         r#"
         interface Debuggable {
-            function debug(self) -> string
+            function debug(self) -> string throws never
         }
         implements Debuggable for int {
             function debug(self) -> string { return "int" }
@@ -6275,7 +6294,7 @@ fn implements_for_union_target_is_rejected() {
     assert_compile_error_code(
         r#"
         interface Tag {
-            function tag(self) -> int
+            function tag(self) -> int throws never
         }
         implements Tag for int | string {
             function tag(self) -> int { return 0 }
@@ -6292,10 +6311,10 @@ fn implements_for_interface_target_is_rejected() {
     assert_compile_error_code(
         r#"
         interface Tag {
-            function tag(self) -> int
+            function tag(self) -> int throws never
         }
         interface Other {
-            function other(self) -> int
+            function other(self) -> int throws never
         }
         implements Tag for Other {
             function tag(self) -> int { return 0 }
@@ -6312,7 +6331,7 @@ fn implements_for_optional_target_is_rejected() {
     assert_compile_error_code(
         r#"
         interface Label {
-            function label(self) -> string
+            function label(self) -> string throws never
         }
         implements<T> Label for T? {
             function label(self) -> string { return "optional" }
@@ -6330,7 +6349,7 @@ fn impl_generic_bound_must_be_an_interface() {
     assert_compile_error_code(
         r#"
         interface Printable {
-            function print(self) -> string
+            function print(self) -> string throws never
         }
         class Widget {
             name: string
@@ -6353,7 +6372,7 @@ fn implements_for_unknown_target_is_rejected() {
     assert_compile_error_code(
         r#"
         interface Tag {
-            function tag(self) -> int
+            function tag(self) -> int throws never
         }
         implements Tag for unknown {
             function tag(self) -> int { return 0 }
@@ -6370,7 +6389,7 @@ fn implements_for_literal_target_is_rejected() {
     assert_compile_error_code(
         r#"
         interface Tag {
-            function tag(self) -> int
+            function tag(self) -> int throws never
         }
         implement Tag for 1 {
             function tag(self) -> int { return 0 }
@@ -6389,7 +6408,7 @@ fn implements_for_enum_variant_target_is_rejected() {
         r#"
         enum Color { Red, Green, Blue }
         interface Tag {
-            function tag(self) -> int
+            function tag(self) -> int throws never
         }
         implement Tag for Color.Red {
             function tag(self) -> int { return 0 }
@@ -6408,7 +6427,7 @@ fn implements_for_concrete_container_target_is_allowed() {
     assert_zero_compile_errors(
         r#"
         interface Tag {
-            function tag(self) -> int
+            function tag(self) -> int throws never
         }
         implements<T> Tag for T[] {
             function tag(self) -> int { return 0 }
@@ -6424,7 +6443,7 @@ async fn form1_dispatches_through_interface_typed_var() {
     let output = baml_test!(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -6449,7 +6468,7 @@ async fn form1_dispatches_for_different_instantiations() {
     let output = baml_test!(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -6475,7 +6494,7 @@ async fn form1_self_accesses_receiver_fields() {
     let output = baml_test!(
         r#"
         interface Describable {
-            function describe(self) -> string
+            function describe(self) -> string throws never
         }
         class Pair<T> {
             first: T
@@ -6501,7 +6520,7 @@ async fn form1_with_generic_interface_args() {
     let output = baml_test!(
         r#"
         interface Container<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         class Wrapper<T> {
             value: T
@@ -6523,7 +6542,7 @@ async fn generic_rule_for_list_receiver_dispatches() {
     let output = baml_test!(
         r#"
         interface Label {
-            function label(self) -> string
+            function label(self) -> string throws never
         }
         implements<T> Label for T[] {
             function label(self) -> string { return "list" }
@@ -6546,7 +6565,7 @@ async fn generic_rule_for_map_receiver_dispatches() {
     let output = baml_test!(
         r#"
         interface Label {
-            function label(self) -> string
+            function label(self) -> string throws never
         }
         implements<T> Label for map<string, T> {
             function label(self) -> string { return "map" }
@@ -6569,7 +6588,7 @@ fn generic_rule_for_list_receiver_overlaps_concrete_list() {
     assert_compile_error_code(
         r#"
         interface Label {
-            function label(self) -> string
+            function label(self) -> string throws never
         }
         implements Label for int[] {
             function label(self) -> string { return "ints" }
@@ -6587,7 +6606,7 @@ fn form1_coexists_with_concrete_impl_for_different_class() {
     assert_no_interface_errors(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -6610,7 +6629,7 @@ fn form1_blanket_has_no_compile_errors_at_all() {
     let errors = collect_compile_errors(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -6632,7 +6651,7 @@ fn unified_rule_rejects_mismatched_generic_interface_arg() {
     assert_compile_error_contains(
         r#"
         interface Container<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         class Wrapper<T> {
             value: T
@@ -6656,7 +6675,7 @@ async fn unified_rule_nested_interface_args_dispatch() {
     let output = baml_test!(
         r#"
         interface Container<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         class Wrapper<T> {
             values: T[]
@@ -6678,7 +6697,7 @@ async fn unified_rule_repeated_type_vars_match_runtime() {
     let output = baml_test!(
         r#"
         interface Same {
-            function tag(self) -> string
+            function tag(self) -> string throws never
         }
         class Pair<L, R> {
             left: L
@@ -6704,7 +6723,7 @@ fn unified_rule_repeated_type_vars_reject_conflicting_args() {
     assert_compile_error_contains(
         r#"
         interface Same {
-            function tag(self) -> string
+            function tag(self) -> string throws never
         }
         class Pair<L, R> {
             left: L
@@ -6729,7 +6748,7 @@ async fn unified_rule_default_method_inherited_through_generic_rule() {
     let output = baml_test!(
         r#"
         interface Printable {
-            function display(self) -> string { return "default" }
+            function display(self) -> string throws never { return "default" }
         }
         class Box<T> {
             value: T
@@ -6752,7 +6771,7 @@ async fn unified_rule_reflection_sees_generic_class_implementor_once() {
     let output = baml_test!(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -6778,7 +6797,7 @@ async fn form2_dispatches_through_interface_typed_var() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Person {
             name: string
@@ -6807,7 +6826,7 @@ async fn form2_self_accesses_bound_members() {
             name: string
         }
         interface Labeled {
-            function label(self) -> string
+            function label(self) -> string throws never
         }
         class Project {
             name: string
@@ -6836,7 +6855,7 @@ async fn form2_applies_to_multiple_satisfying_classes() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Person {
             name: string
@@ -6870,7 +6889,7 @@ fn form2_does_not_apply_when_bound_not_satisfied() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Rock {
             label: string
@@ -6895,7 +6914,7 @@ async fn form2_reflect_implements_returns_true() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Person {
             name: string
@@ -6920,7 +6939,7 @@ async fn form2_reflect_implementors_includes_satisfying_classes() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Person {
             name: string
@@ -6973,7 +6992,7 @@ async fn unified_rule_implementor_satisfies_generic_interface_bound() {
     let output = baml_test!(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -7000,7 +7019,7 @@ async fn unified_rule_implementor_satisfies_inferred_generic_interface_bound() {
     let output = baml_test!(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -7027,7 +7046,7 @@ async fn unified_rule_implementor_satisfies_inferred_generic_bound_from_construc
     let output = baml_test!(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -7057,7 +7076,7 @@ async fn bounded_type_var_rule_satisfies_generic_interface_bound() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Person {
             name: string
@@ -7088,7 +7107,7 @@ async fn bounded_type_var_rule_satisfies_inferred_generic_interface_bound() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Person {
             name: string
@@ -7118,7 +7137,7 @@ fn bounded_generic_function_type_annotation_is_rejected() {
     assert_compile_error_contains(
         r#"
         interface MyInterface {
-            function myMethod(self) -> int
+            function myMethod(self) -> int throws never
         }
         function main() -> void {
             let method : <T extends MyInterface>(T) -> int = MyInterface.myMethod
@@ -7151,7 +7170,7 @@ fn inferred_interface_method_reference_enforces_receiver_bound() {
     assert_no_compile_errors(
         r#"
         interface MyInterface {
-            function myMethod(self) -> int
+            function myMethod(self) -> int throws never
         }
         class MyClass {
             implements MyInterface {
@@ -7173,7 +7192,7 @@ fn inferred_interface_method_reference_rejects_receiver_outside_bound() {
     assert_compile_error_contains(
         r#"
         interface MyInterface {
-            function myMethod(self) -> int
+            function myMethod(self) -> int throws never
         }
         class Other {}
         function main() -> int {
@@ -7193,7 +7212,7 @@ async fn form1_bounded_generic_receiver_dispatches_when_bound_satisfied() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Person {
             name: string
@@ -7224,7 +7243,7 @@ fn form1_bounded_generic_receiver_rejects_when_bound_not_satisfied() {
         name: string
     }
     interface Printable {
-        function display(self) -> string
+        function display(self) -> string throws never
     }
     class Rock {
         label: string
@@ -7249,7 +7268,7 @@ fn overlapping_concrete_and_generic_rules_are_e0132() {
     assert_compile_error_code(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -7270,7 +7289,7 @@ fn overlapping_generic_rules_are_e0132() {
     assert_compile_error_code(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -7294,7 +7313,7 @@ fn overlapping_complementary_generic_args_are_e0132() {
     assert_compile_error_code(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Pair<A, B> {
             first: A
@@ -7318,7 +7337,7 @@ fn non_overlapping_disjoint_generic_args_are_ok() {
     assert_no_interface_errors(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Pair<A, B> {
             first: A
@@ -7339,7 +7358,7 @@ fn overlapping_in_body_and_out_of_body_generic_rules_are_e0132() {
     assert_compile_error_code(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -7366,7 +7385,7 @@ fn cross_file_overlapping_impls_are_e0132() {
                 "a.baml",
                 r#"
                 interface Printable {
-                    function display(self) -> string
+                    function display(self) -> string throws never
                 }
                 class Box<T> { value: T }
                 implements<T> Printable for Box<T> {
@@ -7396,7 +7415,7 @@ fn cross_file_non_overlapping_impls_are_ok() {
             "a.baml",
             r#"
             interface Printable {
-                function display(self) -> string
+                function display(self) -> string throws never
             }
             class Apple {}
             implements Printable for Apple {
@@ -7424,7 +7443,7 @@ fn form2_overlap_with_form2_is_e0132() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         implements<T extends Named> Printable for T {
             function display(self) -> string { return "first" }
@@ -7448,7 +7467,7 @@ fn overlapping_bounded_generic_receiver_rules_are_e0132() {
             tag: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -7472,7 +7491,7 @@ fn overlapping_bounded_and_unbounded_generic_receiver_rules_are_e0132() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -7493,7 +7512,7 @@ fn non_overlapping_generic_receiver_rules_for_different_classes_are_ok() {
     assert_no_interface_errors(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -7522,7 +7541,7 @@ fn bounded_type_var_rule_overlaps_concrete_satisfying_bound() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class User {
             name: string
@@ -7552,7 +7571,7 @@ fn bounded_type_var_rule_disjoint_from_concrete_not_satisfying_bound() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class User {
             name: string
@@ -7575,7 +7594,7 @@ fn distinct_bounded_blankets_overlap_e0132() {
         r#"
         interface A { a: int }
         interface B { b: int }
-        interface Printable { function display(self) -> string }
+        interface Printable { function display(self) -> string throws never }
         implements<T extends A> Printable for T {
             function display(self) -> string { return "a" }
         }
@@ -7593,7 +7612,7 @@ fn distinct_bounded_blankets_overlap_e0132() {
 fn unbounded_blanket_overlaps_concrete_e0132() {
     assert_compile_error_code(
         r#"
-        interface Printable { function display(self) -> string }
+        interface Printable { function display(self) -> string throws never }
         class Widget {}
         implements<T> Printable for T {
             function display(self) -> string { return "any" }
@@ -7613,7 +7632,7 @@ fn unbounded_blanket_overlaps_concrete_e0132() {
 fn homogeneous_blanket_disjoint_from_heterogeneous_ground() {
     assert_no_interface_errors(
         r#"
-        interface Printable { function display(self) -> string }
+        interface Printable { function display(self) -> string throws never }
         class Pair<A, B> { first: A second: B }
         implements<T> Printable for Pair<T, T> {
             function display(self) -> string { return "tt" }
@@ -7659,7 +7678,7 @@ fn orphan_rejects_foreign_interface_for_map_of_local() {
 fn shared_var_across_interface_arg_and_for_type_overlaps_e0132() {
     assert_compile_error_code(
         r#"
-        interface P<X> { function p(self) -> string }
+        interface P<X> { function p(self) -> string throws never }
         class Box<T> { v: T }
         implements<T> P<T> for Box<T> {
             function p(self) -> string { return "t" }
@@ -7711,7 +7730,7 @@ fn implements_target_arg_error_is_reported_exactly_once() {
     let in_body = collect_compile_errors(
         r#"
         interface Container<T> {
-            function size(self) -> int
+            function size(self) -> int throws never
         }
         class Box {
             items: int[]
@@ -7734,7 +7753,7 @@ fn implements_target_arg_error_is_reported_exactly_once() {
     let out_of_body = collect_compile_errors(
         r#"
         interface Container<T> {
-            function size(self) -> int
+            function size(self) -> int throws never
         }
         class Cat {
             name: string
@@ -8208,7 +8227,7 @@ fn unified_rule_namespaced_classes_with_same_short_name_do_not_cross_match() {
             "ns_a/wrapper.baml",
             r#"
                 interface Printable {
-                    function display(self) -> string
+                    function display(self) -> string throws never
                 }
                 class Wrapper {
                     value: int
@@ -8248,7 +8267,7 @@ fn unified_rule_namespaced_generic_classes_with_same_short_name_do_not_cross_mat
             "ns_a/wrapper.baml",
             r#"
                 interface Printable<T> {
-                    function display(self) -> string
+                    function display(self) -> string throws never
                 }
                 class Wrapper<T> {
                     value: T
@@ -8286,8 +8305,8 @@ fn namespaced_class_can_implement_root_qualified_interface() {
             "ns_animals/animals.baml",
             r#"
                 interface Animal {
-                    function sound(self) -> string
-                    function describe(self) -> string {
+                    function sound(self) -> string throws never
+                    function describe(self) -> string throws never {
                         return "I say " + self.sound()
                     }
                 }
@@ -8324,7 +8343,7 @@ fn namespaced_class_method_body_resolves_root_qualified_interface_type() {
             "ns_a/a.baml",
             r#"
                 interface Named {
-                    function name(self) -> string
+                    function name(self) -> string throws never
                 }
                 "#,
         ),
@@ -8332,7 +8351,7 @@ fn namespaced_class_method_body_resolves_root_qualified_interface_type() {
             "ns_b/b.baml",
             r#"
                 interface Greeter {
-                    function greet(self) -> string
+                    function greet(self) -> string throws never
                 }
                 "#,
         ),
@@ -8363,7 +8382,7 @@ fn namespaced_class_cannot_use_unrooted_cross_namespace_qualification() {
             "ns_a/a.baml",
             r#"
                 interface Named {
-                    function name(self) -> string
+                    function name(self) -> string throws never
                 }
                 "#,
         ),
@@ -8379,10 +8398,10 @@ fn namespaced_class_cannot_use_unrooted_cross_namespace_qualification() {
         ),
     ];
 
-    assert_compile_error_contains_multi(
-        files,
-        "class `Dog` cannot implement `a.Named`: no interface with that name is in scope",
-    );
+    // An unrooted cross-namespace `a.Named` does not resolve (the absolute form
+    // `root.a.Named` is required), so it surfaces as a general unresolved-type
+    // error rather than a dedicated implements-target diagnostic.
+    assert_compile_error_contains_multi(files, "unresolved type: a.Named");
 }
 
 #[test]
@@ -8392,7 +8411,7 @@ fn qualified_generic_constructor_preserves_concrete_type_in_diagnostics() {
             "main.baml",
             r#"
                 interface Printable<T> {
-                    function display(self) -> string
+                    function display(self) -> string throws never
                 }
                 class Box<T> {
                     value: T
@@ -8449,7 +8468,7 @@ async fn unified_rule_requires_closure_preserves_substituted_generic_args() {
     let output = baml_test!(
         r#"
         interface Parent<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         interface Child<T> requires Parent<T> {}
         class Wrapper<T> {
@@ -8478,7 +8497,7 @@ fn bounded_type_var_rule_conservatively_overlaps_generic_class_rule() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -8502,7 +8521,7 @@ fn bounded_type_var_rule_conservatively_overlaps_in_body_generic_class_rule() {
             name: string
         }
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -8542,7 +8561,7 @@ fn bounded_type_var_rule_conservatively_overlaps_in_body_generic_class_rule() {
 async fn fuzz_bug01_method_ref_required_method_crashes() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 
 class Dog {
@@ -8572,7 +8591,7 @@ function main() -> string {
 async fn fuzz_bug02_method_ref_default_dispatches_to_override() {
     let output = baml_test!(
         r##"interface Greeter {
-    function greet(self) -> string {
+    function greet(self) -> string throws never {
         return "Hello from default"
     }
 }
@@ -8610,7 +8629,7 @@ function main() -> string {
 async fn fuzz_bug03_implementor_assignable_to_optional_interface_param() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 
 class Dog {
@@ -8644,7 +8663,7 @@ function main() -> string {
 async fn fuzz_bug04_method_call_on_parenthesized_if_expr() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 
 class Dog {
@@ -8675,10 +8694,10 @@ function main() -> string {
 async fn fuzz_bug05_requires_child_override_does_not_leak_into_parent_slot() {
     let output = baml_test!(
         r##"interface A {
-    function foo(self) -> string { return "A" }
+    function foo(self) -> string throws never { return "A" }
 }
 interface B requires A {
-    function foo(self) -> string { return "B" }
+    function foo(self) -> string throws never { return "B" }
 }
 class C {
     implements A {}
@@ -8714,7 +8733,7 @@ fn fuzz_bug06_interface_requires_non_interface_errors_at_declaration() {
 async fn fuzz_bug07_generic_default_method_body_can_use_type_param() {
     let output = baml_test!(
         r##"interface Echo<T> {
-    function echo(self, x: T) -> T {
+    function echo(self, x: T) -> T throws never {
         return x
     }
 }
@@ -8740,7 +8759,7 @@ function main() -> int {
 fn fuzz_bug08_generic_class_overlapping_type_arg_impls_rejected() {
     assert_compile_error_code(
         r##"interface Getter<T> {
-    function get(self) -> T
+    function get(self) -> T throws never
 }
 
 class Pair<L, R> {
@@ -8770,7 +8789,7 @@ function main() -> bool {
 fn fuzz_bug09_same_generic_iface_diff_typeargs_unqualified_call_ambiguous() {
     assert_compile_error_code(
         r##"interface Converter<T> {
-    function convert(self) -> T
+    function convert(self) -> T throws never
 }
 
 class MultiFormat {
@@ -8798,7 +8817,7 @@ function main() -> int {
 async fn fuzz_bug10_generic_interface_as_function_param_dispatches() {
     let output = baml_test!(
         r##"interface Box<T> {
-    function get(self) -> T
+    function get(self) -> T throws never
 }
 
 class IntBox {
@@ -8853,7 +8872,7 @@ function main() -> int {
 fn fuzz_bug12_generic_pair_overlapping_type_arg_impls_rejected() {
     assert_compile_error_code(
         r##"interface Slot<T> {
-    function get(self) -> T
+    function get(self) -> T throws never
 }
 
 class GenPair<L, R> {
@@ -8923,7 +8942,7 @@ function main() -> bool {
 fn fuzz_bug14_generic_overlapping_type_arg_impls_reject_as_projection() {
     assert_compile_error_code(
         r##"interface Slot<T> {
-    function get(self) -> T
+    function get(self) -> T throws never
 }
 
 class GenPair<L, R> {
@@ -8953,8 +8972,8 @@ function main() -> bool {
 async fn fuzz_bug15_generic_default_method_self_call_through_interface_var() {
     let output = baml_test!(
         r##"interface Container<T> {
-    function size(self) -> int
-    function describe_with_self_call(self) -> string {
+    function size(self) -> int throws never
+    function describe_with_self_call(self) -> string throws never {
         let n = self.size()   // calling another interface method on self
         return "ok"
     }
@@ -8985,8 +9004,8 @@ function main() -> string {
 async fn fuzz_bug16_generic_interface_type_param_in_scope_in_default_method() {
     let output = baml_test!(
         r##"interface Container<T> {
-    function get(self) -> T           // required method - T is fine here
-    function get_or(self, fallback: T) -> T {   // default method - T is NOT in scope!
+    function get(self) -> T throws never           // required method - T is fine here
+    function get_or(self, fallback: T) -> T throws never {   // default method - T is NOT in scope!
         return self.get()
     }
 }
@@ -9011,7 +9030,7 @@ function main() -> bool {
 async fn fuzz_bug17_inherited_default_method_callable_on_class_var() {
     let output = baml_test!(
         r##"interface Greetable {
-    function greet(self) -> string {
+    function greet(self) -> string throws never {
         return "Hello!"
     }
 }
@@ -9141,12 +9160,14 @@ function main() -> string {
     );
 }
 
-/// Finding #22 [nit]: Old x.Interface.method() hint for generic interface omits type arguments
+/// Finding #22: the old `x.Interface.method()` projection syntax is no longer
+/// special-cased — `Container` is not a member of `IntBox`, so it is a plain
+/// E0007 no-member error.
 #[test]
-fn fuzz_bug22_old_projection_syntax_hint_includes_type_args() {
+fn fuzz_bug22_old_projection_syntax_is_no_member_error() {
     assert_compile_error_contains(
         r##"interface Container<T> {
-    function get(self) -> T
+    function get(self) -> T throws never
 }
 class IntBox {
     value: int
@@ -9159,7 +9180,7 @@ function main() -> int {
     return b.Container.get()
 }
 "##,
-        "Container<int>",
+        "has no member `Container`",
     );
 }
 
@@ -9168,7 +9189,7 @@ function main() -> int {
 async fn fuzz_bug23_default_inherited_method_unqualified_call_on_class() {
     let output = baml_test!(
         r##"interface Speaker {
-    function speak(self) -> string {
+    function speak(self) -> string throws never {
         return "default speech"
     }
 }
@@ -9196,10 +9217,10 @@ async fn fuzz_bug24_generic_interface_type_param_in_default_method_signature() {
         r##"interface Container<T> {
     // Default method using the interface's type parameter `T` in both its
     // signature and body — `T` must be in scope here.
-    function identity(self, x: T) -> T {
+    function identity(self, x: T) -> T throws never {
         return x
     }
-    function get(self) -> T  // required
+    function get(self) -> T throws never  // required
 }
 
 class IntBag {
@@ -9223,10 +9244,10 @@ function main() -> int {
 fn fuzz_bug25_two_same_named_default_methods_are_ambiguous() {
     assert_compile_error_code(
         r##"interface Alpha {
-    function tag(self) -> string { return "alpha" }
+    function tag(self) -> string throws never { return "alpha" }
 }
 interface Beta {
-    function tag(self) -> string { return "beta" }
+    function tag(self) -> string throws never { return "beta" }
 }
 
 class Both {
@@ -9248,10 +9269,10 @@ function main() -> string {
 fn fuzz_bug26_default_plus_required_same_name_is_ambiguous() {
     assert_compile_error_code(
         r##"interface WithDefault {
-    function process(self) -> string { return "DEFAULT" }
+    function process(self) -> string throws never { return "DEFAULT" }
 }
 interface WithRequired {
-    function process(self) -> string
+    function process(self) -> string throws never
 }
 
 class Impl {
@@ -9275,7 +9296,7 @@ function main() -> string {
 fn fuzz_bug27_same_generic_iface_diff_typeargs_no_receiver_is_ambiguous() {
     assert_compile_error_code(
         r##"interface Converter<T> {
-    function convert(self) -> T
+    function convert(self) -> T throws never
 }
 
 class Multi {
@@ -9328,7 +9349,7 @@ function main() -> string {
 async fn fuzz_bug29_match_binding_form_narrows_to_concrete() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 class Dog {
     breed: string
@@ -9361,7 +9382,7 @@ function main() -> string {
 async fn fuzz_bug31_method_call_on_match_union_result_does_not_crash() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 class Dog {
     implements Animal {
@@ -9397,7 +9418,7 @@ function main() -> string {
 async fn fuzz_bug32_interface_value_coerces_to_optional_interface() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 class Dog {
     breed: string
@@ -9421,7 +9442,7 @@ function main() -> bool {
 async fn fuzz_bug33_return_implementor_from_optional_interface_function() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 class Dog {
     breed: string
@@ -9453,7 +9474,7 @@ function main() -> bool {
 async fn fuzz_bug34_reflect_implements_respects_generic_type_args() {
     let output = baml_test!(
         r##"interface Box<T> {
-    function get(self) -> T
+    function get(self) -> T throws never
 }
 class IntBox {
     implements Box<int> {
@@ -9476,7 +9497,7 @@ function main() -> bool {
 async fn fuzz_bug35_reflect_implemented_by_respects_generic_type_args() {
     let output = baml_test!(
         r##"interface Box<T> {
-    function get(self) -> T
+    function get(self) -> T throws never
 }
 class IntBox {
     implements Box<int> {
@@ -9499,7 +9520,7 @@ function main() -> bool {
 async fn fuzz_bug36_reflect_implementors_respects_generic_type_args() {
     let output = baml_test!(
         r##"interface Box<T> {
-    function get(self) -> T
+    function get(self) -> T throws never
 }
 class IntBox {
     implements Box<int> {
@@ -9551,7 +9572,7 @@ function main() -> string {
 async fn fuzz_bug38_throw_subtype_of_declared_throws_interface_is_allowed() {
     let output = baml_test!(
         r##"interface IError {
-    function describe(self) -> string
+    function describe(self) -> string throws never
 }
 
 class NetworkError {
@@ -9596,7 +9617,7 @@ function main() -> bool {
 async fn fuzz_bug39_catch_by_interface_pattern_matches_implementor() {
     let output = baml_test!(
         r##"interface IError {
-    function describe(self) -> string
+    function describe(self) -> string throws never
 }
 
 class ConcreteErr {
@@ -9630,7 +9651,7 @@ function main() -> string {
 async fn fuzz_bug40_implementor_assignable_to_interface_union() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 class Dog {
     implements Animal {
@@ -9658,7 +9679,7 @@ function main() -> string {
 async fn fuzz_bug41_optional_interface_match_null_arm_reachable() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 class Dog {
     implements Animal {
@@ -9691,7 +9712,7 @@ function main() -> string {
 async fn fuzz_bug42_default_method_callable_on_concrete_class_type() {
     let output = baml_test!(
         r##"interface Printable {
-    function print(self) -> string { return "printable" }
+    function print(self) -> string throws never { return "printable" }
 }
 
 class Widget {
@@ -9716,7 +9737,7 @@ function main() -> string {
 async fn fuzz_bug43_generic_fn_with_generic_interface_param_dispatches() {
     let output = baml_test!(
         r##"interface Producer<T> {
-    function produce(self) -> T
+    function produce(self) -> T throws never
 }
 
 class IntProducer {
@@ -9745,7 +9766,7 @@ function main() -> int {
 async fn fuzz_bug44_generic_interface_default_method_body_uses_type_param() {
     let output = baml_test!(
         r##"interface Wrapper<T> {
-    function wrap(self, x: T) -> T {
+    function wrap(self, x: T) -> T throws never {
         return x
     }
 }
@@ -9768,7 +9789,7 @@ function main() -> int {
 async fn fuzz_bug45_interface_union_match_arms_all_reachable() {
     let output = baml_test!(
         r##"interface Animal {
-    function speak(self) -> string
+    function speak(self) -> string throws never
 }
 class Dog {
     implements Animal {
@@ -9807,10 +9828,10 @@ function main() -> string {
 
 #[test]
 fn requires_unknown_name_is_unknown_interface_not_non_interface() {
-    // `requires DoesNotExist` names nothing at all. The diagnostic must say
-    // "no interface with that name is in scope" (E0112, like `implements`),
-    // not "is not an interface" (E0133) — the latter wrongly implies the
-    // symbol exists with the wrong kind.
+    // `requires DoesNotExist` names nothing at all. The diagnostic must be the
+    // general unresolved-type error (E0002 `unresolved type: DoesNotExist`),
+    // not "is not an interface" (E0133) — the latter wrongly implies the symbol
+    // exists with the wrong kind.
     let errors = collect_compile_errors(
         r#"
         interface Person requires DoesNotExist {
@@ -9819,8 +9840,8 @@ fn requires_unknown_name_is_unknown_interface_not_non_interface() {
         "#,
     );
     assert!(
-        errors.iter().any(|e| e.starts_with("[E0112]")),
-        "expected an E0112 unknown-interface error, got:\n  {}",
+        errors.iter().any(|e| e.starts_with("[E0002]")),
+        "expected an E0002 unresolved-type error, got:\n  {}",
         errors.join("\n  ")
     );
     assert!(
@@ -9857,7 +9878,7 @@ fn unresolvable_type_arg_in_implements_clause_is_error() {
     assert_compile_error_code(
         r#"
         interface Container<T> {
-            function size(self) -> int
+            function size(self) -> int throws never
         }
         class Box {
             items: int[]
@@ -9876,7 +9897,7 @@ fn resolvable_type_arg_in_implements_clause_is_ok() {
     assert_no_interface_errors(
         r#"
         interface Container<T> {
-            function size(self) -> int
+            function size(self) -> int throws never
         }
         class Box {
             items: int[]
@@ -9918,11 +9939,11 @@ fn ambiguous_method_across_namespaces_uses_qualified_interface_names() {
         ),
         (
             "ns_zoo/zoo.baml",
-            r#"interface Animal { function speak(self) -> string }"#,
+            r#"interface Animal { function speak(self) -> string throws never }"#,
         ),
         (
             "ns_farm/farm.baml",
-            r#"interface Animal { function speak(self) -> string }"#,
+            r#"interface Animal { function speak(self) -> string throws never }"#,
         ),
     ];
     let errors = collect_compile_errors_multi(files);
@@ -9970,11 +9991,11 @@ fn ambiguous_method_namespace_qualified_fix_compiles() {
         ),
         (
             "ns_zoo/zoo.baml",
-            r#"interface Animal { function speak(self) -> string }"#,
+            r#"interface Animal { function speak(self) -> string throws never }"#,
         ),
         (
             "ns_farm/farm.baml",
-            r#"interface Animal { function speak(self) -> string }"#,
+            r#"interface Animal { function speak(self) -> string throws never }"#,
         ),
     ];
     assert_no_compile_errors_multi(files);
@@ -10003,10 +10024,10 @@ async fn wf3_generic_requires_chain_default_delegation_runtime() {
     let output = baml_test!(
         r#"
         interface Base<T> {
-            function base_get(self) -> T
+            function base_get(self) -> T throws never
         }
         interface Sub<T> requires Base<T> {
-            function sub_get(self) -> T {
+            function sub_get(self) -> T throws never {
                 return self.base_get()
             }
         }
@@ -10035,8 +10056,8 @@ async fn wf3_blanket_on_blanket_chain_runtime() {
     let output = baml_test!(
         r#"
         interface Named { name: string }
-        interface Printable { function display(self) -> string }
-        interface Loud { function shout(self) -> string }
+        interface Printable { function display(self) -> string throws never }
+        interface Loud { function shout(self) -> string throws never }
         class Person { name: string  implements Named {} }
         implements<T extends Named> Printable for T {
             function display(self) -> string { return self.name }
@@ -10061,11 +10082,16 @@ async fn wf3_blanket_on_blanket_chain_runtime() {
 /// args) is now rejected at compile time — previously it compiled, was accepted
 /// as `Tagged<int|string|bool>`, and crashed the VM.
 /// `_plan/wf3/generics-bounds-blanket/p13c_phantom_single.baml`
+/// Rust-faithful (E0207): an impl type parameter is *constrained* if it appears in the
+/// implemented interface reference (`Tagged<T>`), not only the self type — so
+/// `implements<T> Tagged<T> for Holder` is a valid blanket over the interface parameter
+/// (mirrors Rust's `impl<T> From<T> for MyType`). The existential `Tagged<int>` pins
+/// `T = int`, so there is no erasure at the use site.
 #[test]
-fn wf3_phantom_impl_type_param_is_rejected() {
-    let errors = collect_compile_errors(
+fn wf3_impl_type_param_in_interface_args_is_accepted() {
+    assert_zero_compile_errors(
         r#"
-        interface Tagged<T> { function tag(self) -> string }
+        interface Tagged<T> { function tag(self) -> string throws never }
         class Holder { v: int }
         implements<T> Tagged<T> for Holder {
             function tag(self) -> string { return "h" }
@@ -10075,11 +10101,6 @@ fn wf3_phantom_impl_type_param_is_rejected() {
             return a.tag()
         }
         "#,
-    );
-    assert!(
-        !errors.is_empty(),
-        "an unconstrained phantom type param in an `implements` (`T` only in the \
-         interface args) is unsound and must be a compile error; got none"
     );
 }
 
@@ -10095,7 +10116,7 @@ async fn wf3_default_field_access_does_not_crash() {
         r#"
         interface Named {
             name: string
-            function describe(self) -> string { return "x" }
+            function describe(self) -> string throws never { return "x" }
         }
         class P {
             name: string
@@ -10128,8 +10149,8 @@ fn wf3_generic_default_method_overlapping_type_arg_impls_rejected() {
     assert_compile_error_code(
         r#"
         interface Slot<T> {
-            function get(self) -> T
-            function describe(self) -> T {
+            function get(self) -> T throws never
+            function describe(self) -> T throws never {
                 return self.get()
             }
         }
@@ -10161,7 +10182,7 @@ async fn wf3_reflect_type_of_wrapped_generic_substitutes_param_runtime() {
     let output = baml_test!(
         r#"
         interface Box<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         function names<U>() -> string {
             let naked = reflect.type_of<U>().to_string()
@@ -10187,7 +10208,7 @@ async fn wf3_reflect_implemented_by_generic_arg_substitution_runtime() {
     let output = baml_test!(
         r#"
         interface Box<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         class IntBox {
             implements Box<int> {
@@ -10225,7 +10246,7 @@ fn wf3_self_return_wrong_concrete_class_is_rejected() {
     let errors = collect_compile_errors(
         r#"
         interface Cloneable {
-            function clone(self) -> Self
+            function clone(self) -> Self throws never
         }
         class Box {
             boxField: int
@@ -10344,11 +10365,11 @@ fn wf3_ambiguous_method_suggestion_resolvable_inside_namespace() {
         ),
         (
             "ns_zoo/zoo.baml",
-            r#"interface Animal { function speak(self) -> string }"#,
+            r#"interface Animal { function speak(self) -> string throws never }"#,
         ),
         (
             "ns_farm/farm.baml",
-            r#"interface Animal { function speak(self) -> string }"#,
+            r#"interface Animal { function speak(self) -> string throws never }"#,
         ),
     ];
     assert_compile_error_contains_multi(files, "root.zoo.Animal");
@@ -10361,7 +10382,7 @@ fn wf3_ambiguous_method_suggestion_resolvable_inside_namespace() {
 async fn wf3_pure_diamond_single_method_dispatches_runtime() {
     let output = baml_test!(
         r#"
-        interface Base { function id(self) -> string { return "base" } }
+        interface Base { function id(self) -> string  throws never { return "base" } }
         interface Left requires Base {}
         interface Right requires Base {}
         class D {
@@ -10393,7 +10414,7 @@ fn wf3_pure_diamond_single_method_across_namespaces_no_false_ambiguity() {
         ),
         (
             "ns_a/a.baml",
-            r#"interface Base { function f(self) -> string }"#,
+            r#"interface Base { function f(self) -> string throws never }"#,
         ),
         (
             "ns_b/b.baml",
@@ -10421,7 +10442,7 @@ fn wf3_three_level_requires_chain_single_method_no_false_ambiguity() {
         ),
         (
             "ns_a/a.baml",
-            r#"interface A { function f(self) -> string }"#,
+            r#"interface A { function f(self) -> string throws never }"#,
         ),
         ("ns_b/b.baml", r#"interface B requires root.a.A {}"#),
         (
@@ -10447,7 +10468,7 @@ async fn wf3_union_of_implementors_assignable_to_interface_runtime() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -10475,19 +10496,22 @@ async fn wf3_union_of_implementors_assignable_to_interface_runtime() {
     );
 }
 
-/// wf3 #13 [medium]: calling `.speak()` on `Animal | Swimmer` must be rejected
-/// (a `Swimmer` need not be an `Animal`) — but the diagnostic must blame the arm
-/// that lacks `speak` (`Swimmer`), NOT falsely claim `Animal` has no `speak`.
+/// wf3 #13 [medium]: calling `.speak()` on `Animal | Swimmer` must be rejected.
+/// Union member access is valid only through a single interface that *every* arm
+/// shares and that declares the member. `Animal` declares `speak` but `Swimmer`
+/// does not, so the arms share no common interface that declares `speak`. The
+/// diagnostic must say exactly that — not falsely claim the `Animal` arm lacks
+/// `speak` (it declares it).
 /// `_plan/wf3/subtyping-optional-union-match/union_method_on_iface_union.baml`
 #[test]
 fn wf3_method_on_interface_union_blames_correct_member() {
     let errors = collect_compile_errors(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         interface Swimmer {
-            function swim(self) -> string
+            function swim(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -10507,15 +10531,17 @@ fn wf3_method_on_interface_union_blames_correct_member() {
         "#,
     );
     assert!(
-        !errors.is_empty(),
-        "`.speak()` on `Animal | Swimmer` must be rejected"
+        errors
+            .iter()
+            .any(|e| e.contains("no common interface that declares")),
+        "`.speak()` on `Animal | Swimmer` must be rejected: the arms share no \
+         common interface that declares `speak`. Got:\n  {}",
+        errors.join("\n  ")
     );
     assert!(
-        !errors.iter().any(|e| e.contains("Animal")
-            && e.to_lowercase().contains("no member")
-            && e.contains("speak")),
-        "diagnostic must not claim `Animal` lacks `speak` — it declares it; \
-         should blame `Swimmer`. Got:\n  {}",
+        !errors.iter().any(|e| e.contains("`Animal` has no member")),
+        "diagnostic must not falsely claim the `Animal` arm lacks a member — it \
+         declares `speak`; the union simply shares no common interface. Got:\n  {}",
         errors.join("\n  ")
     );
 }
@@ -10529,7 +10555,7 @@ async fn wf3_out_of_body_primitive_impl_visible_to_reflection_runtime() {
     let output = baml_test!(
         r#"
         interface Debuggable {
-            function debug(self) -> string
+            function debug(self) -> string throws never
         }
         implements Debuggable for int {
             function debug(self) -> string { return "int" }
@@ -10601,7 +10627,7 @@ fn wf3_monomorph_collision_assignment_is_diagnosed() {
     let errors = collect_compile_errors(
         r#"
         interface Getter<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         class Pair<L, R> {
             left: L
@@ -10628,16 +10654,17 @@ fn wf3_monomorph_collision_assignment_is_diagnosed() {
     );
 }
 
-/// wf3 #20 [low]: the E0121 suggestion for a monomorphized generic collision
-/// must use the concrete instantiation (`as<Getter<int>>`), not the
-/// uninstantiated `as<Getter<L>>` (which fails E0002 `unresolved type: L`).
+/// wf3 #20: `Getter<L>` + `Getter<R>` on `Pair<L, R>` overlap at the diagonal
+/// `Pair<T, T>` (both realize `Getter<T>`), so the class is rejected with the
+/// overlapping-implementations coherence error (E0132) at its declaration —
+/// before any call-site collision suggestion can arise.
 /// `_plan/wf3/generics-core/gen_mono_collision_unqualified.baml`
 #[test]
-fn wf3_monomorph_collision_unqualified_suggestion_uses_concrete_args() {
+fn wf3_monomorph_collision_overlapping_impls_rejected() {
     assert_compile_error_contains(
         r#"
         interface Getter<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         class Pair<L, R> {
             left: L
@@ -10654,7 +10681,7 @@ fn wf3_monomorph_collision_unqualified_suggestion_uses_concrete_args() {
             return p.get()
         }
         "#,
-        "Getter<int>",
+        "overlapping interface implementations",
     );
 }
 
@@ -10670,7 +10697,7 @@ fn wf3_bare_cross_ns_requires_unknown_echoes_qualifier() {
         ("main.baml", r#"function main() -> string { return "ok" }"#),
         (
             "ns_a/a.baml",
-            r#"interface Base { function f(self) -> string }"#,
+            r#"interface Base { function f(self) -> string throws never }"#,
         ),
         (
             "ns_b/b.baml",
@@ -10689,7 +10716,7 @@ fn wf3_unsatisfied_blanket_bound_message_names_bound() {
     assert_compile_error_contains(
         r#"
         interface Named { name: string }
-        interface Printable { function display(self) -> string }
+        interface Printable { function display(self) -> string throws never }
         class Rock { label: string }
         class Box<T> { value: T }
         implements<T extends Named> Printable for Box<T> {
@@ -10712,10 +10739,10 @@ fn wf3_as_to_unimplemented_interface_message_mentions_implement() {
     assert_compile_error_contains(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         interface Vehicle {
-            function drive(self) -> string
+            function drive(self) -> string throws never
         }
         class Cat {
             implements Animal {
@@ -10739,7 +10766,7 @@ fn wf3_default_as_bare_value_is_rejected() {
     assert_compile_error_contains(
         r#"
         interface Logger {
-            function log(self, msg: string) -> string { return msg }
+            function log(self, msg: string) -> string throws never { return msg }
         }
         class C {
             implements Logger {
@@ -10772,7 +10799,7 @@ fn wf3_self_interface_field_access_in_method_requires_projection() {
         r#"
         interface Named {
             name: string
-            function greet(self) -> string
+            function greet(self) -> string throws never
         }
         class Person {
             title: string
@@ -10796,7 +10823,7 @@ async fn wf3_self_interface_field_access_via_projection_runtime() {
         r#"
         interface Named {
             name: string
-            function greet(self) -> string
+            function greet(self) -> string throws never
         }
         class Person {
             title: string
@@ -10830,7 +10857,7 @@ fn wf3_throws_covariant_narrower_is_allowed() {
     assert_no_compile_errors(
         r#"
         interface IError {
-            function describe(self) -> string
+            function describe(self) -> string throws never
         }
         class NetworkError {
             msg: string
@@ -10864,10 +10891,10 @@ fn wf3_all_default_requires_parent_still_needs_explicit_implements() {
     assert_compile_error_code(
         r#"
         interface A {
-            function greet(self) -> string { return "hi" }
+            function greet(self) -> string throws never { return "hi" }
         }
         interface B requires A {
-            function bye(self) -> string { return "bye" }
+            function bye(self) -> string throws never { return "bye" }
         }
         class C {
             implements B {}
@@ -10888,8 +10915,8 @@ fn wf3_all_default_requires_parent_still_needs_explicit_implements() {
 fn wf3_requires_cycle_reports_full_path() {
     assert_compile_error_contains(
         r#"
-        interface A requires B { function fa(self) -> string }
-        interface B requires A { function fb(self) -> string }
+        interface A requires B { function fa(self) -> string throws never }
+        interface B requires A { function fb(self) -> string throws never }
         class C {
             implements A { function fa(self) -> string { return "a" } }
             implements B { function fb(self) -> string { return "b" } }
@@ -10899,7 +10926,7 @@ fn wf3_requires_cycle_reports_full_path() {
             return c.fa()
         }
         "#,
-        "A -> B",
+        "A → B",
     );
 }
 
@@ -10911,7 +10938,7 @@ fn wf3_requires_cycle_reports_full_path() {
 async fn wf3_out_of_body_method_callable_directly_runtime() {
     let output = baml_test!(
         r#"
-        interface Debuggable { function debug(self) -> string }
+        interface Debuggable { function debug(self) -> string throws never }
         implements Debuggable for int {
             function debug(self) -> string { return "int" }
         }
@@ -10934,7 +10961,7 @@ async fn wf3_out_of_body_method_callable_directly_runtime() {
 async fn wf3_blanket_method_callable_directly_runtime() {
     let output = baml_test!(
         r#"
-        interface Printable { function display(self) -> string }
+        interface Printable { function display(self) -> string throws never }
         class Box<T> { value: T }
         implements<T> Printable for Box<T> {
             function display(self) -> string { return "box" }
@@ -10961,7 +10988,7 @@ fn wf3_out_of_body_primitive_field_bearing_is_e0126_pins() {
         r#"
         interface Named {
             name: string
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         implements Named for int {
             function display(self) -> string { return "int" }
@@ -10982,7 +11009,7 @@ async fn wf3_union_member_method_call_works_pins() {
     let output = baml_test!(
         r#"
         interface Animal {
-            function speak(self) -> string
+            function speak(self) -> string throws never
         }
         class Dog {
             implements Animal {
@@ -11043,7 +11070,7 @@ async fn wf3_bare_generic_interface_reflection_is_wildcard_pins() {
     let output = baml_test!(
         r#"
         interface Box<T> {
-            function get(self) -> T
+            function get(self) -> T throws never
         }
         class IntBox {
             implements Box<int> {
@@ -11074,7 +11101,7 @@ async fn wf3_blanket_implementor_identity_is_bare_class_pins() {
     let output = baml_test!(
         r#"
         interface Printable {
-            function display(self) -> string
+            function display(self) -> string throws never
         }
         class Box<T> {
             value: T
@@ -11105,13 +11132,15 @@ async fn wf3_blanket_implementor_identity_is_bare_class_pins() {
 // spurious-compile-error > missing-error > bad-diagnostic.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Regression guard (user-reported): a method present on every member of a
-/// *class-only* union (`A | B`, both declaring `execute`) dispatches on the
-/// runtime class. This already worked, but is pinned alongside the interface
-/// union fixes so the shared union-dispatch path stays green.
-#[tokio::test]
-async fn union_fuzz_class_only_union_method_dispatch() {
-    let output = baml_test!(
+/// A method present on every member of a *class-only* union (`A | B`, each
+/// declaring its own `execute` directly) is NOT callable on the union. Union
+/// member access is valid only through a single interface that *every* arm shares
+/// and that declares the member; each class declares its own `execute` (no shared
+/// interface at all), so the union shares no common interface that declares
+/// `execute` — a compile error.
+#[test]
+fn union_fuzz_class_only_union_method_is_rejected() {
+    assert_compile_error_contains(
         r#"
         class A {
           name: string
@@ -11125,11 +11154,8 @@ async fn union_fuzz_class_only_union_method_dispatch() {
         function main() -> string {
           return process(A { name: "Alice" }) + " | " + process(B { name: "Bob" })
         }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("A executes and gets Alice | B executes and gets Bob".into())
+        "#,
+        "no common interface that declares",
     );
 }
 
@@ -11148,7 +11174,7 @@ async fn union_fuzz_pr_class_union_inherited_default_method() {
     let output = baml_test!(
         r#"
         interface Greeter {
-          function greet(self) -> string { return "hello" }
+          function greet(self) -> string throws never { return "hello" }
         }
         class Dog { implements Greeter {} }
         class Cat { implements Greeter {} }
@@ -11170,7 +11196,7 @@ async fn union_fuzz_pr_class_union_inherited_default_method() {
 async fn union_fuzz_pr_reflection_nested_union_arg_order_insensitive() {
     let output = baml_test!(
         r#"
-        interface Box<T> { function get(self) -> T }
+        interface Box<T> { function get(self) -> T throws never }
         class UBox {
           value: int
           implements Box<(int | string)?> {
@@ -11199,8 +11225,8 @@ async fn union_fuzz_pr_reflection_nested_union_arg_order_insensitive() {
 fn union_fuzz_pr_ambiguous_inherited_method_in_class_union_is_e0121() {
     let errors = collect_compile_errors(
         r#"
-        interface A { function f(self) -> string { return "a" } }
-        interface B { function f(self) -> string { return "b" } }
+        interface A { function f(self) -> string  throws never { return "a" } }
+        interface B { function f(self) -> string  throws never { return "b" } }
         class C { implements A {} implements B {} }
         class D { implements A {} implements B {} }
         function g(x: C | D) -> string { return x.f() }
@@ -11290,36 +11316,37 @@ fn union_fuzz_pr_concrete_arm_not_callable_despite_recovery_arm() {
     );
 }
 
-/// Calling a method on a union of interfaces where some class implements two of
-/// them (the method declared by both) is ambiguous for that class — a value of
-/// the union could be that class — so reject with E0121 rather than silently
-/// dispatching to the first interface's default ("from-A").
+/// Calling `m` on a union of two *different* interfaces (`A | B`) that each
+/// declare their own `m` is rejected, even when one class implements both. Union
+/// member access is valid only through a single interface that *every* arm shares
+/// and that declares the member; `A.m` and `B.m` are distinct members, so the
+/// union shares no common interface that declares `m`.
 #[test]
-fn union_fuzz_pr_shared_implementor_method_in_iface_union_is_e0121() {
-    let errors = collect_compile_errors(
+fn union_fuzz_pr_shared_implementor_method_in_iface_union_has_no_common_interface() {
+    assert_compile_error_contains(
         r#"
-        interface A { function m(self) -> string { return "from-A" } }
-        interface B { function m(self) -> string { return "from-B" } }
+        interface A { function m(self) -> string  throws never { return "from-A" } }
+        interface B { function m(self) -> string  throws never { return "from-B" } }
         class C { implements A {} implements B {} }
         function call(x: A | B) -> string { return x.m() }
         function main() -> string { let c: A = C {}; return call(c) }
         "#,
-    );
-    assert!(
-        errors.iter().any(|e| e.starts_with("[E0121]")),
-        "a union of interfaces with a shared ambiguous implementor must be E0121; got:\n  {}",
-        errors.join("\n  ")
+        "no common interface that declares",
     );
 }
 
-/// A union with the *same* interface that is unambiguous (only one implementor
-/// per interface) must still compile and dispatch.
-#[tokio::test]
-async fn union_fuzz_pr_disjoint_implementors_iface_union_dispatches() {
-    let output = baml_test!(
+/// Calling `m` on a union of two *different* interfaces (`A | B`) that each
+/// declare their own `m`, with disjoint implementors (`Dog` is `A`, `Cat` is
+/// `B`), is still rejected. Union member access is valid only through a single
+/// interface that *every* arm shares and that declares the member; `A` and `B`
+/// are distinct interfaces, so their `m`s are distinct members and the union
+/// shares no common interface that declares `m`.
+#[test]
+fn union_fuzz_pr_disjoint_implementors_iface_union_is_rejected() {
+    assert_compile_error_contains(
         r#"
-        interface A { function m(self) -> string { return "a" } }
-        interface B { function m(self) -> string { return "b" } }
+        interface A { function m(self) -> string  throws never { return "a" } }
+        interface B { function m(self) -> string  throws never { return "b" } }
         class Dog { implements A {} }
         class Cat { implements B {} }
         function call(x: A | B) -> string { return x.m() }
@@ -11328,11 +11355,8 @@ async fn union_fuzz_pr_disjoint_implementors_iface_union_dispatches() {
           let c: B = Cat {}
           return call(d) + call(c)
         }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("ab".into())
+        "#,
+        "no common interface that declares",
     );
 }
 
@@ -11343,7 +11367,7 @@ async fn union_fuzz_pr_disjoint_implementors_iface_union_dispatches() {
 async fn union_fuzz_pr_reflection_duplicate_union_members_not_equivalent() {
     let output = baml_test!(
         r#"
-        interface Box<T> { function get(self) -> T }
+        interface Box<T> { function get(self) -> T throws never }
         class UBox {
           value: int
           implements Box<int | int> { function get(self) -> int | int { return self.value } }
@@ -11426,16 +11450,17 @@ async fn union_fuzz_f02_generic_match_narrowing_ignores_type_arg_crash() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(0));
 }
 
-/// F3 [crash]: a same-named field with CONFLICTING types across two union
-/// interfaces (`Animal.id: string`, `Vehicle.id: int`) used to type-check
-/// against any target and then abort the VM (`expected map, got instance`).
-/// The sound result is that `u.id` has type `string | int` (the value is an
-/// Animal OR a Vehicle, not genuinely ambiguous), so reading it into a `string`
-/// must be a clean compile-time type error (E0001) — never a VM crash.
+/// F3 [crash]: a same-named field declared by two *different* union interfaces
+/// (`Animal.id: string`, `Vehicle.id: int`) used to type-check against any target
+/// and then abort the VM (`expected map, got instance`). Union member access is
+/// valid only through a single interface that *every* arm shares and that declares
+/// the member; `Animal.id` and `Vehicle.id` are distinct members, so the union
+/// shares no common interface that declares `id` — a clean compile error, never a
+/// VM crash.
 /// Repro: `cat_iface_iface_union/iface_iface_union_7_same_field_diff_type.baml`
 #[test]
-fn union_fuzz_f03_conflicting_union_field_is_ambiguous_error() {
-    assert_compile_error_code(
+fn union_fuzz_f03_conflicting_union_field_has_no_common_interface() {
+    assert_compile_error_contains(
         r#"
         interface Animal { id: string }
         interface Vehicle { id: int }
@@ -11450,7 +11475,7 @@ fn union_fuzz_f03_conflicting_union_field_is_ambiguous_error() {
           return v
         }
         "#,
-        "E0001",
+        "no common interface that declares",
     );
 }
 
@@ -11522,7 +11547,7 @@ async fn union_fuzz_f06_reflection_generic_union_arg_order_insensitive() {
     let output = baml_test!(
         r#"
         interface Box<T> {
-          function get(self) -> T
+          function get(self) -> T throws never
         }
         class UBox {
           value: int
@@ -11553,18 +11578,19 @@ async fn union_fuzz_f06_reflection_generic_union_arg_order_insensitive() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Int(111111));
 }
 
-/// F7 [spurious-compile-error]: a method present on EVERY member of a union that
-/// contains an interface is rejected as `` `unknown | unknown` is not a function ``
-/// (E0006) — the interface arm's method type resolves to the `Ty::Unknown`
-/// sentinel. SHOULD compile and dispatch on the runtime class -> "Woof".
-/// (Currently panics at compile until fixed.)
+/// F7: calling a method that both arms declare through *different* interfaces
+/// (`Animal.speak` / `Vehicle.speak`) on a union `Animal | Vehicle` is a compile
+/// error. Union member access is valid only through a single interface that
+/// *every* arm shares and that declares the member; `Animal.speak` and
+/// `Vehicle.speak` are distinct members, so the union shares no common interface
+/// that declares `speak`.
 /// Repro: `cat_collection_union/collection_union_9_union_direct_call.baml`
-#[tokio::test]
-async fn union_fuzz_f07_shared_method_on_iface_union_is_callable() {
-    let output = baml_test!(
+#[test]
+fn union_fuzz_f07_shared_method_on_iface_union_is_a_compile_error() {
+    assert_compile_error_contains(
         r#"
         interface Animal {
-          function speak(self) -> string
+          function speak(self) -> string throws never
         }
         class Dog {
           implements Animal {
@@ -11572,7 +11598,7 @@ async fn union_fuzz_f07_shared_method_on_iface_union_is_callable() {
           }
         }
         interface Vehicle {
-          function speak(self) -> string
+          function speak(self) -> string throws never
         }
         class Car {
           implements Vehicle {
@@ -11583,11 +11609,8 @@ async fn union_fuzz_f07_shared_method_on_iface_union_is_callable() {
           let v: Animal | Vehicle = Dog {};
           return v.speak();
         }
-        "#
-    );
-    assert_eq!(
-        output.result.unwrap(),
-        BexExternalValue::String("Woof".into())
+        "#,
+        "no common interface that declares",
     );
 }
 
@@ -11602,7 +11625,7 @@ async fn union_fuzz_f08_interface_bounded_generic_identity_compiles() {
     let output = baml_test!(
         r#"
         interface Animal {
-          function speak(self) -> string
+          function speak(self) -> string throws never
         }
         class Dog {
           implements Animal {
@@ -11635,7 +11658,7 @@ async fn union_fuzz_f09_interface_arm_over_optional_union_compiles() {
     let output = baml_test!(
         r#"
         interface Animal {
-          function speak(self) -> string
+          function speak(self) -> string throws never
         }
         class Dog {
           name: string
@@ -11672,7 +11695,7 @@ async fn union_fuzz_f09_interface_arm_over_optional_union_compiles() {
 async fn union_fuzz_f10_out_of_body_primitive_string_direct_call() {
     let output = baml_test!(
         r#"
-        interface Debuggable { function debug(self) -> string }
+        interface Debuggable { function debug(self) -> string throws never }
         implements Debuggable for string { function debug(self) -> string { return "str" } }
         function main() -> string {
           let s: string = "hi"
@@ -11686,14 +11709,16 @@ async fn union_fuzz_f10_out_of_body_primitive_string_direct_call() {
     );
 }
 
-/// F11 [missing-error]: the soundness face of F3 — reading a conflicting
-/// union-interface field type-checks against ANY target, including `bool`
-/// (`Animal.id: string` / `Vehicle.id: int` read into `let v: bool`), so the
-/// field has no single well-defined type. SHOULD be rejected at compile time.
+/// F11 [missing-error]: the soundness face of F3 — reading a field declared by
+/// two *different* union interfaces (`Animal.id: string` / `Vehicle.id: int`)
+/// used to type-check against ANY target, including `bool`. Union member access
+/// is valid only through a single interface that *every* arm shares and that
+/// declares the member; `Animal.id` and `Vehicle.id` are distinct members, so the
+/// union shares no common interface that declares `id` — rejected at compile time.
 /// Repro: `cat_iface_iface_union/iface_iface_union_7_same_field_diff_type.baml`
 #[test]
 fn union_fuzz_f11_conflicting_union_field_read_is_rejected() {
-    let errors = collect_compile_errors(
+    assert_compile_error_contains(
         r#"
         interface Animal { id: string }
         interface Vehicle { id: int }
@@ -11705,15 +11730,7 @@ fn union_fuzz_f11_conflicting_union_field_read_is_rejected() {
         }
         function main() -> bool { return readBool(Dog { id: "x" }) }
         "#,
-    );
-    assert!(
-        errors
-            .iter()
-            .any(|e| e.starts_with("[E0001]") && e.contains("bool")),
-        "reading a field with conflicting types across union-interface members must be \
-         rejected with a type mismatch (E0001) against the `bool` target — it used to \
-         type-check unsoundly against any target; got:\n  {}",
-        errors.join("\n  ")
+        "no common interface that declares",
     );
 }
 
@@ -11728,7 +11745,7 @@ fn union_fuzz_f12_iface_union_call_diagnostic_does_not_leak_internals() {
     let errors = collect_compile_errors(
         r#"
         interface Animal {
-          function speak(self) -> string
+          function speak(self) -> string throws never
         }
         class Dog {
           implements Animal {
@@ -11808,8 +11825,8 @@ fn union_fuzz_f13_exhaustiveness_witness_does_not_leak_user_prefix() {
 fn union_fuzz_f14_exhaustiveness_witness_names_interface_members() {
     let errors = collect_compile_errors(
         r#"
-        interface Animal { function speak(self) -> string }
-        interface Vehicle { function drive(self) -> string }
+        interface Animal { function speak(self) -> string throws never }
+        interface Vehicle { function drive(self) -> string throws never }
         class Dog { name: string  implements Animal { function speak(self) -> string { return "Woof" } } }
         class Car { model: string  implements Vehicle { function drive(self) -> string { return "Vroom" } } }
         function describe(x: Animal | Vehicle) -> string {
@@ -11846,7 +11863,7 @@ fn union_fuzz_f14_exhaustiveness_witness_names_interface_members() {
 fn union_fuzz_f15_union_method_blame_skips_satisfying_member() {
     let errors = collect_compile_errors(
         r#"
-        interface Debuggable { function debug(self) -> string }
+        interface Debuggable { function debug(self) -> string throws never }
         implements Debuggable for int { function debug(self) -> string { return "int" } }
         class Dog { name: string }
         function main() -> string {
@@ -11947,7 +11964,7 @@ async fn positional_typevar_union_interface_args_dispatch() {
         class ErrA { m: string }
         class ErrB { m: string }
         interface Pipe<E> {
-            function run(self) -> string
+            function run(self) -> string throws never
         }
         class Multi<E, E2> {
             tag: string
@@ -11975,7 +11992,7 @@ fn field_chain_abstract_interface_method_arity_checked() {
     assert_compile_error_contains(
         r#"
         interface Conv {
-            function convert<T>(self, v: T) -> T
+            function convert<T>(self, v: T) -> T throws never
         }
         class Celsius {
             tag: string
@@ -12008,7 +12025,7 @@ fn duplicate_implements_differing_only_in_assoc_bindings_is_compile_error() {
         r#"
         interface Sink {
             type Error
-            function push(self, v: int) -> string
+            function push(self, v: int) -> string throws never
         }
 
         class Buf<E1, E2> {
@@ -12023,7 +12040,7 @@ fn duplicate_implements_differing_only_in_assoc_bindings_is_compile_error() {
             }
         }
         "#,
-        "E0114",
+        "E0132",
     );
 }
 

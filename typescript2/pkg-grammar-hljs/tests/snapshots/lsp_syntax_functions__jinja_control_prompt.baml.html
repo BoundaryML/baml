@@ -1,0 +1,17 @@
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">Message</span> {
+  role <span class="hljs-string">&quot;user&quot;</span> | <span class="hljs-string">&quot;assistant&quot;</span> | <span class="hljs-type">string</span>
+  message <span class="hljs-type">string</span>
+}
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">Bot</span>(convo: Message[]) <span class="hljs-operator">-&gt;</span> <span class="hljs-type">string</span> {
+  <span class="hljs-keyword">client</span> <span class="hljs-string">&quot;openai/gpt-4o&quot;</span>
+  prompt <span class="hljs-string">#&quot;
+    You are a helpful assistant.
+    <span class="hljs-template-variable">{{ <span class="hljs-built_in">ctx</span>.output_format }}</span>
+
+    <span class="hljs-template-tag">{% <span class="hljs-keyword">for</span> m <span class="hljs-keyword">in</span> convo %}</span>
+    <span class="hljs-template-variable">{{ <span class="hljs-built_in">_</span>.role(m.role) }}</span>
+    <span class="hljs-template-variable">{{ m.message }}</span>
+    <span class="hljs-template-tag">{% <span class="hljs-keyword">endfor</span> %}</span>
+  &quot;#</span>
+}

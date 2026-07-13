@@ -265,30 +265,22 @@ function match_container_types.classify_union_element(u: (int | string)[] | int[
     pop_jump_if_false L0
     load_const true
     pop_jump_if_false L0
-    jump L3
+    jump L1
 
   L0:
     load_var u
     is_type (int | string)[]
-    pop_jump_if_false L1
+    pop_jump_if_false L3
+    load_const "mixed"
     jump L2
 
   L1:
-    load_var u
-    is_type int[]
-    pop_jump_if_false L5
-
-  L2:
-    load_const "mixed"
-    jump L4
-
-  L3:
     load_const "ints"
 
-  L4:
+  L2:
     return
 
-  L5:
+  L3:
     unreachable
 }
 

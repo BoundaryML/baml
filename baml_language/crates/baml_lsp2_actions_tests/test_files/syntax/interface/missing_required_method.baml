@@ -1,7 +1,7 @@
 // `speak()` has no default body — class must provide one.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class IncompleteAnimal {
@@ -10,12 +10,12 @@ class IncompleteAnimal {
 
 //----
 //- diagnostics
-// error: class `IncompleteAnimal` does not implement required method `speak` of interface `Animal`
-//    ╭─[ interface_missing_required_method.baml:8:3 ]
+// error: missing implementation of method `speak` required by interface `Animal`
+//    ╭─[ interface_missing_required_method.baml:8:14 ]
 //    │
 //  8 │   implements Animal {}
-//    │   ──────────┬─────────
-//    │             ╰─────────── missing `speak` here
+//    │              ───┬──
+//    │                 ╰──── missing implementation of method `speak` required by interface `Animal`
 //    │
 //    │ Note: Error code: E0113
 // ───╯

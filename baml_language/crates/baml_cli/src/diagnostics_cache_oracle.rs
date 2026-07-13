@@ -251,16 +251,19 @@ fn oracle_layout_reorder() {
 // ── Scenario 6: throws edit — the throws-propagation sentinel ─────────────────
 
 /// A body-only edit grows `risky`'s inferred (transitive) throws without moving
-/// its `throws _` signature, so the caller `guarded` (declared `throws never`)
-/// gains a contract-violation error. Served must equal honest — which only holds
-/// because the throws-change propagation re-checks `guarded`. Disabling that
-/// propagation makes this fail (proven separately in
-/// `throws_sentinel_disabled_breaks_the_oracle`).
+/// its signature, so the caller `guarded` (declared `throws never`) gains a
+/// contract-violation error. Served must equal honest — which only holds
+/// because the throws-change propagation re-checks `guarded`.
+///
+/// `risky` deliberately declares no `throws` clause: #3983 removed the open
+/// `throws X | _` contract (a declared clause is now a *closed* set), so
+/// "inferred throws grow while the signature is unchanged" is only expressible
+/// through an undeclared-throws function whose set is body-inferred.
 const THROWS_ERR: &str = "class MyErr {\n  msg string\n}\n";
 const THROWS_BOOM: &str =
     "function boom() -> int throws MyErr {\n  throw MyErr { msg: \"x\" }\n}\n";
-const THROWS_RISKY_V1: &str = "function risky() -> int throws _ {\n  0\n}\n";
-const THROWS_RISKY_V2: &str = "function risky() -> int throws _ {\n  boom()\n}\n";
+const THROWS_RISKY_V1: &str = "function risky() -> int {\n  0\n}\n";
+const THROWS_RISKY_V2: &str = "function risky() -> int {\n  boom()\n}\n";
 const THROWS_GUARDED: &str = "function guarded() -> int throws never {\n  risky()\n}\n";
 
 /// A four-file project fixture (name, content).
@@ -313,11 +316,11 @@ fn oracle_delete_file() {
 
 #[test]
 fn oracle_warning_in_clean_file_is_served() {
-    // `w.baml` emits an aliasing warning (E0148). Editing an unrelated file must
-    // keep `w.baml` clean, yet its warning must still appear in the served set
-    // (byte-identical to honest) — i.e. it is served from cache, not dropped.
-    let warn =
-        "function warns() -> int {\n  let rows = baml.Array.filled(3, [0]);\n  rows.length()\n}\n";
+    // `w.baml` emits an unreachable-code warning (E0146; the E0148 aliasing lint
+    // this test originally used was removed by #3983). Editing an unrelated file
+    // must keep `w.baml` clean, yet its warning must still appear in the served
+    // set (byte-identical to honest) — i.e. it is served from cache, not dropped.
+    let warn = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
     let initial = [("w.baml", warn), ("z.baml", UNRELATED)];
     let edited = [
         ("w.baml", warn),
@@ -326,8 +329,8 @@ fn oracle_warning_in_clean_file_is_served() {
     let Some(dirty) = run_scenario(&initial, &edited).map(|r| {
         assert_eq!(r.served, r.honest, "served warning must match honest");
         assert!(
-            r.served.contains("E0148"),
-            "the clean file's aliasing warning must be present in the served set:\n{}",
+            r.served.contains("E0146"),
+            "the clean file's unreachable-code warning must be present in the served set:\n{}",
             r.served
         );
         r.dirty
@@ -446,8 +449,9 @@ fn with_stored_manifest(
     let _ = std::fs::remove_dir_all(&root);
 }
 
-const VERIFY_WARN: &str =
-    "function warns() -> int {\n  let rows = baml.Array.filled(3, [0]);\n  rows.length()\n}\n";
+// An unreachable-code warning (E0146); the E0148 aliasing lint the verify tests
+// originally used was removed by #3983.
+const VERIFY_WARN: &str = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
 
 #[test]
 fn verify_diagnostics_passes_for_faithful_cache() {

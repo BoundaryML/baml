@@ -323,7 +323,7 @@ function json_to_from_string.from_string_json_passthrough_object_len() -> int {
     call baml.json.from_string
     store_var j
     load_var j
-    is_type map<_, _>
+    is_type map<string, baml.json.json>
     pop_jump_if_false L0
     jump L1
 

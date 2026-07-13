@@ -22,6 +22,9 @@ struct Ctx {
     enums: HashMap<QualifiedTypeName, Vec<Name>>,
     /// Declared `extends` bounds per `(interface head, associated-type name)`.
     assoc_bounds: HashMap<(QualifiedTypeName, Name), Vec<Ty>>,
+    /// `(base, interface head, member) → reduced type` projection facts, for the
+    /// `project` oracle. A `Vec` (not a map) because `Ty` is not `Hash`.
+    projections: Vec<(Ty, QualifiedTypeName, Name, Ty)>,
 }
 
 fn nominal_head(ty: &Ty) -> Option<QualifiedTypeName> {
@@ -89,6 +92,15 @@ impl TypeContext for Ctx {
             .filter_map(Ty::as_interface)
             .collect()
     }
+
+    fn project(&self, base: &Ty, interface: &Interface, member: &Name) -> ProjectionStep {
+        self.projections
+            .iter()
+            .find(|(b, i, m, _)| b == base && i == &interface.name && m == member)
+            .map_or(ProjectionStep::Opaque, |(_, _, _, reduced)| {
+                ProjectionStep::Reduced(reduced.clone())
+            })
+    }
 }
 
 // ── constructors ─────────────────────────────────────────────────────────--
@@ -119,6 +131,60 @@ fn union(v: Vec<Ty>) -> Ty {
 }
 fn typevar(s: &str) -> Ty {
     Ty::TypeVar(Name::new(s), TyAttr::default())
+}
+fn projection(base: Ty, iface_name: &str, member: &str) -> Ty {
+    Ty::AssociatedTypeProjection {
+        base: Box::new(base),
+        interface: Some(Box::new(Interface::new(qtn(iface_name), vec![], vec![]))),
+        member: Name::new(member),
+        attr: TyAttr::default(),
+    }
+}
+
+// ── projection reduction ─────────────────────────────────────────────────--
+
+#[test]
+fn projection_reduces_to_its_binding() {
+    // `(C as Foo).Assoc` *is* the type the oracle reduces it to — a pure type-level
+    // operator, so its canonical form is the reduced type.
+    let ctx = Ctx {
+        projections: vec![(class("C"), qtn("Foo"), Name::new("Assoc"), Ty::string())],
+        ..Ctx::default()
+    };
+    assert!(equivalent(
+        &projection(class("C"), "Foo", "Assoc"),
+        &Ty::string(),
+        &ctx,
+    ));
+}
+
+#[test]
+fn cyclic_projection_reduction_terminates_and_stays_opaque() {
+    // `(C as I).A → (C as J).B → (C as I).A → …`: fuel-bounded, so normalization
+    // terminates (this test completing proves it) and the projection stays opaque —
+    // never wrongly equated to a concrete type.
+    let ctx = Ctx {
+        projections: vec![
+            (
+                class("C"),
+                qtn("I"),
+                Name::new("A"),
+                projection(class("C"), "J", "B"),
+            ),
+            (
+                class("C"),
+                qtn("J"),
+                Name::new("B"),
+                projection(class("C"), "I", "A"),
+            ),
+        ],
+        ..Ctx::default()
+    };
+    assert!(!equivalent(
+        &projection(class("C"), "I", "A"),
+        &Ty::int(),
+        &ctx,
+    ));
 }
 
 // ── union algebra ────────────────────────────────────────────────────────--
@@ -713,6 +779,42 @@ fn map_ty(key: Ty, value: Ty) -> Ty {
         value: Box::new(value),
         attr: TyAttr::default(),
     }
+}
+
+#[test]
+fn containers_are_invariant_even_when_the_element_is_a_genuine_subtype() {
+    // The memory-corruption example (TYPE_SYSTEM.md §Variance): `Dog <: Animal`
+    // does NOT make `list<Dog> <: list<Animal>`. Element subtyping would let a
+    // caller holding the `list<Animal>` view store a non-`Dog` into a `list<Dog>`,
+    // so the containers are invariant — related only when the elements are mutual
+    // subtypes (equivalent). This is the exact rule value-checking now enforces by
+    // routing through this relation instead of the legacy element-covariant one.
+    let mut ctx = Ctx::default();
+    ctx.impls.push((qtn("Dog"), qtn("Animal")));
+    assert!(is_subtype(&class("Dog"), &iface("Animal"), &ctx));
+
+    assert!(!is_subtype(
+        &Ty::list(class("Dog")),
+        &Ty::list(iface("Animal")),
+        &ctx,
+    ));
+    assert!(!is_subtype(
+        &map_ty(Ty::string(), class("Dog")),
+        &map_ty(Ty::string(), iface("Animal")),
+        &ctx,
+    ));
+    // A generic class is invariant in its argument for the same reason.
+    assert!(!is_subtype(
+        &class1("Box", class("Dog")),
+        &class1("Box", iface("Animal")),
+        &ctx,
+    ));
+    // Reflexive same-instantiation still holds.
+    assert!(is_subtype(
+        &Ty::list(class("Dog")),
+        &Ty::list(class("Dog")),
+        &ctx,
+    ));
 }
 
 #[test]

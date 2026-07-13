@@ -73,12 +73,12 @@ fn assert_compile_error_contains(source: &str, needle: &str) {
 const SPIKE_1A_SCAFFOLD: &str = r#"
     interface HasErr {
         type E
-        function f(self) -> int throws E
+        function f(self) -> int throws Self.E
     }
 
     interface Wrap {
         type WE
-        function g(self) -> int throws WE
+        function g(self) -> int throws Self.WE
     }
 
     implements<T extends HasErr> Wrap for T[] {
@@ -286,7 +286,7 @@ const SPIKE_1B_SCAFFOLD: &str = r#"
     }
 
     interface FirstNamed {
-        function first_name(self) -> string
+        function first_name(self) -> string throws never
     }
 
     implements<T extends Named> FirstNamed for T[] {
@@ -359,7 +359,7 @@ async fn spike_1b_blanket_interface_method_wins_over_array_class_method() {
     let output = baml_test!(
         r#"
         interface Countable {
-            function count(self) -> int
+            function count(self) -> int throws never
         }
 
         implements<T> Countable for T[] {
@@ -384,7 +384,7 @@ async fn spike_1c_two_self_method_through_bounded_typevar_runs() {
     let output = baml_test!(
         r#"
         interface Cmp {
-            function compare(self, other: Self) -> int
+            function compare(self, other: Self) -> int throws never
         }
 
         class Num {
@@ -415,7 +415,7 @@ fn spike_1c_interface_typed_values_cannot_call_two_self_method() {
     assert_compile_error_contains(
         r#"
         interface Cmp {
-            function compare(self, other: Self) -> int
+            function compare(self, other: Self) -> int throws never
         }
 
         function bad(a: Cmp, b: Cmp) -> bool {
@@ -542,12 +542,12 @@ async fn phase2_user_class_compare_direct_call_mir_optimized() {
 const PHASE3_SCAFFOLD: &str = r#"
     interface Cmp2 {
         type CE
-        function comp(self, other: Self) -> int throws CE
+        function comp(self, other: Self) -> int throws Self.CE
     }
 
     interface Srt2 {
         type SE
-        function srt(self) -> Self throws SE
+        function srt(self) -> Self throws Self.SE
     }
 
     implements<T extends Cmp2> Srt2 for T[] {
@@ -672,12 +672,12 @@ fn phase3_defaulted_assoc_error_over_constrains_bound() {
         r#"
         interface CmpD {
             type CE = never
-            function comp(self, other: Self) -> int throws CE
+            function comp(self, other: Self) -> int throws Self.CE
         }
 
         interface SrtD {
             type SE
-            function srt(self) -> Self throws SE
+            function srt(self) -> Self throws Self.SE
         }
 
         implements<T extends CmpD> SrtD for T[] {

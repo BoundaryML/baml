@@ -2,7 +2,7 @@
 // default body (it is a required method).
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {

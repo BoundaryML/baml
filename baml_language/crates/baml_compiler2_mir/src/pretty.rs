@@ -552,6 +552,20 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, receiver)?;
             write!(f, ")")
         }
+        Rvalue::MakeVirtualBoundMethod {
+            iface,
+            method,
+            receiver,
+            type_args,
+        } => {
+            write!(f, "make_virtual_bound_method {iface:?}.{method}")?;
+            if !type_args.is_empty() {
+                write!(f, "<{type_args:?}>")?;
+            }
+            write!(f, "(")?;
+            write_operand(f, receiver)?;
+            write!(f, ")")
+        }
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }

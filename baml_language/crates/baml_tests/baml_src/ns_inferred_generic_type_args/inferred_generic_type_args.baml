@@ -98,7 +98,7 @@ test "showcase_lazy_cursor_pipeline" {
 // ─── Inferred static constructor + non-generic interface, two implementors ───
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog<T> {
@@ -183,7 +183,7 @@ test "inferred_static_ctor_dispatches_through_generic_interface" {
 
 interface Named<T> {
   function first(self) -> T throws unknown
-  function tname(self) -> string {
+  function tname(self) -> string throws never {
     return reflect.type_of<T>().to_string()
   }
 }
@@ -268,10 +268,10 @@ test "class_method_builds_generic_via_class_type_var" {
 // `T` at runtime resolves it instead of seeing `unknown`.
 
 interface Counter<T> {
-  function element_type(self) -> string {
+  function element_type(self) -> string throws never {
     return reflect.type_of<T>().to_string()
   }
-  function describe(self) -> string
+  function describe(self) -> string throws never
 }
 
 class IntCounter<T> {
@@ -310,7 +310,7 @@ test "default_method_forward_reads_interface_type_var" {
 // must resolve its class `T` (here via `reflect.type_of<T>()`).
 
 interface Describable {
-  function describe(self) -> string
+  function describe(self) -> string throws never
 }
 
 class TypedBox<T> {
@@ -464,8 +464,8 @@ function echo_type<T>(a: T) -> string {
 }
 
 interface SelfEcho {
-  function tag(self) -> string
-  function nested_self_type(self) -> string {
+  function tag(self) -> string throws never
+  function nested_self_type(self) -> string throws never {
     return echo_type([self])
   }
 }
@@ -504,7 +504,7 @@ test "nested_self_inferred_binding_not_voided" {
 // dispatch arm itself seeds the receiver/interface frame; `CallPlan.type_args`
 // supplies the method's inferred `U`.
 interface TypeProbe {
-  function seen<U>(self, value: U) -> string
+  function seen<U>(self, value: U) -> string throws never
 }
 
 class ProbeA {

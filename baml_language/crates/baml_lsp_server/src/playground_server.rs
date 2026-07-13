@@ -495,6 +495,9 @@ struct WsState {
     doc_mirror: DocMirror,
     /// Workspace roots that browser-mode LSP saves are allowed to write under.
     workspace_roots: Arc<Vec<PathBuf>>,
+    /// Target of the most recent OpenPlayground; replayed to a page when it
+    /// requests state so a freshly opened / reconnected window navigates there.
+    current_open_target: crate::playground_sender::SharedOpenTarget,
 }
 
 type LiveValueStore = Arc<Mutex<LiveValueCache>>;
@@ -828,26 +831,11 @@ fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
 }
 
 #[derive(Clone, Debug)]
-struct PlaygroundAccessGuard {
-    /// When set (browser mode), every /api request must present it as `?token=`.
-    session_token: Option<Arc<str>>,
-}
+struct PlaygroundAccessGuard {}
 
 impl PlaygroundAccessGuard {
-    fn new(session_token: Option<Arc<str>>) -> Self {
-        Self { session_token }
-    }
-
-    /// True when the request may use the API: either no session token is
-    /// required (LSP/editor mode — origin-only, as before the token existed)
-    /// or the request's `?token=` matches. Covers Origin-less clients too
-    /// (curl/websocat), which the origin check alone deliberately allows.
-    fn is_authorized(&self, uri: &Uri) -> bool {
-        let Some(expected) = &self.session_token else {
-            return true;
-        };
-        query_param(uri.query(), "token")
-            .is_some_and(|got| constant_time_eq(got.as_bytes(), expected.as_bytes()))
+    fn new() -> Self {
+        Self {}
     }
 
     fn is_allowed_origin(&self, origin: Option<&HeaderValue>) -> bool {
@@ -868,21 +856,6 @@ impl PlaygroundAccessGuard {
             None
         }
     }
-}
-
-/// Extract a raw query parameter value (no percent-decoding — the session
-/// token is plain `[0-9a-f]{32}`, so none is needed).
-fn query_param<'a>(query: Option<&'a str>, key: &str) -> Option<&'a str> {
-    query?.split('&').find_map(|pair| {
-        let (k, v) = pair.split_once('=')?;
-        (k == key).then_some(v)
-    })
-}
-
-/// Length-safe constant-time comparison; the token is low-value enough that a
-/// dependency like `subtle` isn't warranted for a loopback timing channel.
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// True when `origin` is an http(s) origin whose host is loopback
@@ -968,10 +941,10 @@ pub async fn run(
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
     doc_mirror: DocMirror,
     workspace_roots: Vec<PathBuf>,
-    session_token: Option<Arc<str>>,
+    current_open_target: crate::playground_sender::SharedOpenTarget,
 ) -> anyhow::Result<()> {
     let local_addr = listener.local_addr()?;
-    let access_guard = PlaygroundAccessGuard::new(session_token);
+    let access_guard = PlaygroundAccessGuard::new();
     let app = build_router(
         bex,
         broadcast_tx,
@@ -983,6 +956,7 @@ pub async fn run(
         doc_mirror,
         Arc::new(workspace_roots),
         access_guard,
+        current_open_target,
     )?;
 
     tracing::info!("Playground: http://localhost:{}", local_addr.port());
@@ -1004,6 +978,7 @@ fn build_router(
     doc_mirror: DocMirror,
     workspace_roots: Arc<Vec<PathBuf>>,
     access_guard: PlaygroundAccessGuard,
+    current_open_target: crate::playground_sender::SharedOpenTarget,
 ) -> anyhow::Result<Router> {
     let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
@@ -1022,6 +997,7 @@ fn build_router(
         lsp_out_tx,
         doc_mirror,
         workspace_roots,
+        current_open_target,
     };
 
     let api = Router::new()
@@ -2365,6 +2341,25 @@ async fn handle_ws_in_message(
 
         WsInMessage::RequestState => {
             state.bex.request_playground_state();
+            // A page that connected after an OpenPlayground request (a freshly
+            // spawned browser window, or a reconnect) still needs to be told
+            // where to navigate. Replay the last target directly to it.
+            let target = state.current_open_target.lock().unwrap().clone();
+            if let Some(target) = target {
+                let notif = bex_project::PlaygroundNotification::OpenPlayground {
+                    project: target.project,
+                    function_name: target.function_name,
+                    test_name: target.test_name,
+                    testset_name: target.testset_name,
+                };
+                let json = serde_json::to_value(&notif).unwrap_or_default();
+                let msg = WsOutMessage::PlaygroundNotification { notification: json };
+                if let Some(ws_msg) = to_ws_text(&msg)
+                    && sink.send(ws_msg).await.is_err()
+                {
+                    tracing::warn!("Failed to replay open-playground target");
+                }
+            }
         }
 
         WsInMessage::RequestCollectTests { project } => {
@@ -2441,16 +2436,6 @@ async fn api_guard_middleware(
             .unwrap();
         apply_api_response_headers(&access_guard, origin.as_ref(), &mut response);
         return response;
-    }
-
-    // After the OPTIONS branch: CORS preflights carry no credentials by design.
-    if !access_guard.is_authorized(req.uri()) {
-        return text_response(
-            StatusCode::UNAUTHORIZED,
-            "Missing or invalid playground session token. Open the exact URL \
-             (including ?token=...) printed by `baml playground`."
-                .to_string(),
-        );
     }
 
     let mut resp = next.run(req).await;
@@ -3011,7 +2996,7 @@ mod tests {
 
     #[test]
     fn playground_access_guard_accepts_any_loopback_port_and_vscode_origins() {
-        let guard = PlaygroundAccessGuard::new(None);
+        let guard = PlaygroundAccessGuard::new();
         assert!(guard.is_allowed_origin(None));
         for allowed in [
             "http://localhost:4265",
@@ -3040,38 +3025,6 @@ mod tests {
                 "{denied}"
             );
         }
-    }
-
-    #[test]
-    fn session_token_required_when_set() {
-        let token = "a3f9c2e8b1d04567a3f9c2e8b1d04567";
-        let guard = PlaygroundAccessGuard::new(Some(token.into()));
-        let uri = |s: &str| s.parse::<Uri>().unwrap();
-
-        assert!(guard.is_authorized(&uri(&format!("/api/ws?token={token}"))));
-        assert!(guard.is_authorized(&uri(&format!("/api/source-files?project=x&token={token}"))));
-        assert!(!guard.is_authorized(&uri("/api/ws")));
-        assert!(!guard.is_authorized(&uri("/api/ws?token=wrong")));
-        assert!(!guard.is_authorized(&uri("/api/ws?token=")));
-        assert!(!guard.is_authorized(&uri("/api/ws?project=x")));
-
-        // No token minted (LSP/editor mode): every URI is authorized.
-        let open_guard = PlaygroundAccessGuard::new(None);
-        assert!(open_guard.is_authorized(&uri("/api/ws")));
-        assert!(open_guard.is_authorized(&uri("/api/ws?token=whatever")));
-    }
-
-    #[test]
-    fn query_param_extracts_token() {
-        assert_eq!(query_param(Some("token=abc"), "token"), Some("abc"));
-        assert_eq!(query_param(Some("token=abc&x=1"), "token"), Some("abc"));
-        assert_eq!(
-            query_param(Some("project=p&token=abc"), "token"),
-            Some("abc")
-        );
-        assert_eq!(query_param(Some("project=p"), "token"), None);
-        assert_eq!(query_param(Some("token"), "token"), None);
-        assert_eq!(query_param(None, "token"), None);
     }
 
     #[test]

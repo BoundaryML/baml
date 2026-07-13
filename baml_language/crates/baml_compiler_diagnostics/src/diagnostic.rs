@@ -425,7 +425,9 @@ impl DiagnosticId {
 
             // Type literal errors
             DiagnosticId::UnsupportedFloatLiteral => "E0033",
-            DiagnosticId::IntegerLiteralOutOfRange => "E0139",
+            // E0139 is the orphan-rule code (`ImplViolatesOrphanRule`, BEP-044); this
+            // literal error previously collided with it — moved to the next free code.
+            DiagnosticId::IntegerLiteralOutOfRange => "E0150",
 
             // Map type errors
             DiagnosticId::InvalidMapArity => "E0039",

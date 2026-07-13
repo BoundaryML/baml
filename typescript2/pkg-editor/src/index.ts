@@ -19,9 +19,6 @@ export {
 } from './remote-backend';
 export type { RemoteBackendOptions } from './remote-backend';
 
-// Session token for `baml playground` /api access.
-export { getPlaygroundToken, withPlaygroundToken } from './playground-token';
-
 // Media helpers (text vs data-URL files).
 export {
   isMediaPath,

@@ -114,6 +114,7 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
             | I::CallIndirectWithRuntimeId
             | I::VirtualCall { .. }
             | I::VirtualCallWithRuntimeId { .. }
+            | I::MakeVirtualBoundMethod { .. }
             | I::Throw
             | I::Rethrow
             | I::Return

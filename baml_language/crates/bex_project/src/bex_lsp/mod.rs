@@ -121,6 +121,14 @@ pub struct LlmCapabilities {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TestInfo {
+    pub name: String,
+    pub function_name: String,
+    pub args_json: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectDiagnostic {
     pub severity: &'static str,
     pub message: String,
@@ -131,6 +139,8 @@ pub struct ProjectDiagnostic {
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
+    /// Statically declared legacy test cases that can seed function previews.
+    pub tests: Vec<TestInfo>,
     /// Shared type table for `FunctionInfo.params` refs: every named type
     /// referenced from any function's schema, defined exactly once and keyed
     /// by canonical dotted FQN. `None` (omitted on the wire) means the binary

@@ -258,7 +258,9 @@ function csv_bom_stripped_by_default() -> string {
     // A real UTF-8 BOM (EF BB BF) via a byte-string source.
     let rows = baml.csv.parse(b"\xEF\xBB\xBFid\n7\n");
     let r = baml.csv.reader(b"\xEF\xBB\xBFid\n7\n");
-    let h = r.headers() ?? [];
+    // `headers()` is `string[]?`; the empty fallback needs a `string[]` type so
+    // the coalesced value is `string[]` (a bare `[]` is otherwise `_[]`).
+    let h: string[] = r.headers() ?? [];
     grid(rows) + "/" + join(h, "|")
 }
 
@@ -297,7 +299,8 @@ test "csv_blank_records" {
 
 function csv_trim_all() -> string {
     let r = baml.csv.reader("  name , score \n  alice ,  9 \n", options = baml.csv.ReaderOptions { trim: "all" });
-    let h = join(r.headers() ?? [], "|");
+    let headers: string[] = r.headers() ?? [];
+    let h = join(headers, "|");
     let row = match (r.next()) {
         baml.iter.Done => "none",
         let rec: baml.csv.CsvRecord => join(rec.fields(), "|"),
