@@ -4,378 +4,43 @@
 //! following the same scheme as `baml_compiler_hir::item_tree`.
 //! Items are indexed by name (not source position) for position-independence.
 
+mod classes;
+mod clients;
+mod common;
+mod enums;
+mod functions;
+mod interfaces;
+mod lets;
+mod retry_policies;
+mod source_map;
+mod template_strings;
+mod test_items;
+mod type_aliases;
+
 use std::ops::Index;
 
 use baml_base::Name;
 use baml_compiler2_ast as ast;
+pub use classes::*;
+pub use clients::*;
+pub use common::*;
+pub use enums::*;
+pub use functions::*;
+pub use interfaces::*;
+pub use lets::*;
+pub use retry_policies::*;
 use rustc_hash::FxHashMap;
+pub use source_map::*;
+pub use template_strings::*;
+pub use test_items::*;
 use text_size::TextRange;
+pub use type_aliases::*;
 
 use crate::ids::{
     ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, ItemKind,
     LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
     hash_impl_key, hash_name,
 };
-
-// ── Span-free attribute representation ───────────────────────────────────────
-
-/// A span-free attribute for position-independent storage in the `ItemTree`.
-/// Derived from `ast::RawAttribute` with all `TextRange`s stripped.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Attribute {
-    pub name: Name,
-    pub args: Vec<AttributeArg>,
-}
-
-/// A span-free attribute argument.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AttributeArg {
-    pub key: Option<Name>,
-    pub value: String,
-}
-
-impl From<&ast::RawAttribute> for Attribute {
-    fn from(raw: &ast::RawAttribute) -> Self {
-        Self {
-            name: raw.name.clone(),
-            args: raw.args.iter().map(AttributeArg::from).collect(),
-        }
-    }
-}
-
-impl From<&ast::RawAttributeArg> for AttributeArg {
-    fn from(raw: &ast::RawAttributeArg) -> Self {
-        Self {
-            key: raw.key.clone(),
-            value: raw.value.clone(),
-        }
-    }
-}
-
-// ── Minimal item data structs ────────────────────────────────────────────────
-
-/// Full function data stored in the `ItemTree`.
-/// Params and return type are stored for signature queries.
-/// Body is stored for body queries (no CST re-parsing needed).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Function {
-    pub name: Name,
-    /// Generic type parameters (e.g., `["T", "U"]`).
-    /// Empty for non-generic functions.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`. `Some(te)`
-    /// means the parameter at the matching index was declared with
-    /// `T extends <te>`; `None` means unbounded.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
-    /// Function parameters with optional type annotations and spans.
-    pub params: Vec<FunctionParam>,
-    /// Function parameter default expression arena.
-    pub defaults: ast::FunctionDefaults,
-    /// Return type with its source span.
-    pub return_type: Option<ast::TypeExpr>,
-    /// Throws contract type with its source span.
-    pub throws: Option<ast::TypeExpr>,
-    /// Function body — either an expression or a builtin.
-    pub body: Option<ast::FunctionBodyDef>,
-    /// Declarative metadata, if this function was declared with declarative syntax.
-    pub declarative_meta: Option<ast::DeclarativeMeta>,
-    pub origin: ast::FunctionOrigin,
-    /// Joined `///` doc-comment lines preceding this declaration.
-    pub docstring: Option<String>,
-    /// BEP-049 §10: set when the fn def had a `//baml:tagged_string` marker.
-    /// Mirrors `ast::FunctionDef::is_tagged_template_tag` so TIR can validate
-    /// tagged-template tags without re-reading the CST.
-    pub is_tagged_template_tag: bool,
-    /// Full source span of the function.
-    pub span: TextRange,
-}
-
-/// A function parameter entry in the `ItemTree`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionParam {
-    pub name: Name,
-    pub type_expr: Option<ast::TypeExpr>,
-    pub default: Option<DefaultExprRef>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DefaultExprRef {
-    pub function: LocalItemId<FunctionMarker>,
-    pub expr: ast::DefaultExprId,
-}
-
-/// A class field stored in the `ItemTree`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClassField {
-    pub name: Name,
-    pub type_expr: Option<ast::TypeExpr>,
-    pub attributes: Vec<Attribute>,
-    /// Joined `///` doc-comment lines preceding this declaration.
-    pub docstring: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Class {
-    pub name: Name,
-    /// Generic type parameters (e.g., `["T"]` for `Array<T>`).
-    /// Empty for non-generic classes.
-    pub generic_params: Vec<Name>,
-    /// Generic bounds parallel to `generic_params`. `Some(te)` means
-    /// `T extends <te>`; `None` means unbounded.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
-    /// Fields of the class, in declaration order.
-    pub fields: Vec<ClassField>,
-    /// Methods defined inside this class, referencing their `Function` entries
-    /// in the same `ItemTree`. Includes both class-level methods and methods
-    /// declared inside `implements I { ... }` blocks (BEP-044) — flattened so
-    /// downstream code (e.g. signature queries, method dispatch) can iterate
-    /// uniformly.
-    pub methods: Vec<LocalItemId<FunctionMarker>>,
-    /// `implements I { ... }` blocks, in declaration order. Each block keeps
-    /// the raw target `TypeExpr` so generic parameters like `Container<int>`
-    /// survive name resolution, plus field redeclarations from the block.
-    pub implements: Vec<ImplementsBlock>,
-    /// Block-level attributes (@@description, @@alias, etc.).
-    pub attributes: Vec<Attribute>,
-    /// Joined `///` doc-comment lines preceding this declaration.
-    pub docstring: Option<String>,
-    /// Full source span of the class declaration.
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplementsBlock {
-    pub target: ast::TypeExpr,
-    pub field_links: Vec<InterfaceFieldLink>,
-    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
-    pub is_out_of_body: bool,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterfaceFieldLink {
-    pub interface_field: Name,
-    pub class_field: Name,
-    pub span: TextRange,
-    pub interface_field_span: TextRange,
-    pub class_field_span: TextRange,
-}
-
-impl InterfaceFieldLink {
-    pub(crate) fn from_ast(link: &ast::InterfaceFieldLinkDef) -> Self {
-        Self {
-            interface_field: link.interface_field.clone(),
-            class_field: link.class_field.clone(),
-            span: link.span,
-            interface_field_span: link.interface_field_span,
-            class_field_span: link.class_field_span,
-        }
-    }
-}
-
-/// A generic parameter on an out-of-body `implements` block, paired with its set
-/// of `&`-separated interface bounds (`<T>` → `bounds = []`; `<T extends A & B>`
-/// → `bounds = [A, B]`). Pairing name and bounds makes a length mismatch between
-/// the two unrepresentable. Bounds are unresolved `TypeExpr`s here; they resolve
-/// to `baml_type::Interface` constraints downstream.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GenericParam {
-    pub name: Name,
-    pub bounds: Vec<ast::TypeExpr>,
-}
-
-/// What an `implements` block applies to. Unifying the owner with the for-target
-/// makes "in-body with an explicit for-target" and "out-of-body without one"
-/// both unrepresentable.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ImplSubject {
-    /// `implements I { … }` in a class body (or a simple `implement I for C`
-    /// merged onto `C`). The for-type is the class itself; the generics are the
-    /// class's. `out_of_body` records the syntactic origin for diagnostics only
-    /// — it must NOT influence resolution, dispatch, or coherence.
-    InClass {
-        class: LocalItemId<ClassMarker>,
-        out_of_body: bool,
-    },
-    /// `implement<…> I for <for_target> { … }`: an explicit for-type plus the
-    /// block's own generic parameters.
-    Free {
-        for_target: ast::TypeExpr,
-        generics: Vec<GenericParam>,
-    },
-}
-
-/// A unified `implements` block (both kinds) stored in the `ItemTree`, keyed by
-/// a stable `LocalItemId<ImplMarker>`. The interface target is kept as a raw
-/// `TypeExpr` here; resolution to an `InterfaceLoc` + `Ty` happens lazily in the
-/// `impl_data` query so HIR construction stays independent of name resolution.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplBlock {
-    pub subject: ImplSubject,
-    pub interface_target: ast::TypeExpr,
-    pub field_links: Vec<InterfaceFieldLink>,
-    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
-    pub methods: Vec<LocalItemId<FunctionMarker>>,
-    pub span: TextRange,
-}
-
-/// An enum variant stored in the `ItemTree`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EnumVariant {
-    pub name: Name,
-    /// Field-level attributes (@description, @alias, @skip, etc.).
-    pub attributes: Vec<Attribute>,
-    /// Joined `///` doc-comment lines preceding this declaration.
-    pub docstring: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Enum {
-    pub name: Name,
-    /// Variants of the enum, in declaration order.
-    pub variants: Vec<EnumVariant>,
-    /// Block-level attributes (@@description, @@alias, etc.).
-    pub attributes: Vec<Attribute>,
-    /// Joined `///` doc-comment lines preceding this declaration.
-    pub docstring: Option<String>,
-    /// Full source span of the enum declaration.
-    pub span: TextRange,
-}
-
-/// A required (no-body) method signature on an interface (BEP-044).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterfaceMethodSig {
-    pub name: Name,
-    /// Generic type parameters local to this method.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
-    pub params: Vec<FunctionParam>,
-    pub return_type: Option<ast::TypeExpr>,
-    pub throws: Option<ast::TypeExpr>,
-    pub attributes: Vec<Attribute>,
-    pub docstring: Option<String>,
-    pub span: TextRange,
-}
-
-/// An interface (BEP-044) stored in the `ItemTree`.
-///
-/// Default methods are stored as full `FunctionMarker` entries in `methods`
-/// (same as `Class::methods`). Required signatures live in `required_methods`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Interface {
-    pub name: Name,
-    /// Generic type parameters declared on the interface.
-    pub generic_params: Vec<Name>,
-    /// BEP-044 generic bounds parallel to `generic_params`.
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
-    /// Required interfaces from `requires I1, I2, …`.
-    pub requires: Vec<ast::TypeExpr>,
-    /// Field signatures declared on the interface. Interface fields cannot
-    /// have default values.
-    pub fields: Vec<ClassField>,
-    /// Associated type declarations on the interface (BEP-057).
-    pub associated_types: Vec<ast::AssociatedTypeDef>,
-    /// Default methods (with bodies). Implementing classes inherit them.
-    pub default_methods: Vec<LocalItemId<FunctionMarker>>,
-    /// Required methods (no body). Implementing classes must provide a body.
-    pub required_methods: Vec<InterfaceMethodSig>,
-    pub attributes: Vec<Attribute>,
-    pub docstring: Option<String>,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypeAlias {
-    pub name: Name,
-    /// The type expression on the RHS of the alias, if present.
-    pub type_expr: Option<ast::TypeExpr>,
-    /// Full source span of the type alias declaration.
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Client {
-    pub name: Name,
-    /// Provider name (e.g., "openai", "anthropic", "fallback", "round-robin").
-    pub provider: Option<Name>,
-    /// Sub-client names for fallback/round-robin clients.
-    pub sub_client_names: Vec<Name>,
-    /// Retry policy name, if configured.
-    pub retry_policy_name: Option<Name>,
-    /// Starting index for round-robin clients.
-    pub round_robin_start: Option<usize>,
-}
-
-pub use baml_compiler2_ast::ast::TestArgValue;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Test {
-    pub name: Name,
-    /// The function(s) this test exercises.
-    pub function_refs: Vec<Name>,
-    /// Test arguments as key-value pairs.
-    pub args: Vec<(Name, TestArgValue)>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TemplateString {
-    pub name: Name,
-    /// Template parameters with optional type annotations and spans.
-    pub params: Vec<FunctionParam>,
-    /// Template body text (Jinja template).
-    pub body: Option<String>,
-    /// Full source span of the template string declaration.
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetryPolicy {
-    pub name: Name,
-    /// Raw string value of `max_retries` (parsed at emit time).
-    pub max_retries: Option<String>,
-    /// Raw string value of `initial_delay_ms`.
-    pub initial_delay_ms: Option<String>,
-    /// Raw string value of multiplier.
-    pub multiplier: Option<String>,
-    /// Raw string value of `max_delay_ms`.
-    pub max_delay_ms: Option<String>,
-}
-
-/// A top-level let binding stored in the `ItemTree`.
-/// Carries the optional initializer `ExprBody` for body queries.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Let {
-    pub name: Name,
-    pub initializer: Option<(ast::ExprBody, ast::AstSourceMap)>,
-    pub origin: ast::LetOrigin,
-    pub span: TextRange,
-    pub name_span: TextRange,
-}
-
-// ── ItemTreeSourceMap ─────────────────────────────────────────────────────────
-
-/// Parallel source map for `ItemTree` — stores name spans that are
-/// deliberately excluded from the semantic `ItemTree` to avoid polluting
-/// Salsa's early-cutoff comparisons with position data.
-///
-/// Follows the same body/signature source-map pattern used by
-/// `function_body` / `function_body_source_map`.
-#[derive(Debug, Clone, Default)]
-pub struct ItemTreeSourceMap {
-    /// `name_span` for each class's fields, parallel to `Class::fields`.
-    pub class_field_spans: FxHashMap<LocalItemId<ClassMarker>, Vec<TextRange>>,
-    /// `name_span` for each enum's variants, parallel to `Enum::variants`.
-    pub enum_variant_spans: FxHashMap<LocalItemId<EnumMarker>, Vec<TextRange>>,
-    /// `name_span` for each function.
-    pub function_name_spans: FxHashMap<LocalItemId<FunctionMarker>, TextRange>,
-    /// `name_span` for each interface's fields, parallel to `Interface::fields`.
-    pub interface_field_spans: FxHashMap<LocalItemId<InterfaceMarker>, Vec<TextRange>>,
-    /// `name_span` for each interface's required methods, parallel to
-    /// `Interface::required_methods`.
-    pub interface_method_spans: FxHashMap<LocalItemId<InterfaceMarker>, Vec<TextRange>>,
-}
 
 // ── ItemTree ─────────────────────────────────────────────────────────────────
 
