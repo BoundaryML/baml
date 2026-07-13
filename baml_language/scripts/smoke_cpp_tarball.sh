@@ -54,6 +54,35 @@ EOF
 c++ -std=c++17 -I"$root/include" "$workdir/main.cpp" -o "$workdir/smoke" \
     -L"$root/lib" -lbridge_cffi -Wl,-rpath,"$root/lib"
 
+# When the tarball carries the C++ bridge headers, verify a bridge-API
+# consumer compiles and agrees with the raw C ABI on the version.
+if [ -d "$root/include/baml" ]; then
+    cat > "$workdir/main_bridge.cpp" << 'EOF'
+#include <cstdio>
+#include <string>
+
+#include <baml/baml.hpp>
+
+int main() {
+    std::string v = baml::version();
+    if (v.empty()) {
+        std::fprintf(stderr, "baml::version() returned empty\n");
+        return 1;
+    }
+    std::printf("%s\n", v.c_str());
+    return 0;
+}
+EOF
+    c++ -std=c++17 -I"$root/include" "$workdir/main_bridge.cpp" -o "$workdir/smoke_bridge" \
+        -L"$root/lib" -lbridge_cffi -Wl,-rpath,"$root/lib"
+    bridge_got="$("$workdir/smoke_bridge")"
+    if [ "$bridge_got" != "$(cat "$root/VERSION")" ]; then
+        echo "smoke test FAILED: bridge header version '$bridge_got' != VERSION" >&2
+        exit 1
+    fi
+    echo "bridge header smoke ok"
+fi
+
 got="$("$workdir/smoke")"
 want="$(cat "$root/VERSION")"
 if [ "$got" != "$want" ]; then
