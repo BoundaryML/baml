@@ -52,7 +52,7 @@ SOURCE_FILE
                   WORD "nested"
                   QUOTE """
                 COLON ":"
-                WORD "null"
+                KW_NULL "null"
               R_BRACE "}"
           R_BRACE "}"
         R_BRACE "}"
