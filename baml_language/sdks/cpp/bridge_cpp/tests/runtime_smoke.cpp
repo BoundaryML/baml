@@ -43,6 +43,13 @@ static void test_arg_tri_state() {
     baml::Arg<int64_t> null_arg = std::nullopt;
     assert(null_arg.is_null());
 
+    baml::Arg<int64_t> null_value_arg = baml::Null{};
+    assert(null_value_arg.is_null());
+
+    // Arg of the bare null type itself: monostate must mean VALUE there.
+    baml::Arg<std::monostate> null_typed_arg = std::monostate{};
+    assert(null_typed_arg.has_value());
+
     static_assert(std::is_same<baml::Null, std::monostate>::value,
                   "bare null unifies with the std vocabulary");
 

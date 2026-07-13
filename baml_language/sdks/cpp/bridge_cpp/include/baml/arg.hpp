@@ -3,6 +3,7 @@
 
 #include <optional>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <variant>
 
@@ -25,6 +26,11 @@ public:
 
     Arg() = default;
     Arg(std::nullopt_t) : state_(State::Null) {}
+    // A value of the null type IS a null; guarded so Arg<std::monostate>
+    // (an optional argument of the bare null type) keeps a single meaning.
+    template <typename U = T,
+              typename = std::enable_if_t<!std::is_same<U, std::monostate>::value>>
+    Arg(std::monostate) : state_(State::Null) {}
     Arg(T value) : state_(State::Value), value_(std::move(value)) {}
 
     State state() const { return state_; }
