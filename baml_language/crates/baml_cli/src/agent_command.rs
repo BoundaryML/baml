@@ -458,6 +458,16 @@ fn normalize_skills(raw: Vec<RawSkill>) -> Result<Vec<Skill>> {
 
     let mut found = BTreeMap::<String, RawSkill>::new();
     for skill in raw {
+        // The archive directory lives inside the skills directory, so a
+        // skill claiming its name would collide with it on replacement
+        // (renaming skills/baml-old_skills into its own archive slot).
+        if skill.name == OLD_SKILLS_DIR {
+            anyhow::bail!(
+                "BAML agent skills source contains a skill named `{OLD_SKILLS_DIR}` at {}; \
+                 that name is reserved for archived previous skill versions",
+                skill.source_path.display()
+            );
+        }
         if let Some(previous) = found.insert(skill.name.clone(), skill) {
             anyhow::bail!(
                 "BAML agent skills source contains duplicate skill `{}` at {}",
@@ -887,6 +897,32 @@ mod tests {
             !root
                 .join(".agents/skills/baml-old_skills/baml-bridges")
                 .exists()
+        );
+    }
+
+    #[test]
+    fn reserved_archive_name_is_rejected_in_direct_layout() {
+        let content = skill("baml-old_skills");
+        let archive = make_archive(&[("skills/baml-old_skills/SKILL.md", content.as_str())]);
+
+        let err = format!("{:#}", skills_from_archive(&archive).unwrap_err());
+        assert!(
+            err.contains("reserved for archived previous skill versions"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn reserved_archive_name_is_rejected_in_legacy_layout() {
+        // Legacy `old_skills` gets the baml- prefix and would land exactly on
+        // the archive directory name.
+        let content = "---\nname: old_skills\ndescription: test\n---\n# old\n";
+        let archive = make_archive(&[("plugins/baml/skills/old_skills/SKILL.md", content)]);
+
+        let err = format!("{:#}", skills_from_archive(&archive).unwrap_err());
+        assert!(
+            err.contains("reserved for archived previous skill versions"),
+            "{err}"
         );
     }
 
