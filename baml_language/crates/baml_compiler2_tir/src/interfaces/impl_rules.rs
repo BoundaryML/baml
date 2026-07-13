@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use baml_base::{Name, Span, TyAttr};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
 use baml_type::{QualifiedTypeName, Ty, normalize::TypeContext};
@@ -1546,7 +1548,7 @@ pub fn get_implements_block<'db>(
     pkg_id: PackageId<'db>,
     concrete_ty: &Ty,
     requested_iface: &baml_type::Interface,
-    aliases: &crate::normalize::ResolvedAliases,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
 ) -> Option<ResolvedImpl<'db>> {
     get_implements_block_within_depth(
         db,
@@ -1783,7 +1785,7 @@ fn get_implements_block_within_depth<'db>(
     pkg_id: PackageId<'db>,
     concrete_ty: &Ty,
     requested_iface: &baml_type::Interface,
-    aliases: &crate::normalize::ResolvedAliases,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
     depth: u32,
 ) -> Option<ResolvedImpl<'db>> {
     debug_assert!(

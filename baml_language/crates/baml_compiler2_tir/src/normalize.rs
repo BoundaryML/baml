@@ -7,23 +7,12 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
-pub use baml_type::ResolvedAliases;
 
 use crate::ty::{FunctionParamMode, LiteralValue, MediaKind, QualifiedTypeName, Ty};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════
-
-/// Build a [`ResolvedAliases`] environment from a bare alias map, computing
-/// its recursive-alias set once. This is the only sanctioned constructor on
-/// the compiler side: every comparison entry point below takes the full
-/// environment, so the O(aliases + edges) cycle analysis is paid once per
-/// environment instead of once per type comparison.
-pub fn resolved_aliases_from_map(aliases: HashMap<QualifiedTypeName, Ty>) -> ResolvedAliases {
-    let recursive = find_recursive_aliases(&aliases);
-    ResolvedAliases { aliases, recursive }
-}
 
 /// Check if `sub` is a subtype of `sup`, resolving type aliases.
 pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeName, Ty>) -> bool {
@@ -1306,11 +1295,7 @@ mod tests {
         let lhs = Ty::Union(vec![int.clone(), string.clone()], TyAttr::default());
         let rhs = Ty::Union(vec![string, int], TyAttr::default());
 
-        assert!(is_same_normalized_type(
-            &lhs,
-            &rhs,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(is_same_normalized_type(&lhs, &rhs, &aliases));
     }
 
     #[test]
@@ -1324,11 +1309,7 @@ mod tests {
         };
         let union = Ty::Union(vec![int.clone(), string], TyAttr::default());
 
-        assert!(!is_same_normalized_type(
-            &int,
-            &union,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(!is_same_normalized_type(&int, &union, &aliases));
     }
 
     #[test]
@@ -1363,7 +1344,7 @@ mod tests {
         assert!(is_same_normalized_type(
             &type_alias("IntOrString"),
             &direct,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
     }
 
@@ -1393,11 +1374,7 @@ mod tests {
             attr: TyAttr::default(),
         };
 
-        assert!(is_same_normalized_type(
-            &lhs,
-            &rhs,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(is_same_normalized_type(&lhs, &rhs, &aliases));
     }
 
     #[test]
@@ -1435,11 +1412,7 @@ mod tests {
             attr: TyAttr::default(),
         };
 
-        assert!(is_same_normalized_type(
-            &lhs,
-            &rhs,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(is_same_normalized_type(&lhs, &rhs, &aliases));
     }
 
     #[test]
@@ -1457,14 +1430,14 @@ mod tests {
             &Ty::Int {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(is_subtype_of(
             &Ty::Int {
                 attr: TyAttr::default()
             },
             &type_alias("MyInt"),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
     }
 
@@ -1484,12 +1457,12 @@ mod tests {
             &Ty::Int {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(is_subtype_of(
             &type_alias("AnotherInt"),
             &type_alias("MyInt"),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
     }
 
@@ -1516,21 +1489,21 @@ mod tests {
                 attr: TyAttr::default()
             },
             &type_alias("IntOrString"),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(is_subtype_of(
             &Ty::String {
                 attr: TyAttr::default()
             },
             &type_alias("IntOrString"),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::Bool {
                 attr: TyAttr::default()
             },
             &type_alias("IntOrString"),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
     }
 
@@ -1579,7 +1552,7 @@ mod tests {
             &Ty::Int {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(is_subtype_of(
             &Ty::Never {
@@ -1588,14 +1561,14 @@ mod tests {
             &Ty::String {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(is_subtype_of(
             &Ty::Never {
                 attr: TyAttr::default()
             },
             &Ty::Class(qn("Foo"), vec![], TyAttr::default()),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(is_subtype_of(
             &Ty::Never {
@@ -1604,7 +1577,7 @@ mod tests {
             &Ty::optional(Ty::Int {
                 attr: TyAttr::default()
             }),
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -1621,7 +1594,7 @@ mod tests {
             &Ty::Float {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::Float {
@@ -1630,7 +1603,7 @@ mod tests {
             &Ty::Int {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -1648,7 +1621,7 @@ mod tests {
             &Ty::Bigint {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -1661,7 +1634,7 @@ mod tests {
             &Ty::Int {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // `Literal(Int) <: Float` was removed (lossy past 2^53). The
         // widening, if needed, must be explicit.
@@ -1670,21 +1643,21 @@ mod tests {
             &Ty::Int {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
             &Ty::Bigint {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
             &Ty::Float {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(is_subtype_of(
             &Ty::Literal(
@@ -1695,20 +1668,20 @@ mod tests {
             &Ty::String {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Fresh, TyAttr::default()),
             &Ty::String {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // Freshness is ignored for subtyping: Fresh(1) <: Regular(1)
         assert!(is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Fresh, TyAttr::default()),
             &Ty::Literal(LiteralValue::Int(42), Freshness::Regular, TyAttr::default()),
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -1718,12 +1691,12 @@ mod tests {
         assert!(is_subtype_of(
             &Ty::EnumVariant(qn("Color"), Name::new("Red"), TyAttr::default()),
             &Ty::Enum(qn("Color"), TyAttr::default()),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(!is_subtype_of(
             &Ty::EnumVariant(qn("Color"), Name::new("Red"), TyAttr::default()),
             &Ty::Enum(qn("Shape"), TyAttr::default()),
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -1764,12 +1737,12 @@ mod tests {
         assert!(is_subtype_of(
             &returns_literal_string,
             &returns_string,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(!is_subtype_of(
             &returns_string,
             &returns_literal_string,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
 
         let returns_variant = Ty::Function {
@@ -1792,16 +1765,8 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        assert!(is_subtype_of(
-            &returns_variant,
-            &returns_enum,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
-        ));
-        assert!(!is_subtype_of(
-            &returns_enum,
-            &returns_variant,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
-        ));
+        assert!(is_subtype_of(&returns_variant, &returns_enum, &aliases));
+        assert!(!is_subtype_of(&returns_enum, &returns_variant, &aliases));
 
         // `fn() -> int` is NOT usable as `fn() -> bigint`: there is no site to
         // insert the `int → bigint` coercion on the returned value.
@@ -1825,16 +1790,8 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        assert!(!is_subtype_of(
-            &returns_int,
-            &returns_bigint,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
-        ));
-        assert!(!is_subtype_of(
-            &returns_bigint,
-            &returns_int,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(!is_subtype_of(&returns_int, &returns_bigint, &aliases));
+        assert!(!is_subtype_of(&returns_bigint, &returns_int, &aliases));
     }
 
     #[test]
@@ -1874,12 +1831,12 @@ mod tests {
         assert!(is_subtype_of(
             &accepts_string,
             &accepts_literal_string,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(!is_subtype_of(
             &accepts_literal_string,
             &accepts_string,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
 
         let accepts_enum = Ty::Function {
@@ -1906,16 +1863,8 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        assert!(is_subtype_of(
-            &accepts_enum,
-            &accepts_variant,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
-        ));
-        assert!(!is_subtype_of(
-            &accepts_variant,
-            &accepts_enum,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
-        ));
+        assert!(is_subtype_of(&accepts_enum, &accepts_variant, &aliases));
+        assert!(!is_subtype_of(&accepts_variant, &accepts_enum, &aliases));
 
         // `fn(bigint)` is NOT usable as `fn(int)`: the caller's `int` argument
         // has no site at which to widen before reaching the `bigint` callee.
@@ -1943,16 +1892,8 @@ mod tests {
             }),
             attr: TyAttr::default(),
         };
-        assert!(!is_subtype_of(
-            &accepts_bigint,
-            &accepts_int,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
-        ));
-        assert!(!is_subtype_of(
-            &accepts_int,
-            &accepts_bigint,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(!is_subtype_of(&accepts_bigint, &accepts_int, &aliases));
+        assert!(!is_subtype_of(&accepts_int, &accepts_bigint, &aliases));
     }
 
     #[test]
@@ -1986,16 +1927,8 @@ mod tests {
             )),
             attr: TyAttr::default(),
         };
-        assert!(is_subtype_of(
-            &f1,
-            &f2,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
-        ));
-        assert!(!is_subtype_of(
-            &f2,
-            &f1,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(is_subtype_of(&f1, &f2, &aliases));
+        assert!(!is_subtype_of(&f2, &f1, &aliases));
     }
 
     #[test]
@@ -2051,12 +1984,12 @@ mod tests {
         assert!(is_subtype_of(
             &with_two_optionals,
             &with_one_optional,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         assert!(!is_subtype_of(
             &with_one_optional,
             &with_two_optionals,
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2116,16 +2049,8 @@ mod tests {
             attr: TyAttr::default(),
         };
 
-        assert!(is_subtype_of(
-            &f1,
-            &f2,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
-        ));
-        assert!(is_subtype_of(
-            &f2,
-            &f1,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(is_subtype_of(&f1, &f2, &aliases));
+        assert!(is_subtype_of(&f2, &f1, &aliases));
     }
 
     #[test]
@@ -2162,16 +2087,8 @@ mod tests {
             attr: TyAttr::default(),
         };
 
-        assert!(!is_subtype_of(
-            &optional,
-            &required,
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
-        ));
-        assert!(!is_subtype_of(
-            &required,
-            &optional,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(!is_subtype_of(&optional, &required, &aliases));
+        assert!(!is_subtype_of(&required, &optional, &aliases));
     }
 
     #[test]
@@ -2185,7 +2102,7 @@ mod tests {
             &Ty::optional(Ty::Int {
                 attr: TyAttr::default()
             }),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // null <: int?
         assert!(is_subtype_of(
@@ -2195,7 +2112,7 @@ mod tests {
             &Ty::optional(Ty::Int {
                 attr: TyAttr::default()
             }),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // string NOT <: int?
         assert!(!is_subtype_of(
@@ -2205,7 +2122,7 @@ mod tests {
             &Ty::optional(Ty::Int {
                 attr: TyAttr::default()
             }),
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2228,7 +2145,7 @@ mod tests {
                 }),
                 TyAttr::default()
             ),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // List(int) <: EvolvingList(int)
         assert!(is_subtype_of(
@@ -2244,7 +2161,7 @@ mod tests {
                 }),
                 TyAttr::default()
             ),
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2267,7 +2184,7 @@ mod tests {
                 }),
                 TyAttr::default()
             ),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // EvolvingList(string) NOT <: List(int) — unrelated primitives.
         assert!(!is_subtype_of(
@@ -2283,7 +2200,7 @@ mod tests {
                 }),
                 TyAttr::default()
             ),
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // Free widenings inside the container survive coercion-free
         // recursion: a literal int element widens to its base type.
@@ -2302,7 +2219,7 @@ mod tests {
                 }),
                 TyAttr::default()
             ),
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2323,7 +2240,7 @@ mod tests {
                 }),
                 TyAttr::default()
             ),
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2350,7 +2267,7 @@ mod tests {
                 }),
                 attr: TyAttr::default(),
             },
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2377,7 +2294,7 @@ mod tests {
                 }),
                 attr: TyAttr::default(),
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // map<never, never> <: map<string, int>
         assert!(is_subtype_of(
@@ -2399,7 +2316,7 @@ mod tests {
                 }),
                 attr: TyAttr::default(),
             },
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2430,7 +2347,7 @@ mod tests {
                 }),
                 attr: TyAttr::default(),
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // map<"name", "World"> <: map<string, string>
         assert!(is_subtype_of(
@@ -2456,7 +2373,7 @@ mod tests {
                 }),
                 attr: TyAttr::default(),
             },
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2485,7 +2402,7 @@ mod tests {
                 }),
                 attr: TyAttr::default(),
             },
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2514,7 +2431,7 @@ mod tests {
                 }),
                 attr: TyAttr::default(),
             },
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2543,7 +2460,7 @@ mod tests {
                 }),
                 attr: TyAttr::default(),
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // map<string, string> NOT <: map<int, string> — incompatible key types
         assert!(!is_subtype_of(
@@ -2565,7 +2482,7 @@ mod tests {
                 }),
                 attr: TyAttr::default(),
             },
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 
@@ -2703,11 +2620,7 @@ mod tests {
         let sup = Ty::Int {
             attr: TyAttr::default(),
         };
-        assert!(is_subtype_of(
-            &sub,
-            &sup,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(is_subtype_of(&sub, &sup, &aliases));
     }
 
     #[test]
@@ -2729,11 +2642,7 @@ mod tests {
             }),
             TyAttr::default(),
         );
-        assert!(is_subtype_of(
-            &sub,
-            &sup,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(is_subtype_of(&sub, &sup, &aliases));
     }
 
     #[test]
@@ -2757,11 +2666,7 @@ mod tests {
         let sup = Ty::Float {
             attr: TyAttr::default(),
         };
-        assert!(!is_subtype_of(
-            &sub,
-            &sup,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(!is_subtype_of(&sub, &sup, &aliases));
     }
 
     #[test]
@@ -2778,11 +2683,7 @@ mod tests {
             TyAttr::default(),
         );
         // T <: T | String should hold
-        assert!(is_subtype_of(
-            &t,
-            &union,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(is_subtype_of(&t, &union, &aliases));
     }
 
     #[test]
@@ -2801,11 +2702,7 @@ mod tests {
             TyAttr::default(),
         );
         // T <: Int | String should NOT hold (T is opaque)
-        assert!(!is_subtype_of(
-            &t,
-            &union,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(!is_subtype_of(&t, &union, &aliases));
     }
 
     #[test]
@@ -2814,11 +2711,7 @@ mod tests {
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
         let opt_t = Ty::optional(t.clone());
         // T <: T? should hold
-        assert!(is_subtype_of(
-            &t,
-            &opt_t,
-            &crate::normalize::resolved_aliases_from_map(aliases)
-        ));
+        assert!(is_subtype_of(&t, &opt_t, &aliases));
     }
 
     #[test]
@@ -2831,7 +2724,7 @@ mod tests {
             &Ty::Int {
                 attr: TyAttr::default()
             },
-            &crate::normalize::resolved_aliases_from_map(aliases.clone())
+            &aliases
         ));
         // Int <: T should NOT hold
         assert!(!is_subtype_of(
@@ -2839,7 +2732,7 @@ mod tests {
                 attr: TyAttr::default()
             },
             &t,
-            &crate::normalize::resolved_aliases_from_map(aliases)
+            &aliases
         ));
     }
 

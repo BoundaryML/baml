@@ -33,7 +33,8 @@ class Meta {
 
   function reasoning_blocks(self) -> ReasoningBlock[] throws never {
     let reasoning: ReasoningBlock[] = [];
-    for (let block in self.blocks ?? []) {
+    let blocks: ModelBlock[] = self.blocks ?? [];
+    for (let block in blocks) {
       match (block) {
         let value: ReasoningBlock => reasoning.push(value),
         _ => {},

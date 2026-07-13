@@ -35,10 +35,10 @@ function compose_tool_dispatch(
     let task_calls = calls.filter((call: ToolCall) -> bool {
       task_tools.filter((tool: Tool) -> bool { tool.name == call.name }).length() > 0
     });
-    let agent_results = if (agent_calls.length() == 0) { [] } else {
+    let agent_results: ToolResult[] = if (agent_calls.length() == 0) { [] } else {
       agent_dispatch(agent_calls)
     };
-    let task_results = if (task_calls.length() == 0) { [] } else {
+    let task_results: ToolResult[] = if (task_calls.length() == 0) { [] } else {
       match (task_dispatch) {
         let dispatch: (ToolCall[]) -> ToolResult[] => dispatch(task_calls),
         null => [],

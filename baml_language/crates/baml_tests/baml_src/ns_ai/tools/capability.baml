@@ -1,11 +1,13 @@
 interface Tools requires Provider {
-  type Transcript
-  function begin<T>(self, request: Request<T>) -> Transcript
+  // Keep the provider-owned transcript representation hidden when `Tools` is
+  // used as an existential; concrete adapters bind their exact wire state.
+  type Transcript = unknown
+  function begin<T>(self, request: Request<T>) -> Self.Transcript
     throws baml.errors.ToolError | baml.errors.UnknownError
-  function step<T>(self, transcript: Transcript) -> T | ToolCalls
+  function step<T>(self, transcript: Self.Transcript) -> T | ToolCalls
     throws baml.errors.ToolError | baml.errors.UnknownError
 
-  function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript
+  function submit(self, transcript: Self.Transcript, results: ToolResult[]) -> Self.Transcript
     throws baml.errors.ToolError | baml.errors.UnknownError
 }
 

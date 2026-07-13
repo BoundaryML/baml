@@ -39,35 +39,35 @@ class UnknownError {
 /// check — is fixed.) Combinators still consult the axis via a runtime `match`; unknown /
 /// foreign errors, which carry no `Failure` impl, keep their legacy behavior.
 interface Failure {
-  function is_retryable(self) -> bool
-  function is_effectful(self) -> bool
-  function is_policy_refusal(self) -> bool
-  function is_resumable(self) -> bool
-  function is_unsupported(self) -> bool
+  function is_retryable(self) -> bool throws never
+  function is_effectful(self) -> bool throws never
+  function is_policy_refusal(self) -> bool throws never
+  function is_resumable(self) -> bool throws never
+  function is_unsupported(self) -> bool throws never
 }
 
 /// Request/response failures. Concrete provider errors (rate limit, refusal, …)
 /// implement this so callers triage without the concrete class.
 interface CallError requires Failure {
-  function is_network_error(self) -> bool
-  function is_rate_limit(self) -> bool
-  function is_parse_error(self) -> bool
+  function is_network_error(self) -> bool throws never
+  function is_rate_limit(self) -> bool throws never
+  function is_parse_error(self) -> bool throws never
 }
 
 /// Incremental (streaming) failures. The same concrete error can arise on the call
 /// path and mid-stream, so a provider error may implement both `CallError` and this.
 interface StreamError requires Failure {
-  function is_network_error(self) -> bool
+  function is_network_error(self) -> bool throws never
 }
 
 /// Failures on the multi-turn tool-calling path.
 interface ToolError requires Failure {
-  function is_network_error(self) -> bool
+  function is_network_error(self) -> bool throws never
 }
 
 /// Failures on a live/duplex (realtime) session.
 interface RealtimeError requires Failure {
-  function is_network_error(self) -> bool
+  function is_network_error(self) -> bool throws never
 }
 
 // The capability-negotiation error `Unsupported` (thrown by a companion's `_` arm when

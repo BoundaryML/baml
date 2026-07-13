@@ -1,10 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use baml_db::{
-    baml_compiler_diagnostics::{Severity, render},
-    baml_compiler2_emit,
-};
+use baml_db::baml_compiler_diagnostics::{Severity, render};
 use clap::Args;
 
 use crate::{project_load::load_project_for_build, reporter::Reporter};
@@ -59,14 +56,8 @@ impl CheckArgs {
 
         // The bytecode build runs under the same "Checking" spinner — a
         // separate "Compiling N file(s)" line would just repeat the count.
-        // `generate_bytecode_unchecked` rather than `get_bytecode`: the
-        // error gate just above already ran the diagnostics pass, and
-        // `get_bytecode` would redundantly run it a second time for its own
-        // gate.
         if let Err(err) = db
-            .generate_bytecode_unchecked(&baml_compiler2_emit::CompileOptions {
-                emit_test_cases: false,
-            })
+            .get_bytecode()
             .with_context(|| format!("failed to compile BAML project at {}", from.display()))
         {
             reporter.abandon();

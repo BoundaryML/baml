@@ -12,7 +12,7 @@ use bex_engine::{
     value_capture::{TraceCaptureConfig, TraceCaptureProducer},
 };
 use bex_events::value::{ValueCodec, ValueRef, ValueWriteOutcome};
-use bridge_ctypes::baml_core::cffi::{
+use bridge_ctypes::baml_bridge::cffi::{
     BamlOutboundValue, baml_outbound_value::Value as OutboundValue,
 };
 use clap::{Args, ValueEnum};
@@ -271,8 +271,7 @@ impl TestArgs {
         let compile_options = baml_compiler2_emit::CompileOptions {
             emit_test_cases: true,
         };
-        let bytecode = db
-            .generate_bytecode_unchecked(&compile_options)
+        let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
         let engine = Arc::new(

@@ -248,11 +248,13 @@ impl PackArgs {
         // to `check` and `generate`.
         check_diagnostics(&db, "Cannot pack: compilation errors found", reporter)?;
 
-        let program = db
-            .generate_bytecode_unchecked(&baml_compiler2_emit::CompileOptions {
+        let program = baml_compiler2_emit::generate_project_bytecode(
+            &db,
+            &baml_compiler2_emit::CompileOptions {
                 emit_test_cases: false,
-            })
-            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+            },
+        )
+        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
         Ok((db, program, needs_format_hint))
     }

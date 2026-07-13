@@ -74,7 +74,12 @@ function _openai_strict_schema_node(schema: json, path: string) -> json
       if (_json_schema_type(object) == "object") {
         match (object.get("properties")) {
           let properties: map<string, json> => {
-            object.set("required", properties.keys());
+            let required = baml.json.from(properties.keys()) catch (e) {
+              _ => throw baml.errors.Unsupported {
+                message: "could not encode strict-schema property names at " + path,
+              },
+            };
+            object.set("required", required);
             object.set("additionalProperties", false);
           },
           _ => throw baml.errors.Unsupported {

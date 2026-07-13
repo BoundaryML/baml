@@ -20,7 +20,7 @@ function _primitive_stream<TPartial, T>(
   let accumulator = primitive.new_stream_accumulator() catch (e) {
     _ => throw baml.errors.UnknownError { data: e, message: [provider_name + " accumulator failed"] },
   };
-  let cache = baml.llm.StreamCache.new(reflect.type_of<TPartial>(), reflect.type_of<T>());
+  let cache = baml.llm.__new_stream_cache<TPartial, T>();
   baml.llm.Stream<TPartial, T> {
     _client: primitive,
     _acc: accumulator,

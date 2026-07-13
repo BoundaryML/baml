@@ -46,8 +46,8 @@ class s40_Fork { session_id: string, at_message_index: int? }
 type s40_Pickup = s40_Fresh | s40_Continue | s40_Resume | s40_ResumeAt | s40_Fork
 
 interface s40_SessionError {
-  function is_network_error(self) -> bool
-  function is_not_found(self) -> bool
+  function is_network_error(self) -> bool throws never
+  function is_not_found(self) -> bool throws never
 }
 
 class s40_SessionNotFound {

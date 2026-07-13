@@ -1,20 +1,22 @@
 // Stateful external agent runtime. Unlike Tools, a Harness owns its internal
 // model/tool loop and exact provider continuation state.
 interface Harness requires Provider {
-  type HarnessSession
+  // The default keeps `Harness` usable as an erased existential. Concrete
+  // providers bind this to their private mutable session representation.
+  type HarnessSession = unknown
 
-  function open(self, options: SessionOptions) -> HarnessSession
+  function open(self, options: SessionOptions) -> Self.HarnessSession
     throws baml.errors.UnknownError
-  function run<T>(self, session: HarnessSession, request: Request<T>) -> AgentRun<T>
+  function run<T>(self, session: Self.HarnessSession, request: Request<T>) -> AgentRun<T>
     throws baml.errors.UnknownError
-  function stream<T>(self, session: HarnessSession, request: Request<T>) -> AgentEventStream<T>
+  function stream<T>(self, session: Self.HarnessSession, request: Request<T>) -> AgentEventStream<T>
     throws baml.errors.UnknownError
-  function save_session(self, session: HarnessSession) -> HarnessSessionToken
+  function save_session(self, session: Self.HarnessSession) -> HarnessSessionToken
     throws baml.errors.UnknownError
-  function restore_session(self, token: HarnessSessionToken) -> HarnessSession
+  function restore_session(self, token: HarnessSessionToken) -> Self.HarnessSession
     throws baml.errors.UnknownError
-  function stop(self, session: HarnessSession) -> null throws baml.errors.UnknownError
-  function destroy(self, session: HarnessSession) -> null throws baml.errors.UnknownError
+  function stop(self, session: Self.HarnessSession) -> null throws baml.errors.UnknownError
+  function destroy(self, session: Self.HarnessSession) -> null throws baml.errors.UnknownError
 }
 
 interface HarnessControlPlane requires Provider {

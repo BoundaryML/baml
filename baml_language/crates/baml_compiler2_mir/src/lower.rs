@@ -60,24 +60,14 @@ use baml_compiler2_tir::ty::{
     FunctionParamMode, FunctionParamTy as Tir2FunctionParamTy, QualifiedTypeName, Ty as Tir2Ty,
 };
 
-/// Salsa query: the [`ResolvedAliases`] type-alias environment for a package,
+/// Build the [`ResolvedAliases`] type-alias environment for a package,
 /// including dependency packages. The pure erasure that consumes it lives in
 /// `baml_type` ([`ResolvedAliases::convert`]), wrapped compiler-side by
 /// `convert_tir_ty_for_runtime`; only this db-querying constructor stays
 /// compiler-side.
-///
-/// Memoized per package: the emit driver and `package_lowering_data` both
-/// demand it, and each computation re-collects (and clones) every alias of
-/// the package *and all its dependencies* — so before tracking, dependency
-/// packages' aliases were re-collected once per dependent, per caller.
-///
-/// Intentionally distinct from TIR's `package_alias_env`, which sees only
-/// dependency *interface exports*; MIR/emit need every dependency alias for
-/// runtime type erasure.
-#[salsa::tracked(returns(ref))]
-pub fn resolved_aliases_for_package<'db>(
-    db: &'db dyn crate::Db,
-    pkg_id: baml_compiler2_hir::package::PackageId<'db>,
+pub fn resolved_aliases_for_package(
+    db: &dyn crate::Db,
+    pkg_id: baml_compiler2_hir::package::PackageId,
 ) -> ResolvedAliases {
     use baml_compiler2_hir::package::{package_dependencies, package_items};
 
@@ -96,7 +86,7 @@ pub fn resolved_aliases_for_package<'db>(
 fn interface_tir_type_args_match_preserving_typevars(
     impl_iface_args: &[Tir2Ty],
     iface_type_args: &[Tir2Ty],
-    aliases: &ResolvedAliases,
+    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
 ) -> bool {
     impl_iface_args.len() == iface_type_args.len()
         && impl_iface_args
@@ -118,7 +108,7 @@ fn interface_tir_type_args_match_preserving_typevars(
 fn tir_type_satisfies_dispatch_request(
     actual: &Tir2Ty,
     requested: &Tir2Ty,
-    aliases: &ResolvedAliases,
+    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
 ) -> bool {
     if baml_compiler2_tir::normalize::is_same_normalized_type(actual, requested, aliases) {
         return true;
@@ -238,7 +228,7 @@ fn bind_interface_class_type_arg(
     name: &Name,
     actual: &Tir2Ty,
     bindings: &mut FxHashMap<Name, Tir2Ty>,
-    aliases: &ResolvedAliases,
+    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
 ) -> bool {
     match bindings.get(name) {
         Some(existing) => {
@@ -255,7 +245,7 @@ fn infer_interface_class_bindings(
     formal: &Tir2Ty,
     actual: &Tir2Ty,
     class_params: &[Name],
-    aliases: &ResolvedAliases,
+    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
     bindings: &mut FxHashMap<Name, Tir2Ty>,
     // Associated-type bindings tolerate an unpinnable typevar union
     // (`Error = E | E2` vs a normalized request) by leaving the params
@@ -486,7 +476,7 @@ fn interface_class_guard_for_args(
     requested_iface_args: &[Tir2Ty],
     requested_iface_assoc: &[(Name, Tir2Ty)],
     class_params: &[Name],
-    aliases: &ResolvedAliases,
+    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
 ) -> Option<InterfaceClassGuard> {
     // An *uninstantiated* request (no type args) matches any implementor
     // instantiation — e.g. `self: Container` inside a generic interface's
@@ -602,7 +592,7 @@ fn type_satisfies_bound(
     db: &dyn crate::Db,
     actual: &Tir2Ty,
     bound: &Tir2Ty,
-    aliases: &ResolvedAliases,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Tir2Ty>,
     default_pkg: &baml_base::Name,
     depth: u32,
 ) -> bool {
@@ -1691,17 +1681,9 @@ fn package_lowering_data<'db>(
     db: &'db dyn crate::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'db>,
 ) -> PackageLoweringData {
-    use baml_compiler2_hir::package::package_dependencies;
-    // The canonical (PPIR-merged) package items, NOT HIR's: the field/enum
-    // schema maps must cover PPIR-synthesized `*$stream` classes, or a typed
-    // partial's field access (`part.title` on `Meeting$stream`) silently
-    // falls to the dynamic map path while the runtime materializes SAP
-    // partials as class instances → `expected map, got instance` in the VM.
-    use baml_compiler2_ppir::package_items;
+    use baml_compiler2_hir::package::{package_dependencies, package_items};
 
-    // Cloned out of the tracked query's cached value once per package: this
-    // struct is itself a per-package Salsa value and owns its env.
-    let resolved_aliases = resolved_aliases_for_package(db, pkg_id).clone();
+    let resolved_aliases = resolved_aliases_for_package(db, pkg_id);
 
     let mut class_fields = ClassFieldIndices::default();
     let mut class_field_types = ClassFieldTypes::default();
@@ -1738,54 +1720,6 @@ fn package_lowering_data<'db>(
             &mut population,
             &resolved_aliases,
         );
-    }
-
-    // Open-world implementors: an interface `match` compiled inside a
-    // DEPENDENCY package and matching a user-authored implementation expands to the static
-    // implementor set in `emit_is_type_branch` — which must therefore span
-    // every package in the session, not just this package + its own deps,
-    // or downstream classes are silently invisible to stdlib matches. Only
-    // the implementor relations are unioned (push-unique); the field/enum
-    // schema maps stay package-scoped via scratch outputs. (Restored after
-    // the pkg-alias-query perf merge dropped it — regression surfaced as
-    // stdlib `drive_call` throwing Unsupported for user HttpProviders.)
-    {
-        let mut covered: Vec<Name> = package_dependencies(db, pkg_id)
-            .iter()
-            .map(|dep| dep.name(db))
-            .collect();
-        covered.push(pkg_id.name(db));
-
-        let mut session_pkgs: Vec<Name> = Vec::new();
-        for file in baml_compiler2_hir::compiler2_all_files(db) {
-            let pkg = baml_compiler2_hir::file_package::file_package(db, file).package;
-            if !covered.contains(&pkg) && !session_pkgs.contains(&pkg) {
-                session_pkgs.push(pkg);
-            }
-        }
-        session_pkgs.sort();
-
-        let mut scratch_class_fields = ClassFieldIndices::default();
-        let mut scratch_class_field_types = ClassFieldTypes::default();
-        let mut scratch_enum_variants = EnumVariantIndices::default();
-        for extra_pkg in session_pkgs {
-            let extra_id = baml_compiler2_hir::package::PackageId::new(db, extra_pkg.clone());
-            let extra_items = package_items(db, extra_id);
-            let mut population = PackagePopulation {
-                class_fields: &mut scratch_class_fields,
-                class_field_types: &mut scratch_class_field_types,
-                enum_variants: &mut scratch_enum_variants,
-                interface_implementors: &mut interface_implementors,
-                interface_type_implementors: &mut interface_type_implementors,
-            };
-            LoweringContext::populate_from_package(
-                db,
-                extra_items,
-                &extra_pkg,
-                &mut population,
-                &resolved_aliases,
-            );
-        }
     }
 
     PackageLoweringData {
@@ -2124,15 +2058,6 @@ impl<'db> LoweringContext<'db> {
                 .generic_param_bounds
                 .get(name)
                 .and_then(|bound| self.interface_view_for_tir_ty(bound, target_tn)),
-            // Type aliases are transparent to interface lookup. TIR expands
-            // them before proving the bound; MIR must do the same before
-            // matching blanket impls such as `Iterable for T[]`.
-            Tir2Ty::TypeAlias(qtn, _) if !self.resolved_aliases.recursive.contains(qtn) => self
-                .resolved_aliases
-                .aliases
-                .get(qtn)
-                .and_then(|target| self.interface_view_for_tir_ty(target, target_tn))
-                .or_else(|| self.interface_view_from_registry(ty, target_tn)),
             Tir2Ty::AssociatedTypeProjection { .. } => {
                 let resolved = self.resolve_ty_projections(ty);
                 if &resolved != ty {
@@ -3666,23 +3591,6 @@ impl<'db> LoweringContext<'db> {
     /// `None` for non-concrete receivers (interfaces/type-vars take their view from
     /// the type itself) and for methods no impl provides.
     fn dispatch_target_for_concrete(
-        &self,
-        recv_ty: &Tir2Ty,
-        method: &Name,
-    ) -> Option<InterfaceTypeView> {
-        let key = (recv_ty.clone(), method.clone());
-        if let Some(hit) = self.dispatch_cache.registry_targets.borrow().get(&key) {
-            return hit.clone();
-        }
-        let resolved = self.registry_dispatch_target_for_concrete_uncached(recv_ty, method);
-        self.dispatch_cache
-            .registry_targets
-            .borrow_mut()
-            .insert(key, resolved.clone());
-        resolved
-    }
-
-    fn registry_dispatch_target_for_concrete_uncached(
         &self,
         recv_ty: &Tir2Ty,
         method: &Name,
@@ -8967,22 +8875,6 @@ impl LoweringContext<'_> {
         )
     }
 
-    /// Whether a written type argument lowers to a type that cannot cross the
-    /// runtime boundary — a `_` wildcard (`Ty::Infer`) or an error-recovery
-    /// sentinel, at any depth. A bare frame type-arg reference (`T`) and any
-    /// concrete type return `false`.
-    fn type_arg_is_infer_hole(
-        &self,
-        type_arg: &AstTypeExpr,
-        generic_params: &[baml_base::Name],
-    ) -> bool {
-        if Self::direct_frame_type_arg_template(type_arg, generic_params).is_some() {
-            return false;
-        }
-        let tir_ty = self.lower_type_arg_to_tir(type_arg, generic_params);
-        baml_type::lower_to_runtime(&tir_ty, self.resolved_aliases).is_err()
-    }
-
     fn direct_frame_type_arg_template(
         type_arg: &AstTypeExpr,
         generic_params: &[baml_base::Name],
@@ -11059,7 +10951,7 @@ impl<'db> LoweringContext<'db> {
                             requested_args,
                             requested_assoc,
                             &class_data.generic_params,
-                            self.resolved_aliases,
+                            &self.resolved_aliases.aliases,
                         ) else {
                             continue;
                         };
@@ -11138,7 +11030,7 @@ impl<'db> LoweringContext<'db> {
                         requested_args,
                         requested_assoc,
                         &class_data.generic_params,
-                        self.resolved_aliases,
+                        &self.resolved_aliases.aliases,
                     ) else {
                         continue;
                     };
@@ -12075,12 +11967,6 @@ impl LoweringContext<'_> {
             _ => {
                 let ty = self.expr_ty(expr_id);
                 let temp = self.builder.temp(ty);
-                // A projection assignment may use an arbitrary expression as
-                // its base (`store.require().info.title = ...`). Materialize
-                // that base exactly once before projecting through it. Merely
-                // allocating the temp leaves it as `any`, so the VM later
-                // faults when the field projection expects an instance.
-                self.lower_expr(expr_id, Place::Local(temp));
                 Place::Local(temp)
             }
         }
@@ -14738,7 +14624,7 @@ mod tests {
 
     #[test]
     fn interface_tir_type_args_match_preserves_type_var_identity() {
-        let aliases = ResolvedAliases::default();
+        let aliases = HashMap::new();
 
         assert!(interface_tir_type_args_match_preserving_typevars(
             &[type_var("L"), type_var("R")],
@@ -14754,7 +14640,7 @@ mod tests {
 
     #[test]
     fn interface_class_guard_checks_assoc_when_request_omits_generic_args() {
-        let aliases = ResolvedAliases::default();
+        let aliases = HashMap::new();
         let impl_args = vec![primitive(&PrimitiveType::String)];
         let requested_args = Vec::new();
         let requested_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];

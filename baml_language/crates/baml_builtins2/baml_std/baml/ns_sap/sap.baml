@@ -9,10 +9,11 @@
 
 /// Parse `text` (an LLM's raw output) into `T` via Schema-Aligned Parsing.
 function parse<T>(text: string) -> T throws root.errors.LlmClient {
+    let cache = root.llm.__new_stream_cache<T, T>();
     root.llm
         .__sap_parse_final<T, T>(
             text,
-            root.llm.StreamCache.new(reflect.type_of<T>(), reflect.type_of<T>()),
+            cache,
         )
 }
 

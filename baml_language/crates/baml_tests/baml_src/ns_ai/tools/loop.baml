@@ -73,9 +73,9 @@ function run_agent<T>(
   };
   let transcript = tools_provider.begin<T>(request);
   let steps = 0;
-  let middleware = request.options.tool_middleware ?? [];
-  let observers = request.options.observers ?? [];
-  let recorders = request.options.recorders ?? [];
+  let middleware: ToolMiddleware[] = request.options.tool_middleware ?? [];
+  let observers: AgentObserver[] = request.options.observers ?? [];
+  let recorders: AgentRecorder[] = request.options.recorders ?? [];
   while (true) {
     match (tools_provider.step<T>(transcript)) {
       let calls: ToolCalls => {
@@ -140,9 +140,9 @@ function run_agent_detailed<T>(
   let steps = 0;
   let turns: AgentTurn<T>[] = [];
   let metas: Meta[] = [];
-  let middleware = request.options.tool_middleware ?? [];
-  let observers = request.options.observers ?? [];
-  let recorders = request.options.recorders ?? [];
+  let middleware: ToolMiddleware[] = request.options.tool_middleware ?? [];
+  let observers: AgentObserver[] = request.options.observers ?? [];
+  let recorders: AgentRecorder[] = request.options.recorders ?? [];
   while (true) {
     match (tools_provider.step<T>(transcript)) {
       let calls: ToolCalls => {

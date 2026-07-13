@@ -34,14 +34,12 @@ use bex_vm_types::{
     ObjectIndex, ObjectPool, Program,
 };
 
-/// Per-package `ResolvedAliases` refs, keyed by package name — borrowed
-/// straight from the tracked `resolved_aliases_for_package` query (computed
-/// once per package for the whole compile).
-fn build_alias_caches<'db>(
-    db: &'db dyn baml_compiler2_mir::Db,
+/// Build a per-package `ResolvedAliases` cache, keyed by package name.
+fn build_alias_caches(
+    db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
-) -> HashMap<Name, &'db ResolvedAliases> {
-    let mut caches: HashMap<Name, &'db ResolvedAliases> = HashMap::new();
+) -> HashMap<Name, ResolvedAliases> {
+    let mut caches: HashMap<Name, ResolvedAliases> = HashMap::new();
     for file in all_files {
         let pkg_info = file_package(db, *file);
         caches.entry(pkg_info.package.clone()).or_insert_with(|| {
@@ -264,7 +262,7 @@ fn build_interface_def(
 fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
-    alias_caches: &HashMap<Name, &ResolvedAliases>,
+    alias_caches: &HashMap<Name, ResolvedAliases>,
     function_indices: &HashMap<String, usize>,
     interface_indices: &HashMap<baml_type::TypeName, usize>,
     program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
@@ -931,20 +929,6 @@ fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     baml_type::QualifiedTypeName::from_dotted_path(fq)
 }
 
-/// Functions already lowered to MIR by the caller (possibly in parallel),
-/// keyed the same way Pass 4 enumerates them: `(file, local item id)` from the
-/// PPIR item tree. Entries MUST have been lowered at the same [`OptLevel`]
-/// passed to the driver; the driver consumes matching entries and falls back
-/// to lowering inline for anything missing, so the map is purely a
-/// performance hand-off.
-pub type PreLoweredMir = rustc_hash::FxHashMap<
-    (
-        baml_base::SourceFile,
-        baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
-    ),
-    MirFunction,
->;
-
 /// Generate bytecode for the entire project (default: `OptLevel::Two`).
 pub fn generate_project_bytecode(
     db: &dyn baml_compiler2_mir::Db,
@@ -958,26 +942,6 @@ pub fn generate_project_bytecode_with_opt(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
     opt: OptLevel,
-) -> Result<Program, LoweringError> {
-    generate_project_bytecode_inner(db, options, opt, PreLoweredMir::default())
-}
-
-/// [`generate_project_bytecode_with_opt`] consuming caller-pre-lowered MIR
-/// (see [`PreLoweredMir`]). `opt` must match the level the map was lowered at.
-pub fn generate_project_bytecode_prelowered(
-    db: &dyn baml_compiler2_mir::Db,
-    options: &CompileOptions,
-    opt: OptLevel,
-    pre_lowered: PreLoweredMir,
-) -> Result<Program, LoweringError> {
-    generate_project_bytecode_inner(db, options, opt, pre_lowered)
-}
-
-fn generate_project_bytecode_inner(
-    db: &dyn baml_compiler2_mir::Db,
-    options: &CompileOptions,
-    opt: OptLevel,
-    mut pre_lowered: PreLoweredMir,
 ) -> Result<Program, LoweringError> {
     let mut program = Program::new();
     let all_files = compiler2_all_files(db);

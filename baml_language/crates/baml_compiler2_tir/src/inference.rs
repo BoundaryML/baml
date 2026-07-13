@@ -1626,7 +1626,7 @@ pub fn infer_scope_types<'db>(
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
 
-    let aliases = package_alias_env(db, pkg_id);
+    let aliases = package_alias_map(db, res_ctx);
     let context = InferContext::new(db, scope_id);
     let mut builder = TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases);
 

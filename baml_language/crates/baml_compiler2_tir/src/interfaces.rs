@@ -523,7 +523,7 @@ fn lower_interface_type_associated_bindings(
 pub fn match_ty_patterns(
     pairs: &[(&Ty, &Ty)],
     generic_params: &[Name],
-    aliases: &normalize::ResolvedAliases,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> Option<TypeBindings> {
     let mut bindings = TypeBindings::default();
     for (pattern, concrete) in pairs {
@@ -539,7 +539,7 @@ pub fn match_ty_pattern_into(
     pattern: &Ty,
     concrete: &Ty,
     generic_params: &[Name],
-    aliases: &normalize::ResolvedAliases,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     if let Ty::TypeVar(name, _) = pattern
@@ -661,7 +661,7 @@ fn match_union_members(
     pattern_members: &[Ty],
     concrete_members: &[Ty],
     generic_params: &[Name],
-    aliases: &normalize::ResolvedAliases,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     let Some((pattern_head, pattern_tail)) = pattern_members.split_first() else {
@@ -709,7 +709,7 @@ fn bind_type_var(
     name: &Name,
     concrete: &Ty,
     bindings: &mut TypeBindings,
-    aliases: &normalize::ResolvedAliases,
+    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> Option<()> {
     match bindings.get(name) {
         Some(existing) if normalize::is_same_normalized_type(existing, concrete, aliases) => {
@@ -1165,7 +1165,7 @@ mod tests {
             match_ty_patterns(
                 &[(&pattern, &good)],
                 &params,
-                &crate::normalize::ResolvedAliases::default()
+                &std::collections::HashMap::default()
             )
             .is_some()
         );
@@ -1173,7 +1173,7 @@ mod tests {
             match_ty_patterns(
                 &[(&pattern, &bad)],
                 &params,
-                &crate::normalize::ResolvedAliases::default()
+                &std::collections::HashMap::default()
             )
             .is_none()
         );
@@ -1213,7 +1213,7 @@ mod tests {
         let bindings = match_ty_patterns(
             &[(&pattern, &actual)],
             &params,
-            &crate::normalize::ResolvedAliases::default(),
+            &std::collections::HashMap::default(),
         )
         .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
@@ -1244,7 +1244,7 @@ mod tests {
             match_ty_patterns(
                 &[(&pattern, &same_short_name)],
                 &[],
-                &crate::normalize::ResolvedAliases::default()
+                &std::collections::HashMap::default()
             )
             .is_none(),
             "same short name in different namespaces must not match"
@@ -1260,7 +1260,7 @@ mod tests {
         let bindings = match_ty_patterns(
             &[(&pattern, &actual)],
             &params,
-            &crate::normalize::ResolvedAliases::default(),
+            &std::collections::HashMap::default(),
         )
         .expect("union members should be matched by type, not position");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));

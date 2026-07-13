@@ -14,7 +14,7 @@ class OpenAiCompatible {
   }
 
   function _headers(self) -> map<string, string> throws never {
-    let headers = self.extra_headers ?? {};
+    let headers: map<string, string> = self.extra_headers ?? {};
     match (self.auth) {
       let custom: HeaderAuth => { let _ = headers.set(custom.name, custom.value); },
       _ => {},
