@@ -93,7 +93,7 @@ jobs:
           clang -v
           cmake --version
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Setup Python for non-ARM64 Windows targets and other OS
       - name: Setup Python (default)
@@ -151,7 +151,7 @@ jobs:
             fi
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.3.2
 
       - name: Test LICENSE packaging
         if: matrix._.license_test != 'skip'
