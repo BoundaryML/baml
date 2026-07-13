@@ -52,14 +52,6 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
             | SyntaxKind::KW_INTERFACE
             | SyntaxKind::KW_EXTENDS
             | SyntaxKind::KW_REQUIRES
-            // Contextual keywords re-lexed from a `Word`: still lower by text
-            // (the literal/identifier arms below switch on the text), so they
-            // must read as ident tokens just as they did when they were `Word`.
-            | SyntaxKind::KW_AS
-            | SyntaxKind::KW_TYPE
-            | SyntaxKind::KW_TRUE
-            | SyntaxKind::KW_FALSE
-            | SyntaxKind::KW_NULL
     )
 }
 

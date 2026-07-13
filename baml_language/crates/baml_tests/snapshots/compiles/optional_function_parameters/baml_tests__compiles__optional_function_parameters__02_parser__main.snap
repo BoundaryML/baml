@@ -1,10 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18292
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Searcher"
     EQUALS "="
     TYPE_EXPR
@@ -26,7 +27,7 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "NarrowSearcher"
     EQUALS "="
     TYPE_EXPR
@@ -147,7 +148,7 @@ SOURCE_FILE
           WORD "string"
           QUESTION "?"
         EQUALS "="
-        KW_NULL "null"
+        WORD "null"
       COMMA ","
       PARAMETER
         WORD "chunk_size"
@@ -350,7 +351,7 @@ SOURCE_FILE
           WORD "string"
           QUESTION "?"
         EQUALS "="
-        KW_NULL "null"
+        WORD "null"
       R_PAREN ")"
     ARROW "->"
     TYPE_EXPR "int"
@@ -365,7 +366,7 @@ SOURCE_FILE
             BINARY_EXPR "filter == null"
               WORD "filter"
               EQUALS_EQUALS "=="
-              KW_NULL "null"
+              WORD "null"
             R_PAREN ")"
           BLOCK_EXPR "{
     max_results
@@ -527,7 +528,7 @@ SOURCE_FILE
             WORD "string"
             QUESTION "?"
           EQUALS "="
-          KW_NULL "null"
+          WORD "null"
         R_PAREN ")"
       ARROW "->"
       TYPE_EXPR "string[]"

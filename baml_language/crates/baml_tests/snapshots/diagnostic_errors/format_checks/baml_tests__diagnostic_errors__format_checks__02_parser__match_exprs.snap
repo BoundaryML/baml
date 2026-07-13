@@ -44,7 +44,7 @@ SOURCE_FILE
       WORD "Pending"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "MatchResult"
     EQUALS "="
     TYPE_EXPR "MatchSuccess | MatchFailure"

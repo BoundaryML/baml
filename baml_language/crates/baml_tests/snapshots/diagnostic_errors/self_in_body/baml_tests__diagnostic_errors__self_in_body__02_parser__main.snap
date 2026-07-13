@@ -393,7 +393,7 @@ SOURCE_FILE
             EQUALS "="
             WORD "other"
             SEMICOLON ";"
-          KW_TRUE "true"
+          WORD "true"
           R_BRACE "}"
     R_BRACE "}"
 

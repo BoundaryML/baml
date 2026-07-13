@@ -16,7 +16,6 @@ baml_compiler_diagnostics = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 sys_jinja_types = { workspace = true }
-bitflags = { workspace = true }
 indexmap = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }

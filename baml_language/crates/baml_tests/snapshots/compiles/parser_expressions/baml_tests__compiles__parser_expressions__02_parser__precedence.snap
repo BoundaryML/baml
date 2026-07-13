@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15330
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -72,12 +73,12 @@ SOURCE_FILE
               WORD "d"
           EQUALS "="
           BINARY_EXPR
-            KW_TRUE "true"
+            WORD "true"
             OR_OR "||"
             BINARY_EXPR "false && false"
-              KW_FALSE "false"
+              WORD "false"
               AND_AND "&&"
-              KW_FALSE "false"
+              WORD "false"
           SEMICOLON ";"
         RETURN_STMT "// Should be true (AND before OR)
 

@@ -4,12 +4,12 @@ source: crates/baml_tests/src/generated_tests.rs
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "type"
     TYPE_EXPR "Foo"
       WORD "Foo"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Bar"
     EQUALS "="
     TYPE_EXPR

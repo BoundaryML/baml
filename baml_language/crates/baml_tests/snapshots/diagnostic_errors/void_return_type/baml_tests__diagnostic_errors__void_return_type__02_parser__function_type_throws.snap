@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ExplicitHandler"
     EQUALS "="
     TYPE_EXPR
@@ -23,7 +23,7 @@ SOURCE_FILE
         TYPE_EXPR "never"
           WORD "never"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ImplicitHandler"
     EQUALS "="
     TYPE_EXPR
@@ -38,7 +38,7 @@ SOURCE_FILE
       TYPE_EXPR "string"
         WORD "string"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "HiddenHandler"
     EQUALS "="
     TYPE_EXPR

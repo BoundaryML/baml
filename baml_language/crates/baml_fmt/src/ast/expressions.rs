@@ -151,9 +151,6 @@ impl FromCST for Expression {
             SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
                 t::FloatLiteral::new_from_span(elem.text_range()),
             )),
-            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
-                Literal::from_cst(elem).map(Expression::Literal)?
-            }
             SyntaxKind::WORD => PathExpr::from_cst(elem).map(Expression::Path)?,
             SyntaxKind::PATH_EXPR => {
                 // The parser wraps any postfix `<...>` in a PATH_EXPR. When the
@@ -417,8 +414,6 @@ pub enum Literal {
     String(t::QuotedString),
     Integer(t::IntegerLiteral),
     Float(t::FloatLiteral),
-    /// `true` / `false` / `null`.
-    Keyword(t::KeywordLiteral),
 }
 
 impl FromCST for Literal {
@@ -427,11 +422,8 @@ impl FromCST for Literal {
             SyntaxKind::STRING_LITERAL => Ok(Literal::String(t::QuotedString::from_cst(elem)?)),
             SyntaxKind::INTEGER_LITERAL => Ok(Literal::Integer(t::IntegerLiteral::from_cst(elem)?)),
             SyntaxKind::FLOAT_LITERAL => Ok(Literal::Float(t::FloatLiteral::from_cst(elem)?)),
-            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
-                Ok(Literal::Keyword(t::KeywordLiteral::from_cst(elem)?))
-            }
             _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "a literal".into(),
+                expected_desc: "STRING_LITERAL, INTEGER_LITERAL, or FLOAT_LITERAL".into(),
                 found: elem.kind(),
                 at: elem.text_range(),
             }),
@@ -453,7 +445,6 @@ impl Literal {
             }
             Literal::Integer(i) => Some(usize::from(i.span().len())),
             Literal::Float(f) => Some(usize::from(f.span().len())),
-            Literal::Keyword(k) => Some(usize::from(k.span().len())),
         }
     }
 }
@@ -464,7 +455,6 @@ impl Printable for Literal {
             Literal::String(s) => printer.print_raw_token(s),
             Literal::Integer(i) => printer.print_raw_token(i),
             Literal::Float(f) => printer.print_raw_token(f),
-            Literal::Keyword(k) => printer.print_raw_token(k),
         }
         PrintInfo::default_single_line()
     }
@@ -473,7 +463,6 @@ impl Printable for Literal {
             Literal::String(s) => s.leftmost_token(),
             Literal::Integer(i) => i.span(),
             Literal::Float(f) => f.span(),
-            Literal::Keyword(k) => k.span(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -481,7 +470,6 @@ impl Printable for Literal {
             Literal::String(s) => s.rightmost_token(),
             Literal::Integer(i) => i.span(),
             Literal::Float(f) => f.span(),
-            Literal::Keyword(k) => k.span(),
         }
     }
 }

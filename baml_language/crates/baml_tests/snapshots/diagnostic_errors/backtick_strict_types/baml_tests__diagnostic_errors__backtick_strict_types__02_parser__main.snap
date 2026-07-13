@@ -27,7 +27,7 @@ SOURCE_FILE
                     WORD "int"
                     QUESTION "?"
           EQUALS "="
-          KW_NULL "null"
+          WORD "null"
         BACKTICK_STRING_LITERAL
           BACKTICK "`"
           WORD "val"

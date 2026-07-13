@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 37935
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -16,7 +17,7 @@ SOURCE_FILE
   null
 }"
       L_BRACE "{"
-      KW_NULL "null"
+      WORD "null"
       R_BRACE "}"
   TEST_EXPR_DEF
     KW_TEST "test"
@@ -25,7 +26,7 @@ SOURCE_FILE
   null
 }"
       L_BRACE "{"
-      KW_NULL "null"
+      WORD "null"
       R_BRACE "}"
   TESTSET_DEF
     KW_TESTSET "testset"
@@ -68,7 +69,7 @@ SOURCE_FILE
       null
     }"
               L_BRACE "{"
-              KW_NULL "null"
+              WORD "null"
               R_BRACE "}"
           R_BRACE "}"
       R_BRACE "}"

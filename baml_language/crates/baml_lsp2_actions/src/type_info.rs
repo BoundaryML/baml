@@ -701,19 +701,11 @@ fn local_type_info(
             })
         }
 
-        DefinitionSite::PatternBinding(pat_id) | DefinitionSite::CatchBinding(pat_id) => {
-            // Resolve the binding type from inference (matching completions) so
-            // hover agrees with completion type info instead of reporting
-            // "unknown". `PatId` is body-local, so walk the use-site's scope
-            // chain (collision-safe) rather than probing the enclosing function
-            // body first, which could match a same-index binding in another body
-            // for pattern/catch bindings inside closures or nested blocks.
-            let ty_str = find_binding_ty_in_scopes(db, index, scope_id, pat_id)
-                .map(|ty| display_local_binding_ty(db, file, &ty))
-                .unwrap_or_else(|| "unknown".to_string());
+        DefinitionSite::PatternBinding(_) => {
+            // Pattern bindings — report as local variable with unknown type for now.
             Some(TypeInfo::LocalVar {
                 name: name.as_str().to_string(),
-                ty: ty_str,
+                ty: "unknown".to_string(),
             })
         }
     }

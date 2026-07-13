@@ -1214,7 +1214,7 @@ SOURCE_FILE
               WORD "name"
             QUESTION "?"
             QUESTION "?"
-            KW_NULL "null"
+            WORD "null"
           SEMICOLON ";"
         LET_STMT
           PATTERN

@@ -4,25 +4,25 @@ source: crates/baml_tests/src/generated_tests.rs
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "SimpleAlias"
     EQUALS "="
     TYPE_EXPR "int"
       WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "AliasChain"
     EQUALS "="
     TYPE_EXPR "SimpleAlias"
       WORD "SimpleAlias"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Name"
     EQUALS "="
     TYPE_EXPR "string"
       WORD "string"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Role"
     EQUALS "="
     TYPE_EXPR
@@ -41,19 +41,19 @@ SOURCE_FILE
         WORD "system"
         QUOTE """
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "HttpOk"
     EQUALS "="
     TYPE_EXPR "200"
       INTEGER_LITERAL "200"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "AlwaysTrue"
     EQUALS "="
     TYPE_EXPR "true"
       WORD "true"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "SuccessCode"
     EQUALS "="
     TYPE_EXPR "200 | 201 | 204"
@@ -63,7 +63,7 @@ SOURCE_FILE
       PIPE "|"
       INTEGER_LITERAL "204"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "MixedLiterals"
     EQUALS "="
     TYPE_EXPR
@@ -76,14 +76,14 @@ SOURCE_FILE
       PIPE "|"
       WORD "true"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "MaybeInt"
     EQUALS "="
     TYPE_EXPR "int?"
       WORD "int"
       QUESTION "?"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "IntList"
     EQUALS "="
     TYPE_EXPR "int[]"
@@ -91,7 +91,7 @@ SOURCE_FILE
       L_BRACKET "["
       R_BRACKET "]"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Matrix"
     EQUALS "="
     TYPE_EXPR "int[][]"
@@ -101,7 +101,7 @@ SOURCE_FILE
       L_BRACKET "["
       R_BRACKET "]"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "StringMap"
     EQUALS "="
     TYPE_EXPR
@@ -115,7 +115,7 @@ SOURCE_FILE
           WORD "int"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ComplexMap"
     EQUALS "="
     TYPE_EXPR
@@ -133,7 +133,7 @@ SOURCE_FILE
           WORD "bool"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "NestedMap"
     EQUALS "="
     TYPE_EXPR
@@ -157,7 +157,7 @@ SOURCE_FILE
             GREATER ">"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ParenUnion"
     EQUALS "="
     TYPE_EXPR
@@ -171,7 +171,7 @@ SOURCE_FILE
       L_BRACKET "["
       R_BRACKET "]"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "OptionalUnion"
     EQUALS "="
     TYPE_EXPR
@@ -184,7 +184,7 @@ SOURCE_FILE
       R_PAREN ")"
       QUESTION "?"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Json"
     EQUALS "="
     TYPE_EXPR
@@ -212,7 +212,7 @@ SOURCE_FILE
           WORD "Json"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "IntToInt"
     EQUALS "="
     TYPE_EXPR
@@ -227,7 +227,7 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "BinaryOp"
     EQUALS "="
     TYPE_EXPR
@@ -248,7 +248,7 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "UnnamedParams"
     EQUALS "="
     TYPE_EXPR
@@ -265,7 +265,7 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Producer"
     EQUALS "="
     TYPE_EXPR
@@ -275,7 +275,7 @@ SOURCE_FILE
       TYPE_EXPR "string"
         WORD "string"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Curried"
     EQUALS "="
     TYPE_EXPR
@@ -299,7 +299,7 @@ SOURCE_FILE
         TYPE_EXPR "int"
           WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ComplexFn"
     EQUALS "="
     TYPE_EXPR
@@ -331,7 +331,7 @@ SOURCE_FILE
         WORD "string"
         QUESTION "?"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "UnionParamFn"
     EQUALS "="
     TYPE_EXPR
@@ -348,7 +348,7 @@ SOURCE_FILE
       TYPE_EXPR "bool"
         WORD "bool"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "FnFactory"
     EQUALS "="
     TYPE_EXPR
@@ -370,7 +370,7 @@ SOURCE_FILE
         TYPE_EXPR "int"
           WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "LongUnion"
     EQUALS "="
     TYPE_EXPR
@@ -434,7 +434,7 @@ SOURCE_FILE
         WORD "lima"
         QUOTE """
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "WideUnion"
     EQUALS "="
     TYPE_EXPR
@@ -480,7 +480,7 @@ SOURCE_FILE
           WORD "string"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ThisIsAnExtremelyLongTypeAliasNameThatDefinitelyExceedsLimit"
     EQUALS "="
     TYPE_EXPR "int | string | bool | float | null"
@@ -494,7 +494,7 @@ SOURCE_FILE
       PIPE "|"
       WORD "null"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "VeryLongNamePlusLongUnion"
     EQUALS "="
     TYPE_EXPR
@@ -543,7 +543,7 @@ SOURCE_FILE
         WORD "india"
         QUOTE """
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "DeepGeneric"
     EQUALS "="
     TYPE_EXPR
@@ -589,7 +589,7 @@ SOURCE_FILE
             GREATER ">"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "DeepFnType"
     EQUALS "="
     TYPE_EXPR
@@ -643,7 +643,7 @@ SOURCE_FILE
                   WORD "bool"
                 GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "LongParamFn"
     EQUALS "="
     TYPE_EXPR
@@ -694,7 +694,7 @@ SOURCE_FILE
       TYPE_EXPR "string"
         WORD "string"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "NestedParenUnion"
     EQUALS "="
     TYPE_EXPR
@@ -720,7 +720,7 @@ SOURCE_FILE
       L_BRACKET "["
       R_BRACKET "]"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "DeepParenUnion"
     EQUALS "="
     TYPE_EXPR
@@ -761,7 +761,7 @@ SOURCE_FILE
       R_BRACKET "]"
       QUESTION "?"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Tree"
     EQUALS "="
     TYPE_EXPR
@@ -805,7 +805,7 @@ SOURCE_FILE
             GREATER ">"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "OptionalArray"
     EQUALS "="
     TYPE_EXPR "int?[]"
@@ -814,7 +814,7 @@ SOURCE_FILE
       L_BRACKET "["
       R_BRACKET "]"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ArrayOptional"
     EQUALS "="
     TYPE_EXPR "int[]?"
@@ -823,7 +823,7 @@ SOURCE_FILE
       R_BRACKET "]"
       QUESTION "?"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "DoubleOptional"
     EQUALS "="
     TYPE_EXPR "int??"
@@ -831,7 +831,7 @@ SOURCE_FILE
       QUESTION "?"
       QUESTION "?"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "DoubleArray"
     EQUALS "="
     TYPE_EXPR "int[][]"
@@ -841,7 +841,7 @@ SOURCE_FILE
       L_BRACKET "["
       R_BRACKET "]"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ComplexPostfix"
     EQUALS "="
     TYPE_EXPR
@@ -858,7 +858,7 @@ SOURCE_FILE
       L_BRACKET "["
       R_BRACKET "]"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "DeepPostfix"
     EQUALS "="
     TYPE_EXPR
@@ -902,7 +902,7 @@ SOURCE_FILE
         WORD "string"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Result"
     EQUALS "="
     TYPE_EXPR "TypeAliasSuccess | TypeAliasFailure"
@@ -910,14 +910,14 @@ SOURCE_FILE
       PIPE "|"
       WORD "TypeAliasFailure"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "MaybeResult"
     EQUALS "="
     TYPE_EXPR "Result?"
       WORD "Result"
       QUESTION "?"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaAlias"
     EQUALS "="
     TYPE_EXPR "// 6 equals trailing
@@ -925,7 +925,7 @@ SOURCE_FILE
 int"
       WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaAliasBlock"
     EQUALS "="
     TYPE_EXPR "/* 6 equals trailing */
@@ -933,7 +933,7 @@ int"
 int"
       WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaUnion"
     EQUALS "="
     TYPE_EXPR "// 1 first member leading
@@ -952,7 +952,7 @@ int"
       PIPE "|"
       WORD "bool"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaUnionBlock"
     EQUALS "="
     TYPE_EXPR "/* 1 first member leading */
@@ -971,7 +971,7 @@ int"
       PIPE "|"
       WORD "bool"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaLongUnion"
     EQUALS "="
     TYPE_EXPR
@@ -1015,7 +1015,7 @@ int"
         WORD "hotel"
         QUOTE """
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaLongUnionBlock"
     EQUALS "="
     TYPE_EXPR
@@ -1059,7 +1059,7 @@ int"
         WORD "hotel"
         QUOTE """
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaGeneric"
     EQUALS "="
     TYPE_EXPR
@@ -1077,7 +1077,7 @@ int"
           WORD "int"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaGenericBlock"
     EQUALS "="
     TYPE_EXPR
@@ -1095,7 +1095,7 @@ int"
           WORD "int"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaDeepGeneric"
     EQUALS "="
     TYPE_EXPR
@@ -1138,7 +1138,7 @@ int"
             GREATER ">"
         GREATER ">"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaFnType"
     EQUALS "="
     TYPE_EXPR
@@ -1157,7 +1157,7 @@ int"
     string"
         WORD "string"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaFnTypeBlock"
     EQUALS "="
     TYPE_EXPR
@@ -1176,7 +1176,7 @@ int"
     string"
         WORD "string"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaLongFnType"
     EQUALS "="
     TYPE_EXPR
@@ -1229,7 +1229,7 @@ int"
     string"
         WORD "string"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaOptional"
     EQUALS "="
     TYPE_EXPR "int // 1 base type trailing
@@ -1238,7 +1238,7 @@ int"
       WORD "int"
       QUESTION "?"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaArray"
     EQUALS "="
     TYPE_EXPR "int // 1 base type trailing
@@ -1250,7 +1250,7 @@ int"
       L_BRACKET "["
       R_BRACKET "]"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "TriviaParen"
     EQUALS "="
     TYPE_EXPR
@@ -1269,13 +1269,13 @@ int"
       L_BRACKET "["
       R_BRACKET "]"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "T"
     EQUALS "="
     TYPE_EXPR "int"
       WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ExtraWhitespace"
     EQUALS "="
     TYPE_EXPR "int   |   string   |   bool   |   float   |   null"

@@ -149,8 +149,8 @@ fn local_definition_location(
             let range = sig_map.param_spans.get(param_idx).copied()?;
             Some(Location { file, range })
         }
-        DefinitionSite::PatternBinding(pat_id) | DefinitionSite::CatchBinding(pat_id) => {
-            // Navigate to the pattern / catch binding.
+        DefinitionSite::PatternBinding(pat_id) => {
+            // Navigate to the pattern binding.
             let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
             let range = source_map.pattern_span(pat_id);
             Some(Location { file, range })
@@ -423,54 +423,11 @@ fn resolve_field_access_at(
                 range: *name_range,
             })
         }
-        MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
-            // A virtual interface-method call: only the slot (interface + name) is
-            // known statically, so navigate to the declaration in the interface —
-            // the required signature, or the default method's definition.
-            let target_file = iface_loc.file(db);
-            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
-            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
-            let iface = &target_item_tree[iface_loc.id(db)];
-            if let Some(method_idx) = iface
-                .required_methods
-                .iter()
-                .position(|m| m.name == *method)
-            {
-                let method_spans = target_source_map
-                    .interface_method_spans
-                    .get(&iface_loc.id(db))?;
-                return Some(Location {
-                    file: target_file,
-                    range: method_spans[method_idx],
-                });
-            }
-            let default_id = iface
-                .default_methods
-                .iter()
-                .copied()
-                .find(|&fn_id| target_item_tree[fn_id].name == *method)?;
-            let name_range = target_source_map.function_name_spans.get(&default_id)?;
-            Some(Location {
-                file: target_file,
-                range: *name_range,
-            })
-        }
-        MemberResolution::InterfaceVirtualField { iface_loc, field } => {
-            // A virtual interface-field access: navigate to the field declaration
-            // in the declaring interface.
-            let target_file = iface_loc.file(db);
-            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
-            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
-            let iface = &target_item_tree[iface_loc.id(db)];
-            let field_idx = iface.fields.iter().position(|f| f.name == *field)?;
-            let field_spans = target_source_map
-                .interface_field_spans
-                .get(&iface_loc.id(db))?;
-            Some(Location {
-                file: target_file,
-                range: field_spans[field_idx],
-            })
-        }
+        // A virtual interface method/field resolves only to a slot (the interface
+        // and the member name), not to a statically-known body or class field, so
+        // there is no single definition site to jump to.
+        MemberResolution::InterfaceVirtualMethod { .. }
+        | MemberResolution::InterfaceVirtualField { .. } => None,
     }
 }
 
