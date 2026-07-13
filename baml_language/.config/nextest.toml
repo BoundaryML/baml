@@ -42,3 +42,11 @@ setup = 'python_pydantic2_uv_unix'
 filter = 'package(=sdk_test_python_pydantic2)'
 platform = { host = 'cfg(windows)' }
 setup = 'python_pydantic2_uv_win'
+
+[scripts.setup.go_bridge_unix]
+command = './sdk_tests/crates/go/setup.sh'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_go)'
+platform = { host = 'cfg(unix)' }
+setup = 'go_bridge_unix'

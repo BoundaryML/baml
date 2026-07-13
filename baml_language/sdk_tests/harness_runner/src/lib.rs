@@ -53,6 +53,39 @@ pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var:
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
 
+/// Run the Go toolchain against one generated fixture. Prefer the repository's
+/// mise-managed Go binary so a globally installed `go` cannot accidentally use
+/// a different GOROOT than the pinned compiler.
+pub fn run_go_test(fixture: &str) {
+    let manifest = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
+    );
+    let dir = manifest.join(fixture).join("generated");
+    let workspace_root = workspace_root_from_manifest(&manifest);
+    let go = resolve_mise_tool("go").unwrap_or_else(|_| PathBuf::from("go"));
+
+    let output = Command::new(&go)
+        .args(["test", "./..."])
+        .current_dir(&dir)
+        .env_remove("GOROOT")
+        .env("CGO_ENABLED", "1")
+        .env("GOCACHE", workspace_root.join("target/go-build-cache"))
+        .env("GOMODCACHE", workspace_root.join("target/go-mod-cache"))
+        .output()
+        .unwrap_or_else(|e| {
+            panic!(
+                "failed to spawn `{}` for fixture `{fixture}`: {e}",
+                go.display()
+            )
+        });
+    assert!(
+        output.status.success(),
+        "fixture `{fixture}` `go test ./...` failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// Run a toolchain command from a workspace-relative directory. Used for
 /// package-level checks that do not belong to a generated fixture app.
 pub fn run_workspace_cmd(relative_dir: &str, cmd: &str, cache_subdir: &str, cache_env_var: &str) {
@@ -281,12 +314,16 @@ fn run_test_process(
 }
 
 fn resolve_mise_uv() -> io::Result<PathBuf> {
-    let output = Command::new("mise").args(["which", "uv"]).output()?;
+    resolve_mise_tool("uv")
+}
+
+fn resolve_mise_tool(tool: &str) -> io::Result<PathBuf> {
+    let output = Command::new("mise").args(["which", tool]).output()?;
     if !output.status.success() {
         return Err(io::Error::new(
             ErrorKind::NotFound,
             format!(
-                "`uv` is not on PATH and `mise which uv` failed:\n{}.",
+                "`{tool}` is not on PATH and `mise which {tool}` failed:\n{}.",
                 String::from_utf8_lossy(&output.stderr)
             ),
         ));
@@ -296,7 +333,7 @@ fn resolve_mise_uv() -> io::Result<PathBuf> {
     if path.is_empty() {
         return Err(io::Error::new(
             ErrorKind::NotFound,
-            "`uv` is not on PATH and `mise which uv` returned an empty path",
+            format!("`{tool}` is not on PATH and `mise which {tool}` returned an empty path"),
         ));
     }
 
@@ -460,4 +497,16 @@ pub mod typescript_node {
     }
 
     pub use crate::typescript_node_test_suite as test_suite;
+}
+
+/// Go generator's test-side glue.
+pub mod go {
+    #[macro_export]
+    macro_rules! go_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/go_tests.rs"));
+        };
+    }
+
+    pub use crate::go_test_suite as test_suite;
 }

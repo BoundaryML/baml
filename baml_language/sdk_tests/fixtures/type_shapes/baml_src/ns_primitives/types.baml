@@ -31,6 +31,12 @@ function return_bool() -> bool {
   true
 }
 
+// Keep bigint standalone for now so primitive function codegen is covered
+// without changing the shared Primitives class fixtures in other SDKs.
+function return_bigint() -> bigint {
+  12345678901234567890n
+}
+
 function return_null() -> null {
   null
 }
@@ -52,6 +58,10 @@ function round_trip_string(x: string) -> string {
 }
 
 function round_trip_bool(x: bool) -> bool {
+  x
+}
+
+function round_trip_bigint(x: bigint) -> bigint {
   x
 }
 

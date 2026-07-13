@@ -132,6 +132,47 @@ pub fn initialize_runtime_from_bytecode(bytecode: &[u8]) -> Result<Arc<dyn Bex>,
     Ok(rt)
 }
 
+/// Initialize the global runtime from serialized BAML bytecode over the C ABI.
+///
+/// An empty buffer means success. On failure, the returned buffer contains a
+/// UTF-8 error message and must be released with [`free_buffer`]. Keeping the
+/// error in an owned buffer gives host bridges useful diagnostics without
+/// introducing a process-global "last error" slot.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[unsafe(no_mangle)]
+pub extern "C" fn initialize_runtime_from_bytecode_ffi(
+    bytecode: *const u8,
+    length: usize,
+) -> Buffer {
+    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        if bytecode.is_null() && length != 0 {
+            return Err(BridgeError::Internal(
+                "bytecode pointer is null but length is nonzero".to_string(),
+            ));
+        }
+
+        let bytes = if length == 0 {
+            &[]
+        } else {
+            unsafe { std::slice::from_raw_parts(bytecode, length) }
+        };
+        initialize_runtime_from_bytecode(bytes).map(|_| ())
+    }));
+
+    match result {
+        Ok(Ok(())) => Buffer::from(Vec::new()),
+        Ok(Err(error)) => Buffer::from(error.to_string().into_bytes()),
+        Err(panic_info) => {
+            let message = panic_info
+                .downcast_ref::<&str>()
+                .map(|message| (*message).to_string())
+                .or_else(|| panic_info.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic while initializing BAML bytecode".to_string());
+            Buffer::from(format!("panic while initializing BAML bytecode: {message}").into_bytes())
+        }
+    }
+}
+
 fn replace_runtime(rt: Arc<dyn Bex>) -> Result<(), BridgeError> {
     let mut guard = RUNTIME_INSTANCE
         .write()
