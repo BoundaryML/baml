@@ -1,5 +1,5 @@
 interface Labels {
-  function label(self, value: bool) -> string {
+  function label(self, value: bool) -> string throws never {
     return match (value) {
       true => "yes"
     }

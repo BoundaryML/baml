@@ -91,10 +91,8 @@ impl TestArgs {
             .ok_or_else(|| anyhow!("No project context"))?;
 
         // ── 2. Diagnostics ─────────────────────────────────────────────────
-        // One "Compiling" spinner stays up for the whole diagnostics +
-        // bytecode-build span below; a separate "Checking" line (or a second
-        // "Compiling") would just repeat the file count.
-        reporter.spin("Compiling", format!("{} file(s)", baml_files.len()));
+        // Keep `baml test` quiet during the compile phase. `baml check` and
+        // `baml generate` own the compile/count progress lines.
         let source_files = db.get_source_files();
         let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
         let errors: Vec<_> = diagnostics
@@ -127,8 +125,6 @@ impl TestArgs {
         let legacy = discover_legacy_tests(&db, project);
 
         // ── 4. Compile + engine + runtime ──────────────────────────────────
-        // The "Compiling N file(s)" spinner from step 2 is still up — no need
-        // to re-issue it here.
         let compile_options = baml_compiler2_emit::CompileOptions {
             emit_test_cases: true,
         };
@@ -499,6 +495,20 @@ fn consume_flat_report(
     *tolerated += flat.tolerated;
     *total += flat.total;
 
+    // An empty selection (a filter that matched no testset tests) aggregates
+    // to a vacuous `pass` over zero tests. Printing a green `PASS testing::*`
+    // for that contradicts the `NoTestsRun` exit the caller then returns and
+    // reads as success to anything parsing stdout, so skip the aggregate line
+    // entirely and let the caller's "no tests selected" guard speak.
+    //
+    // Guard *only* the vacuous-pass case: a zero-test report with a non-pass
+    // outcome must still fall through to the FAIL branch so it prints, sets
+    // `command_failed`, and synthesizes a displayed failure — a real failure
+    // is never silently dropped just because it carried no leaves.
+    if flat.total == 0 && flat.outcome == "pass" {
+        return;
+    }
+
     if flat.outcome == "pass" {
         if flat.tolerated > 0 {
             println!(
@@ -769,6 +779,29 @@ mod tests {
             &mut command_failed,
         );
         (passed, failed, tolerated, total, command_failed)
+    }
+
+    #[test]
+    fn consume_empty_report_folds_zero_counts_without_printing_pass() {
+        // A no-match selector aggregates to a vacuous `pass` over zero tests.
+        // Folding it must leave every counter at zero (so the caller's
+        // `total == 0` guard fires "no tests selected") and must NOT print a
+        // green `PASS testing::*` line contradicting the non-zero exit (B-628).
+        let parsed =
+            parse_flat_report(&flat_report("pass", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
+        assert_eq!(consume(&parsed), (0, 0, 0, 0, false));
+    }
+
+    #[test]
+    fn consume_empty_report_with_fail_outcome_still_propagates_failure() {
+        // The vacuous-pass skip must NOT swallow a zero-test report that
+        // reports a failure. A `total == 0 && outcome == "fail"` report has to
+        // fall through to the FAIL branch: it sets `command_failed` and
+        // synthesizes one displayed failure (so the summary isn't "0 failed"
+        // while the aggregate failed). Regression guard for the narrowed guard.
+        let parsed =
+            parse_flat_report(&flat_report("fail", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
+        assert_eq!(consume(&parsed), (0, 1, 0, 1, true));
     }
 
     #[test]

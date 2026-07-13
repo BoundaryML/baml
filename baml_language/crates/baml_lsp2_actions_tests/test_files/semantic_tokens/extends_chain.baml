@@ -7,11 +7,11 @@ interface HasName {
 }
 
 interface Greeter requires HasName {
-  function greet(self) -> string
+  function greet(self) -> string throws never
 }
 
 interface Polite requires Greeter {
-  function farewell(self) -> string
+  function farewell(self) -> string throws never
 }
 
 class Robot {
@@ -48,6 +48,8 @@ class Robot {
 // extends_chain.baml:10:12 (method) [declaration] len=5 "greet"
 // extends_chain.baml:10:18 (parameter) [declaration] len=4 "self"
 // extends_chain.baml:10:27 (type) [defaultLibrary] len=6 "string"
+// extends_chain.baml:10:34 (keyword) len=6 "throws"
+// extends_chain.baml:10:41 (type) [defaultLibrary] len=5 "never"
 // extends_chain.baml:13:1 (keyword) len=9 "interface"
 // extends_chain.baml:13:11 (interface) [declaration] len=6 "Polite"
 // extends_chain.baml:13:18 (keyword) len=8 "requires"
@@ -56,6 +58,8 @@ class Robot {
 // extends_chain.baml:14:12 (method) [declaration] len=8 "farewell"
 // extends_chain.baml:14:21 (parameter) [declaration] len=4 "self"
 // extends_chain.baml:14:30 (type) [defaultLibrary] len=6 "string"
+// extends_chain.baml:14:37 (keyword) len=6 "throws"
+// extends_chain.baml:14:44 (type) [defaultLibrary] len=5 "never"
 // extends_chain.baml:17:1 (keyword) len=5 "class"
 // extends_chain.baml:17:7 (class) [declaration] len=5 "Robot"
 // extends_chain.baml:18:3 (property) [declaration] len=4 "name"

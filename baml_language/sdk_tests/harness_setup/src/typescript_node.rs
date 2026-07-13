@@ -51,7 +51,7 @@ use crate::{
 
 /// Per-fixture package.json. `__PACKAGE_NAME__` is substituted per
 /// fixture. The dev toolchain (vitest + typescript + types)
-/// plus the BAML runtime dep on `@boundaryml/baml-core-node` (which
+/// plus the BAML runtime dep on `@boundaryml/baml-bridge` (which
 /// `file:`-points at the bridge_nodejs source tree five levels up:
 /// `crates/typescript_node/<F>/generated/` →
 /// `crates/typescript_node/<F>/` → `crates/typescript_node/` →

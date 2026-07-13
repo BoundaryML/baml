@@ -85,10 +85,7 @@ use std::{
 
 use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
-use ::bex_vm_types::{
-    RootHaver,
-    types::{FutureId, InterfaceImplsByPackage},
-};
+use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 pub use bex_events::{
@@ -509,7 +506,7 @@ fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]
             loc.function_name.as_str(),
         )
     }));
-    write!(out, "uncaught throw: {value:?}").unwrap();
+    write!(out, "uncaught throw: {}", value.render_readable()).unwrap();
     out
 }
 
@@ -686,11 +683,16 @@ pub struct BexEngine {
 
     futures: FutureManager,
 
-    /// Per-program interface-impl registry (BEP-044), kept here so every spawned
-    /// VM (including post-`$init` workers) sees the same map without cloning the
-    /// underlying `IndexMap`. Drives the interface-method resolver and `type`
-    /// reflection.
-    interface_impls: Arc<InterfaceImplsByPackage>,
+    /// Loaded packages (name → `Object::Package` pointer), shared with every VM
+    /// so spawned workers see the same index. The source of truth for interface
+    /// dispatch, recursive aliases, and named-item lookup.
+    packages: Arc<indexmap::IndexMap<baml_type::Name, bex_vm_types::HeapPtr>>,
+
+    /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
+    /// from `packages` and shared with every spawned VM (each `BexVm` would
+    /// otherwise re-resolve them from `packages` on construction).
+    error_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
+    panic_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
 
     /// Snapshot of the `BAML_PROFILE` master switch, taken once at
     /// construction (the config is read-once per process). Gates every
@@ -1365,8 +1367,20 @@ impl BexEngine {
             })
             .collect();
 
-        // Create the unified heap with compile-time objects
-        let heap = BexHeap::new(compile_time_objects);
+        // Create the unified heap with compile-time objects, additionally
+        // allocating the per-package `Object::Package` / `Object::ImplRule`
+        // objects and the `vm.packages` index.
+        let (heap, vm_packages) = bex_vm::package_load::build_heap_with_packages(
+            compile_time_objects,
+            &bytecode.packages,
+        );
+        // Shared with every VM so spawned workers see the same package index
+        // without re-resolving it.
+        let packages = Arc::new(vm_packages);
+        // Resolve the builtin error/panic class pointers once; shared with every
+        // spawned VM rather than re-resolved per `BexVm::new`.
+        let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
+        let panic_class_ptrs = bex_vm::vm::resolve_panic_class_ptrs(&packages);
 
         // Convert ObjectIndex -> HeapPtr for function lookup table.
         // Now that the heap exists, we can get stable pointers to compile-time objects.
@@ -1419,9 +1433,6 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
-        let interface_impls: Arc<InterfaceImplsByPackage> =
-            Arc::new(bytecode.interface_impls.clone());
-
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -1431,15 +1442,12 @@ impl BexEngine {
                 let mut vm = BexVm::new(
                     Arc::clone(&heap),
                     VmGlobals::Owned(globals_pool.clone()),
-                    resolved_class_names
-                        .iter()
-                        .chain(resolved_enum_names.iter())
-                        .map(|(k, v)| (k.clone(), *v))
-                        .collect(),
                     #[cfg(not(target_arch = "wasm32"))]
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
-                    Arc::clone(&interface_impls),
+                    Arc::clone(&packages),
+                    Arc::clone(&error_class_ptrs),
+                    Arc::clone(&panic_class_ptrs),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -1541,7 +1549,9 @@ impl BexEngine {
             template_strings_macros: Arc::new(bytecode.template_strings_macros),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
-            type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
+            type_alias_definitions: Arc::new(bex_vm::package_load::all_recursive_type_aliases(
+                &packages,
+            )),
             runtime_io,
         };
 
@@ -1566,7 +1576,9 @@ impl BexEngine {
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
-            interface_impls,
+            packages,
+            error_class_ptrs,
+            panic_class_ptrs,
             prof_enabled,
         })
     }
@@ -2353,8 +2365,11 @@ impl BexEngine {
             })
             .collect::<Result<_, EngineError>>()?;
 
-        // Create the root thread (shared heap, own TLAB) and acquire its permit.
-        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
+        // Create the root thread (shared heap, own TLAB) and acquire its
+        // permit. This named-entry path is the genuine top-level root run.
+        let mut thread = self
+            .new_root_thread(cancel.clone(), profile_enabled, true)
+            .await;
 
         // Reuse the (substituted) `param_types` to thread the expected
         // `RuntimeTy` into per-arg VM conversion. Binding a `HostValue` to an
@@ -2401,25 +2416,27 @@ impl BexEngine {
 
     /// Build a fresh root [`BexThread`] over the shared heap and acquire its
     /// heap permit. Shared by the named-entry (`call_function_bound_args`) and
-    /// callable-entry (`call_callable`) paths.
+    /// callable-entry (`call_callable`) paths. `is_top_level_root` marks the
+    /// genuine top-level entry run so only it runs the B-650 end-of-run wait —
+    /// the named-entry path passes `true`, the callable-entry path (nested
+    /// host-invoked callables such as HTTP handlers) passes `false`. See
+    /// [`BexThread::is_top_level_root`].
     async fn new_root_thread(
         self: &Arc<Self>,
         cancel: CancellationToken,
         profile_enabled: bool,
+        is_top_level_root: bool,
     ) -> ActiveHeapPermit<BexThread> {
         // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
         let vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_impls),
+            Arc::clone(&self.packages),
+            Arc::clone(&self.error_class_ptrs),
+            Arc::clone(&self.panic_class_ptrs),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
@@ -2440,7 +2457,7 @@ impl BexEngine {
         // straight-line into run_thread_event_loop, whose every exit path
         // emits the EndThread), and the snapshot at the same spot plus each
         // loop-head resume.
-        let root_thread = BexThread::new_root(vm, cancel);
+        let root_thread = BexThread::new_root(vm, cancel, is_top_level_root);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
     }
@@ -2640,7 +2657,16 @@ impl BexEngine {
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
-        let mut thread = self.new_root_thread(cancel.clone(), profile_enabled).await;
+        // A by-value callable invocation is a NESTED host-invoked run (an HTTP
+        // request handler dispatched via `spawn_with_callable`, or any host
+        // callback), never the genuine top-level entry — even though it, like
+        // the real root, has `settles_future == None`. Marking it non-root keeps
+        // it from running the B-650 end-of-run wait, which would park forever on
+        // the outer run's still-`Pending` `serve` spawn (B-650 `baml test`
+        // hang).
+        let mut thread = self
+            .new_root_thread(cancel.clone(), profile_enabled, false)
+            .await;
 
         // Resolve the handle to the live heap object. The handle keeps it rooted.
         let entry_ptr = self
@@ -3350,8 +3376,25 @@ impl BexEngine {
         value: Value,
     ) -> Result<(), EngineError> {
         let child_cancel = thread.vm_thread_cancel().clone();
-        let mut guard = self.futures.acquire(thread.proof()).await;
-        let settled_ptr = guard.future_heap_ptr(future_id);
+        let settled_ptr = {
+            let guard = self.futures.acquire(thread.proof()).await;
+            guard.future_heap_ptr(future_id)
+        };
+        // B-650: enqueue the parent-queue entry BEFORE deferring the error.
+        // `defer_error` fires the future's `ready` wake, and the end-of-run
+        // wait (`wait_for_outstanding_child_futures`) parks on that wake. The
+        // wake is set (Release) after this enqueue in program order on this
+        // child thread, and the joiner re-acquires the heap permit (Acquire)
+        // after its wait returns — so the queue entry is guaranteed visible to
+        // the joiner's post-wait drain. Enqueuing AFTER the wake (the previous
+        // order) left a window where the racing waiter saw an empty queue and
+        // dropped the error — the whole point of B-650. This is safe for the
+        // ordinary awaiter path too: the queue entry is only ever *consumed*
+        // (via `future_ready` / `remove_matching`), so its earlier presence
+        // changes nothing.
+        if let Some(ptr) = settled_ptr {
+            thread.vm_thread_notify_parent_of_error(future_id, ptr);
+        }
         // BEP-034 fire-and-forget: DEFER the error instead of settling the
         // heap `Future` to `Error` here. The future stays `Pending` (wake
         // signal fired), so any awaiter — including a sibling task — observes
@@ -3361,12 +3404,11 @@ impl BexEngine {
         // eagerly instead would let a sibling's `await`+`catch` run entirely
         // inside the VM (invisible to the engine), leaving the queue entry to
         // re-surface an already-handled error at the spawner.
-        guard.defer_error(future_id, value)?;
-        drop(guard);
-        child_cancel.cancel();
-        if let Some(ptr) = settled_ptr {
-            thread.vm_thread_notify_parent_of_error(future_id, ptr);
+        {
+            let mut guard = self.futures.acquire(thread.proof()).await;
+            guard.defer_error(future_id, value)?;
         }
+        child_cancel.cancel();
         Ok(())
     }
 
@@ -3539,10 +3581,22 @@ impl BexEngine {
             let _ = trace;
             return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
         }
-        let external = if let Some(ty) = throws_type {
-            self.convert_vm_value_to_external_with_type(value, ty, thread.proof())?
-        } else {
-            self.vm_value_to_owned(thread.proof(), value)
+        // A panic escaping all in-BAML catches to the host is an
+        // engine-level failure mode, not a value the function opted into
+        // via `throws` — so it must bypass the declared-throws re-typing and
+        // route through `vm_value_to_owned` (the same branch used when there
+        // is no `throws` clause). Re-typing it against a 2+-member throws
+        // union would call `find_matching_member`, which never matches a
+        // `baml.panics.*` instance and would surface an internal
+        // `TypeMismatch` leak instead of the clean panic. This mirrors the
+        // panic bypass in [`enforce_host_throw_contract`].
+        let value_is_panic = value_runtime_baml_ty(value, thread.proof())
+            .is_some_and(|rt| matches!(&rt, RuntimeTy::Class(name, _, _) if name.is_panic_type()));
+        let external = match throws_type {
+            Some(ty) if !value_is_panic => {
+                self.convert_vm_value_to_external_with_type(value, ty, thread.proof())?
+            }
+            _ => self.vm_value_to_owned(thread.proof(), value),
         };
         // `baml.panics.Exit { code }` escaping all handlers is the clean-
         // termination path — surface as Exit so the host maps it to a
@@ -3863,15 +3917,12 @@ impl BexEngine {
         let mut child_vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_impls),
+            Arc::clone(&self.packages),
+            Arc::clone(&self.error_class_ptrs),
+            Arc::clone(&self.panic_class_ptrs),
         );
         child_vm.prof_thread_id = prof_thread_id;
         child_vm.prof_suppressed = prof_suppressed;
@@ -4021,6 +4072,82 @@ impl BexEngine {
                 return Ok(Some(value));
             }
             // Already observed by an awaiter — skip and keep draining.
+        }
+    }
+
+    /// B-650: end-of-run wait. Before the root finalizes, WAIT for every
+    /// outstanding spawned child future to run to completion, so a *racing*
+    /// unhandled error — a `spawn { throw ... }` whose tokio task had not been
+    /// polled yet when the root reached `Complete` — is deterministically
+    /// enqueued before the caller's [`Self::drain_one_pending_child_error`].
+    /// Without this the child's error was silently dropped when the root exited
+    /// 0 (B-612 fixed only the case where the child had ALREADY thrown by the
+    /// time the root completed).
+    ///
+    /// **Scope: non-detached spawns only.** A `detach = true` spawn is
+    /// contractually decoupled from its spawner and outlives the run that
+    /// created it ("behaves like a top-level task"); its unhandled error routes
+    /// to the root and is logged if the root is already gone. Waiting on a
+    /// detached spawn here contradicts that contract and deadlocks any
+    /// long-lived detached task designed to span calls — notably the SDK's
+    /// `replay_serve_detached`, whose detached `serve` is only torn down by a
+    /// *later*, separate bridge call and so can never settle while this call is
+    /// still parked on it (the sdk-test hang). Detached spawns are therefore
+    /// excluded by [`FutureManagerGuard::pending_join_handles`]; a
+    /// non-detached fire-and-forget spawn remains this run's in-flight work and
+    /// IS waited-for, so its racing/delayed throw still surfaces.
+    ///
+    /// **WAIT, do not cancel** (for the non-detached spawns we do wait on) —
+    /// the Node.js "run until there is no pending work" model (BEP-034
+    /// end-of-run amendment). We fire no cancel token: a prototype that
+    /// cancelled outstanding work at shutdown was rejected because it injected
+    /// `Cancelled` into legitimate background work (an `all_complete` loser
+    /// whose side effects must finish) and broke the `baml test` harness. A
+    /// non-detached spawn that never settles (never awaited, never cancelled)
+    /// blocks the process at exit; that is the amendment's deliberate red flag
+    /// for a concurrency bug (locate it with tracing), not a case we paper over
+    /// by cancelling. This also preserves the "returning futures is safe"
+    /// guarantee — nothing outstanding is torn down on normal exit.
+    ///
+    /// Loops until no strictly-`Pending` future remains, re-snapshotting to
+    /// catch grandchildren spawned while we waited.
+    ///
+    /// Deadlock-free: the heap permit is released before parking on the settles
+    /// (the wait is a safepoint), mirroring the `Await` arm, so a child task can
+    /// acquire a permit to write the heap and settle its future while we park.
+    /// No lock or permit the children need to make progress is held across the
+    /// wait — the `FutureManager` guard is dropped after the snapshot, and the
+    /// cloned `Arc<SetOnce>` wake handles survive any GC relocation of their
+    /// heap `Future`s (the moved copy shares the same `Arc`).
+    async fn wait_for_outstanding_child_futures(
+        self: &Arc<Self>,
+        mut thread: ActiveHeapPermit<BexThread>,
+    ) -> Result<ActiveHeapPermit<BexThread>, EngineError> {
+        // Scope the wait to THIS run's own spawns: the `FutureManager` is shared
+        // across every concurrent run on the engine, so we must not park on a
+        // different run's outstanding future. Stable for the life of the thread.
+        let run_id = thread.vm_thread_run_id();
+        loop {
+            let handles = {
+                let guard = self.futures.acquire(thread.proof()).await;
+                guard.pending_join_handles(run_id)
+            };
+            if handles.is_empty() {
+                return Ok(thread);
+            }
+            // Release the heap permit before parking — the wait is the
+            // safepoint (mirrors the `Await` arm). Opportunistically collect
+            // while parked; no permit dance is needed since we're released.
+            let inactive = thread.release();
+            self.maybe_collect_garbage().await;
+            for ready in handles {
+                // `ready` fires on every terminal transition AND on a deferred
+                // (fire-and-forget) error; we only need to know the future
+                // settled, so the payload (an internal-error box surfaced by
+                // the drain / a later `Await`) is discarded here.
+                let _ = ready.wait().await;
+            }
+            thread = inactive.acquire().await;
         }
     }
 
@@ -4227,6 +4354,65 @@ impl BexEngine {
 
                     if cancelled {
                         return Err(cancelled_unhandled_throw());
+                    }
+
+                    // B-650: end-of-run wait. The root is finalizing; WAIT for
+                    // this run's still-outstanding NON-detached spawned child
+                    // futures to run to completion FIRST, so a racing
+                    // `spawn { throw ... }` whose task had not been polled yet
+                    // deterministically parks its error before the drain below.
+                    // Without this, only children that had ALREADY thrown by the
+                    // time the root completed surfaced (B-612); the fully-racing
+                    // case exited 0. We WAIT, never cancel; the wait is scoped to
+                    // this run and skips detached spawns (see
+                    // `wait_for_outstanding_child_futures` /
+                    // `FutureManagerGuard::pending_join_handles`).
+                    //
+                    // Gate on the GENUINE top-level root, NOT on
+                    // `settles_future.is_none()`: a nested host-invoked callable
+                    // (an HTTP request handler running on its own BAML thread via
+                    // `spawn_with_callable` → `call_callable`) is also a
+                    // `settles_future == None` root, so `settles_future.is_none()`
+                    // alone misclassifies it as the finalizing root. It would then
+                    // run this wait during the outer run — and, before per-run
+                    // scoping, park forever on the outer run's still-`Pending`
+                    // `serve` spawn (B-650 `baml test` hang). The shared
+                    // `FutureManager` sees every run's pending futures, so the
+                    // wait must be gated on the true root AND scoped by run id.
+                    if thread.vm_thread_is_top_level_root() {
+                        thread = self.wait_for_outstanding_child_futures(thread).await?;
+                    }
+
+                    // End-of-run drain: the root task is finalizing without
+                    // ever having awaited. Fire-and-forget child errors
+                    // (default spawns whose spawner never awaited, and
+                    // `detach = true` spawns that route their unhandled
+                    // errors to the root task) are parked on this thread's
+                    // `pending_child_errors` queue, which is otherwise drained
+                    // ONLY at `Await` opcodes. Without this, a root that
+                    // completes normally drops the parked error at teardown
+                    // and exits 0, silently swallowing the throw and violating
+                    // the documented `spawn`/`detach` routing contract.
+                    //
+                    // Surface the first still-unobserved child error as an
+                    // `UnhandledThrow` — the exact variant `await f` produces,
+                    // which the host maps to a diagnostic + exit 1.
+                    // `drain_one_pending_child_error` skips errors an awaiter
+                    // already consumed (via the `deferred_errors` stash), so a
+                    // root that DID await (and possibly `catch`) its children
+                    // does not re-surface a handled error. The value is used
+                    // synchronously while the heap permit is still held (same
+                    // safety envelope as the `Await`-arm drain above), so
+                    // there is no GC-rooting concern. This branch is only
+                    // reached on the root path: children settle their future
+                    // and return early above, so `thread` here never settles a
+                    // future.
+                    if let Some(value) = self.drain_one_pending_child_error(&mut thread).await? {
+                        let external = self.vm_value_to_owned(thread.proof(), value);
+                        return Err(EngineError::UnhandledThrow {
+                            value: Box::new(external),
+                            trace: Vec::new(),
+                        });
                     }
 
                     if let Some(capture) = root_capture.as_ref() {
@@ -4616,7 +4802,16 @@ impl BexEngine {
 
                     let future_ptr = {
                         let mut guard = self.futures.acquire(thread.proof()).await;
-                        let (future_id, future_ptr) = guard.new_future(child_cancel.clone());
+                        // Tag the future with `detach` and this run's id so the
+                        // B-650 end-of-run wait can (a) skip detached spawns
+                        // (decoupled, they outlive this run) and (b) scope to a
+                        // single run's own spawns on the shared `FutureManager`
+                        // (see `FutureManagerGuard::pending_join_handles`).
+                        let (future_id, future_ptr) = guard.new_future(
+                            child_cancel.clone(),
+                            detach,
+                            thread.vm_thread_run_id(),
+                        );
                         drop(guard);
                         Arc::clone(self)
                             .spawn_thread(

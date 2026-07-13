@@ -1,7 +1,7 @@
 // BEP-044: `default.method()` is only legal inside an `implements` block.
 
 interface Logger {
-  function log(self, msg: string) -> string {
+  function log(self, msg: string) -> string throws never {
     return "[LOG] " + msg
   }
 }

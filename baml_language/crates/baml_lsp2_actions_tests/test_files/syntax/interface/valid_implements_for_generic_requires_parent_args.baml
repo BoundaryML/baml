@@ -3,7 +3,7 @@
 // sibling `implements Parent<int> for int` provides the required method.
 
 interface Parent<T> {
-  function describe(self) -> string
+  function describe(self) -> string throws never
 }
 
 interface Child<T> requires Parent<T> {}

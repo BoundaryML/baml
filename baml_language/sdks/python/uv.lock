@@ -21,8 +21,8 @@ wheels = [
 ]
 
 [[package]]
-name = "baml-core"
-version = "0.12.1"
+name = "baml-bridge"
+version = "0.14.1"
 source = { editable = "." }
 dependencies = [
     { name = "protobuf" },

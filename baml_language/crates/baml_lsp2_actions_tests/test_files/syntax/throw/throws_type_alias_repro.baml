@@ -39,12 +39,12 @@ function getProfile(req: Request) -> bool throws Errors {
 //     │
 //     │ Note: Error code: E0063
 // ────╯
-// warning: extraneous throws declaration: Errors
+// warning: extraneous throws declaration: AuthenticationError, AuthorizationError, InternalServerError, NotFoundError
 //     ╭─[ throw_throws_type_alias_repro.baml:27:50 ]
 //     │
 //  27 │ function getProfile(req: Request) -> bool throws Errors {
 //     │                                                  ───┬──
-//     │                                                     ╰──── extraneous throws declaration: Errors
+//     │                                                     ╰──── extraneous throws declaration: AuthenticationError, AuthorizationError, InternalServerError, NotFoundError
 //     │
 //     │ Note: Error code: E0097
 // ────╯

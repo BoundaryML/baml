@@ -22,7 +22,7 @@ use std::{panic::AssertUnwindSafe, sync::Arc};
 use bex_project::{Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, RuntimeError};
 use bridge_ctypes::{
     CffiHandleTableOptions,
-    baml_core::cffi::{
+    baml_bridge::cffi::{
         BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, baml_outbound_result,
     },
     external_to_outbound,

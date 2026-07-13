@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 47840
 ---
 === TIR2 ===
 function user.test_return_mismatch() -> int throws never {
@@ -57,8 +58,8 @@ lambda user.test_param_type_mismatch {
 }
 function user.test_unknown_param_type() -> int throws never {
   { : 0
-    let f = : (x: unknown) -> 0 throws never
-      (x: NonExistentType) -> { ... } : (x: unknown) -> 0 throws never
+    let f = : (x: !error) -> 0 throws never
+      (x: NonExistentType) -> { ... } : (x: !error) -> 0 throws never
         {
           0
         }
@@ -70,8 +71,8 @@ lambda user.test_unknown_param_type {
 }
 function user.test_unknown_return_type() -> int throws never {
   { : 0
-    let f = : (x: int) -> unknown throws never
-      (x: int) -> NonExistentType { ... } : (x: int) -> unknown throws never
+    let f = : (x: int) -> !error throws never
+      (x: int) -> NonExistentType { ... } : (x: int) -> !error throws never
         {
           x
         }

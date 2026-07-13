@@ -7,12 +7,12 @@
 //! - `int` — `BamlClassInt` (abs, min, max, clamp, bit ops, ...)
 //! - `string` — `BamlClassString` (length, trim, split, ...)
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
-//! - `math` — `BamlNamespaceMath` (trunc)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
-//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
-//!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
-//!   `_rust_sort` / `_float_total_cmp`)
+//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, the numeric-array
+//!   reductions `_sum_int` / `_sum_float` / `_mean_float` / `_median_float`,
+//!   the saturating `_trunc_to_int`, and the `Sortable.sort` shims
+//!   `_compare_shim` / `_is_primitive_array` / `_rust_sort` / `_float_total_cmp`)
 //!
 //! # Adding a new builtin
 //!
@@ -22,17 +22,17 @@
 mod array;
 pub(crate) mod bigint;
 mod csv;
+mod error_context;
 mod float;
 mod future;
 pub(crate) mod id;
 mod int;
 pub mod json;
 mod map;
-mod math;
 mod media;
 mod ops;
 mod resolve;
-pub(crate) use resolve::{realize_frame, resolve_implements_rule};
+pub(crate) use resolve::{realize_frame, resolve_implements_rule, type_implements};
 mod root;
 mod spawn;
 mod stack_trace;
@@ -265,9 +265,13 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
         })
     })?;
 
+    let type_args = vm.bound_method_curried_type_args(v);
     Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: fn_ptr,
         receiver: v,
+        // A stdlib-dispatched `compare` on `v`'s concrete class; curry its class
+        // type args (→ `Self`) from the receiver, matching a `MakeBoundMethod`.
+        type_args,
     }))
 }
 
@@ -285,9 +289,13 @@ pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr>
     let fn_name = to_string_override_fn_name(vm, v)?;
     let fn_ptr = vm.find_function_by_name(&fn_name)?;
 
+    let type_args = vm.bound_method_curried_type_args(v);
     Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: fn_ptr,
         receiver: v,
+        // A stdlib-dispatched `to_string` override on `v`'s concrete class; curry
+        // its class type args (→ `Self`) from the receiver.
+        type_args,
     }))
 }
 
@@ -329,9 +337,13 @@ pub(super) fn to_string_override_fn_name(vm: &BexVm, v: Value) -> Option<String>
 pub(super) fn make_to_json_override_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr> {
     let fn_name = to_json_override_fn_name(vm, v)?;
     let fn_ptr = vm.find_function_by_name(&fn_name)?;
+    let type_args = vm.bound_method_curried_type_args(v);
     Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: fn_ptr,
         receiver: v,
+        // A stdlib-dispatched `to_json` override on `v`'s concrete class; curry
+        // its class type args (→ `Self`) from the receiver.
+        type_args,
     }))
 }
 

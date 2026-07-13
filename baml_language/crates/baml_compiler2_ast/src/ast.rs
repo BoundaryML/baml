@@ -144,6 +144,13 @@ pub enum TypeExprKind {
     Unknown {
         attrs: Vec<RawAttribute>,
     },
+    /// The wildcard `_` — an inference hole. Valid only where the type at this
+    /// slot can be inferred from context (a generic type argument whose binding
+    /// is fixed by an initializer, or a `throws`-clause member). Lowered to
+    /// `Ty::Infer` and filled during TIR checking.
+    Infer {
+        attrs: Vec<RawAttribute>,
+    },
 }
 
 /// A type expression node paired with its source span. Every node in the tree
@@ -231,7 +238,8 @@ impl TypeExprKind {
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs } => attrs,
+            | Self::Unknown { attrs }
+            | Self::Infer { attrs } => attrs,
         }
     }
 
@@ -260,7 +268,8 @@ impl TypeExprKind {
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs } => attrs,
+            | Self::Unknown { attrs }
+            | Self::Infer { attrs } => attrs,
         }
     }
 }
@@ -402,6 +411,7 @@ impl std::fmt::Display for TypeExprKind {
             TypeExprKind::Rust { .. } => write!(f, "$rust_type"),
             TypeExprKind::Error { .. } => write!(f, "error"),
             TypeExprKind::Unknown { .. } => write!(f, "?"),
+            TypeExprKind::Infer { .. } => write!(f, "_"),
         }
     }
 }
@@ -1788,9 +1798,40 @@ pub struct ConfigItemDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestDef {
     pub name: Name,
-    pub config_items: Vec<ConfigItemDef>,
+    /// Functions targeted by this legacy config-block test.
+    pub function_refs: Vec<Name>,
+    /// Statically declared test arguments.
+    pub args: Vec<(Name, TestArgValue)>,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+/// A JSON-compatible value declared in a legacy test's `args` block.
+///
+/// Floats are stored as bit patterns so the AST remains `Eq`, which is
+/// required by the incremental compiler's early-cutoff comparisons.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TestArgValue {
+    Null,
+    Int(i64),
+    FloatBits(u64),
+    Bool(bool),
+    String(std::string::String),
+    Array(Vec<TestArgValue>),
+    Map(Vec<(std::string::String, TestArgValue)>),
+}
+
+impl TestArgValue {
+    pub fn float(value: f64) -> Self {
+        Self::FloatBits(value.to_bits())
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Self::FloatBits(bits) => Some(f64::from_bits(*bits)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

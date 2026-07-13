@@ -43,4 +43,27 @@ class HasThreeBlockAttributes {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// error: Duplicate attribute `@alias`
+//    ╭─[ class_attributes.baml:7:31 ]
+//    │
+//  7 │   key2 string @alias("key21") @alias("key22")
+//    │               ───────┬─────── ───────┬───────
+//    │                      ╰───────────────────────── `@alias` first applied here
+//    │                                      │
+//    │                                      ╰───────── duplicate `@alias` — only the last takes effect
+//    │
+//    │ Note: Error code: E0014
+// ───╯
+// error: Duplicate attribute `@description`
+//     ╭─[ class_attributes.baml:22:3 ]
+//     │
+//  20 │   @@description("A test")
+//     │   ───────────┬───────────
+//     │              ╰───────────── `@description` first applied here
+//     │
+//  22 │   @@description("A second description")
+//     │   ──────────────────┬──────────────────
+//     │                     ╰──────────────────── duplicate `@description` — only the last takes effect
+//     │
+//     │ Note: Error code: E0014
+// ────╯

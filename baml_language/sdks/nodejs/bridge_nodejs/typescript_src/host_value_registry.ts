@@ -36,9 +36,9 @@
 // no-op since `mintHostValueKey` never returns `0`.
 
 import { mintHostValueKey, registerHostValueReleaseCallback, BamlHandle, type HandleKey } from './native.js';
-import { baml_core } from './proto/baml_cffi.js';
+import { baml_bridge } from './proto/baml_cffi.js';
 
-const BamlHandleType = baml_core.cffi.v1.BamlHandleType;
+const BamlHandleType = baml_bridge.cffi.v1.BamlHandleType;
 
 const hostValueMap = new Map<bigint, unknown>();
 

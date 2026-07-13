@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 use baml_types::BamlMediaContent;
 use chrono::Utc;
-use eventsource_stream::Eventsource;
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
 use gcp_auth::TokenProvider;

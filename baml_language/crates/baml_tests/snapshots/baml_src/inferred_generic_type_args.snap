@@ -78,17 +78,9 @@ function inferred_generic_type_args.$init_test_ns_inferred_generic_type_args_inf
     return
 }
 
-function inferred_generic_type_args.ArrBag$stream.Bag<T>.first(self: inferred_generic_type_args.ArrBag$stream<T>) -> T {
-    load_var self
-    load_field .0
-    load_const 0
-    load_array_element
-    return
-}
-
 function inferred_generic_type_args.ArrBag.Bag<T>.first(self: inferred_generic_type_args.ArrBag<T>) -> T {
     load_var self
-    load_field .0
+    load_field .arr
     load_const 0
     load_array_element
     return
@@ -102,43 +94,12 @@ function inferred_generic_type_args.ArrBag.make(a: T[]) -> inferred_generic_type
     return
 }
 
-function inferred_generic_type_args.ArrIter$stream.NextIter<T, never>.next2(self: inferred_generic_type_args.ArrIter$stream<T>) -> T | inferred_generic_type_args.IterDone {
-    load_type #0
-    load_var self
-    load_field .0
-    load_var self
-    load_field .1
-    call baml.Array.at
-    store_var _2
-    load_var _2
-    load_const null
-    cmp_op ==
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    copy 0
-    load_field .1
-    load_const 1
-    bin_op +
-    store_field .1
-    load_var _2
-    jump L2
-
-  L1:
-    alloc_instance user.inferred_generic_type_args.IterDone
-
-  L2:
-    return
-}
-
 function inferred_generic_type_args.ArrIter.NextIter<T, never>.next2(self: inferred_generic_type_args.ArrIter<T>) -> T | inferred_generic_type_args.IterDone {
     load_type #0
     load_var self
-    load_field .0
+    load_field .arr
     load_var self
-    load_field .1
+    load_field .idx
     call baml.Array.at
     store_var _2
     load_var _2
@@ -150,10 +111,10 @@ function inferred_generic_type_args.ArrIter.NextIter<T, never>.next2(self: infer
   L0:
     load_var self
     copy 0
-    load_field .1
+    load_field .idx
     load_const 1
     bin_op +
-    store_field .1
+    store_field .idx
     load_var _2
     jump L2
 
@@ -172,25 +133,9 @@ function inferred_generic_type_args.ArrIter.of(a: T[]) -> inferred_generic_type_
     return
 }
 
-function inferred_generic_type_args.ArrNamed$stream.Named<T>.first(self: inferred_generic_type_args.ArrNamed$stream<T>) -> T {
-    load_var self
-    load_field .0
-    load_const 0
-    load_array_element
-    return
-}
-
 function inferred_generic_type_args.ArrNamed.Named<T>.first(self: inferred_generic_type_args.ArrNamed<T>) -> T {
     load_var self
-    load_field .0
-    load_const 0
-    load_array_element
-    return
-}
-
-function inferred_generic_type_args.ArrayCursor$stream.Cursor<T>.head(self: inferred_generic_type_args.ArrayCursor$stream<T>) -> T {
-    load_var self
-    load_field .0
+    load_field .arr
     load_const 0
     load_array_element
     return
@@ -198,7 +143,7 @@ function inferred_generic_type_args.ArrayCursor$stream.Cursor<T>.head(self: infe
 
 function inferred_generic_type_args.ArrayCursor.Cursor<T>.head(self: inferred_generic_type_args.ArrayCursor<T>) -> T {
     load_var self
-    load_field .0
+    load_field .arr
     load_const 0
     load_array_element
     return
@@ -212,20 +157,9 @@ function inferred_generic_type_args.ArrayCursor.of(items: T[]) -> inferred_gener
     return
 }
 
-function inferred_generic_type_args.Boxed$stream.Wrap<T>.first(self: inferred_generic_type_args.Boxed$stream<T>) -> T {
-    load_var self
-    load_field .0
-    return
-}
-
 function inferred_generic_type_args.Boxed.Wrap<T>.first(self: inferred_generic_type_args.Boxed<T>) -> T {
     load_var self
-    load_field .0
-    return
-}
-
-function inferred_generic_type_args.Cat$stream.Animal.speak(self: inferred_generic_type_args.Cat$stream) -> string {
-    load_const "meow"
+    load_field .val
     return
 }
 
@@ -242,18 +176,13 @@ function inferred_generic_type_args.Counter.element_type(self: inferred_generic_
 
 function inferred_generic_type_args.Cursor.take_one(self: inferred_generic_type_args.Cursor<T>) -> inferred_generic_type_args.Cursor<T> {
     load_var self
-    load_type inferred_generic_type_args.Cursor<T>
+    load_type inferred_generic_type_args.Cursor<#0>
     load_const "head"
     virtual_call nargs=1 ntypeargs=0
     store_var _2
     load_var _2
     load_type #0
     init_instance<1> user.inferred_generic_type_args.SingleCursor .value
-    return
-}
-
-function inferred_generic_type_args.Dog$stream.Animal.speak(self: inferred_generic_type_args.Dog$stream<T>) -> string {
-    load_const "woof"
     return
 }
 
@@ -269,30 +198,13 @@ function inferred_generic_type_args.Dog.make(v: T) -> inferred_generic_type_args
     return
 }
 
-function inferred_generic_type_args.EchoA$stream.SelfEcho.tag(self: inferred_generic_type_args.EchoA$stream) -> string {
-    load_const "a"
-    return
-}
-
 function inferred_generic_type_args.EchoA.SelfEcho.tag(self: inferred_generic_type_args.EchoA) -> string {
     load_const "a"
     return
 }
 
-function inferred_generic_type_args.EchoB$stream.SelfEcho.tag(self: inferred_generic_type_args.EchoB$stream) -> string {
-    load_const "b"
-    return
-}
-
 function inferred_generic_type_args.EchoB.SelfEcho.tag(self: inferred_generic_type_args.EchoB) -> string {
     load_const "b"
-    return
-}
-
-function inferred_generic_type_args.IntCounter$stream.Counter<T>.describe(self: inferred_generic_type_args.IntCounter$stream<T>) -> string {
-    load_type #0
-    load_var self
-    call user.inferred_generic_type_args.Counter.element_type
     return
 }
 
@@ -303,39 +215,18 @@ function inferred_generic_type_args.IntCounter.Counter<T>.describe(self: inferre
     return
 }
 
-function inferred_generic_type_args.LoneIter$stream.NextIter<T, never>.next2(self: inferred_generic_type_args.LoneIter$stream<T>) -> T | inferred_generic_type_args.IterDone {
-    load_var self
-    load_field .1
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var self
-    load_const true
-    store_field .1
-    load_var self
-    load_field .0
-    jump L2
-
-  L1:
-    alloc_instance user.inferred_generic_type_args.IterDone
-
-  L2:
-    return
-}
-
 function inferred_generic_type_args.LoneIter.NextIter<T, never>.next2(self: inferred_generic_type_args.LoneIter<T>) -> T | inferred_generic_type_args.IterDone {
     load_var self
-    load_field .1
+    load_field .used
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var self
     load_const true
-    store_field .1
+    store_field .used
     load_var self
-    load_field .0
+    load_field .v
     jump L2
 
   L1:
@@ -360,7 +251,7 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
     load_const true
     pop_jump_if_false L2
     load_var self
-    load_type inferred_generic_type_args.NextIter<T, E>
+    load_type inferred_generic_type_args.NextIter<#0, #1>
     load_const "next2"
     virtual_call nargs=1 ntypeargs=0
     store_var _3
@@ -380,32 +271,15 @@ function inferred_generic_type_args.NextIter.collect2(self: inferred_generic_typ
     return
 }
 
-function inferred_generic_type_args.OneBag$stream.Bag<T>.first(self: inferred_generic_type_args.OneBag$stream<T>) -> T {
-    load_var self
-    load_field .0
-    return
-}
-
 function inferred_generic_type_args.OneBag.Bag<T>.first(self: inferred_generic_type_args.OneBag<T>) -> T {
     load_var self
-    load_field .0
-    return
-}
-
-function inferred_generic_type_args.OneNamed$stream.Named<T>.first(self: inferred_generic_type_args.OneNamed$stream<T>) -> T {
-    load_var self
-    load_field .0
+    load_field .only
     return
 }
 
 function inferred_generic_type_args.OneNamed.Named<T>.first(self: inferred_generic_type_args.OneNamed<T>) -> T {
     load_var self
-    load_field .0
-    return
-}
-
-function inferred_generic_type_args.PlainThing$stream.Describable.describe(self: inferred_generic_type_args.PlainThing$stream) -> string {
-    load_const "plain"
+    load_field .only
     return
 }
 
@@ -414,20 +288,9 @@ function inferred_generic_type_args.PlainThing.Describable.describe(self: inferr
     return
 }
 
-function inferred_generic_type_args.ProbeA$stream.TypeProbe.seen(self: inferred_generic_type_args.ProbeA$stream, value: U) -> string {
-    load_type #0
-    call baml.TypeValue.baml.ToString.to_string
-    return
-}
-
 function inferred_generic_type_args.ProbeA.TypeProbe.seen(self: inferred_generic_type_args.ProbeA, value: U) -> string {
     load_type #0
     call baml.TypeValue.baml.ToString.to_string
-    return
-}
-
-function inferred_generic_type_args.ProbeB$stream.TypeProbe.seen(self: inferred_generic_type_args.ProbeB$stream, value: U) -> string {
-    load_const "wrong"
     return
 }
 
@@ -438,35 +301,21 @@ function inferred_generic_type_args.ProbeB.TypeProbe.seen(self: inferred_generic
 
 function inferred_generic_type_args.SelfEcho.nested_self_type(self: inferred_generic_type_args.SelfEcho) -> string {
     load_var self
-    load_type Self
+    load_type _
     alloc_array 1
     call user.inferred_generic_type_args.echo_type
     return
 }
 
-function inferred_generic_type_args.SingleCursor$stream.Cursor<T>.head(self: inferred_generic_type_args.SingleCursor$stream<T>) -> T {
-    load_var self
-    load_field .0
-    return
-}
-
 function inferred_generic_type_args.SingleCursor.Cursor<T>.head(self: inferred_generic_type_args.SingleCursor<T>) -> T {
     load_var self
-    load_field .0
-    return
-}
-
-function inferred_generic_type_args.SrcWrap$stream.Wrap<T>.first(self: inferred_generic_type_args.SrcWrap$stream<T>) -> T {
-    load_var self
-    load_field .0
-    load_const 0
-    load_array_element
+    load_field .value
     return
 }
 
 function inferred_generic_type_args.SrcWrap.Wrap<T>.first(self: inferred_generic_type_args.SrcWrap<T>) -> T {
     load_var self
-    load_field .0
+    load_field .arr
     load_const 0
     load_array_element
     return
@@ -482,19 +331,8 @@ function inferred_generic_type_args.SrcWrap.boxed(self: inferred_generic_type_ar
     return
 }
 
-function inferred_generic_type_args.StrCounter$stream.Counter<T>.describe(self: inferred_generic_type_args.StrCounter$stream<T>) -> string {
-    load_const "str"
-    return
-}
-
 function inferred_generic_type_args.StrCounter.Counter<T>.describe(self: inferred_generic_type_args.StrCounter<T>) -> string {
     load_const "str"
-    return
-}
-
-function inferred_generic_type_args.TypedBox$stream.Describable.describe(self: inferred_generic_type_args.TypedBox$stream<T>) -> string {
-    load_type #0
-    call baml.TypeValue.baml.ToString.to_string
     return
 }
 

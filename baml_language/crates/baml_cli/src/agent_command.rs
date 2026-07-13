@@ -10,10 +10,8 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
 
-use crate::{ExitCode, project_load::find_project_root_from};
+use crate::ExitCode;
 
-const SKILL_SOURCE_URL: &str =
-    "https://codeload.github.com/BoundaryML/baml-skill/tar.gz/refs/heads/main";
 const HTTP_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Args, Clone, Debug)]
@@ -41,17 +39,15 @@ pub(crate) enum AgentCommand {
 pub(crate) struct AgentInstallArgs {
     /// Directory where project-local agent skills should be installed.
     ///
-    /// When omitted, BAML installs at the nearest ancestor with baml.toml,
-    /// then the git root, then the current directory.
+    /// When omitted, BAML installs at the nearest ancestor with baml.toml or
+    /// baml_src within the current git repo (else the repo root); outside a
+    /// git repo, at the nearest such ancestor below your home directory, else
+    /// the current directory.
     #[arg(long, value_name = "PATH")]
     pub dir: Option<PathBuf>,
 
-    /// Install skills from the current BoundaryML/baml-skill main branch.
-    #[arg(long, conflicts_with = "from")]
-    pub latest: bool,
-
     /// Install skills from a tar.gz URL, local tar.gz archive, or local directory.
-    #[arg(long, value_name = "URL_OR_PATH", conflicts_with = "latest")]
+    #[arg(long, value_name = "URL_OR_PATH")]
     pub from: Option<String>,
 }
 
@@ -88,28 +84,45 @@ impl AgentInstallArgs {
             Some(dir) => explicit_install_root(dir)?,
             None => detect_install_root()?,
         };
-        let skills = load_skills(self)?;
-        install_skills(&root, &skills)?;
+        let loaded = load_skills(self)?;
+        install_skills(&root, &loaded.skills)?;
+        match &loaded.commit {
+            Some(commit) => record_installed_commit(commit),
+            None => clear_installed_commit(),
+        }
         print_success(&root)?;
         Ok(ExitCode::Success)
     }
 }
 
-fn load_skills(args: &AgentInstallArgs) -> Result<Vec<Skill>> {
-    if args.latest {
-        let archive = fetch_url_bytes(SKILL_SOURCE_URL)?;
-        return skills_from_archive(&archive);
-    }
+#[derive(Debug)]
+struct LoadedSkills {
+    skills: Vec<Skill>,
+    /// Commit of the skill repo the installed content came from, recovered
+    /// from the tarball's pax global header (`comment=<sha>`, written by
+    /// `git archive` and present in GitHub codeload tarballs). Present only
+    /// when installing from the default source; custom `--from` sources have
+    /// no commit identity to record, and archives without the header (or with
+    /// a non-SHA comment) install fine with no recorded provenance.
+    commit: Option<String>,
+}
 
+fn load_skills(args: &AgentInstallArgs) -> Result<LoadedSkills> {
     if let Some(source) = &args.from {
         if is_http_url(source) {
             let archive = fetch_url_bytes(source)?;
-            return skills_from_archive(&archive);
+            return Ok(LoadedSkills {
+                skills: skills_from_archive(&archive)?.skills,
+                commit: None,
+            });
         }
 
         let path = Path::new(source);
         if path.is_dir() {
-            return skills_from_dir(path);
+            return Ok(LoadedSkills {
+                skills: skills_from_dir(path)?,
+                commit: None,
+            });
         }
 
         let archive = fs::read(path).with_context(|| {
@@ -118,61 +131,74 @@ fn load_skills(args: &AgentInstallArgs) -> Result<Vec<Skill>> {
                 path.display()
             )
         })?;
-        return skills_from_archive(&archive);
+        return Ok(LoadedSkills {
+            skills: skills_from_archive(&archive)?.skills,
+            commit: None,
+        });
     }
 
-    let version = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_VERSION")
-        .unwrap_or_else(|| baml_version::CANONICAL_VERSION.to_string());
-    let url = versioned_skill_archive_url(&version);
-    let archive = fetch_url_bytes(&url)?;
-    let checksum_text = fetch_url_text(&format!("{url}.sha256"))?;
-    baml_release::verify_release_archive_checksum_text(&archive, &url, &checksum_text)
-        .context("verifying agent skills archive checksum failed")?;
-    skills_from_archive(&archive)
+    // Default: download the main-branch tarball from codeload. Deliberately
+    // NOT the GitHub REST API: the tarball endpoint needs no credentials and
+    // is not subject to the unauthenticated 60-requests/hour API rate limit
+    // that used to hard-block installs. The tarball embeds the commit it was
+    // cut from in its pax global header, which becomes the recorded
+    // provenance; a mirror that omits the header just skips provenance.
+    let url = baml_release::skills::skill_archive_url("main");
+    let archive = fetch_url_bytes(&url).with_context(|| {
+        format!(
+            "could not download the BAML agent skills from {url}; if GitHub is \
+             unreachable, install from a local copy with \
+             `baml agent install --from <url-or-path>`"
+        )
+    })?;
+    let loaded = skills_from_archive(&archive)?;
+    Ok(LoadedSkills {
+        skills: loaded.skills,
+        commit: loaded.commit,
+    })
+}
+
+/// Record which skill commit was installed (in `~/.baml/state.toml`) and
+/// refresh the latest-commit cache so freshness warnings clear immediately.
+/// Failures are reported but don't fail the install: the skills themselves
+/// were written successfully.
+fn record_installed_commit(commit: &str) {
+    let state = baml_release::skills::SkillsState {
+        installed_commit: commit.to_string(),
+        installed_at: baml_release::skills::utc_now_rfc3339(),
+    };
+    if let Err(err) =
+        baml_release::skills::write_skills_state(&baml_release::skills::state_path(), &state)
+    {
+        crate::reporter::print_warning(format_args!(
+            "failed to record installed skill commit: {err:#}"
+        ));
+    }
+    if let Err(err) = baml_release::skills::write_cached_latest_skill_commit(
+        &baml_release::skills::latest_skill_commit_cache_path(),
+        commit,
+    ) {
+        crate::reporter::print_warning(format_args!(
+            "failed to update skill freshness cache: {err:#}"
+        ));
+    }
+}
+
+/// Installs with no commit identity (custom `--from` sources, or a default
+/// archive whose pax header carried no commit) drop any previously recorded
+/// provenance so the wrapper doesn't report the installed content as up to
+/// date with (or behind) the official skill repo.
+fn clear_installed_commit() {
+    if let Err(err) = baml_release::skills::clear_skills_state(&baml_release::skills::state_path())
+    {
+        crate::reporter::print_warning(format_args!(
+            "failed to clear recorded skill provenance: {err:#}"
+        ));
+    }
 }
 
 fn is_http_url(value: &str) -> bool {
     value.starts_with("https://") || value.starts_with("http://")
-}
-
-fn env_var_nonempty(name: &str) -> Option<String> {
-    std::env::var(name)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-fn versioned_skill_archive_url(version: &str) -> String {
-    let base_url = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_BASE_URL");
-    let repo = env_var_nonempty("BAML_AGENT_SKILLS_RELEASE_REPO")
-        .unwrap_or_else(baml_release::release_repo);
-    versioned_skill_archive_url_with_env(version, base_url.as_deref(), Some(&repo))
-}
-
-fn versioned_skill_archive_url_with_env(
-    version: &str,
-    base_url: Option<&str>,
-    repo: Option<&str>,
-) -> String {
-    let filename = versioned_skill_archive_filename(version);
-    if let Some(base_url) = base_url.map(str::trim).filter(|value| !value.is_empty()) {
-        return format!("{}/{}", base_url.trim_end_matches('/'), filename);
-    }
-
-    let repo = repo
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(baml_release::DEFAULT_RELEASE_REPO);
-    format!("https://github.com/{repo}/releases/download/baml-language-{version}/{filename}")
-}
-
-fn versioned_skill_archive_filename(version: &str) -> String {
-    format!("baml-agent-skills-{version}.tar.gz")
-}
-
-fn fetch_url_text(url: &str) -> Result<String> {
-    let bytes = fetch_url_bytes(url)?;
-    String::from_utf8(bytes).with_context(|| format!("{url} was not valid UTF-8"))
 }
 
 fn fetch_url_bytes(url: &str) -> Result<Vec<u8>> {
@@ -210,35 +236,101 @@ fn detect_install_root() -> Result<PathBuf> {
     let canonical = cwd
         .canonicalize()
         .with_context(|| format!("failed to resolve {}", cwd.display()))?;
-
-    if let Some(root) = find_project_root_from(Some(&canonical))? {
-        return Ok(root);
-    }
-
-    if let Ok(output) = Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .current_dir(&canonical)
-        .output()
-    {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let root = stdout.trim();
-            if !root.is_empty() {
-                return Ok(PathBuf::from(root));
-            }
-        }
-    }
-
-    Ok(canonical)
+    Ok(detect_install_root_in(
+        &canonical,
+        git_toplevel(&canonical).as_deref(),
+        user_home_dir().as_deref(),
+    ))
 }
 
-fn skills_from_archive(archive: &[u8]) -> Result<Vec<Skill>> {
+/// Pick the install root for project-local agent skills.
+///
+/// Inside a git repo, the nearest baml.toml (else baml_src) owner wins, but
+/// the walk never leaves the repo; with no project marker the repo root is
+/// used, since that is where agent harnesses discover `.claude/skills/`.
+/// Outside a git repo the walk stops before the user's home directory —
+/// a stray `~/baml_src` must not pull installs into `$HOME` — or, when no
+/// home directory is known, doesn't leave the current directory at all; the
+/// fallback is always the current directory. All inputs must be
+/// pre-canonicalized.
+fn detect_install_root_in(cwd: &Path, git_toplevel: Option<&Path>, home: Option<&Path>) -> PathBuf {
+    // A toplevel that doesn't contain cwd (an exported GIT_DIR/GIT_WORK_TREE
+    // pointing at a dotfiles worktree in $HOME) is not the project being
+    // worked in; neither is one rooted at — or containing — the home
+    // directory itself, which would reopen the stray-~/baml_src hole this
+    // function exists to close. Ignore both rather than install there.
+    let git_toplevel = git_toplevel.filter(|toplevel| {
+        cwd.starts_with(toplevel) && !home.is_some_and(|home| home.starts_with(toplevel))
+    });
+    let ancestors: Vec<PathBuf> = match (git_toplevel, home) {
+        (Some(toplevel), _) => cwd
+            .ancestors()
+            .take_while(|dir| dir.starts_with(toplevel))
+            .map(Path::to_path_buf)
+            .collect(),
+        (None, Some(home)) => cwd
+            .ancestors()
+            .take_while(|dir| *dir != home)
+            .map(Path::to_path_buf)
+            .collect(),
+        // No git scope and no known home boundary: a walk could climb
+        // arbitrarily far and adopt a stray marker directory, so don't walk
+        // at all. Installing at cwd is always safe.
+        (None, None) => vec![cwd.to_path_buf()],
+    };
+    baml_workspace::find_baml_project_root_from_ancestors(
+        ancestors,
+        |dir| dir.join(baml_workspace::BAML_TOML).is_file(),
+        |dir| dir.join(baml_workspace::BAML_SRC_DIR).is_dir(),
+    )
+    .unwrap_or_else(|| match git_toplevel {
+        Some(toplevel) => toplevel.to_path_buf(),
+        None => cwd.to_path_buf(),
+    })
+}
+
+/// Canonicalized toplevel of the git repo containing `dir`, if any.
+fn git_toplevel(dir: &Path) -> Option<PathBuf> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(dir)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let root = stdout.trim();
+    if root.is_empty() {
+        return None;
+    }
+    PathBuf::from(root).canonicalize().ok()
+}
+
+/// The user's canonicalized home directory (`HOME`, or `USERPROFILE` on
+/// Windows). Not [`baml_release::baml_home`], which is `~/.baml` state
+/// storage and overridable via `BAML_HOME`.
+fn user_home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .and_then(|home| home.canonicalize().ok())
+}
+
+fn skills_from_archive(archive: &[u8]) -> Result<LoadedSkills> {
     let decoder = flate2::read::GzDecoder::new(Cursor::new(archive));
     let mut archive = tar::Archive::new(decoder);
     let mut raw = Vec::new();
+    let mut commit = None;
 
     for entry in archive.entries().context("failed to read skill archive")? {
         let mut entry = entry.context("failed to read skill archive entry")?;
+        if entry.header().entry_type() == tar::EntryType::XGlobalHeader {
+            if commit.is_none() {
+                commit = pax_comment_sha(&mut entry);
+            }
+            continue;
+        }
         if !entry.header().entry_type().is_file() {
             continue;
         }
@@ -259,7 +351,48 @@ fn skills_from_archive(archive: &[u8]) -> Result<Vec<Skill>> {
         raw.push(raw_skill(skill_path, content, path));
     }
 
-    normalize_skills(raw)
+    Ok(LoadedSkills {
+        skills: normalize_skills(raw)?,
+        commit,
+    })
+}
+
+/// Extract the commit SHA a codeload tarball was cut from: `git archive`
+/// records it as a `comment=<sha>` record in the pax global header entry.
+/// Returns `None` (rather than erroring) for archives without the header or
+/// with a comment that doesn't look like a git SHA, so custom mirrors and
+/// hand-rolled archives still install — they just record no provenance.
+fn pax_comment_sha(entry: &mut impl Read) -> Option<String> {
+    let mut body = Vec::new();
+    entry.take(4096).read_to_end(&mut body).ok()?;
+    let comment =
+        pax_records(&body).find_map(|(key, value)| (key == "comment").then_some(value))?;
+    let sha = comment.trim();
+    let looks_like_sha =
+        (7..=64).contains(&sha.len()) && sha.chars().all(|c| c.is_ascii_hexdigit());
+    looks_like_sha.then(|| sha.to_string())
+}
+
+/// Iterate `<len> <key>=<value>\n` records in a pax extended header body,
+/// skipping anything malformed.
+fn pax_records(body: &[u8]) -> impl Iterator<Item = (&str, &str)> {
+    let mut rest = body;
+    std::iter::from_fn(move || {
+        loop {
+            let text = std::str::from_utf8(rest).ok()?;
+            let (len_text, _) = text.split_once(' ')?;
+            let record_len: usize = len_text.parse().ok()?;
+            if record_len <= len_text.len() + 1 {
+                return None;
+            }
+            let record = text.get(..record_len)?;
+            rest = &rest[record_len..];
+            let content = &record[len_text.len() + 1..];
+            if let Some((key, value)) = content.trim_end_matches('\n').split_once('=') {
+                return Some((key, value));
+            }
+        }
+    })
 }
 
 fn skills_from_dir(root: &Path) -> Result<Vec<Skill>> {
@@ -626,7 +759,7 @@ mod tests {
     fn direct_archive_layout_is_loaded() {
         let content = skill("baml-core");
         let archive = make_archive(&[("skills/baml-core/SKILL.md", content.as_str())]);
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "baml-core");
@@ -639,7 +772,7 @@ mod tests {
             direct_skill_entries(&["baml-core", "baml-bridges", "baml-serving", "baml-testing"]);
         let archive = make_archive(&entry_refs(&entries));
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
         let names = skills
             .iter()
             .map(|skill| skill.name.as_str())
@@ -659,7 +792,7 @@ mod tests {
             ("skills/baml-core/._SKILL.md", &[0xff, 0xfe]),
         ]);
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "baml-core");
@@ -678,7 +811,7 @@ mod tests {
             .collect::<Vec<_>>();
         let archive = make_archive(&entry_refs(&entries));
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
         let core = skills
             .iter()
             .find(|skill| skill.name == "baml-core")
@@ -706,7 +839,7 @@ mod tests {
         let content = "---\r\nname: baml-core\r\ndescription: test\r\n---\r\n# Core\r\n";
         let archive = make_archive(&[("skills/baml-core/SKILL.md", content)]);
 
-        let skills = skills_from_archive(&archive).unwrap();
+        let skills = skills_from_archive(&archive).unwrap().skills;
 
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].name, "baml-core");
@@ -752,19 +885,154 @@ mod tests {
     }
 
     #[test]
-    fn versioned_archive_url_defaults_to_release_asset() {
-        assert_eq!(
-            versioned_skill_archive_url_with_env("1.2.3", None, None),
-            "https://github.com/BoundaryML/baml/releases/download/baml-language-1.2.3/baml-agent-skills-1.2.3.tar.gz"
+    fn archive_pax_global_header_comment_becomes_commit() {
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        let content = skill("baml-core");
+        let archive = make_archive_with_pax(
+            &[("skills/baml-core/SKILL.md", content.as_str())],
+            Some(sha),
         );
-        assert_eq!(
-            versioned_skill_archive_url_with_env("1.2.3", Some("https://example.com/base/"), None),
-            "https://example.com/base/baml-agent-skills-1.2.3.tar.gz"
+
+        let loaded = skills_from_archive(&archive).unwrap();
+
+        assert_eq!(loaded.commit.as_deref(), Some(sha));
+        assert_eq!(loaded.skills.len(), 1);
+    }
+
+    #[test]
+    fn archive_without_pax_header_has_no_commit() {
+        let content = skill("baml-core");
+        let archive = make_archive(&[("skills/baml-core/SKILL.md", content.as_str())]);
+
+        assert_eq!(skills_from_archive(&archive).unwrap().commit, None);
+    }
+
+    #[test]
+    fn archive_with_non_sha_pax_comment_has_no_commit() {
+        let content = skill("baml-core");
+        let archive = make_archive_with_pax(
+            &[("skills/baml-core/SKILL.md", content.as_str())],
+            Some("not a commit sha"),
         );
-        assert_eq!(
-            versioned_skill_archive_url_with_env("1.2.3", None, Some("BoundaryML/custom")),
-            "https://github.com/BoundaryML/custom/releases/download/baml-language-1.2.3/baml-agent-skills-1.2.3.tar.gz"
-        );
+
+        assert_eq!(skills_from_archive(&archive).unwrap().commit, None);
+    }
+
+    #[test]
+    fn install_root_prefers_baml_toml_within_git_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let toplevel = tmp.path().canonicalize().unwrap();
+        let project = toplevel.join("services/x");
+        let cwd = project.join("deep");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::write(project.join("baml.toml"), "[package]\nname = \"x\"\n").unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&toplevel), None);
+
+        assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_never_escapes_git_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let outer = tmp.path().canonicalize().unwrap();
+        // A baml_src above the repo must not pull the install outside it.
+        fs::create_dir_all(outer.join("baml_src")).unwrap();
+        let toplevel = outer.join("repo");
+        let cwd = toplevel.join("sub");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&toplevel), None);
+
+        assert_eq!(root, toplevel);
+    }
+
+    #[test]
+    fn install_root_ignores_git_toplevel_that_is_not_an_ancestor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().canonicalize().unwrap();
+        // Dotfiles bare-repo pattern: exported GIT_DIR/GIT_WORK_TREE make git
+        // report a worktree (often $HOME) unrelated to the directory the user
+        // is actually in. The project markers next to cwd must still win.
+        let foreign_worktree = base.join("home");
+        let project = base.join("opt/project");
+        let cwd = project.join("sub");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(&foreign_worktree).unwrap();
+        fs::write(project.join("baml.toml"), "[package]\nname = \"x\"\n").unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&foreign_worktree), Some(&foreign_worktree));
+
+        assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_ignores_git_toplevel_at_or_above_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        // A repo rooted at $HOME (dotfiles-as-git-repo) must not turn the
+        // stray-marker hole back on: the home boundary still applies.
+        fs::create_dir_all(home.join("baml_src")).unwrap();
+        let cwd = home.join("nomad");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, Some(&home), Some(&home));
+
+        assert_eq!(root, cwd);
+    }
+
+    #[test]
+    fn install_root_without_known_home_stays_at_cwd() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().canonicalize().unwrap();
+        // No git scope and no home boundary: never adopt a marker above cwd.
+        fs::create_dir_all(base.join("baml_src")).unwrap();
+        let cwd = base.join("a/b");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, None, None);
+
+        assert_eq!(root, cwd);
+    }
+
+    #[test]
+    fn install_root_ignores_stray_baml_src_at_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        // Regression: a stray ~/baml_src used to make installs from ~/some/dir
+        // land the skills in $HOME.
+        fs::create_dir_all(home.join("baml_src")).unwrap();
+        let cwd = home.join("nomad");
+        fs::create_dir_all(&cwd).unwrap();
+
+        let root = detect_install_root_in(&cwd, None, Some(&home));
+
+        assert_eq!(root, cwd);
+    }
+
+    #[test]
+    fn install_root_accepts_baml_src_owner_below_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        let project = home.join("work");
+        let cwd = project.join("sub");
+        fs::create_dir_all(&cwd).unwrap();
+        fs::create_dir_all(project.join("baml_src")).unwrap();
+
+        let root = detect_install_root_in(&cwd, None, Some(&home));
+
+        assert_eq!(root, project);
+    }
+
+    #[test]
+    fn install_root_in_home_itself_is_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().canonicalize().unwrap();
+        fs::create_dir_all(home.join("baml_src")).unwrap();
+
+        let root = detect_install_root_in(&home, None, Some(&home));
+
+        assert_eq!(root, home);
     }
 
     #[test]
@@ -873,6 +1141,53 @@ mod tests {
             .map(|(path, content)| (*path, content.as_bytes()))
             .collect::<Vec<_>>();
         make_archive_bytes(&entries)
+    }
+
+    /// Like [`make_archive`], but prepends a pax global header carrying
+    /// `comment=<value>` the way `git archive` (and GitHub codeload) does.
+    fn make_archive_with_pax(entries: &[(&str, &str)], pax_comment: Option<&str>) -> Vec<u8> {
+        let mut archive_bytes = Vec::new();
+        {
+            let encoder =
+                flate2::write::GzEncoder::new(&mut archive_bytes, flate2::Compression::default());
+            let mut builder = tar::Builder::new(encoder);
+            if let Some(comment) = pax_comment {
+                let record_content = format!("comment={comment}\n");
+                let mut total = record_content.len();
+                // The pax length prefix counts itself: grow until stable.
+                loop {
+                    let with_prefix = total.to_string().len() + 1 + record_content.len();
+                    if with_prefix == total {
+                        break;
+                    }
+                    total = with_prefix;
+                }
+                let record = format!("{total} {record_content}");
+                let mut header = tar::Header::new_gnu();
+                header.set_entry_type(tar::EntryType::XGlobalHeader);
+                header.set_size(record.len() as u64);
+                header.set_mode(0o666);
+                header.set_cksum();
+                builder
+                    .append_data(&mut header, "pax_global_header", record.as_bytes())
+                    .unwrap();
+            }
+            for &(path, content) in entries {
+                let mut header = tar::Header::new_gnu();
+                header.set_size(content.len() as u64);
+                header.set_mode(0o644);
+                header.set_cksum();
+                builder
+                    .append_data(
+                        &mut header,
+                        format!("baml-skill-main/{path}"),
+                        content.as_bytes(),
+                    )
+                    .unwrap();
+            }
+            builder.finish().unwrap();
+        }
+        archive_bytes
     }
 
     fn make_archive_bytes(entries: &[(&str, &[u8])]) -> Vec<u8> {

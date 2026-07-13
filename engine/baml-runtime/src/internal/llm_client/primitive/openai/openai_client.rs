@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
-use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};

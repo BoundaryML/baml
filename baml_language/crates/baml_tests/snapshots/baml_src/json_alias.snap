@@ -59,7 +59,7 @@ function json_alias.json_array_len() -> int {
     load_const 1
     load_const 2
     load_const 3
-    load_type int
+    load_type baml.json.json
     alloc_array 3
     store_var_load_var arr
     is_type baml.json.json[]
@@ -83,7 +83,7 @@ function json_alias.json_map_has_key() -> bool {
     load_const "value"
     load_const "key"
     load_type string
-    load_type string
+    load_type baml.json.json
     alloc_map 1
     store_var_load_var m
     is_type map<string, baml.json.json>
@@ -97,6 +97,8 @@ function json_alias.json_map_has_key() -> bool {
   L1:
     load_var m
     container_len
+    store_var _4
+    load_var _4
     load_const 1
     cmp_int_op ==
 

@@ -98,6 +98,7 @@ pub const ALL: &[BuiltinFile] = &[
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
     builtin!("baml", "ns_errors/stack_trace.baml"),
+    builtin!("baml", "ns_errors/error_context.baml"),
     builtin!("baml", "ns_panics/panics.baml"),
     builtin!("baml", "ns_env/env.baml"),
     builtin!("baml", "ns_io/io.baml"),
@@ -105,7 +106,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_http/server.baml"),
     builtin!("baml", "ns_events/events.baml"),
     builtin!("baml", "ns_id/id.baml"),
-    builtin!("baml", "ns_math/math.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
     builtin!("baml", "ns_fs/fs.baml"),
     builtin!("baml", "ns_glob/glob.baml"),

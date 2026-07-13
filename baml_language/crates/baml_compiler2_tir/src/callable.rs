@@ -9,7 +9,6 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     inference::{CallPlan, MemberResolution, ScopeInference, infer_scope_types},
-    lower_type_expr::lower_type_expr_in_ns,
     package_interface::package_resolution_context,
     throw_inference::{function_throw_sets, throw_set_key},
     throws_analysis::ThrowsAnalysisContext,
@@ -46,12 +45,18 @@ fn lowered_declared_callable_throws<'db>(
 
     sig.throws.as_ref().map(|declared_throws| {
         let mut diags = Vec::new();
-        lower_type_expr_in_ns(
-            db,
+        crate::lower_type_expr::lower_type_expr(
             declared_throws,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
+            &crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: &pkg_info.namespace_path,
+                generic_params: &generic_params,
+                bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                    db, function,
+                ),
+                self_ty: None,
+            },
             &mut diags,
         )
     })
@@ -72,17 +77,18 @@ fn signature_cycle_initial_callable_throws<'db>(
     generic_params.extend(sig.user_generic_params.iter().cloned());
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
+    let param_scope = crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items: pkg_items,
+        ns_context: &pkg_info.namespace_path,
+        generic_params: &generic_params,
+        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(db, function),
+        self_ty: None,
+    };
     let mut facts = BTreeSet::new();
     for param in &sig.params {
         let mut diags = Vec::new();
-        let lowered = lower_type_expr_in_ns(
-            db,
-            &param.ty,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
-            &mut diags,
-        );
+        let lowered = crate::lower_type_expr::lower_type_expr(&param.ty, &param_scope, &mut diags);
         if let Ty::Function { throws, .. } = lowered {
             facts.extend(crate::throw_inference::flatten_ty_to_facts(&throws));
         }

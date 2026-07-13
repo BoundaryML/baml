@@ -29,7 +29,7 @@
 interface Comparable {
   type CompareError
 
-  function compare(self, other: Self) -> int throws CompareError
+  function compare(self, other: Self) -> int throws Self.CompareError
 }
 
 implements Comparable for int {
@@ -62,7 +62,7 @@ implements Comparable for string {
 interface Sortable {
   type SortError
 
-  function sort(self) -> Self throws SortError
+  function sort(self) -> Self throws Self.SortError
 }
 
 implements<T extends Comparable> Sortable for T[] {

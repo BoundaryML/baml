@@ -22,11 +22,11 @@ filter = 'package(=sdk_test_typescript_node)'
 platform = { host = 'cfg(windows)' }
 setup = 'typescript_node_pnpm_win'
 
-# python tests need each fixture's venv synced with freshly-built baml_core.
+# python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per
 # fixture plus one incremental `maturin develop`; Windows builds one wheel
 # first, then fixture `uv sync` installs that wheel to avoid duplicate
-# editable baml_core builds.
+# editable baml_bridge builds.
 [scripts.setup.python_pydantic2_uv_unix]
 command = './sdk_tests/crates/python_pydantic2/setup.sh'
 

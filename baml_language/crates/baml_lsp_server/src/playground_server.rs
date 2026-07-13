@@ -54,7 +54,9 @@ use tokio::{net::TcpListener, sync::broadcast};
 use crate::{
     playground_env::PlaygroundEnvState,
     playground_io::PlaygroundIoState,
-    playground_runs::{patch_to_wire, run_summary_to_wire, run_to_wire},
+    playground_runs::{
+        overlay_function_name_for_target, patch_to_wire, run_summary_to_wire, run_to_wire,
+    },
     playground_ws::{RunListFilter, RunListKind, RunListVisibility, WsInMessage, WsOutMessage},
 };
 
@@ -438,6 +440,29 @@ pub async fn pick_port(base_port: u16, max_attempts: u16) -> anyhow::Result<(Tcp
     )
 }
 
+/// Resolve the given env var names against `lookup`, keeping only those set.
+/// Pure so tests never have to mutate the process environment.
+fn collect_referenced_env_vars(
+    names: &[String],
+    lookup: impl Fn(&str) -> Option<String>,
+) -> std::collections::HashMap<String, String> {
+    names
+        .iter()
+        .filter_map(|n| lookup(n).map(|v| (n.clone(), v)))
+        .collect()
+}
+
+/// Bind exactly `port` on loopback, with an actionable error when taken.
+pub async fn bind_exact_port(port: u16) -> anyhow::Result<TcpListener> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    TcpListener::bind(addr).await.map_err(|e| {
+        anyhow::anyhow!(
+            "Could not bind playground port {port}: {e}. Another process may be \
+             using it; pass a different --port or omit it to auto-pick from 4265."
+        )
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Shared state for Axum handlers
 // ---------------------------------------------------------------------------
@@ -470,6 +495,9 @@ struct WsState {
     doc_mirror: DocMirror,
     /// Workspace roots that browser-mode LSP saves are allowed to write under.
     workspace_roots: Arc<Vec<PathBuf>>,
+    /// Target of the most recent OpenPlayground; replayed to a page when it
+    /// requests state so a freshly opened / reconnected window navigates there.
+    current_open_target: crate::playground_sender::SharedOpenTarget,
 }
 
 type LiveValueStore = Arc<Mutex<LiveValueCache>>;
@@ -803,20 +831,11 @@ fn capture_loss_message(capture_kind: &str, skipped: u64) -> String {
 }
 
 #[derive(Clone, Debug)]
-struct PlaygroundAccessGuard {
-    allowed_origins: Arc<Vec<String>>,
-}
+struct PlaygroundAccessGuard {}
 
 impl PlaygroundAccessGuard {
-    fn for_listener_addr(addr: SocketAddr) -> Self {
-        let port = addr.port();
-        Self {
-            allowed_origins: Arc::new(vec![
-                format!("http://localhost:{port}"),
-                format!("http://127.0.0.1:{port}"),
-                format!("http://[::1]:{port}"),
-            ]),
-        }
+    fn new() -> Self {
+        Self {}
     }
 
     fn is_allowed_origin(&self, origin: Option<&HeaderValue>) -> bool {
@@ -826,10 +845,7 @@ impl PlaygroundAccessGuard {
         let Ok(origin) = origin.to_str() else {
             return false;
         };
-        self.allowed_origins
-            .iter()
-            .any(|allowed| origin.eq_ignore_ascii_case(allowed))
-            || is_vscode_webview_origin(origin)
+        is_loopback_origin(origin) || is_vscode_webview_origin(origin)
     }
 
     fn cors_origin(&self, origin: Option<&HeaderValue>) -> Option<HeaderValue> {
@@ -840,6 +856,31 @@ impl PlaygroundAccessGuard {
             None
         }
     }
+}
+
+/// True when `origin` is an http(s) origin whose host is loopback
+/// (`localhost`, a 127.0.0.0/8 address, or `[::1]`), on any port.
+///
+/// Through an `ssh -L` tunnel the page's origin is the local tunnel endpoint:
+/// loopback host, arbitrary port. The host, not the port, is the trust signal;
+/// a hostile web page's fetch/WS still carries its real remote origin -> denied.
+fn is_loopback_origin(origin: &str) -> bool {
+    let Ok(uri) = origin.parse::<Uri>() else {
+        return false;
+    };
+    if !matches!(uri.scheme_str(), Some("http") | Some("https")) {
+        return false;
+    }
+    let Some(host) = uri.host() else {
+        return false;
+    };
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<std::net::IpAddr>()
+        .is_ok_and(|ip| ip.is_loopback())
 }
 
 fn is_vscode_webview_origin(origin: &str) -> bool {
@@ -900,9 +941,10 @@ pub async fn run(
     lsp_out_tx: broadcast::Sender<lsp_server::Message>,
     doc_mirror: DocMirror,
     workspace_roots: Vec<PathBuf>,
+    current_open_target: crate::playground_sender::SharedOpenTarget,
 ) -> anyhow::Result<()> {
     let local_addr = listener.local_addr()?;
-    let access_guard = PlaygroundAccessGuard::for_listener_addr(local_addr);
+    let access_guard = PlaygroundAccessGuard::new();
     let app = build_router(
         bex,
         broadcast_tx,
@@ -914,6 +956,7 @@ pub async fn run(
         doc_mirror,
         Arc::new(workspace_roots),
         access_guard,
+        current_open_target,
     )?;
 
     tracing::info!("Playground: http://localhost:{}", local_addr.port());
@@ -935,6 +978,7 @@ fn build_router(
     doc_mirror: DocMirror,
     workspace_roots: Arc<Vec<PathBuf>>,
     access_guard: PlaygroundAccessGuard,
+    current_open_target: crate::playground_sender::SharedOpenTarget,
 ) -> anyhow::Result<Router> {
     let value_store = Arc::new(Mutex::new(LiveValueCache::with_max_bytes(
         DEFAULT_NATIVE_LIVE_VALUE_CACHE_BYTES,
@@ -953,6 +997,7 @@ fn build_router(
         lsp_out_tx,
         doc_mirror,
         workspace_roots,
+        current_open_target,
     };
 
     let api = Router::new()
@@ -1482,19 +1527,19 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
 
     let mut broadcast_rx = state.broadcast_tx.subscribe();
 
-    // Send all process env vars so the UI can display them immediately.
+    // Send the env vars the project actually references (names from BAML
+    // source, values from the server process env). The full process
+    // environment is deliberately NOT sent — it contains unrelated secrets.
+    // Dynamically-computed keys still resolve lazily via the EnvVarRequest
+    // round-trip (playground_env.rs).
     {
-        let vars: std::collections::HashMap<String, String> = std::env::vars().collect();
+        let names = state.bex.all_env_var_names();
+        let vars = collect_referenced_env_vars(&names, |name| std::env::var(name).ok());
         if let Some(msg) = to_ws_text(&WsOutMessage::ProcessEnvVars { vars })
             && sink.send(msg).await.is_err()
         {
             return;
         }
-    }
-
-    // Send env var names referenced in BAML source code.
-    {
-        let names = state.bex.all_env_var_names();
         if let Some(msg) = to_ws_text(&WsOutMessage::KnownEnvVarNames { names })
             && sink.send(msg).await.is_err()
         {
@@ -1586,6 +1631,15 @@ async fn handle_function_run(
 
     let broadcast_tx = state.broadcast_tx.clone();
     let project_generation = state.bex.project_generation(&project).unwrap_or(0);
+    // Pin the run's control-flow graph while its generation is still
+    // current, so overlay spans stay resolvable after later recompiles.
+    if let Some(function_name) = overlay_function_name_for_target(&target.run_target) {
+        let _ = state.bex.control_flow_graph_for_generation(
+            &project,
+            project_generation,
+            function_name,
+        );
+    }
     let fs_path = bex_project::FsPath::from_str(project);
     let boundary_id = BoundaryId::new_random();
     let value_capture =
@@ -2004,7 +2058,17 @@ async fn handle_ws_in_message(
                     return;
                 }
             };
-            match state.run_store.snapshot(boundary_id) {
+            // A terminal run may have been evicted from the in-memory store
+            // by the retention policy; rehydrate it from disk history like
+            // OpenHistory does.
+            let snapshot = state.run_store.snapshot(boundary_id).or_else(|| {
+                state.history_store.open(boundary_id).ok().map(|run| {
+                    let snapshot = run.clone();
+                    let _ = state.run_store.insert_replayed_run(run);
+                    snapshot
+                })
+            });
+            match snapshot {
                 Some(snapshot) => {
                     send_ws(
                         sink,
@@ -2277,6 +2341,25 @@ async fn handle_ws_in_message(
 
         WsInMessage::RequestState => {
             state.bex.request_playground_state();
+            // A page that connected after an OpenPlayground request (a freshly
+            // spawned browser window, or a reconnect) still needs to be told
+            // where to navigate. Replay the last target directly to it.
+            let target = state.current_open_target.lock().unwrap().clone();
+            if let Some(target) = target {
+                let notif = bex_project::PlaygroundNotification::OpenPlayground {
+                    project: target.project,
+                    function_name: target.function_name,
+                    test_name: target.test_name,
+                    testset_name: target.testset_name,
+                };
+                let json = serde_json::to_value(&notif).unwrap_or_default();
+                let msg = WsOutMessage::PlaygroundNotification { notification: json };
+                if let Some(ws_msg) = to_ws_text(&msg)
+                    && sink.send(ws_msg).await.is_err()
+                {
+                    tracing::warn!("Failed to replay open-playground target");
+                }
+            }
         }
 
         WsInMessage::RequestCollectTests { project } => {
@@ -2912,21 +2995,68 @@ mod tests {
     }
 
     #[test]
-    fn playground_access_guard_accepts_localhost_and_vscode_origins_only() {
-        let guard =
-            PlaygroundAccessGuard::for_listener_addr(SocketAddr::from(([127, 0, 0, 1], 3700)));
+    fn playground_access_guard_accepts_any_loopback_port_and_vscode_origins() {
+        let guard = PlaygroundAccessGuard::new();
         assert!(guard.is_allowed_origin(None));
-        assert!(guard.is_allowed_origin(Some(&HeaderValue::from_static("http://localhost:3700"))));
-        assert!(
-            guard.is_allowed_origin(Some(&HeaderValue::from_static("vscode-webview://abc123")))
-        );
-        assert!(guard.is_allowed_origin(Some(&HeaderValue::from_static(
-            "https://abc123.vscode-cdn.net"
-        ))));
-        assert!(!guard.is_allowed_origin(Some(&HeaderValue::from_static("https://example.com"))));
-        assert!(!guard.is_allowed_origin(Some(&HeaderValue::from_static(
-            "https://vscode-cdn.net.example.com"
-        ))));
+        for allowed in [
+            "http://localhost:4265",
+            "http://localhost:8000", // ssh -L remapped tunnel port
+            "http://127.0.0.1:9999",
+            "http://[::1]:4000",
+            "https://localhost:8443",
+            "vscode-webview://abc123",
+            "https://abc123.vscode-cdn.net",
+        ] {
+            assert!(
+                guard.is_allowed_origin(Some(&HeaderValue::from_static(allowed))),
+                "{allowed}"
+            );
+        }
+        for denied in [
+            "https://example.com",
+            "http://localhost.evil.com", // suffix trick
+            "http://10.0.0.5:4265",      // non-loopback IP
+            "http://127.0.0.1.evil.com:4265",
+            "null",
+            "https://vscode-cdn.net.example.com",
+        ] {
+            assert!(
+                !guard.is_allowed_origin(Some(&HeaderValue::from_static(denied))),
+                "{denied}"
+            );
+        }
+    }
+
+    #[test]
+    fn collect_referenced_env_vars_filters_unset() {
+        let names = vec![
+            "OPENAI_API_KEY".to_string(),
+            "UNSET_VAR".to_string(),
+            "ANTHROPIC_API_KEY".to_string(),
+        ];
+        let vars = collect_referenced_env_vars(&names, |name| match name {
+            "OPENAI_API_KEY" => Some("sk-1".to_string()),
+            "ANTHROPIC_API_KEY" => Some("sk-2".to_string()),
+            _ => None,
+        });
+        assert_eq!(vars.len(), 2);
+        assert_eq!(vars["OPENAI_API_KEY"], "sk-1");
+        assert_eq!(vars["ANTHROPIC_API_KEY"], "sk-2");
+        assert!(!vars.contains_key("UNSET_VAR"));
+    }
+
+    #[tokio::test]
+    async fn bind_exact_port_reports_conflict_with_actionable_error() {
+        let (occupied, port) = pick_port(4265, 100).await.expect("a free port to occupy");
+
+        let err = bind_exact_port(port)
+            .await
+            .expect_err("second bind of the same port should fail");
+        let message = format!("{err}");
+        assert!(message.contains(&port.to_string()), "{message}");
+        assert!(message.contains("--port"), "{message}");
+
+        drop(occupied);
     }
 
     #[test]

@@ -480,6 +480,9 @@ importers:
 
   pkg-grammar:
     devDependencies:
+      '@shikijs/types':
+        specifier: ^3.0.0
+        version: 3.23.0
       shiki:
         specifier: ^3.0.0
         version: 3.23.0
@@ -495,6 +498,21 @@ importers:
       vitest:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@24.12.4)(@vitest/browser-playwright@4.0.16)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@24.12.4)(typescript@6.0.3))(tsx@4.22.4)(yaml@2.8.3)
+
+  pkg-grammar-hljs:
+    devDependencies:
+      highlight.js:
+        specifier: ^11.11.1
+        version: 11.11.1
+      vitest:
+        specifier: ^4.0.16
+        version: 4.0.16(@types/node@24.12.4)(@vitest/browser-playwright@4.0.16)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.14.6(@types/node@24.12.4)(typescript@6.0.3))(tsx@4.22.4)(yaml@2.8.3)
+
+  pkg-grammar-treesitter:
+    devDependencies:
+      tree-sitter-cli:
+        specifier: ^0.25.8
+        version: 0.25.10
 
   pkg-playground:
     dependencies:
@@ -6398,6 +6416,11 @@ packages:
 
   tree-kill@1.2.2:
     resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
+    hasBin: true
+
+  tree-sitter-cli@0.25.10:
+    resolution: {integrity: sha512-KoebQguKMCIghisEOdA372TIbrUl0kdnfZ9YQIBRAeOvNSKe85XbU4LuFW7hduRUwJj0rAG7pX5wo9sZhbBF1g==}
+    engines: {node: '>=12.0.0'}
     hasBin: true
 
   trim-lines@3.0.1:
@@ -13389,6 +13412,8 @@ snapshots:
       punycode: 2.3.1
 
   tree-kill@1.2.2: {}
+
+  tree-sitter-cli@0.25.10: {}
 
   trim-lines@3.0.1: {}
 

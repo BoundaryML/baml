@@ -290,11 +290,29 @@ impl BexHeap {
 
     /// Create a new heap with explicit debug configuration.
     pub fn with_tlab_size_and_debug(
-        mut compile_time_objects: Vec<Object>,
+        compile_time_objects: Vec<Object>,
         tlab_size: usize,
         debug: HeapDebuggerConfig,
     ) -> Arc<Self> {
-        // Resolve bytecode constants for all Function objects before wrapping in Arc.
+        Self::build_unsealed(compile_time_objects, tlab_size, debug).seal()
+    }
+
+    /// Build the heap but **don't** seal it behind the shared `Arc` yet.
+    ///
+    /// The compile-time objects are laid out at their final, stable addresses, so
+    /// [`Self::compile_time_ptr`] already returns valid pointers — but they can
+    /// still be overwritten with [`Self::set_compile_time_object`]. This is how
+    /// cross-referencing compile-time objects (packages and impl rules) are built:
+    /// their `HeapPtr` fields are only knowable once the compile-time `Vec` exists,
+    /// yet the objects themselves must live inside it. The caller appends
+    /// placeholder slots, builds unsealed, fills each slot using
+    /// `compile_time_ptr`, then calls [`Self::seal`].
+    pub fn build_unsealed(
+        mut compile_time_objects: Vec<Object>,
+        tlab_size: usize,
+        debug: HeapDebuggerConfig,
+    ) -> Self {
+        // Resolve bytecode constants for all Function objects before sealing.
         // This converts ConstValue (with ObjectIndex) to Value (with HeapPtr).
         Self::resolve_function_constants(&mut compile_time_objects);
 
@@ -304,7 +322,7 @@ impl BexHeap {
             .iter()
             .any(|o| matches!(o, Object::Class(c) if c.has_cleanup));
 
-        Arc::new(Self {
+        Self {
             compile_time: compile_time_objects,
             gen0: UnsafeCell::new(ChunkedVec::new()),
             gen1: UnsafeCell::new(ChunkedVec::new()),
@@ -324,7 +342,37 @@ impl BexHeap {
             gen1_collection_threshold: AtomicUsize::new(GEN1_FLOOR),
             gen2_collection_threshold: AtomicUsize::new(GEN2_FLOOR),
             debug_state: HeapDebuggerState::new(debug),
-        })
+        }
+    }
+
+    /// [`Self::build_unsealed`] with the default TLAB size and env-derived debug
+    /// config (the same defaults [`Self::new`] uses).
+    pub fn build_unsealed_default(compile_time_objects: Vec<Object>) -> Self {
+        Self::build_unsealed(
+            compile_time_objects,
+            DEFAULT_TLAB_SIZE,
+            HeapDebuggerConfig::from_env(),
+        )
+    }
+
+    /// Freeze the heap behind the shared `Arc`. After this the compile-time
+    /// objects are immutable. See [`Self::build_unsealed`].
+    pub fn seal(self) -> Arc<Self> {
+        Arc::new(self)
+    }
+
+    /// Overwrite a compile-time object before the heap is [sealed](Self::seal).
+    ///
+    /// The compile-time `Vec` is not resized, so every pointer already handed out
+    /// by [`Self::compile_time_ptr`] stays valid — this only rewrites the slot's
+    /// contents. Used to fill placeholder package / impl-rule slots with their
+    /// resolved cross-references.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    pub fn set_compile_time_object(&mut self, index: usize, object: Object) {
+        self.compile_time[index] = object;
     }
 
     /// Resolve bytecode constants for all Function objects.

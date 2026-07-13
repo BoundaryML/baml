@@ -1,16 +1,11 @@
-//! Cargo-style status reporter for `baml run` / `baml pack`.
+//! Cargo-style status reporter.
 //!
 //! Provides a [`Reporter`] that emits cargo-shaped status lines
-//! (`   Compiling 552 files`) and an inline spinner during long phases.
-//! When stderr isn't a TTY (CI, redirected to file, piped to `less`) the
-//! spinner is suppressed and each status update prints as a plain line —
-//! `console::style` auto-strips ANSI in that case, so no raw color codes
-//! end up in logs.
+//! (`   Compiling 552 files`). `console::style` auto-strips ANSI when
+//! stderr is not a TTY, so piped output stays plain.
 //!
 //! Verb formatting matches cargo: 12-char right-aligned, bold green for
-//! normal phases. Diagnostic output is routed through [`Reporter::suspend`]
-//! so the spinner pauses cleanly during multi-line ariadne dumps instead
-//! of getting interleaved with the source-snippet output.
+//! normal phases.
 
 // Status reporting is intrinsically `print*!` to stderr — that's the
 // whole job of this module. The workspace clippy ban exists to flag
@@ -18,10 +13,10 @@
 // inside `Reporter::status` / `spin` / `finish` / `warning`.
 #![allow(clippy::print_stderr)]
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use console::{Color, Style};
-use indicatif::{HumanDuration, ProgressBar, ProgressStyle};
+use indicatif::HumanDuration;
 
 /// Brand purple `#A855F7` for the cargo-style verb. Rendered via 24-bit
 /// truecolor ANSI (`\x1b[38;2;168;85;247m`) on terminals that support it;
@@ -41,56 +36,14 @@ fn verb_style() -> Style {
 pub use baml_exec::CLAP_STYLING;
 
 /// Cargo-style status reporter.
-///
-/// Holds either a real `indicatif` spinner (when stderr is a TTY) or
-/// nothing (when not), so the same API works in both modes.
 pub struct Reporter {
-    bar: Option<ProgressBar>,
     started: Instant,
 }
 
 impl Reporter {
-    /// Construct a reporter that auto-detects whether to render an
-    /// animated spinner based on stderr being a TTY.
+    /// Construct a reporter.
     pub fn new() -> Self {
-        use std::io::IsTerminal;
-        let bar = if std::io::stderr().is_terminal() {
-            let pb = ProgressBar::new_spinner();
-            #[rustfmt::skip]
-            pb.set_style(
-                ProgressStyle::with_template("{spinner} {wide_msg}")
-                    .expect("static template")
-                    .tick_strings(&[
-                        concat!("            ", "\n",
-                                "🐑   🚧   🐑"),
-                        concat!("            ", "\n",
-                                "     🚧  🐑 "),
-                        concat!("            ", "\n",
-                                "     🚧 🐑  "),
-                        concat!("            ", "\n",
-                                "     🚧🐑   "),
-                        concat!("     🐑      ", "\n",
-                                "     🚧     "),
-                        concat!("            ", "\n",
-                                "   🐑🚧     "),
-                        concat!("            ", "\n",
-                                "  🐑 🚧     "),
-                        concat!("            ", "\n",
-                                " 🐑  🚧     "),
-                        // final / resting
-                        "",
-                    ]),
-            );
-            // ~150ms/frame -> roughly one full walk-cycle every ~2.7s.
-            // Slow enough to read the lamb's position, fast enough to
-            // feel alive.
-            pb.enable_steady_tick(Duration::from_millis(150));
-            Some(pb)
-        } else {
-            None
-        };
         Self {
-            bar,
             started: Instant::now(),
         }
     }
@@ -99,49 +52,15 @@ impl Reporter {
     /// cargo's `   Compiling foo v0.1.0` shape.
     pub fn status(&self, verb: &str, msg: impl AsRef<str>) {
         let line = format_status(verb, msg.as_ref());
-        match &self.bar {
-            Some(b) => b.println(line),
-            None => eprintln!("{line}"),
-        }
+        eprintln!("{line}");
     }
 
-    /// Mark a new phase. Persists the phase line to scrollback (cargo
-    /// behavior — each `   Verb msg` stays in history once it scrolls
-    /// past) *and* updates the lamb spinner's inline message so the
-    /// bar reflects the current phase.
-    ///
-    /// Two formats for the two destinations:
-    ///   - `bar.println` gets the cargo-padded version (12-col
-    ///     right-aligned verb) so the persistent scrollback lines look
-    ///     identical to the piped/non-TTY output.
-    ///   - `bar.set_message` gets the inline (no padding) version
-    ///     because the 🐑 spinner already provides the visual left
-    ///     margin — stacking the 12-col cargo padding on top would put
-    ///     6+ blank cells between the lamb and the verb text.
-    ///
-    /// Non-TTY: single cargo-aligned `eprintln!` (only path; nothing
-    /// to update).
+    /// Mark a new phase with a persistent cargo-style line.
     pub fn spin(&self, verb: &str, msg: impl AsRef<str>) {
-        let msg = msg.as_ref();
-        match &self.bar {
-            Some(b) => {
-                b.println(format_status(verb, msg));
-                b.set_message(format_status_inline(verb, msg));
-            }
-            None => eprintln!("{}", format_status(verb, msg)),
-        }
+        eprintln!("{}", format_status(verb, msg.as_ref()));
     }
 
-    /// Stop the spinner and print a final cargo-style "Finished" line
-    /// with elapsed wall-clock time.
-    ///
-    /// Uses `println` + `finish_and_clear` rather than
-    /// `finish_with_message` so the Finished line lands in scrollback
-    /// the same way every other phase line does — no `{spinner}`
-    /// prefix from the bar's template, which would otherwise insert
-    /// the final tick string (+ a literal template space) ahead of the
-    /// 12-col cargo padding and shift the verb one column right
-    /// versus its peers above.
+    /// Print a final cargo-style "Finished" line with elapsed wall-clock time.
     pub fn finish(&self, verb: &str, msg: impl AsRef<str>) {
         // `{:#}` is `HumanDuration`'s alternate form — the compact
         // `5s` / `2m` / `1h` shape, matching cargo's `Finished` line.
@@ -149,31 +68,15 @@ impl Reporter {
         // wordy for a one-line status.
         let elapsed = HumanDuration(self.started.elapsed());
         let line = format!("{} in {elapsed:#}", format_status(verb, msg.as_ref()));
-        match &self.bar {
-            Some(b) => {
-                b.println(line);
-                b.finish_and_clear();
-            }
-            None => eprintln!("{line}"),
-        }
+        eprintln!("{line}");
     }
 
-    /// Stop the spinner without writing a status line. Use before
-    /// printing an error so the spinner doesn't get left animating.
-    pub fn abandon(&self) {
-        if let Some(b) = &self.bar {
-            b.finish_and_clear();
-        }
-    }
+    /// Preserve the old call shape for diagnostic/error paths.
+    pub fn abandon(&self) {}
 
-    /// Run `f` with the spinner paused so multi-line output (ariadne
-    /// diagnostic blocks, panic backtraces) can render cleanly. Returns
-    /// whatever `f` returns. A no-op when no spinner is active.
+    /// Run `f` and return whatever it returns.
     pub fn suspend<R>(&self, f: impl FnOnce() -> R) -> R {
-        match &self.bar {
-            Some(b) => b.suspend(f),
-            None => f(),
-        }
+        f()
     }
 }
 
@@ -194,15 +97,6 @@ fn format_status(verb: &str, msg: &str) -> String {
     format!("{styled} {msg}")
 }
 
-/// Inline (no-padding) verb formatting for spinner messages. Used when
-/// the 🐑 spinner already provides a visual left margin, so the cargo
-/// 12-col verb pad would just stack extra blank cells between the lamb
-/// and the verb text.
-fn format_status_inline(verb: &str, msg: &str) -> String {
-    let styled = verb_style().apply_to(verb);
-    format!("{styled} {msg}")
-}
-
 /// Re-exports of the shared `error:` / `warning:` printers (defined in
 /// `baml_exec::diag_print`). Lives in this module so callers across
 /// `baml_cli` keep importing `crate::reporter::print_error` etc., while
@@ -211,28 +105,19 @@ fn format_status_inline(verb: &str, msg: &str) -> String {
 pub use baml_exec::{print_anyhow_error, print_error, print_warning};
 
 impl Reporter {
-    /// Print an error through this reporter, abandoning the spinner
-    /// first so multi-line error output doesn't interleave with ticks.
+    /// Print an error through this reporter.
     pub fn error(&self, msg: impl std::fmt::Display) {
         self.abandon();
         print_error(msg);
     }
 
-    /// Print a warning that scrolls into the buffer *above* the active
-    /// spinner. Unlike [`Reporter::error`], the spinner keeps running
-    /// after the warning — warnings are advisories, not failures.
-    /// Falls back to a plain stderr write when no spinner is active.
-    /// Mirrors the formatting of [`print_warning`].
+    /// Print a warning. Mirrors the formatting of [`print_warning`].
     pub fn warning(&self, msg: impl std::fmt::Display) {
         let line = format!(
             "{}: {msg}",
             Style::new().yellow().bold().apply_to("warning")
         );
-        match &self.bar {
-            Some(b) => b.println(line),
-            #[allow(clippy::print_stderr)]
-            None => eprintln!("{line}"),
-        }
+        eprintln!("{line}");
     }
 }
 

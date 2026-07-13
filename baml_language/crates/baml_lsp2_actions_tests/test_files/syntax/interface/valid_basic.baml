@@ -4,7 +4,7 @@ interface Animal {
   name: string
   age: int
 
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {

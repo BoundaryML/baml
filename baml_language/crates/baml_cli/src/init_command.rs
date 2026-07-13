@@ -164,16 +164,37 @@ fn validate_project_name(name: &str) -> Result<()> {
 
 fn render_baml_toml(name: &str) -> String {
     format!(
-        "[package]\n\
-         name = \"{name}\"\n\
-         \n\
-         # [scripts]\n\
-         # dev = \"-f main\"\n\
-         \n\
-         # [generator.my_client]\n\
-         # output_type = \"python/pydantic\"\n\
-         # output_dir = \"../python\"\n\
-         # naming_convention = \"preserve-case\"\n",
+        r#"[package]
+name = "{name}"
+
+# [scripts]
+# dev = "-f main"
+
+# Uncomment this to generate the Python SDK.
+#
+# Note: you also need to install the BAML runtime bridge for Python:
+#   uv add baml_bridge
+#   pip install baml_bridge
+#   conda install -c conda-forge baml_bridge
+#
+# [generator.python_client]
+# output_type = "python/pydantic"
+# output_dir = "./baml_python"
+# naming_convention = "preserve-case"
+
+# Uncomment this to generate the Node SDK.
+#
+# Note: you also need to install the BAML runtime bridge for Node.js:
+#   npm install @boundaryml/baml-bridge
+#   pnpm add @boundaryml/baml-bridge
+#   yarn add @boundaryml/baml-bridge
+#   bun add @boundaryml/baml-bridge
+#
+# [generator.node_client]
+# output_type = "typescript/node"
+# output_dir = "./baml_ts"
+# naming_convention = "preserve-case"
+"#,
     )
 }
 

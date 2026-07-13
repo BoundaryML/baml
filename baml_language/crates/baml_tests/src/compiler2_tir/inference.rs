@@ -4,10 +4,10 @@ use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
 use baml_compiler2_tir::{
     inference::infer_scope_types,
-    interfaces::{package_implements_registry, type_implements_with_deps},
     package_interface::{ExportedType, package_interface, package_resolution_context},
     resolve::{ResolvedName, resolve_name_at_in_scope},
     ty::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr},
+    type_context::GlobalTypeContext,
 };
 use text_size::TextSize;
 
@@ -151,7 +151,7 @@ fn unresolved_field() {
       { : never
         return x.missing : unknown
       }
-      !! 66..73: type `Foo` has no member `missing`
+      !! 64..73: type `Foo` has no member `missing`
     }
     class user.Foo$stream {
       name: string | null
@@ -182,7 +182,7 @@ function f(data: Data) -> string {
       { : never
         return data.inner.foo : unknown
       }
-      !! 78..83: type `Data` has no member `inner`
+      !! 73..87: type `Data` has no member `inner`
     }
     class user.Data$stream {
       name: string | null
@@ -213,7 +213,7 @@ function f(s: Sentiment) -> string {
       { : never
         return s.feelin : unknown
       }
-      !! 85..91: type `Sentiment` has no member `feelin`
+      !! 83..91: type `Sentiment` has no member `feelin`
     }
     class user.Sentiment$stream {
       feeling: string | null
@@ -513,7 +513,7 @@ class Dog {
         "impl.baml",
         r#"
 interface ToJson {
-    function to_json(self) -> string
+    function to_json(self) -> string throws never
 }
 
 implements ToJson for Dog {
@@ -526,9 +526,9 @@ implements ToJson for Dog {
 
     let item_tree = baml_compiler2_hir::file_item_tree(&db, impl_file);
     assert_eq!(
-        item_tree.implements_for.len(),
+        item_tree.free_impls.len(),
         1,
-        "cross-file class target must remain a first-class ImplementsFor record"
+        "cross-file class target must remain a first-class out-of-body impl record"
     );
 
     let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
@@ -537,11 +537,31 @@ implements ToJson for Dog {
         "cross-file class target should not produce diagnostics: {diagnostics:#?}"
     );
 
-    let registry = package_implements_registry(&db, PackageId::new(&db, Name::new("user")));
-    let dog = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog"));
-    let to_json = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("ToJson"));
+    // Membership goes through the canonical L1 seam (GlobalTypeContext's
+    // `TypeContext::implements_interface`); no type aliases are involved here.
+    use baml_type::normalize::TypeContext;
+    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let res_ctx = package_resolution_context(&db, pkg_id);
+    let aliases = std::collections::HashMap::new();
+    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
+    let ctx = GlobalTypeContext {
+        db: &db,
+        res_ctx,
+        aliases: &aliases,
+        bounds: &bounds,
+    };
+    let dog = Ty::Class(
+        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog")),
+        vec![],
+        TyAttr::default(),
+    );
+    let to_json = baml_type::Interface::new(
+        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("ToJson")),
+        vec![],
+        vec![],
+    );
     assert!(
-        registry.implements(&dog, &to_json),
+        ctx.implements_interface(&dog, &to_json),
         "out-of-body implementation in another file should register Dog <: ToJson"
     );
 }
@@ -552,20 +572,30 @@ implements ToJson for Dog {
 /// per-package lookup would miss them).
 #[test]
 fn builtin_equals_compare_visible_from_user_package() {
+    use baml_type::normalize::TypeContext;
+
     let mut db = make_db();
     // A user file so the `user` package exists; `Bare` implements nothing.
     db.add_file("main.baml", "class Bare { x: int }");
     let user_pkg = PackageId::new(&db, Name::new("user"));
 
-    let equals = QualifiedTypeName::new(
-        Name::new("baml"),
-        vec![Name::new("ops")],
-        Name::new("Equals"),
+    let equals = baml_type::Interface::new(
+        QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("ops")],
+            Name::new("Equals"),
+        ),
+        vec![],
+        vec![],
     );
-    let compare = QualifiedTypeName::new(
-        Name::new("baml"),
-        vec![Name::new("ops")],
-        Name::new("Compare"),
+    let compare = baml_type::Interface::new(
+        QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("ops")],
+            Name::new("Compare"),
+        ),
+        vec![],
+        vec![],
     );
     let int_ty = Ty::int();
     let u8_ty = Ty::uint8array();
@@ -575,15 +605,27 @@ fn builtin_equals_compare_visible_from_user_package() {
         TyAttr::default(),
     );
 
+    // The membership query walks the interface's package (`baml`) via the orphan
+    // rule, so the builtin primitive impls are visible from the user package.
+    let res_ctx = package_resolution_context(&db, user_pkg);
+    let aliases = std::collections::HashMap::new();
+    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
+    let ctx = GlobalTypeContext {
+        db: &db,
+        res_ctx,
+        aliases: &aliases,
+        bounds: &bounds,
+    };
+
     // int implements both Equals and Compare (impls in `baml`).
-    assert!(type_implements_with_deps(&db, user_pkg, &int_ty, &equals));
-    assert!(type_implements_with_deps(&db, user_pkg, &int_ty, &compare));
+    assert!(ctx.implements_interface(&int_ty, &equals));
+    assert!(ctx.implements_interface(&int_ty, &compare));
     // uint8array implements Equals but not Compare.
-    assert!(type_implements_with_deps(&db, user_pkg, &u8_ty, &equals));
-    assert!(!type_implements_with_deps(&db, user_pkg, &u8_ty, &compare));
+    assert!(ctx.implements_interface(&u8_ty, &equals));
+    assert!(!ctx.implements_interface(&u8_ty, &compare));
     // A class with no `implements` satisfies neither.
-    assert!(!type_implements_with_deps(&db, user_pkg, &bare, &equals));
-    assert!(!type_implements_with_deps(&db, user_pkg, &bare, &compare));
+    assert!(!ctx.implements_interface(&bare, &equals));
+    assert!(!ctx.implements_interface(&bare, &compare));
 }
 
 #[test]

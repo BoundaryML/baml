@@ -2,6 +2,20 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [hir] error: Duplicate attribute `@description`
+   ╭─[ test.baml:7:3 ]
+   │
+ 5 │   @@description("First description")
+   │   ─────────────────┬────────────────  
+   │                    ╰────────────────── `@description` first applied here
+   │ 
+ 7 │   @@description("Second description")
+   │   ─────────────────┬─────────────────  
+   │                    ╰─────────────────── duplicate `@description` — only the last takes effect
+   │ 
+   │ Note: Error code: E0014
+───╯
+
   [hir] error: Duplicate field `HasDuplicateField.name`
     ╭─[ test.baml:13:3 ]
     │
@@ -16,6 +30,18 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0012
 ────╯
 
+  [hir] error: Duplicate attribute `@alias`
+    ╭─[ test.baml:17:48 ]
+    │
+ 17 │   name string @alias("n") @description("Name") @alias("nm")
+    │               ─────┬─────                      ──────┬─────  
+    │                    ╰───────────────────────────────────────── `@alias` first applied here
+    │                                                      │       
+    │                                                      ╰─────── duplicate `@alias` — only the last takes effect
+    │ 
+    │ Note: Error code: E0014
+────╯
+
   [hir] error: Duplicate variant `HasDuplicateVariant.RED`
     ╭─[ test.baml:23:3 ]
     │
@@ -28,4 +54,29 @@ source: crates/baml_tests/src/generated_tests.rs
     │    ╰─── duplicate variant definition
     │ 
     │ Note: Error code: E0012
+────╯
+
+  [hir] error: Duplicate attribute `@description`
+    ╭─[ test.baml:30:3 ]
+    │
+ 29 │   @@description("First")
+    │   ───────────┬──────────  
+    │              ╰──────────── `@description` first applied here
+ 30 │   @@description("Second")
+    │   ───────────┬───────────  
+    │              ╰───────────── duplicate `@description` — only the last takes effect
+    │ 
+    │ Note: Error code: E0014
+────╯
+
+  [hir] error: Duplicate attribute `@alias`
+    ╭─[ test.baml:34:22 ]
+    │
+ 34 │   ACTIVE @alias("a") @alias("active")
+    │          ─────┬───── ────────┬───────  
+    │               ╰──────────────────────── `@alias` first applied here
+    │                              │         
+    │                              ╰───────── duplicate `@alias` — only the last takes effect
+    │ 
+    │ Note: Error code: E0014
 ────╯

@@ -390,18 +390,6 @@ fn render_builtin_namespace_llm() {
     insta::assert_snapshot!(output);
 }
 
-/// `baml describe baml.math` — list items in the `math` sub-namespace.
-#[test]
-fn render_builtin_namespace_math() {
-    let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let ns_path = vec![baml_db::Name::new("math")];
-    let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
-    assert!(!entries.is_empty());
-    let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
-}
-
 /// `baml describe testing` — list items in the `testing` package.
 #[test]
 fn render_testing_package_listing() {
@@ -1082,6 +1070,24 @@ fn render_keyword_spawn() {
 }
 
 #[test]
+fn render_keyword_defer() {
+    let output = capture_keyword("defer");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_cleanup() {
+    let output = capture_keyword("cleanup");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_playground() {
+    let output = capture_keyword("playground");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_keyword_baml_sdk() {
     let output = capture_keyword("baml_sdk");
     insta::assert_snapshot!(output);
@@ -1105,11 +1111,32 @@ fn render_keyword_patterns() {
     insta::assert_snapshot!(output);
 }
 
+/// `defer` and `cleanup` (BEP-042) resolve to keyword topics rather than
+/// falling through to "No symbol found" (regression test for B-632).
+#[test]
+fn dispatch_defer_and_cleanup_resolve_to_keyword() {
+    let db = simple_project();
+    for name in ["defer", "cleanup"] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`{name}` should resolve to a keyword topic, not fall through to 'No symbol found'"
+        );
+    }
+}
+
 #[test]
 fn dispatch_language_topic_resolves_to_keyword() {
-    // Language/SDK + pattern topics route to keyword docs, not package resolution.
+    // Language/SDK + pattern topics and CLI-command topics route to keyword
+    // docs, not package resolution.
     let db = simple_project();
-    for name in ["python", "typescript", "baml_sdk", "patterns", "pattern"] {
+    for name in [
+        "python",
+        "typescript",
+        "baml_sdk",
+        "patterns",
+        "pattern",
+        "playground",
+    ] {
         assert!(
             matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
             "`{name}` should resolve to a keyword topic"

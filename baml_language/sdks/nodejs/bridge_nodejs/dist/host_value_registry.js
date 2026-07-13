@@ -2,7 +2,7 @@
  * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
  *
  * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 // host_value_registry.ts — mirrors bridge_python's `register_host_opaque`
@@ -42,8 +42,8 @@
 // "no JS callable for this key"); `_releaseHostValue(0n)` is a benign
 // no-op since `mintHostValueKey` never returns `0`.
 import { mintHostValueKey, registerHostValueReleaseCallback, BamlHandle } from './native.js';
-import { baml_core } from './proto/baml_cffi.js';
-const BamlHandleType = baml_core.cffi.v1.BamlHandleType;
+import { baml_bridge } from './proto/baml_cffi.js';
+const BamlHandleType = baml_bridge.cffi.v1.BamlHandleType;
 const hostValueMap = new Map();
 /**
  * Convert a `HandleKey` (`{ low, high }`) to a `bigint` for use as a `Map` key.

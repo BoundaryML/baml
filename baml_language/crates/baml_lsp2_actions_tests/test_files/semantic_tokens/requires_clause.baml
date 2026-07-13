@@ -6,11 +6,11 @@ interface Aged { age: int }
 interface Person requires Named, Aged {
   occupation: string
 
-  function introduce(self) -> string {
+  function introduce(self) -> string throws never {
     return self.name + ", " + self.occupation
   }
 
-  function age_value(self) -> int {
+  function age_value(self) -> int throws never {
     return self.age
   }
 }
@@ -60,6 +60,8 @@ function get_age(e: Employee) -> int {
 // requires_clause.baml:9:12 (method) [declaration] len=9 "introduce"
 // requires_clause.baml:9:22 (parameter) [declaration] len=4 "self"
 // requires_clause.baml:9:31 (type) [defaultLibrary] len=6 "string"
+// requires_clause.baml:9:38 (keyword) len=6 "throws"
+// requires_clause.baml:9:45 (type) [defaultLibrary] len=5 "never"
 // requires_clause.baml:10:5 (keyword) len=6 "return"
 // requires_clause.baml:10:12 (parameter) len=4 "self"
 // requires_clause.baml:10:17 (property) len=4 "name"
@@ -72,6 +74,8 @@ function get_age(e: Employee) -> int {
 // requires_clause.baml:13:12 (method) [declaration] len=9 "age_value"
 // requires_clause.baml:13:22 (parameter) [declaration] len=4 "self"
 // requires_clause.baml:13:31 (type) [defaultLibrary] len=3 "int"
+// requires_clause.baml:13:35 (keyword) len=6 "throws"
+// requires_clause.baml:13:42 (type) [defaultLibrary] len=5 "never"
 // requires_clause.baml:14:5 (keyword) len=6 "return"
 // requires_clause.baml:14:12 (parameter) len=4 "self"
 // requires_clause.baml:14:17 (property) len=3 "age"

@@ -999,3 +999,99 @@ test "array_slice_empty_array" {
     let xs: int[] = [];
     assert.is_true(baml.deep_equals(xs.slice(-1, 5), []))
 }
+
+// ============================================================================
+// Array.generate tests (Linear B-638)
+//
+// `Array.generate(length, f)` calls `f` once per index 0..length-1 and stores
+// each result in its own slot. It is the alias-free counterpart to
+// `Array.filled`: because `f` runs per slot, reference-typed results (inner
+// arrays, maps, class instances) are independent instead of shared.
+// ============================================================================
+
+// (a) `f` is called once per index, receiving 0, 1, ..., length-1 in order.
+test "array_generate_passes_index_0_to_n_minus_1" {
+    let result = baml.Array.generate(4, (i: int) -> int { i });
+    let expected = [0, 1, 2, 3];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
+// The factory result can transform the index (here: squares).
+test "array_generate_maps_index_through_f" {
+    let result = baml.Array.generate(3, (i: int) -> int { i * i });
+    let expected = [0, 1, 4];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
+// `f` runs exactly `length` times — once per slot, no more.
+test "array_generate_calls_f_once_per_index" {
+    let count = 0;
+    let _ = baml.Array.generate(3, (i: int) -> int {
+        count = count + 1;
+        i
+    });
+    // `expected` is a local: a test-block local compares unequal to a literal (VM bug)
+    let expected = 3;
+    assert.is_true(baml.deep_equals(count, expected))
+}
+
+// (b) Each slot is INDEPENDENT: mutating one generated inner array must not
+// touch the others — the exact aliasing bug `Array.filled(n, <mutable>)` has.
+// Done in a function so the subscript writes/reads avoid test-block value-boxing
+// quirks (see file header).
+function generate_independence_grid() -> int[][] {
+    let grid = baml.Array.generate(3, (r: int) -> int[] { baml.Array.filled(2, 0) });
+    grid[0].push(99);
+    grid
+}
+
+test "array_generate_slots_are_independent" {
+    assert.is_true(baml.deep_equals(
+        generate_independence_grid(),
+        [[0, 0, 99], [0, 0], [0, 0]]
+    ))
+}
+
+// Contrast: `Array.filled` with the same mutable inner value aliases every slot,
+// so the push is visible in all three rows. This pins the behavioral difference
+// that motivates `generate`.
+function filled_aliases_grid() -> int[][] {
+    let row = baml.Array.filled(2, 0);
+    let grid = baml.Array.filled(3, row);
+    grid[0].push(99);
+    grid
+}
+
+test "array_filled_shares_mutable_slots_unlike_generate" {
+    assert.is_true(baml.deep_equals(
+        filled_aliases_grid(),
+        [[0, 0, 99], [0, 0, 99], [0, 0, 99]]
+    ))
+}
+
+// (c) n == 0 yields an empty array and never calls `f`.
+test "array_generate_zero_length_is_empty" {
+    let result = baml.Array.generate(0, (i: int) -> int throws string { throw "should not call" });
+    let expected: int[] = [];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
+// A negative length is clamped to empty, like `Array.filled`.
+test "array_generate_negative_length_is_empty" {
+    let result = baml.Array.generate(-3, (i: int) -> int throws string { throw "should not call" });
+    let expected: int[] = [];
+    assert.is_true(baml.deep_equals(result, expected))
+}
+
+// An error thrown by `f` propagates to the caller and halts generation.
+test "array_generate_propagates_error" {
+    assert.is_true(baml.deep_equals(
+        baml.Array.generate(3, (i: int) -> int throws string {
+            if (i == 1) { throw "boom" }
+            i
+        }) catch (e) {
+            string => "caught"
+        },
+        "caught"
+    ))
+}

@@ -45,6 +45,44 @@ pub use text_size::TextRange;
 /// `is_default_receiver_root` helpers over comparing the literal string.
 pub const DEFAULT_RECEIVER_KEYWORD: &str = "default";
 
+/// Parse a string attribute value into its runtime string, handling both
+/// regular strings (`"text"`, `'text'`) and raw strings (`#"text"#`,
+/// `##"text"##`, …).
+///
+/// The input is the raw, still-quoted token text as it appears in
+/// [`RawAttributeArg::value`]. Returns `None` if the value is not a recognized
+/// string literal. This is the single source of truth for turning an
+/// `@alias`/`@description` argument into the value used both by the emitter
+/// (for the runtime alias) and by HIR validation (for effective-key collision
+/// detection), so the two agree on quote/escape/raw-string normalization.
+pub fn parse_string_attr_value(raw: &str) -> Option<String> {
+    // Double-quoted string: "text"
+    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
+        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+    }
+    // Single-quoted string: 'text'
+    if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
+        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+    }
+
+    // Raw string: #"text"#, ##"text"##, etc.
+    let hash_count = raw.bytes().take_while(|&b| b == b'#').count();
+    if hash_count == 0 {
+        return None;
+    }
+
+    let rest = &raw[hash_count..];
+    let closing = format!("\"{}", &raw[..hash_count]);
+
+    // Need at least `"` + `"` + closing hashes
+    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
+        return None;
+    }
+
+    // Raw strings: no escape processing
+    Some(rest[1..rest.len() - 1 - hash_count].to_string())
+}
+
 /// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
 ///
 /// The lexer (`baml_compiler_lexer`) guarantees one-or-more ASCII decimal
@@ -328,6 +366,9 @@ mod tests {
             TypeExprKind::Unknown { attrs } => TypeExprKind::Unknown {
                 attrs: strip_attrs(attrs),
             },
+            TypeExprKind::Infer { attrs } => TypeExprKind::Infer {
+                attrs: strip_attrs(attrs),
+            },
         };
         __stripped.at(text_size::TextRange::default())
     }
@@ -416,6 +457,114 @@ function Extract(client: string, text: string) -> string {
         assert!(
             matches!(default_expr, Expr::Path(path) if path.len() == 1 && path[0].as_str() == "GPT4"),
             "expected compiler-injected client default to reference GPT4, got {default_expr:#?}"
+        );
+    }
+
+    /// The synthesized `<Client>$new` constructor for `client_name`.
+    fn client_new_companion(items: Vec<Item>, client_name: &str) -> crate::ast::FunctionDef {
+        let target = format!("{client_name}$new");
+        items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Function(f) if f.name.as_str() == target => Some(f),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("expected synthesized {target} function"))
+    }
+
+    /// Does `$new`'s body read `env_var` via a soft `baml.env.get`?
+    fn new_companion_reads_env(function: &crate::ast::FunctionDef, env_var: &str) -> bool {
+        use baml_base::Name;
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body for $new companion");
+        };
+        body.exprs.iter().any(|(_, expr)| {
+            let Expr::Call { callee, args, .. } = expr else {
+                return false;
+            };
+            let Expr::Path(path) = &body.exprs[*callee] else {
+                return false;
+            };
+            let is_env_get =
+                path.iter().map(Name::as_str).collect::<Vec<_>>() == ["baml", "env", "get"];
+            let reads_var = args.first().is_some_and(|arg| {
+                matches!(
+                    &body.exprs[arg.expr],
+                    Expr::Literal(baml_base::Literal::String(s)) if s == env_var
+                )
+            });
+            is_env_get && reads_var
+        })
+    }
+
+    #[test]
+    fn named_openai_client_defaults_api_key_to_env_var() {
+        // B-489: a named `client<llm>` with `provider openai` and no explicit
+        // `api_key` defaults the key to a soft `baml.env.get("OPENAI_API_KEY")`,
+        // mirroring the inline `"openai/model"` shorthand (unset -> null, never
+        // panics, so offline render still works without the var set).
+        let source = r#"
+client<llm> C {
+  provider openai
+  options { model "gpt-4o" }
+}
+"#;
+        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        assert!(
+            new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
+            "named openai client with no api_key should default to OPENAI_API_KEY"
+        );
+    }
+
+    #[test]
+    fn named_anthropic_client_defaults_api_key_to_env_var() {
+        let source = r#"
+client<llm> C {
+  provider anthropic
+  options { model "claude-3-5-sonnet-20241022" }
+}
+"#;
+        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        assert!(
+            new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
+            "named anthropic client with no api_key should default to ANTHROPIC_API_KEY"
+        );
+    }
+
+    #[test]
+    fn named_client_explicit_api_key_suppresses_env_default() {
+        // An explicit `api_key` wins: no env-var default is synthesized.
+        let source = r#"
+client<llm> C {
+  provider openai
+  options { model "gpt-4o"  api_key "sk-explicit" }
+}
+"#;
+        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        assert!(
+            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
+            "explicit api_key must suppress the OPENAI_API_KEY default"
+        );
+    }
+
+    #[test]
+    fn named_client_unknown_provider_gets_no_env_default() {
+        // Providers without a ubiquitous env-var convention are untouched.
+        // vertex-ai emits an unrelated MissingClientOptions diagnostic (no
+        // base_url/location), but the `$new` companion is still synthesized —
+        // so tolerate diagnostics and only assert on the api_key default.
+        let source = r#"
+client<llm> C {
+  provider vertex-ai
+  options { model "gemini-2.0-flash" }
+}
+"#;
+        let (items, _diags) = parse_and_lower_with_diagnostics(source);
+        let new_fn = client_new_companion(items, "C");
+        assert!(
+            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY")
+                && !new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
+            "vertex-ai must not default an api_key env var"
         );
     }
 
@@ -562,10 +711,10 @@ function Demo(items: string[]) -> string {
             ..
         } = &body.exprs[root]
         else {
-            panic!("expected block root, got {:?}", &body.exprs[root]);
+            panic!("expected block root, got {:?}", body.exprs[root]);
         };
         let Expr::Template { tag, segments } = &body.exprs[*tail] else {
-            panic!("expected Template tail, got {:?}", &body.exprs[*tail]);
+            panic!("expected Template tail, got {:?}", body.exprs[*tail]);
         };
 
         // A tagged template carries `TemplateTag::Custom`, whose tag expr
@@ -577,7 +726,7 @@ function Demo(items: string[]) -> string {
         assert!(
             matches!(&body.exprs[*tag], Expr::Path(p) if p.len() == 1 && p[0].as_str() == "sql"),
             "tag should lower to Path([sql]), got {:?}",
-            &body.exprs[*tag]
+            body.exprs[*tag]
         );
 
         // Top-level segments include a leading Text, an Interp, a For block
@@ -2324,7 +2473,7 @@ function Demo(name: string) -> string {
             ..
         } = &body.exprs[root]
         else {
-            panic!("expected Block at root, got {:?}", &body.exprs[root]);
+            panic!("expected Block at root, got {:?}", body.exprs[root]);
         };
         let Expr::Template {
             tag: crate::ast::TemplateTag::Default { elaborated },
@@ -2333,13 +2482,13 @@ function Demo(name: string) -> string {
         else {
             panic!(
                 "expected untagged Template at tail, got {:?}",
-                &body.exprs[*tail]
+                body.exprs[*tail]
             );
         };
         let Expr::Binary { op, lhs, rhs } = &body.exprs[*elaborated] else {
             panic!(
                 "expected Binary at elaborated root, got {:?}",
-                &body.exprs[*elaborated]
+                body.exprs[*elaborated]
             );
         };
         assert!(matches!(op, crate::ast::BinaryOp::Add));

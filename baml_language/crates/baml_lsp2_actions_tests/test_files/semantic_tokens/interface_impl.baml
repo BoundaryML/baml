@@ -1,7 +1,7 @@
 // Out-of-body implements: top-level `implements I for T { ... }`
 
 interface ToJson {
-    function to_json(self) -> string
+    function to_json(self) -> string throws never
 }
 
 class Dog {
@@ -26,6 +26,8 @@ implements ToJson for Dog {
 // interface_impl.baml:4:14 (method) [declaration] len=7 "to_json"
 // interface_impl.baml:4:22 (parameter) [declaration] len=4 "self"
 // interface_impl.baml:4:31 (type) [defaultLibrary] len=6 "string"
+// interface_impl.baml:4:38 (keyword) len=6 "throws"
+// interface_impl.baml:4:45 (type) [defaultLibrary] len=5 "never"
 // interface_impl.baml:7:1 (keyword) len=5 "class"
 // interface_impl.baml:7:7 (class) [declaration] len=3 "Dog"
 // interface_impl.baml:8:5 (property) [declaration] len=5 "breed"

@@ -16,7 +16,7 @@
 //! manually after `cargo test --no-run` for plain `cargo test`). This
 //! mirrors the typescript_node target's `pnpm install` placement,
 //! keeps codegen deps the only thing build.rs pulls in, and — most
-//! importantly — lets setup.sh pass `--reinstall-package baml_core`
+//! importantly — lets setup.sh pass `--reinstall-package baml_bridge`
 //! so the maturin-built `.so` is rebuilt on incremental Rust edits
 //! (which a plain `uv sync` skips, leaving a stale `.so`).
 //!
@@ -39,7 +39,7 @@ use crate::{
 };
 
 /// uv-friendly pyproject template. Each fixture's pyproject gets a
-/// unique `name` substituted in for `__PYPROJECT_NAME__`. `baml_core`
+/// unique `name` substituted in for `__PYPROJECT_NAME__`. `baml_bridge`
 /// is wired to the local `sdks/python/` source via
 /// `[tool.uv.sources]` — the relative path is 5 ancestors up from
 /// `crates/python_pydantic2/<F>/generated/pyproject.toml`:

@@ -15,7 +15,7 @@ use baml_compiler2_hir::{
 };
 
 use crate::{
-    lower_type_expr::{lower_type_expr_in_ns, qualify_def},
+    lower_type_expr::qualify_def,
     ty::{Ty, TyAttr},
 };
 
@@ -99,12 +99,18 @@ pub fn function_throw_sets<'db>(
                 let mut diags = Vec::new();
                 let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
                 let func_data = &item_tree[func_loc.id(db)];
-                let lowered = lower_type_expr_in_ns(
-                    db,
+                let lowered = crate::lower_type_expr::lower_type_expr(
                     te,
-                    pkg_items,
-                    &func_ns,
-                    &func_data.generic_params,
+                    &crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: pkg_items,
+                        ns_context: &func_ns,
+                        generic_params: &func_data.generic_params,
+                        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                            db, *func_loc,
+                        ),
+                        self_ty: None,
+                    },
                     &mut diags,
                 );
                 drop(diags);
@@ -121,6 +127,7 @@ pub fn function_throw_sets<'db>(
                     pkg_items,
                     &func_ns,
                     &func_data.generic_params,
+                    crate::lower_type_expr::function_in_scope_generic_param_bounds(db, *func_loc),
                     &func_data.params,
                 );
                 collect_direct_throws(db, pkg_items, &func_ns, *func_loc, expr_body, &param_types)
@@ -160,12 +167,18 @@ pub fn function_throw_sets<'db>(
                     baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
                 let declared_throws = sig.throws.as_ref().map(|te| {
                     let mut diags = Vec::new();
-                    let lowered = lower_type_expr_in_ns(
-                        db,
+                    let lowered = crate::lower_type_expr::lower_type_expr(
                         te,
-                        pkg_items,
-                        &method_ns,
-                        &method_data.generic_params,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: pkg_items,
+                            ns_context: &method_ns,
+                            generic_params: &method_data.generic_params,
+                            bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                                db, func_loc,
+                            ),
+                            self_ty: None,
+                        },
                         &mut diags,
                     );
                     drop(diags);
@@ -182,6 +195,9 @@ pub fn function_throw_sets<'db>(
                         pkg_items,
                         &method_ns,
                         &method_data.generic_params,
+                        crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                            db, func_loc,
+                        ),
                         &method_data.params,
                     );
                     collect_direct_throws(
@@ -351,6 +367,7 @@ fn lower_param_types<'db>(
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     generic_params: &[Name],
+    bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     params: &[baml_compiler2_hir::item_tree::FunctionParam],
 ) -> Vec<(Name, Ty)> {
     params
@@ -358,12 +375,16 @@ fn lower_param_types<'db>(
         .filter_map(|param| {
             let type_expr = param.type_expr.as_ref()?;
             let mut diags = Vec::new();
-            let ty = lower_type_expr_in_ns(
-                db,
+            let ty = crate::lower_type_expr::lower_type_expr(
                 type_expr,
-                pkg_items,
-                ns_context,
-                generic_params,
+                &crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context,
+                    generic_params,
+                    bounds,
+                    self_ty: None,
+                },
                 &mut diags,
             );
             Some((param.name.clone(), ty))
@@ -540,8 +561,8 @@ fn resolve_path_to_ty<'db>(
 }
 
 /// Resolve `type_name` within namespace `ns`, applying the same fallbacks as
-/// `lower_type_expr_in_ns` so throw-set recovery resolves a path identically
-/// whether it appears as an enum-variant prefix or a plain type:
+/// `lower_type_expr` path resolution so throw-set recovery resolves a path
+/// identically whether it appears as an enum-variant prefix or a plain type:
 ///
 /// - a bare name (`ns` empty) is tried in `ns_context` first, then at the
 ///   package root;

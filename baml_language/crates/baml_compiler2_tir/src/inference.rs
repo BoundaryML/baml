@@ -22,7 +22,7 @@ use baml_compiler2_ast::{
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{FileScopeId, ScopeId, ScopeKind},
     semantic_index::{BindingId, BindingKind},
@@ -33,6 +33,7 @@ use text_size::TextRange;
 use crate::{
     builder::TypeInferenceBuilder,
     infer_context::{InferContext, TypeCheckDiagnostics},
+    lower_type_expr::TypeVarBoundsMap,
     ty::{FunctionParamTy, Ty, TyAttr},
 };
 
@@ -41,7 +42,18 @@ struct GenericEnv {
     params: Vec<Name>,
     bound_param_names: Vec<Name>,
     bound_exprs: Vec<Option<ast::TypeExpr>>,
-    concrete_bounds: Vec<(Name, Ty)>,
+    /// Parallel to `bound_param_names`/`bound_exprs`: whether this env's scope
+    /// *owns* the bound's declaration. Bound-expr diagnostics (unresolved names,
+    /// arity, non-interface bounds) are reported only by the owning scope — an
+    /// env that merely inherits a parent declaration's bounds (a method env
+    /// carrying its class's, a lambda env carrying its function's) still lowers
+    /// them for enforcement/projection but stays silent, so each declaration
+    /// error is reported exactly once, at its declaration.
+    owned_bounds: Vec<bool>,
+    /// A parameter pinned to an interface *constraint* (currently only `Self` inside an
+    /// interface's own default method). A `baml_type::Interface`, never a `Ty::Interface`
+    /// existential — a constraint pins only some associated types.
+    concrete_bounds: Vec<(Name, baml_type::Interface)>,
 }
 
 impl GenericEnv {
@@ -50,10 +62,14 @@ impl GenericEnv {
             params,
             bound_param_names: Vec::new(),
             bound_exprs: Vec::new(),
+            owned_bounds: Vec::new(),
             concrete_bounds: Vec::new(),
         }
     }
 
+    /// Prepend an *enclosing* declaration's parameters (a class's onto a method
+    /// env, an impl block's onto its method env). Their bounds are inherited —
+    /// diagnosed at the enclosing declaration, not re-reported by this env.
     fn prepend_declared(&mut self, params: &[Name], bounds: &[Option<ast::TypeExpr>]) {
         let mut merged_params = params.to_vec();
         merged_params.extend(std::mem::take(&mut self.params));
@@ -66,6 +82,10 @@ impl GenericEnv {
         let mut merged_bounds = bounds.to_vec();
         merged_bounds.extend(std::mem::take(&mut self.bound_exprs));
         self.bound_exprs = merged_bounds;
+
+        let mut merged_owned = vec![false; params.len()];
+        merged_owned.extend(std::mem::take(&mut self.owned_bounds));
+        self.owned_bounds = merged_owned;
     }
 
     fn add_bounds_for_declared_params(
@@ -80,6 +100,7 @@ impl GenericEnv {
                 .enumerate()
                 .map(|(idx, _)| bounds.get(idx).cloned().unwrap_or(None)),
         );
+        self.owned_bounds.extend(params.iter().map(|_| true));
     }
 
     fn append_declared(&mut self, params: &[Name], bounds: &[Option<ast::TypeExpr>]) {
@@ -96,10 +117,18 @@ impl GenericEnv {
             self.bound_param_names.push(param.clone());
             self.bound_exprs
                 .push(bounds.get(idx).cloned().unwrap_or(None));
+            self.owned_bounds.push(true);
         }
     }
 
-    fn add_concrete_bound(&mut self, param: Name, bound: Ty) {
+    /// Demote every bound to inherited: the env is being extended for an inner
+    /// scope (a lambda, a required-method signature) that must not re-report the
+    /// enclosing declaration's bound diagnostics.
+    fn mark_all_bounds_inherited(&mut self) {
+        self.owned_bounds.fill(false);
+    }
+
+    fn add_concrete_bound(&mut self, param: Name, bound: baml_type::Interface) {
         self.concrete_bounds.push((param, bound));
     }
 }
@@ -234,27 +263,33 @@ fn fetch_scope_body<'db>(
 }
 
 fn enclosing_type_generics(
-    db: &dyn crate::Db,
-    file: SourceFile,
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
-    pkg_items: &PackageItems<'_>,
-    ns_context: &[Name],
     type_name: &Name,
-) -> Option<(Vec<Name>, Vec<Option<ast::TypeExpr>>)> {
+) -> Option<(
+    crate::infer_context::ShadowedParamOwner,
+    Vec<Name>,
+    Vec<Option<ast::TypeExpr>>,
+)> {
     for class_data in item_tree.classes.values() {
         if class_data.name == *type_name {
             return Some((
+                crate::infer_context::ShadowedParamOwner::Class,
                 class_data.generic_params.clone(),
                 class_data.generic_param_bounds.clone(),
             ));
         }
     }
 
-    for (local_id, iface_data) in &item_tree.interfaces {
+    for iface_data in item_tree.interfaces.values() {
         if iface_data.name == *type_name {
-            let iface_loc = InterfaceLoc::new(db, file, *local_id);
-            return Some(interface_type_level_params_and_bounds(
-                db, iface_loc, iface_data, pkg_items, ns_context,
+            // Associated types are NOT type-level parameters: a bare associated-type
+            // name (`Item`) is illegal and must be written `Self.Item`, so it never
+            // resolves as an in-scope type variable. Only the interface's declared
+            // generics are.
+            return Some((
+                crate::infer_context::ShadowedParamOwner::Interface,
+                iface_data.generic_params.clone(),
+                iface_data.generic_param_bounds.clone(),
             ));
         }
     }
@@ -262,50 +297,36 @@ fn enclosing_type_generics(
     None
 }
 
-fn interface_type_level_params_and_bounds(
+/// Every associated-type name the interface named `qtn` declares — its own plus
+/// each one transitively inherited through `requires`. Empty if `qtn` does not
+/// resolve to an interface. Used to recognise a bare associated-type reference
+/// (illegal: it must be written `Self.<name>`) so lowering can suggest the fix.
+pub(crate) fn interface_associated_type_names_for_qtn(
     db: &dyn crate::Db,
-    iface_loc: InterfaceLoc<'_>,
-    iface_data: &baml_compiler2_hir::item_tree::Interface,
-    pkg_items: &PackageItems<'_>,
-    ns_context: &[Name],
-) -> (Vec<Name>, Vec<Option<ast::TypeExpr>>) {
-    let mut params = iface_data.generic_params.clone();
-    params.extend(
-        iface_data
-            .associated_types
-            .iter()
-            .map(|assoc| assoc.name.clone()),
-    );
+    qtn: &crate::ty::QualifiedTypeName,
+) -> FxHashSet<Name> {
+    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let Some(Definition::Interface(iface_loc)) = pkg_items.lookup_type(qtn.namespace(), qtn.name())
+    else {
+        return FxHashSet::default();
+    };
+    let iface_pkg = baml_compiler2_hir::file_package::file_package(db, iface_loc.file(db));
+    let iface_pkg_id = PackageId::new(db, iface_pkg.package.clone());
+    let iface_pkg_items = baml_compiler2_ppir::package_items(db, iface_pkg_id);
 
-    let mut bounds = iface_data.generic_param_bounds.clone();
-    bounds.extend(
-        iface_data
-            .associated_types
-            .iter()
-            .map(|assoc| assoc.bound.clone()),
-    );
-
-    let own_associated: FxHashSet<Name> = iface_data
-        .associated_types
-        .iter()
-        .map(|assoc| assoc.name.clone())
-        .collect();
-    let inherited = inherited_interface_associated_type_names(db, iface_loc, pkg_items, ns_context);
-    let mut counts: FxHashMap<Name, usize> = FxHashMap::default();
-    for name in &inherited {
-        *counts.entry(name.clone()).or_default() += 1;
+    let mut names: FxHashSet<Name> = FxHashSet::default();
+    let item_tree = baml_compiler2_hir::file_item_tree(db, iface_loc.file(db));
+    if let Some(iface_data) = item_tree.interfaces.get(&iface_loc.id(db)) {
+        names.extend(iface_data.associated_types.iter().map(|a| a.name.clone()));
     }
-    for name in inherited {
-        if counts.get(&name).copied().unwrap_or_default() == 1
-            && !own_associated.contains(&name)
-            && !params.contains(&name)
-        {
-            params.push(name);
-            bounds.push(None);
-        }
-    }
-
-    (params, bounds)
+    names.extend(inherited_interface_associated_type_names(
+        db,
+        iface_loc,
+        iface_pkg_items,
+        &iface_pkg.namespace_path,
+    ));
+    names
 }
 
 fn inherited_interface_associated_type_names(
@@ -377,63 +398,258 @@ fn type_bindings_for_params(params: &[Name]) -> FxHashMap<Name, Ty> {
         .collect()
 }
 
-/// Signature-scope type bindings for a method declared directly inside an
-/// interface (a default method or a required-method stub). `Self` is the rigid
-/// type variable bound by the interface, and each associated type — the
-/// interface's own plus those inherited through `requires` — maps to the
-/// projection `Self.<name>`.
-///
-/// This mirrors the bindings [`infer_scope_types`] installs for the method
-/// *body*, so a signature and its body resolve `Item`/`Error`/`Self`
-/// identically. Lowering a signature with these bindings (via
-/// [`crate::generics::lower_type_expr_with_generics`]) keeps associated-type
-/// references as faithful `Self.<name>` projections instead of letting a bare
-/// [`crate::lower_type_expr::lower_type_expr_in_ns`] erase them to `Ty::Unknown`
-/// — which would otherwise reach the runtime lowering boundary and panic.
-///
-/// Callers merge these over the method's in-scope generic parameters (each
-/// mapped to its own `TypeVar`); the keys here (`Self` and the associated-type
-/// names) take precedence.
-pub fn interface_self_projection_bindings(
+/// Lower one generic parameter's `extends` bound expression to its `Ty`, in the
+/// declaration's own scope with the sibling parameters (`params`) in scope as
+/// rigid type variables, and the env's *concrete* constraints (e.g. `Self`'s
+/// interface inside a default method) visible so a projection bound
+/// (`U extends Self.Item`) resolves through them. Sibling *declared* bounds are
+/// not threaded (that would be order-dependent/circular); shared by the
+/// enforcement table and [`env_interface_bounds`].
+#[expect(clippy::too_many_arguments)]
+fn lower_env_generic_bound(
     db: &dyn crate::Db,
-    iface_loc: InterfaceLoc<'_>,
-    iface_data: &baml_compiler2_hir::item_tree::Interface,
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
-) -> FxHashMap<Name, Ty> {
-    let self_var = || Ty::TypeVar(Name::new("Self"), TyAttr::default());
-    let projection = |member: Name| Ty::AssociatedTypeProjection {
-        base: Box::new(self_var()),
-        interface: None,
-        member,
-        attr: TyAttr::default(),
-    };
+    params: &[Name],
+    concrete_bounds: &TypeVarBoundsMap,
+    self_ty: Option<&Ty>,
+    bound_te: &ast::TypeExpr,
+    diags: &mut Vec<crate::infer_context::TirTypeError>,
+) -> Ty {
+    crate::lower_type_expr::lower_type_expr(
+        bound_te,
+        &crate::lower_type_expr::ScopeCtx {
+            db,
+            package_items: pkg_items,
+            ns_context,
+            generic_params: params,
+            bounds: concrete_bounds,
+            self_ty: self_ty.cloned(),
+        },
+        diags,
+    )
+}
 
-    let mut bindings = FxHashMap::default();
-    bindings.insert(Name::new("Self"), self_var());
-    for assoc in &iface_data.associated_types {
-        bindings.insert(assoc.name.clone(), projection(assoc.name.clone()));
-    }
-    // Inherited associated types are bound as `Self.<name>` only when the name
-    // is unambiguous. A name inherited from more than one `requires` interface
-    // is excluded from the interface's type-level params (see
-    // `interface_type_level_params_and_bounds`, which applies the same
-    // `count == 1` filter) and must be disambiguated explicitly; binding it to a
-    // single `Self.<name>` projection here would silently resolve an ambiguous
-    // reference and diverge from body inference.
-    let inherited = inherited_interface_associated_type_names(db, iface_loc, pkg_items, ns_context);
-    let mut counts: FxHashMap<Name, usize> = FxHashMap::default();
-    for name in &inherited {
-        *counts.entry(name.clone()).or_default() += 1;
-    }
-    for name in inherited {
-        if counts.get(&name).copied().unwrap_or_default() == 1 {
-            bindings
-                .entry(name.clone())
-                .or_insert_with(|| projection(name));
+/// The lowering view of a [`GenericEnv`]'s concrete constraints: the bounds map
+/// (each concrete constraint as a single-conjunct entry) and, when the env
+/// carries a `Self` constraint, the symbolic `Self` type — so a declared bound
+/// mentioning `Self.Item` lowers inside the same scope its enforcement runs in.
+fn env_concrete_lowering_scope(env: &GenericEnv) -> (TypeVarBoundsMap, Option<Ty>) {
+    let bounds: TypeVarBoundsMap = env
+        .concrete_bounds
+        .iter()
+        .map(|(name, constraint)| (name.clone(), vec![constraint.clone()]))
+        .collect();
+    let self_ty = bounds
+        .contains_key(&Name::new("Self"))
+        .then(crate::self_type::self_type_for_interface_default);
+    (bounds, self_ty)
+}
+
+/// A [`GenericEnv`]'s interface-constraint bounds, for resolving a `T.member`
+/// projection in a type expression lowered against it — the env's lowered
+/// `extends` bounds (interface ones only) plus its `concrete_bounds` (e.g. the
+/// `Self` constraint inside an interface default). The projection view of the
+/// same env that [`install_generic_param_bounds`] installs as the `Ty`-typed
+/// enforcement table; bound-lowering diagnostics are the enforcement path's to
+/// report, so they are discarded here.
+fn env_interface_bounds(
+    db: &dyn crate::Db,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    env: &GenericEnv,
+) -> TypeVarBoundsMap {
+    let mut bounds = TypeVarBoundsMap::default();
+    let (concrete_lowering_bounds, lowering_self_ty) = env_concrete_lowering_scope(env);
+    for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
+        let Some(bound_te) = bound else {
+            continue;
+        };
+        let mut diags = Vec::new();
+        let bound_ty = lower_env_generic_bound(
+            db,
+            pkg_items,
+            ns_context,
+            &env.params,
+            &concrete_lowering_bounds,
+            lowering_self_ty.as_ref(),
+            bound_te,
+            &mut diags,
+        );
+        if let Some(constraint) = bound_ty.as_interface() {
+            // Last-wins, matching `install_generic_param_bounds`'s `insert`: a name repeated
+            // across `bound_param_names` is a shadowing artifact (an inner-scope parameter
+            // reusing an outer name), not an intersection conjunction, so the inner bound
+            // replaces the outer one. Keeping both would make this map disagree with the
+            // enforcement table it is meant to mirror.
+            bounds.insert(name.clone(), vec![constraint]);
         }
     }
-    bindings
+    for (name, constraint) in &env.concrete_bounds {
+        bounds.insert(name.clone(), vec![constraint.clone()]);
+    }
+    bounds
+}
+
+/// Report each generic parameter declared more than once in a single declaration
+/// list (`<T, T>`). A name reused across *nested* scopes is not a duplicate but a
+/// shadow, reported as `TypeParamShadowed` at the inner declaration instead.
+fn report_duplicate_generic_params(
+    builder: &TypeInferenceBuilder<'_>,
+    params: &[Name],
+    span: TextRange,
+) {
+    for (idx, param) in params.iter().enumerate() {
+        if params[..idx].contains(param) {
+            builder.report_at_span(
+                crate::infer_context::TirTypeError::DuplicateGenericParam {
+                    name: param.clone(),
+                },
+                span,
+            );
+        }
+    }
+}
+
+/// The number of generic parameters the interface named `qtn` declares, or `None`
+/// if `qtn` does not resolve to an interface.
+pub(crate) fn interface_declared_generic_arity(
+    db: &dyn crate::Db,
+    qtn: &crate::ty::QualifiedTypeName,
+) -> Option<usize> {
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, qtn.package().clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let baml_compiler2_hir::contributions::Definition::Interface(loc) =
+        pkg_items.lookup_type(qtn.namespace(), qtn.name())?
+    else {
+        return None;
+    };
+    let tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
+    Some(tree.interfaces.get(&loc.id(db))?.generic_params.len())
+}
+
+/// Lower one declared interface bound — from a generic parameter's or an
+/// associated type's `extends` clause — to its interface constraint(s), in
+/// `params` scope. A bound *is* an interface conjunction; the intermediate `Ty`
+/// is used only to classify it for diagnostics. When `report` is true (the owning
+/// declaration's scope), emits its lowering diagnostics plus a bare-generic arity
+/// error (`extends Outer` where `interface Outer<X>` — a bound cannot infer the
+/// missing argument, unlike a value position where the bare form is a wildcard)
+/// and a non-interface bound error (a sibling type variable or an associated-type
+/// projection); an inherited bound passes `false`, since the owner already
+/// reported them.
+#[expect(clippy::too_many_arguments)]
+fn lower_declared_interface_bound(
+    db: &dyn crate::Db,
+    builder: &mut TypeInferenceBuilder<'_>,
+    pkg_items: &PackageItems<'_>,
+    ns_context: &[Name],
+    params: &[Name],
+    bounds: &crate::lower_type_expr::TypeVarBoundsMap,
+    self_ty: Option<&Ty>,
+    bound_te: &ast::TypeExpr,
+    span: TextRange,
+    report: bool,
+) -> Box<[baml_type::Interface]> {
+    // `Self` and the scope's bounds are threaded so a projection bound
+    // (`extends Self.Item`, `extends T.Item`) resolves to an `AssociatedTypeProjection`
+    // — which is then correctly rejected as a non-interface bound below, rather than
+    // failing to resolve and masquerading as an "unresolved type".
+    let mut diags = Vec::new();
+    let bound_ty = crate::lower_type_expr::lower_type_expr(
+        bound_te,
+        &crate::lower_type_expr::ScopeCtx {
+            db,
+            package_items: pkg_items,
+            ns_context,
+            generic_params: params,
+            bounds,
+            self_ty: self_ty.cloned(),
+        },
+        &mut diags,
+    );
+    if report {
+        for diag in diags {
+            builder.report_at_span(diag, span);
+        }
+        match &bound_ty {
+            Ty::Interface(qtn, generics, assoc, _) => {
+                if generics.is_empty()
+                    && let Some(arity) = interface_declared_generic_arity(db, qtn)
+                    && arity > 0
+                {
+                    builder.report_at_span(
+                        crate::infer_context::TirTypeError::WrongNumberOfTypeArgs {
+                            type_name: qtn.name().clone(),
+                            expected: arity,
+                            got: 0,
+                        },
+                        span,
+                    );
+                }
+                // An explicit associated binding written on the bound (`P extends
+                // Parser<Output = V>`) must implement that assoc's own declared bound
+                // (`type Output extends Named`) — the same implements relation the
+                // impl-side binding check enforces. Only *written* bindings: a default
+                // is the interface's own obligation, checked at its declaration; a
+                // symbolic value resolves at instantiation and fails open. Cycle-safe:
+                // scope inference runs strictly downstream of `impl_data`.
+                if let baml_compiler2_ast::TypeExprKind::Path {
+                    associated_type_bindings,
+                    ..
+                } = &bound_te.kind
+                {
+                    let head =
+                        baml_type::Interface::new(qtn.clone(), generics.clone(), assoc.clone());
+                    for written in associated_type_bindings {
+                        let Some((_, value)) = assoc.iter().find(|(n, _)| *n == written.name)
+                        else {
+                            // Unknown binding name — lowering reported it already.
+                            continue;
+                        };
+                        if crate::generics::contains_typevar(value) {
+                            continue;
+                        }
+                        let normalized = baml_type::normalize::normalize(value, &*builder);
+                        for declared in
+                            crate::builder::associated_projection::associated_type_declared_bound(
+                                db,
+                                &head,
+                                &written.name,
+                            )
+                        {
+                            if !crate::interfaces::normalized_arg_implements_bound(
+                                &*builder,
+                                &normalized,
+                                &declared,
+                            ) {
+                                builder.report_at_span(
+                                    crate::infer_context::TirTypeError::AssociatedTypeBindingViolatesBound {
+                                        interface: qtn.clone(),
+                                        name: written.name.clone(),
+                                        binding: value.clone(),
+                                        bound: declared,
+                                    },
+                                    span,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            // Already diagnosed by lowering the bound expression itself — a second
+            // "not an interface" here would be redundant.
+            Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => {}
+            // Mirrors the impl-bound check in `lower_generic_param_interface_bounds`.
+            other => builder.report_at_span(
+                crate::infer_context::TirTypeError::GenericBoundNotInterface {
+                    bound: other.clone(),
+                },
+                span,
+            ),
+        }
+    }
+    bound_ty.as_interface().into_iter().collect()
 }
 
 fn install_generic_param_bounds(
@@ -444,27 +660,43 @@ fn install_generic_param_bounds(
     env: &GenericEnv,
     span: TextRange,
 ) {
-    let mut bounds: FxHashMap<Name, Ty> = FxHashMap::default();
-    let type_bindings = type_bindings_for_params(&env.params);
-    for (name, bound) in env.bound_param_names.iter().zip(env.bound_exprs.iter()) {
+    let mut bounds = crate::lower_type_expr::TypeVarBoundsMap::default();
+    let (concrete_lowering_bounds, lowering_self_ty) = env_concrete_lowering_scope(env);
+    debug_assert_eq!(env.bound_param_names.len(), env.owned_bounds.len());
+    for ((name, bound), owned) in env
+        .bound_param_names
+        .iter()
+        .zip(env.bound_exprs.iter())
+        .zip(env.owned_bounds.iter().copied())
+    {
         let Some(bound_te) = bound else {
             continue;
         };
-        let mut diags = Vec::new();
-        let bound_ty = crate::generics::lower_type_expr_with_generics(
+        // Inherited bounds (an enclosing declaration's) are lowered for the
+        // enforcement table but their diagnostics belong to — and were already
+        // reported by — the owning declaration's scope. The env's *concrete*
+        // constraints (e.g. `Self`'s interface inside a default method) are
+        // visible so `U extends Self.Item` resolves; sibling declared bounds
+        // are not threaded (that would be order-dependent).
+        let constraint = lower_declared_interface_bound(
             db,
-            bound_te,
+            builder,
             pkg_items,
             ns_context,
-            &type_bindings,
-            &mut diags,
+            &env.params,
+            &concrete_lowering_bounds,
+            lowering_self_ty.as_ref(),
+            bound_te,
+            span,
+            owned,
         );
-        for diag in diags {
-            builder.report_at_span(diag, span);
-        }
-        bounds.insert(name.clone(), bound_ty);
+        bounds.insert(name.clone(), constraint.into_vec());
     }
-    bounds.extend(env.concrete_bounds.iter().cloned());
+    bounds.extend(
+        env.concrete_bounds
+            .iter()
+            .map(|(name, constraint)| (name.clone(), vec![constraint.clone()])),
+    );
     builder.set_generic_param_bounds(bounds);
 }
 
@@ -482,32 +714,35 @@ fn apply_generic_env(
 
 #[derive(Clone, Copy)]
 struct GenericLookupContext<'a, 'db> {
-    db: &'a dyn crate::Db,
-    file: SourceFile,
     index: &'a baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
     item_tree: &'a baml_compiler2_hir::item_tree::ItemTree,
-    pkg_items: &'a PackageItems<'db>,
-    ns_context: &'a [Name],
+}
+
+/// The enclosing class/interface declaration whose type-level parameters a method's
+/// signature env extends — with the declaration kind for shadowing diagnostics.
+struct ParentTypeGenerics {
+    type_name: Name,
+    owner: crate::infer_context::ShadowedParamOwner,
+    params: Vec<Name>,
+    bounds: Vec<Option<ast::TypeExpr>>,
 }
 
 fn parent_type_generic_env(
     ctx: GenericLookupContext<'_, '_>,
     parent_scope_id: Option<FileScopeId>,
-) -> Option<(Name, Vec<Name>, Vec<Option<ast::TypeExpr>>)> {
+) -> Option<ParentTypeGenerics> {
     let parent = &ctx.index.scopes[parent_scope_id?.index() as usize];
     if !matches!(parent.kind, ScopeKind::Class) {
         return None;
     }
     let type_name = parent.name.clone()?;
-    let (params, bounds) = enclosing_type_generics(
-        ctx.db,
-        ctx.file,
-        ctx.item_tree,
-        ctx.pkg_items,
-        ctx.ns_context,
-        &type_name,
-    )?;
-    Some((type_name, params, bounds))
+    let (owner, params, bounds) = enclosing_type_generics(ctx.item_tree, &type_name)?;
+    Some(ParentTypeGenerics {
+        type_name,
+        owner,
+        params,
+        bounds,
+    })
 }
 
 fn prepend_parent_type_generics(
@@ -515,22 +750,44 @@ fn prepend_parent_type_generics(
     env: &mut GenericEnv,
     parent_scope_id: Option<FileScopeId>,
 ) -> Option<Name> {
-    let (type_name, parent_generics, parent_bounds) =
-        parent_type_generic_env(ctx, parent_scope_id)?;
-    env.prepend_declared(&parent_generics, &parent_bounds);
-    Some(type_name)
+    let parent = parent_type_generic_env(ctx, parent_scope_id)?;
+    env.prepend_declared(&parent.params, &parent.bounds);
+    Some(parent.type_name)
 }
 
-/// The `implements … for …` block whose method list contains `func_data`, if
-/// any. A method is identified by its source span (unique per declaration).
-fn enclosing_impl_for_func<'a>(
-    item_tree: &'a baml_compiler2_hir::item_tree::ItemTree,
+/// An out-of-body impl block's declared generics as `(param names, each's single optional
+/// bound)`. The legacy flat form the generic env consumes; the `ImplBlock` holds the full
+/// `&`-bound set per param, of which only the first is used here (matching the old single-bound
+/// representation). Empty for an in-body (`InClass`) block.
+fn free_impl_generics(
+    block: &baml_compiler2_hir::item_tree::ImplBlock,
+) -> (Vec<Name>, Vec<Option<baml_compiler2_ast::TypeExpr>>) {
+    match &block.subject {
+        baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } => (
+            generics.iter().map(|g| g.name.clone()).collect(),
+            generics.iter().map(|g| g.bounds.first().cloned()).collect(),
+        ),
+        baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => {
+            debug_assert!(false, "Should only be called for a free impl");
+            (Vec::new(), Vec::new())
+        }
+    }
+}
+
+/// The out-of-body `implement … for …` block whose method list contains `func_data`, as its
+/// declared generics, if any. A method is identified by its source span (unique per declaration).
+/// Reads the unified `impls` store via the `free_impls` index.
+fn enclosing_impl_generics_for_func(
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     func_data: &baml_compiler2_hir::item_tree::Function,
-) -> Option<&'a baml_compiler2_hir::item_tree::ImplementsFor> {
-    item_tree.implements_for.iter().find(|imp| {
-        imp.methods
+) -> Option<(Vec<Name>, Vec<Option<baml_compiler2_ast::TypeExpr>>)> {
+    item_tree.free_impls.iter().find_map(|impl_id| {
+        let block = item_tree.impls.get(impl_id)?;
+        block
+            .methods
             .iter()
             .any(|&mid| item_tree[mid].span == func_data.span)
+            .then(|| free_impl_generics(block))
     })
 }
 
@@ -546,8 +803,10 @@ fn generic_env_for_function_data(
     // Sortable for T[]`), which live on the impl block rather than a parent
     // scope. Mirror the `ScopeKind::Function` arm: impl generics take the place
     // of parent-type generics so a nested lambda body can resolve them too.
-    if let Some(imp) = enclosing_impl_for_func(ctx.item_tree, func_data) {
-        env.prepend_declared(&imp.generic_params, &imp.generic_param_bounds);
+    if let Some((generic_params, generic_param_bounds)) =
+        enclosing_impl_generics_for_func(ctx.item_tree, func_data)
+    {
+        env.prepend_declared(&generic_params, &generic_param_bounds);
     } else {
         prepend_parent_type_generics(ctx, &mut env, function_scope.parent);
     }
@@ -576,36 +835,35 @@ fn enclosing_function_generic_env_from_let(
     None
 }
 
-#[derive(Clone, Copy)]
-struct TypeExprLoweringOptions<'a> {
+struct TypeExprLoweringOptions {
     span: TextRange,
-    self_replacement: Option<&'a ast::TypeExpr>,
+    self_ty: Option<Ty>,
 }
 
+#[expect(clippy::too_many_arguments)]
 fn lower_type_expr_at_span_in_env(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     env: &GenericEnv,
+    env_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     type_expr: &ast::TypeExpr,
-    options: TypeExprLoweringOptions<'_>,
+    options: TypeExprLoweringOptions,
 ) -> Ty {
-    let mut diags = Vec::new();
-    let resolved_expr = if let Some(replacement) = options.self_replacement {
-        crate::lower_type_expr::substitute_self_in(type_expr, replacement)
-    } else {
-        type_expr.clone()
-    };
-    let type_bindings = type_bindings_for_params(&env.params);
-    let ty = crate::generics::lower_type_expr_with_generics(
+    // The env's params are the in-scope type variables; `Self` resolves through `self_ty`,
+    // and the env's interface bounds (`env_bounds`, computed once per env via
+    // `env_interface_bounds`) let a `T.member` / `Self.member` projection resolve.
+    let ctx = crate::lower_type_expr::ScopeCtx {
         db,
-        &resolved_expr,
-        pkg_items,
+        package_items: pkg_items,
         ns_context,
-        &type_bindings,
-        &mut diags,
-    );
+        generic_params: &env.params,
+        bounds: env_bounds,
+        self_ty: options.self_ty,
+    };
+    let mut diags = Vec::new();
+    let ty = crate::lower_type_expr::lower_type_expr(type_expr, &ctx, &mut diags);
     for diag in diags {
         builder.report_at_span(diag, options.span);
     }
@@ -613,14 +871,16 @@ fn lower_type_expr_at_span_in_env(
     ty
 }
 
+#[expect(clippy::too_many_arguments)]
 fn validate_spanned_type_expr_generic_bounds(
     db: &dyn crate::Db,
     builder: &mut TypeInferenceBuilder<'_>,
     pkg_items: &PackageItems<'_>,
     ns_context: &[Name],
     env: &GenericEnv,
+    env_bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     type_expr: &ast::TypeExpr,
-    self_replacement: Option<&ast::TypeExpr>,
+    self_ty: Option<Ty>,
 ) {
     lower_type_expr_at_span_in_env(
         db,
@@ -628,15 +888,19 @@ fn validate_spanned_type_expr_generic_bounds(
         pkg_items,
         ns_context,
         env,
+        env_bounds,
         type_expr,
         TypeExprLoweringOptions {
             span: type_expr.span,
-            self_replacement,
+            self_ty,
         },
     );
 }
 
 fn extend_env_with_lambda_generics(mut env: GenericEnv, func_def: &FunctionDef) -> GenericEnv {
+    // The enclosing scope's bounds were already diagnosed there; the lambda's
+    // scope reports only its own.
+    env.mark_all_bounds_inherited();
     env.append_unique_declared(&func_def.generic_params, &func_def.generic_param_bounds);
     env
 }
@@ -650,7 +914,9 @@ fn add_lambda_params_to_builder(
     func_def: &FunctionDef,
     contextual_param_tys: Option<&[FunctionParamTy]>,
 ) {
-    let type_bindings = type_bindings_for_params(&env.params);
+    // The lambda's own generic bounds (its env extends the enclosing scope's) let a
+    // `T.member` projection in a parameter type resolve `T`'s declaring interface.
+    let bounds = env_interface_bounds(db, pkg_items, ns_context, env);
     for (i, param) in func_def.params.iter().enumerate() {
         let param_ty = param
             .type_expr
@@ -661,12 +927,16 @@ fn add_lambda_params_to_builder(
             // child lambda scope.
             .map(|ste| {
                 let mut diags = Vec::new();
-                crate::generics::lower_type_expr_with_generics(
-                    db,
+                crate::lower_type_expr::lower_type_expr(
                     ste,
-                    pkg_items,
-                    ns_context,
-                    &type_bindings,
+                    &crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: pkg_items,
+                        ns_context,
+                        generic_params: &env.params,
+                        bounds: &bounds,
+                        self_ty: None,
+                    },
                     &mut diags,
                 )
             })
@@ -717,25 +987,37 @@ pub enum MemberResolution<'db> {
         class_loc: ClassLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
-    /// An interface default method referenced through the interface type
-    /// itself, e.g. `Named.describe(value)`.
-    InterfaceDefaultMethod {
+    /// A **virtual** interface-method call: the receiver's concrete type is unknown — an
+    /// interface-existential value (`named.describe()`) or a `T extends I` type variable —
+    /// so dispatch resolves to the receiver's runtime impl. Only the *slot* is known
+    /// statically — the interface and the method name — so no `FunctionLoc`: there is no
+    /// statically-known body (the interface's default is just one possible target, and a
+    /// required method has none). Recorded for every virtual call, required and default
+    /// alike; the contract (signature / generics / throws) for type-checking is the
+    /// interface's declaration of `method`. Contrast
+    /// [`MemberResolution::InterfaceConcreteMethod`], where the impl — and thus the called
+    /// body — is statically known.
+    InterfaceVirtualMethod {
         iface_loc: InterfaceLoc<'db>,
+        method: Name,
+    },
+    /// A **concrete** interface-method call: the receiver's concrete type is known, so the
+    /// `impl` block is resolved statically (`foo.describe()` on a class implementing the
+    /// interface). `func_loc` is the impl's override, or — when the impl inherits it — the
+    /// interface's default body; `impl_loc` identifies the impl (and recovers the interface,
+    /// the implementor, and the impl's bindings via `impl_data`).
+    InterfaceConcreteMethod {
+        impl_loc: ImplLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
-    /// A required (signature-only) interface method, accessed on an
-    /// interface-typed value (`x.as<Greeter>.greet()`, `self.next()` in a
-    /// default method). It has no body `FunctionLoc` — only the declaring
-    /// interface.
-    InterfaceMethod {
+    /// A **virtual** interface-field access (`named.field` on an interface-existential, or
+    /// the projected `obj.as<I>.field`): the concrete type is unknown, so the field is read
+    /// through the interface. A *concrete* receiver's interface field instead resolves to
+    /// the linked class field it backs ([`MemberResolution::Field`]), so only the virtual
+    /// case needs its own variant.
+    InterfaceVirtualField {
         iface_loc: InterfaceLoc<'db>,
-        method_name: Name,
-    },
-    /// An interface field, accessed on an interface-typed value
-    /// (`x.as<Named>.name`).
-    InterfaceField {
-        iface_loc: InterfaceLoc<'db>,
-        field_name: Name,
+        field: Name,
     },
 }
 
@@ -1008,6 +1290,11 @@ impl<'db> ScopeInference<'db> {
         self.function_coercions.iter()
     }
 
+    /// Look up the function adapter required for a coerced expression in this scope.
+    pub fn function_coercion(&self, expr_id: ExprId) -> Option<&FunctionCoercion> {
+        self.function_coercions.get(&expr_id)
+    }
+
     /// Iterate over all default-parameter expression types for this scope.
     pub fn iter_default_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
         self.parameter_defaults.expressions.iter()
@@ -1064,6 +1351,67 @@ impl<'db> ScopeInference<'db> {
         &self,
     ) -> impl Iterator<Item = (&ExprId, &FunctionCoercion)> {
         self.parameter_defaults.function_coercions.iter()
+    }
+
+    // ── Parameter-default point lookups ────────────────────────────────────────
+    // Mirror the body-scope accessors above, but read the per-scope
+    // default-parameter inference sub-result (a default's expressions live in a
+    // separate metadata scope). Keep `parameter_defaults` encapsulated: consumers
+    // look up by id here rather than reaching into the sub-struct.
+
+    /// Look up a default-parameter expression's type.
+    pub fn default_expression_type(&self, expr_id: ExprId) -> Option<&Ty> {
+        self.parameter_defaults.expressions.get(&expr_id)
+    }
+
+    /// Look up a default-parameter pattern binding's type.
+    pub fn default_binding_type(&self, pat_id: PatId) -> Option<&Ty> {
+        self.parameter_defaults.pattern_types.get(&pat_id)
+    }
+
+    /// Look up a default-parameter expression's member resolution.
+    pub fn default_resolution(&self, expr_id: ExprId) -> Option<&MemberResolution<'db>> {
+        self.parameter_defaults.resolutions.get(&expr_id)
+    }
+
+    /// Whether a default-parameter match expression was determined exhaustive.
+    pub fn default_is_exhaustive_match(&self, expr_id: ExprId) -> bool {
+        self.parameter_defaults
+            .exhaustive_matches
+            .contains(&expr_id)
+    }
+
+    /// Look up a default-parameter path's root segment type.
+    pub fn default_path_root_type(&self, expr_id: ExprId) -> Option<&Ty> {
+        self.parameter_defaults.path_root_types.get(&expr_id)
+    }
+
+    /// Look up a default-parameter path's `segments[..=seg_idx]` type.
+    pub fn default_path_segment_type(&self, expr_id: ExprId, seg_idx: usize) -> Option<&Ty> {
+        self.parameter_defaults
+            .path_segment_types
+            .get(&(expr_id, seg_idx))
+    }
+
+    /// Look up a default-parameter path's per-segment member resolutions.
+    pub fn default_path_member_resolution(
+        &self,
+        expr_id: ExprId,
+    ) -> Option<&[MemberResolution<'db>]> {
+        self.parameter_defaults
+            .path_member_resolutions
+            .get(&expr_id)
+            .map(Vec::as_slice)
+    }
+
+    /// Look up a default-parameter call's argument binding plan.
+    pub fn default_call_plan(&self, expr_id: ExprId) -> Option<&CallPlan> {
+        self.parameter_defaults.call_plans.get(&expr_id)
+    }
+
+    /// Look up a default-parameter expression's function adapter.
+    pub fn default_function_coercion(&self, expr_id: ExprId) -> Option<&FunctionCoercion> {
+        self.parameter_defaults.function_coercions.get(&expr_id)
     }
 
     /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.
@@ -1296,48 +1644,61 @@ pub fn infer_scope_types<'db>(
                     let body = baml_compiler2_ppir::function_body(db, func_loc);
                     let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
 
-                    let enclosing_impl = item_tree
-                        .implements_for
-                        .iter()
-                        .find(|imp| imp.methods.contains(local_id));
+                    let enclosing_impl = item_tree.free_impls.iter().find_map(|impl_id| {
+                        let block = item_tree.impls.get(impl_id)?;
+                        block.methods.contains(local_id).then_some(block)
+                    });
 
                     let mut env = GenericEnv::from_params(sig.user_generic_params.clone());
                     env.params
                         .extend(sig.synthetic_effect_params.iter().cloned());
+                    report_duplicate_generic_params(
+                        &builder,
+                        &sig.user_generic_params,
+                        func_data.span,
+                    );
                     if let Some(imp) = enclosing_impl {
-                        env.prepend_declared(&imp.generic_params, &imp.generic_param_bounds);
-                    } else if let Some((type_name, parent_generics, parent_bounds)) =
-                        parent_type_generic_env(
-                            GenericLookupContext {
-                                db,
-                                file,
-                                index,
-                                item_tree: &item_tree,
-                                pkg_items,
-                                ns_context: &pkg_info.namespace_path,
-                            },
-                            scope.parent,
-                        )
-                    {
+                        let (impl_generic_params, impl_generic_bounds) = free_impl_generics(imp);
                         for mp in &sig.user_generic_params {
-                            if parent_generics.iter().any(|cp| cp == mp) {
+                            if impl_generic_params.iter().any(|cp| cp == mp) {
                                 builder.report_at_span(
-                                    crate::infer_context::TirTypeError::TypeParamShadowed {
+                                    crate::infer_context::TirTypeError::TypeParamShadowedImplParam {
                                         param_name: mp.clone(),
-                                        class_name: type_name.clone(),
                                     },
                                     func_data.span,
                                 );
                             }
                         }
-                        env.prepend_declared(&parent_generics, &parent_bounds);
+                        env.prepend_declared(&impl_generic_params, &impl_generic_bounds);
+                    } else if let Some(parent) = parent_type_generic_env(
+                        GenericLookupContext {
+                            index,
+                            item_tree: &item_tree,
+                        },
+                        scope.parent,
+                    ) {
+                        for mp in &sig.user_generic_params {
+                            if parent.params.iter().any(|cp| cp == mp) {
+                                builder.report_at_span(
+                                    crate::infer_context::TirTypeError::TypeParamShadowed {
+                                        param_name: mp.clone(),
+                                        type_name: parent.type_name.clone(),
+                                        owner: parent.owner,
+                                    },
+                                    func_data.span,
+                                );
+                            }
+                        }
+                        env.prepend_declared(&parent.params, &parent.bounds);
                     }
                     // BEP-044 (Self-as-type-variable): inside an interface's own
                     // method, `self` is a `Self` type variable bound by the
                     // interface instead of the interface existential. Register it
                     // in the shared generic env so the normal bound-aware member
                     // resolution path handles `Self`.
-                    let interface_self_bound: Option<Ty> = if enclosing_impl.is_none() {
+                    let interface_self_bound: Option<baml_type::Interface> = if enclosing_impl
+                        .is_none()
+                    {
                         scope.parent.and_then(|parent_idx| {
                             let parent = &index.scopes[parent_idx.index() as usize];
                             if !matches!(parent.kind, ScopeKind::Class) {
@@ -1358,30 +1719,12 @@ pub fn infer_scope_types<'db>(
                                 .iter()
                                 .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
                                 .collect();
-                            let associated_bindings = iface
-                                .associated_types
-                                .iter()
-                                .map(|assoc| {
-                                    (
-                                        assoc.name.clone(),
-                                        Ty::AssociatedTypeProjection {
-                                            base: Box::new(Ty::TypeVar(
-                                                Name::new("Self"),
-                                                TyAttr::default(),
-                                            )),
-                                            interface: None,
-                                            member: assoc.name.clone(),
-                                            attr: TyAttr::default(),
-                                        },
-                                    )
-                                })
-                                .collect();
-                            Some(Ty::Interface(
-                                qtn,
-                                args,
-                                associated_bindings,
-                                TyAttr::default(),
-                            ))
+                            // `Self`'s bound is the interface as a *constraint* (a
+                            // `baml_type::Interface`, not a `Ty::Interface` existential): it pins
+                            // none of its associated types — they are `Self`'s own, abstract in a
+                            // default body, so `Self.Item` stays symbolic. Empty bindings, never
+                            // `Ty::Error` placeholders which would wrongly pin `Item = Error`.
+                            Some(baml_type::Interface::new(qtn, args, Vec::new()))
                         })
                     } else {
                         None
@@ -1437,6 +1780,12 @@ pub fn infer_scope_types<'db>(
                     }
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
+                        // The method's in-scope interface bounds (its own params, the
+                        // enclosing class/interface's, and `Self`'s constraint) so a
+                        // `T.member` / `Self.member` projection in the receiver pattern,
+                        // interface arguments, or a binding value resolves nominally.
+                        let env_bounds =
+                            env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &env);
                         // Determine enclosing class name for `self` parameter
                         // resolution and BEP-044 `Self`-type substitution.
                         let enclosing_class_name: Option<Name> =
@@ -1448,35 +1797,59 @@ pub fn infer_scope_types<'db>(
                                     None
                                 }
                             });
-                        // BEP-044 `Self` substitution: inside an out-of-body
-                        // implementation, `Self` is the rule receiver pattern
-                        // (`Box<T>` or `T`). Otherwise it is the enclosing
-                        // class/interface type.
-                        let self_replacement = if interface_self_bound.is_some() {
-                            // Interface method: `Self` is the bound type variable,
-                            // not the interface existential.
-                            Some(crate::lower_type_expr::type_expr_for_name(Name::new(
-                                "Self",
-                            )))
+                        // `Self`'s type for this body — resolved through the lowering context
+                        // below, never a bare-name substitution: the rigid `Self` type variable
+                        // (interface's own default method), the impl's receiver pattern, or the
+                        // enclosing class's full receiver type (`Foo<T>`, carrying its generics).
+                        let self_ty: Option<Ty> = if interface_self_bound.is_some() {
+                            Some(crate::self_type::self_type_for_interface_default())
+                        } else if let Some(imp) = enclosing_impl
+                            && let baml_compiler2_hir::item_tree::ImplSubject::Free {
+                                for_target,
+                                ..
+                            } = &imp.subject
+                        {
+                            let mut diags = Vec::new();
+                            Some(crate::lower_type_expr::lower_type_expr(
+                                for_target,
+                                &crate::lower_type_expr::ScopeCtx {
+                                    db,
+                                    package_items: pkg_items,
+                                    ns_context: &pkg_info.namespace_path,
+                                    generic_params: &env.params,
+                                    bounds: &env_bounds,
+                                    self_ty: None,
+                                },
+                                &mut diags,
+                            ))
                         } else {
-                            enclosing_impl
-                                .map(|imp| imp.for_target.clone())
-                                .or_else(|| {
-                                    enclosing_class_name.as_ref().map(|cn| {
-                                        crate::lower_type_expr::type_expr_for_name(cn.clone())
-                                    })
-                                })
+                            enclosing_class_name.as_ref().and_then(|cn| {
+                                let baml_compiler2_hir::contributions::Definition::Class(class_loc) =
+                                    pkg_items.lookup_type(&pkg_info.namespace_path, cn)?
+                                else {
+                                    return None;
+                                };
+                                let class_file = class_loc.file(db);
+                                let class_pkg =
+                                    baml_compiler2_hir::file_package::file_package(db, class_file);
+                                let class_tree = baml_compiler2_hir::file_item_tree(db, class_file);
+                                let class_data = class_tree.classes.get(&class_loc.id(db))?;
+                                Some(crate::self_type::self_type_for_class(
+                                    class_data,
+                                    &class_pkg.namespace_path,
+                                    class_pkg.package.clone(),
+                                ))
+                            })
                         };
+                        // The interface bound `Self.Assoc` projects through, as a constraint
+                        // (interface's own default method); `None` when `Self` is concrete.
+                        let self_bound: Option<baml_type::Interface> = interface_self_bound;
+
                         let sig_sm = baml_compiler2_ppir::elaborated_function_signature_source_map(
                             db, func_loc,
                         );
-                        let mut type_bindings: FxHashMap<Name, Ty> = FxHashMap::default();
-                        for param in &env.params {
-                            type_bindings.insert(
-                                param.clone(),
-                                Ty::TypeVar(param.clone(), TyAttr::default()),
-                            );
-                        }
+                        let mut type_bindings: FxHashMap<Name, Ty> =
+                            type_bindings_for_params(&env.params);
                         if let Some(target) = item_tree.method_to_iface_target.get(local_id)
                             && let Some(iface_loc) = crate::interfaces::resolve_path_to_interface(
                                 db,
@@ -1488,9 +1861,6 @@ pub fn infer_scope_types<'db>(
                             let iface_file = iface_loc.file(db);
                             let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
                             if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
-                                let iface_ns =
-                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
-                                        .namespace_path;
                                 let mut iface_type_bindings = type_bindings.clone();
                                 if let baml_compiler2_ast::TypeExprKind::Path {
                                     generic_args, ..
@@ -1500,14 +1870,25 @@ pub fn infer_scope_types<'db>(
                                         iface_data.generic_params.iter().zip(generic_args)
                                     {
                                         let mut arg_diags = Vec::new();
-                                        let ty = crate::generics::lower_type_expr_with_generics(
-                                            db,
-                                            arg,
-                                            pkg_items,
-                                            &pkg_info.namespace_path,
-                                            &type_bindings,
-                                            &mut arg_diags,
-                                        );
+                                        let ty = {
+                                            let generic_params: Vec<_> =
+                                                type_bindings.keys().cloned().collect();
+                                            crate::generics::substitute_ty(
+                                                &crate::lower_type_expr::lower_type_expr(
+                                                    arg,
+                                                    &crate::lower_type_expr::ScopeCtx {
+                                                        db,
+                                                        package_items: pkg_items,
+                                                        ns_context: &pkg_info.namespace_path,
+                                                        generic_params: &generic_params,
+                                                        bounds: &env_bounds,
+                                                        self_ty: None,
+                                                    },
+                                                    &mut arg_diags,
+                                                ),
+                                                &type_bindings,
+                                            )
+                                        };
                                         for diag in arg_diags {
                                             builder.report_at_span(diag, target.span);
                                         }
@@ -1525,146 +1906,96 @@ pub fn infer_scope_types<'db>(
                                         explicit_bindings.iter().find(|b| b.name == assoc.name)
                                         && let Some(te) = &binding.type_expr
                                     {
-                                        let resolved = if let Some(replacement) = &self_replacement
-                                        {
-                                            crate::lower_type_expr::substitute_self_in(
-                                                te,
-                                                replacement,
-                                            )
-                                        } else {
-                                            te.clone()
+                                        // Lower the binding's type through a context that resolves
+                                        // `Self`, then substitute the in-scope generics /
+                                        // associated types accumulated so far.
+                                        let binding_generic_params: Vec<Name> =
+                                            type_bindings.keys().cloned().collect();
+                                        let binding_ctx = crate::lower_type_expr::ScopeCtx {
+                                            db,
+                                            package_items: pkg_items,
+                                            ns_context: &pkg_info.namespace_path,
+                                            generic_params: &binding_generic_params,
+                                            bounds: &env_bounds,
+                                            self_ty: self_ty.clone(),
                                         };
                                         let mut binding_diags = Vec::new();
-                                        let ty = crate::generics::lower_type_expr_with_generics(
-                                            db,
-                                            &resolved,
-                                            pkg_items,
-                                            &pkg_info.namespace_path,
+                                        let ty = crate::generics::substitute_ty(
+                                            &crate::lower_type_expr::lower_type_expr(
+                                                te,
+                                                &binding_ctx,
+                                                &mut binding_diags,
+                                            ),
                                             &type_bindings,
-                                            &mut binding_diags,
                                         );
                                         for diag in binding_diags {
                                             builder.report_at_span(diag, te.span);
                                         }
-                                        type_bindings.insert(assoc.name.clone(), ty.clone());
+                                        // Into `iface_type_bindings` only — the binding realizes
+                                        // later defaults, but the bare name is NOT in scope
+                                        // (banned: the method must write `Self.Item`).
                                         iface_type_bindings.insert(assoc.name.clone(), ty);
                                         continue;
                                     }
-                                    if let Some(default) = &assoc.default {
-                                        let mut default_diags = Vec::new();
-                                        let ty = crate::generics::lower_type_expr_with_generics(
+                                    if let Some((default_ty, _diags)) =
+                                        crate::interfaces::interface_associated_type_default(
                                             db,
-                                            default,
-                                            pkg_items,
-                                            &iface_ns,
-                                            &iface_type_bindings,
-                                            &mut default_diags,
-                                        );
-                                        for diag in default_diags {
-                                            builder.report_at_span(diag, default.span);
-                                        }
-                                        type_bindings.insert(assoc.name.clone(), ty.clone());
-                                        iface_type_bindings.insert(assoc.name.clone(), ty);
-                                    }
-                                }
-                            }
-                        } else if let Some(iface_name) = &enclosing_class_name
-                            && let Some(def) =
-                                pkg_items.lookup_type(&pkg_info.namespace_path, iface_name)
-                            && let baml_compiler2_hir::contributions::Definition::Interface(
-                                iface_loc,
-                            ) = def
-                        {
-                            let iface_file = iface_loc.file(db);
-                            let iface_tree = baml_compiler2_hir::file_item_tree(db, iface_file);
-                            if let Some(iface_data) = iface_tree.interfaces.get(&iface_loc.id(db)) {
-                                let iface_ns =
-                                    baml_compiler2_hir::file_package::file_package(db, iface_file)
-                                        .namespace_path;
-                                let self_assoc_projection =
-                                    |member: Name| Ty::AssociatedTypeProjection {
-                                        base: Box::new(Ty::TypeVar(
-                                            Name::new("Self"),
-                                            TyAttr::default(),
-                                        )),
-                                        interface: None,
-                                        member,
-                                        attr: TyAttr::default(),
-                                    };
-                                for assoc in &iface_data.associated_types {
-                                    if let Some(default) = &assoc.default {
-                                        let mut default_diags = Vec::new();
-                                        let _ = crate::generics::lower_type_expr_with_generics(
-                                            db,
-                                            default,
-                                            pkg_items,
-                                            &iface_ns,
-                                            &type_bindings,
-                                            &mut default_diags,
-                                        );
-                                        for diag in default_diags {
-                                            builder.report_at_span(diag, default.span);
-                                        }
-                                    }
-                                    // Inside the interface's own (default) method, `Self` is the
-                                    // rigid type variable bound by the interface, not an existential
-                                    // interface value. Associated types therefore project onto `Self`
-                                    // even when they have defaults. Defaults are for omitted bindings
-                                    // at interface type-use sites; a default body must stay
-                                    // polymorphic over implementors that override the associated type.
-                                    // This also matches how `self.method()` resolves the same
-                                    // associated type via `SelfReceiver::RigidVar`.
-                                    type_bindings.insert(
-                                        assoc.name.clone(),
-                                        self_assoc_projection(assoc.name.clone()),
-                                    );
-                                }
-                                let own_associated: FxHashSet<Name> = iface_data
-                                    .associated_types
-                                    .iter()
-                                    .map(|assoc| assoc.name.clone())
-                                    .collect();
-                                let inherited = inherited_interface_associated_type_names(
-                                    db, iface_loc, pkg_items, &iface_ns,
-                                );
-                                let mut inherited_counts: FxHashMap<Name, usize> =
-                                    FxHashMap::default();
-                                for name in &inherited {
-                                    *inherited_counts.entry(name.clone()).or_default() += 1;
-                                }
-                                for inherited_name in inherited {
-                                    if inherited_counts
-                                        .get(&inherited_name)
-                                        .copied()
-                                        .unwrap_or_default()
-                                        == 1
-                                        && !own_associated.contains(&inherited_name)
+                                            iface_loc,
+                                            assoc.name.clone(),
+                                        )
                                     {
-                                        type_bindings.insert(
-                                            inherited_name.clone(),
-                                            self_assoc_projection(inherited_name),
+                                        // The default is lowered once (symbolic `Self`) by the
+                                        // shared query; substitute the generics / associated
+                                        // types accumulated so far. `Self` stays symbolic here
+                                        // (an interface method body's receiver is rigid), so a
+                                        // Self-referencing default resolves to `(Self as I).X`.
+                                        // Diagnostics surface at the interface declaration.
+                                        // Into `iface_type_bindings` only (see the explicit-
+                                        // binding arm above): bare names are banned.
+                                        let ty = crate::generics::substitute_ty(
+                                            &default_ty,
+                                            &iface_type_bindings,
                                         );
+                                        iface_type_bindings.insert(assoc.name.clone(), ty);
                                     }
                                 }
                             }
                         }
+                        // Inside an interface's own default body, associated types are
+                        // deliberately NOT registered as bare names: a bare `Item` is
+                        // banned everywhere — the body writes `Self.Item`, which lowers
+                        // through the `Self` bound installed below.
                         builder.set_type_bindings(type_bindings.clone());
+                        // Lower body type annotations through the shared context: `Self` and
+                        // `Self.Assoc` resolve via `self_ty` and the `Self` bound; interface /
+                        // method generics and associated types then substitute in. A bare
+                        // associated name is an in-scope type variable (it is a `type_bindings`
+                        // key) substituted to its symbolic projection, matching `Self.Assoc`.
+                        let body_generic_params: Vec<Name> =
+                            type_bindings.keys().cloned().collect();
+                        let mut body_bounds =
+                            crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                                db, func_loc,
+                            )
+                            .clone();
+                        if let Some(bound) = &self_bound {
+                            body_bounds.insert(Name::new("Self"), vec![bound.clone()]);
+                        }
+                        let ctx = crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: pkg_items,
+                            ns_context: &pkg_info.namespace_path,
+                            generic_params: &body_generic_params,
+                            bounds: &body_bounds,
+                            self_ty: self_ty.clone(),
+                        };
                         let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
                                                diags: &mut Vec<
                             crate::infer_context::TirTypeError,
                         >| {
-                            let resolved = if let Some(replacement) = &self_replacement {
-                                crate::lower_type_expr::substitute_self_in(te, replacement)
-                            } else {
-                                te.clone()
-                            };
-                            crate::generics::lower_type_expr_with_generics(
-                                db,
-                                &resolved,
-                                pkg_items,
-                                &pkg_info.namespace_path,
+                            crate::generics::substitute_ty(
+                                &crate::lower_type_expr::lower_type_expr(te, &ctx, diags),
                                 &type_bindings,
-                                diags,
                             )
                         };
 
@@ -1704,118 +2035,12 @@ pub fn infer_scope_types<'db>(
                                     param.ty.kind,
                                     baml_compiler2_ast::TypeExprKind::Unknown { .. }
                                 ) {
-                                if let Some(imp) = enclosing_impl {
-                                    param_ty_validated = true;
-                                    lower_type_expr_at_span_in_env(
-                                        db,
-                                        &mut builder,
-                                        pkg_items,
-                                        &pkg_info.namespace_path,
-                                        &env,
-                                        &imp.for_target,
-                                        TypeExprLoweringOptions {
-                                            span: param_type_span,
-                                            self_replacement: None,
-                                        },
-                                    )
-                                } else if interface_self_bound.is_some() {
-                                    // BEP-044 Self-as-type-variable: inside an
-                                    // interface's own method `self` is the `Self`
-                                    // type variable (bound by this interface), not
-                                    // the interface existential — so `self.method(
-                                    // other: Self)` resolves with `Self` pinned.
-                                    // Member resolution walks the registered bound
-                                    // to reach the interface contract.
-                                    Ty::TypeVar(Name::new("Self"), TyAttr::default())
-                                } else {
-                                    // `self` parameter with no type annotation — infer from
-                                    // enclosing class.
-                                    enclosing_class_name
-                                        .as_ref()
-                                        .and_then(|cn| {
-                                            let ns_path = &pkg_info.namespace_path;
-                                            pkg_items.lookup_type(ns_path, cn).map(|def| {
-                                                let qtn =
-                                                    crate::lower_type_expr::qualify_def(db, def, cn);
-                                                match def {
-                                                    baml_compiler2_hir::contributions::Definition::Interface(_) => {
-                                                        // BEP-044 wf3 #1/#5: a generic interface's
-                                                        // default method must type `self` as
-                                                        // `Interface<T..>` carrying its own params as
-                                                        // TypeVars — empty args dropped `T`, so a
-                                                        // `self.method()` call lost the reached view's
-                                                        // concrete arg (first impl block wins) and
-                                                        // cross-`requires` calls found no MIR candidate.
-                                                        let iface_args: Vec<Ty> = item_tree
-                                                            .interfaces
-                                                            .values()
-                                                            .find(|i| &i.name == cn)
-                                                            .map(|i| {
-                                                                i.generic_params
-                                                                    .iter()
-                                                                    .map(|p| Ty::TypeVar(
-                                                                        p.clone(),
-                                                                        TyAttr::default(),
-                                                                    ))
-                                                                    .collect()
-                                                            })
-                                                            .unwrap_or_default();
-                                                        Ty::Interface(
-                                                            qtn,
-                                                            iface_args,
-                                                            vec![],
-                                                            TyAttr::default(),
-                                                        )
-                                                    }
-                                                    _ => {
-                                                        // Mirror the interface arm: a generic class's
-                                                        // method must type `self` as `Class<T..>`
-                                                        // carrying the class's own params as TypeVars.
-                                                        // Empty args left `self` as a bare `Class`, so
-                                                        // the auto-derived `to_json`'s
-                                                        // `to_string<Self>(self)` saw `self: StreamCache`
-                                                        // against `Self = StreamCache<TStream, TFinal>`,
-                                                        // and more generally a bare-class `self` leaked
-                                                        // into every generic-class method body.
-                                                        let class_args: Vec<Ty> = item_tree
-                                                            .classes
-                                                            .values()
-                                                            .find(|c| &c.name == cn)
-                                                            .map(|c| {
-                                                                c.generic_params
-                                                                    .iter()
-                                                                    .map(|p| Ty::TypeVar(
-                                                                        p.clone(),
-                                                                        TyAttr::default(),
-                                                                    ))
-                                                                    .collect()
-                                                            })
-                                                            .unwrap_or_default();
-                                                        // The builtin `Array<T>` is the array sugar
-                                                        // `T[]` (`Ty::List`), not a nominal class:
-                                                        // type its methods' `self` structurally so a
-                                                        // body that returns `self` (e.g. the in-place
-                                                        // `sort_by`/`sort_by_key`) matches the `T[]`
-                                                        // return type. Members still resolve (a `List`
-                                                        // receiver dispatches to the `Array` builtins).
-                                                        if qtn.is_builtin_root_type("Array")
-                                                            && class_args.len() == 1
-                                                        {
-                                                            Ty::List(
-                                                                Box::new(class_args[0].clone()),
-                                                                TyAttr::default(),
-                                                            )
-                                                        } else {
-                                                            Ty::Class(qtn, class_args, TyAttr::default())
-                                                        }
-                                                    }
-                                                }
-                                            })
-                                        })
-                                        .unwrap_or(Ty::Unknown {
-                                            attr: TyAttr::default(),
-                                        })
-                                }
+                                // `self`'s type is the method's `Self` receiver, resolved once
+                                // above (rigid `Self` var for an interface's own default method,
+                                // the impl's receiver pattern, or the enclosing class's `Foo<T>`).
+                                self_ty.clone().unwrap_or(Ty::Unknown {
+                                    attr: TyAttr::default(),
+                                })
                             } else {
                                 param_ty_validated = true;
                                 let mut param_diags = Vec::new();
@@ -2022,12 +2247,8 @@ pub fn infer_scope_types<'db>(
                                     let env = extend_env_with_lambda_generics(
                                         generic_env_for_function_data(
                                             GenericLookupContext {
-                                                db,
-                                                file,
                                                 index,
                                                 item_tree: &item_tree,
-                                                pkg_items,
-                                                ns_context: &pkg_info.namespace_path,
                                             },
                                             ancestor_scope,
                                             func_data,
@@ -2102,12 +2323,8 @@ pub fn infer_scope_types<'db>(
                                     let env = extend_env_with_lambda_generics(
                                         enclosing_function_generic_env_from_let(
                                             GenericLookupContext {
-                                                db,
-                                                file,
                                                 index,
                                                 item_tree: &item_tree,
-                                                pkg_items,
-                                                ns_context: &pkg_info.namespace_path,
                                             },
                                             ancestor_scope,
                                         )
@@ -2157,6 +2374,11 @@ pub fn infer_scope_types<'db>(
                 if class_data.span != scope.range || scope.name.as_ref() != Some(&class_data.name) {
                     continue;
                 }
+                report_duplicate_generic_params(
+                    &builder,
+                    &class_data.generic_params,
+                    class_data.span,
+                );
                 let mut env = GenericEnv::from_params(class_data.generic_params.clone());
                 env.add_bounds_for_declared_params(
                     &class_data.generic_params,
@@ -2184,17 +2406,175 @@ pub fn infer_scope_types<'db>(
                     continue;
                 }
                 let iface_loc = InterfaceLoc::new(db, file, *local_id);
-                let (iface_params, iface_bounds) = interface_type_level_params_and_bounds(
-                    db,
-                    iface_loc,
-                    iface_data,
-                    pkg_items,
-                    &pkg_info.namespace_path,
+                report_duplicate_generic_params(
+                    &builder,
+                    &iface_data.generic_params,
+                    iface_data.span,
                 );
+                // Associated types share the interface's type-level namespace with its
+                // generic parameters (a bare `Assoc` reference lowers as a type variable),
+                // so a name collision — with a parameter or another associated type —
+                // would silently alias the two. Both are declaration errors.
+                for (idx, assoc) in iface_data.associated_types.iter().enumerate() {
+                    if iface_data.generic_params.contains(&assoc.name) {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::AssociatedTypeConflictsWithGenericParam {
+                                name: assoc.name.clone(),
+                            },
+                            assoc.name_span,
+                        );
+                    }
+                    if iface_data.associated_types[..idx]
+                        .iter()
+                        .any(|prior| prior.name == assoc.name)
+                    {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::DuplicateAssociatedType {
+                                name: assoc.name.clone(),
+                            },
+                            assoc.name_span,
+                        );
+                    }
+                }
+                // Interface-declaration well-formedness (BEP-044). `iface_qtn` names the
+                // interface for each diagnostic.
+                let iface_qtn = crate::lower_type_expr::qualify_def(
+                    db,
+                    baml_compiler2_hir::contributions::Definition::Interface(iface_loc),
+                    &iface_data.name,
+                );
+                // E0118: a `requires` graph that cycles back to this interface.
+                if let Some(chain) = crate::interfaces::interface_requires_cycle(db, iface_loc) {
+                    builder.report_at_span(
+                        crate::infer_context::TirTypeError::InterfaceRequiresCycle { chain },
+                        iface_data.span,
+                    );
+                }
+                // E0136: a field type may not name the *bare* `Self` type (a recursive field
+                // must name the interface itself). A `Self.Assoc` projection is allowed —
+                // once the implementor binds the associated type it denotes a concrete field
+                // type (`value: Self.Item` with `type Item = int` is an `int` field).
+                for field in &iface_data.fields {
+                    if let Some(type_expr) = &field.type_expr
+                        && crate::builder::TypeInferenceBuilder::type_expr_contains_bare_self(
+                            type_expr,
+                        )
+                    {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::SelfInInterfaceField {
+                                interface: iface_qtn.clone(),
+                                field: field.name.clone(),
+                            },
+                            type_expr.span,
+                        );
+                    }
+                }
+                // E0133: a `requires` clause may only name interfaces. A resolved non-interface
+                // type is rejected here; an unknown name forwards its own lowering error.
+                let requires_scope = crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &iface_data.generic_params,
+                    bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+                    self_ty: None,
+                };
+                for requires_te in &iface_data.requires {
+                    if crate::interfaces::resolve_path_to_interface(
+                        db,
+                        requires_te,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                    )
+                    .is_some()
+                    {
+                        continue;
+                    }
+                    let mut requires_diags = Vec::new();
+                    let lowered = crate::lower_type_expr::lower_type_expr(
+                        requires_te,
+                        &requires_scope,
+                        &mut requires_diags,
+                    );
+                    match &lowered {
+                        Ty::Class(qtn, ..) | Ty::Enum(qtn, ..) => builder.report_at_span(
+                            crate::infer_context::TirTypeError::InterfaceRequiresNonInterface {
+                                interface: iface_qtn.clone(),
+                                target: qtn.name().clone(),
+                            },
+                            requires_te.span,
+                        ),
+                        _ => {
+                            for e in requires_diags {
+                                builder.report_at_span(e, requires_te.span);
+                            }
+                        }
+                    }
+                }
+                // Every interface method (required or default) must declare an explicit `throws`
+                // clause: a signature is the contract, and unlike a free function its error type is
+                // never inferred (TYPE_SYSTEM.md rule 1). (The return type is required for *all*
+                // functions, not just interface ones — a universal syntax-layer rule, not enforced
+                // here.)
+                for (method, throws, span) in iface_data
+                    .required_methods
+                    .iter()
+                    .map(|s| (&s.name, s.throws.as_ref(), s.span))
+                    .chain(iface_data.default_methods.iter().filter_map(|id| {
+                        item_tree
+                            .functions
+                            .get(id)
+                            .map(|f| (&f.name, f.throws.as_ref(), f.span))
+                    }))
+                {
+                    if throws.is_none() {
+                        builder.report_at_span(
+                            crate::infer_context::TirTypeError::InterfaceMethodMissingThrows {
+                                interface: iface_qtn.clone(),
+                                method: method.clone(),
+                            },
+                            span,
+                        );
+                    }
+                }
+                // Associated types are NOT type-level parameters — a bare associated-type
+                // name is illegal (`Self.X` required), so only the interface's declared
+                // generics enter the signature-lowering env. The associated-type names are
+                // still collected below, for the method-generic shadowing check.
+                let iface_params = iface_data.generic_params.clone();
+                let iface_bounds = iface_data.generic_param_bounds.clone();
+                let iface_assoc_names: Vec<Name> = iface_data
+                    .associated_types
+                    .iter()
+                    .map(|assoc| assoc.name.clone())
+                    .collect();
                 let mut iface_env = GenericEnv::from_params(iface_params.clone());
                 iface_env.add_bounds_for_declared_params(&iface_params, &iface_bounds);
-                let self_replacement =
-                    crate::lower_type_expr::type_expr_for_name(iface_data.name.clone());
+                // `Self` in an interface's own signatures is its rigid `Self` type variable,
+                // bounded by the interface itself (as a constraint, no associated pins) — so a
+                // `Self.member` projection in a field or method signature resolves through it,
+                // mirroring the interface-default-body path.
+                let self_param = Name::new("Self");
+                if !iface_env.params.iter().any(|p| p == &self_param) {
+                    iface_env.params.push(self_param.clone());
+                }
+                iface_env.add_concrete_bound(
+                    self_param,
+                    baml_type::Interface::new(
+                        crate::lower_type_expr::qualify_def(
+                            db,
+                            baml_compiler2_hir::contributions::Definition::Interface(iface_loc),
+                            &iface_data.name,
+                        ),
+                        iface_data
+                            .generic_params
+                            .iter()
+                            .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                            .collect(),
+                        Vec::new(),
+                    ),
+                );
+                let self_ty = crate::self_type::self_type_for_interface_default();
                 apply_generic_env(
                     db,
                     &mut builder,
@@ -2203,6 +2583,31 @@ pub fn infer_scope_types<'db>(
                     &iface_env,
                     iface_data.span,
                 );
+                // Computed once per env — every signature type expr below shares it.
+                let iface_env_bounds =
+                    env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &iface_env);
+                // Each associated type's `extends` bound must be a well-formed interface (same
+                // arity / non-interface checks as a generic-param bound). Lowered in the
+                // interface's env with `Self` in scope so a projection bound (`extends
+                // Self.Item`) forms and is rejected as non-interface. Only checked for
+                // diagnostics — associated types are not type-level params, so nothing is
+                // threaded into the enforcement table.
+                for assoc in &iface_data.associated_types {
+                    if let Some(bound_te) = &assoc.bound {
+                        let _ = lower_declared_interface_bound(
+                            db,
+                            &mut builder,
+                            pkg_items,
+                            &pkg_info.namespace_path,
+                            &iface_env.params,
+                            &iface_env_bounds,
+                            Some(&self_ty),
+                            bound_te,
+                            bound_te.span,
+                            true,
+                        );
+                    }
+                }
                 for field in &iface_data.fields {
                     if let Some(type_expr) = &field.type_expr {
                         validate_spanned_type_expr_generic_bounds(
@@ -2211,13 +2616,36 @@ pub fn infer_scope_types<'db>(
                             pkg_items,
                             &pkg_info.namespace_path,
                             &iface_env,
+                            &iface_env_bounds,
                             type_expr,
-                            Some(&self_replacement),
+                            Some(self_ty.clone()),
                         );
                     }
                 }
                 for sig in &iface_data.required_methods {
+                    // Required methods have no body scope, so the method-generic
+                    // hygiene checks that the function arm runs for default methods
+                    // happen here: no `<T, T>`, and no shadowing of the interface's
+                    // type-level parameters (generics and associated types alike).
+                    report_duplicate_generic_params(&builder, &sig.generic_params, sig.span);
+                    for mp in &sig.generic_params {
+                        if iface_params.iter().any(|ip| ip == mp) || iface_assoc_names.contains(mp)
+                        {
+                            builder.report_at_span(
+                                crate::infer_context::TirTypeError::TypeParamShadowed {
+                                    param_name: mp.clone(),
+                                    type_name: iface_data.name.clone(),
+                                    owner: crate::infer_context::ShadowedParamOwner::Interface,
+                                },
+                                sig.span,
+                            );
+                        }
+                    }
                     let mut sig_env = iface_env.clone();
+                    // The interface's own bounds were diagnosed above at the
+                    // interface span; each signature env reports only its
+                    // method's own.
+                    sig_env.mark_all_bounds_inherited();
                     sig_env.append_declared(&sig.generic_params, &sig.generic_param_bounds);
                     apply_generic_env(
                         db,
@@ -2227,6 +2655,10 @@ pub fn infer_scope_types<'db>(
                         &sig_env,
                         sig.span,
                     );
+                    // Once per signature env (the interface's bounds plus this
+                    // method's own), shared by its params, return, and throws.
+                    let sig_env_bounds =
+                        env_interface_bounds(db, pkg_items, &pkg_info.namespace_path, &sig_env);
                     for param in &sig.params {
                         if let Some(type_expr) = &param.type_expr {
                             validate_spanned_type_expr_generic_bounds(
@@ -2235,8 +2667,9 @@ pub fn infer_scope_types<'db>(
                                 pkg_items,
                                 &pkg_info.namespace_path,
                                 &sig_env,
+                                &sig_env_bounds,
                                 type_expr,
-                                Some(&self_replacement),
+                                Some(self_ty.clone()),
                             );
                         }
                     }
@@ -2247,8 +2680,9 @@ pub fn infer_scope_types<'db>(
                             pkg_items,
                             &pkg_info.namespace_path,
                             &sig_env,
+                            &sig_env_bounds,
                             return_type,
-                            Some(&self_replacement),
+                            Some(self_ty.clone()),
                         );
                     }
                     if let Some(throws) = &sig.throws {
@@ -2258,11 +2692,83 @@ pub fn infer_scope_types<'db>(
                             pkg_items,
                             &pkg_info.namespace_path,
                             &sig_env,
+                            &sig_env_bounds,
                             throws,
-                            Some(&self_replacement),
+                            Some(self_ty.clone()),
                         );
                     }
                 }
+                // An associated type's default must implement its declared bound (`type Item
+                // extends J = V` requires `V` to implement `J`) — the decl-side analogue of the
+                // impl-side binding check, via the same shared bound-satisfaction helper. Cycle-safe
+                // (the bound resolves without a `requires`-closure walk). A self-referential default
+                // bound realizes only partially (`Self` stays symbolic) — rare.
+                let default_bound_iface = baml_type::Interface::new(
+                    iface_qtn.clone(),
+                    iface_data
+                        .generic_params
+                        .iter()
+                        .map(|p| Ty::TypeVar(p.clone(), TyAttr::default()))
+                        .collect(),
+                    Vec::new(),
+                );
+                for assoc in &iface_data.associated_types {
+                    let Some(default_te) = &assoc.default else {
+                        continue;
+                    };
+                    // The default is lowered once — with a symbolic `Self` — by the shared
+                    // query; its lowering diagnostics surface here, at the interface
+                    // declaration, the single reporting site, so no referencing site (value
+                    // type, projection reducer, method body) re-reports them.
+                    let Some((default_ty, default_diags)) =
+                        crate::interfaces::interface_associated_type_default(
+                            db,
+                            iface_loc,
+                            assoc.name.clone(),
+                        )
+                    else {
+                        continue;
+                    };
+                    for diag in default_diags {
+                        builder.report_at_span(diag, default_te.span);
+                    }
+                    // A bounded default (`type Item extends J = V`) must implement its bound.
+                    if assoc.bound.is_none() {
+                        continue;
+                    }
+                    let normalized = baml_type::normalize::normalize(&default_ty, &builder);
+                    for bound in
+                        crate::builder::associated_projection::associated_type_declared_bound(
+                            db,
+                            &default_bound_iface,
+                            &assoc.name,
+                        )
+                    {
+                        if !crate::interfaces::normalized_arg_implements_bound(
+                            &builder,
+                            &normalized,
+                            &bound,
+                        ) {
+                            builder.report_at_span(
+                                crate::infer_context::TirTypeError::AssociatedTypeDefaultViolatesBound {
+                                    interface: iface_qtn.clone(),
+                                    name: assoc.name.clone(),
+                                    default: default_ty.clone(),
+                                    bound,
+                                },
+                                default_te.span,
+                            );
+                        }
+                    }
+                }
+                // NOTE: interfaces are traits, not inheritance — `Foo.x` and `Bar.x` are distinct,
+                // per-interface obligations (like `<T as Foo>::Item` vs `<T as Bar>::Item`), and a
+                // type satisfies each independently (via `field as class_field` links mapping them
+                // to different class fields). So two interfaces sharing a field name with different
+                // types is NOT a `requires`-declaration conflict. A genuine clash surfaces only at
+                // the impl site when one class field is forced to satisfy two of them (E0116), and
+                // ambiguous unqualified access is a use-site check. There is deliberately no
+                // declaration-level inherited-field-conflict check.
                 break;
             }
         }
@@ -2369,6 +2875,48 @@ pub fn collect_type_aliases<'db>(
         }
     }
     aliases
+}
+
+/// Resolve a type alias by qualified name to the type it expands to (one level).
+///
+/// A global function of the name alone — `qtn` carries its package, so the alias's
+/// definition is found without any scope or prebuilt alias map, composing the cached
+/// [`baml_compiler2_ppir::package_items`] and [`resolve_type_alias`] queries. Returns
+/// `None` when `qtn` does not name a type alias. Equivalent to a [`collect_type_aliases`]
+/// lookup, but resolved on demand and reaching every dependency (not only the aliases a
+/// package happens to re-export).
+pub fn alias_def(db: &dyn crate::Db, qtn: &crate::ty::QualifiedTypeName) -> Option<Ty> {
+    let pkg_id = PackageId::new(db, qtn.package().clone());
+    let items = baml_compiler2_ppir::package_items(db, pkg_id);
+    match items.lookup_type(qtn.namespace(), qtn.name())? {
+        Definition::TypeAlias(loc) => Some(resolve_type_alias(db, loc).ty.clone()),
+        _ => None,
+    }
+}
+
+/// Look up an enum's variant names by qualified name, resolving the owning
+/// package through `res_ctx`.
+///
+/// The global counterpart to per-scope enum lookup: a pure function of the
+/// program's declarations plus the resolution context that bounds which packages
+/// are visible from the current one. Returns `None` when `enum_name` does not
+/// resolve to an enum in an accessible package — distinct from `Some(vec![])`,
+/// a resolved enum that declares no variants.
+pub fn enum_variants<'db>(
+    db: &'db dyn crate::Db,
+    res_ctx: &'db crate::package_interface::PackageResolutionContext<'db>,
+    enum_name: &crate::ty::QualifiedTypeName,
+) -> Option<Vec<Name>> {
+    let items = res_ctx.items_for_package(db, enum_name.package())?;
+    let Some(Definition::Enum(enum_loc)) =
+        items.lookup_type(enum_name.namespace(), enum_name.name())
+    else {
+        return None;
+    };
+    let file = enum_loc.file(db);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let enum_data = &item_tree[enum_loc.id(db)];
+    Some(enum_data.variants.iter().map(|v| v.name.clone()).collect())
 }
 
 /// Build the type-alias map visible from a package: its own aliases plus those
@@ -2536,6 +3084,14 @@ pub fn resolve_class_fields<'db>(
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let class_data = &item_tree[class_loc.id(db)];
+    let field_scope = crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items: pkg_items,
+        ns_context: &pkg_info.namespace_path,
+        generic_params: &class_data.generic_params,
+        bounds: crate::lower_type_expr::class_generic_param_bounds(db, class_loc),
+        self_ty: None,
+    };
     let mut all_diags = Vec::new();
     let fields = class_data
         .fields
@@ -2546,17 +3102,9 @@ pub fn resolve_class_fields<'db>(
                 .as_ref()
                 .map(|te| {
                     let mut diags = Vec::new();
-                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                        db,
-                        te,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                        &class_data.generic_params,
-                        &mut diags,
-                    );
+                    let ty = crate::lower_type_expr::lower_type_expr(te, &field_scope, &mut diags);
                     for d in diags {
-                        let span = d.precise_span().unwrap_or(te.span);
-                        all_diags.push((d, span));
+                        all_diags.push((d, te.span));
                     }
                     ty
                 })
@@ -2576,7 +3124,29 @@ pub fn resolve_class_fields<'db>(
 /// Salsa query: resolved type alias body.
 ///
 /// Cached per `TypeAliasLoc` — re-runs only when the alias definition changes.
-#[salsa::tracked(returns(ref))]
+/// Cycle-recovery seed for [`resolve_type_alias`].
+///
+/// A type alias whose body is an associated-type projection (`type A = T.Member`)
+/// makes `resolve_type_alias` a Salsa cycle head: lowering the projection consults
+/// the package's impls and its alias map — to find and realize the declaring
+/// interface — and building that alias map resolves every alias in the package,
+/// this one included. The projection's resolution never depends on this alias's own
+/// value, so the fixpoint converges in a single step; this seeds it with the
+/// "still inferring" sentinel and no diagnostics (the converged iteration owns them).
+fn resolve_type_alias_cycle_initial<'db>(
+    _db: &'db dyn crate::Db,
+    _id: salsa::Id,
+    _alias_loc: TypeAliasLoc<'db>,
+) -> Arc<ResolvedTypeAlias> {
+    Arc::new(ResolvedTypeAlias {
+        ty: Ty::Unknown {
+            attr: TyAttr::default(),
+        },
+        diagnostics: Vec::new(),
+    })
+}
+
+#[salsa::tracked(returns(ref), cycle_initial = resolve_type_alias_cycle_initial)]
 pub fn resolve_type_alias<'db>(
     db: &'db dyn crate::Db,
     alias_loc: TypeAliasLoc<'db>,
@@ -2594,17 +3164,20 @@ pub fn resolve_type_alias<'db>(
         .as_ref()
         .map(|te| {
             let mut diags = Vec::new();
-            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
-                db,
+            let ty = crate::lower_type_expr::lower_type_expr(
                 te,
-                pkg_items,
-                &pkg_info.namespace_path,
-                &[],
+                &crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &[],
+                    bounds: &crate::lower_type_expr::TypeVarBoundsMap::default(),
+                    self_ty: None,
+                },
                 &mut diags,
             );
             for d in diags {
-                let span = d.precise_span().unwrap_or(te.span);
-                all_diags.push((d, span));
+                all_diags.push((d, te.span));
             }
             ty
         })

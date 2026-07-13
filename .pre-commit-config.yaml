@@ -46,7 +46,7 @@ repos:
         entry: bash -c 'node typescript2/pkg-grammar/scripts/sync.mjs --check'
         language: system
         pass_filenames: false
-        files: ^typescript2/(pkg-grammar/.*\.tmLanguage\.json|app-vscode-ext/syntaxes/.*\.tmLanguage\.json)$
+        files: ^typescript2/(pkg-grammar/(.*\.tmLanguage\.json|language-configuration\.json)|app-vscode-ext/(syntaxes/.*\.tmLanguage\.json|language-configuration\.json))$
         priority: 0
 
       - id: cargo-fmt

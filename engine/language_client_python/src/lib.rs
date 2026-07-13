@@ -2,6 +2,7 @@ mod abort_controller;
 mod errors;
 mod parse_py_type;
 mod runtime;
+mod serde_py;
 mod types;
 
 use pyo3::{

@@ -149,8 +149,11 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 non_free_function_ids.insert(*m);
             }
         }
-        for imp in &item_tree.implements_for {
-            for m in &imp.methods {
+        for impl_id in &item_tree.free_impls {
+            let Some(block) = item_tree.impls.get(impl_id) else {
+                continue;
+            };
+            for m in &block.methods {
                 non_free_function_ids.insert(*m);
             }
         }
@@ -502,12 +505,16 @@ fn resolve_type_expr(
 ) -> Option<cg::Ty> {
     let spanned = spanned?;
     let mut diagnostics = Vec::new();
-    let tir_ty = lower_type_expr::lower_type_expr_in_ns(
-        db,
+    let tir_ty = lower_type_expr::lower_type_expr(
         spanned,
-        package_items,
-        ns_context,
-        generic_params,
+        &lower_type_expr::ScopeCtx {
+            db,
+            package_items,
+            ns_context,
+            generic_params,
+            bounds: &lower_type_expr::TypeVarBoundsMap::default(),
+            self_ty: None,
+        },
         &mut diagnostics,
     );
     Some(convert_tir_to_codegen_ty(
@@ -655,11 +662,13 @@ fn convert_tir_leaf(
         // their own opaque-handle mapping.
         TirTy::RustType { .. } => cg::Ty::RustType,
 
-        // Bottom / sentinel / error recovery — map to Unit.
+        // Bottom / sentinel / error recovery — map to Unit. An inference hole
+        // (`_`) should have been filled before codegen; map defensively to Unit.
         TirTy::Void { .. }
         | TirTy::Never { .. }
         | TirTy::Unknown { .. }
         | TirTy::Error { .. }
+        | TirTy::Infer { .. }
         | TirTy::Type { .. } => cg::Ty::Unit,
 
         // BEP-034: surface a `Future<T, E>` as the codegen-side `Unit`

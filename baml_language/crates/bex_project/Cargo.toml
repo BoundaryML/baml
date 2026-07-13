@@ -50,7 +50,8 @@ tracing = { workspace = true }
 vfs = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { workspace = true, features = [ "sync", "rt" ] }
+ignore = { workspace = true }
+tokio = { workspace = true, features = [ "sync", "rt", "time" ] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = { workspace = true }

@@ -67,6 +67,36 @@ pub enum Hir2Diagnostic {
     DuplicatePatternBinding { name: Name, sites: Vec<TextRange> },
     /// A class destructure names the same field more than once.
     DuplicatePatternField { name: Name, sites: Vec<TextRange> },
+    /// Two or more members of a class or enum serialize to the same JSON key —
+    /// either two members share an `@alias("k")`, or one member's name equals
+    /// another member's `@alias`. Because an aliased member's real name is never
+    /// used for matching (see `bex_sap`'s `AnnotatedField::key_matches`), such
+    /// members are indistinguishable in the serialized schema: `ctx.output_format`
+    /// renders duplicate keys and only one member can ever be populated at parse
+    /// time (for classes) or produced during parsing (for enum variants).
+    ///
+    /// `key` is the shared serialized key. `sites` lists the name span of every
+    /// contributing member in source order; the first is treated as the original
+    /// and the rest as duplicates. `container` is the kind of declaration the
+    /// collision occurs in (`"class"` or `"enum"`), used only for the message.
+    DuplicateFieldAlias {
+        key: String,
+        sites: Vec<TextRange>,
+        container: &'static str,
+    },
+    /// A single declaration (class, enum, field, or variant) carries the same
+    /// single-valued schema attribute more than once — e.g. two `@alias`, two
+    /// `@description`, or two `@skip`. These attributes take effect at most once
+    /// (for valued attrs the last write silently wins, discarding the earlier
+    /// ones), so a repeat is always a mistake (Linear B-648).
+    ///
+    /// `attr_name` is the duplicated attribute name (without the leading `@`).
+    /// `sites` lists the span of every occurrence in source order; the first is
+    /// treated as the original and the rest as duplicates.
+    DuplicateAttribute {
+        attr_name: String,
+        sites: Vec<TextRange>,
+    },
     /// An `Or` pattern's alternatives don't all bind the same name set.
     /// A name introduced in some alternatives but not others would only
     /// sometimes be in scope in the arm body — semantically incoherent.
@@ -417,6 +447,60 @@ impl Hir2Diagnostic {
                             range: *range,
                         },
                         format!("field `{name}` destructured again here"),
+                    );
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::DuplicateFieldAlias {
+                key,
+                sites,
+                container,
+            } => {
+                let first = sites.first().copied().unwrap_or_default();
+                let rest = sites.get(1..).unwrap_or(&[]);
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::DuplicateFieldAlias,
+                    format!("Duplicate serialized key `{key}` in {container}"),
+                )
+                .with_secondary(
+                    Span {
+                        file_id,
+                        range: first,
+                    },
+                    format!("key `{key}` first serialized here"),
+                );
+                for range in rest {
+                    diag = diag.with_primary(
+                        Span {
+                            file_id,
+                            range: *range,
+                        },
+                        format!("also serialized as `{key}` here"),
+                    );
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::DuplicateAttribute { attr_name, sites } => {
+                let first = sites.first().copied().unwrap_or_default();
+                let rest = sites.get(1..).unwrap_or(&[]);
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::DuplicateAttribute,
+                    format!("Duplicate attribute `@{attr_name}`"),
+                )
+                .with_secondary(
+                    Span {
+                        file_id,
+                        range: first,
+                    },
+                    format!("`@{attr_name}` first applied here"),
+                );
+                for range in rest {
+                    diag = diag.with_primary(
+                        Span {
+                            file_id,
+                            range: *range,
+                        },
+                        format!("duplicate `@{attr_name}` — only the last takes effect"),
                     );
                 }
                 diag.with_phase(DiagnosticPhase::Hir)

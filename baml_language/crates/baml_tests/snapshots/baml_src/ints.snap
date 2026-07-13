@@ -578,6 +578,18 @@ function ints.$init_test_ns_ints_ints(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "int_abs_bare_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 96)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_to_string_bare_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 97)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }

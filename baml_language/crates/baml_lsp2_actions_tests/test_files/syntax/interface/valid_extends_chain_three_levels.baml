@@ -7,11 +7,11 @@ interface HasName {
 }
 
 interface Greeter requires HasName {
-  function greet(self) -> string
+  function greet(self) -> string throws never
 }
 
 interface Polite requires Greeter {
-  function farewell(self) -> string
+  function farewell(self) -> string throws never
 }
 
 class Robot {

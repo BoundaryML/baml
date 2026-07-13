@@ -672,6 +672,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "baml_release",
+ "console",
  "reqwest",
  "serde",
  "serde_json",
@@ -758,6 +759,7 @@ dependencies = [
  "text-size",
  "tokio",
  "toml 0.8.23",
+ "uuid",
  "yaml_serde",
 ]
 
@@ -869,6 +871,7 @@ dependencies = [
  "rustc-hash 2.1.2",
  "salsa",
  "smol_str 0.3.6",
+ "strsim",
  "text-size",
 ]
 
@@ -1087,6 +1090,7 @@ dependencies = [
  "lsp-types",
  "salsa",
  "serde",
+ "serde_json",
  "text-size",
 ]
 
@@ -1101,7 +1105,9 @@ dependencies = [
  "serde_json",
  "sha2",
  "tar",
+ "tempfile",
  "thiserror 2.0.18",
+ "toml 0.8.23",
  "zip",
 ]
 
@@ -1131,6 +1137,7 @@ dependencies = [
  "darwin-kperf-events",
  "indexmap",
  "insta",
+ "libc",
  "num-bigint",
  "prettyplease",
  "proc-macro2",
@@ -1320,6 +1327,7 @@ dependencies = [
  "bex_heap",
  "bex_vm_types",
  "borsh",
+ "ignore",
  "log",
  "lsp-server",
  "lsp-types",
@@ -2216,6 +2224,25 @@ name = "crossbeam-channel"
 version = "0.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-deque"
+version = "0.8.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5181e0de7b61eb03a81e347d6dd8797bae9da5146707b51077e2d71a54ec0ceb"
+dependencies = [
+ "crossbeam-epoch",
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-epoch"
+version = "0.9.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -3749,6 +3776,22 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "ignore"
+version = "0.4.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe112b004901c62c2faa11f4f75e9864e0cc5af8da71c9115d184a3aa888749f"
+dependencies = [
+ "crossbeam-deque",
+ "globset",
+ "log",
+ "memchr",
+ "regex-automata",
+ "same-file",
+ "walkdir",
+ "winapi-util",
 ]
 
 [[package]]
@@ -6112,6 +6155,8 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
+ "serde",
+ "serde_json",
  "sync_wrapper",
  "tokio",
  "tokio-native-tls",

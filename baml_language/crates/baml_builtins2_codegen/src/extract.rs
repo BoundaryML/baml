@@ -117,8 +117,8 @@ pub fn extract_native_builtins()
         }
 
         // Build the namespace prefix from the file's package and path-derived namespace.
-        // e.g. package="baml", ns_path=["math"] → "baml.math"
-        //      package="baml", ns_path=[]        → "baml"
+        // e.g. package="baml", ns_path=["sys"] → "baml.sys"
+        //      package="baml", ns_path=[]       → "baml"
         let ns_path = builtin_file.namespace_path();
         let namespace_prefix = if ns_path.is_empty() {
             builtin_file.package.to_string()
@@ -716,7 +716,7 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
 /// Examples:
 /// - `"baml.Array.length"` → `"baml_array_length"`
 /// - `"baml.deep_copy"` → `"baml_deep_copy"`
-/// - `"baml.math.trunc"` → `"baml_math_trunc"`
+/// - `"baml.sys.now_ms"` → `"baml_sys_now_ms"`
 /// - `"baml.media.Pdf.url"` → `"baml_media_pdf_url"`
 fn path_to_fn_name(path: &str) -> String {
     path.replace('.', "_").to_lowercase()
@@ -816,7 +816,8 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExprKind::AssociatedTypeProjection { .. }
         | TypeExprKind::BuiltinUnknown { .. }
         | TypeExprKind::Unknown { .. }
-        | TypeExprKind::Error { .. } => BamlType::Named("unknown".to_string()),
+        | TypeExprKind::Error { .. }
+        | TypeExprKind::Infer { .. } => BamlType::Named("unknown".to_string()),
         TypeExprKind::Type { .. } => BamlType::Named("type".to_string()),
         TypeExprKind::Rust { .. } => BamlType::RustType,
     }
@@ -1090,7 +1091,7 @@ mod tests {
     fn test_path_to_fn_name() {
         assert_eq!(path_to_fn_name("baml.Array.length"), "baml_array_length");
         assert_eq!(path_to_fn_name("baml.deep_copy"), "baml_deep_copy");
-        assert_eq!(path_to_fn_name("baml.math.trunc"), "baml_math_trunc");
+        assert_eq!(path_to_fn_name("baml.sys.now_ms"), "baml_sys_now_ms");
         assert_eq!(path_to_fn_name("baml.media.Pdf.url"), "baml_media_pdf_url");
         assert_eq!(path_to_fn_name("baml.Array.push"), "baml_array_push");
     }
@@ -1197,13 +1198,13 @@ mod tests {
             .expect("missing String.length");
         assert_eq!(string_length.fn_name, "baml_string_length");
 
-        let math_trunc = vm_builtins
+        let trunc_to_int = vm_builtins
             .iter()
-            .find(|b| b.path == "baml.math.trunc")
-            .expect("missing math.trunc");
-        assert!(math_trunc.receiver.is_none());
-        assert_eq!(math_trunc.params.len(), 1);
-        assert!(matches!(math_trunc.params[0].ty, BamlType::Float));
+            .find(|b| b.path == "baml._trunc_to_int")
+            .expect("missing _trunc_to_int");
+        assert!(trunc_to_int.receiver.is_none());
+        assert_eq!(trunc_to_int.params.len(), 1);
+        assert!(matches!(trunc_to_int.params[0].ty, BamlType::Float));
 
         let pdf_url = vm_builtins
             .iter()
@@ -1222,7 +1223,7 @@ mod tests {
 
         assert_eq!(array_length.vm_usage, VmUsage::None);
         assert_eq!(array_push.vm_usage, VmUsage::None);
-        assert_eq!(math_trunc.vm_usage, VmUsage::None);
+        assert_eq!(trunc_to_int.vm_usage, VmUsage::None);
 
         let string_split = vm_builtins
             .iter()

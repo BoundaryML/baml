@@ -154,7 +154,7 @@ fn decode_args(
     args_proto: &[u8],
     _function_name: &str,
 ) -> std::result::Result<DecodedCallArgs, bridge_cffi::BridgeError> {
-    let args = bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(args_proto)
+    let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(args_proto)
         .map_err(bridge_ctypes::CtypesError::from)?;
 
     if args.call_id == 0 {

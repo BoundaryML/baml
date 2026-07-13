@@ -82,6 +82,103 @@ fn js_err(e: &wasm_bindgen::JsValue) -> VmBamlError {
     }
 }
 
+/// A child entry discovered while walking a directory for recursive removal:
+/// its full path plus whether it must be recursed into (a real subdirectory).
+///
+/// In the rich `readDirEntries` path a symlink-to-dir is reported as a file
+/// (`removeFile`, never descended into), matching native `remove_dir_all`, which
+/// does not follow symlinks. The legacy `readDir` fallback has no symlink info
+/// (the JS VFS exposes no `lstat`), so there a symlink-to-dir is
+/// indistinguishable from a real directory and would be descended into;
+/// `remove_tree`'s depth cap bounds the resulting walk against symlink cycles.
+struct RemoveChild {
+    path: String,
+    is_dir: bool,
+}
+
+/// List the immediate children of `path`, preferring the rich `readDirEntries`
+/// JS method (one round-trip with type + symlink info) and falling back to the
+/// legacy `readDir` + per-entry `metadata` probe when a host lacks it.
+///
+/// Malformed host payloads map to `Io` so `remove_dir_all` only ever surfaces
+/// `root.errors.Io` — the error type it declares in `fs.baml`.
+fn dir_children(vfs: &WasmVfs, path: &str) -> Result<Vec<RemoveChild>, VmBamlError> {
+    if let Ok(arr) = vfs.vfs_read_dir_entries(path) {
+        let mut out = Vec::with_capacity(arr.length() as usize);
+        for v in arr.iter() {
+            let entry: crate::wasm_fs::WasmVfsDirEntry = serde_wasm_bindgen::from_value(v)
+                .map_err(|e| VmBamlError::Io {
+                    message: format!("Invalid readDirEntries payload for '{path}': {e}"),
+                })?;
+            out.push(RemoveChild {
+                path: join_path(path, &entry.name),
+                is_dir: entry.file_type == "directory" && !entry.is_symlink,
+            });
+        }
+        return Ok(out);
+    }
+
+    let arr = vfs.vfs_read_dir(path).map_err(|e| js_err(&e))?;
+    let mut out = Vec::with_capacity(arr.length() as usize);
+    for v in arr.iter() {
+        let Some(name) = v.as_string() else {
+            return Err(VmBamlError::Io {
+                message: format!("Invalid readDir payload for '{path}': entry was not a string"),
+            });
+        };
+        let full = join_path(path, &name);
+        let is_dir = vfs.vfs_metadata(&full).map_err(|e| js_err(&e))?.file_type == "directory";
+        out.push(RemoveChild { path: full, is_dir });
+    }
+    Ok(out)
+}
+
+/// Upper bound on recursion depth for `remove_tree`. Real directory trees never
+/// approach this; it exists only to turn a symlink cycle reached via the legacy
+/// (lstat-less) `readDir` fallback into a bounded `Io` error instead of a stack
+/// overflow.
+const MAX_REMOVE_DEPTH: u32 = 1024;
+
+/// Recursively remove the directory `path` and everything beneath it. `path` is
+/// assumed to already be a directory — the top-level entry point validates that.
+fn remove_tree(vfs: &WasmVfs, path: &str, depth: u32) -> Result<(), VmBamlError> {
+    if depth > MAX_REMOVE_DEPTH {
+        return Err(VmBamlError::Io {
+            message: format!(
+                "Failed to remove directory '{path}': exceeded max recursion depth {MAX_REMOVE_DEPTH} (possible symlink cycle)"
+            ),
+        });
+    }
+    for child in dir_children(vfs, path)? {
+        if child.is_dir {
+            remove_tree(vfs, &child.path, depth + 1)?;
+        } else {
+            vfs.vfs_remove_file(&child.path).map_err(|e| js_err(&e))?;
+        }
+    }
+    vfs.vfs_remove_dir(path).map_err(|e| js_err(&e))
+}
+
+/// Entry point for `remove_dir_all`. Idempotent on missing paths (`force: true`
+/// semantics) and — like the native `tokio::fs::remove_dir_all`, which fails
+/// with `NotADirectory` on a file — refuses a non-directory target, so
+/// `remove_dir_all("file.txt")` can never silently delete a regular file on
+/// WASM. (The native side also avoids following a top-level symlink; the JS VFS
+/// has no `lstat`, so that narrow case can't be distinguished here.)
+fn remove_dir_all_recursive(vfs: &WasmVfs, path: &str) -> Result<(), VmBamlError> {
+    match vfs.vfs_exists(path) {
+        Ok(false) => return Ok(()),
+        Ok(true) => {}
+        Err(e) => return Err(js_err(&e)),
+    }
+    if vfs.vfs_metadata(path).map_err(|e| js_err(&e))?.file_type != "directory" {
+        return Err(VmBamlError::Io {
+            message: format!("Failed to remove directory '{path}': not a directory"),
+        });
+    }
+    remove_tree(vfs, path, 0)
+}
+
 // ============================================================================
 // IoClassFsFile — all File handle methods return Unsupported in WASM.
 // The native tokio file-handle model (open/read/write/seek/close) cannot be
@@ -235,9 +332,53 @@ impl io::IoNamespaceFs for WasmIoFs {
     ) -> SysOpOutput<()> {
         match self.vfs().vfs_remove_file(&path) {
             Ok(()) => SysOpOutput::ok(()),
+            Err(e) => {
+                // Mirror native: when the target is a directory, point at the
+                // directory-removal APIs instead of surfacing the raw host error
+                // (the B-232 hint). The JS VFS has no lstat, so a symlink-to-dir
+                // is reported as a directory here — an accepted approximation.
+                if matches!(self.vfs().vfs_metadata(&path), Ok(m) if m.file_type == "directory") {
+                    return SysOpOutput::err(VmBamlError::Io {
+                        message: format!(
+                            "Failed to remove '{path}': it is a directory; use baml.fs.remove_dir or baml.fs.remove_dir_all to delete directories"
+                        ),
+                    });
+                }
+                SysOpOutput::err(VmBamlError::Io {
+                    message: format!("{e:?}"),
+                })
+            }
+        }
+    }
+
+    fn remove_dir(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        match self.vfs().vfs_remove_dir(&path) {
+            Ok(()) => SysOpOutput::ok(()),
             Err(e) => SysOpOutput::err(VmBamlError::Io {
                 message: format!("{e:?}"),
             }),
+        }
+    }
+
+    fn remove_dir_all(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        // The JS VFS contract only exposes `removeDir` (empty-directory removal),
+        // so the recursive walk is driven Rust-side, mirroring how `mkdir`
+        // recursion is handled here.
+        match remove_dir_all_recursive(self.vfs(), &path) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(e) => SysOpOutput::err(e),
         }
     }
 

@@ -766,6 +766,9 @@ fn convert_object(
     let obj = unsafe { heap_ptr.get() };
     match obj {
         Object::Function(..) => unconvertible("function"),
+        Object::Interface(..) => unconvertible("interface"),
+        Object::Package(..) => unconvertible("package"),
+        Object::ImplRule(..) => unconvertible("impl_rule"),
         Object::Class(..) => unconvertible("class"),
         Object::Enum(..) => unconvertible("enum"),
         Object::Future(..) => unconvertible("future"),

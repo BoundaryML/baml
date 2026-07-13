@@ -411,7 +411,7 @@ fn resolve_field_access_at(
         }
         MemberResolution::BoundMethod { func_loc, .. }
         | MemberResolution::UnboundMethod { func_loc, .. }
-        | MemberResolution::InterfaceDefaultMethod { func_loc, .. } => {
+        | MemberResolution::InterfaceConcreteMethod { func_loc, .. } => {
             // Methods are not in FileSymbolContributions — use ItemTreeSourceMap.
             let target_file = func_loc.file(db);
             let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
@@ -423,39 +423,46 @@ fn resolve_field_access_at(
                 range: *name_range,
             })
         }
-        MemberResolution::InterfaceMethod {
-            iface_loc,
-            method_name,
-        } => {
-            // A required interface method accessed on an interface-typed value:
-            // navigate to the method signature in the declaring interface.
+        MemberResolution::InterfaceVirtualMethod { iface_loc, method } => {
+            // A virtual interface-method call: only the slot (interface + name) is
+            // known statically, so navigate to the declaration in the interface —
+            // the required signature, or the default method's definition.
             let target_file = iface_loc.file(db);
             let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
             let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
             let iface = &target_item_tree[iface_loc.id(db)];
-            let method_idx = iface
+            if let Some(method_idx) = iface
                 .required_methods
                 .iter()
-                .position(|m| m.name == *method_name)?;
-            let method_spans = target_source_map
-                .interface_method_spans
-                .get(&iface_loc.id(db))?;
+                .position(|m| m.name == *method)
+            {
+                let method_spans = target_source_map
+                    .interface_method_spans
+                    .get(&iface_loc.id(db))?;
+                return Some(Location {
+                    file: target_file,
+                    range: method_spans[method_idx],
+                });
+            }
+            let default_id = iface
+                .default_methods
+                .iter()
+                .copied()
+                .find(|&fn_id| target_item_tree[fn_id].name == *method)?;
+            let name_range = target_source_map.function_name_spans.get(&default_id)?;
             Some(Location {
                 file: target_file,
-                range: method_spans[method_idx],
+                range: *name_range,
             })
         }
-        MemberResolution::InterfaceField {
-            iface_loc,
-            field_name,
-        } => {
-            // An interface field accessed on an interface-typed value: navigate
-            // to the field declaration in the declaring interface.
+        MemberResolution::InterfaceVirtualField { iface_loc, field } => {
+            // A virtual interface-field access: navigate to the field declaration
+            // in the declaring interface.
             let target_file = iface_loc.file(db);
             let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
             let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
             let iface = &target_item_tree[iface_loc.id(db)];
-            let field_idx = iface.fields.iter().position(|f| f.name == *field_name)?;
+            let field_idx = iface.fields.iter().position(|f| f.name == *field)?;
             let field_spans = target_source_map
                 .interface_field_spans
                 .get(&iface_loc.id(db))?;

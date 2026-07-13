@@ -25,6 +25,7 @@ fn run_baml_cli(built: &BuiltPaths, dir: &Path, args: &[&str]) -> Output {
         cmd.arg(arg);
     }
     cmd.current_dir(dir);
+    cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
     cmd.output().expect("spawn baml-cli")
 }
 
@@ -238,6 +239,10 @@ fn generate_valid_project_returns_zero_exit_code() {
         )),
         "Expected generate output to include CLI version, got: {stderr}",
     );
+    assert!(
+        stderr.contains("Compiling 1 file(s)"),
+        "`baml generate` should keep compile progress, got: {stderr}",
+    );
 }
 
 // ============================================================================
@@ -266,6 +271,60 @@ fn run_list_compilation_error_returns_nonzero_exit_code() {
         Some(4),
         "Expected exit code 4 for compilation error",
     );
+}
+
+/// `baml run` should only emit the program output for a formatted project.
+/// Compile progress remains reserved for `baml check` and `baml generate`.
+#[test]
+fn run_valid_project_outputs_only_program_output() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(tmp.path(), "function answer() -> int {\n    42\n}\n");
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid run, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("42"), "Expected run result, got:\n{stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.trim().is_empty(),
+        "Expected empty stderr, got:\n{stderr}"
+    );
+}
+
+/// The formatter advisory is the allowed `baml run` stderr exception.
+#[test]
+fn run_unformatted_project_keeps_format_warning() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(tmp.path(), "function answer()->int {\n42\n}\n");
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid run, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("42"), "Expected run result, got:\n{stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Code is unformatted"),
+        "Expected format warning, got:\n{stderr}"
+    );
+    common::assert_no_compile_file_status(&stderr);
 }
 
 // ============================================================================
@@ -318,6 +377,88 @@ fn test_no_tests_returns_specific_exit_code() {
         output.status.code(),
         String::from_utf8_lossy(&output.stderr),
     );
+}
+
+/// A selector that matches no test must NOT print a green `PASS testing::*`
+/// line: the aggregate of zero tests is a vacuous pass, but stdout that says
+/// PASS while the command exits 5 (`NoTestsRun`) misleads anything parsing it.
+/// Regression for B-628.
+#[test]
+fn test_no_match_selector_does_not_print_pass() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    // A project that DOES have tests, so discovery yields a registry — the
+    // empty selection has to come from the filter, not an empty project.
+    create_project(
+        tmp.path(),
+        r#"
+testset "suite" {
+  test "one" { assert.is_true(true) }
+  test "two" { assert.is_true(true) }
+}
+"#,
+    );
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--from", ".", "-i", "totally-bogus-selector-xyz"],
+    );
+
+    // Exit-code semantics are preserved: no tests selected is exit 5.
+    assert_eq!(
+        output.status.code(),
+        Some(5),
+        "Expected NoTestsRun (5) for a no-match selector, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        !combined.contains("PASS"),
+        "A no-match selector must not print a PASS line, got:\nstdout: {stdout}\nstderr: {stderr}",
+    );
+    assert!(
+        combined.contains("no tests selected"),
+        "Expected a `no tests selected` message, got:\nstdout: {stdout}\nstderr: {stderr}",
+    );
+}
+
+/// `baml test` should not emit the compile file-count status pair.
+#[test]
+fn test_valid_project_omits_compile_file_status() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+test "passes" {
+  assert.equal(1, 1)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+
+    assert!(
+        output.status.success(),
+        "Expected exit code 0 for valid test, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("PASS"),
+        "Expected passing test output, got:\n{stdout}"
+    );
+    common::assert_no_compile_file_status(&String::from_utf8_lossy(&output.stderr));
 }
 
 /// Failing `assert.equal` should surface both operand values and keep stack
@@ -926,7 +1067,7 @@ fn run_prints_concrete_associated_type_projection_return() {
         r#"
 interface PublicIdentity {
   type Key
-  key: Key
+  key: Self.Key
 }
 
 class AccountRecord {
@@ -940,7 +1081,7 @@ class AccountRecord {
 
 function get_public_key() -> (AccountRecord as PublicIdentity).Key {
   let account = AccountRecord { public_key: "visible-key" }
-  return account.as<PublicIdentity>.key
+  return account.as<PublicIdentity<Key = string>>.key
 }
 "#,
     );
@@ -977,7 +1118,7 @@ fn run_list_prints_resolved_associated_projection_metadata() {
         r#"
 interface PublicIdentity {
   type Key
-  key: Key
+  key: Self.Key
 }
 
 class AccountRecord {
@@ -991,7 +1132,7 @@ class AccountRecord {
 
 interface Repository {
   type Record
-  function find(self) -> Self.Record
+  function find(self) -> Self.Record throws never
 }
 
 class UserRecord {
@@ -1020,11 +1161,11 @@ class GenericBox<T> {
 
 interface BoxLike {
   type Item
-  function get(self) -> Self.Item
+  function get(self) -> Self.Item throws never
 }
 
 function get_public_key(account: AccountRecord) -> (AccountRecord as PublicIdentity).Key {
-  return account.as<PublicIdentity>.key
+  return account.as<PublicIdentity<Key = string>>.key
 }
 
 function read_item<T extends BoxLike>(box: T) -> T.Item {
@@ -1051,7 +1192,10 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
         "get_public_key(account: AccountRecord) -> string",
         "UserRepository.Repository.find(self: UserRepository) -> UserRecord",
         "GenericBox.get<T>(self: GenericBox<T>) -> T",
-        "read_item<T extends BoxLike>(box: T) -> T.Item",
+        // The projection renders fully determined — lowering resolves the
+        // declaring interface, so `T.Item` prints as its canonical
+        // `(T as BoxLike).Item` triple.
+        "read_item<T extends BoxLike>(box: T) -> (T as BoxLike).Item",
     ] {
         assert!(
             stdout.contains(expected),
@@ -1105,7 +1249,10 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
         .collect();
     assert_eq!(generic_params, vec!["T extends BoxLike"]);
     assert_eq!(read_item["params"][0]["type"].as_str(), Some("T"));
-    assert_eq!(read_item["return_type"].as_str(), Some("T.Item"));
+    assert_eq!(
+        read_item["return_type"].as_str(),
+        Some("(T as BoxLike).Item")
+    );
 
     let generic_box_get = functions
         .iter()

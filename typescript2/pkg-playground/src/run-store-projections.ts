@@ -100,6 +100,10 @@ type RootInputPayloadEvent = PayloadEvent & {
 
 export type GraphNodeValuePreview = RunTraceCallValue;
 
+export type RunToGraphNodeValuesOptions = {
+  rootGraphNodeId?: string | null;
+};
+
 export type ExecutionProfileOrigin = 'user' | 'library' | 'system' | 'unknown';
 
 export type ExecutionProfileColorMode = 'function' | 'origin' | 'thread';
@@ -223,55 +227,63 @@ export function runToGraphNodeValues(
   run: Run | null | undefined,
   overlay: GraphRuntimeOverlay | null | undefined,
   valueBodyCache?: ValueBodyCache,
+  options: RunToGraphNodeValuesOptions = {},
 ): Map<string, GraphNodeValuePreview[]> {
   const valuesByNodeId = new Map<string, GraphNodeValuePreview[]>();
-  if (
-    !run ||
-    !overlay ||
-    overlay.entries.length === 0 ||
-    run.calls.length === 0
-  ) {
+  if (!run) {
     return valuesByNodeId;
   }
 
   const nodeIdsByCallId = new Map<string, string[]>();
-  for (const entry of overlay.entries) {
-    const nodeId = String(entry.cfgNodeId);
-    for (const callNodeId of entry.callNodeIds) {
-      const ids = nodeIdsByCallId.get(callNodeId);
-      if (ids) ids.push(nodeId);
-      else nodeIdsByCallId.set(callNodeId, [nodeId]);
+  if (overlay && overlay.entries.length > 0) {
+    for (const entry of overlay.entries) {
+      const nodeId = String(entry.cfgNodeId);
+      for (const callNodeId of entry.callNodeIds) {
+        const ids = nodeIdsByCallId.get(callNodeId);
+        if (ids) ids.push(nodeId);
+        else nodeIdsByCallId.set(callNodeId, [nodeId]);
+      }
     }
   }
 
-  const callsByPayloadId = callIdsByPayloadId(run);
-  for (const payload of run.payloads) {
-    if (!isCallValuePayload(payload)) continue;
-    const value = payloadToTraceCallValue(run.boundaryId, payload, valueBodyCache);
+  if (nodeIdsByCallId.size > 0) {
+    const callsByPayloadId = callIdsByPayloadId(run);
+    for (const payload of run.payloads) {
+      if (!isCallValuePayload(payload)) continue;
+      const value = payloadToTraceCallValue(run.boundaryId, payload, valueBodyCache);
 
-    const nodeIds = new Set<string>();
-    for (const callId of callIdsForPayload(payload, callsByPayloadId)) {
-      for (const nodeId of nodeIdsByCallId.get(callId) ?? []) {
-        nodeIds.add(nodeId);
+      const nodeIds = new Set<string>();
+      for (const callId of callIdsForPayload(payload, callsByPayloadId)) {
+        for (const nodeId of nodeIdsByCallId.get(callId) ?? []) {
+          nodeIds.add(nodeId);
+        }
       }
-    }
-    if (nodeIds.size === 0) continue;
+      if (nodeIds.size === 0) continue;
 
-    for (const nodeId of nodeIds) {
-      addGraphNodeValue(valuesByNodeId, nodeId, value);
+      for (const nodeId of nodeIds) {
+        addGraphNodeValue(valuesByNodeId, nodeId, value);
+      }
     }
   }
 
   const rootInput = rootInputToGraphValue(run, valueBodyCache);
-  if (rootInput && run.rootCallNodeId) {
-    for (const nodeId of graphNodeIdsForRootResult(run, nodeIdsByCallId)) {
+  if (rootInput) {
+    for (const nodeId of graphNodeIdsForRootValues(
+      run,
+      nodeIdsByCallId,
+      options.rootGraphNodeId,
+    )) {
       addGraphNodeValue(valuesByNodeId, nodeId, rootInput);
     }
   }
 
   const rootValue = rootResultToGraphValue(run, valueBodyCache);
-  if (rootValue && run.rootCallNodeId) {
-    for (const nodeId of graphNodeIdsForRootResult(run, nodeIdsByCallId)) {
+  if (rootValue) {
+    for (const nodeId of graphNodeIdsForRootValues(
+      run,
+      nodeIdsByCallId,
+      options.rootGraphNodeId,
+    )) {
       addGraphNodeValue(valuesByNodeId, nodeId, rootValue);
     }
   }
@@ -912,40 +924,18 @@ function payloadToTraceCallValue(
   };
 }
 
-function graphNodeIdsForRootResult(
+function graphNodeIdsForRootValues(
   run: Run,
   nodeIdsByCallId: Map<string, string[]>,
+  rootGraphNodeId: string | null | undefined,
 ): string[] {
+  if (rootGraphNodeId) return [rootGraphNodeId];
+
   const rootCallNodeId = run.rootCallNodeId;
   if (!rootCallNodeId) return [];
 
   const directNodeIds = nodeIdsByCallId.get(rootCallNodeId);
-  if (directNodeIds && directNodeIds.length > 0) return directNodeIds;
-
-  const callsById = new Map(run.calls.map((call) => [call.id, call]));
-  const descendantNodeIds = new Set<string>();
-  for (const call of run.calls) {
-    if (!isDescendantCall(call.id, rootCallNodeId, callsById)) continue;
-    for (const nodeId of nodeIdsByCallId.get(call.id) ?? []) {
-      descendantNodeIds.add(nodeId);
-    }
-  }
-  return descendantNodeIds.size === 1 ? [...descendantNodeIds] : [];
-}
-
-function isDescendantCall(
-  callId: string,
-  ancestorId: string,
-  callsById: Map<string, Run['calls'][number]>,
-): boolean {
-  const seen = new Set<string>([callId]);
-  let parentId = callsById.get(callId)?.parentId ?? null;
-  while (parentId && !seen.has(parentId)) {
-    if (parentId === ancestorId) return true;
-    seen.add(parentId);
-    parentId = callsById.get(parentId)?.parentId ?? null;
-  }
-  return false;
+  return directNodeIds ?? [];
 }
 
 function rootInputToGraphValue(

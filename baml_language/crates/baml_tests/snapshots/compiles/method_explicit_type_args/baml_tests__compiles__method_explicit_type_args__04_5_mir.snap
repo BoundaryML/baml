@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 19690
 ---
 === MIR2 ===
 fn user.use_method_type_args() -> int {
@@ -38,9 +39,9 @@ fn user.use_method_type_args() -> int {
     }
 }
 
-fn user.Foo.zero(self: Foo) -> T | null {
+fn user.Foo.zero(self: Foo) -> null | T {
     // Locals:
-    let _0: T | null // _0 // return
+    let _0: null | T // _0 // return
     let _1: Foo // self // param
 
     bb0: {

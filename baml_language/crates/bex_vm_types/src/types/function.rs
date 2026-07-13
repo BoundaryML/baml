@@ -325,14 +325,39 @@ pub struct Closure {
 
 /// A method bound to a specific receiver instance.
 ///
-/// Created by `MakeBoundMethod`. The receiver is inserted as `self`
-/// at call time by `CallIndirect`.
+/// Created by `MakeBoundMethod` (a statically-resolved method) or
+/// `MakeVirtualBoundMethod` (an interface method resolved from the receiver's
+/// runtime `Self` at bind time). The receiver is inserted as `self` at call time
+/// by `CallIndirect`.
+///
+/// Like every callable value, a bound method is fully realized: its complete
+/// type environment is curried in at creation via [`Self::type_args`], so the
+/// `CallIndirect` that invokes it carries no type arguments of its own.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
     pub function: HeapPtr,
     /// The receiver value (inserted as `self` at call time).
     pub receiver: Value,
+    /// The callee frame's **complete** curried type arguments, in the callee
+    /// frame's De Bruijn order — materialized at bind time and installed as
+    /// `frame.type_args` when the value is invoked by `CallIndirect`, so
+    /// `LoadType(TypeArgRef(N))` / `IsType` inside the body resolve correctly.
+    ///
+    /// `MakeBoundMethod` curries `[class generics (→ Self), method fn generics]`
+    /// — the exact vector a direct `receiver.method<…>(…)` call would seed.
+    /// `MakeVirtualBoundMethod` instead curries the resolved impl's realized
+    /// frame — the impl's own generics, or the interface's args + associated
+    /// types for an inherited default (which the receiver's class args cannot
+    /// express, e.g. a blanket `implement<T> I for T[]` bound at `int[]`) —
+    /// followed by any method-level type args from the reference site.
+    ///
+    /// `RuntimeTy` (not `RealizedTy`) mirrors [`Closure::captured_type_args`]
+    /// and [`GenericFunction::type_args`]: these positions should never carry a
+    /// type variable, but the upstream fix that stops typevars leaking into
+    /// value positions is still in flight, so all three stay `RuntimeTy` and
+    /// narrow to `RealizedTy` together once it lands.
+    pub type_args: Box<[baml_type::RuntimeTy]>,
 }
 
 /// A generic function instantiation carrying concrete type arguments.

@@ -45,6 +45,13 @@ pub(crate) struct RuntimeCli {
     /// Specifies a subcommand to run.
     #[command(subcommand)]
     pub(crate) command: Commands,
+
+    /// Name of the invoked top-level subcommand, as registered with clap
+    /// (e.g. `"fmt"`, `"lsp"`). Not a CLI argument: it's populated in
+    /// [`Self::parse_from_smart`] from the parsed matches so telemetry can
+    /// report the exact clap name without a hand-maintained mapping.
+    #[arg(skip)]
+    pub(crate) invoked_subcommand: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -179,10 +186,22 @@ impl RuntimeCli {
             err.exit();
         }
 
+        // Record the invoked subcommand's clap name for telemetry, straight
+        // from the parsed matches so it always matches what clap registered.
+        cli.invoked_subcommand = matches.subcommand_name().map(str::to_string);
+
         cli
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
+        // Fire anonymous, best-effort telemetry for this invocation. The guard
+        // overlaps the request with command execution and, on drop (after the
+        // match below returns), waits briefly for it to finish. It never fails
+        // or noticeably delays the command.
+        let _telemetry = crate::telemetry::record_invocation(
+            self.invoked_subcommand.as_deref().unwrap_or("unknown"),
+        );
+
         // Resolve color/hyperlink output once, before any subcommand writes.
         crate::paint::init_color(self.color);
         match &self.command {
@@ -223,6 +242,17 @@ mod tests {
     #[test]
     fn release_version_matches_compile_time_setting() {
         assert_eq!(release_version(), baml_version::CANONICAL_VERSION);
+    }
+
+    /// `parse_from_smart` records the invoked subcommand's clap name for
+    /// telemetry, straight from the parsed matches.
+    #[test]
+    fn parse_records_invoked_subcommand_name() {
+        let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "fmt".into()]);
+        assert_eq!(cli.invoked_subcommand.as_deref(), Some("fmt"));
+
+        let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "lsp".into()]);
+        assert_eq!(cli.invoked_subcommand.as_deref(), Some("lsp"));
     }
 
     fn help_for(args: &[&str]) -> String {
@@ -293,6 +323,8 @@ mod tests {
         assert!(help.contains("Usage: baml playground [OPTIONS]"), "{help}");
         assert!(help.contains("--file <PATH>"), "{help}");
         assert!(help.contains("--from <PATH>"), "{help}");
+        assert!(help.contains("--port <PORT>"), "{help}");
+        assert!(help.contains("--no-open"), "{help}");
     }
 
     /// `run -e` accepts hyphen-prefixed values without consuming run flags.

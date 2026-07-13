@@ -302,7 +302,7 @@ function type_reflection.GetFoo$stream(client: baml.llm.Client) -> baml.llm.Stre
     return
 }
 
-function type_reflection.TestClient$new() -> null {
+function type_reflection.TestClient$new(lenient: bool) -> null {
     load_const "TestClient"
     load_const "openai"
     load_const "gpt-4o-mini"

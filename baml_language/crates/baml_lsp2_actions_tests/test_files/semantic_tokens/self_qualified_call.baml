@@ -3,11 +3,11 @@
 // are flat.
 
 interface Greeter {
-  function greet(self) -> string
+  function greet(self) -> string throws never
 }
 
 interface Farewell {
-  function bye(self) -> string
+  function bye(self) -> string throws never
 }
 
 class Polite {
@@ -40,12 +40,16 @@ class Polite {
 // self_qualified_call.baml:6:12 (method) [declaration] len=5 "greet"
 // self_qualified_call.baml:6:18 (parameter) [declaration] len=4 "self"
 // self_qualified_call.baml:6:27 (type) [defaultLibrary] len=6 "string"
+// self_qualified_call.baml:6:34 (keyword) len=6 "throws"
+// self_qualified_call.baml:6:41 (type) [defaultLibrary] len=5 "never"
 // self_qualified_call.baml:9:1 (keyword) len=9 "interface"
 // self_qualified_call.baml:9:11 (interface) [declaration] len=8 "Farewell"
 // self_qualified_call.baml:10:3 (keyword) len=8 "function"
 // self_qualified_call.baml:10:12 (method) [declaration] len=3 "bye"
 // self_qualified_call.baml:10:16 (parameter) [declaration] len=4 "self"
 // self_qualified_call.baml:10:25 (type) [defaultLibrary] len=6 "string"
+// self_qualified_call.baml:10:32 (keyword) len=6 "throws"
+// self_qualified_call.baml:10:39 (type) [defaultLibrary] len=5 "never"
 // self_qualified_call.baml:13:1 (keyword) len=5 "class"
 // self_qualified_call.baml:13:7 (class) [declaration] len=6 "Polite"
 // self_qualified_call.baml:14:3 (property) [declaration] len=4 "name"

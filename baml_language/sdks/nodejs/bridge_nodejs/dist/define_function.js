@@ -2,11 +2,11 @@
  * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
  *
  * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
 // define_function.ts — runtime factories for BAML callables, the Node analog
-// of `define_function` in sdks/python/src/baml_core/__init__.py.
+// of `define_function` in sdks/python/src/baml_bridge/__init__.py.
 //
 // Generated SDK code emits, per BAML function:
 //   export const f = defineFunction("user.ns.f", "sync", ["a"]) as (a: A) => R;
