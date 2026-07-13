@@ -351,10 +351,13 @@
 91:27-28     "]"                source.baml meta.test.baml meta.block.code.baml meta.expression.array.baml punctuation.definition.array.end.baml
 92:3-7       "args"             source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml entity.name.type.baml
 92:8-9       "{"                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.begin.baml
-93:5-9       "text"             source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
-93:10-11     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-93:11-37     "Jane Doe, 12 years of Rust" source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
-93:37-38     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+93:5-7       "/*"               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml comment.block.baml
+93:7-12      " who "            source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml comment.block.baml
+93:12-14     "*/"               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml comment.block.baml
+93:15-19     "text"             source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+93:20-21     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+93:21-47     "Jane Doe, 12 years of Rust" source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
+93:47-48     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
 94:5-10      "hints"            source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.dotted-expression.baml variable.other.readwrite.baml
 94:11-12     "["                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml punctuation.definition.array.begin.baml
 94:12-13     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml string.quoted.double.baml punctuation.definition.string.begin.baml

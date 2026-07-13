@@ -11,8 +11,8 @@
 // Without --version the template's 0.0.0-dev placeholder is kept; the sync
 // workflow always stamps a real version.
 
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -40,12 +40,25 @@ const out = resolve(process.cwd(), values.out);
 
 // The rmSync below is recursive: refuse any --out that overlaps the repo
 // checkout (`--out .`, a parent, or a subdirectory of the package) so a typo
-// can never delete source files.
+// can never delete source files. Compare canonical paths — resolve symlinks
+// via the nearest existing ancestor, so a link like /tmp/repo-link/pkg can't
+// smuggle the checkout past a lexical check.
+const canonical = (path) => {
+  let existing = path;
+  let remainder = '';
+  while (!existsSync(existing)) {
+    remainder = join(basename(existing), remainder);
+    existing = dirname(existing);
+  }
+  return join(realpathSync(existing), remainder);
+};
 const overlaps = (a, b) => {
   const rel = relative(a, b);
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 };
-if (overlaps(repoRoot, out) || overlaps(out, repoRoot)) {
+const realOut = canonical(out);
+const realRepo = canonical(repoRoot);
+if (overlaps(realRepo, realOut) || overlaps(realOut, realRepo)) {
   console.error(`--out must not overlap the repository: ${out}`);
   process.exit(1);
 }
@@ -60,8 +73,10 @@ cpSync(resolve(pkgRoot, 'src'), resolve(out, 'src'), { recursive: true });
 // third-party language repos follow). Derived textually from src/baml.js so
 // the mirror needs no bundler; fail loudly if the source shape changes.
 const esm = readFileSync(resolve(pkgRoot, 'src/baml.js'), 'utf8');
-if (!esm.includes('export default function')) {
-  console.error('src/baml.js no longer has a single `export default function`; fix the dist wrapper');
+// The wrapper below registers a binding literally named `baml`, so require
+// exactly that export shape (not just any default function anywhere).
+if (!/^export default function baml\(/m.test(esm)) {
+  console.error('src/baml.js no longer `export default function baml(...)`; fix the dist wrapper');
   process.exit(1);
 }
 const iife = `// Generated from src/baml.js by assemble-mirror.mjs. Do not edit.

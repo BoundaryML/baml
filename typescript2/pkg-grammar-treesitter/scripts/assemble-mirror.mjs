@@ -13,8 +13,8 @@
 // matches grammar.js.
 
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -48,12 +48,25 @@ const out = resolve(process.cwd(), values.out);
 
 // The rmSync below is recursive: refuse any --out that overlaps the repo
 // checkout (`--out .`, a parent, or a subdirectory of the package) so a typo
-// can never delete source files.
+// can never delete source files. Compare canonical paths — resolve symlinks
+// via the nearest existing ancestor, so a link like /tmp/repo-link/pkg can't
+// smuggle the checkout past a lexical check.
+const canonical = (path) => {
+  let existing = path;
+  let remainder = '';
+  while (!existsSync(existing)) {
+    remainder = join(basename(existing), remainder);
+    existing = dirname(existing);
+  }
+  return join(realpathSync(existing), remainder);
+};
 const overlaps = (a, b) => {
   const rel = relative(a, b);
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 };
-if (overlaps(repoRoot, out) || overlaps(out, repoRoot)) {
+const realOut = canonical(out);
+const realRepo = canonical(repoRoot);
+if (overlaps(realRepo, realOut) || overlaps(realOut, realRepo)) {
   console.error(`--out must not overlap the repository: ${out}`);
   process.exit(1);
 }

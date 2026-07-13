@@ -214,6 +214,60 @@ class Person {
             (identifier)))))))
 
 ==================
+implement (singular) is interchangeable with implements
+==================
+
+class Robot {
+  name: string
+
+  implement Named {
+    name as display_name
+  }
+}
+
+implement ToJson for Dog {
+  function to_json(self) -> string {
+    self.breed
+  }
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (implements_block
+        (type_path
+          (identifier))
+        (implements_body
+          (field_link
+            (identifier)
+            (identifier))))))
+  (implements_for_declaration
+    (type_path
+      (identifier))
+    (type_path
+      (identifier))
+    (implements_body
+      (function_declaration
+        (identifier)
+        (parameter_list
+          (parameter
+            (identifier)))
+        (type_path
+          (identifier))
+        (function_body
+          (expression_statement
+            (member_expression
+              (identifier)
+              (property_identifier))))))))
+
+==================
 top-level implements ... for ...
 ==================
 

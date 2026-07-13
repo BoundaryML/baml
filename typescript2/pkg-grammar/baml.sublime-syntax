@@ -825,7 +825,7 @@ contexts:
     - include: comments
     - include: expression
   constructor-field-shorthand:
-    - match: '(?:^|(?<=[{,]))[ \t]*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)[ \t]+(?=#+"|"|b"|\`|\[|[0-9+-]|true\b|false\b|null\b|env\b)'
+    - match: '(?:^|(?<=[{,])|(?<=\*/))[ \t]*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)[ \t]+(?=#+"|"|b"|\`|\[|[0-9+-]|true\b|false\b|null\b|env\b)'
       captures:
         1: variable.other.property.baml
       push: constructor-field-shorthand--body

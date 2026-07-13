@@ -1699,7 +1699,7 @@
     },
     "constructor-field-shorthand": {
       "name": "meta.constructor.field.baml",
-      "begin": "(?:^|(?<=[{,]))[ \\t]*(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)[ \\t]+(?=#+\"|\"|b\"|\\`|\\[|[0-9+-]|true\\b|false\\b|null\\b|env\\b)",
+      "begin": "(?:^|(?<=[{,])|(?<=\\*/))[ \\t]*(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)[ \\t]+(?=#+\"|\"|b\"|\\`|\\[|[0-9+-]|true\\b|false\\b|null\\b|env\\b)",
       "beginCaptures": {
         "1": {
           "name": "variable.other.property.baml"

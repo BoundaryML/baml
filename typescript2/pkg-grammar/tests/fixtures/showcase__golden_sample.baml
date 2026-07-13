@@ -90,7 +90,7 @@ function Describe(flag: bool) -> string {
 test GoldenExtract {
   functions [ExtractResume]
   args {
-    text "Jane Doe, 12 years of Rust"
+    /* who */ text "Jane Doe, 12 years of Rust"
     hints ["skills", "email"]
   }
 }

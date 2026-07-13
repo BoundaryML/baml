@@ -281,10 +281,13 @@ module.exports = grammar({
         ),
       ),
 
-    // `implements Iface<Args> { ... }` inside a class body.
+    // `implements Iface<Args> { ... }` inside a class body. The lexer has
+    // both `implements` and `implement` (tokens.rs), and the parser accepts
+    // them interchangeably here and in `implements … for` (parser.rs
+    // parse_implements_block / parse_implements_for).
     implements_block: ($) =>
       seq(
-        'implements',
+        choice('implements', 'implement'),
         field('interface', $._type),
         field('body', $.implements_body),
       ),
@@ -292,7 +295,7 @@ module.exports = grammar({
     // Top-level `implements<T> Iface<T> for Target<T> { ... }`.
     implements_for_declaration: ($) =>
       seq(
-        'implements',
+        choice('implements', 'implement'),
         optional(field('type_parameters', $.generic_parameters)),
         field('interface', $._type),
         'for',

@@ -53,6 +53,7 @@
   "enum"
   "interface"
   "implements"
+  "implement"
   "extends"
   "requires"
   "function"
