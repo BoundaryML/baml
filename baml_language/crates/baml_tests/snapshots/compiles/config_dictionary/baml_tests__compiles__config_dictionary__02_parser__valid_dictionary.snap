@@ -119,7 +119,7 @@ SOURCE_FILE
           CONFIG_ITEM
             WORD "booleanValue"
             CONFIG_VALUE "true"
-              KW_TRUE "true"
+              WORD "true"
           CONFIG_ITEM
             WORD "stringKey"
             CONFIG_VALUE

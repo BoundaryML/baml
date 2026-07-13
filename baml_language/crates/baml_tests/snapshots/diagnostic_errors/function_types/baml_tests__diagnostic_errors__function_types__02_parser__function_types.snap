@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "IntToInt"
     EQUALS "="
     TYPE_EXPR
@@ -19,7 +19,7 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "BinaryOp"
     EQUALS "="
     TYPE_EXPR
@@ -40,7 +40,7 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "UnnamedParams"
     EQUALS "="
     TYPE_EXPR
@@ -57,7 +57,7 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "MixedParams"
     EQUALS "="
     TYPE_EXPR
@@ -82,7 +82,7 @@ SOURCE_FILE
       TYPE_EXPR "bool"
         WORD "bool"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Producer"
     EQUALS "="
     TYPE_EXPR
@@ -92,7 +92,7 @@ SOURCE_FILE
       TYPE_EXPR "string"
         WORD "string"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Curried"
     EQUALS "="
     TYPE_EXPR
@@ -116,7 +116,7 @@ SOURCE_FILE
         TYPE_EXPR "int"
           WORD "int"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Complex"
     EQUALS "="
     TYPE_EXPR
@@ -174,7 +174,7 @@ SOURCE_FILE
         INTEGER_LITERAL "1"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "UnionParam"
     EQUALS "="
     TYPE_EXPR
@@ -191,7 +191,7 @@ SOURCE_FILE
       TYPE_EXPR "bool"
         WORD "bool"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "FunctionFactory"
     EQUALS "="
     TYPE_EXPR

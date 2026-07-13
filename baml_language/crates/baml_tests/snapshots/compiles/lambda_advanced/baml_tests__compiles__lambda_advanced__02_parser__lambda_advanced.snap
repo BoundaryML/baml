@@ -1117,7 +1117,7 @@ SOURCE_FILE
                 KW_ELSE "else"
                 BLOCK_EXPR "{ null }"
                   L_BRACE "{"
-                  KW_NULL "null"
+                  WORD "null"
                   R_BRACE "}"
               R_BRACE "}"
         CALL_EXPR
@@ -2209,7 +2209,7 @@ SOURCE_FILE
             L_BRACKET "["
             INTEGER_LITERAL "1"
             COMMA ","
-            KW_NULL "null"
+            WORD "null"
             COMMA ","
             INTEGER_LITERAL "3"
             R_BRACKET "]"

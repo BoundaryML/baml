@@ -50,12 +50,8 @@ pub enum DefinitionSite {
     Statement(StmtId),
     /// Defined as a function parameter (with its index).
     Parameter(usize),
-    /// Defined by a pattern binding (match arm, if-let, etc.).
+    /// Defined by a pattern binding (match arm, catch arm, catch clause, etc.).
     PatternBinding(PatId),
-    /// The error (and optional stack-trace) binding of a `catch (e) { … }`
-    /// clause. Like a function parameter — a value bound by the clause and
-    /// scoped to its body — so it is highlighted as a parameter.
-    CatchBinding(PatId),
 }
 
 // ── BindingId ────────────────────────────────────────────────────────────────

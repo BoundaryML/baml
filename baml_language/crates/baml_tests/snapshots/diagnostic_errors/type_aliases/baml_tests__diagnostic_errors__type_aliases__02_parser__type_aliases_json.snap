@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "JSON"
     EQUALS "="
     TYPE_EXPR

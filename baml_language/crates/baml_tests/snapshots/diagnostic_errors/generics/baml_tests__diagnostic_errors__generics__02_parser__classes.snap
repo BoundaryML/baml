@@ -1078,7 +1078,7 @@ SOURCE_FILE
             OBJECT_FIELD "value: null"
               WORD "value"
               COLON ":"
-              KW_NULL "null"
+              WORD "null"
             R_BRACE "}"
         CALL_EXPR
           PATH_EXPR "b.get_or_default"

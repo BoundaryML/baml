@@ -2935,21 +2935,8 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    // Catch-clause bindings (`catch (e, ctx)`) are registered in the semantic
-    // index under `DefinitionSite::CatchBinding`, not `PatternBinding`, so the
-    // catch-lowering paths must query with the matching site.
-    fn record_catch_binding_local(&mut self, pattern: AstPatId, name: &Name, local: Local) {
-        if let Some(binding_id) = self.binding_id_for_pattern_site_name(
-            pattern,
-            DefinitionSite::CatchBinding(pattern),
-            name,
-        ) {
-            self.binding_locals.insert(binding_id, local);
-        }
-    }
-
-    fn catch_binding_is_captured(&self, pattern: AstPatId) -> bool {
-        self.any_pattern_binding_is_captured(pattern, DefinitionSite::CatchBinding(pattern))
+    fn pattern_binding_is_captured(&self, pattern: AstPatId) -> bool {
+        self.any_pattern_binding_is_captured(pattern, DefinitionSite::PatternBinding(pattern))
     }
 
     fn binding_id_for_name_at(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
@@ -14229,7 +14216,7 @@ impl LoweringContext<'_> {
         // shows up in bytecode instead of an anonymous `_N` temp. Only do this
         // for single-clause catches with a non-captured binding.
         let single_clause_binding_name = clauses.first().and_then(|c| {
-            if clauses.len() == 1 && !self.catch_binding_is_captured(c.binding) {
+            if clauses.len() == 1 && !self.pattern_binding_is_captured(c.binding) {
                 self.body.patterns[c.binding]
                     .binding_name(&self.body.patterns)
                     .cloned()
@@ -14265,7 +14252,7 @@ impl LoweringContext<'_> {
             let binding_name = self.body.patterns[clause.binding]
                 .binding_name(&self.body.patterns)
                 .cloned();
-            let binding_is_captured = self.catch_binding_is_captured(clause.binding);
+            let binding_is_captured = self.pattern_binding_is_captured(clause.binding);
             let (binding_local, binding_copy_local) = match binding_name.clone() {
                 Some(name) if binding_is_captured => {
                     let local = self.builder.declare_local(
@@ -14276,11 +14263,11 @@ impl LoweringContext<'_> {
                         None,
                         false,
                     );
-                    self.record_catch_binding_local(clause.binding, &name, local);
+                    self.record_pattern_binding_local(clause.binding, &name, local);
                     (Some(local), Some(local))
                 }
                 Some(name) => {
-                    self.record_catch_binding_local(clause.binding, &name, error_local);
+                    self.record_pattern_binding_local(clause.binding, &name, error_local);
                     (Some(error_local), None)
                 }
                 None => (None, None),
@@ -14292,7 +14279,7 @@ impl LoweringContext<'_> {
                 let name = self.body.patterns[st_pat]
                     .binding_name(&self.body.patterns)
                     .cloned();
-                let is_captured = self.catch_binding_is_captured(st_pat);
+                let is_captured = self.pattern_binding_is_captured(st_pat);
                 match name.clone() {
                     Some(name) if is_captured => {
                         let local = self.builder.declare_local(
@@ -14303,11 +14290,11 @@ impl LoweringContext<'_> {
                             None,
                             false,
                         );
-                        self.record_catch_binding_local(st_pat, &name, local);
+                        self.record_pattern_binding_local(st_pat, &name, local);
                         (Some(name), Some(local))
                     }
                     Some(name) => {
-                        self.record_catch_binding_local(st_pat, &name, payload);
+                        self.record_pattern_binding_local(st_pat, &name, payload);
                         (Some(name), Some(payload))
                     }
                     None => (None, None),
