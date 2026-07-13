@@ -474,7 +474,7 @@ type ClassFingerprint = (
     baml_base::Name,
     Vec<Option<baml_compiler2_hir::type_ref::TypeRefId>>,
     baml_compiler2_hir::type_ref::TypeRefStore,
-    Vec<baml_compiler2_hir::item_data::ClassFieldData>,
+    Vec<baml_compiler2_hir::item_data::FieldData>,
     Vec<baml_compiler2_hir::item_data::ImplementsData>,
     Vec<baml_compiler2_hir::item_tree::Attribute>,
 );

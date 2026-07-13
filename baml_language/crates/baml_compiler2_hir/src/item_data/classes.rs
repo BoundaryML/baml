@@ -2,6 +2,10 @@ use baml_base::Name;
 use text_size::TextRange;
 
 use crate::{
+    item_data::common::{
+        AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FieldData,
+        InterfaceFieldLinkData, InterfaceFieldLinkSourceMap,
+    },
     item_tree::Attribute,
     loc::{ClassLoc, FunctionLoc},
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
@@ -22,17 +26,9 @@ pub struct ClassData<'db> {
     pub type_refs: TypeRefStore,
     /// Parallel to `generic_params`. `Some` means `T extends <bound>`.
     pub generic_param_bounds: Vec<Option<TypeRefId>>,
-    pub fields: Vec<ClassFieldData>,
+    pub fields: Vec<FieldData>,
     pub methods: Vec<FunctionLoc<'db>>,
     pub implements: Vec<ImplementsData>,
-    pub attributes: Vec<Attribute>,
-    pub docstring: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClassFieldData {
-    pub name: Name,
-    pub type_ref: Option<TypeRefId>,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
 }
@@ -45,18 +41,6 @@ pub struct ImplementsData {
     /// Syntactic origin, for diagnostics only — it must NOT influence
     /// resolution, dispatch, or coherence.
     pub is_out_of_body: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterfaceFieldLinkData {
-    pub interface_field: Name,
-    pub class_field: Name,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AssociatedTypeBindingData {
-    pub name: Name,
-    pub type_ref: Option<TypeRefId>,
 }
 
 /// Spans for a `Class`, parallel to [`ClassData`].
@@ -77,19 +61,6 @@ pub struct ImplementsSourceMap {
     pub span: TextRange,
     pub field_links: Vec<InterfaceFieldLinkSourceMap>,
     pub associated_type_bindings: Vec<AssociatedTypeBindingSourceMap>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterfaceFieldLinkSourceMap {
-    pub span: TextRange,
-    pub interface_field_span: TextRange,
-    pub class_field_span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AssociatedTypeBindingSourceMap {
-    pub span: TextRange,
-    pub name_span: TextRange,
 }
 
 /// Semantic data for one class. Span-free — see the module docs.
@@ -127,7 +98,7 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
     let fields = data
         .fields
         .iter()
-        .map(|field| ClassFieldData {
+        .map(|field| FieldData {
             name: field.name.clone(),
             type_ref: field.type_expr.as_ref().map(|te| type_refs.lower(te)),
             attributes: field.attributes.clone(),

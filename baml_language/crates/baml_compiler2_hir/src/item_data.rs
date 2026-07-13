@@ -27,9 +27,29 @@
 //! One submodule per item kind, mirroring `item_tree`.
 
 mod classes;
+mod clients;
+mod common;
+mod enumeration;
+mod enums;
 mod functions;
+mod impls;
+mod interfaces;
+mod lets;
+mod retry_policies;
+mod template_strings;
+mod test_items;
 mod type_aliases;
 
 pub use classes::*;
+pub use clients::*;
+pub use common::*;
+pub use enumeration::*;
+pub use enums::*;
 pub use functions::*;
+pub use impls::*;
+pub use interfaces::*;
+pub use lets::*;
+pub use retry_policies::*;
+pub use template_strings::*;
+pub use test_items::*;
 pub use type_aliases::*;

@@ -3,6 +3,9 @@ use baml_compiler2_ast as ast;
 use text_size::TextRange;
 
 use crate::{
+    item_data::common::{
+        AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData,
+    },
     loc::FunctionLoc,
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
 };
@@ -35,15 +38,6 @@ pub struct FunctionData {
     pub is_tagged_template_tag: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionParamData {
-    pub name: Name,
-    pub type_ref: Option<TypeRefId>,
-    /// Whether a default expression was supplied. The expression itself lives in
-    /// `signature::function_parameter_defaults`.
-    pub has_default: bool,
-}
-
 /// Spans for a `Function`, parallel to [`FunctionData`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSourceMap {
@@ -71,6 +65,90 @@ pub fn function_source_map<'db>(
     function: FunctionLoc<'db>,
 ) -> FunctionSourceMap {
     lower(db, function).1
+}
+
+/// The interface target a method was declared under, when it sits inside an
+/// `implements I { … }` block — plus the associated-type bindings from that
+/// block's header. `None` for class-level methods and for interface default
+/// methods.
+///
+/// The target stays an unresolved `TypeRef`; TIR resolves it to an
+/// `InterfaceLoc` lazily, so HIR construction stays independent of name
+/// resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MethodInterfaceTarget {
+    pub type_refs: TypeRefStore,
+    pub target: TypeRefId,
+    pub associated_type_bindings: Vec<AssociatedTypeBindingData>,
+}
+
+/// Spans for a [`MethodInterfaceTarget`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MethodInterfaceTargetSourceMap {
+    pub type_refs: TypeRefSourceMap,
+    /// Parallel to `MethodInterfaceTarget::associated_type_bindings`.
+    pub associated_type_bindings: Vec<AssociatedTypeBindingSourceMap>,
+}
+
+/// See [`MethodInterfaceTarget`]. Span-free.
+#[salsa::tracked(returns(ref))]
+pub fn method_interface_target<'db>(
+    db: &'db dyn crate::Db,
+    method: FunctionLoc<'db>,
+) -> Option<MethodInterfaceTarget> {
+    lower_interface_target(db, method).map(|(data, _)| data)
+}
+
+/// Spans for [`method_interface_target`]. Kept separate so that a
+/// whitespace-only edit invalidates this but not the semantic data.
+#[salsa::tracked(returns(ref))]
+pub fn method_interface_target_source_map<'db>(
+    db: &'db dyn crate::Db,
+    method: FunctionLoc<'db>,
+) -> Option<MethodInterfaceTargetSourceMap> {
+    lower_interface_target(db, method).map(|(_, source_map)| source_map)
+}
+
+fn lower_interface_target<'db>(
+    db: &'db dyn crate::Db,
+    method: FunctionLoc<'db>,
+) -> Option<(MethodInterfaceTarget, MethodInterfaceTargetSourceMap)> {
+    let item_tree = crate::file_item_tree(db, method.file(db));
+    let target_expr = item_tree.method_to_iface_target.get(&method.id(db))?;
+    let bindings = item_tree
+        .method_to_iface_associated_type_bindings
+        .get(&method.id(db))
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+
+    let mut type_refs = TypeRefBuilder::new();
+    let target = type_refs.lower(target_expr);
+    let associated_type_bindings = bindings
+        .iter()
+        .map(|binding| AssociatedTypeBindingData {
+            name: binding.name.clone(),
+            type_ref: binding.type_expr.as_ref().map(|te| type_refs.lower(te)),
+        })
+        .collect();
+    let (store, spans) = type_refs.finish();
+
+    Some((
+        MethodInterfaceTarget {
+            type_refs: store,
+            target,
+            associated_type_bindings,
+        },
+        MethodInterfaceTargetSourceMap {
+            type_refs: spans,
+            associated_type_bindings: bindings
+                .iter()
+                .map(|binding| AssociatedTypeBindingSourceMap {
+                    span: binding.span,
+                    name_span: binding.name_span,
+                })
+                .collect(),
+        },
+    ))
 }
 
 /// Both halves share one lowering pass — the split into two queries is purely
