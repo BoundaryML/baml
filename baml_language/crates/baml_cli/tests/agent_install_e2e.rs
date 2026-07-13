@@ -159,6 +159,13 @@ fn init_warns_then_default_install_sets_up_skills_and_silences() {
         stderr.contains("No baml skill is installed, set it up with baml agent install."),
         "{stderr}"
     );
+    // A generator section makes the step-3 `generate` genuinely succeed, so
+    // its quietness assertion can also require success.
+    let mut baml_toml = fs::read_to_string(project.join("baml.toml")).unwrap();
+    baml_toml.push_str(
+        "\n[generator.py]\noutput_type = \"python/pydantic\"\noutput_dir = \"generated\"\nnaming_convention = \"preserve-case\"\n",
+    );
+    fs::write(project.join("baml.toml"), baml_toml).unwrap();
 
     // Step 2: plain `baml agent install` finds the project root from the cwd
     // and installs the skills into both agent directories.
@@ -180,6 +187,11 @@ fn init_warns_then_default_install_sets_up_skills_and_silences() {
     // Step 3: the installed, up-to-date skill keeps later authoring commands
     // quiet.
     let output = run(&["generate"]);
+    assert!(
+        output.status.success(),
+        "generate failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!stderr.contains("baml skill"), "{stderr}");
 }
