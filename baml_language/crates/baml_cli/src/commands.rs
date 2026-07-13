@@ -204,6 +204,19 @@ impl RuntimeCli {
 
         // Resolve color/hyperlink output once, before any subcommand writes.
         crate::paint::init_color(self.color);
+
+        // Passive skill warning + background freshness refresh, only on the
+        // core authoring commands (init, run, generate, pack) so the nag
+        // never bleeds into machine-facing or utility invocations. The
+        // guard's drop, after the match below returns, gives the background
+        // refresh the rest of its time budget.
+        let _skill_check = match &self.command {
+            Commands::Init(_) | Commands::Run(_) | Commands::Generate(_) | Commands::Pack(_) => {
+                crate::skill_check::SkillCheck::start()
+            }
+            _ => crate::skill_check::SkillCheck::skipped(),
+        };
+
         match &self.command {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
