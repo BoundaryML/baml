@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <map>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <baml/baml.hpp>
@@ -39,8 +40,11 @@ static void test_arg_tri_state() {
     baml::Arg<int64_t> unset;
     assert(unset.is_unset() && !unset.is_null() && !unset.has_value());
 
-    baml::Arg<int64_t> null_arg = baml::null;
+    baml::Arg<int64_t> null_arg = std::nullopt;
     assert(null_arg.is_null());
+
+    static_assert(std::is_same<baml::Null, std::monostate>::value,
+                  "bare null unifies with the std vocabulary");
 
     baml::Arg<int64_t> value_arg = int64_t{42};
     assert(value_arg.has_value() && value_arg.value() == 42);

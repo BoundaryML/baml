@@ -4,32 +4,27 @@
 #include <optional>
 #include <stdexcept>
 #include <utility>
+#include <variant>
 
 namespace baml {
 
-// Unit type for BAML `null`-typed values (e.g. a class field declared `null`).
-struct Null {
-    friend bool operator==(Null, Null) { return true; }
-    friend bool operator!=(Null, Null) { return false; }
-};
-
-// Tag for passing an explicit BAML null to an optional argument, as opposed
-// to leaving it unset (engine evaluates the declared default).
-struct null_t {
-    explicit constexpr null_t() = default;
-};
-inline constexpr null_t null{};
+// The BAML `null` unit type is std::monostate; this alias is documentation.
+// Union-with-null is std::optional, so nullability uses only std vocabulary:
+//   null         -> std::monostate (baml::Null)
+//   T | null     -> std::optional<T>
+//   A | B | null -> std::optional<std::variant<A, B>>
+using Null = std::monostate;
 
 // Tri-state optional-argument holder: unset / explicit null / value.
-// Default-constructed = unset, which makes `Opts opts = {}` mean "engine
-// defaults for everything".
+// Default-constructed = unset (engine evaluates the declared default);
+// std::nullopt = explicit BAML null, same spelling as for optional values.
 template <typename T>
 class Arg {
 public:
     enum class State { Unset, Null, Value };
 
     Arg() = default;
-    Arg(null_t) : state_(State::Null) {}
+    Arg(std::nullopt_t) : state_(State::Null) {}
     Arg(T value) : state_(State::Value), value_(std::move(value)) {}
 
     State state() const { return state_; }
