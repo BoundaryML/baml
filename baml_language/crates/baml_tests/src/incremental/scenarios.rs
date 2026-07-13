@@ -582,3 +582,109 @@ fn editing_a_function_body_preserves_its_signature_data() {
     );
     assert_eq!(before.params.len(), 2);
 }
+
+// ── Item ↔ scope index ───────────────────────────────────────────────────────
+//
+// ~20 sites across TIR/MIR/LSP used to recover "the scope for this item" by
+// scanning for a scope whose `range` equalled the item's `span`. That made item
+// spans load-bearing *semantic identity*, which is what blocked moving them into
+// the source map. The builder now records the link directly.
+
+/// The index must agree with the span-equality scan it replaces, for every
+/// function in the file — otherwise migrating the call sites changes behavior.
+#[test]
+fn function_scope_index_agrees_with_the_span_join_it_replaces() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        "function Add(x: int, y: int) -> int {\n  x + y\n}\n\n\
+         function Sub(x: int, y: int) -> int {\n  x - y\n}\n\n\
+         class Holder {\n  n int\n\n  function get(self) -> int {\n    self.n\n  }\n}\n",
+    );
+
+    let db = test_db.db();
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+
+    assert!(!item_tree.functions.is_empty());
+
+    for (id, func) in item_tree.functions.iter() {
+        let loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *id);
+
+        // The scan being retired.
+        let legacy = index
+            .scope_ids
+            .iter()
+            .copied()
+            .find(|scope_id| {
+                let scope = &index.scopes[scope_id.file_scope_id(db).index() as usize];
+                matches!(scope.kind, baml_compiler2_hir::scope::ScopeKind::Function)
+                    && scope.range == func.span
+                    && scope.name.as_ref() == Some(&func.name)
+            })
+            .map(|scope| scope.file_scope_id(db));
+
+        let indexed = baml_compiler2_hir::item_data::function_scope(db, loc)
+            .map(|scope| scope.file_scope_id(db));
+
+        assert_eq!(
+            legacy, indexed,
+            "index and span-join disagree for function `{}`",
+            func.name
+        );
+        assert!(indexed.is_some(), "`{}` should have a scope", func.name);
+    }
+}
+
+/// The point of the index: it is not derived from spans, so a whitespace edit
+/// leaves it alone.
+#[test]
+fn function_scope_survives_a_whitespace_edit() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        "function Add(x: int, y: int) -> int {\n  x + y\n}\n",
+    );
+
+    let before = {
+        let db = test_db.db();
+        let loc = function_loc(db, file, "Add");
+        baml_compiler2_hir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
+    };
+
+    file.set_text(test_db.db_mut())
+        .to("// pushed down\nfunction Add(x: int, y: int) -> int {\n  x + y\n}\n".to_string());
+
+    let after = {
+        let db = test_db.db();
+        let loc = function_loc(db, file, "Add");
+        baml_compiler2_hir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
+    };
+
+    assert!(before.is_some());
+    assert_eq!(
+        before, after,
+        "the item↔scope link must not depend on where the item sits in the file"
+    );
+}
+
+/// `scope_owner` is the inverse and must round-trip.
+#[test]
+fn scope_owner_round_trips() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db
+        .db_mut()
+        .add_file("test.baml", "function Add(x: int) -> int {\n  x\n}\n");
+
+    let db = test_db.db();
+    let loc = function_loc(db, file, "Add");
+    let scope = baml_compiler2_hir::item_data::function_scope(db, loc).expect("scope");
+
+    assert_eq!(
+        baml_compiler2_hir::item_data::scope_owner(db, scope),
+        Some(baml_compiler2_hir::item_data::ScopeOwner::Function(loc)),
+    );
+}
