@@ -436,3 +436,149 @@ fn semantic_edit_changes_item_data() {
 
     assert_ne!(data_before, data_after);
 }
+
+fn class_loc<'db>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+) -> baml_compiler2_hir::loc::ClassLoc<'db> {
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let (id, _) = item_tree
+        .classes
+        .iter()
+        .find(|(_, class)| class.name.as_str() == name)
+        .unwrap_or_else(|| unreachable!("class `{name}` should exist"));
+    baml_compiler2_hir::loc::ClassLoc::new(db, file, *id)
+}
+
+fn function_loc<'db>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+) -> baml_compiler2_hir::loc::FunctionLoc<'db> {
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let (id, _) = item_tree
+        .functions
+        .iter()
+        .find(|(_, function)| function.name.as_str() == name)
+        .unwrap_or_else(|| unreachable!("function `{name}` should exist"));
+    baml_compiler2_hir::loc::FunctionLoc::new(db, file, *id)
+}
+
+/// Everything span-bearing in a `ClassData`, as an owned value.
+///
+/// `ClassData<'db>` holds `FunctionLoc<'db>`s, so even a clone keeps the `db`
+/// borrow alive and cannot be held across an edit. `methods` is pure identity
+/// and carries no spans, so projecting it away loses nothing these tests check.
+type ClassFingerprint = (
+    baml_base::Name,
+    Vec<Option<baml_compiler2_hir::type_ref::TypeRefId>>,
+    baml_compiler2_hir::type_ref::TypeRefStore,
+    Vec<baml_compiler2_hir::item_data::ClassFieldData>,
+    Vec<baml_compiler2_hir::item_data::ImplementsData>,
+    Vec<baml_compiler2_hir::item_tree::Attribute>,
+);
+
+fn class_fingerprint(
+    db: &baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+) -> ClassFingerprint {
+    let data = baml_compiler2_hir::item_data::class_data(db, class_loc(db, file, name));
+    (
+        data.name.clone(),
+        data.generic_param_bounds.clone(),
+        data.type_refs.clone(),
+        data.fields.clone(),
+        data.implements.clone(),
+        data.attributes.clone(),
+    )
+}
+
+/// The whole point of a per-item firewall: editing one item must leave every
+/// *other* item's data untouched, so nothing downstream of them re-runs.
+#[test]
+fn editing_one_class_preserves_the_others_data() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        "class Person {\n  name string\n}\n\nclass Address {\n  city string\n}\n",
+    );
+
+    let untouched_before = class_fingerprint(test_db.db(), file, "Address");
+
+    // Add a field to `Person`. `Address` is not touched — but it moves, so every
+    // span in it shifts.
+    file.set_text(test_db.db_mut()).to(
+        "class Person {\n  name string\n  age int\n}\n\nclass Address {\n  city string\n}\n"
+            .to_string(),
+    );
+
+    let untouched_after = class_fingerprint(test_db.db(), file, "Address");
+    let touched = class_fingerprint(test_db.db(), file, "Person");
+
+    assert_eq!(
+        untouched_before, untouched_after,
+        "editing `Person` must not invalidate `Address` — that is the firewall"
+    );
+    assert_eq!(touched.3.len(), 2, "`Person` really did change");
+}
+
+/// `ast::RawAttribute` puts its span in its own `PartialEq`, and every
+/// `TypeExprKind` variant holds `attrs`, so today a whitespace edit near any
+/// `@description` makes the type compare unequal and silently destroys cutoff.
+/// `ClassData` carries the span-free `Attribute` instead.
+#[test]
+fn moving_an_attribute_preserves_class_data() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        "class Person {\n  name string @description(\"who\")\n}\n",
+    );
+
+    let before = class_fingerprint(test_db.db(), file, "Person");
+
+    // Push the class down. The attribute's span moves with it.
+    file.set_text(test_db.db_mut())
+        .to("// a comment\nclass Person {\n  name string @description(\"who\")\n}\n".to_string());
+
+    let after = class_fingerprint(test_db.db(), file, "Person");
+
+    assert_eq!(
+        before, after,
+        "moving an attribute must not change the semantic data"
+    );
+}
+
+/// A function's signature data must not depend on its body — otherwise every
+/// keystroke inside a body invalidates every caller's view of the signature.
+#[test]
+fn editing_a_function_body_preserves_its_signature_data() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        "function Add(x: int, y: int) -> int {\n  x + y\n}\n",
+    );
+
+    let before = {
+        let db = test_db.db();
+        baml_compiler2_hir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
+    };
+
+    file.set_text(test_db.db_mut())
+        .to("function Add(x: int, y: int) -> int {\n  y + x + 0\n}\n".to_string());
+
+    let after = {
+        let db = test_db.db();
+        baml_compiler2_hir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
+    };
+
+    assert_eq!(
+        before, after,
+        "a body edit must not invalidate the signature"
+    );
+    assert_eq!(before.params.len(), 2);
+}

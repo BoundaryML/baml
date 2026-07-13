@@ -26,6 +26,10 @@
 //!
 //! One submodule per item kind, mirroring `item_tree`.
 
+mod classes;
+mod functions;
 mod type_aliases;
 
+pub use classes::*;
+pub use functions::*;
 pub use type_aliases::*;
