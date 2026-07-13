@@ -83,6 +83,7 @@ const teamMembers: TeamMember[] = [
   {
     bio: 'Avery revived the defunct LEGO Universe MMO with a custom C++ server emulator (open-sourcing it led to an official partnership with The LEGO Group) while finishing his CS degree at UPenn.',
     image: '/avery.png',
+    linkedin: 'https://www.linkedin.com/in/codeshaunted/',
     name: 'Avery Townsend',
     role: 'Engineering',
   },
