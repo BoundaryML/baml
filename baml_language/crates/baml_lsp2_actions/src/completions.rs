@@ -1323,7 +1323,8 @@ fn local_variable_ty(
             // StmtId is in a nested ExprBody, not the outer function's body.
             find_binding_ty_for_local(db, file, at_offset, site)
         }
-        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_) => {
+        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_)
+        | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(_) => {
             find_binding_ty_for_local(db, file, at_offset, site)
         }
     }
@@ -1398,7 +1399,8 @@ fn find_binding_ty_for_local(
                 extract_pat_from_stmt(target_body, stmt_id)
             }
         }
-        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id) => Some(pat_id),
+        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id)
+        | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(pat_id) => Some(pat_id),
         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => None,
     };
 

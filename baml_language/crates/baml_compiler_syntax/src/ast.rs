@@ -186,6 +186,49 @@ ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(Attribute, ATTRIBUTE);
 ast_node!(TypeBuilderBlock, TYPE_BUILDER_BLOCK);
 ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
+ast_node!(ObjectField, OBJECT_FIELD);
+ast_node!(GenericParam, GENERIC_PARAM);
+
+impl CallArg {
+    /// The name of a named argument `name = value` — a leading `WORD` (or
+    /// `client`) immediately followed by `=`. `None` for a positional argument
+    /// (whose first element is the value expression, not a name token).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        let mut elements = self
+            .syntax
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia());
+        let first = elements.next()?.into_token()?;
+        if !matches!(first.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT) {
+            return None;
+        }
+        (elements.next()?.kind() == SyntaxKind::EQUALS).then_some(first)
+    }
+}
+
+impl ObjectField {
+    /// The bare-word key of `key: value` (or shorthand `key`).
+    ///
+    /// `None` when the key is a string literal (`"key": value`): such a key is a
+    /// child node, not a bare word.
+    pub fn key(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .find(|element| !element.kind().is_trivia())
+            .and_then(rowan::NodeOrToken::into_token)
+            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+    }
+}
+
+impl GenericParam {
+    /// The declared parameter name (`T` in `<T: Bound>`).
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+}
 
 /// Parts of a union member for token-based parsing.
 ///
@@ -338,11 +381,7 @@ impl UnionMemberParts {
         {
             return None;
         }
-        if !self
-            .tokens
-            .iter()
-            .any(|t| t.kind() == SyntaxKind::WORD && t.text() == "as")
-        {
+        if !self.tokens.iter().any(|t| t.kind() == SyntaxKind::KW_AS) {
             return None;
         }
         let dot_idx = self
@@ -466,10 +505,7 @@ impl TypeExpr {
         {
             return None;
         }
-        if !tokens
-            .iter()
-            .any(|t| t.kind() == SyntaxKind::WORD && t.text() == "as")
-        {
+        if !tokens.iter().any(|t| t.kind() == SyntaxKind::KW_AS) {
             return None;
         }
         let dot_idx = tokens.iter().rposition(|t| t.kind() == SyntaxKind::DOT)?;
@@ -2137,7 +2173,7 @@ impl InterfaceFieldLink {
             .find(|token| {
                 !token.kind().is_trivia()
                     && is_member_name_token(token.kind())
-                    && !(token.kind() == SyntaxKind::WORD && token.text() == "as")
+                    && token.kind() != SyntaxKind::KW_AS
             })
     }
 
@@ -2150,7 +2186,7 @@ impl InterfaceFieldLink {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| !token.kind().is_trivia())
         {
-            if token.kind() == SyntaxKind::WORD && token.text() == "as" {
+            if token.kind() == SyntaxKind::KW_AS {
                 after_as = true;
                 continue;
             }
@@ -2166,7 +2202,7 @@ impl InterfaceFieldLink {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD && token.text() == "as")
+            .find(|token| token.kind() == SyntaxKind::KW_AS)
     }
 }
 
@@ -2793,16 +2829,15 @@ impl TestDef {
 }
 
 impl TypeAliasDef {
-    /// Get the type alias name.
-    /// Note: "type" is parsed as a WORD token, not a keyword, so we skip it.
+    /// Get the type alias name — the first direct WORD child (the `type`
+    /// keyword is a `KW_TYPE` token, so no skipping is needed).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| {
+            .find(|token| {
                 token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
             })
-            .nth(1) // Skip "type" keyword (which is a WORD), get the actual name
     }
 
     /// Get the aliased type expression.
@@ -3740,7 +3775,11 @@ impl BlockExpr {
                         | SyntaxKind::INTEGER_LITERAL
                         | SyntaxKind::FLOAT_LITERAL
                         | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL => Some(BlockElement::ExprToken(t)),
+                        | SyntaxKind::RAW_STRING_LITERAL
+                        // Boolean / null literals are re-lexed contextual keywords.
+                        | SyntaxKind::KW_TRUE
+                        | SyntaxKind::KW_FALSE
+                        | SyntaxKind::KW_NULL => Some(BlockElement::ExprToken(t)),
                         _ => None,
                     }
                 }
