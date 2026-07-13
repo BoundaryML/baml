@@ -179,8 +179,6 @@ enum BamlTyVariant {
     PromptAst(BamlTyPromptAst),
     #[prost(message, tag = "20")]
     Void(BamlTyVoid),
-    #[prost(message, tag = "21")]
-    WatchAccessor(BamlTyWatchAccessor),
     #[prost(message, tag = "22")]
     TypeVar(BamlTyTypeVar),
     #[prost(message, tag = "23")]
@@ -342,12 +340,6 @@ struct BamlTyFuture {
     value: Option<Box<BamlTy>>,
     #[prost(message, optional, boxed, tag = "2")]
     error: Option<Box<BamlTy>>,
-}
-
-#[derive(Clone, PartialEq, Message)]
-struct BamlTyWatchAccessor {
-    #[prost(message, optional, boxed, tag = "1")]
-    inner: Option<Box<BamlTy>>,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -660,9 +652,6 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
         RuntimeTy::Resource { .. } => BamlTyVariant::Resource(BamlTyResource {}),
         RuntimeTy::PromptAst { .. } => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
         RuntimeTy::Void { .. } => BamlTyVariant::Void(BamlTyVoid {}),
-        RuntimeTy::WatchAccessor(inner, _) => BamlTyVariant::WatchAccessor(BamlTyWatchAccessor {
-            inner: Some(Box::new(runtime_ty_to_proto_ty(inner))),
-        }),
         RuntimeTy::TypeVar(name, _) => BamlTyVariant::TypeVar(BamlTyTypeVar {
             name: name.as_str().to_string(),
         }),

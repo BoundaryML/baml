@@ -83,7 +83,6 @@ define_keyword_tokens! {
     "catch" => SyntaxKind::KW_CATCH => Catch;
     "catch_all" => SyntaxKind::KW_CATCH_ALL => CatchAll;
     "catch_all_panics" => SyntaxKind::KW_CATCH_ALL_PANICS => CatchAllPanics;
-    "watch" => SyntaxKind::KW_WATCH => Watch;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "is" => SyntaxKind::KW_IS => Is;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;

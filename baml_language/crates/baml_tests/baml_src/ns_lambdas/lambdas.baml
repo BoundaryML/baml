@@ -375,33 +375,6 @@ test "issue_b_captured_variable_mutation_visible" {
     assert.is_true(baml.deep_equals(lambdas_issue_b_captured_variable_mutation_visible(), 42))
 }
 
-// ─── issue_b_watch_let_captured_by_lambda ─────────────────────────────────────
-
-function lambdas_issue_b_watch_let_captured_by_lambda() -> int {
-    watch let x = 0;
-    let inc = () -> { x += 1 }
-    inc()
-    inc()
-    x
-}
-
-test "issue_b_watch_let_captured_by_lambda" {
-    assert.is_true(baml.deep_equals(lambdas_issue_b_watch_let_captured_by_lambda(), 2))
-}
-
-// ─── issue_b_watch_let_mutated_by_parent_and_lambda ──────────────────────────
-
-function lambdas_issue_b_watch_let_mutated_by_parent_and_lambda() -> int {
-    watch let counter = 0;
-    counter = 1;
-    let bump = () -> { counter += 10 }
-    bump()
-    counter
-}
-
-test "issue_b_watch_let_mutated_by_parent_and_lambda" {
-    assert.is_true(baml.deep_equals(lambdas_issue_b_watch_let_mutated_by_parent_and_lambda(), 11))
-}
 
 // ─── lambda_param_shadows_annotated_outer_local ───────────────────────────────
 

@@ -8388,9 +8388,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Self::ty_contains_unknown_like(value, count_builtin)
                     || Self::ty_contains_unknown_like(error, count_builtin)
             }
-            // `WatchAccessor` is never built by TIR; the arm exists only so the
-            // match stays exhaustive over the shared `baml_type::Ty`.
-            Ty::WatchAccessor(inner, _) => Self::ty_contains_recovery_unknown(inner),
             Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::TypeAlias(..)
@@ -14463,7 +14460,6 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. }
-            | Ty::WatchAccessor(..)
             | Ty::TypeVar(_, _)
             | Ty::AssociatedTypeProjection { .. } => vec![Ctor::NonExhaustive],
             Ty::Never { .. } => vec![],

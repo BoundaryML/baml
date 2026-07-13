@@ -242,7 +242,7 @@ func TestEncodeCallArgsRollsBackOnLaterFailure(t *testing.T) {
 	_, err := encodeCallArgs(map[string]any{
 		"callback": cb,
 		"bad":      unencodable{},
-	})
+	}, 1)
 	if err == nil {
 		t.Fatal("expected encodeCallArgs to fail on the unencodable kwarg")
 	}

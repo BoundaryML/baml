@@ -24,14 +24,14 @@ import (
 // releases — the callables we registered for earlier kwargs, leaking them
 // for the life of the process. To avoid that, we track every key registered
 // during this encode and unregister them all if any kwarg fails.
-func encodeCallArgs(kwargs map[string]any) ([]byte, error) {
+func encodeCallArgs(kwargs map[string]any, callID uint64) ([]byte, error) {
 	var registered []uint64
 	entries, err := encodeKwargs(kwargs, &registered)
 	if err != nil {
 		rollbackRegisteredHostValues(registered)
 		return nil, err
 	}
-	out, err := proto.Marshal(&pb.CallFunctionArgs{Kwargs: entries})
+	out, err := proto.Marshal(&pb.CallFunctionArgs{Kwargs: entries, CallId: callID})
 	if err != nil {
 		// Marshal failure is unusual (the messages are valid by
 		// construction), but treat it the same: the call won't reach the

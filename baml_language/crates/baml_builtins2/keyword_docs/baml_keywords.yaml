@@ -339,13 +339,6 @@ return:
       return a + b
     }
 
-watch:
-  summary: "Binds a value and re-runs dependent work as it updates over time."
-  syntax: |
-    watch let user_input = SimulateHumanGuess(history);
-    watch let WPoint { x } = current_point;
-  details: "`watch` is a prefix on a `let` binding: `watch let <pattern> = <expr>;`. The binding is reactive — code depending on it re-evaluates as the watched value changes. It binds the same patterns as `let` (names or destructuring), and unlike a plain `let` it cannot take an `else` clause."
-
 throw:
   summary: "Raises an error value, unwinding to the nearest `catch`."
   syntax: |

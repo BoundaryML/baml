@@ -14,11 +14,12 @@ typedef void (*FreeBufferFn)(Buffer buf);
 typedef void (*CallFunctionFn)(const char *function_name, const uint8_t *encoded_args, size_t length, uint32_t id);
 typedef void (*CallbackFn)(uint32_t call_id, const int8_t *content, size_t length);
 typedef void (*RegisterCallbackFn)(CallbackFn cb);
+typedef uint64_t (*NewFunctionCallFn)(void);
 typedef uint32_t BamlCffiStatus;
 typedef BamlCffiStatus (*BamlHandleCloneFn)(uint64_t key, uint64_t *out_key);
 typedef BamlCffiStatus (*BamlHandleReleaseFn)(uint64_t key);
 typedef BamlCffiStatus (*TestonlySeedFunctionRefFn)(uint64_t global_index, uint64_t *out_key, int32_t *out_handle_type);
-typedef int32_t (*CancelFunctionCallFn)(uint32_t id);
+typedef int32_t (*CancelFunctionCallFn)(uint64_t id);
 typedef void (*FlushEventsFn)(void);
 // Host-value callable support
 typedef void (*HostDispatchFn)(uint64_t host_value_key, uint32_t call_id, const uint8_t *args, size_t length);
@@ -34,6 +35,7 @@ static void *destroyBamlRuntimeFnPtr = NULL;
 static void *freeBufferFnPtr = NULL;
 static void *callFunctionFnPtr = NULL;
 static void *registerCallbackFnPtr = NULL;
+static void *newFunctionCallFnPtr = NULL;
 static void *bamlHandleCloneFnPtr = NULL;
 static void *bamlHandleReleaseFnPtr = NULL;
 static void *testonlySeedFunctionRefFnPtr = NULL;
@@ -51,6 +53,7 @@ static void setDestroyBamlRuntimeFn(void *fn) { destroyBamlRuntimeFnPtr = fn; }
 static void setFreeBufferFn(void *fn) { freeBufferFnPtr = fn; }
 static void setCallFunctionFn(void *fn) { callFunctionFnPtr = fn; }
 static void setRegisterCallbackFn(void *fn) { registerCallbackFnPtr = fn; }
+static void setNewFunctionCallFn(void *fn) { newFunctionCallFnPtr = fn; }
 static void setBamlHandleCloneFn(void *fn) { bamlHandleCloneFnPtr = fn; }
 static void setBamlHandleReleaseFn(void *fn) { bamlHandleReleaseFnPtr = fn; }
 static void setTestonlySeedFunctionRefFn(void *fn) { testonlySeedFunctionRefFnPtr = fn; }
@@ -85,6 +88,10 @@ static void wrapCallFunction(const char *function_name, const uint8_t *encoded_a
 static void wrapRegisterCallback(CallbackFn cb) {
     if (registerCallbackFnPtr) ((RegisterCallbackFn)registerCallbackFnPtr)(cb);
 }
+static uint64_t wrapNewFunctionCall(void) {
+    if (newFunctionCallFnPtr) return ((NewFunctionCallFn)newFunctionCallFnPtr)();
+    return 0;
+}
 static BamlCffiStatus wrapBamlHandleClone(uint64_t key, uint64_t *out_key) {
     if (bamlHandleCloneFnPtr) return ((BamlHandleCloneFn)bamlHandleCloneFnPtr)(key, out_key);
     return 4;
@@ -97,7 +104,7 @@ static BamlCffiStatus wrapTestonlySeedFunctionRef(uint64_t global_index, uint64_
     if (testonlySeedFunctionRefFnPtr) return ((TestonlySeedFunctionRefFn)testonlySeedFunctionRefFnPtr)(global_index, out_key, out_handle_type);
     return 4;
 }
-static int32_t wrapCancelFunctionCall(uint32_t id) {
+static int32_t wrapCancelFunctionCall(uint64_t id) {
     if (cancelFunctionCallFnPtr) return ((CancelFunctionCallFn)cancelFunctionCallFnPtr)(id);
     return 1;
 }

@@ -41,7 +41,6 @@ enum SwitchOtherwise {
 struct LoopContext {
     break_target: BlockId,
     continue_target: BlockId,
-    watched_locals_depth: usize,
     /// Depth of `defer_stack` at loop entry (BEP-042). `break`/`continue`
     /// replay the defers declared inside the loop body so far (down to this
     /// depth) before jumping.
@@ -769,7 +768,6 @@ fn tir_contains_projection(ty: &Tir2Ty) -> bool {
                 || tir_contains_projection(ret)
                 || tir_contains_projection(throws)
         }
-        Tir2Ty::WatchAccessor(inner, _) => tir_contains_projection(inner),
         _ => false,
     }
 }
@@ -949,10 +947,6 @@ pub fn tir2_to_template(
             Box::new(tir2_to_template(error, resolved, generic_params)),
             TyAttr::default(),
         ),
-        Tir2Ty::WatchAccessor(inner, _) => TyTemplate::WatchAccessor(
-            Box::new(tir2_to_template(inner, resolved, generic_params)),
-            TyAttr::default(),
-        ),
         // Everything else is a leaf with no nested type positions (primitives,
         // enums, aliases, `Type`/`Resource`/`PromptAst`, …) — `convert` lowers
         // it faithfully and the narrowing proves it realized. The symbolic
@@ -1090,10 +1084,6 @@ pub(crate) fn ty_to_template_from_resolved_ty(ty: &RuntimeTy) -> TyTemplate {
             Box::new(ty_to_template_from_resolved_ty(error)),
             TyAttr::default(),
         ),
-        RuntimeTy::WatchAccessor(inner, _) => TyTemplate::WatchAccessor(
-            Box::new(ty_to_template_from_resolved_ty(inner)),
-            TyAttr::default(),
-        ),
         // A realized leaf (incl. a monomorphic class): narrow and widen. A
         // non-realized value would be a composite handled above or a residual
         // type variable handled at the top — a failure is a compiler invariant
@@ -1174,7 +1164,6 @@ fn member_is_opaque_for_tag_proof(m: &RuntimeTy) -> bool {
         | RuntimeTy::Type { .. }
         | RuntimeTy::Resource { .. }
         | RuntimeTy::PromptAst { .. }
-        | RuntimeTy::WatchAccessor(..)
         | RuntimeTy::Never { .. } => false,
     }
 }
@@ -1855,10 +1844,8 @@ struct LoweringContext<'db> {
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
 
-    watched_locals_stack: Vec<Local>,
-
     /// Stack of pending `defer` block bodies (BEP-042), parallel to
-    /// `watched_locals_stack`. Each entry is the `AstExprId` of a defer body
+    /// lexical scopes. Each entry is the `AstExprId` of a defer body
     /// (an inline `Expr::Block`). Pushed by `lower_stmt`; replayed (LIFO,
     /// re-lowered inline) at every scope exit by `replay_defers_to_depth`.
     /// Swapped at lambda boundaries so a lambda body never replays the parent's
@@ -2083,7 +2070,6 @@ impl<'db> LoweringContext<'db> {
         iterable_view: InterfaceTypeView,
     ) {
         let saved_locals = self.locals.clone();
-        let watched_depth = self.watched_locals_stack.len();
         let coll_ty = self.expr_ty(collection);
         let coll_local = self.builder.temp(coll_ty);
         self.lower_expr(collection, Place::local(coll_local));
@@ -2130,7 +2116,6 @@ impl<'db> LoweringContext<'db> {
         self.loop_context = Some(LoopContext {
             break_target: bb_exit,
             continue_target: bb_header,
-            watched_locals_depth: watched_depth,
             defer_depth: self.defer_stack.len(),
         });
 
@@ -2157,7 +2142,7 @@ impl<'db> LoweringContext<'db> {
         self.emit_is_type_branch(next_local, Self::baml_iter_done_ty(), bb_exit, bb_body);
 
         self.builder.set_current_block(bb_body);
-        let elem_local = self.builder.declare_local(None, elem_ty, None, false);
+        let elem_local = self.builder.declare_local(None, elem_ty, None);
         self.builder.assign(
             Place::local(elem_local),
             Rvalue::Use(Operand::Copy(Place::Local(next_local))),
@@ -2183,10 +2168,9 @@ impl<'db> LoweringContext<'db> {
         self.lower_expr(body, Place::local(body_temp));
 
         if !self.builder.is_current_terminated() {
-            self.emit_unwatch_to_depth(watched_depth);
             self.builder.goto(bb_header);
         }
-        self.restore_locals_after_scope(saved_locals, watched_depth);
+        self.restore_locals_after_scope(saved_locals);
 
         self.loop_context = prev_loop;
         self.builder.set_current_block(bb_exit);
@@ -2748,7 +2732,6 @@ impl<'db> LoweringContext<'db> {
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
-            watched_locals_stack: Vec::new(),
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
@@ -2834,7 +2817,6 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             interface_implementors: &pkg_data.interface_implementors,
             resolved_aliases: &pkg_data.resolved_aliases,
-            watched_locals_stack: Vec::new(),
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
@@ -2997,38 +2979,13 @@ impl<'db> LoweringContext<'db> {
         idx
     }
 
-    /// Emit `unwatch` ops for every watched local at index `[watched_depth..]`
-    /// of `watched_locals_stack`, in reverse declaration order.
-    ///
-    /// This is the single emitter for unwatch sequences. All scope-exit
-    /// paths go through it:
-    ///   - normal block fallthrough: `lower_scoped_block` (depth = entry stack len)
-    ///   - normal `for`-body fallthrough (depth = entry stack len)
-    ///   - normal match/catch arm-body fallthrough (depth = arm-entry stack len)
-    ///   - `break` / `continue` (depth = `loop_context.watched_locals_depth`)
-    ///   - `return` / `throw` (depth = 0 — the stack is swapped at lambda
-    ///     boundaries, so 0 means "everything in the enclosing function")
-    ///
-    /// Does NOT truncate the stack — callers that own the scope are
-    /// responsible for truncating via `restore_locals_after_scope`. Divergent
-    /// callers (break/continue/return/throw) leave the stack alone because a
-    /// dead block follows the divergent terminator.
-    fn emit_unwatch_to_depth(&mut self, watched_depth: usize) {
-        let watched = self.watched_locals_stack[watched_depth..].to_vec();
-        for local in watched.into_iter().rev() {
-            self.builder.unwatch(local);
-        }
-    }
-
     /// Re-lower the `defer` block bodies registered at `[defer_depth..]` of
     /// `defer_stack`, in reverse declaration order (LIFO) — BEP-042.
     ///
     /// Each body is re-lowered INLINE (block-duplication) into a throwaway Void
     /// temp so it reads the live enclosing locals at THIS exit point, per the
-    /// BEP's "final value" rule. Called before `emit_unwatch_to_depth` at every
-    /// scope exit (a defer body may read a watched local before it is
-    /// unwatched). Like `emit_unwatch_to_depth` it does NOT truncate the stack —
-    /// the owning `lower_scoped_block` truncates; divergent callers leave it
+    /// BEP's "final value" rule. Called at every scope exit. It does not truncate
+    /// the stack; the owning `lower_scoped_block` truncates, while divergent callers leave it
     /// (a dead block follows). If a replayed body diverges (e.g. `throw`), the
     /// remaining defers are emitted on the resulting dead block and eliminated.
     fn replay_defers_to_depth(&mut self, defer_depth: usize) {
@@ -3054,12 +3011,7 @@ impl<'db> LoweringContext<'db> {
         self.catch_context = saved_catch;
     }
 
-    fn restore_locals_after_scope(
-        &mut self,
-        saved_locals: HashMap<Name, Local>,
-        watched_depth: usize,
-    ) {
-        self.watched_locals_stack.truncate(watched_depth);
+    fn restore_locals_after_scope(&mut self, saved_locals: HashMap<Name, Local>) {
         self.locals = saved_locals;
     }
 
@@ -3287,9 +3239,6 @@ impl<'db> LoweringContext<'db> {
                 Box::new(Self::erase_compiler_only_ty(*error)),
                 attr,
             ),
-            Tir2Ty::WatchAccessor(inner, attr) => {
-                Tir2Ty::WatchAccessor(Box::new(Self::erase_compiler_only_ty(*inner)), attr)
-            }
             Tir2Ty::AssociatedTypeProjection {
                 base,
                 interface,
@@ -4024,7 +3973,7 @@ impl<'db> LoweringContext<'db> {
             });
         let ret = self
             .builder
-            .declare_local(Some(Name::new("_0")), ret_ty, None, false);
+            .declare_local(Some(Name::new("_0")), ret_ty, None);
 
         // Detect enclosing class for `self` parameter resolution
         let index = file_semantic_index(self.db, self.file);
@@ -4103,7 +4052,7 @@ impl<'db> LoweringContext<'db> {
             };
             let local = self
                 .builder
-                .declare_local(Some(param.name.clone()), param_ty, None, false);
+                .declare_local(Some(param.name.clone()), param_ty, None);
             self.locals.insert(param.name.clone(), local);
             self.binding_locals
                 .insert(BindingId::parameter(self.current_scope, param_idx), local);
@@ -4233,7 +4182,6 @@ impl<'db> LoweringContext<'db> {
                 attr: TyAttr::default(),
             },
             None,
-            false,
         );
 
         // Entry and exit blocks
@@ -4291,11 +4239,11 @@ impl<'db> LoweringContext<'db> {
             MirBuilder::new(Name::new(&adapter_name), coercion.target_params.len());
 
         let ret_ty = self.resolved_aliases.convert(&coercion.target_return);
-        let ret = adapter_builder.declare_local(Some(Name::new("_0")), ret_ty, None, false);
+        let ret = adapter_builder.declare_local(Some(Name::new("_0")), ret_ty, None);
 
         for param in &coercion.target_params {
             let param_ty = self.resolved_aliases.convert(&param.ty);
-            adapter_builder.declare_local(param.name.clone(), param_ty, None, false);
+            adapter_builder.declare_local(param.name.clone(), param_ty, None);
         }
 
         let entry = adapter_builder.create_block();
@@ -4452,7 +4400,6 @@ impl<'db> LoweringContext<'db> {
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
         let saved_catch_context = self.catch_context.take();
-        let saved_watched_locals = std::mem::take(&mut self.watched_locals_stack);
         // BEP-042: a lambda body is its own cleanup region — reset the defer
         // stack so it never replays the parent's defers, restore it after.
         let saved_defer_stack = std::mem::take(&mut self.defer_stack);
@@ -4500,7 +4447,6 @@ impl<'db> LoweringContext<'db> {
                 attr: baml_type::TyAttr::default(),
             },
             None,
-            false,
         );
 
         // Declare parameter locals _1..=_n. A lambda param annotation may
@@ -4543,7 +4489,7 @@ impl<'db> LoweringContext<'db> {
             };
             let local = self
                 .builder
-                .declare_local(Some(param.name.clone()), param_ty, None, false);
+                .declare_local(Some(param.name.clone()), param_ty, None);
             self.locals.insert(param.name.clone(), local);
             self.binding_locals
                 .insert(BindingId::parameter(self.current_scope, param_idx), local);
@@ -4611,7 +4557,6 @@ impl<'db> LoweringContext<'db> {
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
         self.catch_context = saved_catch_context;
-        self.watched_locals_stack = saved_watched_locals;
         self.defer_stack = saved_defer_stack;
         self.current_scope = saved_current_scope;
         self.current_metadata_scope = saved_metadata_scope;
@@ -4984,7 +4929,6 @@ impl LoweringContext<'_> {
         let saved_exit_block = self.exit_block;
         let saved_loop_context = self.loop_context.take();
         let saved_catch_context = self.catch_context.take();
-        let saved_watched_locals = std::mem::take(&mut self.watched_locals_stack);
         let saved_current_scope = self.current_scope;
         let saved_metadata_scope = self.current_metadata_scope;
         let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
@@ -5016,14 +4960,13 @@ impl LoweringContext<'_> {
                 attr: TyAttr::default(),
             },
             None,
-            false,
         );
 
         // Body params _1..=_n (the tag supplies their values when it calls body).
         for (param_idx, (name, ty)) in body_params.iter().enumerate() {
             let local = self
                 .builder
-                .declare_local(Some(name.clone()), ty.clone(), None, false);
+                .declare_local(Some(name.clone()), ty.clone(), None);
             self.locals.insert(name.clone(), local);
             self.binding_locals
                 .insert(BindingId::parameter(self.current_scope, param_idx), local);
@@ -5050,7 +4993,6 @@ impl LoweringContext<'_> {
                         TyAttr::default(),
                     ),
                     None,
-                    false,
                 );
                 self.builder.assign(
                     Place::local(parts_local),
@@ -5083,7 +5025,6 @@ impl LoweringContext<'_> {
                         TyAttr::default(),
                     ),
                     None,
-                    false,
                 );
                 self.builder.assign(
                     Place::local(values_local),
@@ -5157,7 +5098,6 @@ impl LoweringContext<'_> {
         self.exit_block = saved_exit_block;
         self.loop_context = saved_loop_context;
         self.catch_context = saved_catch_context;
-        self.watched_locals_stack = saved_watched_locals;
         self.current_scope = saved_current_scope;
         self.current_metadata_scope = saved_metadata_scope;
         self.capture_indices = saved_capture_indices;
@@ -5232,7 +5172,6 @@ impl LoweringContext<'_> {
         dest: Place,
     ) {
         let saved_locals = self.locals.clone();
-        let watched_depth = self.watched_locals_stack.len();
         let defer_depth = self.defer_stack.len();
 
         // BEP-042 Stage 2: a defer must also run when an exception propagates
@@ -5275,7 +5214,6 @@ impl LoweringContext<'_> {
                                 attr: TyAttr::default(),
                             },
                             None,
-                            false,
                         )
                     });
                     let ctx_local = *shared_ctx.get_or_insert_with(|| {
@@ -5285,7 +5223,6 @@ impl LoweringContext<'_> {
                                 attr: TyAttr::default(),
                             },
                             None,
-                            false,
                         )
                     });
                     let pad = self.builder.create_block();
@@ -5336,11 +5273,9 @@ impl LoweringContext<'_> {
             }
         }
 
-        // Normal (non-throwing) fall-through: replay defers inline, then
-        // unwatch watched locals.
+        // Normal (non-throwing) fall-through: replay defers inline.
         if !self.builder.is_current_terminated() {
             self.replay_defers_to_depth(defer_depth);
-            self.emit_unwatch_to_depth(watched_depth);
         }
 
         // Emit the landing pads out of line (reached via the exception table).
@@ -5398,7 +5333,7 @@ impl LoweringContext<'_> {
 
         self.catch_context = block_incoming_catch;
         self.defer_stack.truncate(defer_depth);
-        self.restore_locals_after_scope(saved_locals, watched_depth);
+        self.restore_locals_after_scope(saved_locals);
     }
 
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
@@ -5637,11 +5572,8 @@ impl LoweringContext<'_> {
                 if let Some(e) = value {
                     self.lower_expr(e, Place::local(ret));
                 }
-                // Run pending defers (LIFO) then unwatch all watched locals in
-                // this function before jumping to the exit (depth=0 covers the
-                // current function; stacks are swapped at lambda boundaries).
+                // Run pending defers (LIFO) before jumping to the exit.
                 self.replay_defers_to_depth(0);
-                self.emit_unwatch_to_depth(0);
                 self.builder.goto(self.exit_block);
                 // Subsequent code is unreachable; lower it into a dead block.
                 let dead = self.builder.create_block();
@@ -7579,16 +7511,10 @@ impl<'db> LoweringContext<'db> {
         runtime_id: Option<AstExprId>,
         dest: Place,
     ) {
-        // Check if callee is a member access (potential watch method call)
         let callee_expr = self.body.exprs[callee].clone();
         if let AstExpr::MemberAccess { base, member } = &callee_expr {
             let member_name = member.clone();
             let base_id = *base;
-            if member_name.as_str() == "options" || member_name.as_str() == "notify" {
-                let args_owned = args.to_vec();
-                self.lower_watch_method(expr_id, base_id, &member_name, &args_owned, dest);
-                return;
-            }
             // BEP-044: interface-typed receiver — dispatch by type tag over
             // the registered implementor set. Each arm emits a static call
             // to that implementor's method.
@@ -9388,14 +9314,12 @@ impl<'db> LoweringContext<'db> {
         // Then-branch: bind pattern locals, lower body, restore on exit.
         self.builder.set_current_block(bb_then);
         let saved_locals = self.locals.clone();
-        let watched_depth = self.watched_locals_stack.len();
         self.bind_pattern(scrutinee_local, pattern);
         self.lower_expr(then_branch, dest.clone());
         if !self.builder.is_current_terminated() {
-            self.emit_unwatch_to_depth(watched_depth);
             self.builder.goto(bb_join);
         }
-        self.restore_locals_after_scope(saved_locals, watched_depth);
+        self.restore_locals_after_scope(saved_locals);
 
         // Else-branch: no bindings from the pattern, just lower the else
         // (or write Null if absent — same as plain `if` with no else).
@@ -11107,44 +11031,6 @@ impl<'db> LoweringContext<'db> {
         let pkg_id = PackageId::new(self.db, pkg_name.clone());
         package_items(self.db, pkg_id)
     }
-
-    fn lower_watch_method(
-        &mut self,
-        _expr_id: AstExprId,
-        base: AstExprId,
-        method: &Name,
-        args: &[AstExprId],
-        dest: Place,
-    ) {
-        // Find the watched local from the base expression
-        let base_op = self.lower_to_operand(base);
-        let (Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))) = base_op
-        else {
-            // Not a direct local — fall back to regular call lowering
-            // (shouldn't happen in well-formed code)
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-            return;
-        };
-
-        if method.as_str() == "options" {
-            // $watch.options(filter) — emit WatchOptions statement
-            if let Some(&filter_expr) = args.first() {
-                let filter_op = self.lower_to_operand(filter_expr);
-                self.builder.watch_options(local, filter_op);
-            }
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-        } else if method.as_str() == "notify" {
-            // $watch.notify() — emit WatchNotify statement
-            self.builder.watch_notify(local);
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-        } else {
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-        }
-    }
 }
 
 // ─── Statement lowering ───────────────────────────────────────────────────────
@@ -11173,7 +11059,6 @@ impl LoweringContext<'_> {
             AstStmt::Let {
                 pattern,
                 initializer,
-                is_watched,
                 else_branch: Some(else_expr),
                 ..
             } => {
@@ -11218,7 +11103,7 @@ impl LoweringContext<'_> {
                 // No saved/restored locals — these flow forward like a
                 // plain `let`.
                 self.builder.set_current_block(bb_match);
-                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false, is_watched);
+                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false);
 
                 let names: Vec<Name> = self.body.patterns[pattern]
                     .bound_names(&self.body.patterns)
@@ -11233,20 +11118,11 @@ impl LoweringContext<'_> {
                         self.binding_locals.insert(binding_id, local);
                     }
                 }
-
-                if is_watched {
-                    for name in self.body.patterns[pattern].bound_names(&self.body.patterns) {
-                        if let Some(&local) = self.locals.get(name) {
-                            self.watched_locals_stack.push(local);
-                        }
-                    }
-                }
             }
 
             AstStmt::Let {
                 pattern,
                 initializer,
-                is_watched,
                 ..
             } if self.pattern_contains_structural(pattern) => {
                 let local_ty = self.pat_ty(pattern);
@@ -11261,7 +11137,7 @@ impl LoweringContext<'_> {
                     );
                 }
 
-                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false, is_watched);
+                self.bind_pattern_inner(scrutinee, pattern, pattern, pattern, false);
 
                 let names: Vec<Name> = self.body.patterns[pattern]
                     .bound_names(&self.body.patterns)
@@ -11276,20 +11152,11 @@ impl LoweringContext<'_> {
                         self.binding_locals.insert(binding_id, local);
                     }
                 }
-
-                if is_watched {
-                    for name in self.body.patterns[pattern].bound_names(&self.body.patterns) {
-                        if let Some(&local) = self.locals.get(name) {
-                            self.watched_locals_stack.push(local);
-                        }
-                    }
-                }
             }
 
             AstStmt::Let {
                 pattern,
                 initializer,
-                is_watched,
                 ..
             } => {
                 // Extract binding names from pattern. A simple `let x` has
@@ -11305,12 +11172,9 @@ impl LoweringContext<'_> {
                 let first_name = names.first().cloned();
 
                 let local_ty = self.pat_ty(pattern);
-                let local = self.builder.declare_local(
-                    first_name.clone(),
-                    local_ty.clone(),
-                    None,
-                    is_watched,
-                );
+                let local = self
+                    .builder
+                    .declare_local(first_name.clone(), local_ty.clone(), None);
 
                 if let Some(init) = initializer {
                     self.lower_expr(init, Place::local(local));
@@ -11333,12 +11197,9 @@ impl LoweringContext<'_> {
                 // Additional chain-link bindings get their own locals that
                 // copy from the first. `let x: let y` ⇒ y = x at runtime.
                 for extra in names.iter().skip(1) {
-                    let alias = self.builder.declare_local(
-                        Some(extra.clone()),
-                        local_ty.clone(),
-                        None,
-                        false,
-                    );
+                    let alias =
+                        self.builder
+                            .declare_local(Some(extra.clone()), local_ty.clone(), None);
                     self.builder.assign(
                         Place::local(alias),
                         Rvalue::Use(Operand::Copy(Place::Local(local))),
@@ -11349,10 +11210,6 @@ impl LoweringContext<'_> {
                         self.binding_locals.insert(binding_id, alias);
                     }
                     self.locals.insert(extra.clone(), alias);
-                }
-
-                if is_watched {
-                    self.watched_locals_stack.push(local);
                 }
             }
 
@@ -11372,11 +11229,9 @@ impl LoweringContext<'_> {
                 let bb_exit = self.builder.create_block();
 
                 let prev_loop = self.loop_context.take();
-                let watched_depth = self.watched_locals_stack.len();
                 self.loop_context = Some(LoopContext {
                     break_target: bb_exit,
                     continue_target: bb_after,
-                    watched_locals_depth: watched_depth,
                     defer_depth: self.defer_stack.len(),
                 });
 
@@ -11431,11 +11286,9 @@ impl LoweringContext<'_> {
                 // re-tests the pattern); `break` jumps to the exit. Save/swap/
                 // restore loop_context so nested loops work — mirrors While.
                 let prev_loop = self.loop_context.take();
-                let watched_depth = self.watched_locals_stack.len();
                 self.loop_context = Some(LoopContext {
                     break_target: bb_exit,
                     continue_target: bb_header,
-                    watched_locals_depth: watched_depth,
                     defer_depth: self.defer_stack.len(),
                 });
 
@@ -11484,10 +11337,9 @@ impl LoweringContext<'_> {
                 });
                 self.lower_expr(body, Place::local(body_temp));
                 if !self.builder.is_current_terminated() {
-                    self.emit_unwatch_to_depth(watched_depth);
                     self.builder.goto(bb_header);
                 }
-                self.restore_locals_after_scope(saved_locals, watched_depth);
+                self.restore_locals_after_scope(saved_locals);
 
                 // Exit.
                 self.loop_context = prev_loop;
@@ -11520,11 +11372,8 @@ impl LoweringContext<'_> {
                 if let Some(e) = expr {
                     self.lower_expr(e, Place::local(ret));
                 }
-                // Run all pending defers (LIFO), then unwatch all watched
-                // locals in this function. The stacks are swapped at lambda
-                // boundaries, so depth=0 covers exactly the current function.
+                // Run all pending defers (LIFO).
                 self.replay_defers_to_depth(0);
-                self.emit_unwatch_to_depth(0);
                 self.builder.goto(self.exit_block);
                 // Create a dead successor block for the builder cursor
                 // (subsequent statements in the same block-list are dead code)
@@ -11537,12 +11386,10 @@ impl LoweringContext<'_> {
 
             AstStmt::Throw { value } => {
                 let val_op = self.lower_throw_operand(value);
-                // Unwatch all watched locals before throwing. Defers run via the
-                // block's unwind landing pads: the throw's PC is inside the
+                // Defers run via the block's unwind landing pads: the throw's PC is inside the
                 // enclosing defer region(s), so the exception table routes it to
                 // the innermost defer pad (BEP-042 Stage 2). We do NOT inline-
                 // replay here — that would double-run the defers.
-                self.emit_unwatch_to_depth(0);
                 if self.operand_is_marked_rethrow(&val_op) {
                     self.builder.rethrow(val_op);
                 } else {
@@ -11555,11 +11402,9 @@ impl LoweringContext<'_> {
             AstStmt::Break => {
                 if let Some(ref loop_ctx) = self.loop_context {
                     let target = loop_ctx.break_target;
-                    let depth = loop_ctx.watched_locals_depth;
                     let defer_depth = loop_ctx.defer_depth;
-                    // Run defers declared in the loop body, then unwatch.
+                    // Run defers declared in the loop body.
                     self.replay_defers_to_depth(defer_depth);
-                    self.emit_unwatch_to_depth(depth);
                     self.builder.goto(target);
                 }
                 let dead = self.builder.create_block();
@@ -11569,11 +11414,9 @@ impl LoweringContext<'_> {
             AstStmt::Continue => {
                 if let Some(ref loop_ctx) = self.loop_context {
                     let target = loop_ctx.continue_target;
-                    let depth = loop_ctx.watched_locals_depth;
                     let defer_depth = loop_ctx.defer_depth;
-                    // Run defers declared in the loop body, then unwatch.
+                    // Run defers declared in the loop body.
                     self.replay_defers_to_depth(defer_depth);
-                    self.emit_unwatch_to_depth(depth);
                     self.builder.goto(target);
                 }
                 let dead = self.builder.create_block();
@@ -11650,10 +11493,7 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(dead);
             }
 
-            AstStmt::HeaderComment { name, level } => {
-                self.builder
-                    .push_statement(StatementKind::NotifyBlock { name, level }, None);
-            }
+            AstStmt::HeaderComment { .. } => {}
         }
 
         self.builder.current_source_span = prev_span;
@@ -12329,19 +12169,12 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(bb_body);
                 let (pattern, body, _) = arms[arm_idx];
                 let saved_locals = self.locals.clone();
-                let watched_depth = self.watched_locals_stack.len();
                 self.bind_pattern(scrutinee, pattern);
                 self.lower_expr(body, dest.clone());
                 if !self.builder.is_current_terminated() {
-                    // A `watch let` declared inside an arm body must be torn
-                    // down on fallthrough. Without this the watcher leaks past
-                    // the arm. Mirrors `lower_match_chain`.
-                    self.emit_unwatch_to_depth(watched_depth);
                     self.builder.goto(join);
                 }
-                // Restore both the name→local map AND truncate the watched
-                // stack back to the arm-entry depth (mirrors `lower_scoped_block`).
-                self.restore_locals_after_scope(saved_locals, watched_depth);
+                self.restore_locals_after_scope(saved_locals);
             }
         }
 
@@ -12408,18 +12241,12 @@ impl LoweringContext<'_> {
             }
             let (pattern, body, _) = arms[idx];
             let saved_locals = self.locals.clone();
-            let watched_depth = self.watched_locals_stack.len();
             self.bind_pattern(scrutinee, pattern);
             self.lower_expr(body, dest);
             if !self.builder.is_current_terminated() {
-                // A `watch let` declared inside the wildcard body must be
-                // torn down on fallthrough; mirrors the int-arm path above.
-                self.emit_unwatch_to_depth(watched_depth);
                 self.builder.goto(join);
             }
-            // Restore name→local map AND truncate the watched stack back to
-            // the arm-entry depth (mirrors `lower_scoped_block`).
-            self.restore_locals_after_scope(saved_locals, watched_depth);
+            self.restore_locals_after_scope(saved_locals);
         } else {
             // No wildcard — decide what the otherwise block does.
             // Use `is_switch_exhaustive` (which may be inferred for TypeTag)
@@ -12533,19 +12360,12 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(bb_body);
             }
             let saved_locals = self.locals.clone();
-            let watched_depth = self.watched_locals_stack.len();
             self.bind_pattern(scrutinee, arm.pattern);
             self.lower_expr(arm.body, dest);
             if !self.builder.is_current_terminated() {
-                // A `watch let` declared inside an arm body must be torn
-                // down on fallthrough. Without this the watcher leaks past
-                // the arm.
-                self.emit_unwatch_to_depth(watched_depth);
                 self.builder.goto(join);
             }
-            // Restore both the name→local map AND truncate the watched stack
-            // back to the arm-entry depth (mirrors `lower_scoped_block`).
-            self.restore_locals_after_scope(saved_locals, watched_depth);
+            self.restore_locals_after_scope(saved_locals);
             return;
         }
 
@@ -12563,7 +12383,6 @@ impl LoweringContext<'_> {
 
                 self.builder.set_current_block(bb_body);
                 let saved_locals = self.locals.clone();
-                let watched_depth = self.watched_locals_stack.len();
                 self.bind_pattern(scrutinee, part);
                 if let Some(guard) = arm.guard {
                     let guard_op = self.lower_to_operand(guard);
@@ -12573,10 +12392,9 @@ impl LoweringContext<'_> {
                 }
                 self.lower_expr(arm.body, dest.clone());
                 if !self.builder.is_current_terminated() {
-                    self.emit_unwatch_to_depth(watched_depth);
                     self.builder.goto(join);
                 }
-                self.restore_locals_after_scope(saved_locals, watched_depth);
+                self.restore_locals_after_scope(saved_locals);
 
                 if idx + 1 < parts.len() {
                     self.builder.set_current_block(bb_alt_next);
@@ -12595,7 +12413,6 @@ impl LoweringContext<'_> {
 
         self.builder.set_current_block(bb_body);
         let saved_locals = self.locals.clone();
-        let watched_depth = self.watched_locals_stack.len();
         self.bind_pattern(scrutinee, arm.pattern);
         if let Some(guard) = arm.guard {
             let guard_op = self.lower_to_operand(guard);
@@ -12605,11 +12422,9 @@ impl LoweringContext<'_> {
         }
         self.lower_expr(arm.body, dest.clone());
         if !self.builder.is_current_terminated() {
-            // See exhaustive arm comment above.
-            self.emit_unwatch_to_depth(watched_depth);
             self.builder.goto(join);
         }
-        self.restore_locals_after_scope(saved_locals, watched_depth);
+        self.restore_locals_after_scope(saved_locals);
 
         self.builder.set_current_block(bb_next);
         self.lower_match_chain(scrutinee, rest, dest, join, exhaustive, backstop_last_arm);
@@ -13709,11 +13524,11 @@ impl LoweringContext<'_> {
         // match-arm's pattern, etc.), never by the inner Bind. To wire up
         // closure capture lookups correctly, we register the local against
         // that root.
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, false, false);
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, false);
     }
 
     fn bind_pattern_with_fresh_cells(&mut self, scrutinee: Local, pat_id: AstPatId) {
-        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, true, false);
+        self.bind_pattern_inner(scrutinee, pat_id, pat_id, pat_id, true);
     }
 
     fn bind_pattern_inner(
@@ -13723,7 +13538,6 @@ impl LoweringContext<'_> {
         root: AstPatId,
         narrow_root: AstPatId,
         fresh_cell: bool,
-        is_watched: bool,
     ) {
         match self.body.patterns[pat_id].clone() {
             AstPattern::Bind { name, subpat } => {
@@ -13742,9 +13556,7 @@ impl LoweringContext<'_> {
                         .map(|ty| self.resolved_aliases.convert(ty))
                         .unwrap_or_else(|| self.builder.local_ty(scrutinee))
                 };
-                let local = self
-                    .builder
-                    .declare_local(Some(name.clone()), ty, None, is_watched);
+                let local = self.builder.declare_local(Some(name.clone()), ty, None);
                 if fresh_cell {
                     self.builder.fresh_cell(local);
                 }
@@ -13757,7 +13569,7 @@ impl LoweringContext<'_> {
                 // Recurse into the sub-pattern so inner bindings (e.g.
                 // `let x: let y` or `let x: Class { f }`) get emitted too.
                 if let Some(sp) = subpat {
-                    self.bind_pattern_inner(scrutinee, sp, root, sp, fresh_cell, is_watched);
+                    self.bind_pattern_inner(scrutinee, sp, root, sp, fresh_cell);
                 }
             }
             AstPattern::Or(parts) => {
@@ -13766,7 +13578,7 @@ impl LoweringContext<'_> {
                 if bindings.is_empty() {
                     return;
                 }
-                self.declare_or_pattern_bindings(pat_id, root, fresh_cell, is_watched);
+                self.declare_or_pattern_bindings(pat_id, root, fresh_cell);
                 self.lower_or_pattern_assign_existing(scrutinee, &parts, root, narrow_root);
             }
             AstPattern::Class { fields, .. } => {
@@ -13774,14 +13586,7 @@ impl LoweringContext<'_> {
                     if let Some(field_local) =
                         self.project_class_pattern_field(scrutinee, pat_id, f.pat, &f.field)
                     {
-                        self.bind_pattern_inner(
-                            field_local,
-                            f.pat,
-                            root,
-                            f.pat,
-                            fresh_cell,
-                            is_watched,
-                        );
+                        self.bind_pattern_inner(field_local, f.pat, root, f.pat, fresh_cell);
                     }
                 }
             }
@@ -13794,9 +13599,7 @@ impl LoweringContext<'_> {
                 for (idx, elem_pat) in prefix.iter().copied().enumerate() {
                     let elem_local =
                         self.project_array_pattern_element_from_start(scrutinee, elem_pat, idx);
-                    self.bind_pattern_inner(
-                        elem_local, elem_pat, root, elem_pat, fresh_cell, is_watched,
-                    );
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, fresh_cell);
                 }
                 if let Some(rest) = rest
                     && let Some(rest_pat) = rest.pat
@@ -13807,9 +13610,7 @@ impl LoweringContext<'_> {
                         prefix.len(),
                         suffix.len(),
                     );
-                    self.bind_pattern_inner(
-                        rest_local, rest_pat, root, rest_pat, fresh_cell, is_watched,
-                    );
+                    self.bind_pattern_inner(rest_local, rest_pat, root, rest_pat, fresh_cell);
                 }
                 for (suffix_idx, elem_pat) in suffix.iter().copied().enumerate() {
                     let absolute_idx_from_end = suffix.len() - suffix_idx;
@@ -13818,9 +13619,7 @@ impl LoweringContext<'_> {
                         elem_pat,
                         absolute_idx_from_end,
                     );
-                    self.bind_pattern_inner(
-                        elem_local, elem_pat, root, elem_pat, fresh_cell, is_watched,
-                    );
+                    self.bind_pattern_inner(elem_local, elem_pat, root, elem_pat, fresh_cell);
                 }
             }
             AstPattern::Wildcard | AstPattern::Type(_) => {}
@@ -13867,22 +13666,13 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn declare_or_pattern_bindings(
-        &mut self,
-        pat_id: AstPatId,
-        root: AstPatId,
-        fresh_cell: bool,
-        is_watched: bool,
-    ) {
+    fn declare_or_pattern_bindings(&mut self, pat_id: AstPatId, root: AstPatId, fresh_cell: bool) {
         let mut bindings = Vec::new();
         self.collect_pattern_bindings(pat_id, &mut bindings);
         for (name, bind_pat) in bindings {
-            let local = self.builder.declare_local(
-                Some(name.clone()),
-                self.pat_ty(bind_pat),
-                None,
-                is_watched,
-            );
+            let local = self
+                .builder
+                .declare_local(Some(name.clone()), self.pat_ty(bind_pat), None);
             if fresh_cell {
                 self.builder.fresh_cell(local);
             }
@@ -14230,7 +14020,6 @@ impl LoweringContext<'_> {
                 attr: TyAttr::default(),
             },
             None,
-            false,
         );
 
         let stack_trace_local = clauses
@@ -14243,7 +14032,6 @@ impl LoweringContext<'_> {
                         attr: TyAttr::default(),
                     },
                     None,
-                    false,
                 )
             });
 
@@ -14261,7 +14049,6 @@ impl LoweringContext<'_> {
                             attr: TyAttr::default(),
                         },
                         None,
-                        false,
                     );
                     self.record_pattern_binding_local(clause.binding, &name, local);
                     (Some(local), Some(local))
@@ -14288,7 +14075,6 @@ impl LoweringContext<'_> {
                                 attr: TyAttr::default(),
                             },
                             None,
-                            false,
                         );
                         self.record_pattern_binding_local(st_pat, &name, local);
                         (Some(name), Some(local))
@@ -14442,7 +14228,6 @@ impl LoweringContext<'_> {
         for &(ref arm, body_block, _, clause_idx) in &arms_with_blocks {
             self.builder.set_current_block(body_block);
             let saved_locals = self.locals.clone();
-            let watched_depth = self.watched_locals_stack.len();
             let clause = clause_locals[clause_idx].clone();
             install_clause_locals(self, error_local, &clause);
             self.bind_pattern(error_local, arm.pattern);
@@ -14454,14 +14239,9 @@ impl LoweringContext<'_> {
             self.lower_expr(arm.body, dest.clone());
             self.catch_rethrow_locals.truncate(rethrow_mark);
             if !self.builder.is_current_terminated() {
-                // A `watch let` declared inside a catch-arm body must be
-                // torn down on fallthrough.
-                self.emit_unwatch_to_depth(watched_depth);
                 self.builder.goto(bb_join);
             }
-            // Restore name→local map AND truncate the watched stack back to
-            // the arm-entry depth (mirrors `lower_scoped_block`).
-            self.restore_locals_after_scope(saved_locals, watched_depth);
+            self.restore_locals_after_scope(saved_locals);
         }
 
         self.builder.catch_regions[catch_region_idx].handler_body = std::iter::once(bb_handler)
@@ -14571,7 +14351,6 @@ pub fn lower_function<'db>(
                         is_captured: false,
                         span: None,
                         scope_span: None,
-                        is_watched: false,
                     })
                     .collect(),
                 catch_regions: vec![],

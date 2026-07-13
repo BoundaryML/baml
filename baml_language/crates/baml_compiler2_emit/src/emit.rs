@@ -329,10 +329,6 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Instruction index where the currently emitted basic block starts.
     current_block_start: usize,
 
-    /// Watched locals that have already had Watch instruction emitted.
-    /// We only emit Watch once per watched local (at initialization).
-    watched_locals_initialized: HashSet<Local>,
-
     /// MIR local types for field name resolution (debug info).
     local_types: HashMap<Local, RuntimeTy>,
 
@@ -414,7 +410,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             next_line_discriminator: HashMap::new(),
             next_block: None,
             current_block_start: 0,
-            watched_locals_initialized: HashSet::new(),
             local_types: HashMap::new(),
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
@@ -835,12 +830,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             },
             _ => None,
         }
-    }
-
-    fn local_slot_or_panic(&self, local: Local, context: &str) -> usize {
-        *self.local_slots.get(&local).unwrap_or_else(|| {
-            panic!("local {local} has no allocated slot while emitting {context}")
-        })
     }
 
     fn span_for_statement_ref(&self, block: BlockId, statement_ref: StatementRef) -> Option<Span> {
@@ -1354,23 +1343,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 }
 
                 match destination {
-                    Place::Local(local) => {
+                    Place::Local(_) => {
                         // Local assignment: emit rvalue then store
                         self.emit_rvalue_pull(value);
                         self.emit_store_place(destination);
-                        // Emit Watch only once for watched locals (at initialization)
-                        let local_decl = self.body.local(*local);
-                        if local_decl.is_watched && !self.watched_locals_initialized.contains(local)
-                        {
-                            self.watched_locals_initialized.insert(*local);
-                            unwrap_infallible(
-                                self.push_watch_channel(*local, local_decl.name.as_deref()),
-                            );
-                            let null_const_idx = self.add_constant(ConstValue::Null);
-                            let inst = self.emit(Instruction::LoadConst(null_const_idx));
-                            self.set_operand(inst, OperandMeta::Const("null".to_string()));
-                            unwrap_infallible(self.watch_local(*local));
-                        }
                     }
                     Place::Capture(idx) => {
                         // Capture store: evaluate rvalue, then StoreCapture.
@@ -1382,30 +1358,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::Drop(place) => {
                 unwrap_infallible(pull_semantics::walk_drop_statement(self, place));
-            }
-            StatementKind::Unwatch(local) => {
-                // Emit unwatch for a watched local going out of scope
-                let slot = self.local_slot_or_panic(*local, "Unwatch");
-                let inst = self.emit(Instruction::Unwatch(slot));
-                self.set_var_operand(inst, slot);
-            }
-            StatementKind::NotifyBlock { name: _, level: _ } => {
-                // Block/viz observability is not emitted to bytecode.
-            }
-            StatementKind::WatchOptions { local, filter } => {
-                let channel_name = self.body.local(*local).name.as_deref();
-                unwrap_infallible(pull_semantics::walk_watch_options_statement(
-                    self,
-                    *local,
-                    channel_name,
-                    filter,
-                ));
-            }
-            StatementKind::WatchNotify(local) => {
-                // Emit manual notify for a watched variable
-                let slot = self.local_slot_or_panic(*local, "WatchNotify");
-                let inst = self.emit(Instruction::Notify(slot));
-                self.set_var_operand(inst, slot);
             }
             StatementKind::VizEnter(_node_idx) => {
                 // Viz observability is not emitted to bytecode.
@@ -3496,35 +3448,6 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
         self.emit(Instruction::StoreCapture(idx));
         Ok(())
     }
-
-    fn push_watch_channel(
-        &mut self,
-        local: Local,
-        channel_name: Option<&str>,
-    ) -> Result<(), Self::Error> {
-        // Watched locals must be `Real` and therefore must have slots.
-        let _slot = self.local_slot_or_panic(local, "WatchOptions/watch initialization");
-        let channel = channel_name
-            .unwrap_or_else(|| panic!("watched local {local} must have a user-visible name"))
-            .to_string();
-        let channel_obj_idx = self.objects.len();
-        self.objects.push(Object::String(channel.as_str().into()));
-        let channel_const_idx =
-            self.add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
-        let inst = self.emit(Instruction::LoadConst(channel_const_idx));
-        self.set_operand(
-            inst,
-            OperandMeta::Const(Self::display_string_operand(&channel)),
-        );
-        Ok(())
-    }
-
-    fn watch_local(&mut self, local: Local) -> Result<(), Self::Error> {
-        let slot = self.local_slot_or_panic(local, "Watch");
-        let inst = self.emit(Instruction::Watch(slot));
-        self.set_var_operand(inst, slot);
-        Ok(())
-    }
 }
 
 /// The coarse `IsType` type tag for a realized leaf type, or `None` for a type
@@ -3604,7 +3527,6 @@ mod tests {
             ty,
             span: None,
             scope_span: None,
-            is_watched: false,
             is_captured: false,
         }
     }

@@ -307,7 +307,6 @@ fn determine_interface(
         | Ty::Future(..)
         | Ty::Function { .. }
         | Ty::RustType { .. }
-        | Ty::WatchAccessor(..)
         | Ty::Type { .. }
         | Ty::Resource { .. }
         | Ty::PromptAst { .. }

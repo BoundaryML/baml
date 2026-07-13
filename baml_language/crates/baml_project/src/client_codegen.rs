@@ -677,12 +677,10 @@ fn convert_tir_leaf(
         // returns futures must `await` them before crossing the host
         // boundary in v1.
         TirTy::Future(_, _, _) => cg::Ty::Unit,
-        // `Resource`/`PromptAst`/`WatchAccessor` are never produced by TIR; the
+        // `Resource`/`PromptAst` are never produced by TIR; the
         // arms exist only so the match stays exhaustive over the shared
         // `baml_type::Ty`.
-        TirTy::Resource { .. } | TirTy::PromptAst { .. } | TirTy::WatchAccessor(..) => {
-            cg::Ty::BuiltinUnknown
-        }
+        TirTy::Resource { .. } | TirTy::PromptAst { .. } => cg::Ty::BuiltinUnknown,
     }
 }
 

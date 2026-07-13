@@ -34,6 +34,7 @@ func Init(libraryPath string) error {
 		"free_buffer":          func(p unsafe.Pointer) { C.setFreeBufferFn(p) },
 		"call_function":        func(p unsafe.Pointer) { C.setCallFunctionFn(p) },
 		"register_callback":    func(p unsafe.Pointer) { C.setRegisterCallbackFn(p) },
+		"new_function_call":    func(p unsafe.Pointer) { C.setNewFunctionCallFn(p) },
 		"cancel_function_call": func(p unsafe.Pointer) { C.setCancelFunctionCallFn(p) },
 		"baml_handle_clone":    func(p unsafe.Pointer) { C.setBamlHandleCloneFn(p) },
 		"baml_handle_release":  func(p unsafe.Pointer) { C.setBamlHandleReleaseFn(p) },
@@ -141,6 +142,11 @@ func RegisterCallback(cb unsafe.Pointer) {
 	C.wrapRegisterCallback((C.CallbackFn)(cb))
 }
 
+// NewFunctionCall allocates a process-unique engine call ID.
+func NewFunctionCall() uint64 {
+	return uint64(C.wrapNewFunctionCall())
+}
+
 // CallFunction dispatches an async function call to Rust.
 // Results and errors are delivered via the registered callback.
 func CallFunction(functionName string, encodedArgs []byte, id uint32) {
@@ -161,8 +167,8 @@ func CallFunction(functionName string, encodedArgs []byte, id uint32) {
 // invocation. If CancelFunctionCall were to return an error, it would have to be
 // returned through ctx.Cancel(), but since there's no way to return an error
 // through this path, there's no reason for CancelFunctionCall to return an error.
-func CancelFunctionCall(id uint32) {
-	if rc := C.wrapCancelFunctionCall(C.uint32_t(id)); rc != 0 {
+func CancelFunctionCall(id uint64) {
+	if rc := C.wrapCancelFunctionCall(C.uint64_t(id)); rc != 0 {
 		log.Printf("bridge_go: cancel_function_call failed for id=%d (rc=%d)", id, rc)
 	}
 }
@@ -250,7 +256,7 @@ func RegisterHostReleaseCallback(cb unsafe.Pointer) {
 
 // CompleteHostCall forwards a host-callable result back to Rust. `isError == 0`
 // indicates a success payload (InboundValue protobuf), `isError == 1` indicates
-// an error payload (HostCallableError protobuf).
+// an InboundValue carrying the thrown value.
 //
 // The pointer/length pair only needs to be valid for the duration of this
 // call; Rust copies the bytes before returning.

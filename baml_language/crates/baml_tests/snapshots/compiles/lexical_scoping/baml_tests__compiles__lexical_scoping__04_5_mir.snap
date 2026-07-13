@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18293
 ---
 === MIR2 ===
 fn user.branch_locals(b: bool) -> int {
@@ -291,26 +290,6 @@ fn user.shadow_param(x: int) -> int {
     bb0: {
         _2 = copy _1 + const 1_i64;
         _0 = copy _2;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.watch_block_cleanup() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // x
-    let _2: int // x
-
-    bb0: {
-        _1 = const 1_i64;
-        _2 = const 2_i64;
-        unwatch(_2);
-        _0 = copy _1;
-        unwatch(_1);
         goto -> bb1;
     }
 

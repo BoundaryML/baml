@@ -178,20 +178,6 @@ impl<C: ErrorContext> TypeError<C> {
             )
             .with_primary_span(loc_fn(location)),
 
-            TypeError::WatchOnNonVariable { location } => Diagnostic::error(
-                DiagnosticId::WatchOnNonVariable,
-                "$watch can only be used on simple variable expressions",
-            )
-            .with_primary_span(loc_fn(location)),
-
-            TypeError::WatchOnUnwatchedVariable { name, location } => Diagnostic::error(
-                DiagnosticId::WatchOnUnwatchedVariable,
-                format!(
-                    "Cannot use $watch on `{name}`: variable must be declared with `watch let`"
-                ),
-            )
-            .with_primary_span(loc_fn(location)),
-
             TypeError::MissingReturnExpression { expected, location } => Diagnostic::error(
                 DiagnosticId::MissingReturnExpression,
                 format!(

@@ -1477,8 +1477,7 @@ impl BexEngine {
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
-                // bytecode (no async ops), but we loop to handle any intermediate
-                // notifications gracefully.
+                // bytecode, but events and GC safepoints may still yield.
                 loop {
                     match vm.exec() {
                         Ok(VmExecState::Complete(_)) => {
@@ -1491,10 +1490,6 @@ impl BexEngine {
                                 }
                             };
                             break;
-                        }
-                        Ok(VmExecState::Notify(_)) => {
-                            // Ignore watch notifications during init.
-                            continue;
                         }
                         Ok(VmExecState::Event { .. }) => {
                             // Handle events during $init: push null and continue.
@@ -3738,10 +3733,8 @@ impl BexEngine {
         let unwind_result = thread.vm.try_handle_external_exception(vm_value);
         self.drain_vm_call_captures(thread, call_capture);
         match unwind_result {
-            // A handler caught the injected exception. `crossed` cannot be
-            // true here: this entry point runs from the engine's sysop arm,
-            // never inside a watch-filter mini-runner.
-            Ok(_crossed) => Ok(None),
+            // A handler caught the injected exception.
+            Ok(()) => Ok(None),
             Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => Ok(Some(
                 self.route_unhandled_vm_throw(
                     thread,
@@ -5118,10 +5111,6 @@ impl BexEngine {
                     // arguments but does not push a return value, so push null
                     // before the VM resumes at the next instruction.
                     thread.vm.stack.push(Value::NULL);
-                }
-
-                VmExecState::Notify(_notification) => {
-                    // Ignore watch notifications for now
                 }
 
                 VmExecState::EarlyYield => {

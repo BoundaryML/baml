@@ -169,16 +169,6 @@ fn template_relates<C: normalize::TypeContext>(
             }
             _ => false,
         },
-        TyTemplate::WatchAccessor(inner, _) => match actual {
-            Ty::WatchAccessor(actual_inner, _) => template_relates(
-                ctx,
-                inner,
-                frame_type_args,
-                actual_inner,
-                Variance::Invariant,
-            ),
-            _ => false,
-        },
         // A union at the top level matches if any member matches (covariant); as
         // an invariant argument it must match member-for-member, but a
         // value's concrete type is never itself a union at an argument position
