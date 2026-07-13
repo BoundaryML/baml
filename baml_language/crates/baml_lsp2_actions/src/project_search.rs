@@ -1,6 +1,6 @@
-//! Compiler-aware project search used by `baml describe --grep`.
+//! Compiler-aware project search used by `baml describe --search`.
 //!
-//! The core `grep()` function routes between semantic and text search modes:
+//! The core search function routes between semantic and text search modes:
 //! - If the pattern matches a known symbol name → delegate to `describe()`
 //! - Otherwise → text search with semantic annotations on matches
 //!
@@ -27,7 +27,7 @@ pub struct ProjectSearchResult {
     pub text_matches: Vec<TextMatch>,
 }
 
-/// How the grep was resolved.
+/// How the project search was resolved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectSearchMode {
     /// Pattern matched a known symbol — results come from `describe()`.

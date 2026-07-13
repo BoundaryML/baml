@@ -5,8 +5,8 @@ use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 use anyhow::{Context, Result};
 use baml_db::baml_compiler2_hir;
 use baml_lsp2_actions::{
-    DefinitionKind, MatchAnnotation, ProjectSearchOptions, ResolvedTarget, SymbolDescription,
-    TextMatch, describe, search_symbols, search_text,
+    DefinitionKind, ListingEntry, MatchAnnotation, ProjectSearchOptions, ResolvedTarget,
+    SymbolDescription, TextMatch, describe, search_text,
 };
 use baml_project::ProjectDatabase;
 use clap::Args;
@@ -57,39 +57,54 @@ pub enum DescribeView {
     Impact,
 }
 
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DescribeOutput {
+    #[default]
+    Text,
+    Compact,
+    Json,
+}
+
+const SEARCH_RESULT_LIMIT: usize = 12;
+
 #[derive(Args, Clone, Debug)]
 pub struct DescribeArgs {
     /// Symbol names to describe
-    #[arg(value_name = "SYMBOL")]
+    #[arg(value_name = "SYMBOL", conflicts_with = "search_queries")]
     pub names: Vec<String>,
 
-    /// Discover symbols from literal OR queries, then describe them
-    #[arg(long = "grep", value_name = "QUERY", action = clap::ArgAction::Append)]
-    pub grep_queries: Vec<String>,
+    /// Find top-level project symbols and preview the best match
+    #[arg(
+        long = "search",
+        value_name = "QUERY",
+        value_delimiter = ',',
+        action = clap::ArgAction::Append
+    )]
+    pub search_queries: Vec<String>,
 
-    /// List all symbols in the project
-    #[arg(long)]
-    pub symbols: bool,
-
-    /// Filter discovered symbols by kind
-    #[arg(long, value_delimiter = ',')]
+    /// Filter listings and discovered symbols by top-level declaration kind
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_name = "KIND",
+        value_parser = [
+            "class",
+            "enum",
+            "interface",
+            "type_alias",
+            "function",
+            "template_string",
+            "client",
+            "test",
+            "retry_policy",
+            "let"
+        ]
+    )]
     pub kind: Vec<String>,
 
-    /// Filter discovered symbols and text matches by file path substring
-    #[arg(long, value_name = "PATH")]
+    /// Filter search results by file path substring
+    #[arg(long, value_name = "PATH", requires = "search_queries")]
     pub file: Vec<String>,
-
-    /// Maximum number of grep-discovered symbols
-    #[arg(long, default_value_t = 12)]
-    pub limit: usize,
-
-    /// Match grep query text case-insensitively
-    #[arg(short = 'i', long)]
-    pub ignore_case: bool,
-
-    /// Emit compact output intended for coding agents
-    #[arg(long)]
-    pub agent: bool,
 
     /// Project search starting point. Defaults to the current directory.
     #[arg(long, value_name = "PATH")]
@@ -108,9 +123,9 @@ pub struct DescribeArgs {
     #[arg(long, default_value_t = 0)]
     pub depth: usize,
 
-    /// Output results as JSON
-    #[arg(long)]
-    pub json: bool,
+    /// Output format
+    #[arg(long, value_enum, default_value_t = DescribeOutput::Text)]
+    pub output: DescribeOutput,
 }
 
 /// Find FQNs across the user and builtin packages that are fuzzy-similar to `name`.
@@ -331,9 +346,220 @@ fn resolve_unqualified_builtin_member<'db>(
     baml_lsp2_actions::resolve_target(db, baml_pkg, name)
 }
 
+fn print_missing_symbol(db: &ProjectDatabase, name: &str) {
+    eprintln!("No exact symbol found: {name}");
+    print_did_you_mean(db, name);
+    eprintln!("To search the project: baml describe --search {name}");
+}
+
+pub(crate) fn exact_item_candidates(db: &ProjectDatabase, name: &str) -> Vec<ListingEntry> {
+    let normalized = name.strip_prefix("root.").unwrap_or(name);
+    let (package_name, local_name) =
+        name.split_once('.')
+            .map_or(("user", normalized), |(first, rest)| {
+                if baml_lsp2_actions::non_user_package_names(db).contains(first) {
+                    (first, rest)
+                } else {
+                    ("user", normalized)
+                }
+            });
+    let package = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new(package_name));
+    let mut candidates = baml_lsp2_actions::list_package_items(db, package)
+        .into_iter()
+        .filter(|entry| {
+            if package_name == "user" {
+                entry.fqn() == local_name
+            } else {
+                entry.fqn() == name
+            }
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by(|entry_a, entry_b| {
+        entry_a
+            .fqn()
+            .cmp(&entry_b.fqn())
+            .then_with(|| entry_a.kind.as_str().cmp(entry_b.kind.as_str()))
+            .then_with(|| entry_a.file_path.cmp(&entry_b.file_path))
+            .then_with(|| entry_a.line.cmp(&entry_b.line))
+    });
+    candidates
+}
+
+fn print_ambiguous_symbol(name: &str, candidates: &[ListingEntry]) {
+    eprintln!("Ambiguous exact symbol: {name}");
+    eprintln!("Candidates:");
+    for candidate in candidates {
+        eprintln!(
+            "  {} {}  {}:{}",
+            candidate.kind.as_str(),
+            candidate.fqn(),
+            candidate.file_path,
+            candidate.line
+        );
+    }
+}
+
+fn definition_for_listing_entry<'db>(
+    db: &'db ProjectDatabase,
+    entry: &ListingEntry,
+) -> Option<baml_compiler2_hir::contributions::Definition<'db>> {
+    let package = baml_compiler2_hir::package::PackageId::new(db, entry.package_name.clone());
+    let items = baml_compiler2_hir::package::package_items(db, package);
+    let namespace = items.namespaces.get(&entry.ns_path)?;
+    match entry.kind {
+        DefinitionKind::Class
+        | DefinitionKind::Enum
+        | DefinitionKind::Interface
+        | DefinitionKind::TypeAlias => namespace.types.get(&entry.item_name).copied(),
+        DefinitionKind::Function
+        | DefinitionKind::TemplateString
+        | DefinitionKind::Client
+        | DefinitionKind::Test
+        | DefinitionKind::RetryPolicy
+        | DefinitionKind::Let => namespace.values.get(&entry.item_name).copied(),
+        DefinitionKind::Field
+        | DefinitionKind::AssociatedType
+        | DefinitionKind::Method
+        | DefinitionKind::Variant
+        | DefinitionKind::Binding
+        | DefinitionKind::Parameter => None,
+    }
+}
+
+fn describe_listing_entry(
+    db: &ProjectDatabase,
+    files: &[baml_db::SourceFile],
+    entry: &ListingEntry,
+    options: baml_lsp2_actions::DescribeOptions,
+) -> Option<SymbolDescription> {
+    let definition = definition_for_listing_entry(db, entry)?;
+    baml_lsp2_actions::describe_by_definition_with_options(db, files, definition, options)
+}
+
+pub(crate) fn resolve_exact_description(
+    db: &ProjectDatabase,
+    files: &[baml_db::SourceFile],
+    name: &str,
+    options: baml_lsp2_actions::DescribeOptions,
+) -> Option<SymbolDescription> {
+    match dispatch(db, name) {
+        Some(ResolvedTarget::Item(def)) => {
+            baml_lsp2_actions::describe_by_definition_with_options(db, files, def, options)
+        }
+        Some(ResolvedTarget::Member {
+            parent,
+            member_name,
+        }) if name.contains('.') => {
+            baml_lsp2_actions::describe_item_member(db, files, parent, member_name.as_str())
+        }
+        _ => None,
+    }
+}
+
+pub(crate) fn search_match_rank(entry: &ListingEntry, term: &str) -> Option<u8> {
+    let name = entry.item_name.as_str();
+    let fqn = entry.fqn();
+    let term_lower = term.to_lowercase();
+    let name_lower = name.to_lowercase();
+    let fqn_lower = fqn.to_lowercase();
+
+    if name == term || fqn == term {
+        Some(0)
+    } else if name_lower == term_lower || fqn_lower == term_lower {
+        Some(1)
+    } else if name_lower.starts_with(&term_lower) || fqn_lower.starts_with(&term_lower) {
+        Some(2)
+    } else if name_lower.contains(&term_lower) || fqn_lower.contains(&term_lower) {
+        Some(3)
+    } else {
+        None
+    }
+}
+
+pub(crate) fn source_candidate_ranges(
+    db: &ProjectDatabase,
+    files: &[baml_db::SourceFile],
+    entries: &[ListingEntry],
+) -> Vec<(ListingEntry, usize, usize)> {
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let description = describe_listing_entry(
+                db,
+                files,
+                entry,
+                baml_lsp2_actions::DescribeOptions::source(),
+            )?;
+            let (start_line, end_line) = definition_line_range(
+                description.file.text(db),
+                description.item_range.start().into(),
+                description.item_range.end().into(),
+            );
+            Some((entry.clone(), start_line, end_line))
+        })
+        .collect()
+}
+
+pub(crate) fn source_candidate_for_match(
+    ranges: &[(ListingEntry, usize, usize)],
+    text_match: &TextMatch,
+) -> Option<ListingEntry> {
+    ranges
+        .iter()
+        .filter(|(entry, start_line, end_line)| {
+            entry.file == text_match.file
+                && (*start_line..=*end_line).contains(&text_match.line_number)
+        })
+        .min_by(|(entry_a, start_a, end_a), (entry_b, start_b, end_b)| {
+            (end_a - start_a)
+                .cmp(&(end_b - start_b))
+                .then_with(|| entry_a.fqn().cmp(&entry_b.fqn()))
+                .then_with(|| entry_a.line.cmp(&entry_b.line))
+        })
+        .map(|(entry, _, _)| entry.clone())
+}
+
+pub(crate) fn select_search_candidates(
+    candidates_by_term: &[Vec<ListingEntry>],
+    limit: usize,
+) -> (Vec<ListingEntry>, usize) {
+    let all_candidate_count = candidates_by_term
+        .iter()
+        .flatten()
+        .map(listing_entry_identity)
+        .collect::<std::collections::HashSet<_>>()
+        .len();
+    let mut candidates = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut candidate_index = 0usize;
+    while candidates.len() < limit {
+        let mut advanced = false;
+        for term_candidates in candidates_by_term {
+            if let Some(candidate) = term_candidates.get(candidate_index) {
+                advanced = true;
+                if seen.insert(listing_entry_identity(candidate)) {
+                    candidates.push(candidate.clone());
+                    if candidates.len() >= limit {
+                        break;
+                    }
+                }
+            }
+        }
+        if !advanced {
+            break;
+        }
+        candidate_index += 1;
+    }
+    (candidates, all_candidate_count)
+}
+
+fn listing_entry_identity(entry: &ListingEntry) -> (String, DefinitionKind, String, usize) {
+    (entry.fqn(), entry.kind, entry.file_path.clone(), entry.line)
+}
+
 impl DescribeArgs {
     fn describe_options(&self) -> baml_lsp2_actions::DescribeOptions {
-        if self.json {
+        if self.output == DescribeOutput::Json {
             return baml_lsp2_actions::DescribeOptions::default();
         }
         match self.view {
@@ -347,9 +573,10 @@ impl DescribeArgs {
 
     /// Run the describe command and return the CLI exit code.
     pub fn run(&self) -> Result<crate::ExitCode> {
-        if self.names.len() > 1 || !self.grep_queries.is_empty() || self.agent {
-            return self.run_batch();
+        if self.output != DescribeOutput::Text {
+            crate::paint::init_color(crate::paint::ColorChoice::Never);
         }
+
         // Introspection never requires a `baml.toml`: with no project, we
         // fall back to a stdlib-only "default state" so `baml describe
         // baml.String` works anywhere. An empty user-file set is therefore
@@ -357,19 +584,30 @@ impl DescribeArgs {
         // the per-target "No symbol found" + did-you-mean paths below.
         let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
 
-        // ── --symbols deprecation ───────────────────────────────────────────
-        if self.symbols {
-            eprintln!(
-                "warning: --symbols is deprecated. Use `baml describe` with no arguments instead."
-            );
+        if !self.search_queries.is_empty() {
+            return self.run_search(&db, &from);
+        }
+
+        if self.names.len() > 1
+            || (self.output == DescribeOutput::Compact && !self.names.is_empty())
+        {
+            return self.run_exact_batch(&db, &from);
         }
 
         let name = self.names.first().map(String::as_str).unwrap_or("");
         let target = dispatch(&db, name);
 
+        if matches!(target, Some(ResolvedTarget::Item(_))) {
+            let candidates = exact_item_candidates(&db, name);
+            if candidates.len() > 1 {
+                print_ambiguous_symbol(name, &candidates);
+                return Ok(crate::ExitCode::Other);
+            }
+        }
+
         match target {
             Some(ResolvedTarget::Keyword(ref kw)) => {
-                if self.json {
+                if self.output == DescribeOutput::Json {
                     let json = render_keyword_json(kw);
                     println!(
                         "{}",
@@ -382,12 +620,16 @@ impl DescribeArgs {
                 Ok(crate::ExitCode::Success)
             }
             Some(ResolvedTarget::Package(pkg)) => {
-                let entries = baml_lsp2_actions::list_package_items(&db, pkg);
+                let kind_filter = parse_kind_filter(&self.kind)?;
+                let entries = filter_listing_by_kind(
+                    baml_lsp2_actions::list_package_items(&db, pkg),
+                    &kind_filter,
+                );
                 if entries.is_empty() {
                     eprintln!("No symbols found.");
                     return Ok(crate::ExitCode::Other);
                 }
-                if self.json {
+                if self.output == DescribeOutput::Json {
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
@@ -417,13 +659,17 @@ impl DescribeArgs {
                 Ok(crate::ExitCode::Success)
             }
             Some(ResolvedTarget::Namespace { package, ns_path }) => {
-                let entries = baml_lsp2_actions::list_namespace_items(&db, package, &ns_path)
-                    .unwrap_or_default();
+                let kind_filter = parse_kind_filter(&self.kind)?;
+                let entries = filter_listing_by_kind(
+                    baml_lsp2_actions::list_namespace_items(&db, package, &ns_path)
+                        .unwrap_or_default(),
+                    &kind_filter,
+                );
                 if entries.is_empty() {
                     eprintln!("No symbols found in namespace.");
                     return Ok(crate::ExitCode::Other);
                 }
-                if self.json {
+                if self.output == DescribeOutput::Json {
                     println!(
                         "{}",
                         serde_json::to_string_pretty(&listing_to_json(&db, &entries, &from))
@@ -442,7 +688,7 @@ impl DescribeArgs {
                     def,
                     self.describe_options(),
                 ) {
-                    if self.json {
+                    if self.output == DescribeOutput::Json {
                         let json = description_to_json(&db, &desc, self.max_lines, &from);
                         println!(
                             "{}",
@@ -478,7 +724,7 @@ impl DescribeArgs {
                     parent,
                     member_name.as_str(),
                 ) {
-                    if self.json {
+                    if self.output == DescribeOutput::Json {
                         let json = description_to_json(&db, &desc, self.max_lines, &from);
                         println!(
                             "{}",
@@ -504,167 +750,32 @@ impl DescribeArgs {
                 }
             }
             None => {
-                // Substring fallback (existing behavior for unresolved names).
-                let describe_files = baml_compiler2_hir::compiler2_all_files(&db);
-                let descriptions = describe(&db, &describe_files, name);
-
-                if descriptions.is_empty() {
-                    eprintln!("No symbol found: {name}");
-                    print_did_you_mean(&db, name);
-                    return Ok(crate::ExitCode::Other);
-                }
-
-                if self.json {
-                    let max_lines = self.max_lines;
-                    let json_output: Vec<serde_json::Value> = descriptions
-                        .iter()
-                        .map(|d| description_to_json(&db, d, max_lines, &from))
-                        .collect();
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&json_output)
-                            .context("Failed to serialize output as JSON")?
-                    );
-                    return Ok(crate::ExitCode::Success);
-                }
-
-                for (i, desc) in descriptions.iter().enumerate() {
-                    if i > 0 {
-                        println!();
-                        println!();
-                    }
-                    render_view(
-                        &db,
-                        &describe_files,
-                        desc,
-                        self.view,
-                        self.max_lines,
-                        self.depth,
-                        &from,
-                    );
-                }
-
-                Ok(crate::ExitCode::Success)
+                print_missing_symbol(&db, name);
+                Ok(crate::ExitCode::Other)
             }
         }
     }
 
-    fn run_batch(&self) -> Result<crate::ExitCode> {
-        let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
-        let files = baml_compiler2_hir::compiler2_all_files(&db);
-        // Discovery is project-scoped. Builtins remain available when named
-        // explicitly, but should not crowd user symbols out of a bounded
-        // `--grep` result (for example, a user query for "outcome" should not
-        // spend its first slot on testing.Outcome).
-        let search_files = db.get_source_files();
-        let kind_filter = parse_kind_filter(&self.kind)?;
-        let terms = parse_grep_terms(&self.grep_queries)?;
-
-        let mut requested = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        for name in &self.names {
-            if seen.insert(name.clone()) {
-                requested.push(name.clone());
-            }
-        }
-
-        let mut unmatched = Vec::new();
-        let mut candidates_by_term = Vec::new();
-        for term in &terms {
-            let mut candidates = search_symbols(&db, &search_files, term)
-                .into_iter()
-                .filter(|symbol| symbol.container_name.is_none())
-                .filter(|symbol| kind_filter.is_empty() || kind_filter.contains(&symbol.kind))
-                .filter(|symbol| {
-                    path_matches(&symbol.file.path(&db).display().to_string(), &self.file)
-                })
-                .collect::<Vec<_>>();
-            candidates.sort_by_key(|symbol| {
-                let exact = symbol.name == *term;
-                let case_exact = symbol.name.eq_ignore_ascii_case(term);
-                (!exact, !case_exact, symbol.name.len(), symbol.name.clone())
-            });
-
-            let mut names = candidates
-                .into_iter()
-                .map(|candidate| candidate.name)
-                .collect::<Vec<_>>();
-            if names.is_empty() {
-                let opts = ProjectSearchOptions {
-                    pattern: term,
-                    ignore_case: self.ignore_case,
-                    kind_filter: &kind_filter,
-                };
-                let text_matches = search_text(&db, &search_files, &opts);
-                for text_match in text_matches {
-                    if !path_matches(&text_match.file_path, &self.file) {
-                        continue;
-                    }
-                    let target = match &text_match.annotation {
-                        Some(MatchAnnotation::Definition { name, .. }) => Some(name.clone()),
-                        Some(MatchAnnotation::Reference { target_name, .. }) => {
-                            Some(target_name.clone())
-                        }
-                        _ => None,
-                    };
-                    if let Some(target) = target {
-                        if !names.contains(&target) {
-                            names.push(target);
-                        }
-                    } else {
-                        unmatched.push(text_match);
-                    }
-                }
-            }
-            candidates_by_term.push(names);
-        }
-
-        let mut discovered = 0usize;
-        let mut candidate_index = 0usize;
-        while discovered < self.limit {
-            let mut advanced = false;
-            for candidates in &candidates_by_term {
-                if let Some(candidate) = candidates.get(candidate_index) {
-                    advanced = true;
-                    if seen.insert(candidate.clone()) {
-                        requested.push(candidate.clone());
-                        discovered += 1;
-                        if discovered >= self.limit {
-                            break;
-                        }
-                    }
-                }
-            }
-            if !advanced {
-                break;
-            }
-            candidate_index += 1;
-        }
-
+    fn run_exact_batch(
+        &self,
+        db: &ProjectDatabase,
+        from: &std::path::Path,
+    ) -> Result<crate::ExitCode> {
+        let files = baml_compiler2_hir::compiler2_all_files(db);
         let mut descriptions = Vec::new();
         let mut misses = Vec::new();
-        for name in &requested {
-            let target = dispatch(&db, name);
-            let description = match target {
-                Some(ResolvedTarget::Item(def)) => {
-                    baml_lsp2_actions::describe_by_definition_with_options(
-                        &db,
-                        &files,
-                        def,
-                        self.describe_options(),
-                    )
-                }
-                Some(ResolvedTarget::Member {
-                    parent,
-                    member_name,
-                }) => baml_lsp2_actions::describe_item_member(
-                    &db,
-                    &files,
-                    parent,
-                    member_name.as_str(),
-                ),
-                _ => describe(&db, &files, name).into_iter().next(),
-            };
+        let mut ambiguities = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for name in &self.names {
+            if !seen.insert(name.clone()) {
+                continue;
+            }
+            let candidates = exact_item_candidates(db, name);
+            if candidates.len() > 1 {
+                ambiguities.push((name.clone(), candidates));
+                continue;
+            }
+            let description = resolve_exact_description(db, &files, name, self.describe_options());
             if let Some(description) = description {
                 descriptions.push(description);
             } else {
@@ -672,14 +783,22 @@ impl DescribeArgs {
             }
         }
 
+        for (name, candidates) in &ambiguities {
+            print_ambiguous_symbol(name, candidates);
+        }
+
         if descriptions.is_empty() {
             for miss in &misses {
-                eprintln!("No symbol found: {miss}");
+                print_missing_symbol(db, miss);
             }
             return Ok(crate::ExitCode::Other);
         }
 
-        if self.json {
+        for miss in &misses {
+            print_missing_symbol(db, miss);
+        }
+
+        if self.output == DescribeOutput::Json {
             let per_result_max_lines = self
                 .max_lines
                 .saturating_sub(descriptions.len())
@@ -689,17 +808,13 @@ impl DescribeArgs {
                 .iter()
                 .map(|description| {
                     batch_description_to_json(
-                        &db,
+                        db,
                         description,
                         self.view,
                         per_result_max_lines,
-                        &from,
+                        from,
                     )
                 })
-                .collect::<Vec<_>>();
-            let unmatched_json = unmatched
-                .iter()
-                .map(|text_match| text_match_to_json(&db, text_match, &from))
                 .collect::<Vec<_>>();
             let next = misses
                 .iter()
@@ -707,9 +822,8 @@ impl DescribeArgs {
                 .collect::<Vec<_>>();
             let envelope = serde_json::json!({
                 "schema_version": 1,
-                "query": { "symbols": self.names, "grep": terms },
+                "query": { "symbols": self.names },
                 "results": results,
-                "unmatched": unmatched_json,
                 "omitted": misses,
                 "next": next,
             });
@@ -721,13 +835,124 @@ impl DescribeArgs {
         } else {
             write_batch_output(
                 &mut std::io::stdout(),
-                &db,
+                db,
                 &files,
                 &descriptions,
-                &unmatched,
+                &[],
                 &misses,
                 self,
-                &from,
+                from,
+            )?;
+        }
+
+        Ok(crate::ExitCode::Success)
+    }
+
+    fn run_search(&self, db: &ProjectDatabase, from: &std::path::Path) -> Result<crate::ExitCode> {
+        let terms = parse_search_terms(&self.search_queries)?;
+        let kind_filter = parse_kind_filter(&self.kind)?;
+        let search_files = db.get_source_files();
+        let user_pkg = baml_compiler2_hir::package::PackageId::new(db, baml_db::Name::new("user"));
+        let entries = filter_listing_by_kind(
+            baml_lsp2_actions::list_package_items(db, user_pkg),
+            &kind_filter,
+        )
+        .into_iter()
+        .filter(|entry| path_matches(&entry.file_path, &self.file))
+        .collect::<Vec<_>>();
+        let source_ranges = source_candidate_ranges(db, &search_files, &entries);
+
+        let mut candidates_by_term = Vec::new();
+        let mut unmatched = Vec::new();
+        for term in &terms {
+            let mut candidates = entries
+                .iter()
+                .filter_map(|entry| {
+                    search_match_rank(entry, term).map(|rank| (rank, entry.clone()))
+                })
+                .collect::<Vec<_>>();
+            candidates.sort_by(|(rank_a, entry_a), (rank_b, entry_b)| {
+                rank_a
+                    .cmp(rank_b)
+                    .then_with(|| entry_a.fqn().cmp(&entry_b.fqn()))
+                    .then_with(|| entry_a.kind.as_str().cmp(entry_b.kind.as_str()))
+                    .then_with(|| entry_a.file_path.cmp(&entry_b.file_path))
+                    .then_with(|| entry_a.line.cmp(&entry_b.line))
+            });
+
+            let mut ranked = candidates
+                .into_iter()
+                .map(|(_, entry)| entry)
+                .collect::<Vec<_>>();
+            if ranked.is_empty() {
+                let opts = ProjectSearchOptions {
+                    pattern: term,
+                    ignore_case: true,
+                    kind_filter: &kind_filter,
+                };
+                for text_match in search_text(db, &search_files, &opts) {
+                    if !path_matches(&text_match.file_path, &self.file) {
+                        continue;
+                    }
+                    if let Some(entry) = source_candidate_for_match(&source_ranges, &text_match) {
+                        if !ranked.iter().any(|candidate| {
+                            listing_entry_identity(candidate) == listing_entry_identity(&entry)
+                        }) {
+                            ranked.push(entry);
+                        }
+                    } else {
+                        unmatched.push(text_match);
+                    }
+                }
+                ranked.sort_by(|entry_a, entry_b| {
+                    entry_a
+                        .fqn()
+                        .cmp(&entry_b.fqn())
+                        .then_with(|| entry_a.kind.as_str().cmp(entry_b.kind.as_str()))
+                        .then_with(|| entry_a.file_path.cmp(&entry_b.file_path))
+                        .then_with(|| entry_a.line.cmp(&entry_b.line))
+                });
+            }
+            candidates_by_term.push(ranked);
+        }
+
+        let (candidates, all_candidate_count) =
+            select_search_candidates(&candidates_by_term, SEARCH_RESULT_LIMIT);
+
+        let Some(preview_entry) = candidates.first() else {
+            eprintln!("No search results for: {}", terms.join(", "));
+            return Ok(crate::ExitCode::Other);
+        };
+        let files = baml_compiler2_hir::compiler2_all_files(db);
+        let preview = describe_listing_entry(db, &files, preview_entry, self.describe_options())
+            .context("Search preview candidate did not resolve")?;
+
+        if self.output == DescribeOutput::Json {
+            let envelope = search_to_json(
+                db,
+                from,
+                &terms,
+                &candidates,
+                all_candidate_count,
+                &preview,
+                self,
+                &unmatched,
+            );
+            println!(
+                "{}",
+                serde_json::to_string(&envelope)
+                    .context("Failed to serialize search output as JSON")?
+            );
+        } else {
+            write_search_output(
+                &mut std::io::stdout(),
+                db,
+                &files,
+                from,
+                &candidates,
+                all_candidate_count,
+                &preview,
+                self,
             )?;
         }
 
@@ -735,14 +960,15 @@ impl DescribeArgs {
     }
 }
 
-pub(crate) fn parse_grep_terms(queries: &[String]) -> Result<Vec<String>> {
+pub(crate) fn parse_search_terms(queries: &[String]) -> Result<Vec<String>> {
     let mut terms = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for query in queries {
-        for term in query.split("||") {
-            let term = term.trim();
-            if term.is_empty() {
-                anyhow::bail!("Invalid --grep query: empty term around `||`");
-            }
+        let term = query.trim();
+        if term.is_empty() {
+            anyhow::bail!("Invalid --search query: query cannot be empty");
+        }
+        if seen.insert(term.to_lowercase()) {
             terms.push(term.to_string());
         }
     }
@@ -755,20 +981,33 @@ pub(crate) fn parse_kind_filter(kinds: &[String]) -> Result<Vec<DefinitionKind>>
         .map(|kind| match kind.as_str() {
             "class" => Ok(DefinitionKind::Class),
             "enum" => Ok(DefinitionKind::Enum),
-            "function" => Ok(DefinitionKind::Function),
-            "test" => Ok(DefinitionKind::Test),
-            "client" => Ok(DefinitionKind::Client),
+            "interface" => Ok(DefinitionKind::Interface),
             "type_alias" => Ok(DefinitionKind::TypeAlias),
+            "function" => Ok(DefinitionKind::Function),
             "template_string" => Ok(DefinitionKind::TemplateString),
+            "client" => Ok(DefinitionKind::Client),
+            "test" => Ok(DefinitionKind::Test),
             "retry_policy" => Ok(DefinitionKind::RetryPolicy),
             "let" => Ok(DefinitionKind::Let),
-            "field" => Ok(DefinitionKind::Field),
-            "variant" => Ok(DefinitionKind::Variant),
             other => anyhow::bail!(
-                "Unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, let, field, variant"
+                "Unknown kind: {other}. Valid kinds: class, enum, interface, type_alias, function, template_string, client, test, retry_policy, let"
             ),
         })
         .collect()
+}
+
+pub(crate) fn filter_listing_by_kind(
+    entries: Vec<baml_lsp2_actions::ListingEntry>,
+    kinds: &[DefinitionKind],
+) -> Vec<baml_lsp2_actions::ListingEntry> {
+    if kinds.is_empty() {
+        entries
+    } else {
+        entries
+            .into_iter()
+            .filter(|entry| kinds.contains(&entry.kind))
+            .collect()
+    }
 }
 
 pub(crate) fn path_matches(path: &str, filters: &[String]) -> bool {
@@ -922,6 +1161,151 @@ fn batch_description_to_json(
     }
 }
 
+fn search_candidate_to_json(
+    entry: &ListingEntry,
+    project_root: &std::path::Path,
+) -> serde_json::Value {
+    let path = relative_path(std::path::Path::new(&entry.file_path), project_root);
+    serde_json::json!({
+        "name": entry.fqn(),
+        "kind": entry.kind.as_str(),
+        "file": path.to_string_lossy(),
+        "line": entry.line,
+    })
+}
+
+pub(crate) fn search_to_json(
+    db: &ProjectDatabase,
+    project_root: &std::path::Path,
+    terms: &[String],
+    candidates: &[ListingEntry],
+    all_candidate_count: usize,
+    preview: &SymbolDescription,
+    args: &DescribeArgs,
+    unmatched: &[TextMatch],
+) -> serde_json::Value {
+    let next = format!(
+        "baml describe {}",
+        candidates
+            .iter()
+            .map(ListingEntry::fqn)
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    serde_json::json!({
+        "schema_version": 1,
+        "query": { "search": terms },
+        "candidates": candidates
+            .iter()
+            .map(|entry| search_candidate_to_json(entry, project_root))
+            .collect::<Vec<_>>(),
+        "preview": batch_description_to_json(
+            db,
+            preview,
+            args.view,
+            args.max_lines,
+            project_root,
+        ),
+        "unmatched": unmatched
+            .iter()
+            .map(|text_match| text_match_to_json(db, text_match, project_root))
+            .collect::<Vec<_>>(),
+        "omitted": all_candidate_count.saturating_sub(candidates.len()),
+        "next": next,
+    })
+}
+
+pub(crate) fn write_search_output(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    files: &[baml_db::SourceFile],
+    project_root: &std::path::Path,
+    candidates: &[ListingEntry],
+    all_candidate_count: usize,
+    preview: &SymbolDescription,
+    args: &DescribeArgs,
+) -> std::io::Result<()> {
+    let painter = crate::paint::Painter::stdout();
+    let mut used = 0usize;
+    if args.max_lines > 0 {
+        writeln!(w, "Matches:")?;
+        used += 1;
+    }
+
+    let compact = args.output == DescribeOutput::Compact;
+    let reserve = usize::from(args.max_lines > used) * (2 + usize::from(compact));
+    let mut candidate_budget = args.max_lines.saturating_sub(used + reserve);
+    let omitted = all_candidate_count.saturating_sub(candidates.len());
+    if omitted > 0 && candidate_budget > 0 {
+        candidate_budget = candidate_budget.saturating_sub(1);
+    }
+    let shown = candidates.len().min(candidate_budget);
+    for entry in candidates.iter().take(shown) {
+        let abs = std::path::Path::new(&entry.file_path);
+        let rel = relative_path(abs, project_root);
+        let loc = painter.location(abs, &rel.display().to_string(), &entry.line.to_string());
+        write_symbol_row(w, &painter, "  ", entry.kind, &entry.fqn(), &loc)?;
+        used += 1;
+    }
+    let hidden = all_candidate_count.saturating_sub(shown);
+    if hidden > 0 && used < args.max_lines {
+        writeln!(w, "  … {hidden} more matches")?;
+        used += 1;
+    }
+
+    if compact && used < args.max_lines {
+        writeln!(
+            w,
+            "next: baml describe {} --view {} --max-lines {} --output compact",
+            candidates
+                .iter()
+                .map(ListingEntry::fqn)
+                .collect::<Vec<_>>()
+                .join(" "),
+            describe_view_name(args.view),
+            args.max_lines,
+        )?;
+        used += 1;
+    }
+
+    if used < args.max_lines {
+        writeln!(
+            w,
+            "Previewing: {}",
+            preview.canonical_fqn.as_deref().unwrap_or(&preview.name)
+        )?;
+        used += 1;
+    }
+    let remaining = args.max_lines.saturating_sub(used);
+    if remaining > 0 {
+        let mut preview_output = Vec::new();
+        write_view(
+            &mut preview_output,
+            db,
+            files,
+            preview,
+            args.view,
+            remaining,
+            args.depth,
+            project_root,
+        )?;
+        let preview_output = String::from_utf8_lossy(&preview_output);
+        for line in preview_output.lines().take(remaining) {
+            writeln!(w, "{line}")?;
+        }
+    }
+    Ok(())
+}
+
+fn describe_view_name(view: DescribeView) -> &'static str {
+    match view {
+        DescribeView::Overview => "overview",
+        DescribeView::Source => "source",
+        DescribeView::Usage => "usage",
+        DescribeView::Impact => "impact",
+    }
+}
+
 pub(crate) fn write_batch_output(
     w: &mut impl std::io::Write,
     db: &ProjectDatabase,
@@ -932,11 +1316,8 @@ pub(crate) fn write_batch_output(
     args: &DescribeArgs,
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
-    let output_max_lines = if args.agent {
-        args.max_lines.min(80)
-    } else {
-        args.max_lines
-    };
+    let output_max_lines = args.max_lines;
+    let compact = args.output == DescribeOutput::Compact;
     let mut blocks = Vec::new();
     for description in descriptions {
         let mut bytes = Vec::new();
@@ -970,7 +1351,7 @@ pub(crate) fn write_batch_output(
         if let Some(identity) = rendered.first() {
             block.push(identity.clone());
         }
-        if args.agent {
+        if compact {
             let mut seen_relationships = std::collections::HashSet::new();
             for dependency in description.dependencies.iter().take(6) {
                 let path = relative_path(&dependency.file.path(db), project_root);
@@ -1014,13 +1395,8 @@ pub(crate) fn write_batch_output(
         }
     }
 
-    let view = match args.view {
-        DescribeView::Overview => "overview",
-        DescribeView::Source => "source",
-        DescribeView::Usage => "usage",
-        DescribeView::Impact => "impact",
-    };
-    if args.agent {
+    let view = describe_view_name(args.view);
+    if compact {
         // Only reserve a follow-up hint when the global budget cannot give
         // every symbol even one content line. Partially bounded source is
         // already useful; advertising an executable `next:` command for it
@@ -1049,7 +1425,7 @@ pub(crate) fn write_batch_output(
         if !omitted_names.is_empty() && remaining > 0 {
             writeln!(
                 w,
-                "next: baml describe {} --view {view} --max-lines 80 --agent",
+                "next: baml describe {} --view {view} --max-lines 80 --output compact",
                 omitted_names.join(" ")
             )?;
             remaining -= 1;
@@ -1100,7 +1476,7 @@ pub(crate) fn write_batch_output(
         if remaining == 0 {
             break;
         }
-        writeln!(w, "not found: {miss} — baml describe --grep {miss}")?;
+        writeln!(w, "not found: {miss} — baml describe --search {miss}")?;
         remaining -= 1;
     }
     Ok(())
@@ -1429,6 +1805,25 @@ impl LineBudget {
 }
 
 /// Dispatch a description to the renderer for the selected `--view`.
+pub fn write_view(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    files: &[baml_db::SourceFile],
+    desc: &SymbolDescription,
+    view: DescribeView,
+    budget: usize,
+    depth: usize,
+    project_root: &std::path::Path,
+) -> std::io::Result<()> {
+    match view {
+        DescribeView::Source => write_description(w, db, desc, budget, project_root),
+        DescribeView::Overview => write_overview(w, db, files, desc, budget, depth, project_root),
+        DescribeView::Usage => write_usage_view(w, db, desc, budget, project_root),
+        DescribeView::Impact => write_impact_view(w, db, desc, budget, project_root),
+    }
+}
+
+/// Dispatch a description to stdout for the selected `--view`.
 pub fn render_view(
     db: &ProjectDatabase,
     files: &[baml_db::SourceFile],
@@ -1439,12 +1834,7 @@ pub fn render_view(
     project_root: &std::path::Path,
 ) {
     let w = &mut std::io::stdout();
-    let _ = match view {
-        DescribeView::Source => write_description(w, db, desc, budget, project_root),
-        DescribeView::Overview => write_overview(w, db, files, desc, budget, depth, project_root),
-        DescribeView::Usage => write_usage_view(w, db, desc, budget, project_root),
-        DescribeView::Impact => write_impact_view(w, db, desc, budget, project_root),
-    };
+    let _ = write_view(w, db, files, desc, view, budget, depth, project_root);
 }
 
 /// Render the `overview` view: the most useful bounded summary of a symbol.

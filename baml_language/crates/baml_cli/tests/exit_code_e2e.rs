@@ -840,6 +840,185 @@ fn describe_walks_up_to_ancestor_project() {
     );
 }
 
+#[test]
+fn describe_exact_batch_and_qualified_member_workflows() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+class User {
+  name: string
+  function label(self) -> string { self.name }
+}
+
+function make_user(name: string) -> User {
+  let local_name = name;
+  User { name: local_name }
+}
+"#,
+    );
+
+    let batch = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "User",
+            "make_user",
+            "--output",
+            "compact",
+            "--max-lines",
+            "40",
+        ],
+    );
+    assert!(
+        batch.status.success(),
+        "batched exact describe failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&batch.stdout),
+        String::from_utf8_lossy(&batch.stderr),
+    );
+    let batch_stdout = String::from_utf8_lossy(&batch.stdout);
+    assert!(batch_stdout.contains("class User"), "{batch_stdout}");
+    assert!(
+        batch_stdout.contains("function make_user"),
+        "{batch_stdout}"
+    );
+
+    let member = run_baml_cli(built, tmp.path(), &["describe", "User.label"]);
+    assert!(
+        member.status.success(),
+        "qualified member describe failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&member.stdout),
+        String::from_utf8_lossy(&member.stderr),
+    );
+
+    let local = run_baml_cli(built, tmp.path(), &["describe", "local_name"]);
+    assert!(
+        !local.status.success(),
+        "bare local binding should not resolve"
+    );
+    let local_stderr = String::from_utf8_lossy(&local.stderr);
+    assert!(local_stderr.contains("No exact symbol found: local_name"));
+    assert!(
+        local_stderr.contains("baml describe --search local_name"),
+        "{local_stderr}"
+    );
+}
+
+#[test]
+fn describe_search_lists_top_level_candidates_and_previews_source_matches() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+class Trophy {}
+
+function parse_trophy(raw: string) -> Trophy {
+  Trophy {}
+}
+
+function slack_post_message(message: string) -> string {
+  let payload_note = "posting payload to slack";
+  payload_note + message
+}
+"#,
+    );
+
+    let name_search = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "--search",
+            "trophy",
+            "--kind",
+            "class,function",
+            "--max-lines",
+            "20",
+        ],
+    );
+    assert!(
+        name_search.status.success(),
+        "name search failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&name_search.stdout),
+        String::from_utf8_lossy(&name_search.stderr),
+    );
+    let name_stdout = String::from_utf8_lossy(&name_search.stdout);
+    assert!(name_stdout.contains("Matches:"), "{name_stdout}");
+    assert!(name_stdout.contains("Trophy"), "{name_stdout}");
+    assert!(name_stdout.contains("parse_trophy"), "{name_stdout}");
+    assert!(name_stdout.contains("Previewing: Trophy"), "{name_stdout}");
+
+    let source_search = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "--search",
+            "posting payload",
+            "--view",
+            "source",
+            "--max-lines",
+            "20",
+        ],
+    );
+    assert!(
+        source_search.status.success(),
+        "source fallback search failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&source_search.stdout),
+        String::from_utf8_lossy(&source_search.stderr),
+    );
+    let source_stdout = String::from_utf8_lossy(&source_search.stdout);
+    assert!(
+        source_stdout.contains("slack_post_message"),
+        "{source_stdout}"
+    );
+    assert!(
+        source_stdout.contains("Previewing: slack_post_message"),
+        "{source_stdout}"
+    );
+    assert!(source_stdout.lines().count() <= 20, "{source_stdout}");
+
+    let zero = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "--search", "definitely_absent_symbol"],
+    );
+    assert!(!zero.status.success(), "zero-result search should fail");
+    assert!(
+        String::from_utf8_lossy(&zero.stderr)
+            .contains("No search results for: definitely_absent_symbol")
+    );
+}
+
+#[test]
+fn describe_ambiguous_type_and_value_name_returns_candidates() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+class Shared {}
+function Shared() -> string { "value" }
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["describe", "Shared"]);
+    assert!(
+        !output.status.success(),
+        "ambiguous exact lookup should fail"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Ambiguous exact symbol: Shared"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("class Shared"), "{stderr}");
+    assert!(stderr.contains("function Shared"), "{stderr}");
+}
+
 /// `baml fmt` in a directory with no project is a no-op success, not an
 /// error — nothing to format is not a failure.
 #[test]
