@@ -51,7 +51,7 @@ echo "==> pnpm build:debug in sdks/nodejs/bridge_nodejs"
 #    doesn't walk up to the repo-root workspace and skip the install.
 #    The per-fixture `package.json` `file:`-points at bridge_nodejs, so
 #    the install resolves the dev toolchain (vitest, typescript)
-#    plus the `@boundaryml/baml-core-node` runtime dep against the addon we
+#    plus the `@boundaryml/baml-bridge` runtime dep against the addon we
 #    just built. `--force` is load-bearing: pnpm otherwise treats the fixture
 #    lockfile as current and may keep a stale packed copy of the local `file:`
 #    dependency when bridge_nodejs build output changes.

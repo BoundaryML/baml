@@ -1,0 +1,26 @@
+<span class="hljs-comment">// Codegen for the Python host: `baml generate` emits the typed `baml_sdk`</span>
+<span class="hljs-comment">// package into python_demo/, next to the Python scripts that import it (so no</span>
+<span class="hljs-comment">// sys.path tweaking). Re-run after changing any function or type that</span>
+<span class="hljs-comment">// Python imports. <span class="hljs-doctag">NOTE:</span> output_dir is relative to the project root (where</span>
+<span class="hljs-comment">// baml.toml lives), not to baml_src/.</span>
+<span class="hljs-keyword">generator</span> <span class="hljs-title">target</span> {
+    output_type: <span class="hljs-string">&quot;python/pydantic&quot;</span>,
+    output_dir: <span class="hljs-string">&quot;python_demo&quot;</span>,
+    default_client_mode: <span class="hljs-string">&quot;sync&quot;</span>,
+    <span class="hljs-comment">// the python/pydantic generator only supports preserve-case</span>
+    naming_convention: <span class="hljs-string">&quot;preserve-case&quot;</span>,
+}
+
+<span class="hljs-comment">// Codegen for the Node/TypeScript host: emits the typed `baml_sdk` package</span>
+<span class="hljs-comment">// into typescript_demo/, next to the TypeScript scripts that import it. The TS SDK</span>
+<span class="hljs-comment">// always emits both sync and `_async` bindings, so there is no client-mode</span>
+<span class="hljs-comment">// knob here. Generated code imports the `@boundaryml/baml-core-node` runtime.</span>
+<span class="hljs-comment">// (Like the Python target, output_dir is relative to the project root and the</span>
+<span class="hljs-comment">// `baml_sdk` package name is appended automatically.) Re-run `baml generate`</span>
+<span class="hljs-comment">// after changing any function or type the TS side imports.</span>
+<span class="hljs-keyword">generator</span> <span class="hljs-title">ts_target</span> {
+    output_type: <span class="hljs-string">&quot;typescript/node&quot;</span>,
+    output_dir: <span class="hljs-string">&quot;typescript_demo&quot;</span>,
+    <span class="hljs-comment">// the typescript/node generator only supports preserve-case</span>
+    naming_convention: <span class="hljs-string">&quot;preserve-case&quot;</span>,
+}

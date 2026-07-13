@@ -1,11 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13949
 ---
 === MIR2 ===
-fn user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
+fn user.decode_auto(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> pkg.inner.AutoBox<int> {
     // Locals:
     let _0: pkg.inner.AutoBox<int> // _0 // return
-    let _1: baml.json.json // j // param
+    let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: type
 
     bb0: {
@@ -18,10 +19,10 @@ fn user.decode_auto(j: baml.json.json) -> pkg.inner.AutoBox<int> {
     }
 }
 
-fn user.decode_plain(j: baml.json.json) -> pkg.inner.Plain {
+fn user.decode_plain(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> pkg.inner.Plain {
     // Locals:
     let _0: pkg.inner.Plain // _0 // return
-    let _1: baml.json.json // j // param
+    let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: type
 
     bb0: {
@@ -34,10 +35,10 @@ fn user.decode_plain(j: baml.json.json) -> pkg.inner.Plain {
     }
 }
 
-fn user.decode_root(j: baml.json.json) -> pkg.inner.Box<int> {
+fn user.decode_root(j: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json>) -> pkg.inner.Box<int> {
     // Locals:
     let _0: pkg.inner.Box<int> // _0 // return
-    let _1: baml.json.json // j // param
+    let _1: int | float | string | bool | null | baml.json.json[] | map<string, baml.json.json> // j // param
     let _2: type
 
     bb0: {

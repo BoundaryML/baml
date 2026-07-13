@@ -1521,6 +1521,21 @@ fn emit_glue_method(
         .map(|(val_id, param_id)| quote! { let #param_id = #val_id; })
         .collect();
 
+    let call_expr = quote! {
+        self.#clean_method_ident(heap, call_id, #receiver_ident #(#call_param_idents,)* #(#clean_type_arg_call_idents,)* ctx)
+    };
+    // Use the shared helper so a class method returning a class array
+    // (`Vec<owned::ns::Class>`) is converted via `into_result_mapped` — the same
+    // path free functions use — instead of an unconditional `into_result`
+    // (which requires an `AsBexExternalValue` impl that `Vec<ClassName>` lacks).
+    let into_result = emit_into_result_call(
+        &builtin.return_type,
+        &variant_ident,
+        &call_expr,
+        class_ns_map,
+        paths,
+    );
+
     quote! {
         fn #glue_ident<'a>(
             &self,
@@ -1546,8 +1561,7 @@ fn emit_glue_method(
             match __extraction {
                 Ok((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*)) => {
                     #(#type_arg_bind_stmts)*
-                    self.#clean_method_ident(heap, call_id, #receiver_ident #(#call_param_idents,)* #(#clean_type_arg_call_idents,)* ctx)
-                        .into_result(SysOp::#variant_ident)
+                    #into_result
                 }
                 Err(e) => SysOpResult::Ready(Err(OpError::new(
                     SysOp::#variant_ident,

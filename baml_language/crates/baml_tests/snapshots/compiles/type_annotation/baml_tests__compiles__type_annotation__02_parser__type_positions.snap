@@ -139,7 +139,7 @@ SOURCE_FILE
                     WORD "type"
                     QUESTION "?"
           EQUALS "="
-          WORD "null"
+          KW_NULL "null"
           SEMICOLON ";"
         RETURN_STMT
           KW_RETURN "return"

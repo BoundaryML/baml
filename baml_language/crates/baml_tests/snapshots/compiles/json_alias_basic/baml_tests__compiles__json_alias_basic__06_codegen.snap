@@ -59,7 +59,7 @@ function user.ReturnArray() -> baml.json.json {
     load_const 1
     load_const 2
     load_const 3
-    load_type int
+    load_type baml.json.json
     alloc_array 3
     return
 }
@@ -83,7 +83,7 @@ function user.ReturnMap() -> baml.json.json {
     load_const "value"
     load_const "key"
     load_type string
-    load_type string
+    load_type baml.json.json
     alloc_map 1
     return
 }

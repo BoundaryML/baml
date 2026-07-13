@@ -106,8 +106,9 @@ const App: React.FC = () => {
     // When loaded directly in a VS Code webview (no iframe), the extension
     // injects __PLAYGROUND_WS_URL. Fall back to location-based URL for
     // standalone / iframe / dev scenarios.
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl =
-      window.__PLAYGROUND_WS_URL ?? `ws://${window.location.host}/api/ws`;
+      window.__PLAYGROUND_WS_URL ?? `${scheme}://${window.location.host}/api/ws`;
     const runtimePort = new WebSocketRuntimePort(wsUrl);
     setPort(runtimePort);
     return () => runtimePort.dispose();

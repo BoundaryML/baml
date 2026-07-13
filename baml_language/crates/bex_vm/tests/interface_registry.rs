@@ -7,7 +7,7 @@
 //! winning over the default.
 
 use baml_project::testing::compile_source;
-use baml_type::{RuntimeTy, TyTemplate};
+use baml_type::TyTemplate;
 use bex_vm_types::{Object, types::Program};
 
 /// The head type name of a for-type pattern (`Dog` for `Dog`, `Wrap` for
@@ -16,8 +16,7 @@ use bex_vm_types::{Object, types::Program};
 /// companions, which have a distinct head name) from colliding.
 fn for_ty_head_name(pat: &TyTemplate) -> Option<&str> {
     match pat {
-        TyTemplate::Concrete(RuntimeTy::Class(qtn, ..) | RuntimeTy::Enum(qtn, ..))
-        | TyTemplate::Class(qtn, _) => Some(qtn.name().as_str()),
+        TyTemplate::Class(qtn, ..) | TyTemplate::Enum(qtn, ..) => Some(qtn.name().as_str()),
         _ => None,
     }
 }
@@ -60,8 +59,8 @@ fn impl_rule_methods_include_inherited_interface_defaults() {
     let program = compile_source(
         r#"
         interface Greeter {
-            function greet(self) -> string
-            function greet_loud(self) -> string { return self.greet() }
+            function greet(self) -> string throws never
+            function greet_loud(self) -> string throws never { return self.greet() }
         }
         class Dog {
             implements Greeter {
@@ -90,8 +89,8 @@ fn impl_rule_override_wins_over_inherited_default() {
     let program = compile_source(
         r#"
         interface Greeter {
-            function greet(self) -> string
-            function greet_loud(self) -> string { return self.greet() }
+            function greet(self) -> string throws never
+            function greet_loud(self) -> string throws never { return self.greet() }
         }
         class Cat {
             implements Greeter {

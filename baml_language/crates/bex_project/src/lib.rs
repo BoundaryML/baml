@@ -105,6 +105,9 @@ pub fn new_from_bytecode(bytecode: &[u8], sys_ops: SysOps) -> Result<Arc<dyn Bex
     Ok(Arc::new(engine))
 }
 
+// Schema types re-exported for `bridge_wasm`, which depends on `bex_project`
+// but not `baml_project` and needs to name them in its `From` impl.
+pub use baml_project::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};
 pub use bex_lsp::{
     BackgroundSpawner, BexLsp, FunctionInfo, FunctionKind, FunctionOrigin, LlmCapabilities,
     LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender, PlaygroundSourceFile,

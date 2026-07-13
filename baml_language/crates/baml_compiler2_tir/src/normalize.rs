@@ -26,16 +26,10 @@ pub fn resolved_aliases_from_map(aliases: HashMap<QualifiedTypeName, Ty>) -> Res
 }
 
 /// Check if `sub` is a subtype of `sup`, resolving type aliases.
-pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, env: &ResolvedAliases) -> bool {
-    // Fast path: `normalize` is a pure function of `(ty, env)`, so
-    // structurally identical types always normalize identically, and
-    // `StructuralTy::is_subtype_of` is reflexive. Skips the double
-    // normalization for the common `T <: T` query.
-    if sub == sup {
-        return true;
-    }
-    let sub_norm = normalize(sub, &env.aliases, &env.recursive);
-    let sup_norm = normalize(sup, &env.aliases, &env.recursive);
+pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeName, Ty>) -> bool {
+    let recursive = find_recursive_aliases(aliases);
+    let sub_norm = normalize(sub, aliases, &recursive);
+    let sup_norm = normalize(sup, aliases, &recursive);
     sub_norm.is_subtype_of(&sup_norm, &mut HashSet::new())
 }
 
@@ -45,33 +39,25 @@ pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, env: &ResolvedAliases) -> bool {
 /// This is not an assignability/subtyping check. Use it for invariant positions
 /// where two type spellings may differ but still denote the same type, such as
 /// interface field implementations.
-pub fn is_same_normalized_type(lhs: &Ty, rhs: &Ty, env: &ResolvedAliases) -> bool {
-    // Fast path: `normalize` is a pure function of `(ty, env)`, so
-    // structurally identical types always normalize (and canonicalize)
-    // identically. Skips the double normalization for the very common
-    // identical-spelling case.
-    if lhs == rhs {
-        return true;
-    }
-    normalize(lhs, &env.aliases, &env.recursive).canonicalize()
-        == normalize(rhs, &env.aliases, &env.recursive).canonicalize()
+pub fn is_same_normalized_type(
+    lhs: &Ty,
+    rhs: &Ty,
+    aliases: &HashMap<QualifiedTypeName, Ty>,
+) -> bool {
+    let recursive = find_recursive_aliases(aliases);
+    normalize(lhs, aliases, &recursive).canonicalize()
+        == normalize(rhs, aliases, &recursive).canonicalize()
 }
 
 /// Find all recursive type aliases via DFS.
-///
-/// A single memoized DFS over the whole alias graph: `state` maps each alias
-/// to `None` while it is on the DFS stack and to `Some(reaches_cycle)` once
-/// fully explored, so every alias body is walked at most once — O(nodes +
-/// edges) total rather than a fresh DFS per alias. ("Reaches a cycle" is a
-/// property of the alias alone, independent of which root the DFS entered
-/// from, so memoizing it across roots is sound.)
 pub fn find_recursive_aliases(
     aliases: &HashMap<QualifiedTypeName, Ty>,
 ) -> HashSet<QualifiedTypeName> {
-    let mut state = HashMap::new();
     let mut recursive = HashSet::new();
     for name in aliases.keys() {
-        if has_cycle(name, aliases, &mut state) {
+        let mut visited = HashSet::new();
+        let mut stack = HashSet::new();
+        if has_cycle(name, aliases, &mut visited, &mut stack) {
             recursive.insert(name.clone());
         }
     }
@@ -715,56 +701,64 @@ fn normalize_impl(
 // CYCLE DETECTION
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Does expanding `name` ever reach a cycle in the alias graph?
-///
-/// `state` is the shared memo for [`find_recursive_aliases`]: `None` marks an
-/// alias currently on the DFS stack (so hitting it again is a back-edge, i.e.
-/// a real cycle), `Some(result)` a fully explored alias.
 fn has_cycle(
     name: &QualifiedTypeName,
     aliases: &HashMap<QualifiedTypeName, Ty>,
-    state: &mut HashMap<QualifiedTypeName, Option<bool>>,
+    visited: &mut HashSet<QualifiedTypeName>,
+    stack: &mut HashSet<QualifiedTypeName>,
 ) -> bool {
-    match state.get(name) {
-        // On the current DFS stack — a back-edge, i.e. a real cycle.
-        Some(None) => return true,
-        // Fully explored on an earlier visit.
-        Some(&Some(result)) => return result,
-        None => {}
+    if stack.contains(name) {
+        return true;
     }
-    state.insert(name.clone(), None);
+    if visited.contains(name) {
+        return false;
+    }
+    visited.insert(name.clone());
+    stack.insert(name.clone());
     let result = aliases
         .get(name)
-        .is_some_and(|ty| ty_has_cycle(ty, aliases, state));
-    state.insert(name.clone(), Some(result));
+        .is_some_and(|ty| ty_has_cycle(ty, aliases, visited, stack));
+    stack.remove(name);
     result
 }
 
 fn ty_has_cycle(
     ty: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,
-    state: &mut HashMap<QualifiedTypeName, Option<bool>>,
+    visited: &mut HashSet<QualifiedTypeName>,
+    stack: &mut HashSet<QualifiedTypeName>,
 ) -> bool {
     match ty {
-        Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, state),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => ty_has_cycle(inner, aliases, state),
-        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
-            ty_has_cycle(key, aliases, state) || ty_has_cycle(value, aliases, state)
+        Ty::TypeAlias(qn, _) if aliases.contains_key(qn) => has_cycle(qn, aliases, visited, stack),
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
+            ty_has_cycle(inner, aliases, visited, stack)
         }
-        Ty::Union(types, _) => types.iter().any(|t| ty_has_cycle(t, aliases, state)),
-        Ty::Class(_, type_args, _) => type_args.iter().any(|t| ty_has_cycle(t, aliases, state)),
+        Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
+            ty_has_cycle(key, aliases, visited, stack)
+                || ty_has_cycle(value, aliases, visited, stack)
+        }
+        Ty::Union(types, _) => types
+            .iter()
+            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Class(_, type_args, _) => type_args
+            .iter()
+            .any(|t| ty_has_cycle(t, aliases, visited, stack)),
         Ty::Interface(_, type_args, associated_bindings, _) => {
-            type_args.iter().any(|t| ty_has_cycle(t, aliases, state))
+            type_args
+                .iter()
+                .any(|t| ty_has_cycle(t, aliases, visited, stack))
                 || associated_bindings
                     .iter()
-                    .any(|(_, ty)| ty_has_cycle(ty, aliases, state))
+                    .any(|(_, ty)| ty_has_cycle(ty, aliases, visited, stack))
         }
         Ty::AssociatedTypeProjection {
             base, interface, ..
         } => {
-            ty_has_cycle(base, aliases, state)
+            ty_has_cycle(base, aliases, visited, stack)
                 || interface.as_ref().is_some_and(|interface| {
-                    interface.tys().any(|t| ty_has_cycle(t, aliases, state))
+                    interface
+                        .tys()
+                        .any(|t| ty_has_cycle(t, aliases, visited, stack))
                 })
         }
         Ty::Function {
@@ -775,9 +769,9 @@ fn ty_has_cycle(
         } => {
             params
                 .iter()
-                .any(|param| ty_has_cycle(&param.ty, aliases, state))
-                || ty_has_cycle(ret, aliases, state)
-                || ty_has_cycle(throws, aliases, state)
+                .any(|param| ty_has_cycle(&param.ty, aliases, visited, stack))
+                || ty_has_cycle(ret, aliases, visited, stack)
+                || ty_has_cycle(throws, aliases, visited, stack)
         }
         _ => false,
     }

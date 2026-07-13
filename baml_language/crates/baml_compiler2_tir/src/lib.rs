@@ -25,7 +25,6 @@ pub(crate) const INT_MIN: i64 = !(i64::MAX >> 1);
 pub(crate) const INT_MAX: i64 = i64::MAX >> 1;
 
 pub mod analysis;
-pub mod associated_projection;
 pub mod builder;
 pub mod callable;
 pub mod cycle_detector;
@@ -40,9 +39,12 @@ pub mod normalize;
 pub mod package_interface;
 pub mod pattern_lowering;
 pub mod resolve;
+pub mod self_type;
+pub mod signature;
 pub mod throw_inference;
 pub mod throws_analysis;
 pub mod ty;
+pub mod type_context;
 pub mod user_facing;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────

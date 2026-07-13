@@ -382,7 +382,8 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     scan_operand(cap, set);
                 }
             }
-            crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+            crate::Rvalue::MakeBoundMethod { receiver, .. }
+            | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
                 scan_operand(receiver, set);
             }
             crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -644,7 +645,8 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
                 count_in_operand(cap, uses);
             }
         }
-        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+        crate::Rvalue::MakeBoundMethod { receiver, .. }
+        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
             count_in_operand(receiver, uses);
         }
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -1007,7 +1009,8 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
                 apply_subst_to_operand(cap, subst);
             }
         }
-        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+        crate::Rvalue::MakeBoundMethod { receiver, .. }
+        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
             apply_subst_to_operand(receiver, subst);
         }
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -1291,7 +1294,8 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
                 remap_operand(cap, map);
             }
         }
-        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+        crate::Rvalue::MakeBoundMethod { receiver, .. }
+        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
             remap_operand(receiver, map);
         }
         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {
@@ -1553,7 +1557,8 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                                 check_operand(cap, &blk);
                             }
                         }
-                        crate::Rvalue::MakeBoundMethod { receiver, .. } => {
+                        crate::Rvalue::MakeBoundMethod { receiver, .. }
+                        | crate::Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
                             check_operand(receiver, &blk);
                         }
                         crate::Rvalue::MakeGenericFunctionFromValue { value, .. } => {

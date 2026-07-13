@@ -46,32 +46,41 @@ fn guard_template_matches(
     frame_type_args: &[baml_type::RuntimeTy],
     actual: &baml_type::RuntimeTy,
 ) -> bool {
+    use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
+
+    // A fully-realized template carries no frame refs or holes: compare it to
+    // the actual arg by exact structural equality (the invariant-position rule
+    // for reified type args). This is the flattened successor to the old
+    // `Concrete(expected) => expected == actual` arm.
+    if let Ok(realized) = <&RealizedTy>::try_from(template) {
+        return realized.as_runtime_ty() == actual;
+    }
+
     match template {
-        baml_type::TyTemplate::Wildcard => true,
+        TyTemplate::Wildcard => true,
         #[expect(deprecated)]
-        baml_type::TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
-            Some(baml_type::RuntimeTy::BuiltinUnknown { .. }) | None => true,
+        TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
+            Some(RuntimeTy::BuiltinUnknown { .. }) | None => true,
             Some(expected) => actual.is_subtype_of(expected),
         },
-        baml_type::TyTemplate::TypeArgRef(n) => {
+        TyTemplate::TypeArgRef(n) => {
             frame_type_args
                 .get(*n as usize)
                 .cloned()
-                .unwrap_or_else(baml_type::RuntimeTy::unknown)
+                .unwrap_or_else(RuntimeTy::unknown)
                 == *actual
         }
-        baml_type::TyTemplate::Concrete(expected) => expected == actual,
-        baml_type::TyTemplate::Array(inner) => {
-            matches!(actual, baml_type::RuntimeTy::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
+        TyTemplate::List(inner, _) => {
+            matches!(actual, RuntimeTy::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
         }
-        baml_type::TyTemplate::Map(k, v) => {
-            matches!(actual, baml_type::RuntimeTy::Map { key, value, .. } if guard_template_matches(k, frame_type_args, key) && guard_template_matches(v, frame_type_args, value))
+        TyTemplate::Map { key, value, .. } => {
+            matches!(actual, RuntimeTy::Map { key: actual_key, value: actual_value, .. } if guard_template_matches(key, frame_type_args, actual_key) && guard_template_matches(value, frame_type_args, actual_value))
         }
-        baml_type::TyTemplate::Class(name, args) => {
-            matches!(actual, baml_type::RuntimeTy::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
+        TyTemplate::Class(name, args, _) => {
+            matches!(actual, RuntimeTy::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
         }
-        baml_type::TyTemplate::Interface(name, args, assoc) => {
-            matches!(actual, baml_type::RuntimeTy::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
+        TyTemplate::Interface(name, args, assoc, _) => {
+            matches!(actual, RuntimeTy::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
             && args.len() == actual_args.len()
             && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual))
             && assoc.iter().all(|(name, template)| {
@@ -81,18 +90,46 @@ fn guard_template_matches(
                     .is_some_and(|(_, actual)| guard_template_matches(template, frame_type_args, actual))
             }))
         }
-        baml_type::TyTemplate::Union(parts) => match actual {
-            baml_type::RuntimeTy::Union(actual_parts, _) => {
-                actual_parts.iter().all(|actual_part| {
-                    parts
-                        .iter()
-                        .any(|part| guard_template_matches(part, frame_type_args, actual_part))
-                })
-            }
+        TyTemplate::Union(parts, _) => match actual {
+            RuntimeTy::Union(actual_parts, _) => actual_parts.iter().all(|actual_part| {
+                parts
+                    .iter()
+                    .any(|part| guard_template_matches(part, frame_type_args, actual_part))
+            }),
             _ => parts
                 .iter()
                 .any(|part| guard_template_matches(part, frame_type_args, actual)),
         },
+        TyTemplate::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => {
+            matches!(actual, RuntimeTy::Function { params: actual_params, ret: actual_ret, throws: actual_throws, .. }
+                if params.len() == actual_params.len()
+                && params.iter().zip(actual_params).all(|(param, actual_param)| {
+                    param.mode == actual_param.mode
+                        && guard_template_matches(&param.ty, frame_type_args, &actual_param.ty)
+                })
+                && guard_template_matches(ret, frame_type_args, actual_ret)
+                && guard_template_matches(throws, frame_type_args, actual_throws))
+        }
+        TyTemplate::Future(value, error, _) => {
+            matches!(actual, RuntimeTy::Future(actual_value, actual_error, _)
+                if guard_template_matches(value, frame_type_args, actual_value)
+                && guard_template_matches(error, frame_type_args, actual_error))
+        }
+        TyTemplate::WatchAccessor(inner, _) => {
+            matches!(actual, RuntimeTy::WatchAccessor(actual_inner, _)
+                if guard_template_matches(inner, frame_type_args, actual_inner))
+        }
+        // A symbolic projection whose witness type was not resolved at compile
+        // time — never a match: a runtime value's concrete type carries no
+        // unresolved projection for it to equal.
+        TyTemplate::AssociatedTypeProjection { .. } => false,
+        // Realized leaves are handled by the fast path above.
+        _ => false,
     }
 }
 
@@ -385,7 +422,7 @@ mod tests {
         ClassField {
             name: name.to_string(),
             field_type: int_ty(),
-            field_template: TyTemplate::Concrete(int_ty()),
+            field_template: TyTemplate::from(baml_type::RealizedTy::int()),
             description: None,
             alias: None,
             skip: false,
@@ -756,8 +793,10 @@ mod tests {
         // concrete path (`contains_typevar == false`) and must keep exact
         // discrimination — unaffected by the B-634 subtype fix.
         let foo = TypeName::local(Name::new("Foo"));
-        let foo_int_template =
-            TyTemplate::Class(foo.clone(), vec![TyTemplate::Concrete(RuntimeTy::int())]);
+        let foo_int_template = TyTemplate::class(
+            foo.clone(),
+            vec![TyTemplate::from(baml_type::RealizedTy::int())],
+        );
         let foo_int_value = RuntimeTy::class_with_args(foo.clone(), vec![RuntimeTy::int()]);
         let foo_string_value = RuntimeTy::class_with_args(foo, vec![RuntimeTy::string()]);
 
@@ -1295,6 +1334,65 @@ fn value_as_float(value: Value) -> Option<f64> {
         Object::Float(f) => Some(*f),
         _ => None,
     }
+}
+
+/// Narrow a value's stored argument type (a `RuntimeTy`) to the `RealizedTy` a
+/// [`ConcreteRealizedTy`] holds. A value's arguments are realized by
+/// construction, so this returns `None` only if a residual type variable leaked
+/// in — a bug — which callers propagate up as "no concrete type".
+///
+/// [`ConcreteRealizedTy`]: baml_type::ConcreteRealizedTy
+fn realized_arg(ty: &baml_type::RuntimeTy) -> Option<baml_type::RealizedTy> {
+    baml_type::RealizedTy::try_from(ty).ok()
+}
+
+/// The [`ConcreteRealizedTy::Function`] denoted by a `Function` object's stored
+/// signature, or `None` if a param/return/throws type carries an unresolved
+/// generic that does not narrow to a `RealizedTy` (a bug — see [`realized_arg`]).
+///
+/// Used to reconstruct the concrete type of a callable value (closure / generic
+/// function). The signature erases unresolved generics to `unknown`
+/// (`Function::param_types` / `return_type`), so a generic callable reconstructs
+/// coarsely — but faithfully to what the runtime object carries.
+///
+/// [`ConcreteRealizedTy::Function`]: baml_type::ConcreteRealizedTy::Function
+fn function_object_ty(f: &bex_vm_types::types::Function) -> Option<baml_type::ConcreteRealizedTy> {
+    use baml_type::{
+        ConcreteRealizedTy, FunctionParamMode, RealizedFunctionParamTy, RealizedTy, TyAttr,
+    };
+    let params = f
+        .param_types
+        .iter()
+        .enumerate()
+        .map(|(i, ty)| {
+            Some(RealizedFunctionParamTy {
+                name: f
+                    .param_names
+                    .get(i)
+                    .filter(|n| !n.is_empty())
+                    .map(|n| Name::new(n.as_str())),
+                ty: realized_arg(ty)?,
+                mode: if f.param_has_default.get(i).copied().unwrap_or(false) {
+                    FunctionParamMode::Optional
+                } else {
+                    FunctionParamMode::Required
+                },
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    // `None` throws == "never throws" == the `void` error type.
+    let throws = match &f.throws_type {
+        Some(ty) => realized_arg(ty)?,
+        None => RealizedTy::Void {
+            attr: TyAttr::default(),
+        },
+    };
+    Some(ConcreteRealizedTy::Function {
+        params,
+        ret: Box::new(realized_arg(&f.return_type)?),
+        throws: Box::new(throws),
+        attr: TyAttr::default(),
+    })
 }
 
 /// Get the type tag for any runtime value.
@@ -1958,70 +2056,81 @@ impl BexVm {
         Type::of(value, |ptr| ObjectType::of(self.get_object(ptr)))
     }
 
-    /// The full concrete `RuntimeTy` of a value — its runtime `Self` for a virtual
-    /// interface call. Total: every value realizes to exactly one concrete type
-    /// (the coherence in [`crate::package_baml`] relies on this), so this never
-    /// returns an "unknown". Primitives map to their kind; an `Instance` carries
-    /// its `class_type_args` (so `Box<int>` resolves the `Box` impl at `T = int`);
-    /// an enum `Variant` maps to its enum.
-    fn value_concrete_runtime_ty(&self, value: Value) -> baml_type::RuntimeTy {
-        use baml_type::{RuntimeTy, TyAttr};
+    /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
+    /// runtime value's type satisfies (a concrete top with realized arguments, no
+    /// type variables) made explicit in the type. `None` for a value kind that
+    /// has no such type (a raw function/future value or an opaque native handle).
+    ///
+    /// Primitives construct their leaf directly; an `Instance` narrows its stored
+    /// `class_type_args` into the argument list (so `Box<int>` resolves the `Box`
+    /// impl at `T = int`); an enum `Variant` maps to its enum; a container narrows
+    /// its element/key/value types; a `Cell` is transparent. A value's arguments
+    /// are realized by construction, so a per-argument narrow (see [`realized_arg`])
+    /// fails (→ `None`) only if a residual type variable leaked in — a bug.
+    ///
+    /// The interface resolver wants the loose `RuntimeTy`, so the sole such caller
+    /// widens the result back; the `IsType` value matcher wants the invariant made
+    /// explicit and uses it directly.
+    pub(crate) fn value_concrete_ty(&self, value: Value) -> Option<baml_type::ConcreteRealizedTy> {
+        use baml_type::{ConcreteRealizedTy, TyAttr};
         if value.as_int().is_some() {
-            return RuntimeTy::Int {
+            return Some(ConcreteRealizedTy::Int {
                 attr: TyAttr::default(),
-            };
+            });
         }
         if value.as_bool().is_some() {
-            return RuntimeTy::Bool {
+            return Some(ConcreteRealizedTy::Bool {
                 attr: TyAttr::default(),
-            };
+            });
         }
         if value.is_null() {
-            return RuntimeTy::Null {
+            return Some(ConcreteRealizedTy::Null {
                 attr: TyAttr::default(),
-            };
+            });
         }
-        let ptr = value
-            .as_object_ptr()
-            .unwrap_or_else(|| unreachable!("value is neither a primitive nor a heap object"));
-        match self.get_object(ptr) {
-            Object::Float(_) => RuntimeTy::Float {
+        Some(match self.get_object(value.as_object_ptr()?) {
+            Object::Float(_) => ConcreteRealizedTy::Float {
                 attr: TyAttr::default(),
             },
-            Object::Bigint(_) => RuntimeTy::Bigint {
+            Object::Bigint(_) => ConcreteRealizedTy::Bigint {
                 attr: TyAttr::default(),
             },
-            Object::String(_) => RuntimeTy::String {
+            Object::String(_) => ConcreteRealizedTy::String {
                 attr: TyAttr::default(),
             },
-            Object::Uint8Array(_) => RuntimeTy::Uint8Array {
+            Object::Uint8Array(_) => ConcreteRealizedTy::Uint8Array {
                 attr: TyAttr::default(),
             },
-            Object::Instance(inst) => {
-                let type_args = inst.class_type_args.to_vec();
-                match self.get_object(inst.class) {
-                    Object::Class(class) => {
-                        // Media values are `Object::Instance`s of the std media
-                        // classes (`baml.media.{Image,Audio,Video,Pdf}`), but their
-                        // concrete type is the `image`/`audio`/… primitive
-                        // (`RuntimeTy::Media`) — which is how the impl registry keys
-                        // `implement I for image`. Return that, not the class.
-                        if let Some(kind) = crate::package_baml::json::media_kind_from_fqn(
-                            class.name.display_name().as_str(),
-                        ) {
-                            RuntimeTy::Media(kind, TyAttr::default())
-                        } else {
-                            RuntimeTy::Class(class.name.clone(), type_args, TyAttr::default())
-                        }
+            Object::Instance(inst) => match self.get_object(inst.class) {
+                Object::Class(class) => {
+                    // Media values are `Object::Instance`s of the std media classes
+                    // (`baml.media.{Image,Audio,Video,Pdf}`), but their concrete
+                    // type is the `image`/`audio`/… primitive
+                    // (`ConcreteRealizedTy::Media`) — which is how the impl registry
+                    // keys `implement I for image`. Return that, not the class.
+                    if let Some(kind) = crate::package_baml::json::media_kind_from_fqn(
+                        class.name.display_name().as_str(),
+                    ) {
+                        ConcreteRealizedTy::Media(kind, TyAttr::default())
+                    } else {
+                        // A generic instance's stored `class_type_args` are realized
+                        // at construction (`Box<int>` ⇒ `T = int`); narrow each into
+                        // the `ConcreteRealizedTy::Class` argument list.
+                        let type_args = inst
+                            .class_type_args
+                            .iter()
+                            .map(realized_arg)
+                            .collect::<Option<Vec<_>>>()?;
+                        ConcreteRealizedTy::Class(class.name.clone(), type_args, TyAttr::default())
                     }
-                    other => unreachable!(
-                        "Instance.class must point to a Class, found {:?}",
-                        ObjectType::of(other)
-                    ),
                 }
-            }
+                other => unreachable!(
+                    "Instance.class must point to a Class, found {:?}",
+                    ObjectType::of(other)
+                ),
+            },
             Object::Variant(v) => match self.get_object(v.enm) {
-                Object::Enum(e) => RuntimeTy::Enum(e.name.clone(), TyAttr::default()),
+                Object::Enum(e) => ConcreteRealizedTy::Enum(e.name.clone(), TyAttr::default()),
                 other => unreachable!(
                     "Variant.enm must point to an Enum, found {:?}",
                     ObjectType::of(other)
@@ -2029,27 +2138,96 @@ impl BexVm {
             },
             // A `type` value (e.g. `reflect.type_of<T>()`) — its concrete type is
             // the `type` primitive, the subject of `implement I for type`.
-            Object::Type(_) => RuntimeTy::Type {
+            Object::Type(_) => ConcreteRealizedTy::Type {
                 attr: TyAttr::default(),
             },
             // Arrays/maps carry their element/key/value types, so the faithful
-            // `list<T>` / `map<K, V>` is reconstructed from the value itself. In
-            // practice MIR routes container-backed interface dispatch to the
-            // closed-world type-tag switch (the `iface_may_be_container_backed`
-            // gate), so a container receiver does not actually reach a virtual
-            // call (the sole caller) — but should one ever arrive, return its real
-            // type rather than aborting the VM.
-            Object::Array(arr) => RuntimeTy::list((*arr.element_ty).clone()),
-            Object::Map(map) => RuntimeTy::map((*map.key_ty).clone(), (*map.value_ty).clone()),
-            // Functions/closures/futures are not valid impl subjects, and
-            // `resource`/`prompt_ast` (also impl subjects) have no runtime value
-            // representation — none can be an interface-dispatch receiver, so the
-            // type checker never emits a virtual call on them.
-            other => unreachable!(
-                "value of object kind {:?} cannot be a virtual-call receiver",
-                ObjectType::of(other)
+            // `list<T>` / `map<K, V>` is reconstructed from the value itself.
+            Object::Array(arr) => ConcreteRealizedTy::List(
+                Box::new(realized_arg(&arr.element_ty)?),
+                TyAttr::default(),
             ),
-        }
+            Object::Map(map) => ConcreteRealizedTy::Map {
+                key: Box::new(realized_arg(&map.key_ty)?),
+                value: Box::new(realized_arg(&map.value_ty)?),
+                attr: TyAttr::default(),
+            },
+            // A cell is a transparent capture/mutable-binding slot, not a value
+            // of its own: its concrete type is that of the value it holds.
+            Object::Cell(cell) => return self.value_concrete_ty(cell.load()),
+
+            // ── Function-pointer values ──────────────────────────────────────
+            // These are user-facing callables; their concrete type is the
+            // reconstructed function signature. (The signature stored on the
+            // underlying `Function` erases unresolved generics to `unknown`, so a
+            // generic closure reconstructs coarsely — but it is a real function
+            // type, not "no type".)
+            Object::Closure(closure) => {
+                // SAFETY: `closure.function` points to a live `Function`, the
+                // same invariant `resolve_callable_target` relies on.
+                match unsafe { closure.function.get() } {
+                    Object::Function(f) => function_object_ty(f)?,
+                    _ => return None,
+                }
+            }
+            Object::GenericFunction(gf) => {
+                // Resolve the underlying function through the global table, as at
+                // call time; its `type_args` seed the frame but the stored
+                // signature is already generic-erased, so reuse it directly.
+                let inner = self.globals.get(self.proof(), gf.function);
+                match inner.as_object_ptr().map(|p| self.get_object(p)) {
+                    Some(Object::Function(f)) => function_object_ty(f)?,
+                    _ => return None,
+                }
+            }
+            Object::HostClosure(hc) => ConcreteRealizedTy::Function {
+                params: hc
+                    .params
+                    .iter()
+                    .map(|p| {
+                        Some(baml_type::RealizedFunctionParamTy {
+                            name: p.name.clone(),
+                            ty: realized_arg(&p.ty)?,
+                            mode: p.mode,
+                        })
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+                ret: Box::new(realized_arg(&hc.ret_ty)?),
+                throws: Box::new(realized_arg(&hc.throws_ty)?),
+                attr: TyAttr::default(),
+            },
+            // BUG: a `BoundMethod` is a callable value and *should* reconstruct
+            // to its underlying function's type with the bound `self` parameter
+            // dropped, but the receiver-relative generic realization needed to do
+            // that faithfully isn't threaded onto the object — so it reports no
+            // type for now rather than a wrong one.
+            Object::BoundMethod(_) => return None,
+
+            // `Object::Function` is NOT a function-pointer value — it is the
+            // internal function representation that acts as the type constructor
+            // for the callables above, so like the other compile-time definition
+            // objects (a package, class, enum, interface, or impl rule) it is
+            // never a *data value* reaching a type test.
+            Object::Function(_)
+            | Object::Package(_)
+            | Object::Class(_)
+            | Object::Enum(_)
+            | Object::Interface(_)
+            | Object::ImplRule(_) => return None,
+
+            // A `Future` *is* a concrete type, but the value holds only its
+            // resolved value and state, never its `<V, E>` type arguments, so a
+            // precise `Future<int>` can't be reconstructed; `Future` patterns are
+            // matched by the coarse `FUTURE` type tag instead.
+            Object::Future(_) | Object::UnscheduledFuture(_) => return None,
+
+            // Opaque native handles are not BAML data types at all.
+            Object::RustData(_) | Object::Collector(_) => return None,
+
+            // A GC-debug sentinel is never a live value.
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => return None,
+        })
     }
 
     /// Get mutable string from a Value.
@@ -3964,6 +4142,26 @@ impl BexVm {
         callee
     }
 
+    /// The class-level type arguments to curry into a bound method whose
+    /// receiver is `receiver`: the receiver instance's `class_type_args` (De
+    /// Bruijn class-param order — the method's `Self`), or empty for a
+    /// non-instance receiver (a primitive, `type`, `uint8array`, …, which has no
+    /// class generics). Captured at `MakeBoundMethod` time so the value is fully
+    /// realized; installed as the callee's `frame.type_args` at `CallIndirect`
+    /// (see the `Object::BoundMethod` arm of `execute_call_from_locals_offset`).
+    pub(crate) fn bound_method_curried_type_args(
+        &self,
+        receiver: Value,
+    ) -> Box<[baml_type::RuntimeTy]> {
+        match receiver.as_object_ptr() {
+            Some(ptr) => match self.get_object(ptr) {
+                Object::Instance(inst) => inst.class_type_args.clone(),
+                _ => Box::new([]),
+            },
+            None => Box::new([]),
+        }
+    }
+
     // ── BEX profiling event stream (bex_events::prof) ──────────────────
 
     /// The innermost live call's profiling id (`0` = at thread root). The
@@ -4417,10 +4615,14 @@ impl BexVm {
         // case, including all recursion — needs neither closure captures nor
         // bound-method class args, so it takes the empty fast path. The
         // `closure_type_args` are a Closure's captured type args; the
-        // `bound_method_class_type_args` are the receiver's class type args (De
-        // Bruijn ordering: class args ++ explicit call-site args, matching
-        // enclosing_generic_params() which puts class params first). Both are
-        // injected into the new BytecodeFrame after it is created.
+        // `bound_method_class_type_args` are the bound method's curried type args
+        // (De Bruijn ordering: class args → `Self` ++ explicit call-site args,
+        // matching enclosing_generic_params() which puts class params first).
+        // Curried at `MakeBoundMethod` time (see `bound_method_curried_type_args`)
+        // so every callable value seeds its frame from its own type-args field —
+        // the same mechanism as `Closure::captured_type_args` /
+        // `GenericFunction::type_args`. Both are injected into the new
+        // BytecodeFrame after it is created.
         let (is_host, closure_type_args, bound_method_class_type_args): (
             bool,
             Box<[baml_type::RuntimeTy]>,
@@ -4428,16 +4630,7 @@ impl BexVm {
         ) = match self.get_object(callee_ptr) {
             Object::HostClosure(_) => (true, Box::new([]), Box::new([])),
             Object::Closure(c) => (false, c.captured_type_args.clone(), Box::new([])),
-            Object::BoundMethod(bm) => {
-                let bm_args: Box<[baml_type::RuntimeTy]> = match bm.receiver.as_object_ptr() {
-                    Some(recv_ptr) => match self.get_object(recv_ptr) {
-                        Object::Instance(inst) => inst.class_type_args.clone(),
-                        _ => Box::new([]),
-                    },
-                    None => Box::new([]),
-                };
-                (false, Box::new([]), bm_args)
-            }
+            Object::BoundMethod(bm) => (false, Box::new([]), bm.type_args.clone()),
             // Plain Function (fast path) and everything else: no extra args.
             _ => (false, Box::new([]), Box::new([])),
         };
@@ -5183,6 +5376,10 @@ impl BexVm {
     /// is the VM's lifetime backstop for non-local exits (for example, a native
     /// panic unwinding the frame before its explicit `Unwatch` executes).
     fn unregister_frame_watches(&mut self, locals_offset: StackIndex) {
+        if self.watched_vars.is_empty() {
+            return;
+        }
+
         let locals_offset = locals_offset.raw();
         let frame_watches: Vec<StackIndex> = self
             .watched_vars
@@ -5191,11 +5388,15 @@ impl BexVm {
             .filter(|index| index.raw() >= locals_offset)
             .collect();
 
-        for local_var_index in frame_watches {
-            self.watched_vars.remove(&local_var_index);
-            self.watch
-                .unregister_root(NodeId::LocalVar(local_var_index));
+        if frame_watches.is_empty() {
+            return;
         }
+
+        for &local_var_index in &frame_watches {
+            self.watched_vars.remove(&local_var_index);
+        }
+        self.watch
+            .unregister_roots(frame_watches.into_iter().map(NodeId::LocalVar));
     }
 
     /// Load the function object for the given frame.
@@ -6722,7 +6923,16 @@ impl BexVm {
                     // agrees. The rule borrows `self`; scope it so the borrow ends
                     // before the `&mut self` call below.
                     let receiver = self.stack[StackIndex::from_raw(args_offset)];
-                    let self_ty = self.value_concrete_runtime_ty(receiver);
+                    // The resolver operates on the loose `RuntimeTy`; widen back
+                    // from the value's concrete-realized type.
+                    let self_ty = baml_type::RuntimeTy::from(
+                        self.value_concrete_ty(receiver).unwrap_or_else(|| {
+                            unreachable!(
+                                "value of kind {:?} cannot be a virtual-call receiver",
+                                self.type_of(&receiver)
+                            )
+                        }),
+                    );
                     let (callee_ptr, type_args) = {
                         let (rule, bound_args) = crate::package_baml::resolve_implements_rule(
                             self,
@@ -7196,6 +7406,25 @@ impl BexVm {
                     // to the pre-resolved Object/Int path.
                     let raw_const = &function.bytecode.constants[const_idx];
                     let result = match raw_const {
+                        // Structural type test against a full `TyTemplate` (a
+                        // container element type, a bare frame ref, a `Wildcard`
+                        // hole, …), matched with the canonical type algebra. Not
+                        // emitted yet — the MIR/emit routing that produces these
+                        // constants lands with the structural-routing unit.
+                        ConstValue::Type(template) => {
+                            let frame_type_args =
+                                if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                                    bf.type_args.clone()
+                                } else {
+                                    vec![]
+                                };
+                            crate::type_match::value_matches_template(
+                                self,
+                                value,
+                                template,
+                                &frame_type_args,
+                            )
+                        }
                         ConstValue::ClassWithTypeArgs {
                             class_obj,
                             type_args_templates,
@@ -7234,10 +7463,18 @@ impl BexVm {
                         }
                         _ => {
                             let expected = &function.bytecode.resolved_constants[const_idx];
-                            if let Some(class_ptr) = expected.as_object_ptr() {
+                            if let Some(expected_ptr) = expected.as_object_ptr() {
+                                // Class- or enum-pointer identity: `is Foo` checks
+                                // the instance's class object; `is Color` checks the
+                                // variant's enum object. Enum-type tests dispatch on
+                                // enum identity because the shared `ENUM` type tag
+                                // cannot tell `Color` from `Status`.
                                 match value.as_object_ptr() {
                                     Some(val_ptr) => match self.get_object(val_ptr) {
-                                        Object::Instance(instance) => instance.class == class_ptr,
+                                        Object::Instance(instance) => {
+                                            instance.class == expected_ptr
+                                        }
+                                        Object::Variant(variant) => variant.enm == expected_ptr,
                                         _ => false,
                                     },
                                     None => false,
@@ -7381,19 +7618,19 @@ impl BexVm {
                     };
 
                     let ty = {
-                        let frame_type_args = if let Frame::Bytecode(bf) = &self.frames[*frame_idx]
-                        {
-                            bf.type_args.clone()
+                        // A fully-realized template narrows to `RealizedTy` (a
+                        // single validation walk) and widens to `RuntimeTy` by
+                        // transmute — no substitution environment needed.
+                        // Otherwise resolve its frame refs.
+                        if let Ok(realized) = <&baml_type::RealizedTy>::try_from(&template) {
+                            baml_type::RuntimeTy::from(realized)
                         } else {
-                            vec![]
-                        };
-                        if template.is_fully_concrete() {
-                            if let baml_type::TyTemplate::Concrete(t) = &template {
-                                t.clone()
-                            } else {
-                                template.substitute(&frame_type_args)
-                            }
-                        } else {
+                            let frame_type_args =
+                                if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
+                                    bf.type_args.clone()
+                                } else {
+                                    vec![]
+                                };
                             template.substitute(&frame_type_args)
                         }
                     };
@@ -7410,9 +7647,104 @@ impl BexVm {
                     let callee_value = self.globals.get(self.proof(), global_idx);
                     let function_ptr =
                         self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
+                    // Curry the receiver's class type args (→ `Self`) into the
+                    // value now, so the bound method is fully realized and the
+                    // `CallIndirect` that invokes it needs no type-arg operands.
+                    // (Method-level fn generics — `b.m<int>` — are not yet
+                    // curried here; that needs turbofish-on-member-access
+                    // support and would append after these.)
+                    let type_args = self.bound_method_curried_type_args(receiver);
                     let bound = Object::BoundMethod(BoundMethod {
                         function: function_ptr,
                         receiver,
+                        type_args,
+                    });
+                    let ptr = self.tlab.alloc(bound);
+                    self.stack.push(Value::object(ptr));
+                }
+
+                // ── MakeVirtualBoundMethod ────────────────────────────────────
+                // The value analogue of `VirtualCall`: resolve the interface
+                // method from the receiver's concrete `Self` at *bind* time (the
+                // receiver value — and hence its type — is fixed here), producing
+                // a regular `BoundMethod` that additionally carries the impl's
+                // realized frame type args (a blanket impl's or inherited
+                // default's frame, which the receiver's class args can't express).
+                // Stack (top last): `[receiver, type_args…, iface_type, method_name]`.
+                OpCode::MakeVirtualBoundMethod => {
+                    let ntypeargs = read_u16_unchecked(code, pc) as usize;
+                    let method_value = self.stack.ensure_pop();
+                    let method_name = self.as_string(&method_value)?.to_string();
+                    let iface_value = self.stack.ensure_pop();
+                    let (iface_qtn, iface_args) = {
+                        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+                        match self.get_object(iface_ptr) {
+                            Object::Type(ty) => match ty.as_ref() {
+                                baml_type::RuntimeTy::Interface(qtn, args, _assoc, _attr) => {
+                                    (qtn.clone(), args.clone())
+                                }
+                                other => unreachable!(
+                                    "MakeVirtualBoundMethod interface operand must be an \
+                                     Interface type, found {other:?}"
+                                ),
+                            },
+                            other => unreachable!(
+                                "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                                ObjectType::of(other)
+                            ),
+                        }
+                    };
+                    // The method-level type args (a generic interface method's own
+                    // generics, specialized at the reference site) sit below the
+                    // interface type; they append to the resolved impl frame.
+                    let mut method_type_args: Vec<baml_type::RuntimeTy> =
+                        Vec::with_capacity(ntypeargs);
+                    for _ in 0..ntypeargs {
+                        let v = self.stack.ensure_pop();
+                        let ptr = self.as_object_ptr(v, ObjectType::Type)?;
+                        let Object::Type(ty) = self.get_object(ptr) else {
+                            unreachable!("as_object_ptr guarantees Type variant");
+                        };
+                        method_type_args.push(*ty.clone());
+                    }
+                    method_type_args.reverse();
+                    let receiver = self.stack.ensure_pop();
+                    // The resolver operates on the loose `RuntimeTy`; widen back
+                    // from the value's concrete-realized type.
+                    let self_ty = baml_type::RuntimeTy::from(
+                        self.value_concrete_ty(receiver).unwrap_or_else(|| {
+                            unreachable!(
+                                "value of kind {:?} cannot be a virtual bound-method receiver",
+                                self.type_of(&receiver)
+                            )
+                        }),
+                    );
+                    let (function_ptr, type_args) = {
+                        let (rule, bound_args) = crate::package_baml::resolve_implements_rule(
+                            self,
+                            &self_ty,
+                            &iface_qtn,
+                            &iface_args,
+                        )
+                        .ok_or_else(|| {
+                            VmInternalError::UnresolvedVirtualCall {
+                                method: method_name.clone(),
+                            }
+                        })?;
+                        let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
+                            VmInternalError::UnresolvedVirtualCall {
+                                method: method_name.clone(),
+                            }
+                        })?;
+                        let mut frame =
+                            crate::package_baml::realize_frame(&method.frame, &bound_args);
+                        frame.extend(method_type_args);
+                        (method.fqn, frame)
+                    };
+                    let bound = Object::BoundMethod(BoundMethod {
+                        function: function_ptr,
+                        receiver,
+                        type_args: type_args.into_boxed_slice(),
                     });
                     let ptr = self.tlab.alloc(bound);
                     self.stack.push(Value::object(ptr));

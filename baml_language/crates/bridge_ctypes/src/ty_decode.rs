@@ -18,7 +18,7 @@ use bex_project::{BexExternalAdt, BexExternalValue};
 use indexmap::IndexMap;
 
 use crate::{
-    baml_core::cffi::{
+    baml_bridge::cffi::{
         BamlTy, BamlTyArg, BamlTyFunctionParam, BamlTyFunctionParamMode, BamlTyMediaKind,
         BamlTyPrimitiveKind, baml_ty::Ty as TyVariant,
         baml_ty_literal::Literal as TyLiteralVariant,

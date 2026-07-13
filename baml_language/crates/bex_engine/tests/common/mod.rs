@@ -203,7 +203,7 @@ function TestFunc(input: string) -> {return_type} {{
 }}
 
 function get_prompt() -> baml.llm.PromptAst {{
-    let args = {{ "input": "test" }};
+    let args: map<string, unknown> = {{ "input": "test" }};
     baml.llm.render_prompt(TestClient, "TestFunc", args)
 }}
 "##

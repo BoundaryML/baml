@@ -730,9 +730,9 @@ pub enum Rvalue {
     ///
     /// The type is stored as a `TyTemplate` so that generic class checks like
     /// `value is Foo<T>` (where `T` is a type parameter in scope) resolve
-    /// correctly at runtime via `TypeArgRef` substitution.  For fully-concrete
-    /// types the template is `TyTemplate::Concrete(ty)`, which the emitter
-    /// handles on the same fast path as before.
+    /// correctly at runtime via `TypeArgRef` substitution.  A fully-realized
+    /// template narrows to a `RealizedTy`, which the emitter handles on the
+    /// same tag / class-identity fast path as before.
     IsType {
         operand: Operand,
         ty_template: TyTemplate,
@@ -761,6 +761,27 @@ pub enum Rvalue {
     MakeBoundMethod {
         item_ref: ItemRef,
         receiver: Operand,
+    },
+
+    /// Create a bound method value for an *interface* method whose impl is
+    /// unknown statically — the value analogue of [`Terminator::VirtualCall`]
+    /// (`let f = x.eq` on an existential / bounded-type-var receiver). The VM
+    /// resolves the receiver's concrete `Self` to its impl at bind time and
+    /// produces a `BoundMethod` over the resolved method, carrying the impl's
+    /// realized frame type args.
+    MakeVirtualBoundMethod {
+        /// The interface to resolve against, as a template the emitter pushes
+        /// with `LoadType` (like [`Terminator::VirtualCall`]'s `iface`).
+        iface: TyTemplate,
+        /// The interface method's name.
+        method: String,
+        /// The receiver whose runtime concrete type is the `Self` to resolve on.
+        receiver: Operand,
+        /// Method-level type-argument templates from the reference site (a
+        /// generic interface method's own generics, when specialized there).
+        /// Appended to the resolved impl frame by the VM — dropping them would
+        /// lose the method's own generics.
+        type_args: Vec<TyTemplate>,
     },
 
     /// Create a generic-function value (`foo<T>`) whose type arguments depend on
@@ -793,9 +814,9 @@ pub enum Rvalue {
 
     /// Materialize a `Ty` from a `TyTemplate`.
     ///
-    /// For concrete templates (`TyTemplate::Concrete`), the `Ty` is baked in
-    /// at compile time. For templates containing `TypeArgRef(N)`, the VM
-    /// substitutes `frame.type_args[N]` at execution time.
+    /// For a fully-realized template, the `Ty` is baked in at compile time.
+    /// For templates containing `TypeArgRef(N)`, the VM substitutes
+    /// `frame.type_args[N]` at execution time.
     ///
     /// Emitted by the `reflect.type_of<T>()` intrinsic.
     /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.

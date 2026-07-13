@@ -52,6 +52,14 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
             | SyntaxKind::KW_INTERFACE
             | SyntaxKind::KW_EXTENDS
             | SyntaxKind::KW_REQUIRES
+            // Contextual keywords re-lexed from a `Word`: still lower by text
+            // (the literal/identifier arms below switch on the text), so they
+            // must read as ident tokens just as they did when they were `Word`.
+            | SyntaxKind::KW_AS
+            | SyntaxKind::KW_TYPE
+            | SyntaxKind::KW_TRUE
+            | SyntaxKind::KW_FALSE
+            | SyntaxKind::KW_NULL
     )
 }
 
@@ -1277,6 +1285,11 @@ impl LoweringContext {
         let mut op = None;
         let mut operand = None;
         let mut double_op = false;
+        // Set when the prefix operator is `~` (bitwise NOT). Desugared below
+        // into `-x - 1` (two's-complement complement) rather than a dedicated
+        // `UnaryOp` variant, so it reuses the existing, correct `Neg`/`Sub`
+        // type rules and VM opcodes without a new operator in the pipeline.
+        let mut bit_not = false;
         // Value of an `INTEGER_LITERAL` token seen *directly* in this
         // `UNARY_EXPR` (not via a child node like a parenthesized expr).
         let mut direct_int_lit: Option<i64> = None;
@@ -1290,6 +1303,7 @@ impl LoweringContext {
                     let span = token.text_range();
                     match token.kind() {
                         SyntaxKind::NOT => op = Some(UnaryOp::Not),
+                        SyntaxKind::TILDE => bit_not = true,
                         SyntaxKind::MINUS => op = Some(UnaryOp::Neg),
                         SyntaxKind::MINUS_MINUS => {
                             op = Some(UnaryOp::Neg);
@@ -1331,6 +1345,45 @@ impl LoweringContext {
         }
 
         let expr = operand.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+
+        // Bitwise NOT: desugar `~x` into `-x - 1`. Two's-complement complement
+        // is `~x == -x - 1`, correct for every BAML int (63-bit signed) whose
+        // negation is representable. Lowering to existing `Neg`/`Sub` keeps `~`
+        // out of the type checker and VM as a distinct operator while producing
+        // the correct value; the operand is evaluated exactly once. The lone
+        // corner is `~INT_MIN`: its result (`INT_MAX`) is representable, but the
+        // intermediate `-INT_MIN` overflows the range, so it throws/errors like
+        // any other `-INT_MIN` — an inherent limitation of negating INT_MIN
+        // here, not a silent wrong answer (the bug this fix removes).
+        if bit_not {
+            let span = node.span_range();
+            // Every node built here is compiler-generated: the user wrote `~`,
+            // which desugars away entirely, so — unlike the backtick/tagged
+            // desugarings, whose outer `Template` still maps 1:1 to user syntax
+            // — no surviving node corresponds to the source. Mark all of them
+            // synthetic (so tooling like inlay hints skips them) and restore the
+            // flag afterward. Only the operand `x`, lowered above, is user code
+            // and keeps its real, non-synthetic id.
+            let prev_synth = std::mem::replace(&mut self.synthesizing, true);
+            let neg = self.alloc_expr(
+                Expr::Unary {
+                    op: UnaryOp::Neg,
+                    expr,
+                },
+                span,
+            );
+            let one = self.alloc_expr(Expr::Literal(Literal::Int(1)), span);
+            let result = self.alloc_expr(
+                Expr::Binary {
+                    op: BinaryOp::Sub,
+                    lhs: neg,
+                    rhs: one,
+                },
+                span,
+            );
+            self.synthesizing = prev_synth;
+            return result;
+        }
 
         let Some(op) = op else {
             return expr;

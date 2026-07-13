@@ -1799,11 +1799,13 @@ impl<'a> Parser<'a> {
                 hashes_seen += 1;
                 i += 1;
                 if hashes_seen == hash_count {
-                    // Found all hashes, now skip basic trivia to find next token
+                    // Found all hashes, now skip basic trivia to find next token.
                     while i < self.tokens.len() && self.is_basic_trivia(self.tokens[i].kind) {
                         i += 1;
                     }
-                    return Some(i);
+                    // `None` if the hashes run to EOF with no token after them,
+                    // so callers never index past the end on incomplete input.
+                    return (i < self.tokens.len()).then_some(i);
                 }
             } else if self.is_basic_trivia(token.kind) {
                 i += 1;
@@ -1966,7 +1968,9 @@ impl<'a> Parser<'a> {
         // Must be followed by opening quote - check after consuming hashes
         // We need to peek ahead past the hashes to see if there's a quote
         let quote_pos = self.find_token_after_hashes(opening_hashes);
-        if quote_pos.is_none() || quote_pos.map(|i| self.tokens[i].kind) != Some(TokenKind::Quote) {
+        // `find_token_after_hashes` can point at the EOF slot (== tokens.len())
+        // on incomplete input, so index through `get` rather than `[]`.
+        if quote_pos.and_then(|i| self.tokens.get(i)).map(|t| t.kind) != Some(TokenKind::Quote) {
             // Just hashes, not a raw string
             return false;
         }
@@ -3074,7 +3078,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LParen);
         self.parse_type();
         if self.at_contextual_kw("as") {
-            self.bump();
+            self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
         } else {
             self.error_unexpected_token("`as`".to_string());
         }
@@ -3728,7 +3732,7 @@ impl<'a> Parser<'a> {
             }
 
             if p.at_contextual_kw("as") {
-                p.bump();
+                p.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
             } else {
                 p.error_unexpected_token("`as`".to_string());
             }
@@ -3821,7 +3825,7 @@ impl<'a> Parser<'a> {
     fn parse_associated_type_decl(&mut self, require_binding: bool) {
         self.with_node(SyntaxKind::ASSOCIATED_TYPE_DECL, |p| {
             if p.at_contextual_kw("type") {
-                p.bump();
+                p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
             } else {
                 p.error_unexpected_token("`type`".to_string());
             }
@@ -6004,7 +6008,7 @@ impl<'a> Parser<'a> {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);
                 self.bump(); // .
-                self.bump(); // contextual `as`
+                self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
                 self.parse_generic_args();
                 self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
@@ -6387,12 +6391,12 @@ impl<'a> Parser<'a> {
             {
                 // env.FIELD sugar (not followed by `(`) — desugar to baml.env.get_or_panic("FIELD")
                 self.parse_env_access();
-            } else if text == "true" || text == "false" {
-                // Boolean literal
-                self.bump();
+            } else if text == "true" {
+                self.bump_contextual_kw_as("true", SyntaxKind::KW_TRUE);
+            } else if text == "false" {
+                self.bump_contextual_kw_as("false", SyntaxKind::KW_FALSE);
             } else if text == "null" {
-                // Null literal
-                self.bump();
+                self.bump_contextual_kw_as("null", SyntaxKind::KW_NULL);
             } else {
                 // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
                 self.parse_path_or_ident();
@@ -7931,7 +7935,7 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TYPE_ALIAS_DEF, |p| {
             // 'type' keyword
             if p.at(TokenKind::Word) && p.current().map(|t| t.text == "type").unwrap_or(false) {
-                p.bump();
+                p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
             } else {
                 p.error_unexpected_token("'type' keyword".to_string());
             }

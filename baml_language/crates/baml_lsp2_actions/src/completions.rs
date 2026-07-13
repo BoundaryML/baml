@@ -1286,14 +1286,21 @@ fn local_variable_ty(
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                     sig.params.get(param_idx).map(|param| {
                         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                        let pkg_id = PackageId::new(db, pkg_info.package);
+                        let pkg_id = PackageId::new(db, pkg_info.package.clone());
                         let pkg = package_items(db, pkg_id);
                         let mut diags = Vec::new();
                         baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                            db,
                             &param.ty,
-                            pkg,
-                            &[],
+                            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: pkg,
+                                ns_context: &pkg_info.namespace_path,
+                                generic_params: &[],
+                                bounds:
+                                    &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(
+                                    ),
+                                self_ty: None,
+                            },
                             &mut diags,
                         )
                     })
@@ -1316,7 +1323,8 @@ fn local_variable_ty(
             // StmtId is in a nested ExprBody, not the outer function's body.
             find_binding_ty_for_local(db, file, at_offset, site)
         }
-        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_) => {
+        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_)
+        | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(_) => {
             find_binding_ty_for_local(db, file, at_offset, site)
         }
     }
@@ -1391,7 +1399,8 @@ fn find_binding_ty_for_local(
                 extract_pat_from_stmt(target_body, stmt_id)
             }
         }
-        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id) => Some(pat_id),
+        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(pat_id)
+        | baml_compiler2_hir::semantic_index::DefinitionSite::CatchBinding(pat_id) => Some(pat_id),
         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => None,
     };
 

@@ -15,10 +15,12 @@
 //! there is no `requires`-closure entry at runtime yet (the resolver proves
 //! `concrete: I`, not `I_a requires I_b`).
 //!
-//! NOTE: not yet wired into any caller. The `RuntimeTy::is_subtype_of` call sites
-//! migrate onto this context only once the compiler adopts the canonical algebra
-//! (the runtime must not become stricter than the compiler — see the
-//! List/Map-invariance sequencing constraint).
+//! First wired into [`crate::type_match`] — the `IsType` value matcher — as of
+//! the canonical-algebra unit. Other `RuntimeTy::is_subtype_of` call sites still
+//! migrate onto this context only as the surrounding relation is made canonical
+//! (the runtime must not become stricter than the compiler where it would break
+//! a proven-exhaustive match — see the List/Map-invariance sequencing constraint;
+//! the matcher's callers gate structural tests accordingly).
 
 use baml_type::{Interface, Name, QualifiedTypeName, RuntimeTy, Ty, normalize::TypeContext};
 use bex_vm_types::types::Object;
@@ -32,10 +34,6 @@ pub(crate) struct RuntimeTypeContext<'a> {
     vm: &'a BexVm,
 }
 
-#[expect(
-    dead_code,
-    reason = "constructed at the runtime subtyping call sites once the flip lands"
-)]
 impl<'a> RuntimeTypeContext<'a> {
     pub(crate) fn new(vm: &'a BexVm) -> Self {
         Self { vm }
@@ -106,6 +104,23 @@ impl TypeContext for RuntimeTypeContext<'_> {
         }
     }
 
-    // `associated_type_bound` uses the trait default (`Vec::new()`): symbolic
-    // associated projections don't arise over realized runtime values.
+    fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
+        // Explicitly empty: symbolic associated projections don't arise over
+        // realized runtime values, so there is never a `(_ as I).assoc` for the
+        // subtype rule to bound here. (The trait requires this method precisely so
+        // this "no bounds" decision is deliberate, not a forgotten default.)
+        Vec::new()
+    }
+
+    fn project(
+        &self,
+        _base: &Ty,
+        _interface: &Interface,
+        _member: &Name,
+    ) -> baml_type::normalize::ProjectionStep {
+        // Explicitly opaque: for the same reason as `associated_type_bound` — a
+        // realized runtime value never carries a symbolic `(_ as I).member`
+        // projection for the algebra to reduce.
+        baml_type::normalize::ProjectionStep::Opaque
+    }
 }

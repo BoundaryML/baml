@@ -4,7 +4,7 @@
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
 
-import { baml_core } from './proto/baml_cffi.js';
+import { baml_bridge } from './proto/baml_cffi.js';
 import {
     BamlHandle,
     HandleKey,
@@ -25,14 +25,14 @@ import {
 import { BamlTypeMap, getTypeMap } from './typemap.js';
 import { lowerTypeToWireTy, outboundTyToBamlType, type BamlType } from './wire_ty.js';
 
-const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
-const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
-const BamlOutboundResult = baml_core.cffi.v1.BamlOutboundResult;
-const BamlToHostCall = baml_core.cffi.v1.BamlToHostCall;
-const InboundValue = baml_core.cffi.v1.InboundValue;
-const InboundClassValue = baml_core.cffi.v1.InboundClassValue;
-const InboundMapEntry = baml_core.cffi.v1.InboundMapEntry;
-const BamlHandleType = baml_core.cffi.v1.BamlHandleType;
+const CallFunctionArgs = baml_bridge.cffi.v1.CallFunctionArgs;
+const BamlOutboundValue = baml_bridge.cffi.v1.BamlOutboundValue;
+const BamlOutboundResult = baml_bridge.cffi.v1.BamlOutboundResult;
+const BamlToHostCall = baml_bridge.cffi.v1.BamlToHostCall;
+const InboundValue = baml_bridge.cffi.v1.InboundValue;
+const InboundClassValue = baml_bridge.cffi.v1.InboundClassValue;
+const InboundMapEntry = baml_bridge.cffi.v1.InboundMapEntry;
+const BamlHandleType = baml_bridge.cffi.v1.BamlHandleType;
 const CANCELLED_PANIC_CLASS = 'baml.panics.Cancelled';
 
 // ─── Inbound (TS → Rust) ───
@@ -75,7 +75,7 @@ export interface EncodeCallArgsOptions {
      * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
      * `type_args` argument. Omitted/empty for non-generic calls.
      */
-    typeArgs?: Array<[string, baml_core.cffi.v1.IBamlTy]>;
+    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy]>;
 }
 
 /**
@@ -93,7 +93,7 @@ function genericParamNames(value: object): string[] | null {
     return null;
 }
 
-function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ctx: EncodeCtx): void {
+function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, ctx: EncodeCtx): void {
     if (value === null || value === undefined) {
         return; // Leave oneof unset → null
     }
@@ -172,9 +172,9 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
         ctx.registered.push(key);
         iv.handle = { key, handleType: BamlHandleType.HOST_VALUE_CALLABLE };
     } else if (Array.isArray(value)) {
-        const listVal: baml_core.cffi.v1.IInboundValue[] = [];
+        const listVal: baml_bridge.cffi.v1.IInboundValue[] = [];
         for (const item of value) {
-            const child: baml_core.cffi.v1.IInboundValue = {};
+            const child: baml_bridge.cffi.v1.IInboundValue = {};
             setInboundValue(child, item, ctx);
             listVal.push(child);
         }
@@ -209,10 +209,10 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
         if (isClassInstance && Object.values(value).some(v => v instanceof BamlHandle)) {
             const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
             if (fqn) {
-                const classFields: baml_core.cffi.v1.IInboundMapEntry[] = [];
+                const classFields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
                 for (const [k, v] of Object.entries(value)) {
                     if (typeof v === 'function') continue;
-                    const childVal: baml_core.cffi.v1.IInboundValue = {};
+                    const childVal: baml_bridge.cffi.v1.IInboundValue = {};
                     setInboundValue(childVal, v, ctx);
                     classFields.push({ stringKey: k, value: childVal });
                 }
@@ -236,13 +236,13 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
                 const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
                 const userTypes = (value as { $types?: Record<string, BamlType> }).$types;
                 const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes?.[p]));
-                const classFields: baml_core.cffi.v1.IInboundMapEntry[] = [];
+                const classFields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
                 for (const [k, v] of Object.entries(value)) {
                     // Skip method bindings (behavior, not state) and the synthetic
                     // `$types` carrier (it rides `class_ty`, not the field list).
                     if (typeof v === 'function') continue;
                     if (k === '$types') continue;
-                    const childVal: baml_core.cffi.v1.IInboundValue = {};
+                    const childVal: baml_bridge.cffi.v1.IInboundValue = {};
                     setInboundValue(childVal, v, ctx);
                     classFields.push({ stringKey: k, value: childVal });
                 }
@@ -250,11 +250,11 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
                 return;
             }
         }
-        const entries: baml_core.cffi.v1.IInboundMapEntry[] = [];
+        const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
         for (const [k, v] of Object.entries(value)) {
             if (isClassInstance && typeof v === 'function') continue;
-            const entry: baml_core.cffi.v1.IInboundMapEntry = { stringKey: k };
-            const childVal: baml_core.cffi.v1.IInboundValue = {};
+            const entry: baml_bridge.cffi.v1.IInboundMapEntry = { stringKey: k };
+            const childVal: baml_bridge.cffi.v1.IInboundValue = {};
             setInboundValue(childVal, v, ctx);
             entry.value = childVal;
             entries.push(entry);
@@ -291,10 +291,10 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
     }
     const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
-        const entries: baml_core.cffi.v1.IInboundMapEntry[] = [];
+        const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
         for (const [key, value] of Object.entries(kwargs)) {
-            const entry: baml_core.cffi.v1.IInboundMapEntry = { stringKey: key };
-            const iv: baml_core.cffi.v1.IInboundValue = {};
+            const entry: baml_bridge.cffi.v1.IInboundMapEntry = { stringKey: key };
+            const iv: baml_bridge.cffi.v1.IInboundValue = {};
             setInboundValue(iv, value, ctx);
             entry.value = iv;
             entries.push(entry);
@@ -356,7 +356,7 @@ function parseHexBigint(s: string): bigint {
 }
 
 function decodeValueHolder(
-    holder: baml_core.cffi.v1.IBamlOutboundValue,
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue,
     typeMap: BamlTypeMap,
 ): unknown {
     if (holder.nullValue != null) return null;
@@ -379,7 +379,7 @@ function decodeValueHolder(
         // protobufjs oneof virtual getter (only on the decoded class instance,
         // not the `I`-interface) since scalar fields default to a non-null zero
         // value rather than `null`.
-        const lit = holder.literalValue as baml_core.cffi.v1.BamlLiteralValue;
+        const lit = holder.literalValue as baml_bridge.cffi.v1.BamlLiteralValue;
         switch (lit.literal) {
             case 'stringValue':
                 return lit.stringValue;
@@ -463,7 +463,7 @@ function decodeValueHolder(
  * class), fall back to a plain object — preserving the pre-typemap behavior.
  */
 function decodeClass(
-    classValue: baml_core.cffi.v1.IBamlValueClass,
+    classValue: baml_bridge.cffi.v1.IBamlValueClass,
     typeMap: BamlTypeMap,
 ): unknown {
     const fieldDict: Record<string, unknown> = {};
@@ -528,7 +528,7 @@ function decodeClass(
  * the raw variant string when the FQN is unmapped (bare bridge / unmapped enum).
  */
 function decodeEnum(
-    enumValue: baml_core.cffi.v1.IBamlValueEnum,
+    enumValue: baml_bridge.cffi.v1.IBamlValueEnum,
     typeMap: BamlTypeMap,
 ): unknown {
     const fqn = enumValue.name ?? '';
@@ -622,8 +622,8 @@ function reshapeHostArgs(positional: unknown[], optional: Record<string, unknown
  * FQN read below must match or `className` is lost for union throws.
  */
 function unwrapUnionVariant(
-    holder: baml_core.cffi.v1.IBamlOutboundValue | null | undefined
-): baml_core.cffi.v1.IBamlOutboundValue | null | undefined {
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined
+): baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined {
     let h = holder;
     while (h?.unionVariantValue?.value) {
         h = h.unionVariantValue.value;
@@ -632,7 +632,7 @@ function unwrapUnionVariant(
 }
 
 function decodeThrown(
-    holder: baml_core.cffi.v1.IBamlOutboundValue | null | undefined
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined
 ): { value: unknown; className: string | undefined; message: string } {
     const className = unwrapUnionVariant(holder)?.classValue?.name ?? undefined;
     let value: unknown;
@@ -817,7 +817,7 @@ function sendHostCallableResult(callId: number, value: unknown): void {
     // argument-path rollback in `encodeCallArgs`.
     const ctx: EncodeCtx = { syncMode: false, registered: [] };
     try {
-        const iv: baml_core.cffi.v1.IInboundValue = {};
+        const iv: baml_bridge.cffi.v1.IInboundValue = {};
         setInboundValue(iv, value, ctx);
         const msg = InboundValue.create(iv);
         bytes = Buffer.from(InboundValue.encode(msg).finish());

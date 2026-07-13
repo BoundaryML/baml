@@ -302,7 +302,7 @@ mod tests {
         let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
 
         let legacy_in_class: usize = item_tree.classes.values().map(|c| c.implements.len()).sum();
-        let legacy_out_of_body = item_tree.implements_for.len();
+        let legacy_out_of_body = item_tree.free_impls.len();
 
         // One ImplBlock per legacy entry.
         assert_eq!(

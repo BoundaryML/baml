@@ -1,0 +1,568 @@
+==================
+match: literals, wildcard, guard
+==================
+
+function classify(status: string) -> string {
+  match status {
+    "accept" => "accepted",
+    "retry" if env.SHOULD_RETRY => "retrying",
+    0 => "zero",
+    true => "yes",
+    null => "empty",
+    _ => "unknown",
+  }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (match_expression
+          (identifier)
+          (match_body
+            (match_arm
+              (type_pattern
+                (literal_type
+                  (string)))
+              (string))
+            (match_arm
+              (type_pattern
+                (literal_type
+                  (string)))
+              (match_guard
+                (member_expression
+                  (identifier)
+                  (property_identifier)))
+              (string))
+            (match_arm
+              (type_pattern
+                (literal_type
+                  (number)))
+              (string))
+            (match_arm
+              (type_pattern
+                (literal_type
+                  (boolean)))
+              (string))
+            (match_arm
+              (type_pattern
+                (null))
+              (string))
+            (match_arm
+              (wildcard_pattern)
+              (string))))))))
+
+==================
+match: type patterns, unions, optional and generic types
+==================
+
+function classify(input: PatternInput) -> string {
+  match (input) {
+    string => "text",
+    int | float => "number",
+    PatternRecord? => "record-ish",
+    root.matching.PatternRecord => "namespaced record",
+    map<string, PatternRecord[]> => "record map",
+    Direction.North => "north",
+    _ => "unknown",
+  }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (match_expression
+          (parenthesized_expression
+            (identifier))
+          (match_body
+            (match_arm
+              (type_pattern
+                (type_path
+                  (identifier)))
+              (string))
+            (match_arm
+              (type_pattern
+                (union_type
+                  (type_path
+                    (identifier))
+                  (type_path
+                    (identifier))))
+              (string))
+            (match_arm
+              (type_pattern
+                (optional_type
+                  (type_path
+                    (identifier))))
+              (string))
+            (match_arm
+              (type_pattern
+                (type_path
+                  (identifier)
+                  (identifier)
+                  (identifier)))
+              (string))
+            (match_arm
+              (type_pattern
+                (type_path
+                  (identifier)
+                  (type_arguments
+                    (type_path
+                      (identifier))
+                    (array_type
+                      (type_path
+                        (identifier))))))
+              (string))
+            (match_arm
+              (type_pattern
+                (type_path
+                  (identifier)
+                  (identifier)))
+              (string))
+            (match_arm
+              (wildcard_pattern)
+              (string))))))))
+
+==================
+match: bindings, chains, destructures
+==================
+
+function classify(input: PatternInput) -> string {
+  match (input) {
+    let text: string => text,
+    PatternRecord { id, label } => label,
+    PatternRecord { id: let record_id, label: string } => record_id,
+    let x: let y: let z: Destructure { field } => field,
+    let PatternEnvelope { record: PatternRecord { label: let name }, tags } => name,
+    name.space.PatternEnvelope { record } => "namespaced destructure",
+    let value => "bound fallback",
+    let _ => "wildcard binding",
+  }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (match_expression
+          (parenthesized_expression
+            (identifier))
+          (match_body
+            (match_arm
+              (chain_pattern
+                (binding_pattern
+                  (identifier))
+                (type_pattern
+                  (type_path
+                    (identifier))))
+              (identifier))
+            (match_arm
+              (destructure_pattern
+                (identifier)
+                (field_pattern
+                  (property_identifier))
+                (field_pattern
+                  (property_identifier)))
+              (identifier))
+            (match_arm
+              (destructure_pattern
+                (identifier)
+                (field_pattern
+                  (property_identifier)
+                  (binding_pattern
+                    (identifier)))
+                (field_pattern
+                  (property_identifier)
+                  (type_pattern
+                    (type_path
+                      (identifier)))))
+              (identifier))
+            (match_arm
+              (chain_pattern
+                (binding_pattern
+                  (identifier))
+                (binding_pattern
+                  (identifier))
+                (binding_pattern
+                  (identifier))
+                (destructure_pattern
+                  (identifier)
+                  (field_pattern
+                    (property_identifier))))
+              (identifier))
+            (match_arm
+              (destructure_pattern
+                (identifier)
+                (field_pattern
+                  (property_identifier)
+                  (destructure_pattern
+                    (identifier)
+                    (field_pattern
+                      (property_identifier)
+                      (binding_pattern
+                        (identifier)))))
+                (field_pattern
+                  (property_identifier)))
+              (identifier))
+            (match_arm
+              (destructure_pattern
+                (identifier)
+                (identifier)
+                (identifier)
+                (field_pattern
+                  (property_identifier)))
+              (string))
+            (match_arm
+              (binding_pattern
+                (identifier))
+              (string))
+            (match_arm
+              (binding_pattern)
+              (string))))))))
+
+==================
+match: array patterns with rest
+==================
+
+function classify(input: string[]) -> string {
+  match (input) {
+    [let first, string, ..let rest]: string[] => first,
+    let [let head, ..let tail]: string[] => head,
+    [..] => "rest only",
+    _ => "unknown",
+  }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (array_type
+          (type_path
+            (identifier)))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (match_expression
+          (parenthesized_expression
+            (identifier))
+          (match_body
+            (match_arm
+              (chain_pattern
+                (array_pattern
+                  (binding_pattern
+                    (identifier))
+                  (type_pattern
+                    (type_path
+                      (identifier)))
+                  (rest_pattern
+                    (binding_pattern
+                      (identifier))))
+                (type_pattern
+                  (array_type
+                    (type_path
+                      (identifier)))))
+              (identifier))
+            (match_arm
+              (chain_pattern
+                (array_pattern
+                  (binding_pattern
+                    (identifier))
+                  (rest_pattern
+                    (binding_pattern
+                      (identifier))))
+                (type_pattern
+                  (array_type
+                    (type_path
+                      (identifier)))))
+              (identifier))
+            (match_arm
+              (array_pattern
+                (rest_pattern))
+              (string))
+            (match_arm
+              (wildcard_pattern)
+              (string))))))))
+
+==================
+match: or-patterns with parens, function-type patterns
+==================
+
+function dispatch(cb: ((int) -> int) | ((string) -> string)) -> int {
+  match (cb) {
+    (let x: int) | (let x: int) => x,
+    let f: (int) -> int => f(0),
+    (string) -> string => 0,
+    ((int | string)[])? => 1,
+    _ => 0
+  }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (union_type
+          (parenthesized_type
+            (function_type
+              (function_type_parameters
+                (function_type_parameter
+                  (type_path
+                    (identifier))))
+              (type_path
+                (identifier))))
+          (parenthesized_type
+            (function_type
+              (function_type_parameters
+                (function_type_parameter
+                  (type_path
+                    (identifier))))
+              (type_path
+                (identifier)))))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (match_expression
+          (parenthesized_expression
+            (identifier))
+          (match_body
+            (match_arm
+              (union_pattern
+                (paren_pattern
+                  (chain_pattern
+                    (binding_pattern
+                      (identifier))
+                    (type_pattern
+                      (type_path
+                        (identifier)))))
+                (paren_pattern
+                  (chain_pattern
+                    (binding_pattern
+                      (identifier))
+                    (type_pattern
+                      (type_path
+                        (identifier))))))
+              (identifier))
+            (match_arm
+              (chain_pattern
+                (binding_pattern
+                  (identifier))
+                (type_pattern
+                  (function_type
+                    (function_type_parameters
+                      (function_type_parameter
+                        (type_path
+                          (identifier))))
+                    (type_path
+                      (identifier)))))
+              (call_expression
+                (identifier)
+                (arguments
+                  (number))))
+            (match_arm
+              (type_pattern
+                (function_type
+                  (function_type_parameters
+                    (function_type_parameter
+                      (type_path
+                        (identifier))))
+                  (type_path
+                    (identifier))))
+              (number))
+            (match_arm
+              (type_pattern
+                (optional_type
+                  (parenthesized_type
+                    (array_type
+                      (parenthesized_type
+                        (union_type
+                          (type_path
+                            (identifier))
+                          (type_path
+                            (identifier))))))))
+              (number))
+            (match_arm
+              (wildcard_pattern)
+              (number))))))))
+
+==================
+is operator: types, unions, literals
+==================
+
+function f(v: int | string | bool) -> bool {
+  v is int || v is int | bool && n is 0 && !(v is string)
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (union_type
+          (union_type
+            (type_path
+              (identifier))
+            (type_path
+              (identifier)))
+          (type_path
+            (identifier)))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (binary_expression
+          (is_expression
+            (identifier)
+            (type_pattern
+              (type_path
+                (identifier))))
+          (binary_expression
+            (binary_expression
+              (is_expression
+                (identifier)
+                (type_pattern
+                  (union_type
+                    (type_path
+                      (identifier))
+                    (type_path
+                      (identifier)))))
+              (is_expression
+                (identifier)
+                (type_pattern
+                  (literal_type
+                    (number)))))
+            (unary_expression
+              (parenthesized_expression
+                (is_expression
+                  (identifier)
+                  (type_pattern
+                    (type_path
+                      (identifier))))))))))))
+
+==================
+destructuring let and const declarations
+==================
+
+function f(user: User, xs: int[], input: PatternInput) -> int {
+  const User { name } = user;
+  const [first] = xs;
+  let Destructure { field } = input
+  let [let a, let b] = xs else { return -1; };
+  let x: let y: let z: Destructure { field } = input
+  a + b
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier)))
+      (parameter
+        (identifier)
+        (array_type
+          (type_path
+            (identifier))))
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (destructure_pattern
+          (identifier)
+          (field_pattern
+            (property_identifier)))
+        (identifier))
+      (let_declaration
+        (array_pattern
+          (type_pattern
+            (type_path
+              (identifier))))
+        (identifier))
+      (let_declaration
+        (destructure_pattern
+          (identifier)
+          (field_pattern
+            (property_identifier)))
+        (identifier))
+      (let_declaration
+        (array_pattern
+          (binding_pattern
+            (identifier))
+          (binding_pattern
+            (identifier)))
+        (identifier)
+        (else_clause
+          (block
+            (expression_statement
+              (return_expression
+                (unary_expression
+                  (number)))))))
+      (let_declaration
+        (chain_pattern
+          (type_pattern
+            (type_path
+              (identifier)))
+          (binding_pattern
+            (identifier))
+          (binding_pattern
+            (identifier))
+          (destructure_pattern
+            (identifier)
+            (field_pattern
+              (property_identifier))))
+        (identifier))
+      (expression_statement
+        (binary_expression
+          (identifier)
+          (identifier))))))

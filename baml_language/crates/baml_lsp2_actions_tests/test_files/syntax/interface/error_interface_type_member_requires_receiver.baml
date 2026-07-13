@@ -2,7 +2,7 @@
 // implementors, so `Interface.method(value)` is valid.
 
 interface Describable {
-  function describe(self) -> string {
+  function describe(self) -> string throws never {
     return "default"
   }
 }

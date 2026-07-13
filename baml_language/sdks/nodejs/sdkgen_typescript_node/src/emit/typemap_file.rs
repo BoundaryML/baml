@@ -9,7 +9,7 @@
 //! SDK: `() => __leaf_0.Resume`. A thunk (rather than the Python-style
 //! `[module_path, attr]` pair) is required because resolution must happen in the
 //! generated SDK's module scope — the runtime `BamlTypeMap` lives in
-//! `@boundaryml/baml-core-node` and cannot resolve a `baml_sdk/...` path.
+//! `@boundaryml/baml-bridge` and cannot resolve a `baml_sdk/...` path.
 
 use std::{collections::BTreeMap, fmt::Write as _};
 
@@ -53,7 +53,7 @@ pub(crate) fn render_typemap_module(
     aliases.sort();
 
     let mut out = String::new();
-    out.push_str("import { BamlTypeMap } from \"@boundaryml/baml-core-node\";\n");
+    out.push_str("import { BamlTypeMap } from \"@boundaryml/baml-bridge\";\n");
     for (leaf, module_alias) in &module_aliases {
         writeln!(
             out,

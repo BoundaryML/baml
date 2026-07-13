@@ -2,10 +2,10 @@
  * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
  *
  * Source: baml_language/crates/bridge_nodejs/typescript_src/
- * Proto:  baml_language/crates/bridge_ctypes/types/baml_core/cffi/v1/*.proto
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
  */
-import { baml_core } from './proto/baml_cffi.js';
+import { baml_bridge } from './proto/baml_cffi.js';
 /**
  * The bottom type (BAML `never`). Pass as a `$types` binding to bind a TypeVar
  * to `never`, mirroring Python's `_types={"T": Never}`.
@@ -44,7 +44,7 @@ export type BamlType = BamlPrimitiveToken | typeof Never | BamlClassCtor | {
  * unrecognized or absent token leaves the unknown/top type, which binds
  * nothing.
  */
-export declare function lowerTypeToWireTy(token: BamlType): baml_core.cffi.v1.IBamlTy;
+export declare function lowerTypeToWireTy(token: BamlType): baml_bridge.cffi.v1.IBamlTy;
 /**
  * Decode a wire `Ty` (baml_type.proto) back to a {@link BamlType} token — the
  * exact inverse of {@link lowerTypeToWireTy}, used to repopulate a generic
@@ -54,5 +54,5 @@ export declare function lowerTypeToWireTy(token: BamlType): baml_core.cffi.v1.IB
  * variable, an opaque/runtime-only type) decode to `undefined`, i.e. an unbound
  * wildcard.
  */
-export declare function outboundTyToBamlType(ty: baml_core.cffi.v1.IBamlTy | null | undefined): BamlType;
+export declare function outboundTyToBamlType(ty: baml_bridge.cffi.v1.IBamlTy | null | undefined): BamlType;
 //# sourceMappingURL=wire_ty.d.ts.map

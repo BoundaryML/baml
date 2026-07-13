@@ -93,7 +93,7 @@ def main() -> None:
             "url": artifact_url(f"baml-language-{args.version}", vsix),
             "sha256": sha256(vsix),
         },
-        "baml_core_pypi": {
+        "baml_bridge_pypi": {
             "version": args.pypi_version,
         },
     }

@@ -438,7 +438,7 @@ client<llm> AnthropicClient {
 client<llm> VertexClient {
   provider vertex-ai
   options {
-    model "gemini-1.5-pro"
+    model "gemini-3.1-pro-preview"
     project "your-project"
     location "us-central1"
     media_url_handler {
@@ -451,7 +451,7 @@ client<llm> VertexClient {
 client<llm> GoogleAIClient {
   provider google-ai
   options {
-    model "gemini-1.5-pro"
+    model "gemini-3.1-pro-preview"
     api_key env.GOOGLE_API_KEY
     media_url_handler {
       pdf "send_base64_unless_google_url"  // Keep gs:// URLs, convert others

@@ -18,7 +18,7 @@ class baml.Bool$stream {
 }
 
 --- <builtin>/baml/comparable.baml ---
-function baml.compare(self: unknown, other: unknown) -> int throws never {
+function baml.compare(self: unknown, other: !error) -> int throws never {
   { : -1 | 1 | 0
     if (self < other : bool) : -1 | 1 | 0
       { : -1
@@ -35,7 +35,7 @@ function baml.compare(self: unknown, other: unknown) -> int throws never {
         }
   }
 }
-function baml.compare(self: unknown, other: unknown) -> int throws never {
+function baml.compare(self: unknown, other: !error) -> int throws never {
   { : -1 | 1 | 0
     if (self < other : bool) : -1 | 1 | 0
       { : -1
@@ -52,7 +52,7 @@ function baml.compare(self: unknown, other: unknown) -> int throws never {
         }
   }
 }
-function baml.compare(self: unknown, other: unknown) -> int throws never {
+function baml.compare(self: unknown, other: !error) -> int throws never {
   { : -1 | 1 | 0
     if (self < other : bool) : -1 | 1 | 0
       { : -1
@@ -69,7 +69,7 @@ function baml.compare(self: unknown, other: unknown) -> int throws never {
         }
   }
 }
-function baml.sort(self: unknown) -> unknown throws unknown {
+function baml.sort(self: unknown) -> !error throws !error {
   { : T[]
     if (root._is_primitive_array(self) : bool) : T[]
       { : T[]
@@ -78,7 +78,7 @@ function baml.sort(self: unknown) -> unknown throws unknown {
     else
       { : T[]
         self.sort_by<T, E>((a: T, b: T) -> int throws T.CompareError { ... }) : T[]
-          (a: T, b: T) -> int throws T.CompareError { ... } : (a: T, b: T) -> int throws T.CompareError
+          (a: T, b: T) -> int throws T.CompareError { ... } : (a: T, b: T) -> int throws (T as baml.Comparable).CompareError
             {
               root._compare_shim(a, b)
             }
@@ -87,7 +87,7 @@ function baml.sort(self: unknown) -> unknown throws unknown {
 }
 lambda baml.sort {
 }
-function baml.compare(self: unknown, other: unknown) -> int throws never {
+function baml.compare(self: unknown, other: !error) -> int throws never {
   { : int
     root._float_total_cmp(self, other) : int
   }
@@ -95,6 +95,18 @@ function baml.compare(self: unknown, other: unknown) -> int throws never {
 
 --- <builtin>/baml/containers.baml ---
 class baml.Array {
+}
+function baml.Array.generate<E>(length: int, f: (int) -> T throws E) -> T[] throws E {
+  { : T[]
+    let out: T[] = [] : T[]
+    let i = 0 : 0 -> int
+    while i < length
+      { : void
+        out.push<T>(f(i)) : int
+        i Add= 1 : int
+      }
+    out : T[]
+  }
 }
 function baml.Array.for_each<E>(self: baml.Array<T>, fn: (T) -> void throws E) -> void throws E {
   { : void
@@ -121,7 +133,7 @@ function baml.Array.filter_map<U, E>(self: baml.Array<T>, fn: (T) -> U | null th
     out : U[]
   }
 }
-function baml.Array.sort_by_key<U, E>(self: baml.Array<T>, key: (T) -> U throws E) -> T[] throws E | U.CompareError {
+function baml.Array.sort_by_key<U, E>(self: baml.Array<T>, key: (T) -> U throws E) -> T[] throws E | !error {
   { : never
     let n = self.length<T>() : int
     if (n <= 1 : bool) : void
@@ -142,7 +154,7 @@ function baml.Array.sort_by_key<U, E>(self: baml.Array<T>, key: (T) -> U throws 
         p Add= 1 : int
       }
     order.sort_by<E>((i: int, j: int) -> int throws U.CompareError { ... }) : int[]
-      (i: int, j: int) -> int throws U.CompareError { ... } : (i: int, j: int) -> int throws U.CompareError
+      (i: int, j: int) -> int throws U.CompareError { ... } : (i: int, j: int) -> int throws (U as baml.Comparable).CompareError
         {
           match (keys.at(i)) { null => 0, ki: U => match (keys.at(j)) { null => 0, kj: U => ki.compare(kj) } }
         }
@@ -172,12 +184,22 @@ class baml.Map {
 }
 function baml.sum(self: unknown) -> int throws never {
   { : int
-    root.math._sum_int(self) : int
+    root._sum_int(self) : int
   }
 }
 function baml.sum(self: unknown) -> float throws never {
   { : float
-    root.math.sum(self) : float
+    root._sum_float(self) : float
+  }
+}
+function baml.mean(self: unknown) -> float throws baml.errors.InvalidArgument {
+  { : float
+    root._mean_float(self) : float
+  }
+}
+function baml.median(self: unknown) -> float throws baml.errors.InvalidArgument {
+  { : float
+    root._median_float(self) : float
   }
 }
 class baml.Array$stream {
@@ -743,6 +765,18 @@ class baml.csv.CsvWriter$stream {
 function baml.env.get_or_panic(key: string) -> string throws never {
   { : string
     get(key) ?? root.sys.panic("env var not found: " + key) : string
+  }
+}
+function baml.env.get_or_panic_lenient(key: string, lenient: bool) -> string throws never {
+  { : string
+    if (lenient : bool) : string
+      { : string
+        get(key) ?? "" : string
+      }
+    else
+      { : string
+        get_or_panic(key) : string
+      }
   }
 }
 
@@ -1322,68 +1356,68 @@ class baml.http.TlsConfig$stream {
 --- <builtin>/baml/ns_iter/iter.baml ---
 class baml.iter.Done {
 }
-function baml.iter.Iterator.map<R, E2>(self: baml.iter.Iterator, fn: (unknown) -> R throws E2) -> baml.iter.Iterator<Item = R, Error = unknown | E2> throws never {
-  { : baml.iter.Map<Self.Item, R, Self.Error, E2>
-    Map { source: self, func: fn } : baml.iter.Map<Self.Item, R, Self.Error, E2>
+function baml.iter.Iterator.map<R, E2>(self: baml.iter.Iterator, fn: (!error) -> R throws E2) -> baml.iter.Iterator<Item = R, Error = !error | E2> throws never {
+  { : baml.iter.Map<(Self as baml.iter.Iterator).Item, R, (Self as baml.iter.Iterator).Error, E2>
+    Map { source: self, func: fn } : baml.iter.Map<(Self as baml.iter.Iterator).Item, R, (Self as baml.iter.Iterator).Error, E2>
   }
 }
-function baml.iter.Iterator.filter<E2>(self: baml.iter.Iterator, predicate: (unknown) -> bool throws E2) -> baml.iter.Iterator<Item = unknown, Error = unknown | E2> throws never {
-  { : baml.iter.Filter<Self.Item, Self.Error, E2>
-    Filter { source: self, predicate: predicate } : baml.iter.Filter<Self.Item, Self.Error, E2>
+function baml.iter.Iterator.filter<E2>(self: baml.iter.Iterator, predicate: (!error) -> bool throws E2) -> baml.iter.Iterator<Item = !error, Error = !error | E2> throws never {
+  { : baml.iter.Filter<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error, E2>
+    Filter { source: self, predicate: predicate } : baml.iter.Filter<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error, E2>
   }
 }
-function baml.iter.Iterator.filter_map<R, E2>(self: baml.iter.Iterator, fn: (unknown) -> R | null throws E2) -> baml.iter.Iterator<Item = R, Error = unknown | E2> throws never {
-  { : baml.iter.FilterMap<Self.Item, R, Self.Error, E2>
-    FilterMap { source: self, func: fn } : baml.iter.FilterMap<Self.Item, R, Self.Error, E2>
+function baml.iter.Iterator.filter_map<R, E2>(self: baml.iter.Iterator, fn: (!error) -> R | null throws E2) -> baml.iter.Iterator<Item = R, Error = !error | E2> throws never {
+  { : baml.iter.FilterMap<(Self as baml.iter.Iterator).Item, R, (Self as baml.iter.Iterator).Error, E2>
+    FilterMap { source: self, func: fn } : baml.iter.FilterMap<(Self as baml.iter.Iterator).Item, R, (Self as baml.iter.Iterator).Error, E2>
   }
 }
-function baml.iter.Iterator.flat_map<R, E2, E3>(self: baml.iter.Iterator, fn: (unknown) -> baml.iter.Iterable<Item = R, Error = E3> throws E2) -> baml.iter.Iterator<Item = R, Error = unknown | E2 | E3> throws never {
-  { : baml.iter.FlatMap<Self.Item, R, Self.Error, E2, E3>
-    FlatMap { source: self, func: fn, inner: Done {  } } : baml.iter.FlatMap<Self.Item, R, Self.Error, E2, E3>
+function baml.iter.Iterator.flat_map<R, E2, E3>(self: baml.iter.Iterator, fn: (!error) -> baml.iter.Iterable<Item = R, Error = E3> throws E2) -> baml.iter.Iterator<Item = R, Error = !error | E2 | E3> throws never {
+  { : baml.iter.FlatMap<(Self as baml.iter.Iterator).Item, R, (Self as baml.iter.Iterator).Error, E2, E3>
+    FlatMap { source: self, func: fn, inner: Done {  } } : baml.iter.FlatMap<(Self as baml.iter.Iterator).Item, R, (Self as baml.iter.Iterator).Error, E2, E3>
   }
 }
-function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Item = unknown, Error = unknown> throws never {
-  { : baml.iter.StepBy<Self.Item, Self.Error>
-    StepBy { source: self, n: n, first: true } : baml.iter.StepBy<Self.Item, Self.Error>
+function baml.iter.Iterator.step_by(self: baml.iter.Iterator, n: int) -> baml.iter.Iterator<Item = !error, Error = !error> throws never {
+  { : baml.iter.StepBy<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error>
+    StepBy { source: self, n: n, first: true } : baml.iter.StepBy<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error>
   }
 }
-function baml.iter.Iterator.chain<E2>(self: baml.iter.Iterator, other: baml.iter.Iterable<Item = unknown, Error = E2>) -> baml.iter.Iterator<Item = unknown, Error = unknown | E2> throws never {
-  { : baml.iter.Chain<Self.Item, Self.Error, E2>
-    Chain { first: self, other: other.iter(), first_done: false } : baml.iter.Chain<Self.Item, Self.Error, E2>
+function baml.iter.Iterator.chain<E2>(self: baml.iter.Iterator, other: baml.iter.Iterable<Item = !error, Error = E2>) -> baml.iter.Iterator<Item = !error, Error = !error | E2> throws never {
+  { : baml.iter.Chain<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error, E2>
+    Chain { first: self, other: other.iter(), first_done: false } : baml.iter.Chain<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error, E2>
   }
 }
-function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<unknown, unknown> throws never {
-  { : baml.iter.Peekable<Self.Item, Self.Error>
-    Peekable { source: self, buffer: Done {  }, has_buffer: false } : baml.iter.Peekable<Self.Item, Self.Error>
+function baml.iter.Iterator.peekable(self: baml.iter.Iterator) -> baml.iter.Peekable<!error, !error> throws never {
+  { : baml.iter.Peekable<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error>
+    Peekable { source: self, buffer: Done {  }, has_buffer: false } : baml.iter.Peekable<(Self as baml.iter.Iterator).Item, (Self as baml.iter.Iterator).Error>
   }
 }
-function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> unknown[] throws unknown {
-  { : Self.Item[]
-    let r: Item[] = [] : Self.Item[] -> never
+function baml.iter.Iterator.collect(self: baml.iter.Iterator) -> !error[] throws !error {
+  { : (Self as baml.iter.Iterator).Item[]
+    let r: Self.Item[] = [] : (Self as baml.iter.Iterator).Item[]
     while true
       { : int
-        match (self.next() : Self.Item | baml.iter.Done) : int
+        match (self.next() : (Self as baml.iter.Iterator).Item | baml.iter.Done) : int
           Done =>
             { : never
               break
             }
-          x: Item =>
+          x: Self.Item =>
             r.push(x) : int
       }
-    r : Self.Item[]
+    r : (Self as baml.iter.Iterator).Item[]
   }
 }
-function baml.iter.Iterator.reduce<A, E2>(self: baml.iter.Iterator, fn: (A, unknown) -> A throws E2, initial: A) -> A throws unknown | E2 {
+function baml.iter.Iterator.reduce<A, E2>(self: baml.iter.Iterator, fn: (A, !error) -> A throws E2, initial: A) -> A throws !error | E2 {
   { : A
     let acc: A = initial : A
     while true
       { : void
-        match (self.next() : Self.Item | baml.iter.Done) : void
+        match (self.next() : (Self as baml.iter.Iterator).Item | baml.iter.Done) : void
           Done =>
             { : never
               break
             }
-          x: Item =>
+          x: Self.Item =>
             { : void
               acc = fn(acc, x) : A
             }
@@ -1391,17 +1425,17 @@ function baml.iter.Iterator.reduce<A, E2>(self: baml.iter.Iterator, fn: (A, unkn
     acc : A
   }
 }
-function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int throws unknown {
+function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int throws !error {
   { : int
     let n: int = 0 : 0 -> int
     while true
       { : void
-        match (self.next() : Self.Item | baml.iter.Done) : void
+        match (self.next() : (Self as baml.iter.Iterator).Item | baml.iter.Done) : void
           Done =>
             { : never
               break
             }
-          x: Item =>
+          x: Self.Item =>
             { : void
               n Add= 1 : int
             }
@@ -1409,32 +1443,32 @@ function baml.iter.Iterator.count(self: baml.iter.Iterator) -> int throws unknow
     n : int
   }
 }
-function baml.iter.Iterator.for_each<E2>(self: baml.iter.Iterator, fn: (unknown) -> void throws E2) -> void throws unknown | E2 {
+function baml.iter.Iterator.for_each<E2>(self: baml.iter.Iterator, fn: (!error) -> void throws E2) -> void throws !error | E2 {
   { : void
     while true
       { : void
-        match (self.next() : Self.Item | baml.iter.Done) : void
+        match (self.next() : (Self as baml.iter.Iterator).Item | baml.iter.Done) : void
           Done =>
             { : never
               break
             }
-          x: Item =>
+          x: Self.Item =>
             { : void
               fn<E2>(x) : void
             }
       }
   }
 }
-function baml.iter.Iterator.some<E2>(self: baml.iter.Iterator, predicate: (unknown) -> bool throws E2) -> bool throws unknown | E2 {
+function baml.iter.Iterator.some<E2>(self: baml.iter.Iterator, predicate: (!error) -> bool throws E2) -> bool throws !error | E2 {
   { : false
     while true
       { : void
-        match (self.next() : Self.Item | baml.iter.Done) : void
+        match (self.next() : (Self as baml.iter.Iterator).Item | baml.iter.Done) : void
           Done =>
             { : never
               break
             }
-          x: Item =>
+          x: Self.Item =>
             { : void
               if (predicate(x) : bool) : void
                 { : never
@@ -1445,16 +1479,16 @@ function baml.iter.Iterator.some<E2>(self: baml.iter.Iterator, predicate: (unkno
     false : false
   }
 }
-function baml.iter.Iterator.every<E2>(self: baml.iter.Iterator, predicate: (unknown) -> bool throws E2) -> bool throws unknown | E2 {
+function baml.iter.Iterator.every<E2>(self: baml.iter.Iterator, predicate: (!error) -> bool throws E2) -> bool throws !error | E2 {
   { : true
     while true
       { : void
-        match (self.next() : Self.Item | baml.iter.Done) : void
+        match (self.next() : (Self as baml.iter.Iterator).Item | baml.iter.Done) : void
           Done =>
             { : never
               break
             }
-          x: Item =>
+          x: Self.Item =>
             { : void
               if (Not predicate(x) : bool) : void
                 { : never
@@ -1465,20 +1499,20 @@ function baml.iter.Iterator.every<E2>(self: baml.iter.Iterator, predicate: (unkn
     true : true
   }
 }
-function baml.iter.Iterator.find<E2>(self: baml.iter.Iterator, predicate: (unknown) -> bool throws E2) -> unknown | null throws unknown | E2 {
+function baml.iter.Iterator.find<E2>(self: baml.iter.Iterator, predicate: (!error) -> bool throws E2) -> !error | null throws !error | E2 {
   { : null
     while true
       { : void
-        match (self.next() : Self.Item | baml.iter.Done) : void
+        match (self.next() : (Self as baml.iter.Iterator).Item | baml.iter.Done) : void
           Done =>
             { : never
               break
             }
-          x: Item =>
+          x: Self.Item =>
             { : void
               if (predicate(x) : bool) : void
                 { : never
-                  return x : never
+                  return x : (Self as baml.iter.Iterator).Item
                 }
             }
       }
@@ -1840,7 +1874,7 @@ function baml.iter.Chain.next(self: baml.iter.Chain<T, E, E2>) -> T | baml.iter.
     self.other.next<T, E2>() : T | baml.iter.Done
   }
 }
-function baml.iter.iter(self: unknown) -> baml.iter.Iterator<Item = unknown, Error = never> throws never {
+function baml.iter.iter(self: unknown) -> baml.iter.Iterator<Item = !error, Error = never> throws never {
   { : baml.iter.ArrayIterator<T>
     ArrayIterator.new<T>(self) : baml.iter.ArrayIterator<T>
   }
@@ -1866,39 +1900,39 @@ class baml.iter.Repeat$stream {
   count: int | null
 }
 class baml.iter.Map$stream {
-  source: baml.iter.Iterator | null
+  source: baml.iter.Iterator<Error = never> | null
   func: unknown
 }
 class baml.iter.Filter$stream {
-  source: baml.iter.Iterator | null
+  source: baml.iter.Iterator<Error = never> | null
   predicate: unknown
 }
 class baml.iter.FilterMap$stream {
-  source: baml.iter.Iterator | null
+  source: baml.iter.Iterator<Error = never> | null
   func: unknown
 }
 class baml.iter.FlatMap$stream {
-  source: baml.iter.Iterator | null
+  source: baml.iter.Iterator<Error = never> | null
   func: unknown
-  inner: baml.iter.Iterator | baml.iter.Done$stream | null
+  inner: baml.iter.Iterator<Error = never> | baml.iter.Done$stream | null
 }
 class baml.iter.Flatten$stream {
-  source: baml.iter.Iterator | null
-  inner: baml.iter.Iterator | baml.iter.Done$stream | null
+  source: baml.iter.Iterator<Error = never> | null
+  inner: baml.iter.Iterator<Error = never> | baml.iter.Done$stream | null
 }
 class baml.iter.Peekable$stream {
-  source: baml.iter.Iterator | null
+  source: baml.iter.Iterator<Error = never> | null
   buffer: T | baml.iter.Done$stream | null
   has_buffer: bool | null
 }
 class baml.iter.StepBy$stream {
-  source: baml.iter.Iterator | null
+  source: baml.iter.Iterator<Error = never> | null
   n: int | null
   first: bool | null
 }
 class baml.iter.Chain$stream {
-  first: baml.iter.Iterator | null
-  other: baml.iter.Iterator | null
+  first: baml.iter.Iterator<Error = never> | null
+  other: baml.iter.Iterator<Error = never> | null
   first_done: bool | null
 }
 
@@ -2102,7 +2136,7 @@ function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((b
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
     let return_type = get_return_type(function_name) : type
-    let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
+    let primitive_client = client.to_primitive_client(lenient = true) : baml.llm.PrimitiveClient
     let template = prompt_template_for(function_name, prompt_closure) : string
     primitive_client.render_specialized_prompt(template, args, return_type, prompt_closure) : baml.llm.PromptAst
   }
@@ -2125,10 +2159,13 @@ function baml.llm.build_request_stream(client: baml.llm.Client, function_name: s
     primitive_client.build_request_stream(specialized_prompt, return_type) : baml.http.Request
   }
 }
-function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws never {
+function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws baml.errors.ParseError {
   { : TFinal
     let cache: StreamCache<TStream, TFinal> = StreamCache.new(reflect.type_of<TStream>(), reflect.type_of<TFinal>()) : baml.llm.StreamCache<TStream, TFinal>
-    __sap_parse_final<TFinal>(json, cache) : TFinal
+    catch (__sap_parse_final<TFinal>(json, cache) : TFinal) : TFinal
+      catch (_)
+        root.errors.LlmClient { message: message } =>
+          throw root.errors.ParseError { message: message } : never
   }
 }
 function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {
@@ -2172,8 +2209,17 @@ class baml.llm.PlannerState$stream {
 }
 
 --- <builtin>/baml/ns_llm/llm_types.baml ---
+class baml.llm.PromptMessage {
+  role: string
+  content: string
+}
 class baml.llm.PromptAst {
   _data: $rust_type
+}
+function baml.llm.PromptAst.to_string(self: baml.llm.PromptAst) -> string throws never {
+  { : string
+    self.text() : string
+  }
 }
 class baml.llm.OutputFormat {
   _data: $rust_type
@@ -2197,9 +2243,24 @@ class baml.llm.Context {
 enum baml.llm.ClientType
 class baml.llm.RetryPolicy {
   max_retries: int
-  initial_delay_ms: int
-  multiplier: float
-  max_delay_ms: int
+  initial_delay_ms: int | null
+  multiplier: float | null
+  max_delay_ms: int | null
+}
+function baml.llm.RetryPolicy.initial_delay_or_default(self: baml.llm.RetryPolicy) -> float throws never {
+  { : float
+    self.initial_delay_ms ?? 200 + 0.0 : float
+  }
+}
+function baml.llm.RetryPolicy.multiplier_or_default(self: baml.llm.RetryPolicy) -> float throws never {
+  { : float
+    self.multiplier ?? 1.5 : float
+  }
+}
+function baml.llm.RetryPolicy.max_delay_or_default(self: baml.llm.RetryPolicy) -> float throws never {
+  { : float
+    self.max_delay_ms ?? 10000 + 0.0 : float
+  }
 }
 class baml.llm.Client {
   name: string
@@ -2208,7 +2269,7 @@ class baml.llm.Client {
   retry: baml.llm.RetryPolicy | null
   counter: int
 }
-function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient throws never {
+function baml.llm.Client.to_primitive_client(self: baml.llm.Client, lenient: bool = false) -> baml.llm.PrimitiveClient throws never {
   { : baml.llm.PrimitiveClient
     if (self.name.includes("/") : bool) : baml.llm.PrimitiveClient
       { : baml.llm.PrimitiveClient
@@ -2216,7 +2277,7 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
       }
     else
       { : baml.llm.PrimitiveClient
-        self.get_constructor()() : baml.llm.PrimitiveClient
+        self.get_constructor()(lenient) : baml.llm.PrimitiveClient
       }
   }
 }
@@ -2272,7 +2333,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
       r: RetryPolicy =>
         { : baml.llm.OrchestrationStep[]
           let result: OrchestrationStep[] = [] : baml.llm.OrchestrationStep[]
-          let current_delay = r.initial_delay_ms + 0.0 : float
+          let current_delay = r.initial_delay_or_default() : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt <= r.max_retries
@@ -2280,11 +2341,11 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
                 let delay = 0 : 0 -> int
                 if (attempt > 0 : bool) : void
                   { : void
-                    delay = root.math.trunc(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                    delay = root._trunc_to_int(current_delay) : int
+                    let next = current_delay * r.multiplier_or_default() : float
+                    if (next > r.max_delay_or_default() : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
+                        current_delay = r.max_delay_or_default() : float
                       }
                     else
                       { : void
@@ -2309,7 +2370,7 @@ function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, 
     match (self.retry : baml.llm.RetryPolicy | null) : never
       r: RetryPolicy =>
         { : never
-          let current_delay = r.initial_delay_ms + 0.0 : float
+          let current_delay = r.initial_delay_or_default() : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt <= r.max_retries
@@ -2317,11 +2378,11 @@ function baml.llm.Client.execute_stream<TStream, TFinal>(self: baml.llm.Client, 
                 let attempt_delay = inherited_delay_ms : int
                 if (attempt > 0 : bool) : void
                   { : void
-                    attempt_delay = root.math.trunc(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                    attempt_delay = root._trunc_to_int(current_delay) : int
+                    let next = current_delay * r.multiplier_or_default() : float
+                    if (next > r.max_delay_or_default() : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
+                        current_delay = r.max_delay_or_default() : float
                       }
                     else
                       { : void
@@ -2405,7 +2466,7 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
     match (self.retry : baml.llm.RetryPolicy | null) : never
       r: RetryPolicy =>
         { : never
-          let current_delay = r.initial_delay_ms + 0.0 : float
+          let current_delay = r.initial_delay_or_default() : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt <= r.max_retries
@@ -2413,11 +2474,11 @@ function baml.llm.Client.execute_oneshot<T>(self: baml.llm.Client, context: baml
                 let attempt_delay = inherited_delay_ms : int
                 if (attempt > 0 : bool) : void
                   { : void
-                    attempt_delay = root.math.trunc(current_delay) : int
-                    let next = current_delay * r.multiplier : float
-                    if (next > r.max_delay_ms + 0.0 : bool) : void
+                    attempt_delay = root._trunc_to_int(current_delay) : int
+                    let next = current_delay * r.multiplier_or_default() : float
+                    if (next > r.max_delay_or_default() : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms + 0.0 : float
+                        current_delay = r.max_delay_or_default() : float
                       }
                     else
                       { : void
@@ -2658,6 +2719,21 @@ function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.Primi
     self.specialize_prompt(prompt) : baml.llm.PromptAst
   }
 }
+function baml.llm.render_prompt_values(values: unknown[]) -> unknown[] throws never {
+  { : unknown[]
+    let rendered: unknown[] = [] : unknown[]
+    for value in values
+      { : int
+        rendered.push(match (value) { Role => value, _ => string.from(value) }) : int
+          match (value : unknown) : baml.llm.Role | string
+            Role =>
+              value : baml.llm.Role
+            _ =>
+              string.from<T>(value) : string
+      }
+    rendered : unknown[]
+  }
+}
 function baml.llm.build_prompt_context(primitive: baml.llm.PrimitiveClient, return_type: type) -> baml.llm.Context throws never {
   { : baml.llm.Context
     Context { client: ContextClient { name: primitive.name, provider: primitive.provider, default_role: primitive.options.default_role ?? "system", allowed_roles: primitive.options.allowed_roles ?? [] }, tags: map {  }, output_format: render_output_format(return_type), _output_format: build_output_format(return_type) } : baml.llm.Context
@@ -2674,12 +2750,16 @@ function baml.llm.prompt(body: (role: (string) -> baml.llm.Role throws never, ct
       (ctx: Context) -> { ... } : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
         {
           let t = body(make_role, ctx)
-          assemble_prompt_ast(t.parts, t.values)
+          assemble_prompt_ast(t.parts, render_prompt_values(t.values))
         }
     render : (ctx: baml.llm.Context) -> baml.llm.PromptAst throws never
   }
 }
 lambda baml.llm.prompt {
+}
+class baml.llm.PromptMessage$stream {
+  role: string | null
+  content: string | null
 }
 class baml.llm.PromptAst$stream {
   _data: $rust_type
@@ -2784,8 +2864,6 @@ class baml.llm.PrimitiveClient$stream {
   options: baml.llm.PrimitiveClientOptions$stream | null
 }
 
---- <builtin>/baml/ns_math/math.baml ---
-
 --- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Pdf {
   _data: $rust_type
@@ -2875,52 +2953,52 @@ class baml.net.Datagram$stream {
 }
 
 --- <builtin>/baml/ns_ops/comparison.baml ---
-function baml.ops.Equals.neq(self: baml.ops.Equals, other: unknown) -> bool throws never {
+function baml.ops.Equals.neq(self: baml.ops.Equals, other: !error) -> bool throws never {
   { : bool
     Not self.eq(other) : bool
   }
 }
-function baml.ops.Compare.le(self: baml.ops.Compare, other: unknown) -> bool throws never {
+function baml.ops.Compare.le(self: baml.ops.Compare, other: !error) -> bool throws never {
   { : bool
     self.lt(other) || self.eq(other) : bool
   }
 }
-function baml.ops.Compare.gt(self: baml.ops.Compare, other: unknown) -> bool throws never {
+function baml.ops.Compare.gt(self: baml.ops.Compare, other: !error) -> bool throws never {
   { : bool
     Not self.le(other) : bool
   }
 }
-function baml.ops.Compare.ge(self: baml.ops.Compare, other: unknown) -> bool throws never {
+function baml.ops.Compare.ge(self: baml.ops.Compare, other: !error) -> bool throws never {
   { : bool
     Not self.lt(other) : bool
   }
 }
-function baml.ops.lt(self: unknown, other: unknown) -> bool throws never {
+function baml.ops.lt(self: unknown, other: !error) -> bool throws never {
   { : bool
     Not self && other : bool
   }
 }
-function baml.ops.gt(self: unknown, other: unknown) -> bool throws never {
+function baml.ops.gt(self: unknown, other: !error) -> bool throws never {
   { : bool
     self && Not other : bool
   }
 }
-function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+function baml.ops.eq(self: unknown, other: !error) -> bool throws never {
   { : true
     true : true
   }
 }
-function baml.ops.neq(self: unknown, other: unknown) -> bool throws never {
+function baml.ops.neq(self: unknown, other: !error) -> bool throws never {
   { : false
     false : false
   }
 }
-function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+function baml.ops.eq(self: unknown, other: !error) -> bool throws never {
   { : bool
     baml.ops.equals_equals(self, other) : bool
   }
 }
-function baml.ops.eq(self: unknown, other: unknown) -> bool throws never {
+function baml.ops.eq(self: unknown, other: !error) -> bool throws never {
   { : bool
     baml.ops.equals_equals(self, other) : bool
   }
@@ -3292,7 +3370,7 @@ function baml.time.Instant.to_string(self: baml.time.Instant) -> string throws n
           root.sys.panic("Instant.to_string: " + message) : never
   }
 }
-function baml.time.Instant.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
+function baml.time.Instant.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.time.Instant
     match (j : baml.json.json) : baml.time.Instant
       string =>
@@ -3333,7 +3411,7 @@ function baml.time.PlainDate.to_string(self: baml.time.PlainDate) -> string thro
           root.sys.panic("PlainDate.to_stri..." + message) : never
   }
 }
-function baml.time.PlainDate.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
+function baml.time.PlainDate.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.time.PlainDate
     match (j : baml.json.json) : baml.time.PlainDate
       string =>
@@ -3433,7 +3511,7 @@ function baml.time.PlainDateTime.to_string(self: baml.time.PlainDateTime) -> str
           root.sys.panic("PlainDateTime.to_..." + message) : never
   }
 }
-function baml.time.PlainDateTime.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
+function baml.time.PlainDateTime.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.time.PlainDateTime
     match (j : baml.json.json) : baml.time.PlainDateTime
       string =>
@@ -3496,7 +3574,7 @@ function baml.time.PlainTime.to_string(self: baml.time.PlainTime) -> string thro
     self._to_string_impl() : string
   }
 }
-function baml.time.PlainTime.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
+function baml.time.PlainTime.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.time.PlainTime
     match (j : baml.json.json) : baml.time.PlainTime
       string =>
@@ -3726,7 +3804,7 @@ function baml.time.ZonedDateTime.to_string(self: baml.time.ZonedDateTime) -> str
           root.sys.panic("ZonedDateTime.to_...") : never
   }
 }
-function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
+function baml.time.ZonedDateTime.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.time.ZonedDateTime
     match (j : baml.json.json) : baml.time.ZonedDateTime
       string =>
@@ -3766,7 +3844,7 @@ function baml.toml.Table.to_json(self: baml.toml.Table) -> baml.json.json throws
     baml.json.from<T>(self.items) : baml.json.json
   }
 }
-function baml.toml.Table.from_json(j: baml.json.json) -> unknown throws baml.json.JsonDecodeError {
+function baml.toml.Table.from_json(j: baml.json.json) -> !error throws baml.json.JsonDecodeError {
   { : baml.toml.Table
     table_from_json(j) : baml.toml.Table
   }

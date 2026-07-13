@@ -3,7 +3,7 @@
 // qualifier must be a known interface.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Dog {

@@ -15,7 +15,7 @@ use baml_compiler2_hir::{
 };
 
 use crate::{
-    lower_type_expr::{lower_type_expr_in_ns, qualify_def},
+    lower_type_expr::qualify_def,
     ty::{Ty, TyAttr},
 };
 
@@ -95,35 +95,29 @@ pub fn function_throw_sets<'db>(
             let func_ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
                 .namespace_path;
 
-            // `(flattened named facts, has_open_hole)`. A `_` in the clause makes
-            // the declaration open: the named facts seed the set, but the body's
-            // transitive throws are still merged on top (the barrier is disabled).
-            let declared_throws_info = sig.throws.as_ref().map(|te| {
+            let declared_throws = sig.throws.as_ref().map(|te| {
                 let mut diags = Vec::new();
                 let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
                 let func_data = &item_tree[func_loc.id(db)];
-                let lowered = lower_type_expr_in_ns(
-                    db,
+                let lowered = crate::lower_type_expr::lower_type_expr(
                     te,
-                    pkg_items,
-                    &func_ns,
-                    &func_data.generic_params,
+                    &crate::lower_type_expr::ScopeCtx {
+                        db,
+                        package_items: pkg_items,
+                        ns_context: &func_ns,
+                        generic_params: &func_data.generic_params,
+                        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                            db, *func_loc,
+                        ),
+                        self_ty: None,
+                    },
                     &mut diags,
                 );
                 drop(diags);
-                let has_hole = throws_ty_has_infer_hole(&lowered);
-                (flatten_ty_to_facts(&lowered), has_hole)
+                flatten_ty_to_facts(&lowered)
             });
-            let declared_throws = declared_throws_info
-                .as_ref()
-                .map(|(facts, _)| facts.clone());
-            let declared_has_hole = declared_throws_info
-                .as_ref()
-                .is_some_and(|(_, has_hole)| *has_hole);
 
-            let direct = if let Some(declared) =
-                declared_throws.clone().filter(|_| !declared_has_hole)
-            {
+            let direct = if let Some(declared) = declared_throws.clone() {
                 declared
             } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
                 let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
@@ -133,31 +127,16 @@ pub fn function_throw_sets<'db>(
                     pkg_items,
                     &func_ns,
                     &func_data.generic_params,
+                    crate::lower_type_expr::function_in_scope_generic_param_bounds(db, *func_loc),
                     &func_data.params,
                 );
-                // For an open (`| _`) declaration, seed with the named throws and
-                // let the call-graph merge add the body's transitive throws.
-                let mut facts = collect_direct_throws(
-                    db,
-                    pkg_items,
-                    &func_ns,
-                    *func_loc,
-                    expr_body,
-                    &param_types,
-                );
-                if let Some(named) = declared_throws.clone() {
-                    facts.extend(named);
-                }
-                facts
+                collect_direct_throws(db, pkg_items, &func_ns, *func_loc, expr_body, &param_types)
             } else {
-                declared_throws.clone().unwrap_or_default()
+                BTreeSet::new()
             };
 
             direct_facts.insert(key.clone(), direct);
-            // An open (`| _`) declaration is NOT a contract barrier: callee
-            // throws must still propagate so the hole is filled.
-            has_declared_contract
-                .insert(key.clone(), declared_throws.is_some() && !declared_has_hole);
+            has_declared_contract.insert(key.clone(), declared_throws.is_some());
 
             if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
                 call_edges.insert(key, collect_call_targets(expr_body));
@@ -186,30 +165,27 @@ pub fn function_throw_sets<'db>(
 
                 let method_ns =
                     baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
-                let declared_throws_info = sig.throws.as_ref().map(|te| {
+                let declared_throws = sig.throws.as_ref().map(|te| {
                     let mut diags = Vec::new();
-                    let lowered = lower_type_expr_in_ns(
-                        db,
+                    let lowered = crate::lower_type_expr::lower_type_expr(
                         te,
-                        pkg_items,
-                        &method_ns,
-                        &method_data.generic_params,
+                        &crate::lower_type_expr::ScopeCtx {
+                            db,
+                            package_items: pkg_items,
+                            ns_context: &method_ns,
+                            generic_params: &method_data.generic_params,
+                            bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                                db, func_loc,
+                            ),
+                            self_ty: None,
+                        },
                         &mut diags,
                     );
                     drop(diags);
-                    let has_hole = throws_ty_has_infer_hole(&lowered);
-                    (flatten_ty_to_facts(&lowered), has_hole)
+                    flatten_ty_to_facts(&lowered)
                 });
-                let declared_throws = declared_throws_info
-                    .as_ref()
-                    .map(|(facts, _)| facts.clone());
-                let declared_has_hole = declared_throws_info
-                    .as_ref()
-                    .is_some_and(|(_, has_hole)| *has_hole);
 
-                let direct = if let Some(declared) =
-                    declared_throws.clone().filter(|_| !declared_has_hole)
-                {
+                let direct = if let Some(declared) = declared_throws.clone() {
                     declared
                 } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
                     body.as_ref()
@@ -219,27 +195,25 @@ pub fn function_throw_sets<'db>(
                         pkg_items,
                         &method_ns,
                         &method_data.generic_params,
+                        crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                            db, func_loc,
+                        ),
                         &method_data.params,
                     );
-                    let mut facts = collect_direct_throws(
+                    collect_direct_throws(
                         db,
                         pkg_items,
                         &method_ns,
                         func_loc,
                         expr_body,
                         &param_types,
-                    );
-                    if let Some(named) = declared_throws.clone() {
-                        facts.extend(named);
-                    }
-                    facts
+                    )
                 } else {
-                    declared_throws.clone().unwrap_or_default()
+                    BTreeSet::new()
                 };
 
                 direct_facts.insert(key.clone(), direct);
-                has_declared_contract
-                    .insert(key.clone(), declared_throws.is_some() && !declared_has_hole);
+                has_declared_contract.insert(key.clone(), declared_throws.is_some());
 
                 if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
                     // Rewrite "self.X" call targets to "ClassName.X" so edges
@@ -393,6 +367,7 @@ fn lower_param_types<'db>(
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
     generic_params: &[Name],
+    bounds: &crate::lower_type_expr::TypeVarBoundsMap,
     params: &[baml_compiler2_hir::item_tree::FunctionParam],
 ) -> Vec<(Name, Ty)> {
     params
@@ -400,12 +375,16 @@ fn lower_param_types<'db>(
         .filter_map(|param| {
             let type_expr = param.type_expr.as_ref()?;
             let mut diags = Vec::new();
-            let ty = lower_type_expr_in_ns(
-                db,
+            let ty = crate::lower_type_expr::lower_type_expr(
                 type_expr,
-                pkg_items,
-                ns_context,
-                generic_params,
+                &crate::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context,
+                    generic_params,
+                    bounds,
+                    self_ty: None,
+                },
                 &mut diags,
             );
             Some((param.name.clone(), ty))
@@ -582,8 +561,8 @@ fn resolve_path_to_ty<'db>(
 }
 
 /// Resolve `type_name` within namespace `ns`, applying the same fallbacks as
-/// `lower_type_expr_in_ns` so throw-set recovery resolves a path identically
-/// whether it appears as an enum-variant prefix or a plain type:
+/// `lower_type_expr` path resolution so throw-set recovery resolves a path
+/// identically whether it appears as an enum-variant prefix or a plain type:
 ///
 /// - a bare name (`ns` empty) is tried in `ns_context` first, then at the
 ///   package root;
@@ -655,19 +634,6 @@ pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
     out
 }
 
-/// Does a declared `throws` type contain a `_` inference hole (`Ty::Infer`),
-/// either as the whole clause (`throws _`) or as a union member
-/// (`throws AppError | _`)? Such a clause is an *open* contract: the function's
-/// exposed throw set is the named members PLUS whatever its body transitively
-/// throws, so the contract firewall must not narrow callers to the named set.
-pub fn throws_ty_has_infer_hole(ty: &Ty) -> bool {
-    match ty {
-        Ty::Infer { .. } => true,
-        Ty::Union(members, _) => members.iter().any(throws_ty_has_infer_hole),
-        _ => false,
-    }
-}
-
 fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
     match ty {
         // Compound types: decompose
@@ -687,11 +653,8 @@ fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
                 Literal::Bool(_) => Ty::Bool { attr },
             });
         }
-        // Bottom/void: no facts. An inference hole (`_`) is likewise not a
-        // concrete throw fact — it is an open-slot marker handled separately
-        // (`throws_ty_has_infer_hole`), so the flattened set holds only the
-        // named throws (`throws AppError | _` flattens to `{AppError}`).
-        Ty::Never { .. } | Ty::Void { .. } | Ty::Infer { .. } => {}
+        // Bottom/void: no facts
+        Ty::Never { .. } | Ty::Void { .. } => {}
         // Everything else: keep as-is
         _ => {
             out.insert(ty.clone());

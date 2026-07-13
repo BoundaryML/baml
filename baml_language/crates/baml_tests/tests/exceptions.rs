@@ -124,7 +124,7 @@ function main() -> int {
       File "test.baml", line 12, in user.main
       File "test.baml", line 8, in user.outer
       File "test.baml", line 3, in user.inner
-    uncaught throw: String("from_closure")
+    uncaught throw: "from_closure"
     "#);
 }
 
@@ -152,8 +152,38 @@ function main() -> int {
       File "test.baml", line 11, in user.main
       File "test.baml", line 7, in user.caller
       File "test.baml", line 3, in user.divider
-    uncaught throw: Instance { class_name: "baml.panics.DivisionByZero", type_args: [], fields: {"dividend": Int(42)} }
+    uncaught throw: baml.panics.DivisionByZero {dividend: 42}
     "#);
+}
+
+/// B-623 regression: an uncaught `throw` of an error instance must surface the
+/// value's readable rendering, not the Rust `Debug` shape (`Instance { class_name,
+/// type_args, fields }`, `QualifiedTypeName`, `TyAttr`).
+#[tokio::test]
+async fn uncaught_throw_renders_readable_error_not_debug() {
+    let output = baml_test!(
+        r#"
+function main() -> void {
+  throw baml.errors.Io { message: "boom" }
+}
+"#
+    );
+
+    let err = output.result.unwrap_err();
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains(r#"uncaught throw: baml.errors.Io {message: "boom"}"#),
+        "expected readable render, got: {rendered}"
+    );
+    // Must not leak Rust `Debug` internals.
+    for leak in [
+        "Instance {",
+        "QualifiedTypeName",
+        "TyAttr",
+        "String(\"boom\")",
+    ] {
+        assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
+    }
 }
 
 // ============================================================================

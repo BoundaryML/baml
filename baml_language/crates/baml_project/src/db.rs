@@ -74,6 +74,45 @@ pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
 ///     println!("{}", diag.message);
 /// }
 /// ```
+/// Cap on the total node count of a fully-inlined control-flow graph. Callee
+/// graphs are copied into every call site, so an uncapped graph grows as
+/// `fan_out^depth` on deep call chains; once the budget is reached remaining
+/// calls stay plain call nodes.
+const CFG_EXPANSION_NODE_BUDGET: usize = 5_000;
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct CfgExpansionCacheKey {
+    callee_name: String,
+    active_expansions: Vec<String>,
+}
+
+/// State threaded through one top-level [`ProjectDatabase::ast_control_flow_graph`] build.
+#[derive(Default)]
+struct CfgExpansionCtx {
+    /// Functions currently being expanded (cycle guard).
+    expanding: HashSet<String>,
+    /// Fully-expanded callee graphs keyed by the active expansion context.
+    /// `None` records callees with no buildable graph so they are not retried
+    /// per equivalent site.
+    cache: HashMap<
+        CfgExpansionCacheKey,
+        Option<std::sync::Arc<baml_compiler2_visualization::control_flow::ControlFlowGraph>>,
+    >,
+}
+
+impl CfgExpansionCtx {
+    fn cache_key(&self, callee_name: String) -> CfgExpansionCacheKey {
+        // The recursion guard depends on membership in `expanding`, not call
+        // order, so a sorted active set is the safe memoization context.
+        let mut active_expansions = self.expanding.iter().cloned().collect::<Vec<_>>();
+        active_expansions.sort();
+        CfgExpansionCacheKey {
+            callee_name,
+            active_expansions,
+        }
+    }
+}
+
 #[salsa::db]
 #[derive(Clone)]
 pub struct ProjectDatabase {
@@ -92,6 +131,12 @@ pub struct ProjectDatabase {
     compiler2_file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps `FileId` to file path for reverse lookup (all files including v2 stubs).
     file_id_to_path: HashMap<FileId, std::path::PathBuf>,
+    /// `SourceFile` inputs of removed paths. Salsa never frees inputs, so a
+    /// delete/recreate cycle (branch switch, codegen rewriting `.baml`
+    /// files) would mint a new immortal input per cycle; instead the input
+    /// parks here with empty text (releasing the source string and its
+    /// downstream memos) and is revived if the path reappears.
+    removed_file_tombstones: HashMap<std::path::PathBuf, SourceFile>,
 }
 
 #[salsa::db]
@@ -157,6 +202,7 @@ impl ProjectDatabase {
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
+            removed_file_tombstones: HashMap::new(),
         }
     }
 
@@ -176,6 +222,7 @@ impl ProjectDatabase {
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
+            removed_file_tombstones: HashMap::new(),
         }
     }
 
@@ -249,8 +296,14 @@ impl ProjectDatabase {
             existing_file.set_text(self).to(content.to_string());
             existing_file
         } else {
-            // Create new file
-            let file = self.add_file_internal(&canonical_path, content);
+            // Revive the tombstoned input if this path existed before —
+            // creating a fresh input would leak the old one forever.
+            let file = if let Some(file) = self.removed_file_tombstones.remove(&canonical_path) {
+                file.set_text(self).to(content.to_string());
+                file
+            } else {
+                self.add_file_internal(&canonical_path, content)
+            };
             let file_id = file.file_id(self);
 
             self.file_map.insert(canonical_path.clone(), file);
@@ -269,8 +322,10 @@ impl ProjectDatabase {
 
     /// Remove a file from the database.
     ///
-    /// Note: Salsa doesn't support true removal, but we can remove it from our tracking
-    /// and the project's file list.
+    /// Note: Salsa doesn't support true removal. The input is emptied (so its
+    /// text and per-file memos can be reclaimed), removed from tracking and
+    /// the project's file list, and parked in a tombstone map for reuse if
+    /// the same path is re-added later.
     pub fn remove_file(&mut self, path: &std::path::Path) {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
@@ -288,6 +343,9 @@ impl ProjectDatabase {
                     .collect();
                 project.set_files(self).to(files);
             }
+
+            file.set_text(self).to(String::new());
+            self.removed_file_tombstones.insert(canonical_path, file);
         }
     }
 
@@ -327,7 +385,7 @@ impl ProjectDatabase {
     /// Load compiler2 builtin BAML source files into the database.
     ///
     /// Returns the list of compiler2 builtin stub files (Array<T>, Map<K,V>, String,
-    /// Media, baml.env, baml.http, baml.math, baml.sys namespaces, etc.).
+    /// Media, baml.env, baml.http, baml.sys namespaces, etc.).
     ///
     /// These are stored in `compiler2_file_map` (NOT `file_map`) so that
     /// `get_source_files()` does NOT return them.
@@ -507,24 +565,28 @@ impl ProjectDatabase {
     /// More error-resilient than `control_flow_graph()` — works even when code has type errors,
     /// because it builds directly from the AST using `Missing` sentinels for unresolved nodes.
     /// Suitable for the playground which must function during editing.
+    ///
+    /// Callee graphs are inlined at every call site, memoized per callee and
+    /// active recursion context, and capped at 5,000 total nodes — the fully-inlined
+    /// representation is otherwise exponential in call-chain depth.
     pub fn ast_control_flow_graph(
         &self,
         function_name: &str,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
-        let mut expanding = HashSet::new();
-        self.ast_control_flow_graph_impl(function_name, &mut expanding)
+        let mut ctx = CfgExpansionCtx::default();
+        self.ast_control_flow_graph_impl(function_name, &mut ctx)
     }
 
     fn ast_control_flow_graph_impl(
         &self,
         function_name: &str,
-        expanding: &mut HashSet<String>,
+        ctx: &mut CfgExpansionCtx,
     ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
         use baml_compiler2_visualization::control_flow::{
             build_control_flow_graph_from_ast, build_llm_control_flow_graph,
         };
 
-        if !expanding.insert(function_name.to_string()) {
+        if !ctx.expanding.insert(function_name.to_string()) {
             return None;
         }
 
@@ -600,9 +662,7 @@ impl ProjectDatabase {
                                     root.source_span.get_or_insert(root_span);
                                 }
                             }
-                            self.expand_user_function_calls_in_graph(
-                                &mut graph, expr_body, expanding,
-                            );
+                            self.expand_user_function_calls_in_graph(&mut graph, expr_body, ctx);
                             Some(graph)
                         }
                         baml_compiler2_hir::body::FunctionBody::Builtin(_)
@@ -616,7 +676,7 @@ impl ProjectDatabase {
             }
         }
 
-        expanding.remove(function_name);
+        ctx.expanding.remove(function_name);
         result
     }
 
@@ -624,7 +684,7 @@ impl ProjectDatabase {
         &self,
         graph: &mut baml_compiler2_visualization::control_flow::ControlFlowGraph,
         body: &baml_compiler2_ast::ExprBody,
-        expanding: &mut HashSet<String>,
+        ctx: &mut CfgExpansionCtx,
     ) {
         use baml_compiler2_visualization::control_flow::NodeType;
 
@@ -641,8 +701,27 @@ impl ProjectDatabase {
                 continue;
             }
 
-            let Some(callee_graph) = self.ast_control_flow_graph_impl(&callee_name, expanding)
-            else {
+            // Recursion is cut at the call node rather than cached: a graph
+            // truncated by the cycle guard must not be reused at sites where
+            // the callee is not part of the active expansion chain.
+            if ctx.expanding.contains(&callee_name) {
+                continue;
+            }
+            // Each callee is fully expanded once per equivalent recursion
+            // context and reused at later matching call sites. The active
+            // expansion set is part of the key because it controls which
+            // recursive edges are intentionally left as plain call nodes.
+            let cache_key = ctx.cache_key(callee_name.clone());
+            let callee_graph = if let Some(cached) = ctx.cache.get(&cache_key) {
+                cached.clone()
+            } else {
+                let built = self
+                    .ast_control_flow_graph_impl(&callee_name, ctx)
+                    .map(std::sync::Arc::new);
+                ctx.cache.insert(cache_key, built.clone());
+                built
+            };
+            let Some(callee_graph) = callee_graph else {
                 continue;
             };
 
@@ -676,6 +755,13 @@ impl ProjectDatabase {
                 }
             }
 
+            // Even with per-callee memoization the merged output copies the
+            // callee graph at every call site, so deep chains still multiply
+            // node counts. Stop inlining once the graph reaches the budget;
+            // remaining calls render as plain call nodes.
+            if graph.nodes.len() + callee_graph.nodes.len() > CFG_EXPANSION_NODE_BUDGET {
+                continue;
+            }
             Self::merge_callee_graph_under_call_node(graph, call_node_id, &callee_graph);
         }
     }
@@ -1445,6 +1531,159 @@ impl std::fmt::Debug for ProjectDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removed_files_are_revived_not_recreated() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        let path = std::path::Path::new("/tmp/churn.baml");
+        let original =
+            db.add_or_update_file(path, "function A(input: string) -> string {\n  input\n}\n");
+        let original_id = original.file_id(&db);
+        let baseline = crate::collect_compiler2_diagnostics(&db).len();
+
+        // Branch switches and codegen delete and recreate files; each cycle
+        // must revive the tombstoned salsa input instead of minting a new
+        // immortal one.
+        for i in 0..3 {
+            db.remove_file(path);
+            assert!(
+                crate::collect_compiler2_diagnostics(&db).len() >= baseline,
+                "diagnostics must still compute while the file is removed"
+            );
+            let revived = db.add_or_update_file(
+                path,
+                &format!("function A(input: string) -> string {{\n  //# v{i}\n  input\n}}\n"),
+            );
+            assert_eq!(
+                revived.file_id(&db),
+                original_id,
+                "re-adding a removed path must reuse its SourceFile input"
+            );
+        }
+
+        assert_eq!(crate::collect_compiler2_diagnostics(&db).len(), baseline);
+        assert!(db.ast_control_flow_graph("A").is_some());
+    }
+
+    #[test]
+    fn callee_graphs_are_still_inlined_per_call_site() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/diamond.baml"),
+            r#"
+function Leaf(input: string) -> string {
+  //# leaf work
+  let a = input;
+  a
+}
+
+function Mid(input: string) -> string {
+  let a = Leaf(input);
+  let b = Leaf(a);
+  b
+}
+
+function Top(input: string) -> string {
+  let a = Mid(input);
+  let b = Mid(a);
+  b
+}
+"#,
+        );
+        let leaf = db.ast_control_flow_graph("Leaf").unwrap();
+        let mid = db.ast_control_flow_graph("Mid").unwrap();
+        let top = db.ast_control_flow_graph("Top").unwrap();
+        // Memoization must not change the inlined-output shape: every call
+        // site still receives its own copy of the callee graph.
+        assert!(
+            mid.nodes.len() > leaf.nodes.len(),
+            "Mid should contain inlined copies of Leaf ({} vs {})",
+            mid.nodes.len(),
+            leaf.nodes.len()
+        );
+        assert!(
+            top.nodes.len() > mid.nodes.len(),
+            "Top should contain inlined copies of Mid ({} vs {})",
+            top.nodes.len(),
+            mid.nodes.len()
+        );
+    }
+
+    #[test]
+    fn recursive_callee_cache_is_scoped_by_active_expansions() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/recursive-cache.baml"),
+            r#"
+//# a step
+function A(input: string) -> string {
+  let next = B(input);
+  next
+}
+
+//# b step
+function B(input: string) -> string {
+  let looped = A(input);
+  let done = Leaf(looped);
+  done
+}
+
+//# leaf step
+function Leaf(input: string) -> string {
+  input
+}
+
+function Top(input: string) -> string {
+  let first = A(input);
+  let second = B(first);
+  second
+}
+"#,
+        );
+
+        let graph = db.ast_control_flow_graph("Top").unwrap();
+        let a_step_count = graph
+            .nodes
+            .values()
+            .filter(|node| node.label == "a step")
+            .count();
+
+        assert!(
+            a_step_count >= 2,
+            "direct B expansion must not reuse a B graph truncated under A recursion; got {a_step_count} A call node(s)"
+        );
+    }
+
+    #[test]
+    fn deep_call_chains_are_capped_not_exponential() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        // Depth 12, fan-out 3: fully inlined and uncapped this is 3^12 ≈ 531k
+        // nodes per top-level function (and exponential build time without
+        // per-callee memoization).
+        let mut src = String::from(
+            "function F12(input: string) -> string {\n  //# leaf\n  let a = input;\n  a\n}\n",
+        );
+        for i in (0..12).rev() {
+            use std::fmt::Write as _;
+            let callee = i + 1;
+            let _ = write!(
+                src,
+                "function F{i}(input: string) -> string {{\n  let v0 = F{callee}(input);\n  let v1 = F{callee}(v0);\n  let v2 = F{callee}(v1);\n  v2\n}}\n"
+            );
+        }
+        db.add_or_update_file(std::path::Path::new("/tmp/chain.baml"), &src);
+
+        let graph = db.ast_control_flow_graph("F0").unwrap();
+        assert!(
+            graph.nodes.len() <= CFG_EXPANSION_NODE_BUDGET,
+            "inlined graph must respect the node budget, got {}",
+            graph.nodes.len()
+        );
+    }
 
     #[test]
     fn header_above_if_keeps_all_branch_arms() {

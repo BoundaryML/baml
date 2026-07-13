@@ -7,7 +7,7 @@ import time
 import pytest
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
-from baml_core import BamlCallContext
+from baml_bridge import BamlCallContext
 from baml_sdk.baml import BamlPanic
 from baml_sdk.baml.panics import Cancelled
 from baml_sdk import throws_test

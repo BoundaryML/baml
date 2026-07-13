@@ -5,7 +5,7 @@ expression: output
 python — Use BAML from Python via a generated Pydantic v2 SDK.
 
 Syntax:
-  pip install baml_core                  # the runtime (Python 3.10+)
+  pip install baml_bridge                  # the runtime (Python 3.10+)
   
   # baml.toml — declare a generator:
   [generator.app]
@@ -15,7 +15,7 @@ Syntax:
   
   baml generate                          # emits the `baml_sdk` package into output_dir
 
-You install `baml_core` (the runtime); you import `baml_sdk` (the generated
+You install `baml_bridge` (the runtime); you import `baml_sdk` (the generated
 code). Functions become top-level Python functions; classes/enums become
 Pydantic models:
 

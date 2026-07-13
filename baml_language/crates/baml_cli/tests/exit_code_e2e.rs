@@ -1113,7 +1113,7 @@ fn run_prints_concrete_associated_type_projection_return() {
         r#"
 interface PublicIdentity {
   type Key
-  key: Key
+  key: Self.Key
 }
 
 class AccountRecord {
@@ -1127,7 +1127,7 @@ class AccountRecord {
 
 function get_public_key() -> (AccountRecord as PublicIdentity).Key {
   let account = AccountRecord { public_key: "visible-key" }
-  return account.as<PublicIdentity>.key
+  return account.as<PublicIdentity<Key = string>>.key
 }
 "#,
     );
@@ -1164,7 +1164,7 @@ fn run_list_prints_resolved_associated_projection_metadata() {
         r#"
 interface PublicIdentity {
   type Key
-  key: Key
+  key: Self.Key
 }
 
 class AccountRecord {
@@ -1178,7 +1178,7 @@ class AccountRecord {
 
 interface Repository {
   type Record
-  function find(self) -> Self.Record
+  function find(self) -> Self.Record throws never
 }
 
 class UserRecord {
@@ -1207,11 +1207,11 @@ class GenericBox<T> {
 
 interface BoxLike {
   type Item
-  function get(self) -> Self.Item
+  function get(self) -> Self.Item throws never
 }
 
 function get_public_key(account: AccountRecord) -> (AccountRecord as PublicIdentity).Key {
-  return account.as<PublicIdentity>.key
+  return account.as<PublicIdentity<Key = string>>.key
 }
 
 function read_item<T extends BoxLike>(box: T) -> T.Item {
@@ -1238,7 +1238,10 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
         "get_public_key(account: AccountRecord) -> string",
         "UserRepository.Repository.find(self: UserRepository) -> UserRecord",
         "GenericBox.get<T>(self: GenericBox<T>) -> T",
-        "read_item<T extends BoxLike>(box: T) -> T.Item",
+        // The projection renders fully determined — lowering resolves the
+        // declaring interface, so `T.Item` prints as its canonical
+        // `(T as BoxLike).Item` triple.
+        "read_item<T extends BoxLike>(box: T) -> (T as BoxLike).Item",
     ] {
         assert!(
             stdout.contains(expected),
@@ -1292,7 +1295,10 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
         .collect();
     assert_eq!(generic_params, vec!["T extends BoxLike"]);
     assert_eq!(read_item["params"][0]["type"].as_str(), Some("T"));
-    assert_eq!(read_item["return_type"].as_str(), Some("T.Item"));
+    assert_eq!(
+        read_item["return_type"].as_str(),
+        Some("(T as BoxLike).Item")
+    );
 
     let generic_box_get = functions
         .iter()

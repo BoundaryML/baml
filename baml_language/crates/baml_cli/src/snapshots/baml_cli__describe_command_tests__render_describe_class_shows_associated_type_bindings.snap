@@ -11,6 +11,6 @@ class IntDecoder {
 }
 
 methods:
-  function decode(self, raw: string) -> IntDecoder.Output  interfaces.baml:10-12
+  function decode(self, raw: string) -> int  interfaces.baml:10-12
 
 references (0):

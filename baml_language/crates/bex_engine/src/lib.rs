@@ -506,7 +506,7 @@ fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]
             loc.function_name.as_str(),
         )
     }));
-    write!(out, "uncaught throw: {value:?}").unwrap();
+    write!(out, "uncaught throw: {}", value.render_readable()).unwrap();
     out
 }
 

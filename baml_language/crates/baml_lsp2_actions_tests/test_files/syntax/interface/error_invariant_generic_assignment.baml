@@ -2,11 +2,11 @@
 // to Container<Animal> even though Dog implements Animal.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 interface Container<T> {
-  function add(self, item: T) -> null
+  function add(self, item: T) -> null throws never
 }
 
 class Dog {

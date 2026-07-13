@@ -19,6 +19,7 @@ pub mod package_baml;
 pub mod package_boundary;
 pub mod package_load;
 mod type_context;
+mod type_match;
 pub mod types;
 pub mod vm;
 pub mod watch;

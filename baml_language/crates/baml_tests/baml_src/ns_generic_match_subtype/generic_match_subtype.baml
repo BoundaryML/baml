@@ -21,7 +21,7 @@
 // same VM local-boxing caveat documented in `ns_class_type_args_at_runtime`).
 
 interface Shape {
-    function area(self) -> int
+    function area(self) -> int throws never
 }
 
 class Sq {
@@ -119,4 +119,47 @@ function concrete_discriminates_string_fn() -> string {
 
 test "generic_match_concrete_discriminates_string" {
     assert.equal(concrete_discriminates_string_fn(), "string")
+}
+
+// ─── 5. Concrete parametric arms on the TypeTag switch path ───────────────────
+// The same discrimination as §4, but with enough tag-eligible arms that the
+// lowering prefers the TypeTag jump-table switch (4+ *distinct* tags —
+// colliding tags dedup before the count, so this needs five arms). A class's
+// type tag ignores its type args, so before the switch tag-sufficiency gate
+// `Foo<int>` and `Foo<string>` shared one tag: the jump table kept only the
+// first `Foo` arm and every `Foo` value jumped there. The gate detects the
+// collision and falls back to the (arg-precise) chain.
+
+function pick_concrete_switch(x: Foo<int> | Foo<string> | int | string | bool) -> string {
+    match (x) {
+        let a: Foo<int> => "int",
+        let b: Foo<string> => "string",
+        let n: int => "prim int",
+        let s: string => "prim string",
+        let f: bool => "prim bool",
+    }
+}
+
+function concrete_switch_int_fn() -> string {
+    pick_concrete_switch(Foo<int> { value: 1 })
+}
+
+test "generic_match_switch_discriminates_int" {
+    assert.equal(concrete_switch_int_fn(), "int")
+}
+
+function concrete_switch_string_fn() -> string {
+    pick_concrete_switch(Foo<string> { value: "x" })
+}
+
+test "generic_match_switch_discriminates_string" {
+    assert.equal(concrete_switch_string_fn(), "string")
+}
+
+function concrete_switch_prim_fn() -> string {
+    pick_concrete_switch("hello")
+}
+
+test "generic_match_switch_prims_still_dispatch" {
+    assert.equal(concrete_switch_prim_fn(), "prim string")
 }

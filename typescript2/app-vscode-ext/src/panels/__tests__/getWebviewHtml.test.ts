@@ -55,20 +55,20 @@ beforeEach(() => {
 
 describe('getPlaygroundHtml', () => {
   it('reads the packaged playground HTML', async () => {
-    await getPlaygroundHtml(webview, extensionUri, 3700);
+    await getPlaygroundHtml(webview, extensionUri, 4265);
 
     expect(fs.readFile).toHaveBeenCalledWith('/extension/dist/playground/index.html', 'utf8');
   });
 
   it('injects the WS URL global', async () => {
-    const html = await getPlaygroundHtml(webview, extensionUri, 3700);
+    const html = await getPlaygroundHtml(webview, extensionUri, 4265);
 
     expect(html).toContain('__PLAYGROUND_WS_URL');
-    expect(html).toContain('ws://localhost:3700/api/ws');
+    expect(html).toContain('ws://localhost:4265/api/ws');
   });
 
   it('injects a CSP allowing packaged scripts and localhost websocket traffic', async () => {
-    const html = await getPlaygroundHtml(webview, extensionUri, 3700);
+    const html = await getPlaygroundHtml(webview, extensionUri, 4265);
 
     expect(html).toContain('script-src vscode-webview://test');
     expect(html).toContain('connect-src ws://localhost:*');
@@ -76,13 +76,13 @@ describe('getPlaygroundHtml', () => {
   });
 
   it('does not contain an iframe', async () => {
-    const html = await getPlaygroundHtml(webview, extensionUri, 3700);
+    const html = await getPlaygroundHtml(webview, extensionUri, 4265);
 
     expect(html).not.toContain('<iframe');
   });
 
   it('rewrites Vite asset URLs to webview URIs', async () => {
-    const html = await getPlaygroundHtml(webview, extensionUri, 3700);
+    const html = await getPlaygroundHtml(webview, extensionUri, 4265);
 
     expect(html).toContain('<div id="root"></div>');
     expect(html).toContain('src="vscode-webview://test/assets/index.js"');

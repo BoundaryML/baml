@@ -63,15 +63,18 @@ impl BoundaryTraceRouter {
 
     #[must_use]
     pub fn component_record_ids(&self, root_trace: TraceCallKey) -> Vec<HistoryProfileRecordId> {
-        let envelopes = self
-            .records
-            .iter()
-            .map(|record| record.record.envelope.clone())
-            .collect::<Vec<_>>();
-        component_event_indices_for_root(&envelopes, root_trace)
+        let envelopes = self.records.iter().map(|record| &record.record.envelope);
+        component_event_indices_for_root(envelopes, root_trace)
             .into_iter()
             .filter_map(|index| self.records.get(index).map(|record| record.id))
             .collect()
+    }
+
+    /// Drop all buffered records for a closed engine — no further events can
+    /// arrive for it and no boundary can claim them anymore.
+    pub fn release_engine(&mut self, engine_id: crate::ids::EngineId) {
+        self.records
+            .retain(|record| record.record.envelope.engine_id != engine_id);
     }
 
     #[must_use]

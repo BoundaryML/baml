@@ -621,6 +621,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
+ "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
  "sha1",
@@ -671,6 +672,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "baml_release",
+ "console",
  "reqwest",
  "serde",
  "serde_json",
@@ -990,6 +992,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_workspace",
+ "bitflags 2.11.1",
  "indexmap",
  "insta",
  "rowan 0.16.1",
@@ -1091,6 +1094,7 @@ dependencies = [
  "rayon",
  "salsa",
  "serde",
+ "serde_json",
  "text-size",
 ]
 
@@ -1105,7 +1109,9 @@ dependencies = [
  "serde_json",
  "sha2",
  "tar",
+ "tempfile",
  "thiserror 2.0.18",
+ "toml 0.8.23",
  "zip",
 ]
 
@@ -1135,6 +1141,7 @@ dependencies = [
  "darwin-kperf-events",
  "indexmap",
  "insta",
+ "libc",
  "num-bigint",
  "prettyplease",
  "proc-macro2",
@@ -1324,6 +1331,7 @@ dependencies = [
  "bex_heap",
  "bex_vm_types",
  "borsh",
+ "ignore",
  "log",
  "lsp-server",
  "lsp-types",
@@ -3772,6 +3780,22 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "ignore"
+version = "0.4.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe112b004901c62c2faa11f4f75e9864e0cc5af8da71c9115d184a3aa888749f"
+dependencies = [
+ "crossbeam-deque",
+ "globset",
+ "log",
+ "memchr",
+ "regex-automata",
+ "same-file",
+ "walkdir",
+ "winapi-util",
 ]
 
 [[package]]
@@ -7692,6 +7716,21 @@ dependencies = [
 [[package]]
 name = "tools_sccache"
 version = "0.1.0"
+
+[[package]]
+name = "tools_semantic_tokens"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "axum",
+ "baml_lsp2_actions",
+ "baml_lsp2_actions_tests",
+ "baml_project",
+ "clap",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "tower"

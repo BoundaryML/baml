@@ -90,10 +90,11 @@ pub(crate) fn member_variants<'a>(
         .filter(move |v| member.includes.contains(&v.axis))
 }
 
-/// Generate the mechanical `attr` / `with_attr` accessors for a member. Every
-/// variant carries a `TyAttr`: named variants in an `attr` field, tuple
-/// variants as the last positional. A unit variant (none today) would have
-/// nowhere to hold one, so it is rejected with a `compile_error!`.
+/// Generate the mechanical `attr` / `with_attr` accessors for a member. An
+/// attr-carrying variant exposes its `TyAttr` (a named `attr` field or the last
+/// tuple positional); an attr-less template leaf (`TypeArgRef`, `Wildcard`)
+/// borrows the shared [`TyAttr::EMPTY`] and ignores `with_attr` (it has nowhere
+/// to store one).
 fn gen_accessors(family: &Family, member: &Member) -> TokenStream {
     let name = &member.name;
     let attr_arms = member_variants(family, member).map(|v| attr_arm(name, v));
@@ -119,15 +120,32 @@ fn gen_accessors(family: &Family, member: &Member) -> TokenStream {
 
 fn attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
     let vident = &v.ident;
+    // Attr-less leaves borrow the shared empty attribute set.
+    if !v.has_attr {
+        return match &v.fields {
+            Fields::Unit => quote! { #name::#vident => &TyAttr::EMPTY },
+            _ => quote! { #name::#vident { .. } => &TyAttr::EMPTY },
+        };
+    }
     match &v.fields {
         Fields::Named(_) => quote! { #name::#vident { attr, .. } => attr },
         Fields::Unnamed(_) => quote! { #name::#vident(.., attr) => attr },
-        Fields::Unit => attr_less_error(name, vident),
+        // `has_attr` is false for a unit variant, handled above.
+        Fields::Unit => unreachable!("attr-carrying unit variant is impossible"),
     }
 }
 
 fn with_attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
     let vident = &v.ident;
+    // Attr-less leaves have nowhere to store an attribute, so `with_attr` is
+    // the identity — the incoming `attr` is dropped. `_ = &attr` silences the
+    // unused-binding lint without moving it (every other arm consumes `attr`).
+    if !v.has_attr {
+        return match &v.fields {
+            Fields::Unit => quote! { this @ #name::#vident => { let _ = &attr; this } },
+            _ => quote! { this @ #name::#vident { .. } => { let _ = &attr; this } },
+        };
+    }
     match &v.fields {
         Fields::Named(named) => {
             let rest: Vec<&Ident> = named
@@ -147,15 +165,9 @@ fn with_attr_arm(name: &Ident, v: &MVariant) -> TokenStream {
                 #name::#vident(#(#binds,)* _) => #name::#vident(#(#binds,)* attr)
             }
         }
-        Fields::Unit => attr_less_error(name, vident),
+        // `has_attr` is false for a unit variant, handled above.
+        Fields::Unit => unreachable!("attr-carrying unit variant is impossible"),
     }
-}
-
-fn attr_less_error(name: &Ident, vident: &Ident) -> TokenStream {
-    let msg = format!(
-        "ty_family: variant `{name}::{vident}` has no `TyAttr` field, so `attr`/`with_attr` cannot be generated"
-    );
-    quote! { #name::#vident => ::core::compile_error!(#msg) }
 }
 
 fn gen_satellite(family: &Family, member: &Member, sat: &Satellite) -> TokenStream {

@@ -146,7 +146,7 @@ SOURCE_FILE
           HASH "#"
       R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "BadAlias"
     EQUALS "="
     TYPE_EXPR

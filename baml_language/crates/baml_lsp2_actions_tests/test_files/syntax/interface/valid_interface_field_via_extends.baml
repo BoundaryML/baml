@@ -6,7 +6,7 @@ interface Aged { age: int }
 interface Person requires Named, Aged {
   occupation: string
 
-  function introduce(self) -> string {
+  function introduce(self) -> string throws never {
     return self.name + ", " + self.occupation
   }
 }
