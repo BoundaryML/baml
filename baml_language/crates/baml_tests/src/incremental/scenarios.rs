@@ -343,3 +343,96 @@ function Greet(name: string) -> int {
     // Signature changes must invalidate queries
     test_db.assert_executed(|db| query_semantic_index(db, file), &[("lex_file", 1)]);
 }
+
+// ── Firewall queries ─────────────────────────────────────────────────────────
+//
+// `file_semantic_index` is `no_eq`, so it always reports "changed" and anything
+// reading the `ItemTree` through it re-runs on every keystroke. The per-item
+// firewall queries are what stop that from propagating: they re-run, but their
+// results only *compare* unequal when the item genuinely changed, so Salsa cuts
+// off there.
+//
+// That only holds because the semantic half is span-free. Salsa keeps the old
+// memoized value whenever the new one compares equal, so if `*_data` carried
+// spans it would either lose cutoff (spans in `PartialEq`) or hand out stale
+// ones (spans ignored by `PartialEq`). These tests pin both halves of that.
+
+fn type_alias_loc<'db>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+) -> baml_compiler2_hir::loc::TypeAliasLoc<'db> {
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let (id, _) = item_tree
+        .type_aliases
+        .iter()
+        .find(|(_, alias)| alias.name.as_str() == name)
+        .unwrap_or_else(|| unreachable!("type alias `{name}` should exist"));
+    baml_compiler2_hir::loc::TypeAliasLoc::new(db, file, *id)
+}
+
+/// A whitespace-only edit must leave the semantic data byte-for-byte equal (so
+/// Salsa cuts off) while the source map still reports the *new* positions.
+#[test]
+fn whitespace_edit_preserves_item_data_but_moves_spans() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file("test.baml", "type Ids = int[]\n");
+
+    let (data_before, span_before) = {
+        let db = test_db.db();
+        let loc = type_alias_loc(db, file, "Ids");
+        (
+            baml_compiler2_hir::item_data::type_alias_data(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_source_map(db, loc).clone(),
+        )
+    };
+
+    // Push the declaration down a line. Semantics identical, every span shifted.
+    file.set_text(test_db.db_mut())
+        .to("// a comment\ntype Ids = int[]\n".to_string());
+
+    let (data_after, span_after) = {
+        let db = test_db.db();
+        let loc = type_alias_loc(db, file, "Ids");
+        (
+            baml_compiler2_hir::item_data::type_alias_data(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_source_map(db, loc).clone(),
+        )
+    };
+
+    assert_eq!(
+        data_before, data_after,
+        "a whitespace-only edit must not change the semantic data, or nothing downstream can cut off"
+    );
+    assert_ne!(
+        span_before, span_after,
+        "the source map must track the new positions — otherwise spans would go stale"
+    );
+}
+
+/// The converse: a real change to the aliased type must invalidate the semantic
+/// data, or we would be cutting off edits that actually matter.
+#[test]
+fn semantic_edit_changes_item_data() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file("test.baml", "type Ids = int[]\n");
+
+    let data_before = {
+        let db = test_db.db();
+        let loc = type_alias_loc(db, file, "Ids");
+        baml_compiler2_hir::item_data::type_alias_data(db, loc).clone()
+    };
+
+    file.set_text(test_db.db_mut())
+        .to("type Ids = string[]\n".to_string());
+
+    let data_after = {
+        let db = test_db.db();
+        let loc = type_alias_loc(db, file, "Ids");
+        baml_compiler2_hir::item_data::type_alias_data(db, loc).clone()
+    };
+
+    assert_ne!(data_before, data_after);
+}
