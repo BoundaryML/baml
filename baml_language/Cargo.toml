@@ -6,6 +6,7 @@ members = [
   "sdks/nodejs/bridge_nodejs",
   "sdks/nodejs/sdkgen_typescript_node",
   "sdks/python/rust/*",
+  "sdks/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
