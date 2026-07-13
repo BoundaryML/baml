@@ -414,3 +414,10 @@ panic = "unwind"
 [profile.release-bridge-node]
 inherits = "release"
 panic = "unwind"
+
+# The cdylib is loaded into a user's process (C/C++ SDK); the engine's
+# catch_unwind boundary needs unwinding to turn panics into BamlPanic
+# envelopes instead of aborting the host.
+[profile.release-bridge-cffi]
+inherits = "release"
+panic = "unwind"

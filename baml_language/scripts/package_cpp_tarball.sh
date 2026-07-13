@@ -29,7 +29,9 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-build_args=(build --release -p bridge_cffi --target "$TARGET")
+# release-bridge-cffi = release + panic=unwind: the cdylib lives in a user's
+# process and engine panics must unwind into BamlPanic envelopes, not abort.
+build_args=(build --profile release-bridge-cffi -p bridge_cffi --target "$TARGET")
 if [ -n "$FEATURES" ]; then
     build_args+=(--no-default-features --features "$FEATURES")
 fi
@@ -47,7 +49,7 @@ rm -rf "$stage"
 mkdir -p "$stage/lib" "$stage/include"
 
 for lib in "${libs[@]}"; do
-    cp "target/$TARGET/release/$lib" "$stage/lib/"
+    cp "target/$TARGET/release-bridge-cffi/$lib" "$stage/lib/"
 done
 cp crates/bridge_cffi/include/baml_cffi.h "$stage/include/"
 if [ -d sdks/cpp/bridge_cpp/include/baml ]; then
