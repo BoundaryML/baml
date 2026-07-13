@@ -8063,10 +8063,19 @@ mod tests {
             "function main() -> string {\n  ##",
             "function main() -> string {\n  ## ",
             "let x = ##",
+            "client<llm> C { key ##",
+            "client<llm> C {\n  provider openai\n  key ##",
         ] {
-            // Errors are expected on incomplete input; parsing just must
-            // not index past the token buffer.
-            let (_root, _errors) = parse_source(source);
+            // Parsing must not index past the token buffer (and must not
+            // loop: config-value recovery leaves the hashes unconsumed, and
+            // the next config-item iteration consumes them as a malformed
+            // key). All of these inputs are malformed, so they must also
+            // surface diagnostics rather than silently parse.
+            let (_root, errors) = parse_source(source);
+            assert!(
+                !errors.is_empty(),
+                "expected at least one diagnostic for {source:?}"
+            );
         }
     }
 
