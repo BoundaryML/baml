@@ -13,7 +13,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_project::testing::compile_source;
-use baml_type::{RuntimeTy, TyTemplate};
+use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, FunctionCaptureProps, GlobalIndex, Instruction, Object, ObjectIndex, Value,
@@ -131,8 +131,8 @@ fn load_type_concrete_int() {
     match vm.get_object(ptr) {
         Object::Type(ty) => assert_eq!(
             **ty,
-            RuntimeTy::int(),
-            "LoadType(int) should materialise RuntimeTy::int"
+            RealizedTy::int(),
+            "LoadType(int) should materialise RealizedTy::int"
         ),
         other => panic!("expected Object::Type, got {other:?}"),
     }
@@ -174,8 +174,8 @@ fn load_type_concrete_string_different_from_int() {
         other => panic!("expected Object::Type for string, got {other:?}"),
     };
 
-    assert_eq!(int_ty, RuntimeTy::int());
-    assert_eq!(str_ty, RuntimeTy::string());
+    assert_eq!(int_ty, RealizedTy::int());
+    assert_eq!(str_ty, RealizedTy::string());
     assert_ne!(
         int_ty, str_ty,
         "int and string LoadType payloads must differ"
@@ -215,7 +215,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame must exist");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RuntimeTy::string()];
+            bf.type_args = vec![RealizedTy::string()];
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -229,7 +229,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
         }
     };
 
-    // The result must be an Object::Type wrapping RuntimeTy::string()
+    // The result must be an Object::Type wrapping RealizedTy::string()
     let Some(ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
@@ -238,7 +238,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                RuntimeTy::string(),
+                RealizedTy::string(),
                 "TypeArgRef(0) should resolve to string"
             );
         }
@@ -276,7 +276,7 @@ fn load_type_array_of_type_arg_ref() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame must exist");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RuntimeTy::int()];
+            bf.type_args = vec![RealizedTy::int()];
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -298,7 +298,7 @@ fn load_type_array_of_type_arg_ref() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                RuntimeTy::list(RuntimeTy::int()),
+                RealizedTy::list(RealizedTy::int()),
                 "Array(TypeArgRef(0)) with int → int[]"
             );
         }
@@ -383,8 +383,8 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
         Object::Type(ty) => {
             assert_eq!(
                 **ty,
-                RuntimeTy::string(),
-                "inner function should receive RuntimeTy::string() via type arg"
+                RealizedTy::string(),
+                "inner function should receive RealizedTy::string() via type arg"
             );
         }
         other => panic!("expected Object::Type, got {other:?}"),

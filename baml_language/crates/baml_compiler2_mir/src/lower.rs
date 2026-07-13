@@ -6417,7 +6417,7 @@ impl<'db> LoweringContext<'db> {
         // generic param, then substitute `class_type_args` so a field
         // declared as `T` resolves to the concrete receiver-side binding.
         let template = tir2_to_template(&tir_ty, self.resolved_aliases, &class_data.generic_params);
-        template.substitute(class_type_args)
+        template.substitute_symbolic(class_type_args)
     }
 
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
@@ -9087,8 +9087,15 @@ impl LoweringContext<'_> {
         let templates = self.generic_apply_type_arg_templates(type_args);
         if templates.iter().all(TyTemplate::is_fully_concrete) {
             // Concrete args → pooled, interned compile-time constant
-            // (pointer-stable identity).
-            let concrete: Vec<RuntimeTy> = templates.iter().map(|t| t.substitute(&[])).collect();
+            // (pointer-stable identity). Each template is fully concrete, so it
+            // narrows directly to a `RealizedTy` — the value the runtime carries.
+            let concrete: Vec<RealizedTy> = templates
+                .iter()
+                .map(|t| {
+                    RealizedTy::try_from(t)
+                        .unwrap_or_else(|e| unreachable!("checked fully concrete: {e}"))
+                })
+                .collect();
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::GenericFunction {

@@ -843,7 +843,8 @@ fn host_call_type_arg(
     // the await a moving GC may relocate/collect this `Object::Type` and the raw
     // pointer would dangle. The caller clones the `RuntimeTy` out before awaiting.
     match unsafe { ptr.get() } {
-        Object::Type(ty) => Ok((**ty).clone()),
+        // `Object::Type` stores a realized type; widen it to the boundary `RuntimeTy`.
+        Object::Type(ty) => Ok((**ty).clone().into()),
         _ => Err(bad_slot()),
     }
 }
@@ -987,7 +988,11 @@ fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Opt
                     };
                     Some(RuntimeTy::Class(
                         class.name.clone(),
-                        instance.class_type_args.to_vec(),
+                        instance
+                            .class_type_args
+                            .iter()
+                            .map(baml_type::RuntimeTy::from)
+                            .collect(),
                         TyAttr::default(),
                     ))
                 }
@@ -2555,6 +2560,22 @@ impl BexEngine {
         // against the callee's generic params. An empty map seeds nothing
         // (non-generic callee) or all-unbound slots (generic callee with no
         // bindings).
+        // The runtime frame holds realized type args; narrow the host-supplied
+        // bindings at this FFI boundary, rejecting a non-realized binding rather
+        // than erasing it.
+        let type_args = type_args
+            .into_iter()
+            .map(|(name, ty)| match baml_type::RealizedTy::try_from(&ty) {
+                Ok(realized) => Ok((name, realized)),
+                Err(e) => Err(EngineError::VmInternalError(
+                    bex_vm::errors::VmInternalError::TypeSubstitution {
+                        message: format!(
+                            "host entry-point type argument `{name}` is not realized: {e}"
+                        ),
+                    },
+                )),
+            })
+            .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
         thread
             .vm
             .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
@@ -2800,7 +2821,11 @@ impl BexEngine {
             if let Some(RuntimeTy::Class(_, declared_args, _)) = param_types.first() {
                 let mut bindings = indexmap::IndexMap::new();
                 for (declared, concrete) in declared_args.iter().zip(seed_type_args.iter()) {
-                    crate::conversion::collect_type_var_bindings(declared, concrete, &mut bindings);
+                    crate::conversion::collect_type_var_bindings(
+                        declared,
+                        concrete.as_runtime_ty(),
+                        &mut bindings,
+                    );
                 }
                 return_type = crate::conversion::substitute_type_vars(&return_type, &bindings);
             }
@@ -2855,6 +2880,10 @@ impl BexEngine {
         // pairing each with the callee's generic-param name. A lambda has no
         // declared param names, so fall back to the index as a key; the named
         // lowering then emits the unnamed bindings in order.
+        // The seed args are realized (a value's captured/class type args); widen
+        // them into the `RuntimeTy` the host `type_args` channel carries. They are
+        // re-narrowed to `RealizedTy` at the `set_entry_point_with_type_args`
+        // boundary inside `run_entry_point`.
         let seed_type_args: indexmap::IndexMap<String, RuntimeTy> = seed_type_args
             .into_iter()
             .enumerate()
@@ -2864,7 +2893,7 @@ impl BexEngine {
                         .get(i)
                         .cloned()
                         .unwrap_or_else(|| i.to_string()),
-                    ty,
+                    RuntimeTy::from(ty),
                 )
             })
             .collect();

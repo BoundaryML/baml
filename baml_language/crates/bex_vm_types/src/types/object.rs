@@ -121,8 +121,8 @@ pub enum Object {
     /// Collector object (opaque handle to `bex_events::Collector`).
     Collector(CollectorRef),
 
-    /// A type descriptor value — wraps a `baml_type::RuntimeTy`.
-    Type(Box<baml_type::RuntimeTy>),
+    /// A type descriptor value — wraps a `baml_type::RealizedTy`.
+    Type(Box<baml_type::RealizedTy>),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(crate::types::SentinelKind),
@@ -191,16 +191,16 @@ enum ObjectWire {
         num_bigint::BigInt,
     ),
     Uint8Array(Vec<u8>),
-    Array(Box<baml_type::RuntimeTy>, Vec<Value>),
+    Array(Box<baml_type::RealizedTy>, Vec<Value>),
     Map(
-        Box<baml_type::RuntimeTy>,
-        Box<baml_type::RuntimeTy>,
+        Box<baml_type::RealizedTy>,
+        Box<baml_type::RealizedTy>,
         IndexMap<String, Value>,
     ),
     Float(f64),
     Future(crate::Future),
     UnscheduledFuture(UnscheduledFuture),
-    Type(Box<baml_type::RuntimeTy>),
+    Type(Box<baml_type::RealizedTy>),
 }
 
 impl BorshSerialize for Object {

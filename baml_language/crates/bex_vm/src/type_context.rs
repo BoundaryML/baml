@@ -22,7 +22,7 @@
 //! a proven-exhaustive match — see the List/Map-invariance sequencing constraint;
 //! the matcher's callers gate structural tests accordingly).
 
-use baml_type::{Interface, Name, QualifiedTypeName, RuntimeTy, Ty, normalize::TypeContext};
+use baml_type::{Interface, Name, QualifiedTypeName, RealizedTy, Ty, normalize::TypeContext};
 use bex_vm_types::types::Object;
 
 use crate::BexVm;
@@ -48,16 +48,17 @@ impl TypeContext for RuntimeTypeContext<'_> {
     }
 
     fn implements_interface(&self, concrete: &Ty, interface: &Interface) -> bool {
-        // Narrow the algebra's `Ty` operands to `RuntimeTy` and delegate to the
-        // open-world resolver. A narrowing failure (a compiler-only variant that
-        // cannot exist at runtime) fails safe: no membership is claimed.
-        let Ok(concrete) = RuntimeTy::try_from(concrete) else {
+        // Narrow the algebra's `Ty` operands to the runtime's `RealizedTy` and
+        // delegate to the open-world resolver. A narrowing failure (a non-realized
+        // variant that cannot exist as a runtime value) fails safe: no membership
+        // is claimed.
+        let Ok(concrete) = RealizedTy::try_from(concrete) else {
             return false;
         };
         let Ok(args) = interface
             .generics
             .iter()
-            .map(RuntimeTy::try_from)
+            .map(RealizedTy::try_from)
             .collect::<Result<Vec<_>, _>>()
         else {
             return false;
@@ -65,7 +66,7 @@ impl TypeContext for RuntimeTypeContext<'_> {
         let Ok(assoc) = interface
             .associated_types
             .iter()
-            .map(|(name, ty)| RuntimeTy::try_from(ty).map(|ty| (name.clone(), ty)))
+            .map(|(name, ty)| RealizedTy::try_from(ty).map(|ty| (name.clone(), ty)))
             .collect::<Result<Vec<_>, _>>()
         else {
             return false;
@@ -114,13 +115,45 @@ impl TypeContext for RuntimeTypeContext<'_> {
 
     fn project(
         &self,
-        _base: &Ty,
-        _interface: &Interface,
-        _member: &Name,
+        base: &Ty,
+        interface: &Interface,
+        member: &Name,
     ) -> baml_type::normalize::ProjectionStep {
-        // Explicitly opaque: for the same reason as `associated_type_bound` — a
-        // realized runtime value never carries a symbolic `(_ as I).member`
-        // projection for the algebra to reduce.
-        baml_type::normalize::ProjectionStep::Opaque
+        use baml_type::normalize::ProjectionStep;
+        // Reduce `(base as I).member` to the impl's binding when the base is a
+        // realized runtime type — the runtime twin of the compiler's projection
+        // reduction. A symbolic (non-realized) base, an interface arg that is not
+        // realized, no applicable impl, or a binding that does not itself realize
+        // all leave the projection opaque (equal only to itself), never a wrong
+        // reduction.
+        let Ok(base) = RealizedTy::try_from(base) else {
+            return ProjectionStep::Opaque;
+        };
+        let Ok(iface_args) = interface
+            .generics
+            .iter()
+            .map(RealizedTy::try_from)
+            .collect::<Result<Vec<_>, _>>()
+        else {
+            return ProjectionStep::Opaque;
+        };
+        // Select the applicable impl and read its associated-type binding template.
+        let Some((rule, bound_args)) = crate::package_baml::resolve_implements_rule(
+            self.vm,
+            &base,
+            &interface.name,
+            &iface_args,
+        ) else {
+            return ProjectionStep::Opaque;
+        };
+        let Some((_, template)) = rule.interface_assoc.iter().find(|(n, _)| n == member) else {
+            return ProjectionStep::Opaque;
+        };
+        // Realize the binding against the impl's bound args; widen back into `Ty`
+        // for the canonical algebra.
+        match template.substitute(&bound_args, self) {
+            Ok(reduced) => ProjectionStep::Reduced(reduced.into()),
+            Err(_) => ProjectionStep::Opaque,
+        }
     }
 }

@@ -33,7 +33,7 @@
 //! Dormant until MIR/emit routes structural type tests through
 //! `ConstValue::Type` — the sole caller today is a unit-tested `IsType` arm.
 
-use baml_type::{RuntimeTy, Ty, TyTemplate, normalize};
+use baml_type::{RealizedTy, Ty, TyTemplate, normalize};
 use bex_vm_types::Value;
 
 use crate::{BexVm, type_context::RuntimeTypeContext};
@@ -69,7 +69,7 @@ pub(crate) fn value_matches_template(
     vm: &BexVm,
     value: Value,
     template: &TyTemplate,
-    frame_type_args: &[RuntimeTy],
+    frame_type_args: &[RealizedTy],
 ) -> bool {
     // A value with no concrete BAML type (function/closure/future/…) is a member
     // of no structural type test.
@@ -100,13 +100,17 @@ pub(crate) fn value_matches_template(
 fn template_relates<C: normalize::TypeContext>(
     ctx: &C,
     template: &TyTemplate,
-    frame_type_args: &[RuntimeTy],
+    frame_type_args: &[RealizedTy],
     actual: &Ty,
     variance: Variance,
 ) -> bool {
     if !template.contains_wildcard() {
-        // Resolve frame references and let the canonical algebra do the work.
-        let expected = template.substitute(frame_type_args);
+        // Resolve frame references (and reduce any projection) into a realized
+        // type, then let the canonical algebra do the work. A template that does
+        // not realize against the frame's realized args matches nothing.
+        let Ok(expected) = template.substitute(frame_type_args, ctx) else {
+            return false;
+        };
         return relate(ctx, actual, expected.as_ty(), variance);
     }
 
@@ -258,11 +262,17 @@ mod tests {
     }
 
     /// `template_relates` over the empty context, covariant at the top level.
+    /// The frame args are written as `RuntimeTy` for test ergonomics and narrowed
+    /// to the realized frame the matcher takes (they are all concrete here).
     fn matches(template: &TyTemplate, frame: &[RuntimeTy], actual: &RuntimeTy) -> bool {
+        let frame: Vec<RealizedTy> = frame
+            .iter()
+            .map(|t| RealizedTy::try_from(t).expect("test frame arg is realized"))
+            .collect();
         template_relates(
             &EmptyCtx,
             template,
-            frame,
+            &frame,
             actual.as_ty(),
             Variance::Covariant,
         )

@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_type::{Name, RuntimeTy, TyAttr, TypeName};
+use baml_type::{Name, RealizedTy, TyAttr, TypeName};
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, ValueKind,
@@ -171,7 +171,7 @@ enum Cmp {
     Yield {
         callee: HeapPtr,
         args: Vec<Value>,
-        type_args: Vec<RuntimeTy>,
+        type_args: Vec<RealizedTy>,
     },
 }
 
@@ -557,15 +557,15 @@ impl Continuation for EqualsDriver {
     }
 }
 
-/// The concrete runtime `RuntimeTy` of the class instance or enum value at `ptr` — `Class` with
+/// The concrete runtime `RealizedTy` of the class instance or enum value at `ptr` — `Class` with
 /// its `class_type_args` (so a generic instance resolves at the right args), or `Enum`.
 /// `None` for any other object kind (only instances/enums implement `Equals`).
-fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RuntimeTy> {
+fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
     match vm.get_object(ptr) {
         Object::Instance(inst) => {
             let (class_ptr, type_args) = (inst.class, inst.class_type_args.to_vec());
             match vm.get_object(class_ptr) {
-                Object::Class(class) => Some(RuntimeTy::Class(
+                Object::Class(class) => Some(RealizedTy::Class(
                     class.name.clone(),
                     type_args,
                     TyAttr::default(),
@@ -574,7 +574,7 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RuntimeTy> {
             }
         }
         Object::Variant(v) => match vm.get_object(v.enm) {
-            Object::Enum(e) => Some(RuntimeTy::Enum(e.name.clone(), TyAttr::default())),
+            Object::Enum(e) => Some(RealizedTy::Enum(e.name.clone(), TyAttr::default())),
             _ => None,
         },
         _ => None,
@@ -585,7 +585,7 @@ fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RuntimeTy> {
 /// `None` when the type has no `Equals` impl (→ the structural/identity fallback). The
 /// concrete type carries any `class_type_args`, so a generic/blanket impl
 /// (`implement<T> Equals for Box<T>`) resolves at the right `T`.
-fn resolve_equals_eq(vm: &BexVm, concrete: &RuntimeTy) -> Option<(HeapPtr, Vec<RuntimeTy>)> {
+fn resolve_equals_eq(vm: &BexVm, concrete: &RealizedTy) -> Option<(HeapPtr, Vec<RealizedTy>)> {
     // `Equals` is non-generic — no interface args to select on; off the resolved
     // rule, `eq` is the concrete method (the impl's own, or the merged default),
     // invoked with its frame realized against the impl's bound type args.
@@ -594,7 +594,14 @@ fn resolve_equals_eq(vm: &BexVm, concrete: &RuntimeTy) -> Option<(HeapPtr, Vec<R
     // `fqn` is the resolved callee's heap pointer (the impl method or merged
     // default), baked at emit time — invoke it directly.
     let callee = method.fqn;
-    Some((callee, resolve::realize_frame(&method.frame, &bound_args)))
+    // The resolved impl's frame realizes fully against its bound args (every
+    // projection reduced through the impl registry). A failure is a broken
+    // compiler/VM invariant rather than a runtime possibility, so surface it
+    // instead of silently dropping the custom `eq`.
+    let type_args = resolve::realize_frame(vm, &method.frame, &bound_args).unwrap_or_else(|e| {
+        unreachable!("Equals impl frame did not realize against bound args: {e}")
+    });
+    Some((callee, type_args))
 }
 
 /// The `baml.ops.Equals` interface name.
