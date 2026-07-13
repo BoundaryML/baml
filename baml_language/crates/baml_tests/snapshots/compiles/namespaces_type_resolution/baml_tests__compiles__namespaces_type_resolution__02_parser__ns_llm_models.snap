@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13789
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -63,13 +64,13 @@ SOURCE_FILE
         WORD "int"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ConfigAlias"
     EQUALS "="
     TYPE_EXPR "Config"
       WORD "Config"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "ResponseAlias"
     EQUALS "="
     TYPE_EXPR "Response"
@@ -274,7 +275,7 @@ SOURCE_FILE
                 OBJECT_FIELD "retryable: true"
                   WORD "retryable"
                   COLON ":"
-                  KW_TRUE "true"
+                  WORD "true"
                 R_BRACE "}"
             COMMA ","
           MATCH_ARM

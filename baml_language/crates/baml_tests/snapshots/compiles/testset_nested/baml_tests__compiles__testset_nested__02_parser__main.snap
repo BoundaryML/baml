@@ -38,7 +38,7 @@ SOURCE_FILE
                 CALL_ARGS
                   L_PAREN "("
                   CALL_ARG "true"
-                    KW_TRUE "true"
+                    WORD "true"
                   R_PAREN ")"
               R_BRACE "}"
           R_BRACE "}"
@@ -68,7 +68,7 @@ SOURCE_FILE
                 CALL_ARGS
                   L_PAREN "("
                   CALL_ARG "true"
-                    KW_TRUE "true"
+                    WORD "true"
                   R_PAREN ")"
               R_BRACE "}"
           R_BRACE "}"

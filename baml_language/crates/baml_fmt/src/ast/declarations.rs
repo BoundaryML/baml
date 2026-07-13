@@ -1349,7 +1349,7 @@ impl Printable for ImplementsTarget {
 /// BEP-057 associated type declaration or implementation witness.
 #[derive(Debug)]
 pub struct AssociatedTypeDecl {
-    pub keyword: t::TypeKw,
+    pub keyword: t::Word,
     pub name: t::Word,
     pub bound: Option<(t::Extends, Type)>,
     pub default: Option<(t::Equals, Type)>,
@@ -1438,7 +1438,7 @@ impl Printable for AssociatedTypeDecl {
 #[derive(Debug)]
 pub struct InterfaceFieldLink {
     pub interface_field: t::Word,
-    pub as_token: t::As,
+    pub as_token: t::Word,
     pub class_field: t::Word,
 }
 
@@ -3307,7 +3307,8 @@ impl Printable for TemplateStringDecl {
 /// Corresponds to a [`SyntaxKind::TYPE_ALIAS_DEF`] node.
 #[derive(Debug)]
 pub struct TypeAliasDecl {
-    pub keyword: t::TypeKw,
+    /// For some reason, type is not currently a keyword
+    pub keyword: t::Word,
     pub name: t::Word,
     pub equals: t::Equals,
     pub type_expr: Type,
@@ -3321,7 +3322,7 @@ impl FromCST for TypeAliasDecl {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        // keyword: `type` (KW_TYPE)
+        // keyword: "type" (it's actually just a WORD, not a keyword)
         let keyword = it.expect_parse()?;
 
         // name

@@ -356,7 +356,7 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Result"
     EQUALS "="
     TYPE_EXPR "Success | Failure"
@@ -815,7 +815,7 @@ SOURCE_FILE
         WORD "int"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "FullResult"
     EQUALS "="
     TYPE_EXPR "Success | Failure | Pending"
@@ -1262,19 +1262,19 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "AlwaysTrue"
     EQUALS "="
     TYPE_EXPR "true"
       WORD "true"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "AlwaysFalse"
     EQUALS "="
     TYPE_EXPR "false"
       WORD "false"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "CustomBool"
     EQUALS "="
     TYPE_EXPR "true | false"
@@ -1573,7 +1573,7 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "Role"
     EQUALS "="
     TYPE_EXPR
@@ -1835,19 +1835,19 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "HttpOk"
     EQUALS "="
     TYPE_EXPR "200"
       INTEGER_LITERAL "200"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "HttpCreated"
     EQUALS "="
     TYPE_EXPR "201"
       INTEGER_LITERAL "201"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "SuccessCode"
     EQUALS "="
     TYPE_EXPR "200 | 201 | 204"
@@ -2050,7 +2050,7 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "MaybeResult"
     EQUALS "="
     TYPE_EXPR "Result?"
@@ -2564,7 +2564,7 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "MaybeOk"
     EQUALS "="
     TYPE_EXPR "200?"
@@ -2689,7 +2689,7 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "MixedLiterals"
     EQUALS "="
     TYPE_EXPR
@@ -2816,13 +2816,13 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "OkCode"
     EQUALS "="
     TYPE_EXPR "200"
       INTEGER_LITERAL "200"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "OkOrCreated"
     EQUALS "="
     TYPE_EXPR "OkCode | 201"
@@ -2911,7 +2911,7 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "DoubleMaybe"
     EQUALS "="
     TYPE_EXPR "MaybeResult?"
@@ -3449,7 +3449,7 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "SuccessOr200"
     EQUALS "="
     TYPE_EXPR "Success | 200"

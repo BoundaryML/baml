@@ -28,7 +28,7 @@ SOURCE_FILE
     null
   }"
           L_BRACE "{"
-          KW_NULL "null"
+          WORD "null"
           R_BRACE "}"
       TESTSET_DEF
         KW_TESTSET "testset"
@@ -54,7 +54,7 @@ SOURCE_FILE
       null
     }"
               L_BRACE "{"
-              KW_NULL "null"
+              WORD "null"
               R_BRACE "}"
           R_BRACE "}"
       R_BRACE "}"

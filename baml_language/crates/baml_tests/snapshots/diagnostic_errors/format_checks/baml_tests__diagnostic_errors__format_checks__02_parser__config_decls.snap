@@ -316,7 +316,7 @@ SOURCE_FILE
           CONFIG_ITEM
             WORD "stream"
             CONFIG_VALUE "true"
-              KW_TRUE "true"
+              WORD "true"
           R_BRACE "}"
       R_BRACE "}"
   CLIENT_DEF
@@ -527,7 +527,7 @@ SOURCE_FILE
           CONFIG_ITEM
             WORD "stream"
             CONFIG_VALUE "true"
-              KW_TRUE "true"
+              WORD "true"
           CONFIG_ITEM
             WORD "stop"
             CONFIG_VALUE
@@ -717,7 +717,7 @@ llm /* 6 type trailing */
                   CONFIG_ITEM
                     WORD "retry_on_failure"
                     CONFIG_VALUE "true"
-                      KW_TRUE "true"
+                      WORD "true"
                   CONFIG_ITEM
                     WORD "timeout_ms"
                     CONFIG_VALUE "30000"
@@ -881,7 +881,7 @@ llm /* 6 type trailing */
           CONFIG_ITEM
             WORD "stream"
             CONFIG_VALUE "true"
-              KW_TRUE "true"
+              WORD "true"
           CONFIG_ITEM
             WORD "stop_sequences"
             CONFIG_VALUE
@@ -1522,7 +1522,7 @@ llm /* 4 type trailing */
               WORD "Q"
             R_BRACE "}"
         TYPE_ALIAS_DEF
-          KW_TYPE "type"
+          WORD "type"
           WORD "InnerAlias"
           EQUALS "="
           TYPE_EXPR "string | int"
@@ -1625,7 +1625,7 @@ llm /* 4 type trailing */
             WORD "AnotherVeryLongVariantName"
           R_BRACE "}"
         TYPE_ALIAS_DEF
-          KW_TYPE "type"
+          WORD "type"
           WORD "VeryLongTypeAliasNameThatExceedsLimit"
           EQUALS "="
           TYPE_EXPR "int | string | bool | float | null | int[] | string[]"
@@ -1693,7 +1693,7 @@ llm /* 4 type trailing */
             WORD "X"
           R_BRACE "}"
         TYPE_ALIAS_DEF
-          KW_TYPE "type"
+          WORD "type"
           WORD "TbAlias"
           EQUALS "="
           TYPE_EXPR "// 42 equals trailing
@@ -1749,7 +1749,7 @@ llm /* 4 type trailing */
             WORD "X"
           R_BRACE "}"
         TYPE_ALIAS_DEF
-          KW_TYPE "type"
+          WORD "type"
           WORD "TbAliasBlock"
           EQUALS "="
           TYPE_EXPR "/* 42 equals trailing */

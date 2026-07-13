@@ -80,7 +80,7 @@ SOURCE_FILE
           KW_WHILE "while"
           PAREN_EXPR "(true)"
             L_PAREN "("
-            KW_TRUE "true"
+            WORD "true"
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"

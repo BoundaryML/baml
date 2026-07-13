@@ -24,7 +24,7 @@ SOURCE_FILE
         WORD "int"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "StringAlias"
     EQUALS "="
     TYPE_EXPR "string"
@@ -83,7 +83,7 @@ SOURCE_FILE
         WORD "string"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    KW_TYPE "type"
+    WORD "type"
     WORD "AliasToClass"
     EQUALS "="
     TYPE_EXPR "Inner"

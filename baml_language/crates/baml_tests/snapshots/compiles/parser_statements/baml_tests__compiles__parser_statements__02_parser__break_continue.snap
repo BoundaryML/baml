@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16268
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -19,7 +20,7 @@ SOURCE_FILE
           KW_WHILE "while"
           PAREN_EXPR "(true)"
             L_PAREN "("
-            KW_TRUE "true"
+            WORD "true"
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
@@ -49,7 +50,7 @@ SOURCE_FILE
           KW_WHILE "while"
           PAREN_EXPR "(true)"
             L_PAREN "("
-            KW_TRUE "true"
+            WORD "true"
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
@@ -175,7 +176,7 @@ SOURCE_FILE
           KW_WHILE "while"
           PAREN_EXPR "(true)"
             L_PAREN "("
-            KW_TRUE "true"
+            WORD "true"
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
@@ -183,7 +184,7 @@ SOURCE_FILE
               KW_WHILE "while"
               PAREN_EXPR "(true)"
                 L_PAREN "("
-                KW_TRUE "true"
+                WORD "true"
                 R_PAREN ")"
               BLOCK_EXPR
                 L_BRACE "{"
@@ -216,7 +217,7 @@ SOURCE_FILE
           KW_WHILE "while"
           PAREN_EXPR "(true)"
             L_PAREN "("
-            KW_TRUE "true"
+            WORD "true"
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
@@ -232,7 +233,7 @@ SOURCE_FILE
               KW_IF "if"
               PAREN_EXPR "(true)"
                 L_PAREN "("
-                KW_TRUE "true"
+                WORD "true"
                 R_PAREN ")"
               BLOCK_EXPR
                 L_BRACE "{"
@@ -272,7 +273,7 @@ SOURCE_FILE
           KW_WHILE "while"
           PAREN_EXPR "(true)"
             L_PAREN "("
-            KW_TRUE "true"
+            WORD "true"
             R_PAREN ")"
           BLOCK_EXPR
             L_BRACE "{"
@@ -288,7 +289,7 @@ SOURCE_FILE
               KW_IF "if"
               PAREN_EXPR "(true)"
                 L_PAREN "("
-                KW_TRUE "true"
+                WORD "true"
                 R_PAREN ")"
               BLOCK_EXPR
                 L_BRACE "{"

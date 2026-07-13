@@ -38,13 +38,6 @@ struct LiveProject {
     rebuild_epoch: std::sync::atomic::AtomicU64,
 }
 
-/// Per-file `result_id` + last-sent encoded token array, keyed by file path.
-type SemanticTokensCache = std::sync::Arc<
-    std::sync::Mutex<
-        std::collections::HashMap<crate::fs::FsPath, (String, Vec<lsp_types::SemanticToken>)>,
-    >,
->;
-
 #[derive(Clone)]
 struct BexMulitProject {
     projects:
@@ -67,13 +60,6 @@ struct BexMulitProject {
     fs: crate::fs::BamlVFS,
 
     spawner: BackgroundSpawner,
-
-    /// Per-file cache of the last semantic tokens returned (its `result_id` and
-    /// the encoded token array), so `semanticTokens/full/delta` can reply with
-    /// only the changed edits instead of the whole array.
-    semantic_tokens_cache: SemanticTokensCache,
-    /// Monotonic source of semantic-token `result_id`s.
-    semantic_tokens_seq: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 pub trait LspClientSenderTrait {
@@ -130,10 +116,6 @@ impl BexMulitProject {
             workspace_roots: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             fs,
             spawner,
-            semantic_tokens_cache: std::sync::Arc::new(std::sync::Mutex::new(
-                std::collections::HashMap::new(),
-            )),
-            semantic_tokens_seq: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 

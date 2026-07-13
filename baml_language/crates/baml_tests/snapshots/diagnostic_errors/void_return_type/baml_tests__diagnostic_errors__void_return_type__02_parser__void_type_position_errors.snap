@@ -98,7 +98,7 @@ SOURCE_FILE
   null
 }"
         L_BRACE "{"
-        KW_NULL "null"
+        WORD "null"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

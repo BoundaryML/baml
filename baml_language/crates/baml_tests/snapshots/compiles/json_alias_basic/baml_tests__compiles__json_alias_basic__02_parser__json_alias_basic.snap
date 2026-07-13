@@ -30,7 +30,7 @@ SOURCE_FILE
           OBJECT_FIELD "data: null"
             WORD "data"
             COLON ":"
-            KW_NULL "null"
+            WORD "null"
           R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
@@ -47,7 +47,7 @@ SOURCE_FILE
   null
 }"
         L_BRACE "{"
-        KW_NULL "null"
+        WORD "null"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -63,7 +63,7 @@ SOURCE_FILE
   true
 }"
         L_BRACE "{"
-        KW_TRUE "true"
+        WORD "true"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

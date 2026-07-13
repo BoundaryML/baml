@@ -142,7 +142,7 @@ SOURCE_FILE
                     WORD "message"
                   R_BRACE "}"
               FAT_ARROW "=>"
-              KW_NULL "null"
+              WORD "null"
               COMMA ","
             R_BRACE "}"
         R_BRACE "}"
