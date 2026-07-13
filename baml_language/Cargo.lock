@@ -6561,7 +6561,10 @@ dependencies = [
  "baml_project",
  "baml_workspace",
  "borsh",
+ "proc-macro2",
+ "quote",
  "sdkgen_python_pydantic2",
+ "sdkgen_rust",
  "sdkgen_typescript_node",
 ]
 
@@ -6577,6 +6580,14 @@ dependencies = [
 
 [[package]]
 name = "sdk_test_python_pydantic2"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
+name = "sdk_test_rust"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
@@ -6613,11 +6624,14 @@ dependencies = [
 name = "sdkgen_rust"
 version = "0.0.0-beta"
 dependencies = [
- "askama",
  "baml_base",
  "baml_codegen_types",
  "indexmap",
  "pretty_assertions",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

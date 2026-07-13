@@ -10,10 +10,13 @@ build.rs for both targets and lives in a per-crate `setup.sh`
 [`crates/python_pydantic2/setup.sh`](./crates/python_pydantic2/setup.sh)
 (the `--reinstall-package` forces the maturin rebuild of
 baml_bridge's `.so` that a plain `uv sync` skips on incremental Rust
-edits), and typescript_node's per-fixture `pnpm install` + the
+edits), typescript_node's per-fixture `pnpm install` + the
 prereq `pnpm build:debug` of bridge_nodejs's native `.node` addon
 live in
-[`crates/typescript_node/setup.sh`](./crates/typescript_node/setup.sh).
+[`crates/typescript_node/setup.sh`](./crates/typescript_node/setup.sh),
+and rust's serial per-fixture `cargo test --no-run` pre-warm of the
+shared `target/sdk-rust-target` build dir lives in
+[`crates/rust/setup.sh`](./crates/rust/setup.sh).
 `cargo nextest run` fires the matching setup script automatically
 via platform-filtered (`cfg(unix)` / `cfg(windows)`) setup-script
 bindings in
@@ -34,7 +37,7 @@ codegen + project-loading deps only land where they're needed:
 - **`sdk_test_harness_setup`** (`[build-dependencies]`) holds the build.rs
   logic -- fixture discovery, codegen, install, scaffold emission,
   `BuildDiagnostics`. Depends on `sdkgen_python_pydantic2`, `sdkgen_typescript_node`,
-  `baml_project`, `baml_db`, `baml_workspace`, `baml_codegen_types`.
+  `sdkgen_rust`, `baml_project`, `baml_db`, `baml_workspace`, `baml_codegen_types`.
 - **`sdk_test_harness_runner`** (`[dev-dependencies]`) holds every emitted
   test's runtime side -- `run_test_cmd` / `run_test_cmd_with_env`,
   the per-generator `<generator>::test_suite!()` macros that
@@ -55,6 +58,7 @@ sdk_tests/
 |   `-- src/
 |       |-- lib.rs                        # generator-agnostic helpers + BuildDiagnostics
 |       |-- python_pydantic2.rs           # python+pydantic2 codegen + scaffold emit (run_all)
+|       |-- rust.rs                       # rust codegen + scaffold emit + TEST_MODS port gating
 |       `-- typescript_node.rs            # nodejs+typescript codegen + scaffold emit
 |-- harness_runner/                       # test-side crate (std only)
 |   |-- Cargo.toml                        # name = "sdk_test_harness_runner"
@@ -71,14 +75,22 @@ sdk_tests/
     |   |-- setup.sh                      # per-fixture `uv sync --reinstall-package baml_bridge` (.so rebuild) (Unix)
     |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
     |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::python_pydantic2::test_suite!()
-    `-- typescript_node/
-        |-- Cargo.toml                    # name = "sdk_test_typescript_node"
+    |-- typescript_node/
+    |   |-- Cargo.toml                    # name = "sdk_test_typescript_node"
+    |   |                                 # [build-dependencies] sdk_test_harness_setup
+    |   |                                 # [dev-dependencies]   sdk_test_harness_runner
+    |   |-- build.rs                      # one-liner -> sdk_test_harness_setup::typescript_node::run_all()
+    |   |-- setup.sh                      # pnpm build:debug (bridge_nodejs) + per-fixture pnpm install (Unix)
+    |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
+    |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript_node::test_suite!()
+    `-- rust/
+        |-- Cargo.toml                    # name = "sdk_test_rust"
         |                                 # [build-dependencies] sdk_test_harness_setup
         |                                 # [dev-dependencies]   sdk_test_harness_runner
-        |-- build.rs                      # one-liner -> sdk_test_harness_setup::typescript_node::run_all()
-        |-- setup.sh                      # pnpm build:debug (bridge_nodejs) + per-fixture pnpm install (Unix)
+        |-- build.rs                      # one-liner -> sdk_test_harness_setup::rust::run_all()
+        |-- setup.sh                      # serial `cargo test --no-run` pre-warm of target/sdk-rust-target (Unix)
         |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
-        `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript_node::test_suite!()
+        `-- src/lib.rs                    # invokes sdk_test_harness_runner::rust::test_suite!()
 ```
 
 ## How It Works
@@ -97,10 +109,20 @@ sdk_tests/
      `crates/<generator>/<fixture>/generated/` (python) -- or
      copies (`typescript_node`, because Node.js follows
      symlinks during module resolution and can break out of the
-     generated dir's `node_modules`).
+     generated dir's `node_modules`). The rust target symlinks into
+     `generated/customizable/` (NOT `generated/tests/`, where cargo
+     would auto-discover every file as its own test target) and
+     writes the `generated/tests/main.rs` gate file that decides
+     which ported files compile (see the `TEST_MODS` table in
+     `harness_setup/src/rust.rs`).
    - Writes `crates/<generator>/<fixture>/generated/pyproject.toml`
      (or `package.json` + `tsconfig.json` for `typescript_node`)
-     with the per-fixture package name.
+     with the per-fixture package name. The rust target's
+     `generated/Cargo.toml` instead comes from `sdkgen_rust` itself
+     (the generated SDK is a complete Cargo crate); the harness
+     injects the per-fixture package name, the `bridge_rust` path
+     dep, and the test-suite `[dev-dependencies]` via
+     `RustGenOptions`.
    - For BOTH targets: the toolchain install is OUT of build.rs and
      lives in `crates/<generator>/setup.sh` (Unix) or `setup.ps1`
      (Windows) -- the two are equivalent, same steps in each
@@ -120,6 +142,12 @@ sdk_tests/
      bridge_nodejs's native `.node` addon. Populates `node_modules/`
      from the shared `target/pnpm-store/`. Tests then only do
      read-only work against the populated tree.
+   - For rust: the setup script runs a serial `cargo test --no-run`
+     per fixture into the shared `target/sdk-rust-target` build dir
+     (threaded to the tests as `CARGO_TARGET_DIR`), so the
+     bridge_rust -> BEX runtime stack compiles once before nextest
+     fans the per-fixture `cargo clippy` / `cargo test` invocations
+     out in parallel against a warm cache.
    - Emits `OUT_DIR/<generator>_tests.rs` -- a generated source file
      containing a `::sdk_test_harness_runner::build_diagnostics!(...)` macro
      invocation at the top followed by one `mod <fixture> { ... }`
