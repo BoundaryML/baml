@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE language>
+<!--
+  KDE KSyntaxHighlighting definition for the BAML language.
+
+  This file is maintained in typescript2/pkg-grammar/syntaxes/ in the BAML
+  monorepo. It is hand-authored (KSyntaxHighlighting is rule-based and not
+  mechanically convertible from TextMate); the keyword lists, literal formats,
+  and escape rules are derived from:
+
+    - typescript2/pkg-grammar/src/baml.ts             (the TextMate source)
+    - baml_language/crates/baml_compiler_lexer/src/tokens.rs (the lexer)
+
+  Consumers: Kate, KWrite, KDevelop, Qt apps via KSyntaxHighlighting, and
+  Pandoc via skylighting.
+
+  Notes on approximations vs. the TextMate grammar:
+    - Raw strings (#"..."#, ##"..."##, ...) and backtick strings (`...`,
+      ``...``, ...) use dynamic rules (%1 backreference), so any delimiter
+      run length is supported exactly - unlike the TextMate grammar, which
+      enumerates 1..8.
+    - Jinja spans ({{ ... }}, {% ... %}, {# ... #}) are highlighted inside
+      every raw string, not only inside `prompt` / `template_string` bodies.
+      In practice raw strings in BAML are prompt/template bodies, so this is
+      a faithful approximation without full parser context.
+    - `class` / `enum` / `interface` / `function` switch into a one-shot
+      context that colours the declared name; other declaration names
+      (clients, tests, generators) are left as normal text.
+-->
+<language
+    name="BAML"
+    section="Sources"
+    extensions="*.baml"
+    version="1"
+    kateversion="5.62"
+    author="Boundary (contact@boundaryml.com)"
+    license="Apache-2.0">
+  <highlighting>
+
+    <!-- Item declaration keywords (lexer keyword tokens plus the contextual
+         `const`, which lexes as a Word but introduces bindings like `let`).
+         `class` / `enum` / `interface` / `function` are handled by WordDetect
+         rules in the Normal context so the declared name can be coloured. -->
+    <list name="declarations">
+      <item>client</item>
+      <item>generator</item>
+      <item>retry_policy</item>
+      <item>template_string</item>
+      <item>test</item>
+      <item>testset</item>
+      <item>type</item>
+      <item>type_builder</item>
+      <item>let</item>
+      <item>const</item>
+      <item>extends</item>
+      <item>requires</item>
+      <item>implements</item>
+      <item>implement</item>
+      <item>dynamic</item>
+    </list>
+
+    <!-- Control-flow keywords (lexer keyword tokens). -->
+    <list name="controlflow">
+      <item>if</item>
+      <item>else</item>
+      <item>for</item>
+      <item>while</item>
+      <item>break</item>
+      <item>continue</item>
+      <item>return</item>
+      <item>throw</item>
+      <item>match</item>
+      <item>catch</item>
+      <item>catch_all</item>
+      <item>defer</item>
+      <item>watch</item>
+    </list>
+
+    <!-- Word-shaped operators. `is`, `in`, `instanceof`, `throws`, `spawn`,
+         `await` are lexer keywords; `as` and `with` are contextual words the
+         TextMate grammar also scopes as operators. -->
+    <list name="wordoperators">
+      <item>in</item>
+      <item>is</item>
+      <item>as</item>
+      <item>instanceof</item>
+      <item>throws</item>
+      <item>spawn</item>
+      <item>await</item>
+      <item>with</item>
+    </list>
+
+    <!-- Builtin primitive types (BUILTIN_TYPES in src/baml.ts). -->
+    <list name="types">
+      <item>int</item>
+      <item>float</item>
+      <item>bigint</item>
+      <item>string</item>
+      <item>bool</item>
+      <item>image</item>
+      <item>audio</item>
+      <item>map</item>
+      <item>json</item>
+      <item>unknown</item>
+      <item>never</item>
+      <item>Self</item>
+    </list>
+
+    <!-- Language constants. `true` / `false` / `null` lex as plain Words;
+         the parser gives them meaning (see src/baml.ts literals section). -->
+    <list name="constants">
+      <item>true</item>
+      <item>false</item>
+      <item>null</item>
+    </list>
+
+    <!-- Reserved root namespaces and special value roots: `root` / `baml`
+         (BUILTIN_NAMESPACES), `env` (environment access), `self`. -->
+    <list name="builtins">
+      <item>env</item>
+      <item>self</item>
+      <item>root</item>
+      <item>baml</item>
+    </list>
+
+    <!-- Jinja keywords recognised inside {{ ... }} / {% ... %} spans
+         (TEMPLATE_KEYWORDS in src/baml.ts). -->
+    <list name="templatekeywords">
+      <item>for</item>
+      <item>endfor</item>
+      <item>if</item>
+      <item>elif</item>
+      <item>else</item>
+      <item>endif</item>
+      <item>in</item>
+      <item>set</item>
+      <item>filter</item>
+      <item>endfilter</item>
+      <item>macro</item>
+      <item>endmacro</item>
+      <item>raw</item>
+      <item>endraw</item>
+    </list>
+
+    <contexts>
+      <context name="Normal" attribute="Normal Text" lineEndContext="#stay">
+        <DetectSpaces/>
+
+        <!-- Comments: `//` to end of line, `/* ... */` (non-nesting). -->
+        <Detect2Chars attribute="Comment" context="CommentLine" char="/" char1="/"/>
+        <Detect2Chars attribute="Comment" context="CommentBlock" char="/" char1="*" beginRegion="Comment"/>
+
+        <!-- Attributes: `@name`, `@@name`, dotted paths allowed
+             (`@stream.done`, `@@assert`). -->
+        <RegExpr attribute="Attribute" context="#stay" String="@@?[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*"/>
+
+        <!-- Environment variable access: `env.OPENAI_API_KEY`. -->
+        <RegExpr attribute="Environment" context="#stay" String="\benv\.[A-Za-z_$][A-Za-z0-9_-]*"/>
+
+        <!-- Declarations whose name is worth colouring. -->
+        <WordDetect attribute="Keyword" context="TypeDeclName" String="class"/>
+        <WordDetect attribute="Keyword" context="TypeDeclName" String="enum"/>
+        <WordDetect attribute="Keyword" context="TypeDeclName" String="interface"/>
+        <WordDetect attribute="Keyword" context="FunctionDeclName" String="function"/>
+
+        <keyword attribute="Keyword" context="#stay" String="declarations"/>
+        <keyword attribute="Control Flow" context="#stay" String="controlflow"/>
+        <keyword attribute="Keyword Operator" context="#stay" String="wordoperators"/>
+        <keyword attribute="Data Type" context="#stay" String="types"/>
+        <keyword attribute="Constant" context="#stay" String="constants"/>
+        <keyword attribute="Builtin" context="#stay" String="builtins"/>
+
+        <!-- Byte string: `b"..."`. The prefix is only special when adjacent
+             to the quote (`b "..."` is an identifier plus a string). -->
+        <RegExpr attribute="Byte String" context="ByteString" String="\bb&quot;"/>
+
+        <!-- Raw string: #"..."#, ##"..."##, ... - any run of hashes. The
+             captured run is matched again by the dynamic close rule. -->
+        <RegExpr attribute="Raw String" context="RawString" String="(#+)&quot;"/>
+
+        <!-- Backtick string: `...`, ``...``, ... - any run of backticks. -->
+        <RegExpr attribute="Backtick String" context="BacktickString" String="(`+)"/>
+
+        <!-- Plain double-quoted string. -->
+        <DetectChar attribute="String" context="StringDQ" char="&quot;"/>
+
+        <!-- Identifiers (lexer Word: hyphens are continuation chars, so
+             `gpt-4o` is one identifier; `$` may prefix or join segments).
+             Claimed before numbers so digits inside a name stay plain. -->
+        <RegExpr attribute="Normal Text" context="#stay" String="\$?[A-Za-z_][A-Za-z0-9_-]*"/>
+
+        <!-- Numbers, in lexer order: bigint (`42n`) and floats before
+             integers, so the integer rule cannot peel their digits off. -->
+        <RegExpr attribute="BigInt" context="#stay" String="\b[0-9]+n"/>
+        <RegExpr attribute="Float" context="#stay" String="\b[0-9]+(?:\.[0-9]+(?:[eE][+-]?[0-9]+)?|[eE][+-]?[0-9]+)"/>
+        <RegExpr attribute="Decimal" context="#stay" String="\b[0-9]+\b"/>
+
+        <!-- Braces drive code folding only; they keep the normal colour. -->
+        <DetectChar attribute="Normal Text" context="#stay" char="{" beginRegion="Brace"/>
+        <DetectChar attribute="Normal Text" context="#stay" char="}" endRegion="Brace"/>
+
+        <!-- Symbolic operators (|, ?, ->, =>, comparisons, arithmetic,
+             bitwise, assignment compounds all decompose into these). -->
+        <AnyChar attribute="Operator" context="#stay" String="+-*/%=!&amp;|^~&lt;&gt;?"/>
+      </context>
+
+      <!-- One-shot: the identifier after class/enum/interface. -->
+      <context name="TypeDeclName" attribute="Normal Text" lineEndContext="#pop" fallthroughContext="#pop">
+        <DetectSpaces/>
+        <RegExpr attribute="Type Name" context="#pop" String="\$?[A-Za-z_][A-Za-z0-9_-]*"/>
+      </context>
+
+      <!-- One-shot: the identifier after `function`. -->
+      <context name="FunctionDeclName" attribute="Normal Text" lineEndContext="#pop" fallthroughContext="#pop">
+        <DetectSpaces/>
+        <RegExpr attribute="Function" context="#pop" String="\$?[A-Za-z_][A-Za-z0-9_-]*"/>
+      </context>
+
+      <context name="CommentLine" attribute="Comment" lineEndContext="#pop">
+        <DetectSpaces/>
+      </context>
+
+      <context name="CommentBlock" attribute="Comment" lineEndContext="#stay">
+        <Detect2Chars attribute="Comment" context="#pop" char="*" char1="/" endRegion="Comment"/>
+      </context>
+
+      <!-- `"..."`: decodes \n \t \r \0 \b \v \f plus \\ and \"; unknown
+           escapes are preserved by the lowerer, so they are not errors. -->
+      <context name="StringDQ" attribute="String" lineEndContext="#stay">
+        <RegExpr attribute="Escape" context="#stay" String="\\[ntr0bvf&quot;\\]"/>
+        <RegExpr attribute="Escape" context="#stay" String="\\."/>
+        <DetectChar attribute="String" context="#pop" char="&quot;"/>
+      </context>
+
+      <!-- `b"..."`: decodes \n \t \r \0, \\ \" and \xHH; anything else is a
+           lowering error, so it is flagged. -->
+      <context name="ByteString" attribute="Byte String" lineEndContext="#stay">
+        <RegExpr attribute="Escape" context="#stay" String="\\x[0-9A-Fa-f]{2}"/>
+        <RegExpr attribute="Escape" context="#stay" String="\\[ntr0&quot;\\]"/>
+        <RegExpr attribute="Invalid Escape" context="#stay" String="\\x[0-9A-Fa-f]?"/>
+        <RegExpr attribute="Invalid Escape" context="#stay" String="\\."/>
+        <DetectChar attribute="Byte String" context="#pop" char="&quot;"/>
+      </context>
+
+      <!-- Raw string body. No escapes; closes on `"` followed by the same
+           hash run that opened it (%1). Jinja spans are highlighted here
+           because raw strings are BAML's prompt / template bodies. -->
+      <context name="RawString" attribute="Raw String" lineEndContext="#stay" dynamic="true">
+        <RegExpr attribute="Raw String" context="#pop" String="&quot;%1" dynamic="true"/>
+        <Detect2Chars attribute="Template" context="JinjaComment" char="{" char1="#"/>
+        <Detect2Chars attribute="Template" context="JinjaStmt" char="{" char1="%"/>
+        <Detect2Chars attribute="Template" context="JinjaExpr" char="{" char1="{"/>
+      </context>
+
+      <!-- Jinja `{{ expression }}`. -->
+      <context name="JinjaExpr" attribute="Template" lineEndContext="#stay">
+        <Detect2Chars attribute="Template" context="#pop" char="}" char1="}"/>
+        <keyword attribute="Template Keyword" context="#stay" String="templatekeywords"/>
+        <DetectChar attribute="String" context="StringDQ" char="&quot;"/>
+      </context>
+
+      <!-- Jinja `{% statement %}`. -->
+      <context name="JinjaStmt" attribute="Template" lineEndContext="#stay">
+        <Detect2Chars attribute="Template" context="#pop" char="%" char1="}"/>
+        <keyword attribute="Template Keyword" context="#stay" String="templatekeywords"/>
+        <DetectChar attribute="String" context="StringDQ" char="&quot;"/>
+      </context>
+
+      <!-- Jinja `{# comment #}`. -->
+      <context name="JinjaComment" attribute="Comment" lineEndContext="#stay">
+        <Detect2Chars attribute="Template" context="#pop" char="#" char1="}"/>
+      </context>
+
+      <!-- Backtick string body. Escapes add \` and \$ to the standard set;
+           `${ ... }` interpolations re-enter expression highlighting. Closes
+           on the same backtick run that opened it, not a longer one. -->
+      <context name="BacktickString" attribute="Backtick String" lineEndContext="#stay" dynamic="true">
+        <RegExpr attribute="Escape" context="#stay" String="\\[ntr0bvf&quot;\\`$]"/>
+        <RegExpr attribute="Escape" context="#stay" String="\\."/>
+        <Detect2Chars attribute="Template" context="BacktickInterp" char="$" char1="{"/>
+        <RegExpr attribute="Backtick String" context="#pop" String="%1(?!`)" dynamic="true"/>
+      </context>
+
+      <!-- `${ ... }` inside a backtick string: normal expression rules, with
+           brace nesting so inner blocks do not close the interpolation. -->
+      <context name="BacktickInterp" attribute="Normal Text" lineEndContext="#stay">
+        <DetectChar attribute="Template" context="#pop" char="}"/>
+        <DetectChar attribute="Normal Text" context="BacktickInterp" char="{"/>
+        <IncludeRules context="Normal"/>
+      </context>
+    </contexts>
+
+    <itemDatas>
+      <itemData name="Normal Text" defStyleNum="dsNormal" spellChecking="false"/>
+      <itemData name="Keyword" defStyleNum="dsKeyword" spellChecking="false"/>
+      <itemData name="Control Flow" defStyleNum="dsControlFlow" spellChecking="false"/>
+      <itemData name="Keyword Operator" defStyleNum="dsOperator" spellChecking="false"/>
+      <itemData name="Operator" defStyleNum="dsOperator" spellChecking="false"/>
+      <itemData name="Data Type" defStyleNum="dsDataType" spellChecking="false"/>
+      <itemData name="Type Name" defStyleNum="dsDataType" spellChecking="false"/>
+      <itemData name="Function" defStyleNum="dsFunction" spellChecking="false"/>
+      <itemData name="Constant" defStyleNum="dsConstant" spellChecking="false"/>
+      <itemData name="Builtin" defStyleNum="dsBuiltIn" spellChecking="false"/>
+      <itemData name="Environment" defStyleNum="dsBuiltIn" spellChecking="false"/>
+      <itemData name="Attribute" defStyleNum="dsAttribute" spellChecking="false"/>
+      <itemData name="Decimal" defStyleNum="dsDecVal" spellChecking="false"/>
+      <itemData name="BigInt" defStyleNum="dsDecVal" spellChecking="false"/>
+      <itemData name="Float" defStyleNum="dsFloat" spellChecking="false"/>
+      <itemData name="String" defStyleNum="dsString"/>
+      <itemData name="Byte String" defStyleNum="dsString" spellChecking="false"/>
+      <itemData name="Raw String" defStyleNum="dsVerbatimString"/>
+      <itemData name="Backtick String" defStyleNum="dsSpecialString"/>
+      <itemData name="Escape" defStyleNum="dsSpecialChar" spellChecking="false"/>
+      <itemData name="Invalid Escape" defStyleNum="dsError" spellChecking="false"/>
+      <itemData name="Template" defStyleNum="dsSpecialChar" spellChecking="false"/>
+      <itemData name="Template Keyword" defStyleNum="dsControlFlow" spellChecking="false"/>
+      <itemData name="Comment" defStyleNum="dsComment"/>
+    </itemDatas>
+  </highlighting>
+
+  <general>
+    <comments>
+      <comment name="singleLine" start="//"/>
+      <comment name="multiLine" start="/*" end="*/" region="Comment"/>
+    </comments>
+    <!-- Hyphen is a continuation character in BAML identifiers (`gpt-4o` is
+         one Word), so remove it from the keyword delimiter set. -->
+    <keywords casesensitive="1" weakDeliminator="-"/>
+  </general>
+</language>

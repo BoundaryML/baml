@@ -1,0 +1,885 @@
+==================
+class with fields, both colon forms, attributes
+==================
+
+class Resume {
+  name string @description("Candidate name") @alias("full_name")
+  email string?
+  level: Level,
+  score: int;
+  @@dynamic
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier))
+        (attribute
+          (attribute_name
+            (identifier))
+          (attribute_arguments
+            (string)))
+        (attribute
+          (attribute_name
+            (identifier))
+          (attribute_arguments
+            (string))))
+      (field_declaration
+        (identifier)
+        (optional_type
+          (type_path
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (block_attribute
+        (attribute_name
+          (identifier))))))
+
+==================
+class with method and generic parameters
+==================
+
+class Box<T> {
+  value T
+
+  function get(self) -> T {
+    self.value
+  }
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (generic_parameters
+      (generic_parameter
+        (identifier)))
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (function_declaration
+        (identifier)
+        (parameter_list
+          (parameter
+            (identifier)))
+        (type_path
+          (identifier))
+        (function_body
+          (expression_statement
+            (member_expression
+              (identifier)
+              (property_identifier))))))))
+
+==================
+enum with variants and attributes
+==================
+
+enum Level {
+  Junior
+  Senior @description("Five or more years"),
+  @@description("Seniority ladder")
+}
+
+---
+
+(source_file
+  (enum_declaration
+    (identifier)
+    (enum_body
+      (enum_variant
+        (identifier))
+      (enum_variant
+        (identifier)
+        (attribute
+          (attribute_name
+            (identifier))
+          (attribute_arguments
+            (string))))
+      (block_attribute
+        (attribute_name
+          (identifier))
+        (attribute_arguments
+          (string))))))
+
+==================
+interface with requires, fields, method signatures and defaults
+==================
+
+interface Iterator<T, E> requires Iterable<T, E> {
+  name: string
+  type CompareError = never
+  function next(self) -> T | Done throws E
+  function count(self) -> int throws E {
+    0
+  }
+}
+
+---
+
+(source_file
+  (interface_declaration
+    (identifier)
+    (generic_parameters
+      (generic_parameter
+        (identifier))
+      (generic_parameter
+        (identifier)))
+    (requires_clause
+      (type_path
+        (identifier)
+        (type_arguments
+          (type_path
+            (identifier))
+          (type_path
+            (identifier)))))
+    (interface_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (associated_type_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (function_declaration
+        (identifier)
+        (parameter_list
+          (parameter
+            (identifier)))
+        (union_type
+          (type_path
+            (identifier))
+          (type_path
+            (identifier)))
+        (throws_clause
+          (type_path
+            (identifier))))
+      (function_declaration
+        (identifier)
+        (parameter_list
+          (parameter
+            (identifier)))
+        (type_path
+          (identifier))
+        (throws_clause
+          (type_path
+            (identifier)))
+        (function_body
+          (expression_statement
+            (number)))))))
+
+==================
+implements block inside class with field link
+==================
+
+class Person {
+  display_name: string
+
+  implements Named {
+    name as display_name
+  }
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (implements_block
+        (type_path
+          (identifier))
+        (implements_body
+          (field_link
+            (identifier)
+            (identifier)))))))
+
+==================
+implement (singular) is interchangeable with implements
+==================
+
+class Robot {
+  name: string
+
+  implement Named {
+    name as display_name
+  }
+}
+
+implement ToJson for Dog {
+  function to_json(self) -> string {
+    self.breed
+  }
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (type_path
+          (identifier)))
+      (implements_block
+        (type_path
+          (identifier))
+        (implements_body
+          (field_link
+            (identifier)
+            (identifier))))))
+  (implements_for_declaration
+    (type_path
+      (identifier))
+    (type_path
+      (identifier))
+    (implements_body
+      (function_declaration
+        (identifier)
+        (parameter_list
+          (parameter
+            (identifier)))
+        (type_path
+          (identifier))
+        (function_body
+          (expression_statement
+            (member_expression
+              (identifier)
+              (property_identifier))))))))
+
+==================
+top-level implements ... for ...
+==================
+
+implements<T> OutOfBodyValue<T> for OutOfBodyBox<T> {
+  function get(self) -> T throws unknown {
+    self.value
+  }
+}
+
+---
+
+(source_file
+  (implements_for_declaration
+    (generic_parameters
+      (generic_parameter
+        (identifier)))
+    (type_path
+      (identifier)
+      (type_arguments
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier)
+      (type_arguments
+        (type_path
+          (identifier))))
+    (implements_body
+      (function_declaration
+        (identifier)
+        (parameter_list
+          (parameter
+            (identifier)))
+        (type_path
+          (identifier))
+        (throws_clause
+          (type_path
+            (identifier)))
+        (function_body
+          (expression_statement
+            (member_expression
+              (identifier)
+              (property_identifier))))))))
+
+==================
+llm function with client and prompt
+==================
+
+function ExtractResume(text: string) -> Resume {
+  client GPT4
+  prompt #"
+    Extract from: {{ text }}
+  "#
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (client_field
+        (config_value_path
+          (identifier)))
+      (prompt_field
+        (property_identifier)
+        (raw_string
+          (raw_string_content))))))
+
+==================
+llm function with quoted and slash-path clients
+==================
+
+function A(x: string) -> string {
+  client "openai/gpt-4o"
+  prompt #"hi"#
+}
+
+function B(x: string) -> string {
+  client openai/gpt-4o-mini
+  prompt #"hi"#
+}
+
+function C(x: string) -> string {
+  client: Brain
+  prompt: #"hi"#
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (client_field
+        (string))
+      (prompt_field
+        (property_identifier)
+        (raw_string
+          (raw_string_content)))))
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (client_field
+        (config_value_path
+          (identifier)
+          (identifier)))
+      (prompt_field
+        (property_identifier)
+        (raw_string
+          (raw_string_content)))))
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (client_field
+        (config_value_path
+          (identifier)))
+      (prompt_field
+        (property_identifier)
+        (raw_string
+          (raw_string_content))))))
+
+==================
+client declaration with unquoted values and nested options
+==================
+
+client<llm> GPT4 {
+  provider openai
+  retry_policy SafeRetry
+  options {
+    model "gpt-4o"
+    api_key env.OPENAI_API_KEY
+    http {
+      request_timeout_ms 30000
+    }
+  }
+}
+
+---
+
+(source_file
+  (client_declaration
+    (client_type
+      (identifier))
+    (identifier)
+    (config_block
+      (config_entry
+        (identifier)
+        (config_value_path
+          (identifier)))
+      (config_entry
+        (identifier)
+        (config_value_path
+          (identifier)))
+      (config_entry
+        (identifier)
+        (config_block
+          (config_entry
+            (identifier)
+            (string))
+          (config_entry
+            (identifier)
+            (config_value_path
+              (identifier)
+              (identifier)))
+          (config_entry
+            (identifier)
+            (config_block
+              (config_entry
+                (identifier)
+                (number)))))))))
+
+==================
+client declaration with colon-comma config style
+==================
+
+client<llm> Fast {
+  provider: round-robin,
+  options: {
+    strategy: [Mini, Haiku],
+  },
+}
+
+---
+
+(source_file
+  (client_declaration
+    (client_type
+      (identifier))
+    (identifier)
+    (config_block
+      (config_entry
+        (identifier)
+        (config_value_path
+          (identifier)))
+      (config_entry
+        (identifier)
+        (config_block
+          (config_entry
+            (identifier)
+            (config_array
+              (config_value_path
+                (identifier))
+              (config_value_path
+                (identifier)))))))))
+
+==================
+generator and retry_policy declarations
+==================
+
+generator ts_target {
+  output_type: "typescript/node",
+  output_dir: "typescript_demo",
+}
+
+retry_policy Exponential {
+  max_retries: 2,
+  strategy: {
+    type: exponential_backoff,
+    delay_ms: 300,
+    multiplier: 1.5,
+  },
+}
+
+---
+
+(source_file
+  (generator_declaration
+    (identifier)
+    (config_block
+      (config_entry
+        (identifier)
+        (string))
+      (config_entry
+        (identifier)
+        (string))))
+  (retry_policy_declaration
+    (identifier)
+    (config_block
+      (config_entry
+        (identifier)
+        (number))
+      (config_entry
+        (identifier)
+        (config_block
+          (config_entry
+            (identifier)
+            (config_value_path
+              (identifier)))
+          (config_entry
+            (identifier)
+            (number))
+          (config_entry
+            (identifier)
+            (number)))))))
+
+==================
+template_string declaration
+==================
+
+template_string Persona(role: string) #"
+  You are a {{ role }}.
+"#
+
+template_string NoParams #"static"#
+
+---
+
+(source_file
+  (template_string_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (raw_string
+      (raw_string_content)))
+  (template_string_declaration
+    (identifier)
+    (raw_string
+      (raw_string_content))))
+
+==================
+function with generic params, default arg, throws clause
+==================
+
+function retry<T>(times: int = 3, fn: () -> T) -> T throws string | baml.errors.Io {
+  fn()
+}
+
+function sort_generic<U extends baml.Comparable>(xs: U[]) -> U[] throws U.CompareError {
+  xs
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (generic_parameters
+      (generic_parameter
+        (identifier)))
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))
+        (number))
+      (parameter
+        (identifier)
+        (function_type
+          (function_type_parameters)
+          (type_path
+            (identifier)))))
+    (type_path
+      (identifier))
+    (throws_clause
+      (union_type
+        (type_path
+          (identifier))
+        (type_path
+          (identifier)
+          (identifier)
+          (identifier))))
+    (function_body
+      (expression_statement
+        (call_expression
+          (identifier)
+          (arguments)))))
+  (function_declaration
+    (identifier)
+    (generic_parameters
+      (generic_parameter
+        (identifier)
+        (type_path
+          (identifier)
+          (identifier))))
+    (parameter_list
+      (parameter
+        (identifier)
+        (array_type
+          (type_path
+            (identifier)))))
+    (array_type
+      (type_path
+        (identifier)))
+    (throws_clause
+      (type_path
+        (identifier)
+        (identifier)))
+    (function_body
+      (expression_statement
+        (identifier)))))
+
+==================
+type aliases
+==================
+
+type ProjectId = int
+type JsonValue = int | string | bool | float | JsonObject | JsonArray;
+type PatternCallback = (int) -> int;
+
+---
+
+(source_file
+  (type_alias_declaration
+    (identifier)
+    (type_path
+      (identifier)))
+  (type_alias_declaration
+    (identifier)
+    (union_type
+      (union_type
+        (union_type
+          (union_type
+            (union_type
+              (type_path
+                (identifier))
+              (type_path
+                (identifier)))
+            (type_path
+              (identifier)))
+          (type_path
+            (identifier)))
+        (type_path
+          (identifier)))
+      (type_path
+        (identifier))))
+  (type_alias_declaration
+    (identifier)
+    (function_type
+      (function_type_parameters
+        (function_type_parameter
+          (type_path
+            (identifier))))
+      (type_path
+        (identifier)))))
+
+==================
+test with config body: functions, args, type_builder
+==================
+
+test ReturnDynamicClassTest {
+  functions [ExtractResume]
+  type_builder {
+    class Experience {
+      title string
+    }
+    dynamic class Resume {
+      experience Experience[]
+    }
+    dynamic enum Job {
+      ProductManager
+    }
+  }
+  args {
+    from_text #"
+      John Doe
+    "#
+    input {
+      text "Hello world"
+    }
+  }
+}
+
+---
+
+(source_file
+  (test_declaration
+    (identifier)
+    (test_body
+      (config_entry
+        (identifier)
+        (config_array
+          (config_value_path
+            (identifier))))
+      (type_builder_block
+        (class_declaration
+          (identifier)
+          (class_body
+            (field_declaration
+              (identifier)
+              (type_path
+                (identifier)))))
+        (dynamic_type_declaration
+          (class_declaration
+            (identifier)
+            (class_body
+              (field_declaration
+                (identifier)
+                (array_type
+                  (type_path
+                    (identifier)))))))
+        (dynamic_type_declaration
+          (enum_declaration
+            (identifier)
+            (enum_body
+              (enum_variant
+                (identifier))))))
+      (config_entry
+        (identifier)
+        (config_block
+          (config_entry
+            (identifier)
+            (raw_string
+              (raw_string_content)))
+          (config_entry
+            (identifier)
+            (config_block
+              (config_entry
+                (identifier)
+                (string)))))))))
+
+==================
+test with expression body and string name
+==================
+
+test "throwing body becomes failure" {
+  risky()
+}
+
+---
+
+(source_file
+  (test_declaration
+    (string)
+    (test_body
+      (expression_statement
+        (call_expression
+          (identifier)
+          (arguments))))))
+
+==================
+testset with statements, nested testsets, dynamic test names
+==================
+
+testset "vibes" {
+  let topics = ["happy", "sad"];
+  for (let s in topics) {
+    testset s {
+      test "case" + baml.unstable.string(1) {
+        assert.equal(classify(s), s);
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (testset_declaration
+    (string)
+    (test_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (array_expression
+          (string)
+          (string)))
+      (for_statement
+        (type_pattern
+          (type_path
+            (identifier)))
+        (identifier)
+        (block
+          (testset_declaration
+            (identifier)
+            (test_body
+              (test_declaration
+                (binary_expression
+                  (string)
+                  (call_expression
+                    (member_expression
+                      (member_expression
+                        (identifier)
+                        (property_identifier))
+                      (property_identifier))
+                    (arguments
+                      (number))))
+                (test_body
+                  (expression_statement
+                    (call_expression
+                      (member_expression
+                        (identifier)
+                        (property_identifier))
+                      (arguments
+                        (call_expression
+                          (identifier)
+                          (arguments
+                            (identifier)))
+                        (identifier)))))))))))))
+
+==================
+top-level let bindings
+==================
+
+let x = 1;
+
+let y = {
+    let b = 2;
+    [1,2,3]
+};
+
+---
+
+(source_file
+  (let_declaration
+    (type_pattern
+      (type_path
+        (identifier)))
+    (number))
+  (let_declaration
+    (type_pattern
+      (type_path
+        (identifier)))
+    (block
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (number))
+      (expression_statement
+        (array_expression
+          (number)
+          (number)
+          (number))))))

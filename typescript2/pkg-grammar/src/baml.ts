@@ -664,6 +664,22 @@ const constructorExpression: Rule = {
           end: String.raw`(?=,|\})`,
           patterns: [comments, expression],
         },
+        {
+          // Shorthand (colon-less) field form used in test `args` and config
+          // blocks: `text "Jane"`, `functions [F]`, `max_retries 3`. The name
+          // is the identifier at entry start (right after `{`, `,`, a
+          // newline, or a closing block comment); the lookahead pins a
+          // literal-ish value start so a bare expression entry is never
+          // misread as a field name.
+          key: "constructor-field-shorthand",
+          scope: "meta.constructor.field.baml",
+          begin: String.raw`(?:^|(?<=[{,])|(?<=\*/))[ \t]*(${IDENT})[ \t]+(?=#+"|"|b"|\`|\[|[0-9+-]|true\b|false\b|null\b|env\b)`,
+          beginCaptures: {
+            "1": { scope: "variable.other.property.baml" },
+          },
+          end: String.raw`(?=,|\})`,
+          patterns: [comments, expression],
+        },
         comma,
       ],
     },
