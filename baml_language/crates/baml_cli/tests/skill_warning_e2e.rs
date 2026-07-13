@@ -139,6 +139,24 @@ fn empty_skill_directory_still_prompts_install() {
 }
 
 #[test]
+fn archived_old_skill_does_not_count_as_installed() {
+    let home = TestHome::new();
+
+    // A skill that only exists in the baml-old_skills/ archive (nested one
+    // level deeper than the <skills>/<name>/SKILL.md layout) is not an
+    // installation and must not suppress the missing-skill prompt.
+    let project = tempfile::tempdir().unwrap();
+    let archived = project
+        .path()
+        .join(".claude/skills/baml-old_skills/baml-core");
+    fs::create_dir_all(&archived).unwrap();
+    fs::write(archived.join("SKILL.md"), "---\nname: baml-core\n---\n").unwrap();
+
+    let stderr = stderr_of(&home.run_from(project.path(), &[]));
+    assert!(stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
+}
+
+#[test]
 fn warns_when_skill_provenance_is_behind_cached_latest() {
     let home = TestHome::new();
     home.write_state(Some("aaa"));
