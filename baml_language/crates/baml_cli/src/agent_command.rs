@@ -186,8 +186,8 @@ fn record_installed_commit(commit: &str) {
 
 /// Installs with no commit identity (custom `--from` sources, or a default
 /// archive whose pax header carried no commit) drop any previously recorded
-/// provenance so the wrapper doesn't report the installed content as up to
-/// date with (or behind) the official skill repo.
+/// provenance so the passive skill check doesn't report the installed content
+/// as up to date with (or behind) the official skill repo.
 fn clear_installed_commit() {
     if let Err(err) = baml_release::skills::clear_skills_state(&baml_release::skills::state_path())
     {

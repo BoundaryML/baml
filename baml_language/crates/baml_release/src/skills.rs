@@ -7,8 +7,8 @@
 //!
 //! This module is the single source of truth for skill state and freshness.
 //! The `baml-cli` toolchain binary owns both sides: `agent install` records
-//! what it installed, and the passive per-command check (`skill_check` in
-//! `baml_cli`) surfaces missing/outdated warnings from the caches here.
+//! what it installed, and the passive authoring-command check (`skill_check`
+//! in `baml_cli`) surfaces missing/outdated warnings from the caches here.
 
 use std::{
     fs,
@@ -69,9 +69,10 @@ pub fn state_path() -> PathBuf {
     baml_home().join("state.toml")
 }
 
-/// Cache file recording the latest known skill repo commit, refreshed at most
-/// once per TTL window by the wrapper's auto-check and by explicit toolchain
-/// commands. Lives next to the toolchain manifest cache.
+/// Cache file recording the latest known skill repo commit, written by
+/// `agent install` and refreshed at most once per TTL window by the
+/// toolchain's passive skill check. Lives next to the toolchain manifest
+/// cache.
 pub fn latest_skill_commit_cache_path() -> PathBuf {
     baml_home()
         .join("manifest-cache")
@@ -86,7 +87,7 @@ pub const LATEST_COMMIT_CACHE_TTL: Duration = Duration::from_hours(24);
 /// Decide which passive skill warning (if any) applies:
 ///
 /// - No `baml-*` skills in the project at all: prompt to install. This fires
-///   on every command regardless of caches, so users discover skills exist.
+///   regardless of caches, so users discover skills exist.
 /// - Skills present but the `[skills]` provenance is missing or behind the
 ///   cached latest skill repo commit: prompt to upgrade. Requires the cache
 ///   (written by the auto-check or explicit commands); without it we can't
@@ -161,9 +162,7 @@ pub fn update_auto_check_enabled() -> bool {
 /// The latest-commit cache is due for a refresh attempt when both the cache
 /// file and its attempt marker are older than the TTL. The marker is touched
 /// before every attempt (success or failure) so an unreachable network is
-/// retried at most once per TTL window instead of on every command. The
-/// marker path convention is shared with the wrapper's auto-check, so the two
-/// binaries throttle each other.
+/// retried at most once per TTL window instead of on every command.
 pub fn should_attempt_latest_commit_refresh() -> bool {
     should_attempt_refresh(&latest_skill_commit_cache_path(), LATEST_COMMIT_CACHE_TTL)
 }
@@ -290,7 +289,7 @@ pub fn write_cached_latest_skill_commit(cache_path: &Path, sha: &str) -> Result<
 
 /// Resolve the latest commit SHA of the skill repo's main branch over the
 /// network. Callers decide the timeout: explicit commands can afford a long
-/// one, while the wrapper's passive auto-check should use a short one.
+/// one, while the passive background check should use a short one.
 pub fn fetch_latest_skill_commit(timeout: Duration) -> Result<String> {
     let url = skill_commits_url();
     let client = reqwest::blocking::Client::builder()
