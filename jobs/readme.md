@@ -14,7 +14,7 @@ Every computing paradigm, brought with it a new language
 | Web browsers | Event driven / async native | JS |
 | AI / Graphics | We need to do a lot of math, and fast | Cuda |
 | Interactive Website | HTML + Logic is hard to do at scale | React |
-| Non-determinism | My software is isn’t predictable because AI | ????? |
+| Non-determinism | My software isn’t predictable because AI | ????? |
 
 BAML is our answer, and it will let more developers than ever write AI pipelines without having to think about AI model reliability.
 
