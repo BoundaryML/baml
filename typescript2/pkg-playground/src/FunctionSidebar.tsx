@@ -269,7 +269,7 @@ function FunctionTreeNode({
         >
           <ChevronRight
             className={cn(
-              'h-3 w-3 transition-transform',
+              'h-3 w-3 shrink-0 transition-transform',
               collapsePending ? 'text-vsc-accent' : 'text-vsc-text-faint',
               open && !collapsePending && 'rotate-90',
             )}

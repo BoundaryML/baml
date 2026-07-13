@@ -20,6 +20,7 @@ describe('FunctionSidebar folder disclosure', () => {
     expect(folder).toHaveAttribute('aria-expanded', 'true');
     expect(folder).toHaveAttribute('data-collapse-pending', 'true');
     expect(screen.getByText(collapsePendingMessage)).toBeInTheDocument();
+    expect(folder.querySelector('svg')).toHaveClass('shrink-0');
     expect(folder.querySelector('svg')).toHaveClass('text-vsc-accent');
     expect(folder.querySelector('svg')).not.toHaveClass('rotate-90');
 
