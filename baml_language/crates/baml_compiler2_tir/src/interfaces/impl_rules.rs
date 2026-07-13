@@ -845,7 +845,7 @@ pub fn impl_data_source_map<'db>(
 fn collect_type_var_names(ty: &Ty, out: &mut Vec<Name>) {
     match ty {
         Ty::TypeVar(name, _) => out.push(name.clone()),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             collect_type_var_names(inner, out);
         }
         Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
@@ -1587,7 +1587,7 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
             }
         }
         Ty::Enum(qtn, _) | Ty::EnumVariant(qtn, _, _) | Ty::TypeAlias(qtn, _) => push(qtn, out),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             collect_ty_packages(inner, out);
         }
         Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) | Ty::Future(key, value, _) => {

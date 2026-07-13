@@ -999,7 +999,6 @@ ast_node!(BlockAttribute, BLOCK_ATTRIBUTE);
 
 ast_node!(Expr, EXPR);
 
-// LetStmt accepts both LET_STMT and WATCH_LET syntax kinds
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LetStmt {
     syntax: SyntaxNode,
@@ -1011,7 +1010,7 @@ impl AstNode for LetStmt {
     type Language = crate::BamlLanguage;
 
     fn can_cast(kind: <Self::Language as rowan::Language>::Kind) -> bool {
-        kind == SyntaxKind::LET_STMT || kind == SyntaxKind::WATCH_LET
+        kind == SyntaxKind::LET_STMT
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -3715,7 +3714,6 @@ impl BlockExpr {
                     match n.kind() {
                         // Statement nodes
                         SyntaxKind::LET_STMT
-                        | SyntaxKind::WATCH_LET
                         | SyntaxKind::RETURN_STMT
                         | SyntaxKind::WHILE_STMT
                         | SyntaxKind::WHILE_LET_STMT

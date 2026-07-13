@@ -717,7 +717,7 @@ function SimulateHumanGuess(history: string[]) -> string {
 function GuessGameAgent() -> string {
   let history: string[] = []
   log.info({"famous_person_name":
-  watch let user_input = SimulateHumanGuess(history)
+  let user_input = SimulateHumanGuess(history)
   user_input<[CURSOR]
 }
 "#,

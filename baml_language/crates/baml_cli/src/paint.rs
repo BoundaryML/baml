@@ -243,7 +243,6 @@ fn is_keyword(kind: TokenKind) -> bool {
             | T::Defer
             | T::Spawn
             | T::Await
-            | T::Watch
             | T::In
             | T::Is
             | T::Instanceof

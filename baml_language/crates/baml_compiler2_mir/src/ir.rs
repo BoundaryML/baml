@@ -174,8 +174,6 @@ pub struct LocalDecl {
     /// This is debugger metadata used to resolve in-scope variables from
     /// source locations.
     pub scope_span: Option<Span>,
-    /// Whether this local is being watched for changes.
-    pub is_watched: bool,
     /// Whether this local is captured by a nested closure.
     ///
     /// When `true`, the local's stack slot holds an `Object::Cell` rather than
@@ -257,38 +255,13 @@ pub enum IntrinsicOp {
 
 /// The kind of a MIR statement.
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum StatementKind {
     /// Assign a value to a place: `_1 = <rvalue>`
     Assign { destination: Place, value: Rvalue },
 
     /// Drop a value (run destructor if any).
     Drop(Place),
-
-    /// Unwatch a local variable (unregister from watch tracking).
-    /// Emitted when a watched variable goes out of scope.
-    Unwatch(Local),
-
-    /// Block notification: `//# name`
-    /// Emits a block notification when executed.
-    NotifyBlock {
-        /// The name of the block annotation
-        name: Name,
-        /// The header level (number of # symbols)
-        level: usize,
-    },
-
-    /// Set watch options for a watched variable.
-    /// Emitted for `var.$watch.options(filter)`.
-    WatchOptions {
-        /// The watched local variable
-        local: Local,
-        /// The new filter (function, "manual", "never", etc.)
-        filter: Operand,
-    },
-
-    /// Manually trigger notification for a watched variable.
-    /// Emitted for `var.$watch.notify()`.
-    WatchNotify(Local),
 
     /// Enter a visualization node.
     /// Emitted at the start of control flow structures (if, while, etc.).

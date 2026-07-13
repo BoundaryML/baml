@@ -1172,10 +1172,6 @@ pub(crate) fn substitute_type_vars(
             Box::new(substitute_type_vars(error, bindings)),
             attr.clone(),
         ),
-        RuntimeTy::WatchAccessor(inner, attr) => RuntimeTy::WatchAccessor(
-            Box::new(substitute_type_vars(inner, bindings)),
-            attr.clone(),
-        ),
         // A function-typed parameter (`f: (T) -> R`) carries call type-vars in its
         // params/return/throws. Substitute them so an explicitly-bound closure
         // param materializes against concrete types (J13: `apply[int,int]` binds
@@ -1213,9 +1209,7 @@ pub(crate) fn first_unbound_type_var(ty: &RuntimeTy) -> Option<String> {
     match ty {
         RuntimeTy::TypeVar(name, _) => Some(name.to_string()),
         RuntimeTy::Class(_, args, _) => args.iter().find_map(first_unbound_type_var),
-        RuntimeTy::List(inner, _) | RuntimeTy::WatchAccessor(inner, _) => {
-            first_unbound_type_var(inner)
-        }
+        RuntimeTy::List(inner, _) => first_unbound_type_var(inner),
         RuntimeTy::Map { key, value, .. } => {
             first_unbound_type_var(key).or_else(|| first_unbound_type_var(value))
         }
@@ -1369,7 +1363,7 @@ fn template_max_type_arg_ref(t: &baml_type::TyTemplate) -> Option<u32> {
     use baml_type::TyTemplate as T;
     match t {
         T::TypeArgRef(n) | T::TypeArgRefOrWildcard(n) => Some(*n),
-        T::List(inner, _) | T::WatchAccessor(inner, _) => template_max_type_arg_ref(inner),
+        T::List(inner, _) => template_max_type_arg_ref(inner),
         T::Map { key, value, .. } | T::Future(key, value, _) => template_max_type_arg_ref(key)
             .into_iter()
             .chain(template_max_type_arg_ref(value))
@@ -1460,7 +1454,7 @@ fn walk_var_positions(ty: &RuntimeTy, in_closure: bool, out: &mut ParamVarPositi
             walk_var_positions(ret, true, out);
             walk_var_positions(throws, true, out);
         }
-        RuntimeTy::List(inner, _) | RuntimeTy::WatchAccessor(inner, _) => {
+        RuntimeTy::List(inner, _) => {
             walk_var_positions(inner, in_closure, out);
         }
         RuntimeTy::Map { key, value, .. } => {
@@ -1662,7 +1656,6 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
         | RuntimeTy::Type { .. }
         | RuntimeTy::Resource { .. }
         | RuntimeTy::PromptAst { .. }
-        | RuntimeTy::WatchAccessor(..)
         | RuntimeTy::TypeAlias(..)
         | RuntimeTy::Never { .. } => false,
     }

@@ -4054,13 +4054,6 @@ impl CompilerRunner {
                     ));
                     break;
                 }
-                Ok(VmExecState::Notify(_)) => {
-                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                        "Function sent a watch notification (not supported in VM Runner)"
-                            .to_string(),
-                    ));
-                    break;
-                }
                 Ok(VmExecState::Event { .. }) => {
                     // Custom events are not surfaced — push null and continue.
                     vm.stack.push(Value::NULL);

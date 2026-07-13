@@ -421,10 +421,6 @@ pub fn lower_to_runtime(ty: &Ty, resolved: &ResolvedAliases) -> Result<RuntimeTy
             Box::new(lower_to_runtime(error, resolved)?),
             attr.clone(),
         ),
-        Ty::WatchAccessor(inner, attr) => {
-            RuntimeTy::WatchAccessor(Box::new(lower_to_runtime(inner, resolved)?), attr.clone())
-        }
-
         // Error-recovery sentinels cannot exist in a type-checked program.
         Ty::Unknown { .. } => return Err(NotRuntimeTy { variant: "Unknown" }),
         Ty::Error { .. } => return Err(NotRuntimeTy { variant: "Error" }),

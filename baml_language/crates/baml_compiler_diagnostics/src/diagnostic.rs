@@ -122,8 +122,6 @@ pub enum DiagnosticId {
     NonExhaustiveCatch,
     UnreachableCatchArm,
     UnknownEnumVariant,
-    WatchOnNonVariable,
-    WatchOnUnwatchedVariable,
 
     // Control-flow diagnostics (E0146)
     UnreachableCode,
@@ -393,8 +391,6 @@ impl DiagnosticId {
             DiagnosticId::NonExhaustiveCatch => "E0094",
             DiagnosticId::UnreachableCatchArm => "E0095",
             DiagnosticId::UnknownEnumVariant => "E0064",
-            DiagnosticId::WatchOnNonVariable => "E0065",
-            DiagnosticId::WatchOnUnwatchedVariable => "E0066",
 
             // Control-flow diagnostics
             DiagnosticId::UnreachableCode => "E0146",

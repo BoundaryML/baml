@@ -1203,9 +1203,6 @@ export namespace baml_bridge {
                 /** BamlTy void */
                 "void"?: (baml_bridge.cffi.v1.IBamlTyVoid|null);
 
-                /** BamlTy watchAccessor */
-                watchAccessor?: (baml_bridge.cffi.v1.IBamlTyWatchAccessor|null);
-
                 /** BamlTy typeVar */
                 typeVar?: (baml_bridge.cffi.v1.IBamlTyTypeVar|null);
 
@@ -1285,9 +1282,6 @@ export namespace baml_bridge {
                 /** BamlTy void. */
                 public void?: (baml_bridge.cffi.v1.IBamlTyVoid|null);
 
-                /** BamlTy watchAccessor. */
-                public watchAccessor?: (baml_bridge.cffi.v1.IBamlTyWatchAccessor|null);
-
                 /** BamlTy typeVar. */
                 public typeVar?: (baml_bridge.cffi.v1.IBamlTyTypeVar|null);
 
@@ -1298,7 +1292,7 @@ export namespace baml_bridge {
                 public never?: (baml_bridge.cffi.v1.IBamlTyNever|null);
 
                 /** BamlTy ty. */
-                public ty?: ("primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"Function"|"future"|"rustType"|"metaType"|"resource"|"promptAst"|"void"|"watchAccessor"|"typeVar"|"associatedTypeProjection"|"never");
+                public ty?: ("primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"Function"|"future"|"rustType"|"metaType"|"resource"|"promptAst"|"void"|"typeVar"|"associatedTypeProjection"|"never");
 
                 /**
                  * Creates a new BamlTy instance using the specified properties.
@@ -3604,103 +3598,6 @@ export namespace baml_bridge {
 
                 /**
                  * Gets the default type url for BamlTyVoid
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** Properties of a BamlTyWatchAccessor. */
-            interface IBamlTyWatchAccessor {
-
-                /** BamlTyWatchAccessor inner */
-                inner?: (baml_bridge.cffi.v1.IBamlTy|null);
-            }
-
-            /** Represents a BamlTyWatchAccessor. */
-            class BamlTyWatchAccessor implements IBamlTyWatchAccessor {
-
-                /**
-                 * Constructs a new BamlTyWatchAccessor.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml_bridge.cffi.v1.IBamlTyWatchAccessor);
-
-                /** BamlTyWatchAccessor inner. */
-                public inner?: (baml_bridge.cffi.v1.IBamlTy|null);
-
-                /**
-                 * Creates a new BamlTyWatchAccessor instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlTyWatchAccessor instance
-                 */
-                public static create(properties?: baml_bridge.cffi.v1.IBamlTyWatchAccessor): baml_bridge.cffi.v1.BamlTyWatchAccessor;
-
-                /**
-                 * Encodes the specified BamlTyWatchAccessor message. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyWatchAccessor.verify|verify} messages.
-                 * @param message BamlTyWatchAccessor message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml_bridge.cffi.v1.IBamlTyWatchAccessor, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlTyWatchAccessor message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyWatchAccessor.verify|verify} messages.
-                 * @param message BamlTyWatchAccessor message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml_bridge.cffi.v1.IBamlTyWatchAccessor, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlTyWatchAccessor message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlTyWatchAccessor
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.BamlTyWatchAccessor;
-
-                /**
-                 * Decodes a BamlTyWatchAccessor message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlTyWatchAccessor
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.BamlTyWatchAccessor;
-
-                /**
-                 * Verifies a BamlTyWatchAccessor message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlTyWatchAccessor message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlTyWatchAccessor
-                 */
-                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.BamlTyWatchAccessor;
-
-                /**
-                 * Creates a plain object from a BamlTyWatchAccessor message. Also converts values to other types if specified.
-                 * @param message BamlTyWatchAccessor
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml_bridge.cffi.v1.BamlTyWatchAccessor, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlTyWatchAccessor to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlTyWatchAccessor
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */

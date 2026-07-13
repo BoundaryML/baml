@@ -5,7 +5,7 @@
 //! - `is_field_attr()` — classify an attribute name as field-level
 //! - `validate_field_attrs()` — post-lowering pass that rejects field attrs
 //!   remaining on any `TypeExpr` (they're in invalid positions), including
-//!   type annotations inside expression bodies (let, watch-let, patterns, lambdas)
+//!   type annotations inside expression bodies (let, patterns, lambdas)
 
 use crate::ast::{
     ClassDef, Expr, ExprBody, FunctionBodyDef, FunctionDef, Item, LetDef, TypeAliasDef, TypeExpr,
@@ -68,7 +68,7 @@ fn validate_function(func: &FunctionDef, diagnostics: &mut Vec<(String, text_siz
     if let Some(ref spanned) = func.throws {
         validate_type_expr_tree(spanned, diagnostics);
     }
-    // Walk expression body for let/watch-let/pattern type annotations.
+    // Walk expression body for let and pattern type annotations.
     if let Some(FunctionBodyDef::Expr(ref body, _)) = func.body {
         validate_expr_body(body, diagnostics);
     }

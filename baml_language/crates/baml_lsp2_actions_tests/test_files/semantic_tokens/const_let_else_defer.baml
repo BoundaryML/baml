@@ -14,7 +14,7 @@ function BindingAndDeferForms(user: User, value: int | string, items: int[]) -> 
     cleanup;
   }
 
-  watch let observed = v;
+  let observed = v;
 
   if const narrowed: int = value {
     observed += narrowed;
@@ -159,11 +159,10 @@ function BindingAndDeferForms(user: User, value: int | string, items: int[]) -> 
 // const_let_else_defer.baml:13:17 (operator) len=1 "="
 // const_let_else_defer.baml:13:19 (variable) len=1 "v"
 // const_let_else_defer.baml:14:5 (variable) len=7 "cleanup"
-// const_let_else_defer.baml:17:3 (keyword) len=5 "watch"
-// const_let_else_defer.baml:17:9 (keyword) len=3 "let"
-// const_let_else_defer.baml:17:13 (variable) [declaration] len=8 "observed"
-// const_let_else_defer.baml:17:22 (operator) len=1 "="
-// const_let_else_defer.baml:17:24 (variable) len=1 "v"
+// const_let_else_defer.baml:17:3 (keyword) len=3 "let"
+// const_let_else_defer.baml:17:7 (variable) [declaration] len=8 "observed"
+// const_let_else_defer.baml:17:16 (operator) len=1 "="
+// const_let_else_defer.baml:17:18 (variable) len=1 "v"
 // const_let_else_defer.baml:19:3 (keyword) len=2 "if"
 // const_let_else_defer.baml:19:6 (keyword) len=5 "const"
 // const_let_else_defer.baml:19:12 (variable) [declaration] len=8 "narrowed"

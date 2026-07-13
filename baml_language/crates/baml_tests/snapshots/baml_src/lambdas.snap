@@ -153,20 +153,8 @@ function lambdas.$init_test_ns_lambdas_lambdas(registry: testing.TestCollector) 
     call testing.TestCollector.register_test
     pop 1
     load_var registry
-    load_const "issue_b_watch_let_captured_by_lambda"
-    make_closure .<lambda($init_test_ns_lambdas_lambdas, 25)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
-    load_const "issue_b_watch_let_mutated_by_parent_and_lambda"
-    make_closure .<lambda($init_test_ns_lambdas_lambdas, 26)>, 0
-    load_const null
-    call testing.TestCollector.register_test
-    pop 1
-    load_var registry
     load_const "lambda_param_shadows_annotated_outer_local"
-    make_closure .<lambda($init_test_ns_lambdas_lambdas, 27)>, 0
+    make_closure .<lambda($init_test_ns_lambdas_lambdas, 25)>, 0
     load_const null
     call testing.TestCollector.register_test
     pop 1
@@ -434,48 +422,6 @@ function lambdas.lambdas_issue_b_captured_variable_mutation_visible() -> int {
     call_indirect
     pop 1
     load_deref ?1
-    return
-}
-
-function lambdas.lambdas_issue_b_watch_let_captured_by_lambda() -> int {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_const 0
-    store_deref ?1
-    load_const "x"
-    load_const null
-    watch x
-    load_var x
-    make_closure .<lambda(lambdas_issue_b_watch_let_captured_by_lambda, 0)>, 1
-    store_var_load_var inc
-    call_indirect
-    pop 1
-    load_var inc
-    call_indirect
-    pop 1
-    load_deref ?1
-    unwatch x
-    return
-}
-
-function lambdas.lambdas_issue_b_watch_let_mutated_by_parent_and_lambda() -> int {
-    load_var ?1
-    make_cell
-    store_var ?1
-    load_const 0
-    store_deref ?1
-    load_const "counter"
-    load_const null
-    watch counter
-    load_const 1
-    store_deref ?1
-    load_var counter
-    make_closure .<lambda(lambdas_issue_b_watch_let_mutated_by_parent_and_lambda, 0)>, 1
-    call_indirect
-    pop 1
-    load_deref ?1
-    unwatch counter
     return
 }
 

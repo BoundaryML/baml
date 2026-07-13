@@ -494,21 +494,6 @@ pub enum Instruction {
     /// BAML built on top of this.
     AwaitAny,
 
-    /// Creates a watched var and tracks its state.
-    ///
-    /// Format: `WATCH i` where `i` is the relative index of the variable in the
-    /// `Vm::stack` array.
-    Watch(usize),
-
-    /// Unregisters a watched variable when it goes out of scope.
-    ///
-    /// Format: `UNWATCH i` where `i` is the relative index of the variable in the
-    /// `Vm::stack` array.
-    Unwatch(usize),
-
-    /// Manually triggers notifications for a watched variable.
-    Notify(usize),
-
     /// Call a statically-known global function.
     ///
     /// Format: `CALL g ntypeargs` where `g` is the global index of the callee
@@ -962,9 +947,6 @@ pub enum OpCode {
     AllocVariant,
     SysOp,
     Spawn,
-    Watch,
-    Unwatch,
-    Notify,
     Call,
     IsType,
     DenseTag,
@@ -1127,9 +1109,6 @@ impl OpCode {
             | Self::AllocVariant
             | Self::SysOp
             | Self::SysOpWithRuntimeId
-            | Self::Watch
-            | Self::Unwatch
-            | Self::Notify
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
@@ -1269,9 +1248,6 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::SysOp as u8 => Ok(Self::SysOp),
             x if x == Self::SysOpWithRuntimeId as u8 => Ok(Self::SysOpWithRuntimeId),
             x if x == Self::Spawn as u8 => Ok(Self::Spawn),
-            x if x == Self::Watch as u8 => Ok(Self::Watch),
-            x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
-            x if x == Self::Notify as u8 => Ok(Self::Notify),
             x if x == Self::Call as u8 => Ok(Self::Call),
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
@@ -1404,9 +1380,6 @@ impl std::fmt::Display for OpCode {
             Self::SysOp => "SYS_OP",
             Self::SysOpWithRuntimeId => "SYS_OP_WITH_RUNTIME_ID",
             Self::Spawn => "SPAWN",
-            Self::Watch => "WATCH",
-            Self::Unwatch => "UNWATCH",
-            Self::Notify => "NOTIFY",
             Self::Call => "CALL",
             Self::CallWithRuntimeId => "CALL_WITH_RUNTIME_ID",
             Self::IsType => "IS_TYPE",
@@ -1631,9 +1604,6 @@ impl std::fmt::Display for Instruction {
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
-            Instruction::Watch(i) => write!(f, "WATCH {i}"),
-            Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),
-            Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
             Instruction::JumpTable(table_idx) => {
                 write!(f, "JUMP_TABLE {table_idx}")
             }
@@ -1684,7 +1654,7 @@ impl std::fmt::Display for Instruction {
 /// need to resolve names from the `ObjectPool` or runtime stack.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum OperandMeta {
-    /// `LoadVar`, `StoreVar`, `Watch`, `Unwatch`, `Notify` — variable name.
+    /// `LoadVar`, `StoreVar` — variable name.
     Var(String),
     /// `LoadField`, `StoreField` — field name.
     Field(String),
@@ -2176,9 +2146,6 @@ impl Bytecode {
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
                 | Instruction::AllocMap(v)
-                | Instruction::Watch(v)
-                | Instruction::Unwatch(v)
-                | Instruction::Notify(v)
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
@@ -2517,9 +2484,6 @@ impl Bytecode {
             Instruction::SysOp(_) => OpCode::SysOp,
             Instruction::SysOpWithRuntimeId(_) => OpCode::SysOpWithRuntimeId,
             Instruction::Spawn => OpCode::Spawn,
-            Instruction::Watch(_) => OpCode::Watch,
-            Instruction::Unwatch(_) => OpCode::Unwatch,
-            Instruction::Notify(_) => OpCode::Notify,
             Instruction::Call { .. } => OpCode::Call,
             Instruction::CallWithRuntimeId { .. } => OpCode::CallWithRuntimeId,
             Instruction::IsType(_) => OpCode::IsType,
