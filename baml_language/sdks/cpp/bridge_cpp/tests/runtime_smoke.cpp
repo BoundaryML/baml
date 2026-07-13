@@ -36,34 +36,62 @@ static void test_call_registry_round_trip() {
     std::printf("call registry round trip ok\n");
 }
 
-static void test_arg_tri_state() {
-    baml::Arg<int64_t> unset;
-    assert(unset.is_unset() && !unset.is_null() && !unset.has_value());
+static void test_arg_two_state() {
+    // Non-nullable optional argument (BAML `count: int = 5`).
+    baml::Arg<int64_t> unset_arg;
+    assert(unset_arg.is_unset() && !unset_arg.is_set());
 
-    baml::Arg<int64_t> null_arg = std::nullopt;
-    assert(null_arg.is_null());
+    baml::Arg<int64_t> explicit_unset = baml::unset;
+    assert(explicit_unset.is_unset());
 
-    baml::Arg<int64_t> null_value_arg = baml::Null{};
-    assert(null_value_arg.is_null());
+    baml::Arg<int64_t> value_arg = int64_t{42};
+    assert(value_arg.is_set() && value_arg.value() == 42);
 
-    // Arg of the bare null type itself: monostate must mean VALUE there.
+    // Null is not in a non-nullable argument's type: rejected at compile time.
+    static_assert(!std::is_constructible<baml::Arg<int64_t>, std::nullopt_t>::value,
+                  "null must not be passable to a non-nullable argument");
+    static_assert(!std::is_constructible<baml::Arg<int64_t>, std::monostate>::value,
+                  "null must not be passable to a non-nullable argument");
+
+    // Nullable optional argument (BAML `lang: string? = "en"`).
+    baml::Arg<std::optional<std::string>> lang_value = std::string("fr");
+    assert(lang_value.is_set() && lang_value.value().has_value());
+
+    baml::Arg<std::optional<std::string>> lang_null = std::nullopt;
+    assert(lang_null.is_set() && !lang_null.value().has_value());
+
+    baml::Arg<std::optional<std::string>> lang_null2 = baml::Null{};
+    assert(lang_null2.is_set() && !lang_null2.value().has_value());
+
+    // Bare-null-typed argument: monostate is the VALUE there.
     baml::Arg<std::monostate> null_typed_arg = std::monostate{};
-    assert(null_typed_arg.has_value());
+    assert(null_typed_arg.is_set());
 
     static_assert(std::is_same<baml::Null, std::monostate>::value,
                   "bare null unifies with the std vocabulary");
 
-    baml::Arg<int64_t> value_arg = int64_t{42};
-    assert(value_arg.has_value() && value_arg.value() == 42);
-
     bool threw = false;
     try {
-        (void)unset.value();
+        (void)unset_arg.value();
     } catch (const std::logic_error&) {
         threw = true;
     }
     assert(threw);
-    std::printf("arg tri-state ok\n");
+
+    // Setters take Arg<T> by value; a string literal must convert in one hop.
+    struct Opts {
+        baml::Arg<std::optional<std::string>> lang;
+        Opts& set_lang(baml::Arg<std::optional<std::string>> v) {
+            lang = std::move(v);
+            return *this;
+        }
+    };
+    assert(Opts{}.set_lang("fr").lang.value().value() == "fr");
+    assert(Opts{}.set_lang(std::nullopt).lang.is_set());
+    assert(!Opts{}.set_lang(std::nullopt).lang.value().has_value());
+    assert(Opts{}.set_lang(baml::Null{}).lang.is_set());
+    assert(Opts{}.lang.is_unset());
+    std::printf("arg two-state ok\n");
 }
 
 static void test_owned_buffer_move() {
@@ -78,7 +106,7 @@ int main() {
     test_version();
     test_initialize_runtime();
     test_call_registry_round_trip();
-    test_arg_tri_state();
+    test_arg_two_state();
     test_owned_buffer_move();
     std::printf("bridge core smoke: all ok\n");
     return 0;
