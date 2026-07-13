@@ -218,6 +218,9 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':typescript2/pkg-grammar/**' \
+            ':typescript2/pkg-grammar-hljs/**' \
+            ':typescript2/pkg-grammar-treesitter/**' \
+            ':typescript2/pnpm-workspace.yaml' \
             ':typescript2/app-vscode-ext/syntaxes/**' \
             ':typescript2/app-vscode-ext/language-configuration.json' \
             ':typescript2/app-vscode-ext/package.json' \
@@ -515,6 +518,17 @@ jobs:
 
       - name: "Run grammar tests"
         run: pnpm --filter @b/pkg-grammar test
+        working-directory: typescript2
+
+      - name: "Run highlight.js grammar tests"
+        # The hljs port validates against pkg-grammar's fixtures, so a grammar
+        # change that the port doesn't handle fails here (conformance gate).
+        run: pnpm --filter @b/pkg-grammar-hljs test
+        working-directory: typescript2
+
+      - name: "Run tree-sitter grammar tests"
+        # Generates the parser and runs the corpus + fixture parse gate.
+        run: pnpm --filter @b/pkg-grammar-treesitter test
         working-directory: typescript2
 
   linguist-compile-gate:

@@ -49,8 +49,17 @@ import grammar from "@boundaryml/baml-grammar";
 | --- | --- |
 | `dist/index.js` | ESM module, default-exports the grammar (Shiki `LanguageRegistration`) |
 | `grammars/baml.tmLanguage.json` | Raw TextMate grammar |
+| `grammars/baml.sublime-syntax` | Sublime Text syntax (also consumed by syntect/`bat`) |
+| `syntaxes/baml.xml` | KDE KSyntaxHighlighting definition (Kate, Pandoc via skylighting) |
+| `samples/baml.sample` | Canonical BAML sample used by grammar registries |
 | `language-configuration.json` | VS Code style language configuration |
+
+The paths above (and `scopeName: source.baml`) are frozen API: external registries fetch them by URL. Renames are breaking changes. `SUPPORT.md` tracks where the grammar has landed.
 
 ## License
 
 Apache-2.0
+
+---
+
+This repository is a **read-only mirror**, generated from [`typescript2/pkg-grammar`](https://github.com/BoundaryML/baml/tree/canary/typescript2/pkg-grammar) in the BAML monorepo by its `sync-grammar-mirror` workflow. Do not edit files or open pull requests here — changes land automatically when the grammar changes upstream. Report issues in [BoundaryML/baml](https://github.com/BoundaryML/baml/issues).

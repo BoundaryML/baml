@@ -25,6 +25,8 @@ allowBuilds:
   node-liblzma: false
   # selects/downloads prebuilt libvips; Next image optimization needs it
   sharp: true
+  # downloads the prebuilt tree-sitter binary (pkg-grammar-treesitter)
+  tree-sitter-cli: true
   unrs-resolver: true
 
 catalog:

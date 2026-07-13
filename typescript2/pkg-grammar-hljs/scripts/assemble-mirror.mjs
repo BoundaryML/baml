@@ -1,17 +1,13 @@
 #!/usr/bin/env node
-// Assemble the full contents of the BoundaryML/textMate-baml mirror repo,
-// which is both the npm package @boundaryml/baml-grammar (published by the
-// mirror's own publish workflow) and the grammar source GitHub Linguist
-// vendors for .baml highlighting on github.com.
-//
-// The output directory is the complete desired state of the mirror: the
-// sync-grammar-mirror workflow rsyncs it over a mirror checkout with --delete
-// (excluding .git), so anything not emitted here gets removed from the mirror.
+// Assemble the full contents of the BoundaryML/baml-highlightjs mirror repo,
+// the npm package @boundaryml/baml-highlightjs (published by the mirror's own
+// publish workflow). Same contract as pkg-grammar/scripts/assemble-mirror.mjs:
+// the output directory is the complete desired state of the mirror; the
+// sync-grammar-mirror workflow rsyncs it over a mirror checkout with --delete.
 //
 // Usage:
 //   node scripts/assemble-mirror.mjs --out <dir> [--version <semver>]
 //
-// Requires a prior `pnpm --filter @b/pkg-grammar build` (dist/ must exist).
 // Without --version the template's 0.0.0-dev placeholder is kept; the sync
 // workflow always stamps a real version.
 
@@ -37,12 +33,6 @@ if (!values.out) {
 }
 if (values.version && !/^\d+\.\d+\.\d+$/.test(values.version)) {
   console.error(`invalid --version: ${values.version}`);
-  process.exit(1);
-}
-
-const distDir = resolve(pkgRoot, 'dist');
-if (!existsSync(resolve(distDir, 'index.js'))) {
-  console.error('dist/index.js missing; run `pnpm --filter @b/pkg-grammar build` first');
   process.exit(1);
 }
 
@@ -73,34 +63,38 @@ if (overlaps(realRepo, realOut) || overlaps(realOut, realRepo)) {
   process.exit(1);
 }
 rmSync(out, { recursive: true, force: true });
-mkdirSync(resolve(out, 'grammars'), { recursive: true });
 mkdirSync(resolve(out, '.github/workflows'), { recursive: true });
 
-// Package artifacts.
-cpSync(distDir, resolve(out, 'dist'), { recursive: true });
-cpSync(resolve(pkgRoot, 'baml.tmLanguage.json'), resolve(out, 'grammars/baml.tmLanguage.json'));
-cpSync(resolve(pkgRoot, 'language-configuration.json'), resolve(out, 'language-configuration.json'));
+// The language definition itself.
+cpSync(resolve(pkgRoot, 'src'), resolve(out, 'src'), { recursive: true });
 
-// Derived grammar formats. The mirror paths are frozen API — bat/Package
-// Control consume grammars/baml.sublime-syntax, and the KDE upstream PR
-// tracks syntaxes/baml.xml.
-cpSync(resolve(pkgRoot, 'baml.sublime-syntax'), resolve(out, 'grammars/baml.sublime-syntax'));
-mkdirSync(resolve(out, 'syntaxes'), { recursive: true });
-cpSync(resolve(pkgRoot, 'syntaxes/baml.xml'), resolve(out, 'syntaxes/baml.xml'));
+// Browser/CDN build: the ESM definition wrapped so a plain <script> tag
+// self-registers the language on a global hljs (the convention highlight.js
+// third-party language repos follow). Derived textually from src/baml.js so
+// the mirror needs no bundler; fail loudly if the source shape changes.
+const esm = readFileSync(resolve(pkgRoot, 'src/baml.js'), 'utf8');
+// The wrapper below registers a binding literally named `baml`, so require
+// exactly that export shape (not just any default function anywhere).
+if (!/^export default function baml\(/m.test(esm)) {
+  console.error('src/baml.js no longer `export default function baml(...)`; fix the dist wrapper');
+  process.exit(1);
+}
+const iife = `// Generated from src/baml.js by assemble-mirror.mjs. Do not edit.
+// Browser/CDN build: load after highlight.js and the language self-registers.
+// Node/bundler consumers should import the package's ESM export instead.
+(function () {
+  ${esm.replace('export default function', 'function').trimEnd().split('\n').join('\n  ')}
+  if (typeof globalThis !== 'undefined' && globalThis.hljs) {
+    globalThis.hljs.registerLanguage('baml', baml);
+  }
+})();
+`;
+mkdirSync(resolve(out, 'dist'), { recursive: true });
+writeFileSync(resolve(out, 'dist/baml.js'), iife);
 
-// Canonical sample: the fixture every grammar port validates against, at a
-// stable path registries (Shiki samples/, hljs demos) can reference.
-mkdirSync(resolve(out, 'samples'), { recursive: true });
-cpSync(
-  resolve(pkgRoot, 'tests/fixtures/showcase__golden_sample.baml'),
-  resolve(out, 'samples/baml.sample'),
-);
-
-// Repo scaffolding. Linguist's license check needs LICENSE; publish.yml is the
-// mirror's own npm release workflow.
+// Repo scaffolding.
 cpSync(resolve(repoRoot, 'LICENSE'), resolve(out, 'LICENSE'));
 cpSync(resolve(pkgRoot, 'mirror/README.md'), resolve(out, 'README.md'));
-cpSync(resolve(pkgRoot, 'mirror/SUPPORT.md'), resolve(out, 'SUPPORT.md'));
 cpSync(resolve(pkgRoot, 'mirror/publish.yml'), resolve(out, '.github/workflows/publish.yml'));
 
 // package.json, with the version stamped in.
