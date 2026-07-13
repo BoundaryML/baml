@@ -3,14 +3,14 @@ use baml_compiler2_ast::ast;
 
 /// A span-free attribute for position-independent storage in the `ItemTree`.
 /// Derived from `ast::RawAttribute` with all `TextRange`s stripped.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Attribute {
     pub args: Vec<AttributeArg>,
     pub name: Name,
 }
 
 /// A span-free attribute argument.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AttributeArg {
     pub key: Option<Name>,
     pub value: String,

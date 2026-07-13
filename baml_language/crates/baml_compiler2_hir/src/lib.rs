@@ -25,6 +25,7 @@ pub mod package;
 pub mod scope;
 pub mod semantic_index;
 pub mod signature;
+pub mod type_ref;
 
 use std::sync::Arc;
 
