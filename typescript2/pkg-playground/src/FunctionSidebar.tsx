@@ -242,21 +242,36 @@ function FunctionTreeNode({
 
   if (node.type === 'folder') {
     const forcedOpen = forcedOpenFolderKeys.has(node.key);
-    const open = forcedOpen || (openFolderKeys[node.key] ?? false);
+    const requestedOpen = openFolderKeys[node.key];
+    const collapsePending = forcedOpen && requestedOpen === false;
+    const open = forcedOpen || (requestedOpen ?? false);
+    const collapsePendingMessage =
+      'Will collapse when this folder is no longer kept open automatically';
     return (
       <Collapsible
         open={open}
-        onOpenChange={(nextOpen) => onFolderOpenChange(node.key, nextOpen)}
+        onOpenChange={(nextOpen) =>
+          onFolderOpenChange(
+            node.key,
+            collapsePending && !nextOpen ? true : nextOpen,
+          )
+        }
       >
         <CollapsibleTrigger
           className="flex items-center gap-1 w-full pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
           style={{ paddingLeft: indent }}
-          title={node.path.join('.')}
+          title={
+            collapsePending
+              ? `${node.path.join('.')} — ${collapsePendingMessage}`
+              : node.path.join('.')
+          }
+          data-collapse-pending={collapsePending || undefined}
         >
           <ChevronRight
             className={cn(
-              'h-3 w-3 text-vsc-text-faint transition-transform',
-              open && 'rotate-90',
+              'h-3 w-3 transition-transform',
+              collapsePending ? 'text-vsc-accent' : 'text-vsc-text-faint',
+              open && !collapsePending && 'rotate-90',
             )}
           />
           <Folder className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
@@ -266,6 +281,9 @@ function FunctionTreeNode({
           <span className="text-vsc-text-faint ml-1">
             ({node.functionCount})
           </span>
+          {collapsePending && (
+            <span className="sr-only">{collapsePendingMessage}</span>
+          )}
         </CollapsibleTrigger>
         <CollapsibleContent>
           {node.children.map((child) => (
