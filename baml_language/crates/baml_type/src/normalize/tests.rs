@@ -93,7 +93,13 @@ impl TypeContext for Ctx {
             .collect()
     }
 
-    fn project(&self, base: &Ty, interface: &Interface, member: &Name) -> ProjectionStep {
+    fn project(
+        &self,
+        base: &Ty,
+        interface: &Interface,
+        member: &Name,
+        _fuel: u32,
+    ) -> ProjectionStep {
         self.projections
             .iter()
             .find(|(b, i, m, _)| b == base && i == &interface.name && m == member)

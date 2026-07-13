@@ -41,12 +41,15 @@ use crate::{
 // CONTEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Starting fuel for projection reduction in one `from_ty` walk: the maximum
-/// length of a reduction chain (`(A as I).X` → `(B as J).Y` → …) before a
-/// projection is left opaque. Generous for any real program; bounds a cyclic
-/// `type A = (C as I).B` / `type B = (C as J).A` (itself a declaration-level error
-/// caught elsewhere) so normalization terminates instead of recursing forever.
-const PROJECTION_REDUCTION_FUEL: u32 = 256;
+/// Starting fuel for projection reduction: the maximum length of a reduction
+/// chain (`(A as I).X` → `(B as J).Y` → …) before a projection is left opaque (the
+/// canonical algebra) or its realization fails (the runtime). Generous for any
+/// real program; bounds a cyclic `type A = (C as I).B` / `type B = (C as J).A`
+/// (itself a declaration-level error caught elsewhere) so both the `from_ty` walk
+/// here and the runtime `TyTemplate::substitute` reduction terminate instead of
+/// recursing forever. Shared by both paths so the single limit shrinks in one
+/// place once declaration-level cycle rejection lands.
+pub(crate) const PROJECTION_REDUCTION_FUEL: u32 = 256;
 
 /// The result of reducing an associated-type projection `(base as I).member`
 /// through [`TypeContext::project`].
@@ -162,7 +165,15 @@ pub trait TypeContext {
     /// dead symbolic type with no error, a silent soundness hole (same class as
     /// [`associated_type_bound`](Self::associated_type_bound)). A context over
     /// already-realized values (the runtime) returns `Opaque` explicitly.
-    fn project(&self, base: &Ty, interface: &Interface, member: &Name) -> ProjectionStep;
+    ///
+    /// `fuel` is the remaining projection-reduction budget. A context that itself
+    /// drives the reduction recursion — the runtime, whose `project` realizes the
+    /// impl binding through `TyTemplate::substitute` and can re-enter `project` —
+    /// threads it on so a cyclic associated-type binding terminates. A single-step
+    /// reducer whose recursion is instead bounded by its caller (the canonical
+    /// `from_ty` walk, which decrements its own fuel) ignores it.
+    fn project(&self, base: &Ty, interface: &Interface, member: &Name, fuel: u32)
+    -> ProjectionStep;
 
     // ── type algebra (defaulted; the canonical implementation) ──────────────
     //
@@ -777,7 +788,8 @@ impl NormalTy {
                 // is assignable from its realization. The qualifier always names the
                 // impl; fuel guards a cyclic reduction.
                 if fuel > 0
-                    && let ProjectionStep::Reduced(reduced) = ctx.project(base, interface, member)
+                    && let ProjectionStep::Reduced(reduced) =
+                        ctx.project(base, interface, member, fuel)
                 {
                     return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
                 }

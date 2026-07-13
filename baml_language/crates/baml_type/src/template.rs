@@ -66,6 +66,16 @@ pub enum SubstituteError {
         /// The offending non-realized variant encountered in the reduced type.
         variant: &'static str,
     },
+    /// A projection-reduction chain exceeded the fuel budget — a cyclic or
+    /// pathologically deep associated-type binding whose reduction re-enters
+    /// itself (`type X = (_ as I).Y` reducing back through `X`). The compiler is
+    /// expected to reject such cycles at declaration, so hitting this runtime
+    /// backstop is a broken invariant rather than a legitimate outcome; it stops
+    /// the recursion instead of overflowing the stack.
+    ProjectionFuelExhausted {
+        /// The associated-type member whose reduction chain did not terminate.
+        member: Name,
+    },
 }
 
 impl fmt::Display for SubstituteError {
@@ -84,6 +94,10 @@ impl fmt::Display for SubstituteError {
             Self::ProjectionNotRealized { member, variant } => write!(
                 f,
                 "associated-type projection `.{member}` reduced to a non-realized `{variant}`"
+            ),
+            Self::ProjectionFuelExhausted { member } => write!(
+                f,
+                "associated-type projection `.{member}` did not terminate within the reduction budget"
             ),
         }
     }
@@ -149,6 +163,26 @@ impl TyTemplate {
         type_args: &[RealizedTy],
         ctx: &C,
     ) -> Result<RealizedTy, SubstituteError> {
+        self.substitute_with_fuel(type_args, ctx, crate::normalize::PROJECTION_REDUCTION_FUEL)
+    }
+
+    /// [`Self::substitute`] with an explicit projection-reduction budget.
+    ///
+    /// `fuel` bounds the associated-type reduction chain: each projection reduced
+    /// through `ctx.project` (which realizes the impl binding by re-entering this
+    /// method) spends one unit, so a cyclic binding — `type X = (_ as I).Y`
+    /// reducing back through `X` — terminates with
+    /// [`SubstituteError::ProjectionFuelExhausted`] instead of overflowing the
+    /// stack. This is the runtime twin of the canonical algebra's fuel guard in
+    /// `normalize`'s `from_ty` walk. The public [`Self::substitute`] seeds the full
+    /// `PROJECTION_REDUCTION_FUEL` budget; `ctx.project` threads the remainder back
+    /// in for the binding it realizes.
+    pub fn substitute_with_fuel<C: TypeContext>(
+        &self,
+        type_args: &[RealizedTy],
+        ctx: &C,
+        fuel: u32,
+    ) -> Result<RealizedTy, SubstituteError> {
         match self {
             // ── Template-only leaves ──────────────────────────────────────────
             // A frame reference materializes to its bound type argument. An
@@ -168,36 +202,38 @@ impl TyTemplate {
 
             // ── Composites: recurse, propagating failures ─────────────────────
             Self::List(inner, attr) => Ok(RealizedTy::List(
-                Box::new(inner.substitute(type_args, ctx)?),
+                Box::new(inner.substitute_with_fuel(type_args, ctx, fuel)?),
                 attr.clone(),
             )),
             Self::Map { key, value, attr } => Ok(RealizedTy::Map {
-                key: Box::new(key.substitute(type_args, ctx)?),
-                value: Box::new(value.substitute(type_args, ctx)?),
+                key: Box::new(key.substitute_with_fuel(type_args, ctx, fuel)?),
+                value: Box::new(value.substitute_with_fuel(type_args, ctx, fuel)?),
                 attr: attr.clone(),
             }),
             Self::Union(parts, attr) => Ok(RealizedTy::Union(
                 parts
                     .iter()
-                    .map(|p| p.substitute(type_args, ctx))
+                    .map(|p| p.substitute_with_fuel(type_args, ctx, fuel))
                     .collect::<Result<_, _>>()?,
                 attr.clone(),
             )),
             Self::Class(name, args, attr) => Ok(RealizedTy::Class(
                 name.clone(),
                 args.iter()
-                    .map(|a| a.substitute(type_args, ctx))
+                    .map(|a| a.substitute_with_fuel(type_args, ctx, fuel))
                     .collect::<Result<_, _>>()?,
                 attr.clone(),
             )),
             Self::Interface(name, args, associated_bindings, attr) => Ok(RealizedTy::Interface(
                 name.clone(),
                 args.iter()
-                    .map(|a| a.substitute(type_args, ctx))
+                    .map(|a| a.substitute_with_fuel(type_args, ctx, fuel))
                     .collect::<Result<_, _>>()?,
                 associated_bindings
                     .iter()
-                    .map(|(name, ty)| Ok((name.clone(), ty.substitute(type_args, ctx)?)))
+                    .map(|(name, ty)| {
+                        Ok((name.clone(), ty.substitute_with_fuel(type_args, ctx, fuel)?))
+                    })
                     .collect::<Result<_, _>>()?,
                 attr.clone(),
             )),
@@ -212,18 +248,18 @@ impl TyTemplate {
                     .map(|p| {
                         Ok(RealizedFunctionParamTy {
                             name: p.name.clone(),
-                            ty: p.ty.substitute(type_args, ctx)?,
+                            ty: p.ty.substitute_with_fuel(type_args, ctx, fuel)?,
                             mode: p.mode,
                         })
                     })
                     .collect::<Result<_, _>>()?,
-                ret: Box::new(ret.substitute(type_args, ctx)?),
-                throws: Box::new(throws.substitute(type_args, ctx)?),
+                ret: Box::new(ret.substitute_with_fuel(type_args, ctx, fuel)?),
+                throws: Box::new(throws.substitute_with_fuel(type_args, ctx, fuel)?),
                 attr: attr.clone(),
             }),
             Self::Future(value, error, attr) => Ok(RealizedTy::Future(
-                Box::new(value.substitute(type_args, ctx)?),
-                Box::new(error.substitute(type_args, ctx)?),
+                Box::new(value.substitute_with_fuel(type_args, ctx, fuel)?),
+                Box::new(error.substitute_with_fuel(type_args, ctx, fuel)?),
                 attr.clone(),
             )),
             // Realize the base, then reduce the projection to the impl's binding.
@@ -236,9 +272,18 @@ impl TyTemplate {
                 member,
                 ..
             } => {
-                let base = base.substitute(type_args, ctx)?;
-                let interface = interface.substitute(type_args, ctx)?;
-                match ctx.project(base.as_ty(), &interface, member) {
+                let base = base.substitute_with_fuel(type_args, ctx, fuel)?;
+                let interface = interface.substitute(type_args, ctx, fuel)?;
+                // Spend one unit on *this* reduction before consulting `ctx.project`,
+                // which realizes the impl binding by re-entering `substitute` and can
+                // reach another projection. A cyclic binding would otherwise recurse
+                // forever; the backstop mirrors the canonical algebra's `from_ty`.
+                let Some(fuel) = fuel.checked_sub(1) else {
+                    return Err(SubstituteError::ProjectionFuelExhausted {
+                        member: member.clone(),
+                    });
+                };
+                match ctx.project(base.as_ty(), &interface, member, fuel) {
                     ProjectionStep::Reduced(reduced) => {
                         RealizedTy::try_from(&reduced).map_err(|e| {
                             SubstituteError::ProjectionNotRealized {
@@ -435,16 +480,22 @@ impl TyTemplateInterface {
         &self,
         type_args: &[RealizedTy],
         ctx: &C,
+        fuel: u32,
     ) -> Result<Interface, SubstituteError> {
         Ok(Interface::new(
             self.name.clone(),
             self.generics
                 .iter()
-                .map(|g| g.substitute(type_args, ctx).map(Ty::from))
+                .map(|g| g.substitute_with_fuel(type_args, ctx, fuel).map(Ty::from))
                 .collect::<Result<_, _>>()?,
             self.associated_types
                 .iter()
-                .map(|(name, ty)| Ok((name.clone(), Ty::from(ty.substitute(type_args, ctx)?))))
+                .map(|(name, ty)| {
+                    Ok((
+                        name.clone(),
+                        Ty::from(ty.substitute_with_fuel(type_args, ctx, fuel)?),
+                    ))
+                })
                 .collect::<Result<_, _>>()?,
         ))
     }
@@ -595,7 +646,7 @@ mod tests {
         fn associated_type_bound(&self, _: &Interface, _: Name) -> Vec<Interface> {
             Vec::new()
         }
-        fn project(&self, _: &Ty, _: &Interface, _: &Name) -> ProjectionStep {
+        fn project(&self, _: &Ty, _: &Interface, _: &Name, _fuel: u32) -> ProjectionStep {
             ProjectionStep::Opaque
         }
     }
@@ -667,6 +718,82 @@ mod tests {
         assert_eq!(
             TyTemplate::Wildcard.substitute(&[r(RuntimeTy::int())], &NoCtx),
             Err(SubstituteError::Wildcard)
+        );
+    }
+
+    /// `(#0 as Cyclic).member` — a projection whose base is a realized frame ref.
+    fn cyclic_projection(member: crate::Name) -> TyTemplate {
+        TyTemplate::AssociatedTypeProjection {
+            base: Box::new(TyTemplate::TypeArgRef(0)),
+            interface: Box::new(TyTemplateInterface {
+                name: TypeName::local(crate::Name::new("Cyclic")),
+                generics: vec![],
+                associated_types: vec![],
+            }),
+            member,
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// A context whose every projection reduces by realizing *the same* projection
+    /// again — a cyclic associated-type binding. Without the fuel backstop this
+    /// recurses forever; with it, the chain exhausts its budget and fails.
+    struct CyclicCtx;
+    impl TypeContext for CyclicCtx {
+        fn alias_def(&self, _: &QualifiedTypeName) -> Option<Ty> {
+            None
+        }
+        fn implements_interface(&self, _: &Ty, _: &Interface) -> bool {
+            false
+        }
+        fn type_var_bound(&self, _: &Name) -> Vec<Interface> {
+            Vec::new()
+        }
+        fn interface_requires(&self, _: &Interface, _: &Interface) -> bool {
+            false
+        }
+        fn enum_variants(&self, _: &QualifiedTypeName) -> Option<Vec<Name>> {
+            None
+        }
+        fn associated_type_bound(&self, _: &Interface, _: Name) -> Vec<Interface> {
+            Vec::new()
+        }
+        fn project(&self, _: &Ty, _: &Interface, member: &Name, fuel: u32) -> ProjectionStep {
+            // The binding for `member` is the same projection, so realizing it
+            // re-enters `project`. The threaded `fuel` bounds the cycle; an
+            // exhausted budget surfaces as a substitution error (→ `Opaque`).
+            match cyclic_projection(member.clone()).substitute_with_fuel(
+                &[RealizedTy::unknown()],
+                self,
+                fuel,
+            ) {
+                Ok(reduced) => ProjectionStep::Reduced(reduced.into()),
+                Err(_) => ProjectionStep::Opaque,
+            }
+        }
+    }
+
+    #[test]
+    fn projection_fuel_guard_fires_at_zero() {
+        // With no remaining budget a projection cannot even attempt its reduction.
+        let proj = cyclic_projection(crate::Name::new("Item"));
+        assert_eq!(
+            proj.substitute_with_fuel(&[RealizedTy::unknown()], &CyclicCtx, 0),
+            Err(SubstituteError::ProjectionFuelExhausted {
+                member: crate::Name::new("Item"),
+            })
+        );
+    }
+
+    #[test]
+    fn cyclic_projection_terminates_instead_of_overflowing() {
+        // A cyclic associated-type binding would realize to itself forever without
+        // the backstop; with it, the chain exhausts its fuel and fails rather than
+        // overflowing the stack.
+        let proj = cyclic_projection(crate::Name::new("Item"));
+        assert!(
+            proj.substitute_with_fuel(&[RealizedTy::unknown()], &CyclicCtx, 16)
+                .is_err()
         );
     }
 

@@ -255,6 +255,7 @@ mod tests {
             _: &baml_type::Ty,
             _: &Interface,
             _: &Name,
+            _fuel: u32,
         ) -> baml_type::normalize::ProjectionStep {
             // Context-free: no impls to reduce through; projections stay opaque.
             baml_type::normalize::ProjectionStep::Opaque

@@ -590,8 +590,9 @@ impl baml_type::normalize::TypeContext for TypeInferenceBuilder<'_> {
         base: &Ty,
         interface: &baml_type::Interface,
         member: &Name,
+        fuel: u32,
     ) -> baml_type::normalize::ProjectionStep {
-        self.as_global().project(base, interface, member)
+        self.as_global().project(base, interface, member, fuel)
     }
 }
 

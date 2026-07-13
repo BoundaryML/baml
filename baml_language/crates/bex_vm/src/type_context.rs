@@ -118,6 +118,7 @@ impl TypeContext for RuntimeTypeContext<'_> {
         base: &Ty,
         interface: &Interface,
         member: &Name,
+        fuel: u32,
     ) -> baml_type::normalize::ProjectionStep {
         use baml_type::normalize::ProjectionStep;
         // Reduce `(base as I).member` to the impl's binding when the base is a
@@ -150,8 +151,10 @@ impl TypeContext for RuntimeTypeContext<'_> {
             return ProjectionStep::Opaque;
         };
         // Realize the binding against the impl's bound args; widen back into `Ty`
-        // for the canonical algebra.
-        match template.substitute(&bound_args, self) {
+        // for the canonical algebra. `fuel` is threaded on so a cyclic
+        // associated-type binding — whose realization re-enters `project` — is
+        // bounded rather than recursing forever (the runtime twin of `from_ty`).
+        match template.substitute_with_fuel(&bound_args, self, fuel) {
             Ok(reduced) => ProjectionStep::Reduced(reduced.into()),
             Err(_) => ProjectionStep::Opaque,
         }
