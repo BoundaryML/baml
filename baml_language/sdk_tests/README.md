@@ -7,15 +7,17 @@ underlying FFI interfaces).
 
 ```bash
 # Run every SDK test target across all fixtures.
-cargo nextest run -p sdk_test_python_pydantic2 -p sdk_test_typescript_node
+cargo nextest run -p sdk_test_python_pydantic2 -p sdk_test_typescript_node -p sdk_test_rust
 
 # Run SDK tests for a specific generator.
 cargo nextest run -p sdk_test_python_pydantic2
 cargo nextest run -p sdk_test_typescript_node
+cargo nextest run -p sdk_test_rust
 
-# Or run the python/nodejs tests specifically
+# Or run the python/nodejs/rust tests specifically
 cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
 cargo nextest run -p sdk_test_typescript_node function_calls::vitest
+cargo nextest run -p sdk_test_rust function_calls::cargo_test
 ```
 
 > SDK tests are designed to be run using `cargo nextest run` and will > fail in
@@ -37,7 +39,22 @@ cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
 # vitest: run tests matching a test-name pattern.
 cargo nextest run -p sdk_test_typescript_node function_calls::vitest
 (cd sdk_tests/crates/typescript_node/function_calls/generated && pnpm exec vitest run -t optional_args)
+
+# rust: run tests matching a name filter (set CARGO_TARGET_DIR to reuse the
+# shared build cache the nextest-driven runs populate).
+cargo nextest run -p sdk_test_rust function_calls::cargo_test
+(cd sdk_tests/crates/rust/function_calls/generated && CARGO_TARGET_DIR=../../../../../target/sdk-rust-target cargo test optional_args)
 ```
+
+### Rust port gating
+
+A Rust test file that references a symbol the generator does not emit yet
+fails to *compile* (unlike pytest/vitest, where it just fails), so ported
+Rust tests are compiled only when the capability they exercise has landed:
+`generated/tests/main.rs` declares the enabled files as `#[path]` modules
+and lists the rest as `// LATER(<reason>)` comments. The single source of
+truth is the `TEST_MODS` table in `sdk_tests/harness_setup/src/rust.rs` —
+enabling a port is a one-line flip there.
 
 ## SDK implementation
 
@@ -54,6 +71,11 @@ Each SDK is implemented in two parts: an FFI to provide core runtime bindings an
   - `sdks/nodejs/bridge_nodejs`
   - `sdks/nodejs/sdkgen_typescript_node`
 
+`sdk_test_rust` provides coverage for
+
+  - `sdks/rust/bridge_rust`
+  - `sdks/rust/sdkgen_rust`
+
 ## Directory structure
 
 There are two dimensions for SDK tests: generators and fixtures.
@@ -62,6 +84,7 @@ There is one Rust crate per SDK generator:
 
   - `sdk_test_python_pydantic2` for the `python/pydantic2` generator
   - `sdk_test_typescript_node` for the `typescript/node` generator
+  - `sdk_test_rust` for the `rust` generator
 
 Each crate fans out over every **fixture** in `sdk_tests/fixtures/`.
 Each fixture is a single `baml_src/` tree that contains `.baml` source
@@ -92,16 +115,33 @@ sdk_tests/
     |   `-- type_shapes/
     |       |-- customizable/
     |       `-- generated/
-    `-- typescript_node/
-        |-- Cargo.toml                    # name = "sdk_test_typescript_node"
+    |-- typescript_node/
+    |   |-- Cargo.toml                    # name = "sdk_test_typescript_node"
+    |   |-- function_calls/
+    |   |   |-- customizable/             # tracked: *.test.ts -- copied into generated/
+    |   |   `-- generated/                # gitignored: build output
+    |   |       |-- baml_sdk/             # empty until sdkgen_typescript_node lands
+    |   |       |-- package.json          # name = "sdk-tests-nodejs-typescript-docstrings-etc"
+    |   |       |-- tsconfig.json
+    |   |       |-- node_modules/         # pnpm install output
+    |   |       `-- *.test.ts             # copied from ../customizable/
+    |   |-- llm_functions/
+    |   |   |-- customizable/
+    |   |   `-- generated/
+    |   `-- type_shapes/
+    |       |-- customizable/
+    |       `-- generated/
+    `-- rust/
+        |-- Cargo.toml                    # name = "sdk_test_rust"
         |-- function_calls/
-        |   |-- customizable/             # tracked: *.test.ts -- copied into generated/
-        |   `-- generated/                # gitignored: build output
-        |       |-- baml_sdk/             # empty until sdkgen_typescript_node lands
-        |       |-- package.json          # name = "sdk-tests-nodejs-typescript-docstrings-etc"
-        |       |-- tsconfig.json
-        |       |-- node_modules/         # pnpm install output
-        |       `-- *.test.ts             # copied from ../customizable/
+        |   |-- customizable/             # tracked: *.rs -- symlinked into generated/customizable/
+        |   `-- generated/                # gitignored: the generated SDK is itself a Cargo crate
+        |       |-- Cargo.toml            # package = "sdk-tests-rust-function-calls", lib = "baml_sdk"
+        |       |-- src/                  # codegen output
+        |       |-- customizable/         # symlinked from ../customizable/ (NOT under tests/ --
+        |       |                         #   cargo would auto-discover gated-off ports)
+        |       `-- tests/main.rs         # gate file: only modules declared here compile;
+        |                                 #   rows come from TEST_MODS in harness_setup/src/rust.rs
         |-- llm_functions/
         |   |-- customizable/
         |   `-- generated/
@@ -119,7 +159,7 @@ sdk_tests/
   `crates/<G>/<F>/` is the output for one generator.
 - **Generator directory** (under `crates/`): lowercase snake
   matching the generator key (`python_pydantic2`,
-  `typescript_node`).
+  `typescript_node`, `rust`).
 - **Rust crate name**: `sdk_test_<generator>` -- one per generator.
 
 ## Adding a Fixture

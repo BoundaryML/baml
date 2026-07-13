@@ -22,6 +22,25 @@ filter = 'package(=sdk_test_typescript_node)'
 platform = { host = 'cfg(windows)' }
 setup = 'typescript_node_pnpm_win'
 
+# rust tests need each fixture's generated crate pre-built into the shared
+# CARGO_TARGET_DIR so the parallel test-time cargo invocations hit a warm
+# cache. fire only when a rust sdk-test is selected.
+[scripts.setup.rust_cargo_unix]
+command = './sdk_tests/crates/rust/setup.sh'
+
+[scripts.setup.rust_cargo_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdk_tests/crates/rust/setup.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_rust)'
+platform = { host = 'cfg(unix)' }
+setup = 'rust_cargo_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_rust)'
+platform = { host = 'cfg(windows)' }
+setup = 'rust_cargo_win'
+
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per
 # fixture plus one incremental `maturin develop`; Windows builds one wheel
