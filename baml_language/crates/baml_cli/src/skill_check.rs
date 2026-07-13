@@ -1,5 +1,5 @@
 //! Passive agent-skill warning, printed on the core authoring commands
-//! (`run`, `generate`, `pack`).
+//! (`init`, `run`, `generate`, `pack`).
 //!
 //! Living in the toolchain (rather than the `baml` wrapper) means the warning
 //! ships with every nightly instead of waiting on a wrapper release, and fires
@@ -61,7 +61,7 @@ impl SkillCheck {
         Self { refresh }
     }
 
-    /// An inert guard for every command outside the run/generate/pack
+    /// An inert guard for every command outside the init/run/generate/pack
     /// whitelist (machine-facing commands, utilities, and `baml agent …`
     /// itself, whose whole purpose is acting on skills).
     pub(crate) fn skipped() -> Self {

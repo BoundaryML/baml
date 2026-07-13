@@ -109,13 +109,12 @@ fn install_command(server: &str, home: &std::path::Path, dir: &std::path::Path) 
     command
 }
 
-/// The first-run journey: `baml init` sets up the project, the first
-/// whitelisted authoring command (`generate`) warns that no agent skill is
-/// installed; `baml agent install` (run plain, exercising install-root
-/// detection from the cwd) fetches the codeload-shaped tarball — never the
-/// GitHub REST API, whose stub here doesn't exist — and installs into the
-/// project's `.claude/skills/` and `.agents/skills/`; the next authoring
-/// command is then quiet.
+/// The first-run journey: `baml init` in an empty directory sets up the
+/// project and warns that no agent skill is installed; `baml agent install`
+/// (run plain, exercising install-root detection from the cwd) fetches the
+/// codeload-shaped tarball — never the GitHub REST API, whose stub here
+/// doesn't exist — and installs into the project's `.claude/skills/` and
+/// `.agents/skills/`; the next authoring command is then quiet.
 #[test]
 fn init_warns_then_default_install_sets_up_skills_and_silences() {
     let server = spawn_stub_codeload(skill_archive(Some(COMMIT)));
@@ -147,8 +146,7 @@ fn init_warns_then_default_install_sets_up_skills_and_silences() {
         command.output().unwrap()
     };
 
-    // Step 1: init sets up the project quietly (not a whitelisted command);
-    // the first authoring command then nudges toward agent install.
+    // Step 1: init sets up the project and nudges toward agent install.
     let output = run(&["init"]);
     assert!(
         output.status.success(),
@@ -156,10 +154,6 @@ fn init_warns_then_default_install_sets_up_skills_and_silences() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(project.join("baml.toml").is_file());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!stderr.contains("baml skill"), "{stderr}");
-
-    let output = run(&["generate"]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("No baml skill is installed, set it up with baml agent install."),

@@ -1,7 +1,7 @@
 //! End-to-end tests for the toolchain's passive agent-skill warning: run the
 //! real `baml-cli` binary against a temp `BAML_HOME` and assert on stderr.
 //!
-//! The warning fires only on the whitelisted authoring commands (run,
+//! The warning fires only on the whitelisted authoring commands (init, run,
 //! generate, pack) and prints before the subcommand dispatches, so the tests
 //! use `generate` in an empty directory — the command itself fails ("no .baml
 //! files"), which is irrelevant to what's being asserted.
@@ -99,11 +99,11 @@ fn stderr_of(output: &Output) -> String {
 fn non_whitelisted_commands_never_warn() {
     let home = TestHome::new();
     // Same skill-less setup that makes `generate` warn — `check` is not in
-    // the run/generate/pack whitelist, so it stays quiet.
+    // the init/run/generate/pack whitelist, so it stays quiet.
     let empty = tempfile::tempdir().unwrap();
     let stderr = stderr_of(&home.run_args_from(&["check"], empty.path(), &[]));
     assert!(!stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
-    let stderr = stderr_of(&home.run_args_from(&["init"], empty.path(), &[]));
+    let stderr = stderr_of(&home.run_args_from(&["fmt"], empty.path(), &[]));
     assert!(!stderr.contains(SKILL_MISSING_WARNING), "{stderr}");
 }
 
