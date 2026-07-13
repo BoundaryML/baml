@@ -745,6 +745,18 @@ export type WebSocketInMessage =
   | { type: 'setEnvVar'; key: string; value: string }
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'requestState' }
+  | {
+      type: 'ensureProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'releaseProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
   | { type: 'requestCollectTests'; project: string }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number };
@@ -875,6 +887,21 @@ export type WorkerInMessage =
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'selectProject'; root: string }
   | { type: 'requestState' }
+  /** Standing intent: the client wants a live runtime for this project.
+   *  Unlike run commands this is not session-scoped — transports must
+   *  re-assert the latest lease after every reconnect handshake. */
+  | {
+      type: 'ensureProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'releaseProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
   | { type: 'requestCollectTests'; project: string }

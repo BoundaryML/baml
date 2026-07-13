@@ -1,7 +1,7 @@
 //! Inline type / parameter-name annotations for BAML files (inlay hints).
 //!
-//! Provides `annotations(db, file) -> Vec<InlineAnnotation>` — a regular
-//! function (not a Salsa query) that walks expression-body functions in a file
+//! Provides `file_annotations(db, file) -> &Vec<InlineAnnotation>` — a Salsa
+//! tracked query that walks expression-body functions in a file
 //! (top-level functions, class/interface methods, and the synthesized
 //! `$init_test` registration functions), recursing into lambda bodies (e.g.
 //! the bodies of `test` / `testset` blocks, which lower to lambdas passed to
@@ -81,7 +81,7 @@ pub enum AnnotationKind {
 }
 
 /// A single inline annotation (inlay hint) to display in the editor.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct InlineAnnotation {
     /// Byte offset in the file where the hint is inserted.
     pub offset: TextSize,
@@ -102,10 +102,16 @@ pub struct InlineAnnotation {
 /// Returns annotations sorted in document order (required by the LSP
 /// `textDocument/inlayHint` contract).
 ///
-/// Regular function (not a Salsa query). Internally calls Salsa-cached
-/// queries (`function_body`, `function_body_source_map`,
-/// `infer_scope_types`, `file_item_tree`, `file_semantic_index`).
-pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
+/// Salsa tracked query (design B1): walks every function body against type
+/// inference (measured 40–150ms on real projects), which is too slow to
+/// recompute per request while the file is unchanged. Editors re-request
+/// inlay hints on every scroll, so this is the hottest read path.
+///
+/// Named `file_annotations` (like `file_outline`) because the tracked-query
+/// machinery claims the bare name in the type namespace, which would collide
+/// with this module.
+#[salsa::tracked(returns(ref))]
+pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let index = baml_compiler2_hir::file_semantic_index(db, file);
 
@@ -433,7 +439,7 @@ function UseEcho() -> string {
         );
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         assert!(
@@ -473,7 +479,7 @@ function Demo(items: int[]) -> string {
 "##,
         );
         let project = builder.build();
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
 
         // The synthesized `.push(...)` calls must not surface `value:`-style hints.
         assert!(
@@ -510,7 +516,7 @@ function Greet(name: string, items: int[]) -> string {
         );
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         // `${expr}` lowers to `string.from(expr)`; that synthetic wrapper call
@@ -547,7 +553,7 @@ test "greets" {
         );
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         assert!(
@@ -582,7 +588,7 @@ class Greeter {
         );
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         assert!(
@@ -613,7 +619,7 @@ testset "math" {
         );
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         assert!(
@@ -647,7 +653,7 @@ function Later() -> string {
         builder.source("main.baml", source);
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let y_offset = TextSize::from(
             u32::try_from(source.find("\"y\"").expect("test arg")).expect("offset fits"),
         );
