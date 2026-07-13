@@ -1,0 +1,65 @@
+{
+  "$comment": "Machine-readable platform contract for BAML release builds (see bridge-release-contract.md). Workflows derive their matrices from this file instead of copying the target list. `sdks` records per-SDK support status: required | experimental | unsupported. `smoke_container` is the container image used to consumer-smoke the artifact when the runner's own userspace is not a valid consumer (musl). `msvc_arch` selects the MSVC dev-shell architecture for Windows smoke tests.",
+  "targets": [
+    {
+      "target": "aarch64-apple-darwin",
+      "runner": "macos-14",
+      "libc": null,
+      "archive": "tar.gz",
+      "sdks": { "cpp": "required" }
+    },
+    {
+      "target": "x86_64-apple-darwin",
+      "runner": "macos-15-intel",
+      "libc": null,
+      "archive": "tar.gz",
+      "sdks": { "cpp": "required" }
+    },
+    {
+      "target": "x86_64-unknown-linux-gnu",
+      "runner": "ubuntu-latest",
+      "libc": "glibc",
+      "archive": "tar.gz",
+      "sdks": { "cpp": "required" }
+    },
+    {
+      "target": "aarch64-unknown-linux-gnu",
+      "runner": "ubuntu-24.04-arm",
+      "libc": "glibc",
+      "archive": "tar.gz",
+      "sdks": { "cpp": "required" }
+    },
+    {
+      "target": "x86_64-unknown-linux-musl",
+      "runner": "ubuntu-latest",
+      "libc": "musl",
+      "archive": "tar.gz",
+      "smoke_container": "alpine:3.21",
+      "sdks": { "cpp": "required" }
+    },
+    {
+      "target": "aarch64-unknown-linux-musl",
+      "runner": "ubuntu-24.04-arm",
+      "libc": "musl",
+      "archive": "tar.gz",
+      "smoke_container": "alpine:3.21",
+      "sdks": { "cpp": "required" }
+    },
+    {
+      "target": "x86_64-pc-windows-msvc",
+      "runner": "windows-latest",
+      "libc": null,
+      "archive": "tar.gz",
+      "msvc_arch": "amd64",
+      "sdks": { "cpp": "required" }
+    },
+    {
+      "target": "aarch64-pc-windows-msvc",
+      "runner": "windows-11-arm",
+      "libc": null,
+      "archive": "tar.gz",
+      "msvc_arch": "arm64",
+      "sdks": { "cpp": "required" }
+    }
+  ]
+}

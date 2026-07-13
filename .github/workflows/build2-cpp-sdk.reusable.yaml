@@ -6,13 +6,11 @@ on:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
         type: string
-        default: ""
-        required: false
+        required: true
       source_sha:
         description: "Exact repository commit to build"
         type: string
-        default: ""
-        required: false
+        required: true
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -24,44 +22,35 @@ defaults:
     shell: bash
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: aarch64-apple-darwin
-            os: macos-14
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
-
-    name: ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+  # Matrices are derived from the repository-owned platform contract so the
+  # target list is not another copied YAML matrix (bridge-release-contract.md).
+  platform-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.derive.outputs.matrix }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_sha || github.sha }}
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+          sparse-checkout: release
+      - id: derive
+        run: |
+          set -euo pipefail
+          matrix="$(jq -c '{include: [.targets[] | select(.sdks.cpp != null and .sdks.cpp != "unsupported")]}' release/platforms.json)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: platform-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
       - name: Stamp release plan
@@ -69,11 +58,7 @@ jobs:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
         run: |
           set -euo pipefail
-          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
-            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
-          else
-            scripts/baml-language-version plan --channel canary --out release-plan.json
-          fi
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
           scripts/baml-language-version stamp --plan release-plan.json
 
       - name: Setup Rust
@@ -86,22 +71,22 @@ jobs:
           enable-cross: false
           skip-protoc: true
 
-      - name: Build tools setup
-        if: matrix.before
-        run: ${{ matrix.before }}
+      - name: Setup musl toolchain
+        if: matrix.libc == 'musl'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          target='${{ matrix.target }}'
+          cc_var="CC_$(echo "$target" | tr '-' '_')"
+          linker_var="CARGO_TARGET_$(echo "$target" | tr 'a-z-' 'A-Z_')_LINKER"
+          echo "$cc_var=musl-gcc" >> "$GITHUB_ENV"
+          echo "$linker_var=musl-gcc" >> "$GITHUB_ENV"
 
       - name: Package baml-cpp tarball
         env:
           BAML_CPP_TARGET: ${{ matrix.target }}
         run: baml_language/scripts/package_cpp_tarball.sh
-
-      # aarch64 Windows is cross-compiled on an x86_64 runner, so the
-      # produced dll cannot be executed there. Windows smoke coverage on
-      # x86_64 needs an MSVC-driven link step and is tracked separately;
-      # the unix targets all run the real user-consumption path.
-      - name: Smoke test tarball
-        if: ${{ !contains(matrix.target, 'windows') }}
-        run: baml_language/scripts/smoke_cpp_tarball.sh
 
       - name: Upload tarball
         uses: actions/upload-artifact@v7
@@ -111,3 +96,63 @@ jobs:
             baml_language/target/cpp-dist/*.tar.gz
             baml_language/target/cpp-dist/*.tar.gz.sha256
           if-no-files-found: error
+
+  # Consumer verification: download the assembled artifact and use it exactly
+  # as a user would (headers + library only, no repository build tree), on a
+  # native runner for every target. musl artifacts are smoked inside a real
+  # musl userspace (Alpine container), not against the glibc host.
+  verify:
+    needs: [platform-matrix, build]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
+    name: verify ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cpp-sdk-${{ matrix.target }}
+          path: cpp-dist
+
+      - name: Resolve expected version
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          expected="$(jq -r .canonical_version release-plan.json)"
+          echo "BAML_EXPECTED_VERSION=$expected" >> "$GITHUB_ENV"
+
+      - name: Verify checksum
+        run: |
+          set -euo pipefail
+          cd cpp-dist
+          if command -v sha256sum > /dev/null; then
+            sha256sum -c ./*.tar.gz.sha256
+          else
+            shasum -a 256 -c ./*.tar.gz.sha256
+          fi
+
+      - name: Smoke test (unix)
+        if: matrix.libc != 'musl' && !contains(matrix.target, 'windows')
+        run: baml_language/scripts/smoke_cpp_tarball.sh cpp-dist/*.tar.gz
+
+      - name: Smoke test (musl container)
+        if: matrix.libc == 'musl'
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work -e BAML_EXPECTED_VERSION \
+            ${{ matrix.smoke_container }} \
+            sh -c "apk add --no-cache bash g++ tar && bash baml_language/scripts/smoke_cpp_tarball.sh cpp-dist/*.tar.gz"
+
+      - name: Smoke test (windows)
+        if: contains(matrix.target, 'windows')
+        shell: pwsh
+        run: |
+          $tarball = (Get-ChildItem cpp-dist/*.tar.gz | Select-Object -First 1).FullName
+          baml_language/scripts/smoke_cpp_tarball.ps1 -Tarball $tarball -MsvcArch ${{ matrix.msvc_arch }}

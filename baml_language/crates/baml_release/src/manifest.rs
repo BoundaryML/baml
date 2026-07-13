@@ -194,3 +194,29 @@ mod tests {
         assert!(parsed.baml_cpp.is_none());
     }
 }
+
+#[cfg(test)]
+mod platform_contract_tests {
+    use crate::SUPPORTED_RELEASE_TARGETS;
+
+    /// The machine-readable platform contract (release/platforms.json) and
+    /// this crate's target constant must never drift apart.
+    #[test]
+    fn test_platforms_json_matches_supported_release_targets() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../release/platforms.json");
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+        let json: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let mut from_file: Vec<&str> = json["targets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["target"].as_str().unwrap())
+            .collect();
+        from_file.sort_unstable();
+        let mut from_const: Vec<&str> = SUPPORTED_RELEASE_TARGETS.to_vec();
+        from_const.sort_unstable();
+        assert_eq!(from_file, from_const);
+    }
+}

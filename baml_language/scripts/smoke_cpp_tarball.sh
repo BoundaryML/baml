@@ -7,9 +7,18 @@
 # Default: newest tarball under target/cpp-dist.
 set -euo pipefail
 
+# Resolve the tarball argument relative to the caller's directory before
+# changing into the workspace.
+TARBALL="${1:-}"
+if [ -n "$TARBALL" ]; then
+    TARBALL="$(cd "$(dirname "$TARBALL")" && pwd)/$(basename "$TARBALL")"
+fi
+
 cd "$(dirname "$0")/.."
 
-TARBALL="${1:-$(ls -t target/cpp-dist/baml-cpp-*.tar.gz 2> /dev/null | head -1)}"
+if [ -z "$TARBALL" ]; then
+    TARBALL="$(ls -t target/cpp-dist/baml-cpp-*.tar.gz 2> /dev/null | head -1)"
+fi
 if [ -z "$TARBALL" ] || [ ! -f "$TARBALL" ]; then
     echo "error: no tarball found; run scripts/package_cpp_tarball.sh first" >&2
     exit 1
@@ -49,6 +58,10 @@ got="$("$workdir/smoke")"
 want="$(cat "$root/VERSION")"
 if [ "$got" != "$want" ]; then
     echo "smoke test FAILED: version() printed '$got' but VERSION says '$want'" >&2
+    exit 1
+fi
+if [ -n "${BAML_EXPECTED_VERSION:-}" ] && [ "$got" != "$BAML_EXPECTED_VERSION" ]; then
+    echo "smoke test FAILED: version() printed '$got' but the release plan expects '$BAML_EXPECTED_VERSION'" >&2
     exit 1
 fi
 echo "smoke test passed: version $got"

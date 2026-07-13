@@ -10,16 +10,9 @@ import json
 from pathlib import Path
 
 
-TARGETS = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-unknown-linux-gnu",
-    "aarch64-unknown-linux-gnu",
-    "x86_64-unknown-linux-musl",
-    "aarch64-unknown-linux-musl",
-    "x86_64-pc-windows-msvc",
-    "aarch64-pc-windows-msvc",
-]
+_PLATFORMS_FILE = Path(__file__).resolve().parent.parent / "release" / "platforms.json"
+
+TARGETS = [entry["target"] for entry in json.loads(_PLATFORMS_FILE.read_text())["targets"]]
 
 
 def sha256(path: Path) -> str:
