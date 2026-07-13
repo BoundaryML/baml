@@ -508,6 +508,10 @@ impl ProjectDatabase {
         self.ast_control_flow_graph_impl(function_name, &mut ctx)
     }
 
+    fn normalize_graph_function_name(function_name: &str) -> &str {
+        function_name.strip_prefix("root.").unwrap_or(function_name)
+    }
+
     fn ast_control_flow_graph_impl(
         &self,
         function_name: &str,
@@ -517,6 +521,7 @@ impl ProjectDatabase {
             build_control_flow_graph_from_ast, build_llm_control_flow_graph,
         };
 
+        let function_name = Self::normalize_graph_function_name(function_name);
         if !ctx.expanding.insert(function_name.to_string()) {
             return None;
         }
@@ -746,7 +751,10 @@ impl ProjectDatabase {
                 .map(AsRef::<str>::as_ref)
                 .collect::<Vec<_>>()
                 .join(".");
-            calls.push((expr_id.into_raw().into_u32(), callee_name));
+            calls.push((
+                expr_id.into_raw().into_u32(),
+                Self::normalize_graph_function_name(&callee_name).to_string(),
+            ));
         }
         calls
     }
@@ -2018,6 +2026,59 @@ function Workflow(input: string) -> string {
         assert!(
             prepared.nodes.contains_key(&call_node.id),
             "LLM call must always render"
+        );
+    }
+
+    #[test]
+    fn test_root_qualified_llm_call_is_resolved_and_rendered() {
+        use baml_compiler2_visualization::control_flow::{
+            NodeType, prepare_control_flow_graph_for_visualization,
+        };
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_task_routing/choose_task.baml"),
+            r##"
+function ChooseTask(input: string) -> string {
+    client GPT4
+    prompt #"Choose a task for {{ input }}"#
+}
+"##,
+        );
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/ns_voice_turn/workflow.baml"),
+            r#"
+function VoiceTurn(input: string) -> string {
+    root.task_routing.ChooseTask(input)
+}
+"#,
+        );
+
+        assert!(
+            db.ast_control_flow_graph("root.voice_turn.VoiceTurn")
+                .is_some(),
+            "absolute root-qualified graph lookup should resolve the namespaced workflow"
+        );
+
+        let graph = db
+            .ast_control_flow_graph("voice_turn.VoiceTurn")
+            .expect("expected graph for namespaced VoiceTurn workflow");
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|node| node.label == "root.task_routing.ChooseTask(input)")
+            .expect("caller graph should contain the absolute namespaced call");
+        assert!(
+            matches!(call_node.node_type, NodeType::LlmFunction),
+            "absolute namespaced LLM call should resolve as LlmFunction, got {:?}",
+            call_node.node_type
+        );
+
+        let prepared = prepare_control_flow_graph_for_visualization(&graph);
+        assert!(
+            prepared.nodes.contains_key(&call_node.id),
+            "absolute namespaced LLM call must survive visualization pruning"
         );
     }
 
