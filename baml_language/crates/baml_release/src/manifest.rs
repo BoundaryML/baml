@@ -39,6 +39,10 @@ pub struct ToolchainManifest {
     pub vsix: Option<VsixArtifact>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub baml_bridge_pypi: Option<BamlBridgePypi>,
+    /// Per-target C++ SDK tarballs (prebuilt `bridge_cffi` cdylib + headers),
+    /// attached to the same baml-language release tag as `artifacts`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub baml_cpp: Option<BTreeMap<String, Artifact>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,6 +65,9 @@ impl ToolchainManifest {
                     sha256: vsix.sha256.clone(),
                 },
             )?;
+        }
+        if let Some(baml_cpp) = &self.baml_cpp {
+            validate_artifacts(&self.version, baml_cpp)?;
         }
         Ok(())
     }
@@ -116,4 +123,74 @@ fn validate_artifact(name: &str, artifact: &Artifact) -> anyhow::Result<()> {
     }
     validate_sha256(&artifact.sha256)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn full_target_artifacts() -> BTreeMap<String, Artifact> {
+        SUPPORTED_RELEASE_TARGETS
+            .iter()
+            .map(|target| {
+                (
+                    (*target).to_string(),
+                    Artifact {
+                        url: format!("https://example.com/{target}.tar.gz"),
+                        sha256: "a".repeat(64),
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn manifest_with_baml_cpp(baml_cpp: Option<BTreeMap<String, Artifact>>) -> ToolchainManifest {
+        ToolchainManifest {
+            schema: MANIFEST_SCHEMA,
+            version: "1.2.3".to_string(),
+            channel: Channel::Nightly,
+            released_at: "2026-07-13T00:00:00Z".to_string(),
+            artifacts: full_target_artifacts(),
+            vsix: None,
+            baml_bridge_pypi: None,
+            baml_cpp,
+        }
+    }
+
+    #[test]
+    fn test_baml_cpp_absent_is_valid_and_omitted_from_json() {
+        let manifest = manifest_with_baml_cpp(None);
+        manifest.validate().unwrap();
+        let json = serde_json::to_string(&manifest).unwrap();
+        assert!(!json.contains("baml_cpp"));
+    }
+
+    #[test]
+    fn test_baml_cpp_with_full_target_set_is_valid() {
+        let manifest = manifest_with_baml_cpp(Some(full_target_artifacts()));
+        manifest.validate().unwrap();
+        let json = serde_json::to_string(&manifest).unwrap();
+        let parsed: ToolchainManifest = serde_json::from_str(&json).unwrap();
+        parsed.validate().unwrap();
+        assert_eq!(
+            parsed.baml_cpp.unwrap().len(),
+            SUPPORTED_RELEASE_TARGETS.len()
+        );
+    }
+
+    #[test]
+    fn test_baml_cpp_with_missing_target_is_rejected() {
+        let mut baml_cpp = full_target_artifacts();
+        baml_cpp.remove(SUPPORTED_RELEASE_TARGETS[0]);
+        let manifest = manifest_with_baml_cpp(Some(baml_cpp));
+        assert!(manifest.validate().is_err());
+    }
+
+    #[test]
+    fn test_manifest_without_baml_cpp_key_still_parses() {
+        let manifest = manifest_with_baml_cpp(None);
+        let json = serde_json::to_string(&manifest).unwrap();
+        let parsed: ToolchainManifest = serde_json::from_str(&json).unwrap();
+        assert!(parsed.baml_cpp.is_none());
+    }
 }

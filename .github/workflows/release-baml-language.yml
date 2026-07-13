@@ -392,6 +392,16 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  build-cpp-sdk:
+    name: Build C++ SDK
+    needs: [plan]
+    uses: ./.github/workflows/build2-cpp-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   all-builds:
     name: All builds gate
     runs-on: ubuntu-latest
@@ -402,6 +412,7 @@ jobs:
       - build-wrapper
       - build-python-sdk
       - build-nodejs-sdk
+      - build-cpp-sdk
     steps:
       - run: echo "all release build jobs completed"
 
@@ -473,6 +484,11 @@ jobs:
         with:
           name: baml-vscode-vsix
           path: dist/vsix
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cpp-sdk-*
+          path: dist/cpp
+          merge-multiple: true
       - name: Generate checksum sidecars
         run: |
           set -euo pipefail
@@ -488,9 +504,9 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/toolchain/* dist/vsix/* --clobber
+            gh release upload "$TAG" dist/toolchain/* dist/vsix/* dist/cpp/* --clobber
           else
-            gh release create "$TAG" dist/toolchain/* dist/vsix/* \
+            gh release create "$TAG" dist/toolchain/* dist/vsix/* dist/cpp/* \
               --title "BAML Language $VERSION" \
               --notes "BAML language toolchain $VERSION"
           fi
@@ -559,6 +575,11 @@ jobs:
         with:
           name: baml-vscode-vsix
           path: dist/vsix
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cpp-sdk-*
+          path: dist/cpp
+          merge-multiple: true
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
@@ -575,6 +596,7 @@ jobs:
             --toolchain-dir dist/toolchain \
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
+            --cpp-dir dist/cpp \
             --out manifests \
             --channel "${{ needs.plan.outputs.channel }}" \
             --version "${{ needs.plan.outputs.version }}" \
@@ -767,6 +789,11 @@ jobs:
         with:
           name: baml-vscode-vsix
           path: dist/vsix
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cpp-sdk-*
+          path: dist/cpp
+          merge-multiple: true
       - name: Generate dry-run files
         run: |
           set -euo pipefail
@@ -778,6 +805,7 @@ jobs:
             --toolchain-dir dist/toolchain \
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
+            --cpp-dir dist/cpp \
             --out dry-run/manifest/v1 \
             --channel "${{ needs.plan.outputs.channel }}" \
             --version "${{ needs.plan.outputs.version }}" \
