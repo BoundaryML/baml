@@ -137,6 +137,29 @@ function Describe() -> string {
             (quote)))))))
 
 ==================
+raw strings: five hash delimiter
+==================
+
+function f() -> string {
+  #####"Complex ####"nested"#### content here"#####
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (raw_string
+          (raw_string_content
+            (quote)
+            (quote)))))))
+
+==================
 raw string as attribute argument
 ==================
 

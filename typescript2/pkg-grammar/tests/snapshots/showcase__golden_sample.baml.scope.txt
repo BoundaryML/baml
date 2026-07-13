@@ -351,11 +351,19 @@
 91:27-28     "]"                source.baml meta.test.baml meta.block.code.baml meta.expression.array.baml punctuation.definition.array.end.baml
 92:3-7       "args"             source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml entity.name.type.baml
 92:8-9       "{"                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.begin.baml
-93:1-19      "    text \"Jane Doe" source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml
-93:19-20     ","                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.separator.comma.baml
-93:20-38     " 12 years of Rust\"" source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml
-94:1-20      "    hints [\"skills\"" source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml
-94:20-21     ","                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.separator.comma.baml
-94:21-30     " \"email\"]"      source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml
+93:5-9       "text"             source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml variable.other.property.baml
+93:10-11     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+93:11-37     "Jane Doe, 12 years of Rust" source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml
+93:37-38     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
+94:5-10      "hints"            source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.dotted-expression.baml variable.other.readwrite.baml
+94:11-12     "["                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml punctuation.definition.array.begin.baml
+94:12-13     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+94:13-19     "skills"           source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml string.quoted.double.baml
+94:19-20     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml string.quoted.double.baml punctuation.definition.string.end.baml
+94:20-21     ","                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml punctuation.separator.comma.baml
+94:22-23     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+94:23-28     "email"            source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml string.quoted.double.baml
+94:28-29     "\""               source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml string.quoted.double.baml punctuation.definition.string.end.baml
+94:29-30     "]"                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml meta.constructor.field.baml meta.expression.array.baml punctuation.definition.array.end.baml
 95:3-4       "}"                source.baml meta.test.baml meta.block.code.baml meta.constructor.expression.baml meta.constructor.body.baml punctuation.definition.constructor.body.end.baml
 96:1-2       "}"                source.baml meta.test.baml meta.block.code.baml punctuation.definition.block.end.baml

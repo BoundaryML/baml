@@ -44,7 +44,9 @@ comment-token = "//"
 
 [[grammar]]
 name = "baml"
-source = { git = "https://github.com/BoundaryML/baml-treesitter", rev = "main" }
+# Pin a specific commit (git log on this repo for the latest) so the parser
+# and your queries cannot drift apart; bump the rev deliberately.
+source = { git = "https://github.com/BoundaryML/baml-treesitter", rev = "<commit-sha>" }
 ```
 
 Then `hx --grammar fetch && hx --grammar build`, and copy `queries/` to

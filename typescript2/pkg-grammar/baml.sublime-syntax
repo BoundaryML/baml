@@ -789,6 +789,7 @@ contexts:
       pop: true
     - include: comments
     - include: constructor-field
+    - include: constructor-field-shorthand
     - include: comma
   constructor-body:
     - match: '\{'
@@ -817,6 +818,17 @@ contexts:
         1: variable.other.property.baml
         2: punctuation.separator.colon.baml
       push: constructor-field--body
+  constructor-field-shorthand--body:
+    - meta_scope: meta.constructor.field.baml
+    - match: '(?=,|\})'
+      pop: true
+    - include: comments
+    - include: expression
+  constructor-field-shorthand:
+    - match: '(?:^|(?<=[{,]))[ \t]*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)[ \t]+(?=#+"|"|b"|\`|\[|[0-9+-]|true\b|false\b|null\b|env\b)'
+      captures:
+        1: variable.other.property.baml
+      push: constructor-field-shorthand--body
   constructor-type:
     - match: '\b\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*\b'
       scope: entity.name.type.baml

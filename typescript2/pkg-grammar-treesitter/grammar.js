@@ -63,6 +63,11 @@ const RAW_CHUNK = token(prec(2, /[^"]+/));
 // Backtick string bodies: text up to a backtick, backslash, or dollar.
 const BACKTICK_CHUNK = token(prec(2, /[^`\\$]+/));
 
+// Raw-string delimiter depth. Matches the TextMate grammar's
+// MAX_DELIMITER = 8 (pkg-grammar/src/baml.ts): the lexer allows any hash
+// count, but 8 covers every realistic string.
+const MAX_RAW_STRING_HASHES = 8;
+
 function rawString($, hashes) {
   return seq(
     '#'.repeat(hashes) + '"',
@@ -1165,10 +1170,16 @@ module.exports = grammar({
 
     byte_string: (_) => token(seq('b"', repeat(choice(/[^"\\]/, /\\./)), '"')),
 
-    // Raw strings: 1–4 hash levels are supported explicitly (the real parser
-    // supports arbitrary N; ≥5 is unheard of in practice — documented gap).
+    // Raw strings: hash levels 1..MAX_RAW_STRING_HASHES are enumerated
+    // explicitly (same longest-match close-delimiter approach per level).
+    // The real lexer allows any count; unbounded nesting would need an
+    // external scanner, which this grammar deliberately avoids.
     raw_string: ($) =>
-      choice(rawString($, 1), rawString($, 2), rawString($, 3), rawString($, 4)),
+      choice(
+        ...Array.from({ length: MAX_RAW_STRING_HASHES }, (_, i) =>
+          rawString($, i + 1),
+        ),
+      ),
 
     raw_string_content: ($) =>
       repeat1(choice(RAW_CHUNK, alias('"', $.quote))),

@@ -45,7 +45,7 @@ The package ships a plain ES module, so it works directly from an ESM CDN — no
 For the classic (non-module) highlight.js build, `dist/baml.js` self-registers the language on the global `hljs` — load it after highlight.js:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@boundaryml/baml-highlightjs/dist/baml.js"></script>
 ```
 

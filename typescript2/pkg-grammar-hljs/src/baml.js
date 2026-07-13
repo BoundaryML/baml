@@ -32,16 +32,20 @@ false for this language.
 
 /** @type {import('highlight.js').LanguageFn} */
 export default function baml(hljs) {
-  // Identifier as the BAML lexer defines its `Word` token: first char is a
-  // letter or underscore (optionally $-prefixed), continuation chars add
-  // digits and hyphens (`gpt-4o` is one identifier).
-  const IDENT = /\$?[A-Za-z_][A-Za-z0-9_-]*/;
+  // Identifier as the BAML lexer defines its `Word` token
+  // (baml_compiler_lexer/src/tokens.rs): first char is a letter or underscore,
+  // continuation chars add digits and hyphens (`gpt-4o` is one identifier).
+  // Names may be joined by `$` into segments (`ExtractResume$render_prompt`),
+  // and a leading `$` marks the special $-prefixed form (`$stream`).
+  const IDENT = /\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*/;
 
   const KEYWORDS = {
-    // Keywords are plain words, but identifiers may contain hyphens; including
-    // `-` in $pattern keeps `catch-all-handler` or `gpt-4o` from being read as
-    // a keyword plus trailing junk.
-    $pattern: /[A-Za-z_][A-Za-z0-9_-]*/,
+    // Keywords are plain words, but identifiers may contain hyphens and
+    // $-joined segments; matching the full lexer Word shape here keeps
+    // `catch-all-handler`, `gpt-4o`, `for$each`, or `$stream` from being read
+    // as a keyword plus trailing junk (keywords themselves contain no `-`/`$`,
+    // so real keywords still match exactly).
+    $pattern: /\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*/,
     keyword: [
       // top-level declaration keywords (lexer TokenKind)
       'class',
@@ -213,8 +217,18 @@ export default function baml(hljs) {
     relevance: 0
   };
 
-  // ${ ... } interpolation inside backtick strings. `contains` is filled in
-  // below (after the modes it references exist).
+  // ${ ... } interpolation inside backtick strings. The interpolated
+  // expression may itself contain braces (`${if ok { "x" } else { "y" }}`), so
+  // a self-recursive brace-tracking mode keeps the interpolation open until
+  // its own balancing `}`. `contains` for both is filled in below (after the
+  // modes they reference exist).
+  const NESTED_BRACES = {
+    begin: /\{/,
+    end: /\}/,
+    keywords: KEYWORDS,
+    contains: []
+  };
+
   const SUBST = {
     scope: 'subst',
     begin: /\$\{/,
@@ -322,13 +336,21 @@ export default function baml(hljs) {
     relevance: 0
   };
 
-  SUBST.contains = [
+  // Shared contents of an interpolated expression. The list includes
+  // NESTED_BRACES, and NESTED_BRACES reuses the list, so arbitrarily deep
+  // `{ ... }` nesting inside `${ ... }` is tracked and only the balancing `}`
+  // closes the interpolation.
+  const INTERPOLATION_CONTAINS = [
     hljs.C_LINE_COMMENT_MODE,
     hljs.C_BLOCK_COMMENT_MODE,
     QUOTED_STRING,
     NUMBER,
-    ENV_VAR
+    ENV_VAR,
+    NESTED_BRACES
   ];
+
+  NESTED_BRACES.contains = INTERPOLATION_CONTAINS;
+  SUBST.contains = INTERPOLATION_CONTAINS;
 
   return {
     name: 'BAML',

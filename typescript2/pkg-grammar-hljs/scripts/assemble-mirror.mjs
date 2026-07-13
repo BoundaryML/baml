@@ -12,7 +12,7 @@
 // workflow always stamps a real version.
 
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -37,6 +37,18 @@ if (values.version && !/^\d+\.\d+\.\d+$/.test(values.version)) {
 }
 
 const out = resolve(process.cwd(), values.out);
+
+// The rmSync below is recursive: refuse any --out that overlaps the repo
+// checkout (`--out .`, a parent, or a subdirectory of the package) so a typo
+// can never delete source files.
+const overlaps = (a, b) => {
+  const rel = relative(a, b);
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+};
+if (overlaps(repoRoot, out) || overlaps(out, repoRoot)) {
+  console.error(`--out must not overlap the repository: ${out}`);
+  process.exit(1);
+}
 rmSync(out, { recursive: true, force: true });
 mkdirSync(resolve(out, '.github/workflows'), { recursive: true });
 

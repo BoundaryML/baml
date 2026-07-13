@@ -138,13 +138,14 @@ jobs:
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -m "Sync from BoundaryML/baml@${SOURCE_SHA} (v${next})"
-          git push origin main
           # Tag every published version: bat submodules, Package Control, and
-          # Linguist bumps all want stable tags to pin.
+          # Linguist bumps all want stable tags to pin. --atomic so main can
+          # never advance without its tag (a half-push would make the next run
+          # see no content diff and skip re-tagging).
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               tag -a "v${next}" -m "v${next}"
-          git push origin "v${next}"
+          git push --atomic origin main "v${next}"
           echo "version=${next}" >> "$GITHUB_OUTPUT"
 
       - name: Verify npm publish landed
@@ -239,11 +240,11 @@ jobs:
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -m "Sync from BoundaryML/baml@${SOURCE_SHA} (v${next})"
-          git push origin main
+          # --atomic: main must never advance without its tag (see sync-textmate).
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               tag -a "v${next}" -m "v${next}"
-          git push origin "v${next}"
+          git push --atomic origin main "v${next}"
           echo "version=${next}" >> "$GITHUB_OUTPUT"
 
       - name: Verify npm publish landed

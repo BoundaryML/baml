@@ -6,7 +6,7 @@ truth live in this monorepo; mirrors are write-only build artifacts; no repo
 we own is ever edited by hand.** See `README.md` for the package family and
 `mirror/SUPPORT.md` for live status.
 
-```
+```text
 BoundaryML/baml (humans edit here, sync-grammar-mirror fans out)
 ├─ pkg-grammar            → BoundaryML/textMate-baml
 │    npm @boundaryml/baml-grammar · Linguist submodule · Shiki source URL

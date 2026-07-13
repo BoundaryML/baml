@@ -77,6 +77,52 @@ describe("BAML highlight.js language", () => {
     expect(hljs.getLanguage("baml")?.name).toBe("BAML");
   });
 
+  it("treats $-joined identifiers as single tokens, not keyword fragments", () => {
+    // Lexer Word forms: `Foo$bar` segments and the `$`-prefixed `$stream`.
+    const code = [
+      "function ExtractResume$render_prompt(x: string) -> string {",
+      "  let for$each = $stream;",
+      "  let is$match = if$else;",
+      "  for$each",
+      "}",
+    ].join("\n");
+
+    const { value, illegal } = hljs.highlight(code, { language: "baml" });
+    expect(illegal).toBe(false);
+
+    // The declaration title spans the whole $-joined name.
+    expect(value).toContain(
+      '<span class="hljs-title function_">ExtractResume$render_prompt</span>',
+    );
+
+    // No keyword fragment may be carved out of a $-joined identifier: `for`,
+    // `is`, `if`, `else` appear only inside `for$each` / `is$match` /
+    // `if$else`, so the only keyword spans are the real ones.
+    const keywordSpans = [...value.matchAll(/<span class="hljs-keyword">([^<]*)<\/span>/g)]
+      .map((m) => m[1])
+      .sort();
+    expect(keywordSpans).toEqual(["function", "let", "let"]);
+  });
+
+  it("tracks nested braces inside backtick ${...} interpolation", () => {
+    const code = 'let msg = `result: ${if ok { "yes" } else { "no" }} done`;';
+
+    const { value, illegal } = hljs.highlight(code, { language: "baml" });
+    expect(illegal).toBe(false);
+
+    // The interpolation must stay open across the inner `{ "yes" }` block:
+    // `else` sits between the nested blocks, so it only gets a keyword span if
+    // the first inner `}` did not close the subst early.
+    expect(value).toContain('<span class="hljs-keyword">if</span>');
+    expect(value).toContain('<span class="hljs-keyword">else</span>');
+    expect(value).toContain('<span class="hljs-string">&quot;yes&quot;</span>');
+    expect(value).toContain('<span class="hljs-string">&quot;no&quot;</span>');
+
+    // The subst closes on its balancing `}`, leaving ` done` and the closing
+    // backtick inside the string scope.
+    expect(value).toMatch(/}<\/span> done`<\/span>;$/);
+  });
+
   for (const fixture of fixtures) {
     const name = fixtureName(fixture);
 

@@ -50,7 +50,7 @@ When the language changes, update the grammar against (in priority order):
 
 ## Design decisions
 
-- **No external scanner.** Raw strings `#"…"#` are supported for 1–4 hash
+- **No external scanner.** Raw strings `#"…"#` are supported for 1–8 hash
   levels with plain tokens: the body is a high-lexical-precedence
   "anything-but-quote" chunk plus a bare `"` token, and the closing `"#…#`
   delimiter beats the bare quote by longest-match — exactly the real
@@ -66,8 +66,12 @@ When the language changes, update the grammar against (in priority order):
 
 ## Known gaps
 
-- Raw strings support 1–4 `#` levels (the compiler allows arbitrary N).
-  Add a level in `rawString(…)` if anyone ever writes `#####"…"#####`.
+- Raw strings support 1–8 `#` levels — the same bound as the TextMate
+  grammar's `MAX_DELIMITER = 8` (`pkg-grammar/src/baml.ts`: "the lexer
+  allows any count; 8 covers every realistic string"). The compiler allows
+  arbitrary N, but truly unbounded delimiters would need an external
+  scanner, which this grammar deliberately avoids; bump
+  `MAX_RAW_STRING_HASHES` in `grammar.js` if that ever changes.
 - Backtick strings support 1–3 tick ladders (same shape of limitation).
 - Tagged template expressions (``tag`…` ``, BEP-049 §10) are not modeled;
   they do not appear in the fixture corpus yet.
