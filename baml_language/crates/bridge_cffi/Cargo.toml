@@ -37,5 +37,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 vfs = { workspace = true }
 
+[dev-dependencies]
+cbindgen = { workspace = true }
+
 [package.metadata.ci]
 wasm_support = false

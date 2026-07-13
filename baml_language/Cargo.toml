@@ -138,6 +138,7 @@ axum = { version = "0.8.4", default-features = false, features = [ "http1", "mat
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
 cargo_metadata = { version = "0.23.1" }
+cbindgen = { version = "0.29.4", default-features = false }
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
