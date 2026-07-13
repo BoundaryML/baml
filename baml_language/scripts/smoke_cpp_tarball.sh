@@ -40,9 +40,9 @@ int main() {
 }
 EOF
 
-# C++11 is the minimum supported standard for the C++ bridge; the smoke test
+# C++17 is the minimum supported standard for the C++ bridge; the smoke test
 # must compile at exactly that floor.
-c++ -std=c++11 -I"$root/include" "$workdir/main.cpp" -o "$workdir/smoke" \
+c++ -std=c++17 -I"$root/include" "$workdir/main.cpp" -o "$workdir/smoke" \
     -L"$root/lib" -lbridge_cffi -Wl,-rpath,"$root/lib"
 
 got="$("$workdir/smoke")"
