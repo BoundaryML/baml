@@ -42,7 +42,6 @@ env:
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: arn:aws:iam::277707123528:role/pkg-boundaryml-com-github-release
   PKG_BUCKET: pkgboundarymlcomstack-pkgboundarymlcomsitebucket4f-ybhvygkqittp
-  BAML_AGENT_SKILLS_REPOSITORY: BoundaryML/baml-skill
 
 jobs:
   plan:
@@ -298,38 +297,6 @@ jobs:
           name: baml-playground-dist
           path: typescript2/app-vscode-webview/dist
 
-  build-agent-skills:
-    name: Build agent skills
-    needs: [plan]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.source_sha }}
-          persist-credentials: false
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ env.BAML_AGENT_SKILLS_REPOSITORY }}
-          path: agent-skills-source
-          persist-credentials: false
-      - name: Package agent skills
-        env:
-          VERSION: ${{ needs.plan.outputs.version }}
-        run: |
-          set -euo pipefail
-          scripts/package-agent-skills \
-            --source agent-skills-source \
-            --version "$VERSION" \
-            --out-dir dist/agent-skills
-
-          archive="dist/agent-skills/baml-agent-skills-$VERSION.tar.gz"
-          tar -tzf "$archive" | tee agent-skills-list.txt
-          grep -E '/SKILL\.md$' agent-skills-list.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: agent-skills
-          path: dist/agent-skills/*
-
   build-wrapper:
     name: Build wrapper (${{ matrix.target }})
     needs: [plan]
@@ -435,7 +402,6 @@ jobs:
       - build-wrapper
       - build-python-sdk
       - build-nodejs-sdk
-      - build-agent-skills
     steps:
       - run: echo "all release build jobs completed"
 
@@ -490,7 +456,7 @@ jobs:
 
   publish-toolchain-release:
     name: Publish toolchain release assets
-    needs: [plan, all-builds, build-agent-skills]
+    needs: [plan, all-builds]
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     runs-on: ubuntu-latest
     env:
@@ -507,10 +473,6 @@ jobs:
         with:
           name: baml-vscode-vsix
           path: dist/vsix
-      - uses: actions/download-artifact@v4
-        with:
-          name: agent-skills
-          path: dist/agent-skills
       - name: Generate checksum sidecars
         run: |
           set -euo pipefail
@@ -526,9 +488,9 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/toolchain/* dist/vsix/* dist/agent-skills/* --clobber
+            gh release upload "$TAG" dist/toolchain/* dist/vsix/* --clobber
           else
-            gh release create "$TAG" dist/toolchain/* dist/vsix/* dist/agent-skills/* \
+            gh release create "$TAG" dist/toolchain/* dist/vsix/* \
               --title "BAML Language $VERSION" \
               --notes "BAML language toolchain $VERSION"
           fi

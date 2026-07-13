@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 52624
 ---
 === TIR2 ===
 function user.compound_assignment() -> string throws never {
@@ -31,6 +32,7 @@ function user.call_site_label() -> int throws never {
   { : int
     takes_int($id = baml.id.new()) : int
   }
+  !! 859..872: `$id` cannot be set at the call site; assign `$id = ...` inside the function body instead
   !! 843..873: missing required argument `x`
 }
 function user.shadowing_let() -> int throws never {

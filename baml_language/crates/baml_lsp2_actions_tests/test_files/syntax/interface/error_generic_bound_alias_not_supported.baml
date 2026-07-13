@@ -1,5 +1,5 @@
 interface Converter<T> {
-  function convert(self) -> T
+  function convert(self) -> T throws never
 }
 
 function read_int<T extends Converter<int> as Ints>(m: T) -> int {

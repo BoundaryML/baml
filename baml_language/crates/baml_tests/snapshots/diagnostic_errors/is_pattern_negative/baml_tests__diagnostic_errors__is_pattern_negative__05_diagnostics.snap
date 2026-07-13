@@ -1,5 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 47055
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: unresolved name: x
@@ -53,11 +54,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: unresolved type: Missing
-    ╭─[ main.baml:36:22 ]
+    ╭─[ main.baml:36:10 ]
     │
  36 │     v is WrapGeneric<Missing>
-    │                      ───┬───  
-    │                         ╰───── unresolved type: Missing
+    │          ──────────┬─────────  
+    │                    ╰─────────── unresolved type: Missing
     │ 
     │ Note: Error code: E0002
 ────╯

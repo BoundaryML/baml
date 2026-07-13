@@ -82,7 +82,7 @@ async fn optional_index_with_valid_index_returns_element() {
 /// (a valid i64, but `INT_MAX + 1`) is rejected at compile time rather than
 /// panicking the VM at engine load. The diagnostic points at `bigint`.
 #[tokio::test]
-#[should_panic(expected = "[E0139]")]
+#[should_panic(expected = "[E0150]")]
 async fn int_literal_above_max_is_rejected_at_compile_time() {
     let _ = baml_test!(
         r#"
@@ -96,7 +96,7 @@ async fn int_literal_above_max_is_rejected_at_compile_time() {
 /// A genuinely-too-large negated literal (magnitude past `INT_MIN`) is also a
 /// compile error — the negated value is range-checked, not just the token.
 #[tokio::test]
-#[should_panic(expected = "[E0139]")]
+#[should_panic(expected = "[E0150]")]
 async fn negated_int_literal_below_min_is_rejected_at_compile_time() {
     let _ = baml_test!(
         r#"
@@ -112,7 +112,7 @@ async fn negated_int_literal_below_min_is_rejected_at_compile_time() {
 /// child node, so the `+2^62` is rejected just like a bare one (matching the
 /// Rust/Java/C# rule, where parentheses break the negative-literal form).
 #[tokio::test]
-#[should_panic(expected = "[E0139]")]
+#[should_panic(expected = "[E0150]")]
 async fn parenthesized_oversized_literal_is_rejected() {
     let _ = baml_test!(
         r#"
@@ -208,8 +208,11 @@ async fn map_with_repeated_string_alias_union_key_is_accepted() {
 }
 
 #[tokio::test]
-async fn generic_map_key_annotation_is_deferred() {
-    let output = baml_test!(
+#[should_panic(expected = "map keys must be `string`; got `K`")]
+async fn generic_map_key_annotation_is_rejected() {
+    // No bound can prove a type variable string-denoting, so `map<K, V>` could be
+    // instantiated at a non-string key — rejected at the declaration (E0067).
+    let _ = baml_test!(
         r#"
         function passthrough<K, V>(items: map<K, V>) -> map<K, V> {
             items
@@ -219,11 +222,6 @@ async fn generic_map_key_annotation_is_deferred() {
             0
         }
     "#
-    );
-    assert!(
-        matches!(output.result, Ok(BexExternalValue::Int(0))),
-        "expected generic map key annotation to compile, got: {:?}",
-        output.result
     );
 }
 

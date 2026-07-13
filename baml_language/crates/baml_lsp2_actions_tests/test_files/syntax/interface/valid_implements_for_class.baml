@@ -1,7 +1,7 @@
 // Out-of-body implements: top-level `implements I for T { ... }`
 
 interface ToJson {
-    function to_json(self) -> string
+    function to_json(self) -> string throws never
 }
 
 class Dog {

@@ -1,27 +1,28 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 56421
 ---
 === TIR2 ===
-function user.Foo() -> unknown throws never {
+function user.Foo() -> !error throws never {
   { : 1
     1 : 1
   }
   !! 132..136: unresolved type: blah
 }
-function user.Bar(x: unknown) -> int throws never {
+function user.Bar(x: !error) -> int throws never {
   { : 1
     1 : 1
   }
   !! 211..229: unresolved type: unknown_param_type
 }
-function user.Baz() -> unknown | null throws never {
+function user.Baz() -> !error | null throws never {
   { : null
     null : null
   }
   !! 312..329: unresolved type: unknown_optional
 }
 enum user.Status
-function user.StatusTypoInTypePosition(s: unknown) -> int throws never {
+function user.StatusTypoInTypePosition(s: !error) -> int throws never {
   { : 1
     1 : 1
   }

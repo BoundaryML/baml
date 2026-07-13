@@ -1,11 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12456
 ---
 === MIR2 ===
-fn user.unwrap_or(o: Opt<T> | Non, default: T) -> T {
+fn user.unwrap_or(o: Non | Opt<T>, default: T) -> T {
     // Locals:
     let _0: T // _0 // return
-    let _1: Opt<T> | Non // o // param
+    let _1: Non | Opt<T> // o // param
     let _2: T // default // param
     let _3: bool
     let _4: Opt<T> // s

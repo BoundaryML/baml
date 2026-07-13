@@ -504,7 +504,7 @@ function Greet(name: string) -> string {
 // Function that returns the PromptAst type - this should work since
 // PromptAst is now a visible builtin type
 function get_prompt() -> baml.llm.PromptAst {
-    let args = { "name": "World" };
+    let args: map<string, unknown> = { "name": "World" };
     baml.llm.render_prompt(TestClient, "Greet", args)
 }
 "##;
@@ -583,7 +583,7 @@ function Greet(name: string) -> string {
 }
 
 function test_build_request() -> int {
-    let args = { "name": "World" };
+    let args: map<string, unknown> = { "name": "World" };
     let request = baml.llm.build_request(TestClient, "Greet", args);
     42
 }
@@ -627,7 +627,7 @@ function Greet(name: string) -> string {
 }
 
 function test_call_llm() -> unknown {
-    let args = { "name": "World" };
+    let args: map<string, unknown> = { "name": "World" };
     baml.llm.call_llm_function(TestClient, "Greet", args)
 }
 "##;
@@ -763,7 +763,7 @@ function Greet(name: string) -> map<string, int> {
 }
 
 function test_call_llm() -> unknown {
-    let args = { "name": "World" };
+    let args: map<string, unknown> = { "name": "World" };
     baml.llm.call_llm_function(TestClient, "Greet", args)
 }
 "##;
@@ -841,7 +841,7 @@ function TestFunc(name: string) -> string {
 }
 
 function get_prompt() -> baml.llm.PromptAst {
-    let args = { "name": "Alice" };
+    let args: map<string, unknown> = { "name": "Alice" };
     baml.llm.render_prompt(TestClient, "TestFunc", args)
 }
 "##;
@@ -939,7 +939,7 @@ function TestFunc(label: string, person: Person) -> string {
 }
 
 function get_prompt() -> baml.llm.PromptAst {
-    let args = { "label": "User", "person": { "name": "Bob", "age": 42 } };
+    let args: map<string, unknown> = { "label": "User", "person": { "name": "Bob", "age": 42 } };
     baml.llm.render_prompt(TestClient, "TestFunc", args)
 }
 "##;

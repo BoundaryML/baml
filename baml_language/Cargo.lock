@@ -671,6 +671,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "baml_release",
+ "console",
  "reqwest",
  "serde",
  "serde_json",
@@ -1049,7 +1050,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "uuid",
  "vfs",
  "webbrowser",
 ]
@@ -1104,7 +1104,9 @@ dependencies = [
  "serde_json",
  "sha2",
  "tar",
+ "tempfile",
  "thiserror 2.0.18",
+ "toml 0.8.23",
  "zip",
 ]
 

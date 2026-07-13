@@ -116,8 +116,13 @@ async fn class_generic_bound_member_access_runs_in_class_method() {
 async fn function_class_generic_bound_member_access_runs() {
     let output = baml_test!(
         r#"
-        class Named {
+        interface Named {
             name: string
+        }
+
+        class Person {
+            name: string
+            implements Named {}
         }
 
         function get_name<T extends Named>(value: T) -> string {
@@ -125,7 +130,7 @@ async fn function_class_generic_bound_member_access_runs() {
         }
 
         function main() -> string {
-            return get_name(Named { name: "Ada" })
+            return get_name(Person { name: "Ada" })
         }
         "#
     );
@@ -269,19 +274,20 @@ fn class_generic_bound_is_visible_inside_lambda_body() {
 }
 
 #[test]
-fn class_generic_bound_accepts_union_members() {
-    assert_no_compile_errors(
+fn class_generic_bound_rejects_union_bound() {
+    // Bounds are interfaces only — a union type is not an interface (there is no
+    // `implements` relation to a union), so it cannot be a generic bound.
+    assert_compile_error_contains(
         r#"
         class Box<T extends int | string> {
             value: T
         }
 
         function main() -> int {
-            let a = Box<int> { value: 1 }
-            let b = Box<string> { value: "ok" }
             return 1
         }
         "#,
+        "is not an interface",
     );
 }
 
@@ -302,23 +308,19 @@ fn class_generic_bound_rejects_type_outside_union() {
 }
 
 #[test]
-fn class_generic_bound_accepts_compound_type_expressions() {
-    assert_no_compile_errors(
+fn class_generic_bound_rejects_container_and_optional_bounds() {
+    // Bounds are interfaces only — a list or optional type is not an interface.
+    assert_compile_error_contains(
         r#"
         class ListBox<T extends int[]> {
             value: T
         }
 
-        class MaybeBox<T extends string?> {
-            value: T
-        }
-
         function main() -> int {
-            let xs = ListBox<int[]> { value: [1, 2, 3] }
-            let maybe = MaybeBox<string?> { value: null }
             return 1
         }
         "#,
+        "is not an interface",
     );
 }
 
@@ -339,33 +341,23 @@ fn class_generic_bound_rejects_wrong_compound_type() {
 }
 
 #[test]
-fn class_generic_bound_accepts_interface_implementors_inside_function_types() {
-    assert_no_compile_errors(
+fn class_generic_bound_rejects_function_type_bound() {
+    // Bounds are interfaces only — a function type is not an interface.
+    assert_compile_error_contains(
         r#"
         interface Named {
             name: string
         }
 
-        class Dog {
-            name: string
-            implements Named {}
-        }
-
-        type DogFactory = () -> Dog
-
         class FunctionBox<T extends () -> Named> {
             cb: T
         }
 
-        function make_dog() -> Dog {
-            return Dog { name: "Rex" }
-        }
-
         function main() -> int {
-            let factory = FunctionBox<DogFactory> { cb: make_dog }
             return 1
         }
         "#,
+        "is not an interface",
     );
 }
 
@@ -474,23 +466,20 @@ fn class_generic_bound_rejects_after_substituting_other_type_params() {
 }
 
 #[test]
-fn class_generic_bound_accepts_function_type_arguments() {
-    assert_no_compile_errors(
+fn class_generic_bound_rejects_function_type_argument_bound() {
+    // Bounds are interfaces only — a function type (even a concrete one) is not an
+    // interface, so it cannot be a generic bound.
+    assert_compile_error_contains(
         r#"
-        type IntCallback = (x: int) -> int
-
         class CallbackBox<T extends (x: int) -> int> {
             cb: T
         }
 
-        function inc(x: int) -> int {
-            return x + 1
-        }
-
-        function main() -> CallbackBox<IntCallback> {
-            return CallbackBox<IntCallback> { cb: inc }
+        function main() -> int {
+            return 1
         }
         "#,
+        "is not an interface",
     );
 }
 
@@ -638,11 +627,13 @@ fn class_generic_bound_is_enforced_in_optional_annotations() {
 fn class_generic_bound_allows_bounded_type_var_as_type_arg_in_class_field() {
     assert_no_compile_errors(
         r#"
-        class Box<T extends int> {
+        interface Marker {}
+
+        class Box<T extends Marker> {
             value: T
         }
 
-        class Outer<T extends int> {
+        class Outer<T extends Marker> {
             inner: Box<T>
         }
 
@@ -798,7 +789,7 @@ fn class_generic_bound_is_enforced_in_required_interface_method_annotations() {
         }
 
         interface Bad {
-            function f(self, value: Box<int>) -> Box<int>
+            function f(self, value: Box<int>) -> Box<int> throws never
         }
         "#,
         "Named",
@@ -813,7 +804,7 @@ fn class_generic_bound_is_enforced_in_required_interface_method_annotations() {
 fn method_generic_bound_referencing_class_param_is_satisfied() {
     assert_no_compile_errors(
         r#"
-        interface Eq<T> { function equal(self, other: T) -> bool }
+        interface Eq<T> { function equal(self, other: T) -> bool throws never }
         class Wrapper<C> {
             inner: C
             function compare_with<U extends Eq<C>>(self, u: U) -> bool { return true }
@@ -836,7 +827,7 @@ fn method_generic_bound_referencing_class_param_is_enforced() {
     // `Eq<int>` via the receiver, so `StrEq` does not satisfy it.
     assert_compile_error_contains(
         r#"
-        interface Eq<T> { function equal(self, other: T) -> bool }
+        interface Eq<T> { function equal(self, other: T) -> bool throws never }
         class Wrapper<C> {
             inner: C
             function compare_with<U extends Eq<C>>(self, u: U) -> bool { return true }

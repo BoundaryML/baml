@@ -22,4 +22,12 @@ function OrPatternBothBindValue(r: Ok | Warn | Err) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// error: type `Ok | Warn` has no member `value`: its members implement no common interface that declares `value`
+//     ╭─[ if_let_if_let_or_pattern.baml:17:7 ]
+//     │
+//  17 │     s.value
+//     │       ──┬──
+//     │         ╰──── type `Ok | Warn` has no member `value`: its members implement no common interface that declares `value`
+//     │
+//     │ Note: Error code: E0007
+// ────╯

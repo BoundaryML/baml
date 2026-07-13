@@ -29,11 +29,11 @@ class ComplexTypes {
 //----
 //- diagnostics
 // error: unresolved type: apple_pie
-//    ╭─[ class_secure_types.baml:3:36 ]
+//    ╭─[ class_secure_types.baml:3:5 ]
 //    │
 //  3 │   a map<string[], (int | bool[]) | apple_pie[][]>
-//    │                                    ────┬────
-//    │                                        ╰────── unresolved type: apple_pie
+//    │     ──────────────────────┬──────────────────────
+//    │                           ╰──────────────────────── unresolved type: apple_pie
 //    │
 //    │ Note: Error code: E0002
 // ───╯
@@ -56,20 +56,20 @@ class ComplexTypes {
 //    │ Note: Error code: E0067
 // ───╯
 // error: unresolved type: char
-//    ╭─[ class_secure_types.baml:4:32 ]
+//    ╭─[ class_secure_types.baml:4:5 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    │                                ──┬─
-//    │                                  ╰─── unresolved type: char
+//    │     ───────────────────────────────────┬──────────────────────────────────
+//    │                                        ╰──────────────────────────────────── unresolved type: char
 //    │
 //    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: long_word_123.foobar
-//    ╭─[ class_secure_types.baml:4:52 ]
+//    ╭─[ class_secure_types.baml:4:5 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    │                                                    ──────────┬─────────
-//    │                                                              ╰─────────── unresolved type: long_word_123.foobar
+//    │     ───────────────────────────────────┬──────────────────────────────────
+//    │                                        ╰──────────────────────────────────── unresolved type: long_word_123.foobar
 //    │
 //    │ Note: Error code: E0002
 // ───╯
@@ -77,26 +77,26 @@ class ComplexTypes {
 //    ╭─[ class_secure_types.baml:5:5 ]
 //    │
 //  5 │   c apple123_456_pie | (stringer, bool[], (int | char))[]
-//    │     ────────┬───────
-//    │             ╰───────── unresolved type: apple123_456_pie
+//    │     ──────────────────────────┬──────────────────────────
+//    │                               ╰──────────────────────────── unresolved type: apple123_456_pie
 //    │
 //    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: stringer
-//    ╭─[ class_secure_types.baml:5:25 ]
+//    ╭─[ class_secure_types.baml:5:5 ]
 //    │
 //  5 │   c apple123_456_pie | (stringer, bool[], (int | char))[]
-//    │                         ────┬───
-//    │                             ╰───── unresolved type: stringer
+//    │     ──────────────────────────┬──────────────────────────
+//    │                               ╰──────────────────────────── unresolved type: stringer
 //    │
 //    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: char
-//    ╭─[ class_secure_types.baml:6:35 ]
+//    ╭─[ class_secure_types.baml:6:5 ]
 //    │
 //  6 │   d map<int[][], ((int | float) | char[])>
-//    │                                   ──┬─
-//    │                                     ╰─── unresolved type: char
+//    │     ───────────────────┬──────────────────
+//    │                        ╰──────────────────── unresolved type: char
 //    │
 //    │ Note: Error code: E0002
 // ───╯
@@ -110,11 +110,11 @@ class ComplexTypes {
 //    │ Note: Error code: E0067
 // ───╯
 // error: unresolved type: long
-//    ╭─[ class_secure_types.baml:7:48 ]
+//    ╭─[ class_secure_types.baml:7:5 ]
 //    │
 //  7 │   e ((int, string | char) | ((float, double) | long[], bool)[][][])
-//    │                                                ──┬─
-//    │                                                  ╰─── unresolved type: long
+//    │     ───────────────────────────────┬───────────────────────────────
+//    │                                    ╰───────────────────────────────── unresolved type: long
 //    │
 //    │ Note: Error code: E0002
 // ───╯
@@ -128,20 +128,20 @@ class ComplexTypes {
 //    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: tuple_inside_tuple
-//    ╭─[ class_secure_types.baml:9:44 ]
+//    ╭─[ class_secure_types.baml:9:5 ]
 //    │
 //  9 │   g (int, (float, char, bool), string[]) | tuple_inside_tuple[]
-//    │                                            ─────────┬────────
-//    │                                                     ╰────────── unresolved type: tuple_inside_tuple
+//    │     ─────────────────────────────┬─────────────────────────────
+//    │                                  ╰─────────────────────────────── unresolved type: tuple_inside_tuple
 //    │
 //    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: char
-//     ╭─[ class_secure_types.baml:10:41 ]
+//     ╭─[ class_secure_types.baml:10:5 ]
 //     │
 //  10 │   h (((int | string)[]) | map<bool[][], char[]>)
-//     │                                         ───┬──
-//     │                                            ╰──── unresolved type: char
+//     │     ──────────────────────┬─────────────────────
+//     │                           ╰─────────────────────── unresolved type: char
 //     │
 //     │ Note: Error code: E0002
 // ────╯
@@ -155,74 +155,74 @@ class ComplexTypes {
 //     │ Note: Error code: E0067
 // ────╯
 // error: unresolved type: apple
-//     ╭─[ class_secure_types.baml:11:6 ]
+//     ╭─[ class_secure_types.baml:11:5 ]
 //     │
 //  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
-//     │      ──┬──
-//     │        ╰──── unresolved type: apple
+//     │     ──────────────────────────────┬─────────────────────────────
+//     │                                   ╰─────────────────────────────── unresolved type: apple
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: banana
-//     ╭─[ class_secure_types.baml:11:13 ]
+//     ╭─[ class_secure_types.baml:11:5 ]
 //     │
 //  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
-//     │             ───┬──
-//     │                ╰──── unresolved type: banana
+//     │     ──────────────────────────────┬─────────────────────────────
+//     │                                   ╰─────────────────────────────── unresolved type: banana
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: cherry
-//     ╭─[ class_secure_types.baml:11:22 ]
+//     ╭─[ class_secure_types.baml:11:5 ]
 //     │
 //  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
-//     │                      ───┬──
-//     │                         ╰──── unresolved type: cherry
+//     │     ──────────────────────────────┬─────────────────────────────
+//     │                                   ╰─────────────────────────────── unresolved type: cherry
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: date_fruit
-//     ╭─[ class_secure_types.baml:11:31 ]
+//     ╭─[ class_secure_types.baml:11:5 ]
 //     │
 //  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
-//     │                               ─────┬────
-//     │                                    ╰────── unresolved type: date_fruit
+//     │     ──────────────────────────────┬─────────────────────────────
+//     │                                   ╰─────────────────────────────── unresolved type: date_fruit
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: eggplant_vegetable
-//     ╭─[ class_secure_types.baml:11:44 ]
+//     ╭─[ class_secure_types.baml:11:5 ]
 //     │
 //  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
-//     │                                            ─────────┬────────
-//     │                                                     ╰────────── unresolved type: eggplant_vegetable
+//     │     ──────────────────────────────┬─────────────────────────────
+//     │                                   ╰─────────────────────────────── unresolved type: eggplant_vegetable
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: char
-//     ╭─[ class_secure_types.baml:12:7 ]
+//     ╭─[ class_secure_types.baml:12:5 ]
 //     │
 //  12 │   j ((char, int[][], (bool | string[][])) | double[][][][], (float, int)[])
-//     │       ──┬─
-//     │         ╰─── unresolved type: char
+//     │     ───────────────────────────────────┬───────────────────────────────────
+//     │                                        ╰───────────────────────────────────── unresolved type: char
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: double
-//     ╭─[ class_secure_types.baml:12:45 ]
+//     ╭─[ class_secure_types.baml:12:5 ]
 //     │
 //  12 │   j ((char, int[][], (bool | string[][])) | double[][][][], (float, int)[])
-//     │                                             ───┬──
-//     │                                                ╰──── unresolved type: double
+//     │     ───────────────────────────────────┬───────────────────────────────────
+//     │                                        ╰───────────────────────────────────── unresolved type: double
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: long
-//     ╭─[ class_secure_types.baml:13:26 ]
+//     ╭─[ class_secure_types.baml:13:5 ]
 //     │
 //  13 │   k map<string[], (int | long[])> | map<float[][], double[][]>
-//     │                          ──┬─
-//     │                            ╰─── unresolved type: long
+//     │     ─────────────────────────────┬────────────────────────────
+//     │                                  ╰────────────────────────────── unresolved type: long
 //     │
 //     │ Note: Error code: E0002
 // ────╯
@@ -236,11 +236,11 @@ class ComplexTypes {
 //     │ Note: Error code: E0067
 // ────╯
 // error: unresolved type: double
-//     ╭─[ class_secure_types.baml:13:52 ]
+//     ╭─[ class_secure_types.baml:13:5 ]
 //     │
 //  13 │   k map<string[], (int | long[])> | map<float[][], double[][]>
-//     │                                                    ─────┬────
-//     │                                                         ╰────── unresolved type: double
+//     │     ─────────────────────────────┬────────────────────────────
+//     │                                  ╰────────────────────────────── unresolved type: double
 //     │
 //     │ Note: Error code: E0002
 // ────╯
@@ -257,98 +257,98 @@ class ComplexTypes {
 //     ╭─[ class_secure_types.baml:14:5 ]
 //     │
 //  14 │   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
-//     │     ────────────┬───────────
-//     │                 ╰───────────── unresolved type: AlphaNumeric_123_456_789
+//     │     ────────────────────────┬───────────────────────
+//     │                             ╰───────────────────────── unresolved type: AlphaNumeric_123_456_789
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: char
-//     ╭─[ class_secure_types.baml:14:47 ]
+//     ╭─[ class_secure_types.baml:14:5 ]
 //     │
 //  14 │   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
-//     │                                               ──┬─
-//     │                                                 ╰─── unresolved type: char
+//     │     ────────────────────────┬───────────────────────
+//     │                             ╰───────────────────────── unresolved type: char
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: tuple_1
-//     ╭─[ class_secure_types.baml:15:6 ]
+//     ╭─[ class_secure_types.baml:15:5 ]
 //     │
 //  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
-//     │      ───┬───
-//     │         ╰───── unresolved type: tuple_1
+//     │     ─────────────────────────┬────────────────────────
+//     │                              ╰────────────────────────── unresolved type: tuple_1
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: tuple_2
-//     ╭─[ class_secure_types.baml:15:15 ]
+//     ╭─[ class_secure_types.baml:15:5 ]
 //     │
 //  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
-//     │               ───┬───
-//     │                  ╰───── unresolved type: tuple_2
+//     │     ─────────────────────────┬────────────────────────
+//     │                              ╰────────────────────────── unresolved type: tuple_2
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: tuple_3
-//     ╭─[ class_secure_types.baml:15:25 ]
+//     ╭─[ class_secure_types.baml:15:5 ]
 //     │
 //  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
-//     │                         ───┬───
-//     │                            ╰───── unresolved type: tuple_3
+//     │     ─────────────────────────┬────────────────────────
+//     │                              ╰────────────────────────── unresolved type: tuple_3
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: tuple_4
-//     ╭─[ class_secure_types.baml:15:35 ]
+//     ╭─[ class_secure_types.baml:15:5 ]
 //     │
 //  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
-//     │                                   ───┬───
-//     │                                      ╰───── unresolved type: tuple_4
+//     │     ─────────────────────────┬────────────────────────
+//     │                              ╰────────────────────────── unresolved type: tuple_4
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: tuple_5
-//     ╭─[ class_secure_types.baml:15:44 ]
+//     ╭─[ class_secure_types.baml:15:5 ]
 //     │
 //  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
-//     │                                            ───┬───
-//     │                                               ╰───── unresolved type: tuple_5
+//     │     ─────────────────────────┬────────────────────────
+//     │                              ╰────────────────────────── unresolved type: tuple_5
 //     │
 //     │ Note: Error code: E0002
 // ────╯
 // error: unresolved type: complex_key_type
-//     ╭─[ class_secure_types.baml:16:9 ]
-//     │
-//  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
-//     │         ─────────┬────────
-//     │                  ╰────────── unresolved type: complex_key_type
-//     │
-//     │ Note: Error code: E0002
-// ────╯
-// error: unresolved type: another_key
-//     ╭─[ class_secure_types.baml:16:33 ]
-//     │
-//  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
-//     │                                 ─────┬─────
-//     │                                      ╰─────── unresolved type: another_key
-//     │
-//     │ Note: Error code: E0002
-// ────╯
-// error: map keys must be `string`; got `unknown[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     ╭─[ class_secure_types.baml:16:5 ]
 //     │
 //  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
 //     │     ─────────────────────────────┬─────────────────────────────
-//     │                                  ╰─────────────────────────────── map keys must be `string`; got `unknown[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     │                                  ╰─────────────────────────────── unresolved type: complex_key_type
+//     │
+//     │ Note: Error code: E0002
+// ────╯
+// error: unresolved type: another_key
+//     ╭─[ class_secure_types.baml:16:5 ]
+//     │
+//  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
+//     │     ─────────────────────────────┬─────────────────────────────
+//     │                                  ╰─────────────────────────────── unresolved type: another_key
+//     │
+//     │ Note: Error code: E0002
+// ────╯
+// error: map keys must be `string`; got `!error[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//     ╭─[ class_secure_types.baml:16:5 ]
+//     │
+//  16 │   n map<complex_key_type[], map<another_key, (int | string[])>>
+//     │     ─────────────────────────────┬─────────────────────────────
+//     │                                  ╰─────────────────────────────── map keys must be `string`; got `!error[]`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
 //     │
 //     │ Note: Error code: E0067
 // ────╯
 // error: unresolved type: long_long_identifier_123
-//     ╭─[ class_secure_types.baml:17:51 ]
+//     ╭─[ class_secure_types.baml:17:5 ]
 //     │
 //  17 │   o (((int | string) | bool[]), (float, double) | long_long_identifier_123)
-//     │                                                   ────────────┬───────────
-//     │                                                               ╰───────────── unresolved type: long_long_identifier_123
+//     │     ───────────────────────────────────┬───────────────────────────────────
+//     │                                        ╰───────────────────────────────────── unresolved type: long_long_identifier_123
 //     │
 //     │ Note: Error code: E0002
 // ────╯

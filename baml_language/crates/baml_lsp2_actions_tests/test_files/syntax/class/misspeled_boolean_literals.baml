@@ -19,20 +19,20 @@ class TestLiterals {
 //----
 //- diagnostics
 // error: unresolved type: True
-//    ╭─[ class_misspeled_boolean_literals.baml:3:17 ]
+//    ╭─[ class_misspeled_boolean_literals.baml:3:5 ]
 //    │
 //  3 │   b "boolean" | True | False
-//    │                 ──┬─
-//    │                   ╰─── unresolved type: True
+//    │     ────────────┬───────────
+//    │                 ╰───────────── unresolved type: True
 //    │
 //    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: False
-//    ╭─[ class_misspeled_boolean_literals.baml:3:24 ]
+//    ╭─[ class_misspeled_boolean_literals.baml:3:5 ]
 //    │
 //  3 │   b "boolean" | True | False
-//    │                        ──┬──
-//    │                          ╰──── unresolved type: False
+//    │     ────────────┬───────────
+//    │                 ╰───────────── unresolved type: False
 //    │
 //    │ Note: Error code: E0002
 // ───╯

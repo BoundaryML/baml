@@ -464,6 +464,10 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
         }
+        Rvalue::MakeVirtualBoundMethod { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("MakeVirtualBoundMethod must be handled in emit_rvalue_pull")
+        }
         Rvalue::MakeGenericFunction {
             item,
             type_arg_templates,
