@@ -152,13 +152,13 @@ $BAML describe baml                 # ← THE FULL PICTURE: every namespace, typ
                                     #   http, json, math, net, time, toml, yaml, iter, …)
 $BAML describe baml.json            # drill into a namespace → its types + function signatures
 $BAML describe Array                # drill into a type → full method list + docs
-$BAML describe String --budget 200  # output is line-budgeted; raise --budget to see all methods
+$BAML describe String --max-lines 200  # output is line-capped; raise --max-lines to see all methods
 $BAML describe <YourSymbol>         # also works on symbols in the loaded project
 ```
 
 `describe` resolves symbols against a project. From inside a project dir it just works; from
-elsewhere pass `--from <project-dir>`. Output is capped by `--budget` (default 30) and tells
-you "… N more lines (re-run with a higher --budget)" — raise it to see everything. Anything
+elsewhere pass `--from <project-dir>`. Output is capped by `--max-lines` (default 30) and tells
+you "… N more lines (re-run with a higher --max-lines)" — raise it to see everything. Anything
 you can't see, `describe` it; do not guess stdlib names or signatures.
 
 ## Setting up a project

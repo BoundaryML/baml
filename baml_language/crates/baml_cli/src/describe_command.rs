@@ -99,9 +99,9 @@ pub struct DescribeArgs {
     #[arg(long, value_enum, default_value_t = DescribeView::Overview)]
     pub view: DescribeView,
 
-    /// Soft line budget for output (default 30)
-    #[arg(long, default_value_t = 30)]
-    pub budget: usize,
+    /// Maximum output lines (soft cap; default 30)
+    #[arg(long, default_value_t = 30, value_name = "LINES")]
+    pub max_lines: usize,
 
     /// Dependency expansion depth in overview: 0 = names only (default),
     /// 1 = direct shapes, 2+ = recurse into nested dependencies (cycle-safe)
@@ -443,7 +443,7 @@ impl DescribeArgs {
                     self.describe_options(),
                 ) {
                     if self.json {
-                        let json = description_to_json(&db, &desc, self.budget, &from);
+                        let json = description_to_json(&db, &desc, self.max_lines, &from);
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&[json])
@@ -455,7 +455,7 @@ impl DescribeArgs {
                             &describe_files,
                             &desc,
                             self.view,
-                            self.budget,
+                            self.max_lines,
                             self.depth,
                             &from,
                         );
@@ -479,7 +479,7 @@ impl DescribeArgs {
                     member_name.as_str(),
                 ) {
                     if self.json {
-                        let json = description_to_json(&db, &desc, self.budget, &from);
+                        let json = description_to_json(&db, &desc, self.max_lines, &from);
                         println!(
                             "{}",
                             serde_json::to_string_pretty(&[json])
@@ -491,7 +491,7 @@ impl DescribeArgs {
                             &describe_files,
                             &desc,
                             self.view,
-                            self.budget,
+                            self.max_lines,
                             self.depth,
                             &from,
                         );
@@ -515,10 +515,10 @@ impl DescribeArgs {
                 }
 
                 if self.json {
-                    let budget = self.budget;
+                    let max_lines = self.max_lines;
                     let json_output: Vec<serde_json::Value> = descriptions
                         .iter()
-                        .map(|d| description_to_json(&db, d, budget, &from))
+                        .map(|d| description_to_json(&db, d, max_lines, &from))
                         .collect();
                     println!(
                         "{}",
@@ -538,7 +538,7 @@ impl DescribeArgs {
                         &describe_files,
                         desc,
                         self.view,
-                        self.budget,
+                        self.max_lines,
                         self.depth,
                         &from,
                     );
@@ -680,15 +680,21 @@ impl DescribeArgs {
         }
 
         if self.json {
-            let per_result_budget = self
-                .budget
+            let per_result_max_lines = self
+                .max_lines
                 .saturating_sub(descriptions.len())
                 .checked_div(descriptions.len())
                 .unwrap_or(0);
             let results = descriptions
                 .iter()
                 .map(|description| {
-                    batch_description_to_json(&db, description, self.view, per_result_budget, &from)
+                    batch_description_to_json(
+                        &db,
+                        description,
+                        self.view,
+                        per_result_max_lines,
+                        &from,
+                    )
                 })
                 .collect::<Vec<_>>();
             let unmatched_json = unmatched
@@ -926,17 +932,17 @@ pub(crate) fn write_batch_output(
     args: &DescribeArgs,
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
-    let output_budget = if args.agent {
-        args.budget.min(80)
+    let output_max_lines = if args.agent {
+        args.max_lines.min(80)
     } else {
-        args.budget
+        args.max_lines
     };
     let mut blocks = Vec::new();
     for description in descriptions {
         let mut bytes = Vec::new();
         match args.view {
             DescribeView::Source => {
-                write_description(&mut bytes, db, description, output_budget, project_root)?;
+                write_description(&mut bytes, db, description, output_max_lines, project_root)?;
             }
             DescribeView::Overview => {
                 write_overview(
@@ -944,16 +950,16 @@ pub(crate) fn write_batch_output(
                     db,
                     files,
                     description,
-                    output_budget,
+                    output_max_lines,
                     args.depth,
                     project_root,
                 )?;
             }
             DescribeView::Usage => {
-                write_usage_view(&mut bytes, db, description, output_budget, project_root)?;
+                write_usage_view(&mut bytes, db, description, output_max_lines, project_root)?;
             }
             DescribeView::Impact => {
-                write_impact_view(&mut bytes, db, description, output_budget, project_root)?;
+                write_impact_view(&mut bytes, db, description, output_max_lines, project_root)?;
             }
         }
         let rendered = String::from_utf8_lossy(&bytes)
@@ -1001,7 +1007,7 @@ pub(crate) fn write_batch_output(
     }
 
     let minimum = blocks.len();
-    let mut remaining = output_budget.saturating_sub(minimum);
+    let mut remaining = output_max_lines.saturating_sub(minimum);
     for block in &blocks {
         if let Some(identity) = block.first() {
             writeln!(w, "{identity}")?;
@@ -1043,7 +1049,7 @@ pub(crate) fn write_batch_output(
         if !omitted_names.is_empty() && remaining > 0 {
             writeln!(
                 w,
-                "next: baml describe {} --view {view} --budget 80 --agent",
+                "next: baml describe {} --view {view} --max-lines 80 --agent",
                 omitted_names.join(" ")
             )?;
             remaining -= 1;
@@ -1064,7 +1070,7 @@ pub(crate) fn write_batch_output(
             if omitted > 0 && remaining > 0 {
                 writeln!(
                     w,
-                    "… {omitted} lines omitted — baml describe {} --view {view} --budget {}",
+                    "… {omitted} lines omitted — baml describe {} --view {view} --max-lines {}",
                     descriptions[index].name,
                     block.len(),
                 )?;
@@ -1263,7 +1269,7 @@ pub fn write_description(
                 writeln!(w)?;
                 writeln!(
                     w,
-                    "[INFO] Showing {shown} of {total} lines. Use --budget {needed} for full output.",
+                    "[INFO] Showing {shown} of {total} lines. Use --max-lines {needed} for full output.",
                     shown = shown_body_lines,
                     total = body_lines.len(),
                     needed = body_lines.len() + 1,
@@ -1397,7 +1403,7 @@ const USAGE_RESERVE: usize = 4;
 
 /// Documented budget-overrun allowance for the budgeted views: the guaranteed
 /// skeleton (identity line, section headers with counts, elision hints) always
-/// renders, so output may exceed `--budget` by at most this many lines.
+/// renders, so output may exceed `--max-lines` by at most this many lines.
 pub(crate) const MAX_BUDGET_OVERRUN: usize = 2;
 
 /// Shared line accountant for all text views. Sections charge what they write
@@ -1981,7 +1987,7 @@ fn write_impl_preview(
 }
 
 /// Render the `usage` view: grouped (tests, then code) and ranked, showing
-/// representative examples within `--budget`. Totals always render; omitted
+/// representative examples within `--max-lines`. Totals always render; omitted
 /// references get a count and a budget value that recovers them.
 pub(crate) fn write_usage_view(
     w: &mut impl std::io::Write,
@@ -2029,7 +2035,7 @@ pub(crate) fn write_usage_view(
     if omitted > 0 {
         writeln!(
             w,
-            "… {omitted} more references — re-run with --budget {}",
+            "… {omitted} more references — re-run with --max-lines {}",
             total + 6
         )?;
     }
@@ -2096,12 +2102,12 @@ pub(crate) fn write_impact_view(
         if omitted_files > 0 {
             writeln!(
                 w,
-                "… {omitted_files} more files, {omitted_sites} more sites — re-run with --budget {needed}"
+                "… {omitted_files} more files, {omitted_sites} more sites — re-run with --max-lines {needed}"
             )?;
         } else {
             writeln!(
                 w,
-                "… {omitted_sites} more sites — re-run with --budget {needed}"
+                "… {omitted_sites} more sites — re-run with --max-lines {needed}"
             )?;
         }
     }
@@ -2284,7 +2290,7 @@ fn write_highlighted_body(
     writeln!(w)?;
     writeln!(
         w,
-        "[INFO] Showing {} of {} lines. Use --budget {} for full output.",
+        "[INFO] Showing {} of {} lines. Use --max-lines {} for full output.",
         head + tail + 1,
         lines.len(),
         lines.len() + 1,
@@ -2296,7 +2302,10 @@ fn write_highlighted_body(
 /// nothing was elided).
 fn write_elision_marker(w: &mut impl std::io::Write, elided: usize) -> std::io::Result<()> {
     if elided > 0 {
-        writeln!(w, "  … {elided} more lines (re-run with a higher --budget)")?;
+        writeln!(
+            w,
+            "  … {elided} more lines (re-run with a higher --max-lines)"
+        )?;
     }
     Ok(())
 }

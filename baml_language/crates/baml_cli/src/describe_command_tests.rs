@@ -939,7 +939,7 @@ fn render_describe_methods_respect_budget() {
     for needle in [
         "methods:",
         "static_methods:",
-        "more lines (re-run with a higher --budget)",
+        "more lines (re-run with a higher --max-lines)",
     ] {
         assert!(
             tight.contains(needle),
@@ -969,7 +969,7 @@ fn render_describe_methods_respect_budget() {
         );
     }
     assert!(
-        !full.contains("re-run with a higher --budget"),
+        !full.contains("re-run with a higher --max-lines"),
         "no elision marker expected at budget 1000:\n{full}"
     );
     assert!(
@@ -1003,7 +1003,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
     let body_part = |s: &str| s[..s.find("\nmethods:").expect("methods section")].to_string();
     assert_eq!(body_part(&tight), body_part(&full));
     assert!(
-        tight.contains("more lines (re-run with a higher --budget)"),
+        tight.contains("more lines (re-run with a higher --max-lines)"),
         "methods exceeding the tight budget must be elided with a marker:\n{tight}"
     );
     for needle in ["class User {", "    name: string,", "    age: int,", "}"] {
@@ -1622,7 +1622,7 @@ fn usage_view_honors_budget_and_reports_omissions() {
         "total count must always render: {output}"
     );
     assert!(
-        output.contains("more references — re-run with --budget"),
+        output.contains("more references — re-run with --max-lines"),
         "omissions must name a recovering budget: {output}"
     );
     // Tests rank first within the sample.
@@ -1667,7 +1667,7 @@ fn impact_view_honors_budget_and_reports_omissions() {
         "total counts must always render: {output}"
     );
     assert!(
-        output.contains("more sites — re-run with --budget"),
+        output.contains("more sites — re-run with --max-lines"),
         "omissions must name a recovering budget: {output}"
     );
 }
@@ -1733,7 +1733,7 @@ fn batch_args(budget: usize) -> DescribeArgs {
         agent: false,
         from: Some(PathBuf::from("/test")),
         view: DescribeView::Source,
-        budget,
+        max_lines: budget,
         depth: 0,
         json: false,
     }

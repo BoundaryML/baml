@@ -21,7 +21,7 @@ Those observations led directly to the implementation in this PR:
 - `baml describe --grep "term1 || term2"` for bounded project discovery;
 - multiple symbols in one invocation;
 - `--agent` for compact, citation-oriented output;
-- `--limit` and `--budget` for hard output bounds;
+- `--limit` and `--max-lines` for bounded output control;
 - removal of the standalone `baml grep` command so search and description share
   one project-aware surface.
 
@@ -76,7 +76,7 @@ agent's navigation loop when a question spans related symbols, while ordinary
 grep remains competitive on small or lexically obvious tasks.
 
 That is why this PR keeps normal source reads available and makes `--grep`,
-`--agent`, `--limit`, and `--budget` composable instead of forcing one workflow.
+`--agent`, `--limit`, and `--max-lines` composable instead of forcing one workflow.
 
 ## Read the transcripts
 
@@ -91,3 +91,6 @@ These are readable transcript exports containing the question, measurements,
 commands, and final answers. Raw JSONL event logs and isolated agent home
 directories are intentionally excluded because they contain hidden model event
 metadata and credential material that does not belong in a public PR.
+
+The transcripts preserve the exact commands used during the benchmark, before
+the final CLI flag rename from `--budget` to `--max-lines`.

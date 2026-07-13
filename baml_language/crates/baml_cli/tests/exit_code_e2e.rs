@@ -1008,7 +1008,7 @@ class Ticket {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["describe", "Ticket", "--from", ".", "--budget", "120"],
+        &["describe", "Ticket", "--from", ".", "--max-lines", "120"],
     );
 
     assert!(
