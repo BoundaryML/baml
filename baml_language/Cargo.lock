@@ -6574,6 +6574,7 @@ version = "0.1.0"
 name = "sdk_test_harness_setup"
 version = "0.1.0"
 dependencies = [
+ "baml_base",
  "baml_codegen_types",
  "baml_db",
  "baml_project",

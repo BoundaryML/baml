@@ -24,6 +24,7 @@ sdkgen_python_pydantic2 = { workspace = true }
 sdkgen_typescript_node = { workspace = true }
 sdkgen_go = { workspace = true }
 baml_codegen_types = { workspace = true }
+baml_base = { workspace = true }
 baml_db = { workspace = true }
 baml_project = { workspace = true }
 baml_workspace = { workspace = true }

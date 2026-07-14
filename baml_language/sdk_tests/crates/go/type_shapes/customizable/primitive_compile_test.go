@@ -46,3 +46,26 @@ var (
 	_ func(context.Context, *big.Int) (*big.Int, error) = baml_sdk.GoCodegenPrimitiveEdgesRoundTripLiteralBigint
 	_ func(context.Context, *big.Int, int64, float64, []byte, string, string) (*big.Int, error) = baml_sdk.GoCodegenPrimitiveEdgesReservedTypeNames
 )
+
+var (
+	_ = baml_sdk.PrimitivesPrimitives{
+		IntField: 1,
+		FloatField: 1.5,
+		StringField: "value",
+		BoolField: true,
+		NullField: baml_go.Null{},
+		Uint8arrayField: []byte{1},
+	}
+	_ = baml_sdk.GoCodegenPrimitiveEdgesPrimitiveHolder{
+		BigValue: big.NewInt(1),
+	}
+	_ = baml_sdk.ClassRefsOuter{
+		Inner: baml_sdk.ClassRefsInner{Value: 1},
+	}
+	_ = baml_sdk.RecursionIntBinaryTree{
+		Left: &baml_sdk.RecursionIntBinaryTree{},
+	}
+	_ = baml_sdk.RecursionA{
+		B: &baml_sdk.RecursionB{},
+	}
+)

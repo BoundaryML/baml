@@ -16,3 +16,8 @@ function reserved_type_names(
 ) -> bigint {
   big
 }
+
+class PrimitiveHolder {
+  big_value bigint
+  optional_int int?
+}
