@@ -96,6 +96,92 @@ pub fn decode_result<R: BamlValue, E: BamlValue>(bytes: &[u8]) -> Result<R, Erro
     }
 }
 
+/// Field accessor for decoding a class value, used by generated
+/// `from_baml` impls.
+///
+/// Construction verifies the wire FQN against the expected class: with no
+/// runtime typemap, decode is driven by the declared static type, so a
+/// mismatch here is always engine/codegen drift and must fail loudly —
+/// never coerce by position.
+pub struct ClassFields {
+    class: &'static str,
+    fields: std::collections::HashMap<String, wire::BamlOutboundValue>,
+}
+
+impl ClassFields {
+    pub fn new(
+        v: wire::BamlOutboundValue,
+        expected_fqn: &'static str,
+    ) -> Result<Self, crate::DecodeError> {
+        let v = unwrap(v);
+        match v.value {
+            Some(Out::ClassValue(class)) => {
+                if class.name != expected_fqn {
+                    return Err(crate::DecodeError::FqnMismatch {
+                        expected: expected_fqn,
+                        got: class.name,
+                    });
+                }
+                Ok(Self {
+                    class: expected_fqn,
+                    fields: class
+                        .fields
+                        .into_iter()
+                        .map(|entry| (entry.key, entry.value.unwrap_or_default()))
+                        .collect(),
+                })
+            }
+            _ => Err(crate::DecodeError::WrongType {
+                expected: expected_fqn,
+                got: crate::baml_value::wire_variant_kind(&v),
+            }),
+        }
+    }
+
+    /// Decode and remove the named field. An absent field decodes as null
+    /// (so optional fields tolerate omission); a required field then
+    /// surfaces the absence as [`MissingField`] rather than a null-type
+    /// mismatch.
+    ///
+    /// [`MissingField`]: crate::DecodeError::MissingField
+    pub fn take<T: BamlValue>(&mut self, field: &'static str) -> Result<T, crate::DecodeError> {
+        match self.fields.remove(field) {
+            Some(value) => T::from_baml(value),
+            None => T::from_baml(wire::BamlOutboundValue { value: None }).map_err(|_| {
+                crate::DecodeError::MissingField {
+                    class: self.class,
+                    field,
+                }
+            }),
+        }
+    }
+}
+
+/// Decode an enum value's wire variant string, verifying the enum FQN.
+/// Generated impls match the returned value against their variants'
+/// declared wire values.
+pub fn enum_variant(
+    v: wire::BamlOutboundValue,
+    expected_fqn: &'static str,
+) -> Result<String, crate::DecodeError> {
+    let v = unwrap(v);
+    match v.value {
+        Some(Out::EnumValue(e)) => {
+            if e.name != expected_fqn {
+                return Err(crate::DecodeError::FqnMismatch {
+                    expected: expected_fqn,
+                    got: e.name,
+                });
+            }
+            Ok(e.value)
+        }
+        _ => Err(crate::DecodeError::WrongType {
+            expected: expected_fqn,
+            got: crate::baml_value::wire_variant_kind(&v),
+        }),
+    }
+}
+
 /// The class FQN of an error-arm value, when it is a class instance.
 fn class_fqn(v: &wire::BamlOutboundValue) -> Option<String> {
     match &v.value {
