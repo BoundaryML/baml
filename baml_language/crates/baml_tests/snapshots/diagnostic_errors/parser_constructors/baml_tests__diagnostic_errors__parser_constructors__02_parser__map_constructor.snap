@@ -154,7 +154,7 @@ SOURCE_FILE
               WORD "hello"
               QUOTE """
             COLON ":"
-            WORD "true"
+            KW_TRUE "true"
           COMMA ","
           OBJECT_FIELD
             STRING_LITERAL "test"
@@ -162,7 +162,7 @@ SOURCE_FILE
               KW_TEST "test"
               QUOTE """
             COLON ":"
-            WORD "false"
+            KW_FALSE "false"
           R_BRACE "}"
         R_BRACE "}"
 

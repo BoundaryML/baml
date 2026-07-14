@@ -32,7 +32,7 @@ SOURCE_FILE
       WORD "PhD"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "EducationList"
     EQUALS "="
     TYPE_EXPR "Education[]"

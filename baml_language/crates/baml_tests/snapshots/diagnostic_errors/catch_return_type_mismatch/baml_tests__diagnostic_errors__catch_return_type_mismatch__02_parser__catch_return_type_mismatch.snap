@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 27541
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -35,7 +34,7 @@ SOURCE_FILE
         L_BRACE "{"
         RETURN_STMT "return true"
           KW_RETURN "return"
-          WORD "true"
+          KW_TRUE "true"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

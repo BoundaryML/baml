@@ -55,7 +55,7 @@ SOURCE_FILE
   null
 }"
         L_BRACE "{"
-        WORD "null"
+        KW_NULL "null"
         R_BRACE "}"
   ENUM_DEF
     KW_ENUM "enum"

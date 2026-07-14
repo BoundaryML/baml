@@ -57,7 +57,7 @@ SOURCE_FILE
           CALL_ARGS
             L_PAREN "("
             CALL_ARG "null"
-              WORD "null"
+              KW_NULL "null"
             R_PAREN ")"
         R_BRACE "}"
 

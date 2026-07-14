@@ -89,6 +89,8 @@ define_keyword_tokens! {
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
+    "type" => SyntaxKind::KW_TYPE => TypeKw;
+    "as" => SyntaxKind::KW_AS => As;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -518,6 +520,40 @@ impl Token for IntegerLiteral {
 impl KnownKind for IntegerLiteral {
     fn kind() -> SyntaxKind {
         SyntaxKind::INTEGER_LITERAL
+    }
+}
+
+/// A boolean / null literal — `true` (`KW_TRUE`), `false` (`KW_FALSE`), or
+/// `null` (`KW_NULL`). One token type spanning the three re-lexed kinds.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct KeywordLiteral {
+    pub token_span: TextRange,
+}
+impl KeywordLiteral {
+    /// Does not verify that the span is actually a boolean/null literal token.
+    #[must_use]
+    pub fn new_from_span(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+}
+impl FromCST for KeywordLiteral {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        match token.kind() {
+            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
+                Ok(Self::new_from_span(token.text_range()))
+            }
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "KW_TRUE, KW_FALSE, or KW_NULL".into(),
+                found,
+                at: token.text_range(),
+            }),
+        }
+    }
+}
+impl Token for KeywordLiteral {
+    fn span(&self) -> TextRange {
+        self.token_span
     }
 }
 
