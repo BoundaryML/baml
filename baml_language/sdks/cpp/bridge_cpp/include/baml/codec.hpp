@@ -17,6 +17,7 @@
 
 #include <baml_cffi.h>
 
+#include <baml/box.hpp>
 #include <baml/detail/proto.hpp>
 #include <baml/detail/wire.hpp>
 #include <baml/errors.hpp>
@@ -150,6 +151,18 @@ private:
         } catch (const BamlError&) {
             return false;
         }
+    }
+};
+
+// Boxes are transparent on the wire: the box exists only to break C++
+// type-recursion cycles.
+template <typename T>
+struct codec<Box<T>> {
+    static void encode(detail::wire::Writer& value_msg, const Box<T>& v) {
+        codec<T>::encode(value_msg, *v);
+    }
+    static Box<T> decode(const detail::OutboundValue& v) {
+        return Box<T>(codec<T>::decode(v));
     }
 };
 

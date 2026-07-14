@@ -5,6 +5,7 @@
 // includes this and refers to everything as ::baml::*.
 
 #include <baml/arg.hpp>
+#include <baml/box.hpp>
 #include <baml/buffer.hpp>
 #include <baml/codec.hpp>
 #include <baml/detail/call.hpp>

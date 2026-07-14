@@ -74,7 +74,7 @@ pub fn to_source_code(
             let Symbol::Class(class_def) = &pool[name] else {
                 unreachable!()
             };
-            match emit_class(pool, name, class_def, &emitted_types) {
+            match emit_class(pool, name, class_def, &emitted_types, &BTreeSet::new()) {
                 Ok(Some(emitted)) => {
                     classes.push(emitted);
                     emitted_types.insert(name.clone());
@@ -92,11 +92,27 @@ pub fn to_source_code(
             break;
         }
     }
-    for name in pending {
-        skipped.push(format!(
-            "{name}: field dependency cycle or dependency on a skipped type \
-             (recursive classes land with baml::Box in a later slice)"
-        ));
+    // Leftovers are cycles (or depend on one): every class in the set counts
+    // as available, and in-cycle class references are boxed (baml::Box needs
+    // only a forward declaration). Classes that still fail depend on a
+    // genuinely skipped type and are reported.
+    if !pending.is_empty() {
+        let cycle_set: BTreeSet<Name> = pending.iter().map(|n| (*n).clone()).collect();
+        for name in &cycle_set {
+            emitted_types.insert(name.clone());
+        }
+        for name in pending {
+            let Symbol::Class(class_def) = &pool[name] else {
+                unreachable!()
+            };
+            match emit_class(pool, name, class_def, &emitted_types, &cycle_set) {
+                Ok(Some(emitted)) => classes.push(emitted),
+                Ok(None) | Err(_) => {
+                    emitted_types.remove(name);
+                    skipped.push(format!("{name}: depends on a type this slice cannot emit"));
+                }
+            }
+        }
     }
 
     // Pass 3: methods, against the final emitted type set (declarations may
@@ -111,6 +127,7 @@ pub fn to_source_code(
                 &method_fqn(&class.pool_name, method),
                 method,
                 &emitted_types,
+                &BTreeSet::new(),
             ) {
                 Ok(emitted) => class.static_methods.push(emitted),
                 Err(reason) => {
@@ -124,6 +141,7 @@ pub fn to_source_code(
                 &method_fqn(&class.pool_name, method),
                 method,
                 &emitted_types,
+                &BTreeSet::new(),
             ) {
                 Ok(emitted) => class.instance_methods.push(emitted),
                 Err(reason) => {
@@ -146,7 +164,13 @@ pub fn to_source_code(
             skipped.push(format!("{name}: companion functions land in a later slice"));
             continue;
         }
-        match emit_callable(pool, &name.to_string(), function, &emitted_types) {
+        match emit_callable(
+            pool,
+            &name.to_string(),
+            function,
+            &emitted_types,
+            &BTreeSet::new(),
+        ) {
             Ok(emitted) => {
                 let ns = cpp_namespace_of(name);
                 fns_by_namespace.entry(ns).or_default().push(emitted);
@@ -297,13 +321,14 @@ fn emit_class(
     name: &Name,
     class_def: &Class,
     emitted_types: &BTreeSet<Name>,
+    boxed: &BTreeSet<Name>,
 ) -> Result<Option<EmittedClass>, String> {
     if !class_def.generic_params.is_empty() {
         return Err("generic classes land in a later slice".to_string());
     }
     let mut fields = Vec::new();
     for prop in &class_def.properties {
-        match translate_ty(pool, &prop.ty, emitted_types) {
+        match translate_ty(pool, &prop.ty, emitted_types, boxed) {
             Translated::Cpp(ty) => {
                 fields.push((sanitize(prop.name.as_str()), ty, prop.name.to_string()));
             }
@@ -358,6 +383,7 @@ fn emit_callable(
     fqn: &str,
     function: &Function,
     emitted_types: &BTreeSet<Name>,
+    boxed: &BTreeSet<Name>,
 ) -> Result<EmittedFn, String> {
     if !function.generic_params.is_empty() {
         return Err("generic functions land in a later slice".to_string());
@@ -365,7 +391,7 @@ fn emit_callable(
     let mut params = Vec::new();
     let mut opt_params = Vec::new();
     for arg in &function.arguments {
-        let ty = match translate_ty(pool, &arg.ty, emitted_types) {
+        let ty = match translate_ty(pool, &arg.ty, emitted_types, boxed) {
             Translated::Cpp(ty) => ty,
             Translated::NotYet | Translated::Unsupported(_) => {
                 return Err(format!(
@@ -381,7 +407,7 @@ fn emit_callable(
             params.push(entry);
         }
     }
-    let ret = match translate_return_ty(pool, &function.return_type, emitted_types) {
+    let ret = match translate_return_ty(pool, &function.return_type, emitted_types, boxed) {
         Translated::Cpp(ty) => ty,
         Translated::NotYet | Translated::Unsupported(_) => {
             return Err(format!("unsupported return type {}", function.return_type));
@@ -433,7 +459,12 @@ enum Translated {
 /// Slice-1..3 type table: primitives, containers, null-normalized optionals,
 /// variants, and emitted classes/enums. Everything else is unsupported here
 /// and the surrounding symbol is skipped (reported, not silently dropped).
-fn translate_ty(pool: &SymbolPool, ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
+fn translate_ty(
+    pool: &SymbolPool,
+    ty: &Ty,
+    emitted_types: &BTreeSet<Name>,
+    boxed: &BTreeSet<Name>,
+) -> Translated {
     let translated = match ty {
         Ty::Int => "int64_t".to_string(),
         Ty::Float => "double".to_string(),
@@ -467,7 +498,7 @@ fn translate_ty(pool: &SymbolPool, ty: &Ty, emitted_types: &BTreeSet<Name>) -> T
                     "recursive type alias (wrapper struct lands in a later slice)".to_string(),
                 );
             }
-            return translate_ty(pool, &alias.resolves_to, emitted_types);
+            return translate_ty(pool, &alias.resolves_to, emitted_types, boxed);
         }
         Ty::Enum(name) => {
             if name.pkg.as_str() != "user" {
@@ -486,13 +517,18 @@ fn translate_ty(pool: &SymbolPool, ty: &Ty, emitted_types: &BTreeSet<Name>) -> T
             if name.pkg.as_str() != "user" {
                 return Translated::Unsupported(format!("non-user class {name}"));
             }
+            // Cycle members box their in-cycle class references: a Box only
+            // needs the forward declaration, so no ordering constraint.
+            if boxed.contains(name) {
+                return Translated::Cpp(format!("::baml::Box<{}>", qualified_cpp_name(name)));
+            }
             return if emitted_types.contains(name) {
                 Translated::Cpp(qualified_cpp_name(name))
             } else {
                 Translated::NotYet
             };
         }
-        Ty::List(inner) => match translate_ty(pool, inner, emitted_types) {
+        Ty::List(inner) => match translate_ty(pool, inner, emitted_types, boxed) {
             Translated::Cpp(inner) => format!("std::vector<{inner}>"),
             other => return other,
         },
@@ -500,7 +536,7 @@ fn translate_ty(pool: &SymbolPool, ty: &Ty, emitted_types: &BTreeSet<Name>) -> T
             if !matches!(key.as_ref(), Ty::String) {
                 return Translated::Unsupported("non-string map key".to_string());
             }
-            match translate_ty(pool, value, emitted_types) {
+            match translate_ty(pool, value, emitted_types, boxed) {
                 Translated::Cpp(value) => format!("std::map<std::string, {value}>"),
                 other => return other,
             }
@@ -514,7 +550,7 @@ fn translate_ty(pool: &SymbolPool, ty: &Ty, emitted_types: &BTreeSet<Name>) -> T
             let had_null = non_null.len() != items.len();
             let mut alternatives: Vec<String> = Vec::new();
             for item in non_null {
-                match translate_ty(pool, item, emitted_types) {
+                match translate_ty(pool, item, emitted_types, boxed) {
                     Translated::Cpp(alt) => {
                         if !alternatives.contains(&alt) {
                             alternatives.push(alt);
@@ -539,11 +575,16 @@ fn translate_ty(pool: &SymbolPool, ty: &Ty, emitted_types: &BTreeSet<Name>) -> T
     Translated::Cpp(translated)
 }
 
-fn translate_return_ty(pool: &SymbolPool, ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
+fn translate_return_ty(
+    pool: &SymbolPool,
+    ty: &Ty,
+    emitted_types: &BTreeSet<Name>,
+    boxed: &BTreeSet<Name>,
+) -> Translated {
     if matches!(ty, Ty::Unit) {
         return Translated::Cpp("void".to_string());
     }
-    translate_ty(pool, ty, emitted_types)
+    translate_ty(pool, ty, emitted_types, boxed)
 }
 
 fn sanitize(name: &str) -> String {
@@ -944,13 +985,14 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             "    static {q} decode(const detail::OutboundValue& v) {{\n        \
              if (v.kind != detail::OutboundValue::Kind::Class ||\n            \
              (!v.name.empty() && v.name != \"{fqn}\")) {{\n            \
-             detail::kind_mismatch(\"class {fqn}\", v);\n        }}\n        \
-             {q} out{{}};",
+             detail::kind_mismatch(\"class {fqn}\", v);\n        }}",
             q = c.qualified,
             fqn = c.fqn
         );
-        for (name, _, _) in &c.fields {
-            let _ = writeln!(buf, "        bool saw_{name} = false;");
+        // Fields land in optional locals first: aggregate construction at the
+        // end supports non-default-constructible field types (baml::Box).
+        for (name, ty, _) in &c.fields {
+            let _ = writeln!(buf, "        std::optional<{ty}> field_{name};");
         }
         buf.push_str("        for (const auto& field : v.fields) {\n");
         let mut first = true;
@@ -960,8 +1002,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             let _ = writeln!(
                 buf,
                 "            {kw} (field.first == \"{wire_name}\") {{\n                \
-                 out.{name} = codec<{ty}>::decode(field.second);\n                \
-                 saw_{name} = true;"
+                 field_{name} = codec<{ty}>::decode(field.second);"
             );
         }
         if !c.fields.is_empty() {
@@ -978,12 +1019,22 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
         for (name, _, wire_name) in &c.fields {
             let _ = writeln!(
                 buf,
-                "        if (!saw_{name}) {{\n            \
+                "        if (!field_{name}.has_value()) {{\n            \
                  throw BamlError(\"missing field '{wire_name}' on {fqn}\");\n        }}",
                 fqn = c.fqn
             );
         }
-        buf.push_str("        return out;\n    }\n};\n");
+        let ctor_args: Vec<String> = c
+            .fields
+            .iter()
+            .map(|(name, _, _)| format!("std::move(*field_{name})"))
+            .collect();
+        let _ = writeln!(
+            buf,
+            "        return {q}{{{args}}};\n    }}\n}};",
+            q = c.qualified,
+            args = ctor_args.join(", ")
+        );
     }
 
     buf.push_str("\n}  // namespace baml\n");
