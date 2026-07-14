@@ -18,6 +18,16 @@ INCLUDES=(
 )
 LIBDIR="$WORKSPACE_ROOT/target/debug"
 
+if ! compgen -G "tests/*.cpp" > /dev/null; then
+    # No ported tests yet: still syntax-check the generated SDK itself.
+    if compgen -G "baml_sdk/src/*.cpp" > /dev/null; then
+        c++ -std=c++17 -Wall -Wextra -fsyntax-only "${INCLUDES[@]}" baml_sdk/src/*.cpp
+        echo "no tests/*.cpp in this fixture yet; generated SDK syntax-checked"
+    else
+        echo "no tests/*.cpp and no generated SDK sources; nothing to compile"
+    fi
+    exit 0
+fi
 SOURCES=(tests/*.cpp)
 if compgen -G "baml_sdk/src/*.cpp" > /dev/null; then
     SOURCES+=(baml_sdk/src/*.cpp)
