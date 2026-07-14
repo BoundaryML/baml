@@ -81,10 +81,12 @@ const teamMembers: TeamMember[] = [
     role: 'Engineering',
   },
   {
-    bio: 'Avery revived the defunct LEGO Universe MMO with a custom C++ server emulator (open-sourcing it led to an official partnership with The LEGO Group) while finishing his CS degree at UPenn.',
+    bio: 'Avery revived the defunct LEGO Universe MMO with a custom C++ server emulator in high school, then wrote a full wgpu rendering backend from scratch and contributed to the Slint compiler while finishing a degree at UPenn.',
     image: '/avery.png',
+    linkedin: 'https://www.linkedin.com/in/codeshaunted/',
     name: 'Avery Townsend',
     role: 'Engineering',
+    twitter: 'https://x.com/codeshaunted',
   },
   {
     bio: 'Dhilan is a computer science intern from UT Austin who built agent-tries-baml, the system BAML uses to measure and improve how well AI agents write it.',
