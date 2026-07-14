@@ -1,0 +1,20 @@
+condition: guided-subagent
+questions: 8
+repetitions: 1
+final cells: 8
+claude: 2.1.207 (Claude Code)
+baml-cli: 0.14.1 release
+baml_language commit: 40546bde973ca1c489878fa81ec94fd074cfbb33
+subagent prompt: baml-describe-subagent.md
+subagent prompt bytes: 4564
+subagent prompt sha1: 538d2d6a2ca8597fb834083e9674322bc958b07d
+delegator prompt: baml-describe-delegator.md
+delegator prompt bytes: 756
+delegator prompt sha1: 9e3d3abe25921eb297e33ec8726c4d65a9ff0215
+published runner: run-claude-subagent.sh
+published runner note: standalone equivalent using the exact measured prompts, prefix, allowed tools, frozen release binary, and accounting rules
+main model: claude-opus-4-8[1m]
+subagent model: claude-sonnet-5
+context accounting: main plus subagent input, cache-read, and cache-creation tokens; Haiku classifier excluded
+cost accounting: aggregate Claude result cost, including the Haiku classifier
+raw traces: intentionally excluded because isolated Claude homes contain credentials
