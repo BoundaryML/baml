@@ -1715,17 +1715,8 @@ mod tests {
             .copied()
             .find(|&id| tree[id].name.as_str() == "first")
             .expect("`first` default method");
-        let func_data = &tree[fn_id];
-
-        let index = baml_compiler2_ppir::file_semantic_index(&db, file);
-        let scope_id = index
-            .scope_ids
-            .iter()
-            .copied()
-            .find(|scope_id| {
-                let scope = &index.scopes[scope_id.file_scope_id(&db).index() as usize];
-                scope.range == func_data.span && scope.name.as_ref() == Some(&func_data.name)
-            })
+        let fn_loc = baml_compiler2_hir::loc::FunctionLoc::new(&db, file, fn_id);
+        let scope_id = baml_compiler2_ppir::item_data::function_scope(&db, fn_loc)
             .expect("`first`'s body scope");
 
         let inference = crate::inference::infer_scope_types(&db, scope_id);

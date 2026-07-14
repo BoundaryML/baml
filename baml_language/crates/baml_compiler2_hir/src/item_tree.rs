@@ -83,6 +83,11 @@ pub struct ItemTree {
     pub method_to_iface_target: FxHashMap<LocalItemId<FunctionMarker>, ast::TypeExpr>,
     pub method_to_iface_associated_type_bindings:
         FxHashMap<LocalItemId<FunctionMarker>, Vec<ast::AssociatedTypeBindingDef>>,
+
+    /// Method → owning item. Inverse of `Class::methods` /
+    /// `Interface::default_methods` / a free impl's `ImplBlock::methods`;
+    /// absent for top-level functions. See [`MethodOwner`].
+    pub method_owners: FxHashMap<LocalItemId<FunctionMarker>, MethodOwner>,
 }
 
 // ── Index impls ───────────────────────────────────────────────────────────────

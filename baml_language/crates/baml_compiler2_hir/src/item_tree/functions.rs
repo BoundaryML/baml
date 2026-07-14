@@ -40,6 +40,27 @@ pub struct Function {
     pub span: TextRange,
 }
 
+/// The item a method belongs to.
+///
+/// Recorded by the `ItemTreeBuilder` at the same call that establishes
+/// membership (`set_class_methods` / `alloc_interface` / `alloc_impl`), so it
+/// cannot drift from the forward lists. Before this existed, ~24 sites across
+/// TIR/MIR/emit/HIR answered "who owns this method?" by scanning
+/// `classes.values().find(|c| c.methods.contains(&id))` and friends — O(items)
+/// per lookup, and with the class/interface halves drifting between copies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MethodOwner {
+    /// A class-level method, *including* methods declared inside an in-body
+    /// `implements I { … }` block — those are flattened into `Class::methods`,
+    /// and their impl relationship lives in `method_to_iface_target` /
+    /// `class_to_impls`.
+    Class(LocalItemId<crate::ids::ClassMarker>),
+    /// An interface default method.
+    Interface(LocalItemId<crate::ids::InterfaceMarker>),
+    /// A method of an out-of-body `implements<…> I for T { … }` block.
+    FreeImpl(LocalItemId<crate::ids::ImplMarker>),
+}
+
 /// A function parameter entry in the `ItemTree`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionParam {

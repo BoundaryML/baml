@@ -2,9 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use baml_base::Name;
 use baml_compiler2_ast::ExprBody;
-use baml_compiler2_hir::{
-    body::FunctionBody, file_package, loc::FunctionLoc, package::PackageId, scope::ScopeKind,
-};
+use baml_compiler2_hir::{body::FunctionBody, file_package, loc::FunctionLoc, package::PackageId};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -129,23 +127,6 @@ fn callable_key<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Name
     let namespace = file_package::file_package(db, function.file(db)).namespace_path;
     let short_name = callable_short_name(db, function);
     throw_set_key(&namespace, &short_name)
-}
-
-fn function_scope_id<'db>(
-    db: &'db dyn crate::Db,
-    function: FunctionLoc<'db>,
-) -> Option<baml_compiler2_hir::scope::ScopeId<'db>> {
-    let file = function.file(db);
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let func_data = &item_tree[function.id(db)];
-
-    index.scope_ids.iter().copied().find(|scope_id| {
-        let scope = &index.scopes[scope_id.file_scope_id(db).index() as usize];
-        matches!(scope.kind, ScopeKind::Function)
-            && scope.range == func_data.span
-            && scope.name.as_ref() == Some(&func_data.name)
-    })
 }
 
 fn named_callee_key<'db>(
@@ -411,7 +392,8 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
 
     match baml_compiler2_ppir::function_body(db, function).as_ref() {
         FunctionBody::Expr(body) => {
-            let Some(scope_id) = function_scope_id(db, function) else {
+            let Some(scope_id) = baml_compiler2_ppir::item_data::function_scope(db, function)
+            else {
                 return Ty::Unknown {
                     attr: TyAttr::default(),
                 };

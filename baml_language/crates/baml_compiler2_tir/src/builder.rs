@@ -10057,12 +10057,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // `stream_llm_function`).
                 Definition::Let(let_loc) => {
                     let db = self.context.db();
-                    let file = let_loc.file(db);
-                    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-                    let let_data = &item_tree[let_loc.id(db)];
-                    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-                    let fsi = index.scope_at_offset(let_data.span.start(), Some(&let_data.name));
-                    let scope_id = index.scope_ids[fsi.index() as usize];
+                    let Some(scope_id) = baml_compiler2_ppir::item_data::let_scope(db, let_loc)
+                    else {
+                        return Ty::Unknown {
+                            attr: TyAttr::default(),
+                        };
+                    };
                     let inference = crate::inference::infer_scope_types(db, scope_id);
                     let body = baml_compiler2_hir::body::let_body(db, let_loc);
                     if let baml_compiler2_hir::body::LetBody::Expr(expr_body) = body.as_ref()

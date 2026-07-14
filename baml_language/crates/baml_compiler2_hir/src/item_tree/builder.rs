@@ -21,8 +21,8 @@ use crate::{
     item_tree::{
         Attribute, Class, ClassField, Client, DefaultExprRef, Enum, EnumVariant, Function,
         FunctionParam, ImplBlock, ImplSubject, ImplementsBlock, Interface, InterfaceFieldLink,
-        InterfaceMethodSig, ItemTree, ItemTreeSourceMap, Let, RetryPolicy, TemplateString, Test,
-        TypeAlias,
+        InterfaceMethodSig, ItemTree, ItemTreeSourceMap, Let, MethodOwner, RetryPolicy,
+        TemplateString, Test, TypeAlias,
     },
 };
 
@@ -153,15 +153,30 @@ impl ItemTreeBuilder {
             .insert(method, associated_type_bindings);
     }
 
-    /// Attach method IDs to an already-allocated class.
+    /// Attach method IDs to an already-allocated class, recording each method's
+    /// owner. Membership and ownership are written by the same call so they
+    /// cannot drift apart.
     pub fn set_class_methods(
         &mut self,
         class_id: LocalItemId<ClassMarker>,
         methods: Vec<LocalItemId<FunctionMarker>>,
     ) {
+        for method in &methods {
+            self.record_method_owner(*method, MethodOwner::Class(class_id));
+        }
         if let Some(class) = self.tree.classes.get_mut(&class_id) {
             class.methods = methods;
         }
+    }
+
+    /// A method belongs to exactly one item; a second recording is a builder bug
+    /// (e.g. one function id handed to two owners).
+    fn record_method_owner(&mut self, method: LocalItemId<FunctionMarker>, owner: MethodOwner) {
+        let previous = self.tree.method_owners.insert(method, owner);
+        debug_assert!(
+            previous.is_none(),
+            "method owner recorded twice: {previous:?} then {owner:?}"
+        );
     }
 
     /// Allocate a stable id for an `implements` block and store it in the
@@ -181,8 +196,15 @@ impl ItemTreeBuilder {
         match &block.subject {
             ImplSubject::InClass { class, .. } => {
                 self.tree.class_to_impls.entry(*class).or_default().push(id);
+                // No owner recording: in-body impl methods are flattened into
+                // `Class::methods`, so `set_class_methods` owns them.
             }
-            ImplSubject::Free { .. } => self.tree.free_impls.push(id),
+            ImplSubject::Free { .. } => {
+                self.tree.free_impls.push(id);
+                for method in &block.methods {
+                    self.record_method_owner(*method, MethodOwner::FreeImpl(id));
+                }
+            }
         }
         self.tree.impls.insert(id, block);
         id
@@ -233,6 +255,9 @@ impl ItemTreeBuilder {
         self.source_map
             .interface_method_spans
             .insert(id, i.required_methods.iter().map(|m| m.name_span).collect());
+        for method in &default_method_ids {
+            self.record_method_owner(*method, MethodOwner::Interface(id));
+        }
         let fields = i
             .fields
             .iter()

@@ -706,3 +706,149 @@ fn scope_owner_round_trips() {
         Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(loc)),
     );
 }
+
+// ── Method → owner index ─────────────────────────────────────────────────────
+
+/// `method_owner` must agree with the three scans it replaces (classes by
+/// `methods`, interfaces by `default_methods`, free impls by `methods`), for
+/// every function in a fixture covering all the ownership cases: a plain class
+/// method, an in-body `implements` method (owned by the *class*), an interface
+/// default method, an out-of-body impl method, and a top-level function.
+#[test]
+fn method_owner_index_agrees_with_the_scans_it_replaces() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r#"
+interface Greeter {
+    function greet(self) -> string
+    function shout(self) -> string throws never {
+        "HI"
+    }
+}
+
+class Person {
+    name string
+
+    function rename(self, name: string) -> string throws never {
+        name
+    }
+
+    implements Greeter {
+        function greet(self) -> string throws never {
+            self.name
+        }
+    }
+}
+
+class Robot {
+    id string
+}
+
+// A simple `implements I for C` is merged onto the class during AST lowering
+// (its method becomes class-owned); only a *generic* out-of-body impl stays a
+// free impl block.
+implements Greeter for Robot {
+    function greet(self) -> string throws never {
+        self.id
+    }
+}
+
+interface Valued<T> {
+    function get(self) -> T
+}
+
+class Box<T> {
+    value T
+}
+
+implements<T> Valued<T> for Box<T> {
+    function get(self) -> T throws never {
+        self.value
+    }
+}
+
+function free_standing(x: int) -> int throws never {
+    x
+}
+"#,
+    );
+
+    let db = test_db.db();
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    assert!(!item_tree.functions.is_empty());
+
+    let mut cases = (0usize, 0usize, 0usize, 0usize);
+    for id in item_tree.functions.keys() {
+        let loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *id);
+
+        // The scans being retired.
+        let by_class = item_tree
+            .classes
+            .iter()
+            .find(|(_, class)| class.methods.contains(id))
+            .map(|(class_id, _)| *class_id);
+        let by_interface = item_tree
+            .interfaces
+            .iter()
+            .find(|(_, iface)| iface.default_methods.contains(id))
+            .map(|(iface_id, _)| *iface_id);
+        let by_free_impl = item_tree
+            .free_impls
+            .iter()
+            .find(|impl_id| item_tree.impls[impl_id].methods.contains(id))
+            .copied();
+
+        let indexed = baml_compiler2_ppir::item_data::method_owner(db, loc);
+
+        use baml_compiler2_ppir::item_data::MethodOwner;
+        match (by_class, by_interface, by_free_impl) {
+            (Some(class_id), None, None) => {
+                cases.0 += 1;
+                assert!(
+                    matches!(indexed, Some(MethodOwner::Class(c)) if c.id(db) == class_id),
+                    "class scan and index disagree for {:?}",
+                    item_tree[*id].name
+                );
+            }
+            (None, Some(iface_id), None) => {
+                cases.1 += 1;
+                assert!(
+                    matches!(indexed, Some(MethodOwner::Interface(i)) if i.id(db) == iface_id),
+                    "interface scan and index disagree for {:?}",
+                    item_tree[*id].name
+                );
+            }
+            (None, None, Some(impl_id)) => {
+                cases.2 += 1;
+                assert!(
+                    matches!(indexed, Some(MethodOwner::FreeImpl(b)) if b.id(db) == impl_id),
+                    "free-impl scan and index disagree for {:?}",
+                    item_tree[*id].name
+                );
+            }
+            (None, None, None) => {
+                cases.3 += 1;
+                assert_eq!(
+                    indexed, None,
+                    "top-level function {:?} should have no owner",
+                    item_tree[*id].name
+                );
+            }
+            other => unreachable!(
+                "a method can only have one owner; scans returned {other:?} for {:?}",
+                item_tree[*id].name
+            ),
+        }
+    }
+
+    // Guard against a vacuous fixture: every ownership case must be present.
+    assert!(
+        cases.0 >= 2,
+        "expected class methods (plain + in-body impl)"
+    );
+    assert!(cases.1 >= 1, "expected an interface default method");
+    assert!(cases.2 >= 1, "expected a free-impl method");
+    assert!(cases.3 >= 1, "expected a top-level function");
+}

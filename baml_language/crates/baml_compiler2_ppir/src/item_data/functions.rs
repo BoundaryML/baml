@@ -67,6 +67,48 @@ pub fn function_source_map<'db>(
     lower(db, function).1
 }
 
+/// The item a method belongs to, as a `Loc`.
+///
+/// Mirrors `item_tree::MethodOwner` (see its docs for the ownership rules —
+/// notably, in-body `implements I { … }` methods are owned by their *class*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
+pub enum MethodOwner<'db> {
+    Class(baml_compiler2_hir::loc::ClassLoc<'db>),
+    Interface(baml_compiler2_hir::loc::InterfaceLoc<'db>),
+    /// An out-of-body `implements<…> I for T { … }` block.
+    FreeImpl(baml_compiler2_hir::loc::ImplLoc<'db>),
+}
+
+/// The item `method` belongs to, or `None` for a top-level function.
+///
+/// Replaces the `classes.values().find(|c| c.methods.contains(&id))` scan
+/// family — O(items) per lookup, with class-only and class-plus-interface
+/// copies drifting apart across crates.
+#[salsa::tracked]
+pub fn method_owner<'db>(
+    db: &'db dyn crate::Db,
+    method: FunctionLoc<'db>,
+) -> Option<MethodOwner<'db>> {
+    use baml_compiler2_hir::item_tree;
+
+    let file = method.file(db);
+    let owner = *crate::file_item_tree(db, file)
+        .method_owners
+        .get(&method.id(db))?;
+
+    Some(match owner {
+        item_tree::MethodOwner::Class(id) => {
+            MethodOwner::Class(baml_compiler2_hir::loc::ClassLoc::new(db, file, id))
+        }
+        item_tree::MethodOwner::Interface(id) => {
+            MethodOwner::Interface(baml_compiler2_hir::loc::InterfaceLoc::new(db, file, id))
+        }
+        item_tree::MethodOwner::FreeImpl(id) => {
+            MethodOwner::FreeImpl(baml_compiler2_hir::loc::ImplLoc::new(db, file, id))
+        }
+    })
+}
+
 /// The interface target a method was declared under, when it sits inside an
 /// `implements I { … }` block — plus the associated-type bindings from that
 /// block's header. `None` for class-level methods and for interface default
