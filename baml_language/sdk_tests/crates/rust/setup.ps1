@@ -9,6 +9,20 @@ Set-Location $PSScriptRoot
 
 $WorkspaceRoot = (Resolve-Path '..\..\..').Path
 
+# The generated SDKs load the engine as a shared library at run time
+# (baml_bridge is dylib-only). Build the cdylib into the MAIN workspace
+# target dir - before the fixture CARGO_TARGET_DIR assignment below -
+# which is where the emitted tests look for it (next to their own
+# binary, so ambient CARGO_TARGET_DIR/profile agree by construction).
+Write-Host "==> cargo build -p bridge_cffi (engine cdylib)"
+Push-Location $WorkspaceRoot
+try {
+    cargo build -p bridge_cffi
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+} finally {
+    Pop-Location
+}
+
 # Shared cargo build dir under target/, matching the CARGO_TARGET_DIR
 # the emitted tests thread through (run_test_cmd / CACHE_SUBDIR in
 # harness_setup/src/rust.rs).

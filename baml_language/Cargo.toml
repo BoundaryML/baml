@@ -170,6 +170,7 @@ insta = { version = "1.34", features = [ "yaml", "redactions" ] }
 jiff = { version = "0.2" }
 la-arena = { version = "0.3" }
 libc = "0.2.169"
+libloading = "0.8"
 libsui = { version = "0.14" }
 log = "0.4.20"
 logos = { version = "0.15" }
@@ -247,6 +248,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
   "fmt",
 ] }
 unicode-normalization = "0.1.25"
+ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
 url = "2.5.2"
 uuid = { version = "1", features = [ "v4" ] }
 walkdir = { version = "2.4" }

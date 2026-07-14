@@ -4,6 +4,8 @@
 
 use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
 
+mod common;
+
 use baml_bridge::{BamlValue, BigInt, Error, OptionalArg, encode, runtime};
 
 const BAML_SRC: &str = r#"
@@ -24,6 +26,7 @@ function opt_probe(a: int, o: int? = 5) -> int?[] { [a, o] }
 fn ensure_runtime() {
     static INIT: OnceLock<()> = OnceLock::new();
     INIT.get_or_init(|| {
+        common::locate_dev_engine();
         let files = HashMap::from([("main.baml".to_string(), BAML_SRC.to_string())]);
         // The vfs rejects trailing slashes (macOS's temp_dir ends in one).
         let root = std::env::temp_dir();

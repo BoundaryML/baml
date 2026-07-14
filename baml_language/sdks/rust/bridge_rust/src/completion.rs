@@ -51,7 +51,7 @@ fn registry() -> &'static Mutex<HashMap<u32, Arc<Slot>>> {
 /// Allocate a dispatch id and register a completion for it, ensuring the
 /// process-global callback is registered with the engine first (so a
 /// result can never arrive unroutable).
-pub(crate) fn register() -> Receiver {
+pub(crate) fn register(api: &'static capi::Api) -> Receiver {
     static CALLBACK_REGISTERED: OnceLock<()> = OnceLock::new();
     // Dispatch ids only correlate callback deliveries with waiting
     // receivers; wrap-around is harmless as long as ~4 billion calls are
@@ -63,7 +63,7 @@ pub(crate) fn register() -> Receiver {
         // never unwinds.
         #[expect(unsafe_code)]
         unsafe {
-            (capi::api().register_callback)(trampoline);
+            (api.register_callback)(trampoline);
         }
     });
 
@@ -194,6 +194,13 @@ extern "C" fn trampoline(call_id: u32, content: *const c_char, length: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Register against the real loaded engine's table; these tests
+    /// fulfill through the trampoline directly and never call it.
+    fn register() -> Receiver {
+        crate::test_support::locate_dev_engine();
+        super::register(capi::api().expect("engine library loads"))
+    }
 
     // Fulfill directly through the trampoline, as the engine would.
     fn fulfill(id: u32, payload: &[u8]) {

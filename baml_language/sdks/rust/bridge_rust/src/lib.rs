@@ -2,9 +2,12 @@
 //!
 //! A generated `baml_sdk` crate embeds compiled BAML bytecode, boots the
 //! process-global BEX engine lazily on first call, and converts values
-//! across the boundary with the [`BamlValue`] trait. This crate carries
-//! everything the generated code composes: the conversion traits and
-//! provided impls ([`baml_value`]), the inbound wire builders
+//! across the boundary with the [`BamlValue`] trait. The engine itself is
+//! never compiled in: it is a `bridge_cffi` shared library acquired at
+//! runtime by [`loader`] and spoken to exclusively over its C ABI — the
+//! same distribution model as the other dylib-loader clients. This crate
+//! carries everything the generated code composes: the conversion traits
+//! and provided impls ([`baml_value`]), the inbound wire builders
 //! ([`encode`]), the result-envelope decoding ([`decode`]), the typed
 //! error surface ([`error`]), and the call machinery ([`runtime`]).
 
@@ -14,7 +17,10 @@ mod completion;
 pub mod decode;
 pub mod encode;
 pub mod error;
+pub mod loader;
 pub mod runtime;
+#[cfg(test)]
+pub(crate) mod test_support;
 
 pub use baml_value::{BamlMapKey, BamlValue, OptionalArg};
 pub use error::{DecodeError, Error, SdkError};

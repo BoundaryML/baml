@@ -7,6 +7,8 @@
 
 use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
 
+mod common;
+
 use baml_bridge::{
     BamlValue, DecodeError, Error, Map, baml_value::internal::__BamlValuePrivate, decode, encode,
     runtime, wire,
@@ -49,6 +51,7 @@ function rt_status(s: "draft" | "sent") -> "draft" | "sent" { s }
 fn ensure_runtime() {
     static INIT: OnceLock<()> = OnceLock::new();
     INIT.get_or_init(|| {
+        common::locate_dev_engine();
         let files = HashMap::from([("main.baml".to_string(), BAML_SRC.to_string())]);
         // The vfs rejects trailing slashes (macOS's temp_dir ends in one).
         let root = std::env::temp_dir();

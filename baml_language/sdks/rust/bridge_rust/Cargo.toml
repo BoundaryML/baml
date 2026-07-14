@@ -17,25 +17,25 @@ name = "baml_bridge"
 doc = false
 doctest = false
 
-[features]
-default = [ "static", "bundle-http", "aws-crypto" ]
-# Link the engine (`bridge_cffi`) into the host binary and resolve its C ABI
-# at link time. The published alternative — loading the prebuilt shared
-# library at runtime — lands as the `dylib` backend.
-static = [ "dep:bridge_cffi" ]
-bundle-http = [ "bridge_cffi?/bundle-http" ]
-aws-crypto = [ "bundle-http", "bridge_cffi?/aws-crypto" ]
-ring-crypto = [ "bundle-http", "bridge_cffi?/ring-crypto" ]
-
+# The engine is never linked into this crate: like the other dylib-loader
+# clients, every call goes through the C ABI of a `bridge_cffi` shared
+# library resolved at runtime by `baml_bridge::loader` — one call path in
+# development and in production. Engine capabilities (HTTP stack, crypto)
+# are baked into the shared library when *it* is built.
 [dependencies]
 baml_version = { workspace = true }
-bridge_cffi = { workspace = true, optional = true }
 bridge_ctypes = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
+libloading = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = [ "rt" ] }
+sha2 = { workspace = true }
+# rt-multi-thread is for `block_in_place`: a first-call engine download
+# must never stall a multi-threaded async executor thread.
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
+ureq = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread", "macros" ] }

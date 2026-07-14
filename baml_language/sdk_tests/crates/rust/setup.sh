@@ -27,6 +27,14 @@ cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/rust
 
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 
+# The generated SDKs load the engine as a shared library at run time
+# (baml_bridge is dylib-only). Build the cdylib into the MAIN workspace
+# target dir — before the fixture CARGO_TARGET_DIR export below — which
+# is where the emitted tests look for it (next to their own binary, so
+# ambient CARGO_TARGET_DIR/profile agree by construction).
+echo "==> cargo build -p bridge_cffi (engine cdylib)"
+(cd "$WORKSPACE_ROOT" && cargo build -p bridge_cffi)
+
 # Shared cargo build dir under target/, matching the CARGO_TARGET_DIR
 # the emitted tests thread through (run_test_cmd / CACHE_SUBDIR in
 # harness_setup/src/rust.rs).

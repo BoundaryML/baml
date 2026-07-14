@@ -54,6 +54,25 @@ filter = 'package(=sdk_test_rust)'
 platform = { host = 'cfg(windows)' }
 setup = 'rust_cargo_win'
 
+# baml_bridge is dylib-only: its tests load the engine cdylib at run time
+# (located next to the test binary in <target>/<profile>/). Build it before
+# any of its tests run. fire only when a baml_bridge test is selected.
+[scripts.setup.rust_bridge_engine_unix]
+command = './sdks/rust/bridge_rust/build-engine.sh'
+
+[scripts.setup.rust_bridge_engine_win]
+command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdks/rust/bridge_rust/build-engine.ps1']
+
+[[profile.default.scripts]]
+filter = 'package(=baml_bridge)'
+platform = { host = 'cfg(unix)' }
+setup = 'rust_bridge_engine_unix'
+
+[[profile.default.scripts]]
+filter = 'package(=baml_bridge)'
+platform = { host = 'cfg(windows)' }
+setup = 'rust_bridge_engine_win'
+
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per
 # fixture plus one incremental `maturin develop`; Windows builds one wheel
