@@ -18,10 +18,19 @@ New-Item -ItemType Directory -Force -Path $env:CARGO_TARGET_DIR | Out-Null
 Get-ChildItem -Directory | ForEach-Object {
     $generated = Join-Path $_.FullName 'generated'
     if (Test-Path $generated) {
+        # Never run cargo without the generated manifest: cargo discovers
+        # manifests upward, so a missing Cargo.toml (codegen failure) would
+        # silently turn this into a workspace-wide build. The failure itself
+        # surfaces via the build_diagnostics test.
+        $manifest = Join-Path $generated 'Cargo.toml'
+        if (-not (Test-Path $manifest)) {
+            Write-Host "==> skipping $($_.Name)/generated (no Cargo.toml - codegen failed?)"
+            return
+        }
         Write-Host "==> cargo test --no-run in $($_.Name)/generated"
         Push-Location $generated
         try {
-            cargo test --no-run
+            cargo test --no-run --manifest-path Cargo.toml
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         } finally {
             Pop-Location

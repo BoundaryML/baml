@@ -9,7 +9,16 @@
 use proc_macro2::{Ident, Span};
 
 /// The BAML name rendered as a Rust identifier.
+///
+/// Panics on names that are not lexically identifiers (e.g. `$`-suffixed
+/// companions): those must be filtered or mangled upstream, so reaching
+/// here with one is a generator bug, never an input-dependent condition.
 pub(crate) fn ident(name: &str) -> Ident {
+    assert!(
+        !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_'),
+        "generator bug: `{name}` is not representable as a Rust identifier; \
+         symbols with such names must be filtered or mangled before emission"
+    );
     if let Some(renamed) = non_raw_able(name) {
         Ident::new(renamed, Span::call_site())
     } else if syn::parse_str::<Ident>(name).is_ok() {

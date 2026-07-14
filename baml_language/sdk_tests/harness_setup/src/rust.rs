@@ -87,11 +87,7 @@ enum Gate {
 /// `customizable/`, gate). File names match the python suite byte-for-byte
 /// (`.py` → `.rs`) for the cross-language suite checker.
 const TEST_MODS: &[(&str, &str, Gate)] = &[
-    (
-        "docstrings_etc",
-        "test_main.rs",
-        Gate::Later("needs doc-comment emission; asserts on generated source text"),
-    ),
+    ("docstrings_etc", "test_main.rs", Gate::Now),
     (
         "function_calls",
         "optional_args_static.rs",
@@ -158,15 +154,11 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "test_streaming_e2e.rs",
         Gate::Later("needs streaming"),
     ),
-    (
-        "type_shapes",
-        "test_main.rs",
-        Gate::Later("needs namespace modules emitted for all symbol kinds"),
-    ),
+    ("type_shapes", "test_main.rs", Gate::Now),
     (
         "type_shapes",
         "test_complex_models.rs",
-        Gate::Later("needs classes/enums/lists/maps end-to-end"),
+        Gate::Later("needs unions (anonymous union fields)"),
     ),
     (
         "type_shapes",
@@ -181,17 +173,13 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     (
         "type_shapes",
         "roundtrip_tests/test_class_refs.rs",
-        Gate::Later("needs classes end-to-end"),
+        Gate::Now,
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_enums.rs",
-        Gate::Later("needs enums end-to-end"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_enums.rs", Gate::Now),
     (
         "type_shapes",
         "roundtrip_tests/test_forward_refs.rs",
-        Gate::Later("needs classes end-to-end"),
+        Gate::Later("needs generics (GNode<T>)"),
     ),
     (
         "type_shapes",
@@ -203,46 +191,30 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "roundtrip_tests/test_handles.rs",
         Gate::Later("needs handle-backed stdlib types"),
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_lists.rs",
-        Gate::Later("needs lists end-to-end"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_lists.rs", Gate::Now),
     (
         "type_shapes",
         "roundtrip_tests/test_literals.rs",
         Gate::Later("needs literal types"),
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_maps.rs",
-        Gate::Later("needs maps end-to-end"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_maps.rs", Gate::Now),
     (
         "type_shapes",
         "roundtrip_tests/test_media.rs",
         Gate::Later("needs media types"),
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_optional.rs",
-        Gate::Later("needs optionals end-to-end"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_optional.rs", Gate::Now),
     (
         "type_shapes",
         "roundtrip_tests/test_primitives.rs",
-        Gate::Later("needs primitive round-trip functions and the Primitives class"),
+        Gate::Now,
     ),
     (
         "type_shapes",
         "roundtrip_tests/test_recursion.rs",
-        Gate::Later("needs recursive classes (Box insertion) end-to-end"),
+        Gate::Now,
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_routing.rs",
-        Gate::Later("needs cross-namespace classes and functions end-to-end"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_routing.rs", Gate::Now),
     (
         "type_shapes",
         "roundtrip_tests/test_streams.rs",
@@ -251,7 +223,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     (
         "type_shapes",
         "roundtrip_tests/test_symbol_collisions.rs",
-        Gate::Later("needs nested-module routing end-to-end"),
+        Gate::Now,
     ),
     (
         "type_shapes",
@@ -371,11 +343,18 @@ fn codegen_fixture(
                 }
             }
         }
-        Err(_) => {
+        Err(payload) => {
+            // Surface the panic message: a codegen panic with an opaque
+            // record is only diagnosable by re-running codegen by hand.
+            let message = payload
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| payload.downcast_ref::<&str>().copied())
+                .unwrap_or("<non-string panic payload>");
             diagnostics.record(
                 "codegen",
                 fixture,
-                "sdkgen_rust::to_source_code_with_bytecode panicked",
+                format!("sdkgen_rust::to_source_code_with_bytecode panicked: {message}"),
             );
         }
     }
@@ -428,24 +407,30 @@ fn render_tests_main(fixture: &str) -> String {
     let mut items = quote::quote! {
         use baml_sdk as _;
     };
+    // rustfmt reorders `mod` declarations alphabetically
+    // (`reorder_modules` is on by default) and this file is under the
+    // suite's own `rustfmt --check` gate, so emit them pre-sorted.
+    let mut enabled: Vec<(String, &str)> = Vec::new();
     for (fx, rel, gate) in TEST_MODS {
         if *fx != fixture {
             continue;
         }
         let mod_name = rel.trim_end_matches(".rs").replace('/', "_");
         match gate {
-            Gate::Now => {
-                let mod_ident = proc_macro2::Ident::new(&mod_name, proc_macro2::Span::call_site());
-                let path = format!("../customizable/{rel}");
-                items.extend(quote::quote! {
-                    #[path = #path]
-                    mod #mod_ident;
-                });
-            }
+            Gate::Now => enabled.push((mod_name, rel)),
             Gate::Later(reason) => {
                 header.push_str(&format!("// LATER({reason}): mod {mod_name};\n"));
             }
         }
+    }
+    enabled.sort();
+    for (mod_name, rel) in enabled {
+        let mod_ident = proc_macro2::Ident::new(&mod_name, proc_macro2::Span::call_site());
+        let path = format!("../customizable/{rel}");
+        items.extend(quote::quote! {
+            #[path = #path]
+            mod #mod_ident;
+        });
     }
     header.push('\n');
     sdkgen_rust::render_rust_file(&header, items)
@@ -473,6 +458,24 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[String]) {
         items.extend(quote::quote! {
             mod #mod_ident {
                 fn cmd(c: &str) {
+                    // Never spawn cargo without the generated manifest in
+                    // place: cargo discovers manifests *upward*, so in its
+                    // absence a fixture-level `cargo test` would silently
+                    // become a workspace-wide one — re-entering this very
+                    // test suite and forking cargo processes without bound.
+                    // (The `--manifest-path Cargo.toml` pin on the commands
+                    // below is the second layer of the same defense.)
+                    let manifest = ::std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                        .join(#fixture)
+                        .join("generated")
+                        .join("Cargo.toml");
+                    assert!(
+                        manifest.exists(),
+                        "{} is missing — codegen failed for this fixture \
+                         (see the build_diagnostics test); refusing to run \
+                         cargo without it",
+                        manifest.display(),
+                    );
                     ::sdk_test_harness_runner::run_test_cmd(
                         #fixture,
                         c,
@@ -488,12 +491,12 @@ fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[String]) {
 
                 #[test]
                 fn clippy() {
-                    cmd("cargo clippy -- -D warnings");
+                    cmd("cargo clippy --manifest-path Cargo.toml -- -D warnings");
                 }
 
                 #[test]
                 fn cargo_test() {
-                    cmd("cargo test");
+                    cmd("cargo test --manifest-path Cargo.toml");
                 }
             }
         });

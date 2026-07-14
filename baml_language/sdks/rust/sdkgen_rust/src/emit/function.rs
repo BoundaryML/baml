@@ -5,12 +5,19 @@ use baml_codegen_types::{Function, Name};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-use crate::{SkipWarning, idents, translate_ty};
+use crate::{
+    SkipWarning, idents,
+    translate_ty::{self, TyCtx},
+};
 
 /// Emit the sync + async bindings for a free function, or a skip warning
 /// when any type in its signature (arguments, return, throws contract)
 /// is not yet representable.
-pub(crate) fn emit(name: &Name, function: &Function) -> Result<TokenStream, SkipWarning> {
+pub(crate) fn emit(
+    name: &Name,
+    function: &Function,
+    ctx: &TyCtx<'_>,
+) -> Result<TokenStream, SkipWarning> {
     let fqn = name.to_string();
     let skip = |reason: String| SkipWarning {
         fqn: fqn.clone(),
@@ -26,11 +33,11 @@ pub(crate) fn emit(name: &Name, function: &Function) -> Result<TokenStream, Skip
         return Err(skip("generic functions are not emitted yet".to_string()));
     }
 
-    let ret = translate_ty::translate(&function.return_type)
+    let ret = translate_ty::translate(&function.return_type, ctx)
         .map_err(|u| skip(format!("return: {}", u.reason)))?;
     let throws = match &function.throws {
         None => quote! { ::core::convert::Infallible },
-        Some(ty) => translate_ty::translate(ty)
+        Some(ty) => translate_ty::translate(ty, ctx)
             .map_err(|u| skip(format!("throws contract: {}", u.reason)))?,
     };
 
@@ -40,7 +47,7 @@ pub(crate) fn emit(name: &Name, function: &Function) -> Result<TokenStream, Skip
     for arg in &function.arguments {
         let arg_name = arg.name.as_str();
         let param = idents::ident(arg_name);
-        let ty = translate_ty::translate(&arg.ty)
+        let ty = translate_ty::translate(&arg.ty, ctx)
             .map_err(|u| skip(format!("argument `{arg_name}`: {}", u.reason)))?;
         if arg.default.is_some() {
             // A defaulted BAML parameter: the wrapper accepts anything
