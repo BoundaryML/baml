@@ -476,6 +476,67 @@ mod tests {
 
     use super::{Highlighter, highlight_str, style_for};
 
+    /// One rendering effect of an SGR escape, decoded from its parameter list.
+    /// Modeling decoded effects (not raw byte fragments) keeps the assertions
+    /// valid however `console` chooses to batch attributes into sequences
+    /// (`\x1b[1m\x1b[33m` and `\x1b[1;33m` decode identically).
+    #[derive(Debug, PartialEq)]
+    enum Sgr {
+        Attr(u16),
+        /// `38;5;N` indexed foreground.
+        Palette(u16),
+        /// `38;2;r;g;b` truecolor foreground.
+        Rgb,
+    }
+
+    /// Decode every SGR effect applied anywhere in `out`.
+    fn sgr_effects(out: &str) -> Vec<Sgr> {
+        let mut effects = Vec::new();
+        for seq in out.split("\u{1b}[").skip(1) {
+            let Some(params) = seq.split('m').next() else {
+                continue;
+            };
+            let mut nums = params.split(';').map(|n| n.parse::<u16>().unwrap_or(0));
+            while let Some(n) = nums.next() {
+                match n {
+                    38 | 48 => match nums.next() {
+                        Some(5) => {
+                            effects.push(Sgr::Palette(nums.next().unwrap_or(0)));
+                        }
+                        Some(2) => {
+                            let _ = (nums.next(), nums.next(), nums.next());
+                            effects.push(Sgr::Rgb);
+                        }
+                        _ => {}
+                    },
+                    n => effects.push(Sgr::Attr(n)),
+                }
+            }
+        }
+        effects
+    }
+
+    /// The effects active exactly where `needle` is rendered: decode the text
+    /// before it and drop everything cancelled by a reset (`0`).
+    fn effects_at(out: &str, needle: &str) -> Vec<Sgr> {
+        let prefix = &out[..out.find(needle).unwrap_or_else(|| {
+            panic!("{needle:?} not found in {out:?}");
+        })];
+        let mut active = Vec::new();
+        for effect in sgr_effects(prefix) {
+            if effect == Sgr::Attr(0) {
+                active.clear();
+            } else {
+                active.push(effect);
+            }
+        }
+        active
+    }
+
+    const BOLD: Sgr = Sgr::Attr(1);
+    const ITALIC: Sgr = Sgr::Attr(3);
+    const YELLOW: Sgr = Sgr::Attr(33);
+
     /// Ordinary names must keep the terminal's default foreground: forcing a
     /// concrete color (the old white) breaks on light backgrounds.
     #[test]
@@ -491,18 +552,22 @@ mod tests {
         let decl = style_for(SemanticTokenType::Class, ModifierSet::DECLARATION)
             .apply_to("Foo")
             .to_string();
-        assert!(decl.contains("\u{1b}[1m"), "declaration not bold: {decl:?}");
+        assert!(
+            effects_at(&decl, "Foo").contains(&BOLD),
+            "declaration not bold: {decl:?}"
+        );
         let lib = style_for(SemanticTokenType::Type, ModifierSet::DEFAULT_LIBRARY)
             .apply_to("string")
             .to_string();
         assert!(
-            lib.contains("\u{1b}[3m"),
+            effects_at(&lib, "string").contains(&ITALIC),
             "defaultLibrary not italic: {lib:?}"
         );
     }
 
     /// The whole palette must be background-agnostic: named ANSI colors and
-    /// attributes only — no fixed 256-color values, no forced white/black.
+    /// attributes only — no fixed 256-color values, no truecolor, no forced
+    /// white/black.
     #[test]
     fn rendered_body_uses_no_fixed_colors() {
         let mut db = ProjectDatabase::new();
@@ -520,41 +585,58 @@ function make(v: int) -> Point {
             file,
             text_size::TextRange::new(0.into(), (src.len() as u32).into()),
         );
-        // Palette slots 0-15 are theme-controlled (console renders bright
-        // colors as `38;5;8..=15`); anything from 16 up is the fixed cube and
-        // ignores the terminal scheme.
-        for chunk in out.split("\u{1b}[38;5;").skip(1) {
-            let idx: u32 = chunk[..chunk.find('m').unwrap()].parse().unwrap();
-            assert!(idx < 16, "fixed-cube 256-color {idx} in: {out:?}");
+        for effect in sgr_effects(&out) {
+            match effect {
+                // Palette slots 0-15 are theme-controlled (console renders
+                // bright colors as `38;5;8..=15`); 16 and up is the fixed
+                // cube, which ignores the terminal scheme.
+                Sgr::Palette(idx) => {
+                    assert!(idx < 16, "fixed-cube 256-color {idx} in: {out:?}");
+                }
+                Sgr::Rgb => panic!("truecolor in: {out:?}"),
+                // 30/37 are concrete black/white foregrounds.
+                Sgr::Attr(n) => {
+                    assert!(n != 30 && n != 37, "forced black/white in: {out:?}");
+                }
+            }
         }
-        assert!(!out.contains("\u{1b}[37m"), "forced white in: {out:?}");
-        assert!(!out.contains("\u{1b}[30m"), "forced black in: {out:?}");
     }
 
     /// Fragments run through the real compiler classifier, not a side lexer:
     /// a declaration gets the class color *and* the bold declaration modifier,
-    /// which the old lexer path could never produce.
+    /// and stdlib types the italic `defaultLibrary` modifier — signals the old
+    /// lexer path could never produce.
     #[test]
     fn fragment_classifies_via_compiler() {
         let out = highlight_str("class Foo {\n  x int\n}");
-        let foo = out.split("Foo").next().unwrap();
+        let at_decl = effects_at(&out, "Foo");
         assert!(
-            foo.contains("\u{1b}[33m") || foo.contains("\u{1b}[1m"),
-            "class decl not styled: {out:?}"
+            at_decl.contains(&YELLOW) && at_decl.contains(&BOLD),
+            "class decl not bold+yellow ({at_decl:?}) in: {out:?}"
         );
-        assert!(out.contains("\u{1b}[1m"), "declaration not bold: {out:?}");
-        // The primitive type is stdlib: italic defaultLibrary modifier.
+        let at_type = effects_at(&out, "int");
         assert!(
-            out.contains("\u{1b}[3m"),
-            "no defaultLibrary italic: {out:?}"
+            at_type.contains(&ITALIC),
+            "stdlib type not italic ({at_type:?}) in: {out:?}"
         );
     }
 
     /// A fragment that mentions names with no project behind them must not
-    /// crash and must leave the unresolvable names plain.
+    /// crash. Syntactic positions still classify (a constructor name reads as
+    /// a type even unresolved), but a member on an unresolvable receiver has
+    /// no signal and stays at the default foreground — the same neutrality an
+    /// editor shows.
     #[test]
     fn fragment_with_unresolved_names_stays_neutral() {
-        let out = highlight_str("let x = SomeUnknownClass { field: 1 };");
+        let out = highlight_str("let x = SomeUnknownClass { field: rcv.member() };");
         assert!(out.contains("SomeUnknownClass"), "text preserved: {out:?}");
+        assert!(
+            effects_at(&out, "SomeUnknownClass").contains(&YELLOW),
+            "constructor position not typed: {out:?}"
+        );
+        assert!(
+            effects_at(&out, "member").is_empty(),
+            "member on unresolved receiver styled: {out:?}"
+        );
     }
 }
