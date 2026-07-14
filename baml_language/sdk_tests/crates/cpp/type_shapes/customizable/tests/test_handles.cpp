@@ -7,10 +7,10 @@
 // handle state. No external dependency: the HTTP test binds an ephemeral
 // localhost server and the FS test uses a temp file.
 //
-// Deviation from the Python file: the Image.from_base64 case lands with
-// the media slice. The HTTP server test is POSIX-only (raw sockets stand
-// in for Python's http.server).
+// Deviation from the Python file: the HTTP server test is POSIX-only (raw
+// sockets stand in for Python's http.server).
 #include <cstdio>
+#include <optional>
 #include <string>
 
 #include <baml_sdk.hpp>
@@ -46,6 +46,20 @@ private:
 };
 
 }  // namespace
+
+// --- media: Image.from_base64 ----------------------------------------------
+
+// 1x1 transparent PNG.
+static const char kPngB64[] =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+    "+M8AAAQEAQB9eIv5AAAAAElFTkSuQmCC";
+
+BAML_TEST(image_from_base64_roundtrips_payload) {
+    const baml_sdk::baml::media::Image img =
+        baml_sdk::baml::media::Image::from_base64(kPngB64, std::string("image/png"));
+    BAML_ASSERT(img.mime_type() == std::optional<std::string>("image/png"));
+    BAML_ASSERT_EQ(img.base64(), std::string(kPngB64));
+}
 
 // --- baml.fs.File: cursor state preserved across calls --------------------
 

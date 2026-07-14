@@ -868,6 +868,33 @@ fn translate_ty(
         // stdlib classes): an owned engine handle.
         Ty::RustType => "::baml::Handle".to_string(),
         Ty::Bigint => "::baml::BigInt".to_string(),
+        // The primitive media types are the stdlib media classes on the
+        // wire (class_value with a `_data` handle), so they translate to
+        // the generated baml.media.* class references.
+        Ty::Media(kind) => {
+            let class_name = match kind {
+                baml_base::MediaKind::Image => "Image",
+                baml_base::MediaKind::Audio => "Audio",
+                baml_base::MediaKind::Video => "Video",
+                baml_base::MediaKind::Pdf => "Pdf",
+                baml_base::MediaKind::Generic => {
+                    return Translated::Unsupported("generic media type".to_string());
+                }
+            };
+            let media_class = Name::new(
+                baml_base::Name::from("baml"),
+                vec![baml_base::Name::from("media")],
+                baml_base::Name::from(class_name),
+            );
+            return translate_ty(
+                pool,
+                names,
+                &Ty::Class(media_class, Vec::new()),
+                emitted_types,
+                boxed,
+                type_vars,
+            );
+        }
         Ty::Literal(lit) => {
             // Literal types widen to their base type (Python parity).
             match lit {
