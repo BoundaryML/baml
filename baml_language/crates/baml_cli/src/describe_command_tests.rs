@@ -1344,7 +1344,7 @@ fn dispatch_root_prefix_nonexistent() {
 
 use crate::describe_command::{
     MAX_BUDGET_OVERRUN, write_dependencies_view, write_impact_view, write_overview,
-    write_usage_view,
+    write_source_view, write_usage_view,
 };
 
 /// Capture `write_overview` output as a String.
@@ -1365,6 +1365,29 @@ fn describe_one(db: &ProjectDatabase, name: &str) -> baml_lsp2_actions::SymbolDe
         .into_iter()
         .next()
         .unwrap_or_else(|| panic!("no description for {name}"))
+}
+
+#[test]
+fn source_view_omits_reference_count() {
+    let db = make_db(&[(
+        "main.baml",
+        r#"
+function helper() -> int {
+    1
+}
+
+function caller() -> int {
+    helper()
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "helper");
+    let mut output = Vec::new();
+    write_source_view(&mut output, &db, &desc, 30, Path::new("/test")).unwrap();
+    let output = String::from_utf8(output).unwrap();
+
+    assert!(output.contains("function helper"), "{output}");
+    assert!(!output.contains("references ("), "{output}");
 }
 
 #[test]

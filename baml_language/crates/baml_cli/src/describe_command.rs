@@ -1797,7 +1797,7 @@ pub(crate) fn write_batch_output(
         let mut bytes = Vec::new();
         match args.view {
             DescribeView::Source => {
-                write_description(&mut bytes, db, description, output_max_lines, project_root)?;
+                write_source_view(&mut bytes, db, description, output_max_lines, project_root)?;
             }
             DescribeView::Overview => {
                 write_overview(
@@ -2060,6 +2060,27 @@ pub fn write_description(
     budget: usize,
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
+    write_description_inner(w, db, desc, budget, project_root, true)
+}
+
+pub(crate) fn write_source_view(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    desc: &SymbolDescription,
+    budget: usize,
+    project_root: &std::path::Path,
+) -> std::io::Result<()> {
+    write_description_inner(w, db, desc, budget, project_root, false)
+}
+
+fn write_description_inner(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    desc: &SymbolDescription,
+    budget: usize,
+    project_root: &std::path::Path,
+    include_references: bool,
+) -> std::io::Result<()> {
     let file_path = desc.file.path(db);
     let file_text = desc.file.text(db);
     let (start_line, end_line) = definition_line_range(
@@ -2240,39 +2261,41 @@ pub fn write_description(
         write_elision_marker(w, elided)?;
     }
 
-    // ── References ───────────────────────────────────────────────────────────
-    // Lowest priority: references are the first thing to give way under a
-    // tight budget. The header always shows the total count.
-    writeln!(w)?;
-    writeln!(w, "references ({}):", desc.references.len())?;
-    remaining = remaining.saturating_sub(2);
-    let mut elided = 0usize;
-    for r in &desc.references {
-        if remaining == 0 {
-            elided += 1;
-            continue;
-        }
-        let ref_abs = r.file.path(db);
-        let ref_path = relative_path(&ref_abs, project_root);
-        let preview = if colors {
-            let h = hl.enclosing_line(r.file, r.range);
-            if h.is_empty() {
-                r.line_text.trim().to_string()
-            } else {
-                h
+    if include_references {
+        // ── References ───────────────────────────────────────────────────────
+        // Lowest priority: references are the first thing to give way under a
+        // tight budget. The header always shows the total count.
+        writeln!(w)?;
+        writeln!(w, "references ({}):", desc.references.len())?;
+        remaining = remaining.saturating_sub(2);
+        let mut elided = 0usize;
+        for r in &desc.references {
+            if remaining == 0 {
+                elided += 1;
+                continue;
             }
-        } else {
-            r.line_text.trim().to_string()
-        };
-        let loc = painter.location(
-            &ref_abs,
-            &ref_path.display().to_string(),
-            &r.line_number.to_string(),
-        );
-        writeln!(w, "  {loc}  {preview}")?;
-        remaining -= 1;
+            let ref_abs = r.file.path(db);
+            let ref_path = relative_path(&ref_abs, project_root);
+            let preview = if colors {
+                let h = hl.enclosing_line(r.file, r.range);
+                if h.is_empty() {
+                    r.line_text.trim().to_string()
+                } else {
+                    h
+                }
+            } else {
+                r.line_text.trim().to_string()
+            };
+            let loc = painter.location(
+                &ref_abs,
+                &ref_path.display().to_string(),
+                &r.line_number.to_string(),
+            );
+            writeln!(w, "  {loc}  {preview}")?;
+            remaining -= 1;
+        }
+        write_elision_marker(w, elided)?;
     }
-    write_elision_marker(w, elided)?;
 
     Ok(())
 }
@@ -2322,7 +2345,7 @@ pub fn write_view(
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
     match view {
-        DescribeView::Source => write_description(w, db, desc, budget, project_root),
+        DescribeView::Source => write_source_view(w, db, desc, budget, project_root),
         DescribeView::Overview => write_overview(w, db, files, desc, budget, project_root),
         DescribeView::Usage => write_usage_view(w, db, desc, budget, project_root),
         DescribeView::Impact => write_impact_view(w, db, desc, budget, project_root),
