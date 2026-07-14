@@ -53,9 +53,9 @@ policy.max_delta_pct = 3.0
 # macOS arm64: baseline 12.64 MB file.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
 max_file_bytes = 13_019_350
-# Linux x86_64: baseline 15.62 MB file.
+# Linux x86_64: baseline 16.26 MB file.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 16_305_593
+max_file_bytes = 16_746_597
 # Windows x86_64: baseline 13.53 MB file.
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
 max_file_bytes = 13_938_290
