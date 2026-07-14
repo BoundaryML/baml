@@ -716,6 +716,7 @@ const [copied, setCopied] = useState(false);
           id: p.slug,
           title: p.title,
           hasContent: !!p.content,
+          parentSlug: p.parentSlug,
         })),
       ]
     : [
@@ -729,6 +730,7 @@ const [copied, setCopied] = useState(false);
           id: p.slug,
           title: p.title,
           hasContent: !!p.content,
+          parentSlug: p.parentSlug,
         })),
         ...newPages.map((p) => ({
           id: p.slug,

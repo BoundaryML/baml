@@ -10,6 +10,7 @@ interface Section {
   id: string;
   title: string;
   hasContent: boolean;
+  parentSlug?: string;
 }
 
 type PageStatus = "modified" | "new" | "deleted";
@@ -83,10 +84,33 @@ export function BepNav({
   pageStatuses = {},
   onAddPage,
 }: BepNavProps) {
+  // Arrange sections as a tree: children (parentSlug) render under their
+  // parent, indented. Children whose parent isn't visible stay at top level.
+  const visibleSections = sections.filter(
+    (s) => s.hasContent || pageStatuses[s.id] === "new"
+  );
+  const visibleIds = new Set(visibleSections.map((s) => s.id));
+  const orderedSections: Array<Section & { depth: number }> = [];
+  for (const section of visibleSections) {
+    // Self-referential pages (parentSlug === own id) render at top level
+    if (
+      section.parentSlug &&
+      section.parentSlug !== section.id &&
+      visibleIds.has(section.parentSlug)
+    ) {
+      continue;
+    }
+    orderedSections.push({ ...section, depth: 0 });
+    for (const child of visibleSections) {
+      if (child.id !== section.id && child.parentSlug === section.id) {
+        orderedSections.push({ ...child, depth: 1 });
+      }
+    }
+  }
+
   return (
     <nav className="space-y-1">
-      {sections
-        .filter((s) => s.hasContent || pageStatuses[s.id] === "new")
+      {orderedSections
         .map((section) => {
           const status = pageStatuses[section.id];
           const isDeleted = status === "deleted";
@@ -102,7 +126,8 @@ export function BepNav({
                 activeSection === section.id
                   ? "bg-accent text-accent-foreground font-medium"
                   : "text-muted-foreground",
-                isDeleted && "opacity-50 line-through"
+                isDeleted && "opacity-50 line-through",
+                section.depth > 0 && "ml-4 border-l pl-3"
               )}
             >
               <span className="flex items-center justify-between gap-2">

@@ -778,7 +778,9 @@ BEP-001/
 ├── README.md                 # Main content with inline comments embedded
 ├── pages/
 │   ├── background.md         # Additional pages with comments
-│   └── tooling.md
+│   ├── tooling.md
+│   └── background/           # One level of nesting supported
+│       └── research.md       # Child of the "background" page (parentSlug)
 ├── AGENT_CONTEXT.md          # AI-friendly summary
 ├── metadata.json             # Machine-readable metadata
 ├── discussion/
