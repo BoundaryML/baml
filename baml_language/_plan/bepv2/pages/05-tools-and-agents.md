@@ -33,6 +33,13 @@ typed provider configuration because the vendor executes them. Driver-owned
 tools are supplied by run options, hooks, or a live `ToolRegistry`. The
 effective roster is assembled at each step as page 3 specifies.
 
+Application and provider-owned tools are separate authority domains.
+`StepPlan.tools: []` can guarantee that the application driver advertises no
+application tools. It does not secretly rewrite provider configuration. To
+guarantee a turn has no tools of either kind, also select a provider value
+whose provider-owned tool list is empty. This explicit provider switch is
+observable and preserves typed vendor configuration.
+
 Argument validation happens before dispatch. Invalid arguments become a tool
 error result the model can repair unless policy explicitly makes them fatal.
 Page 11 specifies how BEP-062 function values remove most hand-written tool

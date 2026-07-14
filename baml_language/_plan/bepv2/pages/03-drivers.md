@@ -164,6 +164,11 @@ Once attached, a live `ToolRegistry` is authoritative because it can add and
 remove tools between turns. Provider-owned tools remain typed provider
 configuration and are translated separately by the provider adapter.
 
+Tool mutation occurs between provider steps, never during an in-flight HTTP or
+realtime model request. “Remove a tool halfway through the loop” means the
+current provider step finishes, `prepare_step` changes the roster, and the next
+provider step sees the new schemas.
+
 Names must be unique in the resulting request. A later source does not
 silently shadow an earlier one; collisions are typed errors unless an explicit
 replacement API is used.
@@ -183,6 +188,56 @@ function prepare_step(ctx: StepContext) -> StepPlan {
 
 A tool may itself discover or authorize more tools, but it mutates a
 driver-owned `ToolRegistry`; it does not rewrite the task declaration.
+
+Removing one application tool persistently mutates the registry:
+
+```baml
+function prepare_step(ctx: StepContext) -> StepPlan {
+  if (ctx.step == 2 && refund_permission_expired(ctx)) {
+    ctx.tool_registry.remove("issue_refund")
+  }
+  StepPlan { provider: null, tools: null, stop: null }
+}
+```
+
+An explicit empty replacement removes all application tools for the next
+turn. With an attached registry, call `clear()` to make that removal persist:
+
+```baml
+// One next turn only:
+StepPlan { provider: null, tools: [], stop: null }
+
+// Persistent for this registry:
+ctx.tool_registry.clear()
+StepPlan { provider: null, tools: null, stop: null }
+```
+
+Provider-owned tools are not application `Tool` values and are not affected by
+either operation. To remove vendor web search, code execution, or retrieval,
+select a provider configuration without those tools:
+
+```baml
+let WithSearch = ai.OpenAi {
+  model: "gpt-5",
+  built_in_tools: [ai.openai.WebSearch { search_context_size: "low" }],
+}
+
+let WithoutSearch = ai.OpenAi { ...WithSearch, built_in_tools: [] }
+
+function prepare_step(ctx: StepContext) -> StepPlan {
+  if (sensitive_phase(ctx)) {
+    // Clear application tools and switch to the same provider configuration
+    // family with all provider-owned tools disabled.
+    StepPlan { provider: WithoutSearch, tools: [], stop: null }
+  } else {
+    StepPlan { provider: null, tools: null, stop: null }
+  }
+}
+```
+
+This is why display names cannot be provider identity: `WithSearch` and
+`WithoutSearch` may report the same family and model while representing
+different request authority.
 
 ## Provider switching halfway through a loop
 

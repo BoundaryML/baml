@@ -47,6 +47,29 @@ themes; pages inside each theme add concepts progressively.
 Start with the [running customer-support example](./00-running-example.md),
 then follow a theme or jump directly to a recipe.
 
+### Snippet convention
+
+Interface methods are always shown inside the class and `implements` block
+that own them. For example, `prepare_step` appears inside
+`implements ai.AgentHooks`; it is not a top-level function. Comments containing
+`...` mark fields or other interface methods omitted from that particular
+example:
+
+```baml
+class ExampleHooks {
+  // ...policy fields...
+
+  implements ai.AgentHooks {
+    function prepare_step(self, ctx: ai.StepContext) -> ai.StepPlan throws never {
+      // ...decision logic...
+      ai.StepPlan { provider: null, tools: null, stop: null }
+    }
+
+    // ...other AgentHooks methods use their defaults...
+  }
+}
+```
+
 ### 1. Tasks and providers
 
 1. [Direct typed call](./01-tasks-and-providers/01-direct-typed-call.md)
@@ -65,6 +88,7 @@ then follow a theme or jump directly to a recipe.
 6. [Dynamic tool registry](./02-tools-and-agents/06-dynamic-tool-registry.md)
 7. [MCP halfway through a loop](./02-tools-and-agents/07-mcp-mid-loop.md)
 8. [Handoffs and budgets](./02-tools-and-agents/08-handoffs-and-budgets.md)
+9. [Remove tools between agent steps](./02-tools-and-agents/09-remove-tools.md)
 
 ### 3. Routing and reliability
 

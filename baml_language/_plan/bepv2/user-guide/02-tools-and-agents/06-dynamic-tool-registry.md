@@ -20,15 +20,23 @@ let run = ai.drivers.run_agent(
 ## Update the next step
 
 ```baml
-function prepare_step(self, ctx: ai.StepContext) -> ai.StepPlan {
-  if (ctx.step == 2 && refund_permission_granted(ctx)) {
-    ctx.tool_registry.add(issue_refund)
-  }
+class DynamicToolHooks {
+  // ...policy fields and helper methods...
 
-  ai.StepPlan {
-    provider: null,
-    tools: ctx.tool_registry.snapshot(),
-    stop: null,
+  implements ai.AgentHooks {
+    function prepare_step(self, ctx: ai.StepContext) -> ai.StepPlan throws never {
+      if (ctx.step == 2 && refund_permission_granted(ctx)) {
+        ctx.tool_registry.add(issue_refund)
+      }
+
+      ai.StepPlan {
+        provider: null,
+        tools: ctx.tool_registry.snapshot(),
+        stop: null,
+      }
+    }
+
+    // ...other AgentHooks methods may be omitted because they have defaults...
   }
 }
 ```
@@ -47,4 +55,3 @@ limitation; the safe driver rejects mutation instead of silently ignoring it.
 
 - [Dynamic tools](../../pages/03-drivers.md#dynamic-tools)
 - Scenario 13 searchable tools
-

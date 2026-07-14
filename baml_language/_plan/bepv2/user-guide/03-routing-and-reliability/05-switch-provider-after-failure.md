@@ -7,13 +7,21 @@ yet define a failure decision.
 ## Desired application policy
 
 ```baml
-// Proposed shape, not yet normative.
-function on_model_failure(self, ctx: ai.ModelFailureContext)
-  -> ai.FailureDecision throws never {
-  if (ctx.failure.kind() == baml.errors.FailureKind.RateLimit) {
-    return ai.FailureDecision.switch_to(CarefulToolModel)
+// Proposed interface and hook, not yet normative.
+class SwitchOnRateLimit {
+  // ...fallback policy fields...
+
+  implements ai.AgentFailureHooks {
+    function on_model_failure(self, ctx: ai.ModelFailureContext)
+      -> ai.FailureDecision throws never {
+      if (ctx.failure.kind() == baml.errors.FailureKind.RateLimit) {
+        return ai.FailureDecision.switch_to(CarefulToolModel)
+      }
+      ai.FailureDecision.stop()
+    }
+
+    // ...other AgentFailureHooks methods...
   }
-  ai.FailureDecision.stop()
 }
 ```
 
@@ -49,4 +57,3 @@ ordinary `prepare_step` does not currently receive.
 
 - [Failure and replay model](../../pages/08-reliability-and-errors.md)
 - This page records an open contract needed by the user guide.
-

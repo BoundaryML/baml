@@ -156,6 +156,7 @@ function no_op_hooks() -> GuideHooks throws never {
 function fake_tool_provider(calls: root.ai.ToolCall[]) -> root.ai.FakeToolProvider throws never {
   root.ai.FakeToolProvider {
     tool_calls: calls,
+    provider_tools: [],
     final_output: `{
       "category":"billing",
       "priority":"Urgent",
@@ -163,6 +164,15 @@ function fake_tool_provider(calls: root.ai.ToolCall[]) -> root.ai.FakeToolProvid
       "reply":"The duplicate is a pending authorization."
     }`,
   }
+}
+
+function fake_tool_provider_with_builtins(
+  calls: root.ai.ToolCall[],
+  provider_tools: root.ai.ProviderTool[],
+) -> root.ai.FakeToolProvider throws never {
+  let provider = fake_tool_provider(calls);
+  provider.provider_tools = provider_tools;
+  provider
 }
 
 function one_knowledge_call() -> root.ai.ToolCall throws never {

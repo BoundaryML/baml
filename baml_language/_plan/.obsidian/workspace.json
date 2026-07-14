@@ -185,6 +185,7 @@
   },
   "active": "c1cf60264c354175",
   "lastOpenFiles": [
+    "bepv2/user-guide/02-tools-and-agents/09-remove-tools.md",
     "bepv2/pages/11-tool-calling-after-bep-062.md",
     "bepv2/v2_deviations.md",
     "bepv2/user-guide/08-external-harnesses/06-implement-a-harness-adapter.md",
@@ -214,7 +215,6 @@
     "bepv2/user-guide/05-media-and-realtime",
     "bepv2/user-guide/04-conversations-and-state/05-save-and-resume.md",
     "bepv2/user-guide/04-conversations-and-state/04-provider-owned-sessions.md",
-    "bepv2/user-guide/04-conversations-and-state/03-fork-a-conversation.md",
     "bepv2/user-guide/04-conversations-and-state",
     "bepv2/user-guide/03-routing-and-reliability",
     "bepv2/user-guide/02-tools-and-agents",

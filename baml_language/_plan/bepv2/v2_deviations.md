@@ -163,3 +163,26 @@ the corresponding reflective call.
 class argument, and move dispatch into the function-backed `Tool`
 implementation. Keep runtime-schema MCP tools and provider-owned tools as
 separate implementations; they do not require BAML function values.
+
+### D-010: Provider-owned tool removal uses a deterministic provider
+
+**Normative design:** provider-owned tools are typed provider configuration.
+Removing them between agent steps selects a derived provider value with those
+tools disabled; `StepPlan.tools: []` independently clears application tools.
+
+**Reference-code spelling:** the executable removal scenario uses
+`FakeToolProvider.provider_tools` and switches to a same-name provider value
+whose list is empty. `FakeToolTranscript` records application and
+provider-owned rosters separately so the assertions can prove both were
+removed.
+
+**Why:** the temp OpenAI adapter currently demonstrates application function
+tools through Chat Completions but does not yet implement an actual
+provider-executed web-search/code-execution configuration. The fake isolates
+the ownership and provider-identity rule without making a live request.
+
+**Follow-up:** add typed provider-owned tool classes to the real OpenAI and
+Anthropic adapters, serialize them through those providers' native APIs, and
+pair the deterministic scenario with live conformance tests. The application
+and provider tool lists must remain separate even if a vendor serializes them
+into one wire-level array.

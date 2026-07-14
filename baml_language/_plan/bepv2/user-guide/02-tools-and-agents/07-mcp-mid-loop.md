@@ -12,17 +12,25 @@ let registry = ai.ToolRegistry.new([tool_search])
 ## Connect when the run needs more capability
 
 ```baml
-function prepare_step(self, ctx: ai.StepContext) -> ai.StepPlan {
-  if (ctx.step == 2 && !ctx.tool_registry.contains("search_policy")) {
-    let server = baml.mcp.connect(ctx.state.get_or_panic("policy_mcp_url"))
-    ctx.state.set("policy_mcp", server)
-    ctx.tool_registry.add_all(server.tools())
-  }
+class McpDiscoveryHooks {
+  // ...connection policy and retained MCP resources...
 
-  ai.StepPlan {
-    provider: null,
-    tools: ctx.tool_registry.snapshot(),
-    stop: null,
+  implements ai.AgentHooks {
+    function prepare_step(self, ctx: ai.StepContext) -> ai.StepPlan throws never {
+      if (ctx.step == 2 && !ctx.tool_registry.contains("search_policy")) {
+        let server = baml.mcp.connect(ctx.state.get_or_panic("policy_mcp_url"))
+        ctx.state.set("policy_mcp", server)
+        ctx.tool_registry.add_all(server.tools())
+      }
+
+      ai.StepPlan {
+        provider: null,
+        tools: ctx.tool_registry.snapshot(),
+        stop: null,
+      }
+    }
+
+    // ...other AgentHooks methods use their defaults...
   }
 }
 ```
@@ -45,4 +53,3 @@ permission, argument-validation, and result-redaction policy before activation.
 
 - [Adding MCP halfway through](../../pages/05-tools-and-agents.md#adding-mcp-halfway-through)
 - Scenarios 13 searchable tools, 39 harness extensibility
-

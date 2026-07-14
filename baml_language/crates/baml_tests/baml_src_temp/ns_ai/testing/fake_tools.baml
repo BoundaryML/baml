@@ -3,6 +3,7 @@ class FakeToolTranscript {
   history: Conversation,
   turn: int,
   last_tools: Tool[],
+  last_provider_tools: ProviderTool[],
 
   implements Transcript {
     function provider(self) -> Provider throws never { self.owner }
@@ -14,6 +15,7 @@ class FakeToolTranscript {
 class FakeToolProvider {
   tool_calls: ToolCall[],
   final_output: string,
+  provider_tools: ProviderTool[],
 }
 
 implements Provider for FakeToolProvider {
@@ -44,6 +46,7 @@ implements ToolCallingProvider for FakeToolProvider {
       history: task.messages().to_conversation(),
       turn: 0,
       last_tools: task.tools,
+      last_provider_tools: self.provider_tools,
     }
   }
 
@@ -54,7 +57,8 @@ implements ToolCallingProvider for FakeToolProvider {
       _ => throw baml.errors.UnknownError { data: null, message: ["wrong fake transcript"] },
     };
     state.last_tools = tools;
-    if (state.turn == 0) {
+    state.last_provider_tools = self.provider_tools;
+    if (state.turn == 0 && self.tool_calls.length() > 0) {
       state.turn = 1;
       return ToolCalls { calls: self.tool_calls };
     }
@@ -76,6 +80,7 @@ implements TranscriptImportProvider for FakeToolProvider {
         history: conversation,
         turn: 0,
         last_tools: [],
+        last_provider_tools: self.provider_tools,
       },
       fidelity: TranscriptFidelity.MessagesOnly,
       warnings: [],

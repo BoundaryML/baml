@@ -52,14 +52,25 @@ denial, choose another action, or request a handoff.
 ## Rewrite arguments
 
 ```baml
-function before_tool_call(self, event: ai.BeforeToolCall)
-  -> ai.ToolDecision throws never {
-  if (event.call.name == "lookup_order") {
-    return ai.ToolDecision.allow(
-      enforce_customer_id(event.call, self.customer_id),
-    )
+class CustomerScopedTools {
+  customer_id: string,
+  // ...other policy fields...
+
+  implements ai.AgentHooks {
+    // ...prepare_step may use its default implementation...
+
+    function before_tool_call(self, event: ai.BeforeToolCall)
+      -> ai.ToolDecision throws never {
+      if (event.call.name == "lookup_order") {
+        return ai.ToolDecision.allow(
+          enforce_customer_id(event.call, self.customer_id),
+        )
+      }
+      ai.ToolDecision.allow(event.call)
+    }
+
+    // ...other AgentHooks methods use their defaults...
   }
-  ai.ToolDecision.allow(event.call)
 }
 ```
 

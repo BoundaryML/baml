@@ -36,6 +36,14 @@ class Tool {
   }
 }
 
+// A provider-owned tool is configured and executed by the provider adapter.
+// It is deliberately not an application Tool and has no application handler.
+class ProviderTool {
+  name: string,
+  kind: string,
+  config: json,
+}
+
 class ToolCall {
   id: string,
   name: string,
@@ -75,8 +83,18 @@ class ToolRegistry {
     null
   }
 
+  function remove(self, name: string) -> bool throws never {
+    let before = self.roster.length();
+    self.roster = self.roster.filter((tool: Tool) -> bool { tool.name != name });
+    self.roster.length() != before
+  }
+
+  function clear(self) -> null throws never {
+    self.roster = [];
+    null
+  }
+
   function snapshot(self) -> Tool[] throws never {
     self.roster.slice(0, self.roster.length())
   }
 }
-
