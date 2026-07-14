@@ -2,6 +2,19 @@ nextest-version = "0.9.98"
 
 experimental = ["setup-scripts"]
 
+# The rust sdk-test fixture tests each spawn a `cargo` subprocess into one
+# shared CARGO_TARGET_DIR, whose build lock serializes them anyway — running
+# them concurrently only multiplies waiting cargo processes and their rustc
+# swarms. Cap the package at 2 in-flight tests (rustfmt is lock-free, so one
+# fmt check can overlap one cargo build); the setup-script pre-warm absorbs
+# the cold build of the shared stack before tests fan out.
+[test-groups]
+rust-sdk-fixture = { max-threads = 2 }
+
+[[profile.default.overrides]]
+filter = 'package(=sdk_test_rust)'
+test-group = 'rust-sdk-fixture'
+
 # nodejs tests need `.node` addon. build it, install fixtures. fire only
 # when a typescript_node test is selected. setup.sh / setup.ps1 are
 # byte-for-byte equivalent — same pnpm steps in the host shell of each

@@ -8,7 +8,13 @@
 //!
 //! ADAPTATION(rust): python's smoke imports are runtime facts; here
 //! reachability is a compile-time fact, asserted by the `use … as _;`
-//! items naming each path.
+//! items naming each path. Those imports are "unused" by design — the
+//! assertion is that they resolve.
+
+#![expect(
+    unused_imports,
+    reason = "reachability is asserted by the imports resolving at compile time"
+)]
 
 #[test]
 fn test_root_imports_cleanly() {

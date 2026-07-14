@@ -13,7 +13,7 @@ fn test_round_trip_empty_list() {
     // encode as an unset `list_value` oneof, which the engine read as null
     // and returned as `None`. An empty list must stay distinct from null on
     // the wire.
-    assert_eq!(round_trip_ints(vec![]).unwrap(), vec![]);
+    assert_eq!(round_trip_ints(vec![]).unwrap(), Vec::<i64>::new());
 }
 
 #[test]

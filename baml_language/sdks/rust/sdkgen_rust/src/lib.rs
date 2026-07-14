@@ -34,6 +34,7 @@ use baml_codegen_types::{Symbol, SymbolPool};
 use proc_macro2::TokenStream;
 use quote::quote;
 
+mod analyze;
 mod emit;
 mod idents;
 mod routing;
@@ -153,37 +154,88 @@ pub fn to_source_code_with_bytecode(
         "only NamingConvention::PreserveCase is supported"
     );
 
-    let mut warnings = Vec::new();
+    let (analysis, mut warnings) = analyze::analyze(pool);
 
     // Items per module path, keyed for a deterministic tree. Iterate the
-    // pool in Name order so both output and warnings are stable.
+    // pool in Name order so both output and warnings are stable. Placement
+    // uses the *renamed* module paths (collision renames cascade to every
+    // symbol under a renamed namespace).
     let mut leaves: BTreeMap<Vec<String>, Vec<LeafItem>> = BTreeMap::new();
     // The stdlib module always exists, even when everything in it is
     // currently skipped — structural parity with the python emitter.
     leaves.entry(vec!["baml".to_string()]).or_default();
+    // Every namespace in the pool gets a module, even when all of its
+    // symbols are currently skipped: the BAML namespace *tree* is part of
+    // the SDK's shape, and an empty module is honest about a namespace
+    // whose contents aren't representable yet.
+    for name in pool.keys() {
+        leaves
+            .entry(analysis.renamed(&routing::route(name).segments).to_vec())
+            .or_default();
+    }
 
     let mut symbols: Vec<_> = pool.iter().collect();
     symbols.sort_by(|(a, _), (b, _)| a.cmp(b));
     for (name, symbol) in symbols {
-        let skipped = |reason: &str| SkipWarning {
-            fqn: name.to_string(),
-            reason: reason.to_string(),
+        let placement = |analysis: &analyze::Analysis| {
+            analysis.renamed(&routing::route(name).segments).to_vec()
         };
         match symbol {
-            Symbol::Function(function) => match emit::function::emit(name, function) {
-                Ok(tokens) => leaves
-                    .entry(routing::route(name).segments)
+            Symbol::Function(function) => {
+                let ctx = translate_ty::TyCtx {
+                    analysis: &analysis,
+                    boxing_for: None,
+                };
+                match emit::function::emit(name, function, &ctx) {
+                    Ok(tokens) => leaves
+                        .entry(placement(&analysis))
+                        .or_default()
+                        .push(LeafItem {
+                            source_file_path: function.origin.source_file_path.clone(),
+                            span_start: function.origin.span_start,
+                            tokens,
+                        }),
+                    Err(warning) => warnings.push(warning),
+                }
+            }
+            Symbol::Class(class) => {
+                if !analysis.is_emitted(name) {
+                    // Skip warning already recorded by the analysis.
+                    continue;
+                }
+                let ctx = translate_ty::TyCtx {
+                    analysis: &analysis,
+                    boxing_for: Some(name),
+                };
+                match emit::class::emit(name, class, &ctx) {
+                    Ok((tokens, class_warnings)) => {
+                        warnings.extend(class_warnings);
+                        leaves
+                            .entry(placement(&analysis))
+                            .or_default()
+                            .push(LeafItem {
+                                source_file_path: class.origin.source_file_path.clone(),
+                                span_start: class.origin.span_start,
+                                tokens,
+                            });
+                    }
+                    Err(warning) => warnings.push(warning),
+                }
+            }
+            Symbol::Enum(enum_) => {
+                leaves
+                    .entry(placement(&analysis))
                     .or_default()
                     .push(LeafItem {
-                        source_file_path: function.origin.source_file_path.clone(),
-                        span_start: function.origin.span_start,
-                        tokens,
-                    }),
-                Err(warning) => warnings.push(warning),
-            },
-            Symbol::Class(_) => warnings.push(skipped("classes are not emitted yet")),
-            Symbol::Enum(_) => warnings.push(skipped("enums are not emitted yet")),
-            Symbol::TypeAlias(_) => warnings.push(skipped("type aliases are not emitted yet")),
+                        source_file_path: enum_.origin.source_file_path.clone(),
+                        span_start: enum_.origin.span_start,
+                        tokens: emit::enum_::emit(name, enum_),
+                    });
+            }
+            Symbol::TypeAlias(_) => warnings.push(SkipWarning {
+                fqn: name.to_string(),
+                reason: "type aliases are not emitted yet".to_string(),
+            }),
         }
     }
 

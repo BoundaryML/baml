@@ -232,9 +232,11 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
     }
 }
 
-/// A key of a BAML `map`. BAML restricts map keys to strings and enums;
-/// like [`BamlValue`] it is bidirectional, but keys have their own wire
-/// shape: a typed key oneof inbound, a stringified key outbound.
+/// A key of a BAML `map`. The language currently restricts map keys to
+/// strings (E0067), so [`String`] is the only impl; the trait is the
+/// extension point should richer key types land. Like [`BamlValue`] it is
+/// bidirectional, but keys have their own wire shape: a typed key oneof
+/// inbound, a stringified key outbound.
 pub trait BamlMapKey: Sized + Eq + std::hash::Hash {
     /// Encode as an inbound map-entry key.
     fn to_baml_key(&self) -> wire::inbound_map_entry::Key;
