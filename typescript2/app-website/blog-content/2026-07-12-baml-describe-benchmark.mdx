@@ -1,6 +1,6 @@
 ---
 title: "We benchmarked BAML describe against grep."
-description: What 117 agent runs taught us about compiler-aware code navigation, agent steering, and the cases where grep still wins.
+description: What 125 agent runs taught us about compiler-aware code navigation, agent steering, and the cases where grep still wins.
 slug: baml-describe-benchmark
 date: Jul 12, 2026
 tags: ['research', 'engineering']
@@ -126,19 +126,22 @@ The sanitized command-and-answer transcripts are included with the [`baml descri
 
 The dependency benchmark deliberately focused on one new view. We followed it with a broader Claude-only matrix to see whether agents could choose among `overview`, `source`, `usage`, `impact`, `dependencies`, and semantic search without the question naming `baml describe` at all.
 
-The eight questions ranged from simple requests like “What does `parse_trophy` do?” to thrown-error analysis, test coverage, type-change impact, and a cross-file parser change. We compared natural navigation, a bounded grep control, and a guided BAML condition whose `CLAUDE.md` explained how to route each intent.
+The eight questions ranged from simple requests like “What does `parse_trophy` do?” to thrown-error analysis, test coverage, type-change impact, and a cross-file parser change. We compared natural navigation, a bounded grep control, a guided BAML condition whose `CLAUDE.md` explained how to route each intent, and a dedicated BAML describe subagent called once by the main agent.
 
 | condition | wall time | calls | cost | context processed |
 |---|---:|---:|---:|---:|
 | natural navigation | **23s** | 3 | $0.203 | 84.7k |
 | bounded grep control | 25.5s | 4 | $0.155 | 95.9k |
 | guided `describe` | 25s | **2** | **$0.117** | **71.0k** |
+| `describe` subagent | 30s | 3.5 | $0.129 | **69.9k** |
 
 Guided BAML used 33% fewer tool calls than natural navigation, cost 43% less, and processed 16% less context. Natural navigation was still two seconds faster at the median.
 
-Correctness stayed level at seven complete core answers and one partial answer in every condition, but the misses differed. Natural navigation and grep missed part of the typed thrown-error set for `agent.tool_edit_file`. Guided BAML found that set, but missed a lexical prompt contract when reasoning about changing `TrophyReport.task_completed` from a string to an enum.
+The subagent processed slightly less context than direct guidance, but the handoff added a turn: it was five seconds slower, used 75% more calls, and cost 10% more. The main agent delegated exactly once in every cell and made no code-navigation calls itself, so this was a real specialist handoff rather than a label in the prompt.
 
-The per-question results matter more than the median. Guided BAML was especially efficient for direct source, error-contract, and test-coverage questions. Natural navigation won some straightforward usage and broad cross-file questions. One parser-error question also caused the guided agent to repeat source lookups instead of expanding helpers efficiently.
+Natural navigation, grep, and direct guided BAML each produced seven complete core answers and one partial answer. The subagent produced five complete and three partial answers. It also missed the lexical prompt contract, treated propagated builtin errors as out of scope for `agent.tool_edit_file`, and stopped before one deeper parser error origin.
+
+The per-question results matter more than the median. Direct guided BAML was especially efficient for direct source, complete error-contract, and test-coverage questions. The subagent's best result was the hardest one: the full `break;` architecture question fell from 105 seconds naturally to 82, from $0.515 to $0.277, and from 187k context to 158k. But it used 16 calls, and a simple test-coverage question ballooned to 11 calls and 67 seconds while it tried to recover test bodies through semantic search.
 
 This matrix used one run per question and condition, so we treat it as directional evidence, not a stable population estimate. Its main value is showing that the agent can choose useful views from ordinary questions—and exposing the workflows where the instructions or CLI still need work.
 
