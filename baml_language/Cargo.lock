@@ -749,6 +749,7 @@ dependencies = [
  "regex",
  "reqwest",
  "sdkgen_python_pydantic2",
+ "sdkgen_rust",
  "sdkgen_typescript_node",
  "serde",
  "serde_json",
@@ -1627,9 +1628,11 @@ dependencies = [
  "bridge_ctypes",
  "indexmap",
  "log",
+ "num-bigint",
  "prost",
  "serde_json",
  "sys_native",
+ "sys_types",
  "tokio",
 ]
 

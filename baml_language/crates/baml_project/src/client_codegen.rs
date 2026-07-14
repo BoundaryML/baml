@@ -664,6 +664,19 @@ fn convert_tir_leaf(
 
         // Bottom / sentinel / error recovery — map to Unit. An inference hole
         // (`_`) should have been filled before codegen; map defensively to Unit.
+        //
+        // BUG: `Never` does not belong in this defensive arm. Unlike the
+        // recovery sentinels around it, `never` is a legitimate,
+        // user-writable type: a `-> never` function reaches every codegen
+        // backend as if it were `-> void` (python emits `-> None` for a
+        // function that never returns normally). Throws contracts are
+        // unaffected (`resolve_throws` special-cases `Never` to "throws
+        // nothing" before conversion), and union arms collapse in TIR
+        // normalization, so the erasure only bites direct slot positions.
+        // The faithful fix is a `Ty::Never` variant in `baml_codegen_types`
+        // mapped per backend (python `typing.Never`, typescript `never`,
+        // rust `::core::convert::Infallible`); deferred so in-flight bridge
+        // work doesn't have to absorb a shared-enum change.
         TirTy::Void { .. }
         | TirTy::Never { .. }
         | TirTy::Unknown { .. }

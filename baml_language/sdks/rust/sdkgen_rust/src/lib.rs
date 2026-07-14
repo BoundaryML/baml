@@ -13,15 +13,31 @@
 //! `bridge_rust` dependency spec via [`RustGenOptions::baml_rs_dep`] — the
 //! CLI pins the release version, while `sdk_tests` uses a path dependency.
 //!
+//! The generated module tree mirrors the BAML namespace tree: one module
+//! (directory + `mod.rs`) per namespace, user symbols from the crate root
+//! down, stdlib under `baml/`, vendor packages under `vendor/<pkg>/`.
+//! Container modules only re-export their children as modules — symbols
+//! are never flattened into a parent.
+//!
 //! Symbols that reference BAML types the Rust SDK cannot represent yet are
 //! skipped rather than failing codegen: each skip is reported through
 //! [`Generated::warnings`] so callers can surface them, and the rest of the
 //! SDK still compiles.
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    path::PathBuf,
+};
 
 pub use baml_codegen_types::NamingConvention;
-use baml_codegen_types::SymbolPool;
+use baml_codegen_types::{Symbol, SymbolPool};
+use proc_macro2::TokenStream;
+use quote::quote;
+
+mod emit;
+mod idents;
+mod routing;
+mod translate_ty;
 
 /// Caller-provided knobs for the generated crate.
 pub struct RustGenOptions {
@@ -55,11 +71,37 @@ pub struct SkipWarning {
     pub reason: String,
 }
 
+/// Contents of one generated file. Nearly everything is text; the
+/// embedded bytecode ships as a sibling binary file so the source module
+/// can `include_bytes!` it instead of parsing a multi-megabyte byte-string
+/// literal.
+#[derive(Debug, PartialEq, Eq)]
+pub enum FileContent {
+    Text(String),
+    Binary(Vec<u8>),
+}
+
+impl FileContent {
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            FileContent::Text(s) => s.as_bytes(),
+            FileContent::Binary(b) => b,
+        }
+    }
+
+    pub fn into_bytes(self) -> Vec<u8> {
+        match self {
+            FileContent::Text(s) => s.into_bytes(),
+            FileContent::Binary(b) => b,
+        }
+    }
+}
+
 /// Emitter output: the generated file tree plus any skip warnings.
 pub struct Generated {
     /// Output-root-relative path → file contents. Includes `Cargo.toml`
     /// at the root and the source tree under `src/`.
-    pub files: HashMap<PathBuf, String>,
+    pub files: HashMap<PathBuf, FileContent>,
     /// Symbols that were skipped, for the caller to surface.
     pub warnings: Vec<SkipWarning>,
 }
@@ -101,13 +143,9 @@ pub fn render_rust_file(header: &str, tokens: proc_macro2::TokenStream) -> Strin
 
 /// Generate the SDK crate for `pool`, embedding `baml_bytecode` (the
 /// borsh-encoded `Program` the runtime boots from).
-///
-/// Symbol emission is not implemented yet: this currently produces the
-/// crate skeleton (manifest + empty library root) so the `sdk_tests`
-/// pipeline can run end-to-end. The signature is final.
 pub fn to_source_code_with_bytecode(
-    _pool: &SymbolPool,
-    _baml_bytecode: &[u8],
+    pool: &SymbolPool,
+    baml_bytecode: &[u8],
     options: &RustGenOptions,
 ) -> Generated {
     assert!(
@@ -115,21 +153,182 @@ pub fn to_source_code_with_bytecode(
         "only NamingConvention::PreserveCase is supported"
     );
 
-    let mut files = HashMap::new();
-    files.insert(PathBuf::from("Cargo.toml"), render_manifest(options));
-    files.insert(
-        PathBuf::from("src/lib.rs"),
-        render_rust_file(
-            RUST_BANNER,
-            quote::quote! {
-                #![allow(non_camel_case_types, non_snake_case)]
+    let mut warnings = Vec::new();
+
+    // Items per module path, keyed for a deterministic tree. Iterate the
+    // pool in Name order so both output and warnings are stable.
+    let mut leaves: BTreeMap<Vec<String>, Vec<LeafItem>> = BTreeMap::new();
+    // The stdlib module always exists, even when everything in it is
+    // currently skipped — structural parity with the python emitter.
+    leaves.entry(vec!["baml".to_string()]).or_default();
+
+    let mut symbols: Vec<_> = pool.iter().collect();
+    symbols.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (name, symbol) in symbols {
+        let skipped = |reason: &str| SkipWarning {
+            fqn: name.to_string(),
+            reason: reason.to_string(),
+        };
+        match symbol {
+            Symbol::Function(function) => match emit::function::emit(name, function) {
+                Ok(tokens) => leaves
+                    .entry(routing::route(name).segments)
+                    .or_default()
+                    .push(LeafItem {
+                        source_file_path: function.origin.source_file_path.clone(),
+                        span_start: function.origin.span_start,
+                        tokens,
+                    }),
+                Err(warning) => warnings.push(warning),
             },
-        ),
-    );
-    Generated {
-        files,
-        warnings: Vec::new(),
+            Symbol::Class(_) => warnings.push(skipped("classes are not emitted yet")),
+            Symbol::Enum(_) => warnings.push(skipped("enums are not emitted yet")),
+            Symbol::TypeAlias(_) => warnings.push(skipped("type aliases are not emitted yet")),
+        }
     }
+
+    // Close the tree over ancestors so interior namespaces get a module
+    // even when no symbol routes directly to them.
+    let paths: Vec<Vec<String>> = leaves.keys().cloned().collect();
+    for path in paths {
+        for depth in 0..path.len() {
+            leaves.entry(path[..depth].to_vec()).or_default();
+        }
+    }
+
+    // Direct children per module, for the `pub mod` declarations.
+    let mut children: BTreeMap<Vec<String>, BTreeSet<String>> = BTreeMap::new();
+    for path in leaves.keys() {
+        if let Some((child, parent)) = path.split_last() {
+            children
+                .entry(parent.to_vec())
+                .or_default()
+                .insert(child.clone());
+        }
+    }
+
+    let mut files = HashMap::new();
+    files.insert(
+        PathBuf::from("Cargo.toml"),
+        FileContent::Text(render_manifest(options)),
+    );
+    files.insert(
+        PathBuf::from("src/_inlinedbaml.bin"),
+        FileContent::Binary(baml_bytecode.to_vec()),
+    );
+    files.insert(
+        PathBuf::from("src/_inlinedbaml.rs"),
+        FileContent::Text(render_inlinedbaml_module()),
+    );
+    files.insert(
+        PathBuf::from("src/_runtime.rs"),
+        FileContent::Text(render_runtime_module()),
+    );
+
+    for (path, mut items) in leaves {
+        items.sort_by(|a, b| {
+            (&a.source_file_path, a.span_start).cmp(&(&b.source_file_path, b.span_start))
+        });
+        let mod_decls: Vec<TokenStream> = children
+            .get(&path)
+            .into_iter()
+            .flatten()
+            .map(|child| {
+                let child = idents::ident(child);
+                quote! { pub mod #child; }
+            })
+            .collect();
+        let item_tokens: Vec<TokenStream> = items.into_iter().map(|i| i.tokens).collect();
+
+        let (file_path, tokens) = if path.is_empty() {
+            (
+                PathBuf::from("src/lib.rs"),
+                quote! {
+                    #![allow(non_camel_case_types, non_snake_case)]
+
+                    mod _inlinedbaml;
+                    mod _runtime;
+
+                    pub use _runtime::init;
+
+                    #(#mod_decls)*
+                    #(#item_tokens)*
+                },
+            )
+        } else {
+            let mut file_path = PathBuf::from("src");
+            for seg in &path {
+                file_path.push(seg);
+            }
+            file_path.push("mod.rs");
+            (
+                file_path,
+                quote! {
+                    #(#mod_decls)*
+                    #(#item_tokens)*
+                },
+            )
+        };
+        files.insert(
+            file_path,
+            FileContent::Text(render_rust_file(RUST_BANNER, tokens)),
+        );
+    }
+
+    Generated { files, warnings }
+}
+
+struct LeafItem {
+    source_file_path: String,
+    span_start: u32,
+    tokens: TokenStream,
+}
+
+/// The embedded bytecode module. The bytes live in the sibling
+/// `_inlinedbaml.bin` (`include_bytes!` resolves relative to the
+/// containing source file) so rustc never has to parse the program as a
+/// byte-string literal.
+fn render_inlinedbaml_module() -> String {
+    render_rust_file(
+        RUST_BANNER,
+        quote! {
+            /// The compiled BAML program this SDK was generated from, as
+            /// borsh-encoded bytecode. The runtime boots from this on the
+            /// first call.
+            pub(crate) static BYTECODE: &[u8] =
+                ::core::include_bytes!("_inlinedbaml.bin");
+        },
+    )
+}
+
+/// The lazy-initialization module: the runtime boots from the embedded
+/// bytecode on first call; a failed boot is stored and returned from
+/// every subsequent call.
+fn render_runtime_module() -> String {
+    render_rust_file(
+        RUST_BANNER,
+        quote! {
+            static INIT: ::std::sync::OnceLock<
+                ::std::result::Result<(), ::baml_rs::SdkError>,
+            > = ::std::sync::OnceLock::new();
+
+            pub(crate) fn ensure_init() -> ::std::result::Result<(), ::baml_rs::SdkError> {
+                INIT.get_or_init(|| {
+                    ::baml_rs::runtime::initialize_from_bytecode(crate::_inlinedbaml::BYTECODE)
+                })
+                .clone()
+            }
+
+            /// Eagerly initialize the BAML runtime this SDK calls into.
+            ///
+            /// Optional: every generated function initializes lazily on
+            /// first call. Call this at startup to surface initialization
+            /// failures early and at a predictable point.
+            pub fn init() -> ::std::result::Result<(), ::baml_rs::Error> {
+                ensure_init().map_err(::baml_rs::Error::Sdk)
+            }
+        },
+    )
 }
 
 fn render_manifest(options: &RustGenOptions) -> String {
@@ -178,6 +377,9 @@ bridge_rust = {baml_rs_dep}
 
 #[cfg(test)]
 mod tests {
+    use baml_codegen_types::{Function, Name, Origin, Ty};
+    use pretty_assertions::assert_eq;
+
     use super::*;
 
     fn options() -> RustGenOptions {
@@ -190,10 +392,41 @@ mod tests {
         }
     }
 
+    fn name(pkg: &str, ns: &[&str], leaf: &str) -> Name {
+        Name::new(
+            baml_base::Name::new(pkg),
+            ns.iter().map(|s| baml_base::Name::new(*s)).collect(),
+            baml_base::Name::new(leaf),
+        )
+    }
+
+    /// The generated file at `path`, asserted to be text.
+    fn text<'a>(generated: &'a Generated, path: &str) -> &'a str {
+        match &generated.files[&PathBuf::from(path)] {
+            FileContent::Text(s) => s,
+            FileContent::Binary(_) => panic!("{path} is binary, expected text"),
+        }
+    }
+
+    fn nullary_string_fn(n: &Name) -> Function {
+        Function {
+            name: n.name.clone(),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: Ty::String,
+            throws: None,
+            watchers: Vec::new(),
+            origin: Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        }
+    }
+
     #[test]
-    fn empty_pool_emits_crate_skeleton() {
-        let pool = SymbolPool::default();
-        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+    fn empty_pool_emits_crate_skeleton_with_stdlib_module() {
+        let generated = to_source_code_with_bytecode(&SymbolPool::default(), &[], &options());
         assert!(generated.warnings.is_empty());
         let mut paths: Vec<_> = generated
             .files
@@ -201,7 +434,70 @@ mod tests {
             .map(|p| p.display().to_string())
             .collect();
         paths.sort();
-        assert_eq!(paths, ["Cargo.toml", "src/lib.rs"]);
+        assert_eq!(
+            paths,
+            [
+                "Cargo.toml",
+                "src/_inlinedbaml.bin",
+                "src/_inlinedbaml.rs",
+                "src/_runtime.rs",
+                "src/baml/mod.rs",
+                "src/lib.rs",
+            ]
+        );
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub mod baml;"));
+        assert!(lib.contains("pub use _runtime::init;"));
+    }
+
+    #[test]
+    fn root_function_emits_sync_and_async_bindings() {
+        let n = name("user", &[], "hello_world");
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(nullary_string_fn(&n)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub fn hello_world()"), "{lib}");
+        assert!(lib.contains("pub async fn hello_world_async()"), "{lib}");
+        assert!(lib.contains(r#""user.hello_world""#), "{lib}");
+    }
+
+    #[test]
+    fn namespaced_function_lands_in_its_module_with_ancestors_closed() {
+        let n = name("user", &["a", "b"], "f");
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(nullary_string_fn(&n)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(text(&generated, "src/a/mod.rs").contains("pub mod b;"));
+        assert!(text(&generated, "src/a/b/mod.rs").contains("pub fn f()"));
+        assert!(text(&generated, "src/lib.rs").contains("pub mod a;"));
+    }
+
+    #[test]
+    fn unsupported_symbols_skip_with_a_warning() {
+        let n = name("user", &[], "needs_media");
+        let mut f = nullary_string_fn(&n);
+        f.return_type = Ty::Media(baml_base::MediaKind::Image);
+        let pool = SymbolPool::from([(n, Symbol::Function(f))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(generated.warnings.len(), 1);
+        assert_eq!(generated.warnings[0].fqn, "user.needs_media");
+        assert!(generated.warnings[0].reason.contains("media"));
+    }
+
+    #[test]
+    fn bytecode_ships_as_a_binary_file_pulled_in_by_include_bytes() {
+        let generated =
+            to_source_code_with_bytecode(&SymbolPool::default(), &[0, 1, 255], &options());
+        assert_eq!(
+            generated.files[&PathBuf::from("src/_inlinedbaml.bin")],
+            FileContent::Binary(vec![0, 1, 255])
+        );
+        let module = text(&generated, "src/_inlinedbaml.rs");
+        assert!(module.contains("BYTECODE"), "{module}");
+        assert!(
+            module.contains(r#"include_bytes!("_inlinedbaml.bin")"#),
+            "{module}"
+        );
     }
 
     #[test]

@@ -77,10 +77,6 @@ tokio = { version = "1", features = ["rt", "macros"] }
 /// Whether a ported test file is compiled into the fixture's test suite.
 enum Gate {
     /// Declared as a module in `tests/main.rs` — compiles and runs.
-    #[expect(
-        dead_code,
-        reason = "no test file is enabled until the generator emits real symbols"
-    )]
     Now,
     /// Listed as a `// LATER(<reason>): …` comment in `tests/main.rs`.
     /// The reason names the capability the file is waiting on.
@@ -101,11 +97,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "optional_args_static.rs",
         Gate::Later("compile-fail probes need a trybuild-style harness"),
     ),
-    (
-        "function_calls",
-        "test_main.rs",
-        Gate::Later("needs free functions with primitive types"),
-    ),
+    ("function_calls", "test_main.rs", Gate::Now),
     (
         "function_calls",
         "test_cancellation.rs",
@@ -266,11 +258,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "roundtrip_tests/test_unions.rs",
         Gate::Later("needs unions"),
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_void.rs",
-        Gate::Later("needs free functions returning void"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_void.rs", Gate::Now),
 ];
 
 /// Entry point for `crates/rust/build.rs`. Drives codegen across every
@@ -374,7 +362,7 @@ fn codegen_fixture(
                         continue;
                     }
                 }
-                if let Err(e) = fs::write(&path, content) {
+                if let Err(e) = fs::write(&path, content.as_bytes()) {
                     diagnostics.record(
                         "codegen_write",
                         fixture,
