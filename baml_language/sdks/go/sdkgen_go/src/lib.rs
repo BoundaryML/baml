@@ -1,12 +1,13 @@
 //! Greenfield Go SDK emitter.
 //!
 //! The current vertical slice covers primitive free functions, class-typed
-//! functions over primitives, classes, and nullable wrappers of either; and
-//! non-generic class declarations composed from the same shapes. Nullable
-//! class edges support finite recursive values, while impossible required-only
-//! class cycles remain omitted. A BAML package becomes one Go package. BAML
-//! namespaces stay within that Go package and qualify exported identifiers,
-//! preserving legal cyclic references between namespaces.
+//! functions over primitives, classes, lists, string-keyed maps, and nullable
+//! wrappers at any position; and non-generic class declarations composed from
+//! the same shapes. Nullable and container class edges support finite recursive
+//! values, while impossible required-only direct class cycles remain omitted.
+//! A BAML package becomes one Go package. BAML namespaces stay within that Go
+//! package and qualify exported identifiers, preserving legal cyclic references
+//! between namespaces.
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -209,6 +210,18 @@ fn collect_codec_classes(ty: &Ty, pool: &SymbolPool, names: &mut BTreeSet<Name>)
         collect_codec_classes(inner, pool, names);
         return;
     }
+    match ty {
+        Ty::List(inner) => {
+            collect_codec_classes(inner, pool, names);
+            return;
+        }
+        Ty::Map { key, value } => {
+            collect_codec_classes(key, pool, names);
+            collect_codec_classes(value, pool, names);
+            return;
+        }
+        _ => {}
+    }
     let Ty::Class(name, arguments) = ty else {
         return;
     };
@@ -307,6 +320,10 @@ fn supported_class_type(ty: &Ty, classes: &BTreeSet<Name>) -> bool {
     }
     match ty {
         Ty::Class(name, arguments) => arguments.is_empty() && classes.contains(name),
+        Ty::List(inner) => supported_class_type(inner, classes),
+        Ty::Map { key, value } => {
+            matches!(key.as_ref(), Ty::String) && supported_class_type(value, classes)
+        }
         Ty::Union(items) => {
             nullable_inner(items).is_some_and(|inner| supported_class_type(inner, classes))
         }
@@ -378,6 +395,8 @@ fn wireable_class_names(pool: &SymbolPool, renderable: &BTreeSet<Name>) -> BTree
 fn class_targets(ty: &Ty) -> Vec<&Name> {
     match ty {
         Ty::Class(name, arguments) if arguments.is_empty() => vec![name],
+        Ty::List(inner) => class_targets(inner),
+        Ty::Map { value, .. } => class_targets(value),
         Ty::Union(items) => nullable_inner(items).map_or_else(Vec::new, class_targets),
         _ => Vec::new(),
     }
@@ -455,6 +474,8 @@ fn supported_function(function: &Function, wireable_classes: &BTreeSet<Name>) ->
 fn supported_wire_type(ty: &Ty, wireable_classes: &BTreeSet<Name>) -> bool {
     primitive_kind(ty).is_some()
         || matches!(ty, Ty::Class(name, arguments) if arguments.is_empty() && wireable_classes.contains(name))
+        || matches!(ty, Ty::List(inner) if supported_wire_type(inner, wireable_classes))
+        || matches!(ty, Ty::Map { key, value } if matches!(key.as_ref(), Ty::String) && supported_wire_type(value, wireable_classes))
         || matches!(ty, Ty::Union(items) if nullable_inner(items).is_some_and(|inner| supported_wire_type(inner, wireable_classes)))
 }
 
@@ -674,6 +695,42 @@ fn add_wire_type_imports(
         );
         return;
     }
+    match ty {
+        Ty::List(inner) => {
+            add_wire_type_imports(
+                inner,
+                current_package,
+                pool,
+                packages,
+                sdk_import_path,
+                imports,
+                visited,
+            );
+            return;
+        }
+        Ty::Map { key, value } => {
+            add_wire_type_imports(
+                key,
+                current_package,
+                pool,
+                packages,
+                sdk_import_path,
+                imports,
+                visited,
+            );
+            add_wire_type_imports(
+                value,
+                current_package,
+                pool,
+                packages,
+                sdk_import_path,
+                imports,
+                visited,
+            );
+            return;
+        }
+        _ => {}
+    }
     let Ty::Class(name, arguments) = ty else {
         unreachable!("function was filtered to supported wire types")
     };
@@ -717,6 +774,20 @@ fn function_go_type(ty: &Ty, current_package: &GoPackageName, names: &GoNames) -
             format!("*{rendered}")
         };
     }
+    match ty {
+        Ty::List(inner) => {
+            return format!("[]{}", function_go_type(inner, current_package, names));
+        }
+        Ty::Map { key, value } => {
+            debug_assert!(matches!(key.as_ref(), Ty::String));
+            return format!(
+                "map[{}]{}",
+                GeneratorIdent::StringType,
+                function_go_type(value, current_package, names)
+            );
+        }
+        _ => {}
+    }
     let Ty::Class(name, arguments) = ty else {
         unreachable!("function was filtered to supported wire types")
     };
@@ -733,6 +804,8 @@ fn function_go_type(ty: &Ty, current_package: &GoPackageName, names: &GoNames) -
 
 fn function_type_uses_bigint(ty: &Ty) -> bool {
     matches!(primitive_kind(ty), Some(PrimitiveKind::Bigint))
+        || matches!(ty, Ty::List(inner) if function_type_uses_bigint(inner))
+        || matches!(ty, Ty::Map { key, value } if function_type_uses_bigint(key) || function_type_uses_bigint(value))
         || matches!(ty, Ty::Union(items) if nullable_inner(items).is_some_and(function_type_uses_bigint))
 }
 
@@ -751,14 +824,7 @@ fn input_expression(ty: &Ty, value: &str, codecs: &ClassCodecs) -> String {
             input_encoder(inner, codecs)
         );
     }
-    let Ty::Class(name, arguments) = ty else {
-        unreachable!("function was filtered to supported wire types")
-    };
-    debug_assert!(arguments.is_empty());
-    format!(
-        "{}({value})",
-        codecs.ident(name, ClassCodecDirection::Encode)
-    )
+    format!("{}({value})", input_encoder(ty, codecs))
 }
 
 fn input_encoder(ty: &Ty, codecs: &ClassCodecs) -> String {
@@ -769,8 +835,37 @@ fn input_encoder(ty: &Ty, codecs: &ClassCodecs) -> String {
             input_constructor(ty)
         );
     }
+    if let Ty::Union(items) = ty {
+        let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
+        if matches!(primitive_kind(inner), Some(PrimitiveKind::Bigint)) {
+            return format!("{}.OptionalBigInt", GeneratorIdent::RuntimePackage);
+        }
+        return format!(
+            "{}.OptionalEncoder({})",
+            GeneratorIdent::RuntimePackage,
+            input_encoder(inner, codecs)
+        );
+    }
+    match ty {
+        Ty::List(inner) => {
+            return format!(
+                "{}.ListEncoder({})",
+                GeneratorIdent::RuntimePackage,
+                input_encoder(inner, codecs)
+            );
+        }
+        Ty::Map { key, value } => {
+            debug_assert!(matches!(key.as_ref(), Ty::String));
+            return format!(
+                "{}.MapEncoder({})",
+                GeneratorIdent::RuntimePackage,
+                input_encoder(value, codecs)
+            );
+        }
+        _ => {}
+    }
     let Ty::Class(name, arguments) = ty else {
-        unreachable!("nullable wire type was not primitive or class")
+        unreachable!("wire type was not primitive, container, or class")
     };
     debug_assert!(arguments.is_empty());
     codecs.ident(name, ClassCodecDirection::Encode).to_string()
@@ -791,14 +886,7 @@ fn output_expression(ty: &Ty, value: &str, codecs: &ClassCodecs) -> String {
             output_decoder(inner, codecs)
         );
     }
-    let Ty::Class(name, arguments) = ty else {
-        unreachable!("function was filtered to supported wire types")
-    };
-    debug_assert!(arguments.is_empty());
-    format!(
-        "{}({value})",
-        codecs.ident(name, ClassCodecDirection::Decode)
-    )
+    format!("{}({value})", output_decoder(ty, codecs))
 }
 
 fn output_decoder(ty: &Ty, codecs: &ClassCodecs) -> String {
@@ -809,8 +897,37 @@ fn output_decoder(ty: &Ty, codecs: &ClassCodecs) -> String {
             output_method(ty)
         );
     }
+    if let Ty::Union(items) = ty {
+        let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
+        if matches!(primitive_kind(inner), Some(PrimitiveKind::Bigint)) {
+            return format!("{}.DecodeOptionalBigInt", GeneratorIdent::RuntimePackage);
+        }
+        return format!(
+            "{}.OptionalDecoder({})",
+            GeneratorIdent::RuntimePackage,
+            output_decoder(inner, codecs)
+        );
+    }
+    match ty {
+        Ty::List(inner) => {
+            return format!(
+                "{}.ListDecoder({})",
+                GeneratorIdent::RuntimePackage,
+                output_decoder(inner, codecs)
+            );
+        }
+        Ty::Map { key, value } => {
+            debug_assert!(matches!(key.as_ref(), Ty::String));
+            return format!(
+                "{}.MapDecoder({})",
+                GeneratorIdent::RuntimePackage,
+                output_decoder(value, codecs)
+            );
+        }
+        _ => {}
+    }
     let Ty::Class(name, arguments) = ty else {
-        unreachable!("nullable wire type was not primitive or class")
+        unreachable!("wire type was not primitive, container, or class")
     };
     debug_assert!(arguments.is_empty());
     codecs.ident(name, ClassCodecDirection::Decode).to_string()
@@ -933,8 +1050,14 @@ fn class_field_output_expression(
             output_decoder(inner, codecs)
         );
     }
+    if matches!(ty, Ty::List(_) | Ty::Map { .. }) {
+        return format!(
+            "{runtime_package}.DecodeField({class_value}, {field_wire:?}, {})",
+            output_decoder(ty, codecs)
+        );
+    }
     let Ty::Class(name, arguments) = ty else {
-        unreachable!("wireable class field was not primitive, class, or nullable")
+        unreachable!("wireable class field was not primitive, container, class, or nullable")
     };
     debug_assert!(arguments.is_empty());
     format!(
@@ -1016,6 +1139,24 @@ impl ClassTypeRenderer<'_> {
         }
 
         match ty {
+            Ty::List(inner) => {
+                let element = self.render(inner, owner, false)?;
+                let rendered = format!("[]{element}");
+                Some(if optional {
+                    format!("*{rendered}")
+                } else {
+                    rendered
+                })
+            }
+            Ty::Map { key, value } if matches!(key.as_ref(), Ty::String) => {
+                let value = self.render(value, owner, false)?;
+                let rendered = format!("map[{}]{value}", GeneratorIdent::StringType);
+                Some(if optional {
+                    format!("*{rendered}")
+                } else {
+                    rendered
+                })
+            }
             Ty::Class(target, arguments) if arguments.is_empty() => {
                 let target_package = self.packages.get(&target.pkg);
                 if target_package.go_name() != self.current_package {
@@ -1325,7 +1466,10 @@ mod tests {
             mixed,
             vec![
                 ("supported", Ty::String),
-                ("deferred", Ty::List(Box::new(Ty::String))),
+                (
+                    "deferred",
+                    Ty::List(Box::new(Ty::Union(vec![Ty::String, Ty::Int]))),
+                ),
             ],
         )]);
 
@@ -1384,6 +1528,36 @@ mod tests {
         assert!(functions.contains("baml_go.Optional(value.Optional, baml_go.String)"));
         assert!(functions.contains("baml_go.DecodeOptionalField("));
         assert!(files[&PathBuf::from("types.go")].contains("type Outer struct"));
+    }
+
+    #[test]
+    fn container_nullability_has_one_pointer_per_nullable_boundary() {
+        let function = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("round_trip_optional_items"),
+        );
+        let nullable_string = Ty::Union(vec![Ty::String, Ty::Null]);
+        let nullable_list = Ty::Union(vec![Ty::List(Box::new(nullable_string)), Ty::Null]);
+        let pool = SymbolPool::from([round_trip_function(function, "items", nullable_list)]);
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert!(functions.contains(
+            "func RoundTripOptionalItems(ctx context.Context, items *[]*string) (*[]*string, error)"
+        ));
+        assert!(functions.contains(
+            "baml_go.Optional(items, baml_go.ListEncoder(baml_go.OptionalEncoder(baml_go.String)))"
+        ));
+        assert!(functions.contains(
+            "baml_go.DecodeOptional(result, baml_go.ListDecoder(baml_go.OptionalDecoder(baml_go.Value.String)))"
+        ));
+        assert!(!functions.contains("**string"));
     }
 
     #[test]

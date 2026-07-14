@@ -1,8 +1,8 @@
 // Every callable in this fixture is deliberately outside the current Go
-// primitive-function slice. The generated package must still compile without
+// wire-type algebra. The generated package must still compile without
 // dangling imports or partial declarations.
 class Payload {
-  values string[]
+  values (string | int)[]
 }
 
 function round_trip_payload(payload: Payload) -> Payload {

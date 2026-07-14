@@ -825,6 +825,29 @@ mod tests {
         assert_eq!(cg_name.bare_name(), "Resume");
     }
 
+    #[test]
+    fn codegen_type_simplification_flattens_and_deduplicates_nullability() {
+        let simplified = simplify_codegen_ty(cg::Ty::Union(vec![
+            cg::Ty::Null,
+            cg::Ty::Union(vec![cg::Ty::String, cg::Ty::Null]),
+            cg::Ty::Null,
+        ]));
+        assert_eq!(
+            simplified,
+            cg::Ty::Union(vec![cg::Ty::String, cg::Ty::Null])
+        );
+
+        let nested_container = simplify_codegen_ty(cg::Ty::List(Box::new(cg::Ty::Union(vec![
+            cg::Ty::Null,
+            cg::Ty::Int,
+            cg::Ty::Null,
+        ]))));
+        assert_eq!(
+            nested_container,
+            cg::Ty::List(Box::new(cg::Ty::Union(vec![cg::Ty::Int, cg::Ty::Null])))
+        );
+    }
+
     // ── Integration tests using ProjectDatabase ─────────────────────────────
 
     /// Verifies that companions land in the pool as their own
@@ -1261,6 +1284,34 @@ function Extract(client: string, text: string) -> string {
             matches!(pool.get(key), Some(cg::Symbol::Function(_))),
             "ReturnInt must be a Function symbol",
         );
+    }
+
+    #[test]
+    fn repeated_null_union_reaches_codegen_as_one_nullable_type() {
+        let root = Path::new("/tmp/repeated_null_union_codegen_type");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            "function repeat(value: null | string | null) -> null | string | null { value }\n",
+        );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+
+        let pool = build_symbol_pool(&db);
+        let function = pool
+            .values()
+            .find_map(|symbol| match symbol {
+                cg::Symbol::Function(function) if function.name.as_str() == "repeat" => {
+                    Some(function)
+                }
+                _ => None,
+            })
+            .expect("repeat function missing from codegen pool");
+        let nullable_string = cg::Ty::Union(vec![cg::Ty::String, cg::Ty::Null]);
+        assert_eq!(function.arguments[0].ty, nullable_string);
+        assert_eq!(function.return_type, nullable_string);
     }
 
     #[test]

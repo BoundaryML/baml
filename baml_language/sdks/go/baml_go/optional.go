@@ -10,6 +10,10 @@ func Optional[T any](value *T, encode func(T) Input) Input {
 	return encode(*value)
 }
 
+func OptionalEncoder[T any](encode func(T) Input) func(*T) Input {
+	return func(value *T) Input { return Optional(value, encode) }
+}
+
 // OptionalBigInt is specialized because both required and optional bigint use
 // *big.Int in Go. A nil required bigint is invalid; a nil optional bigint is
 // BAML null.
@@ -31,6 +35,10 @@ func DecodeOptional[T any](value Value, decode func(Value) (T, error)) (*T, erro
 		return nil, err
 	}
 	return &decoded, nil
+}
+
+func OptionalDecoder[T any](decode func(Value) (T, error)) func(Value) (*T, error) {
+	return func(value Value) (*T, error) { return DecodeOptional(value, decode) }
 }
 
 // DecodeOptionalBigInt preserves bigint's single-pointer Go representation.
