@@ -1,7 +1,7 @@
 //! Inbound (host → engine) wire construction helpers for generated code.
 //!
-//! The inbound path never serializes in-process: these build the prost
-//! structs that feed `bridge_ctypes::kwargs_to_bex_values` directly.
+//! These build the prost structs that [`crate::runtime`] encodes into one
+//! `CallFunctionArgs` buffer per call for the C ABI.
 
 use crate::wire::{self, inbound_map_entry::Key, inbound_value::Value as In};
 

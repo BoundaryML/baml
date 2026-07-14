@@ -7,9 +7,11 @@
 //! atomically rename into place (copy fallback for filesystems that
 //! reject the rename). A checksum *mismatch* is always a hard failure.
 
-use std::io::{IsTerminal, Read, Write};
-use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::{
+    io::{IsTerminal, Read, Write},
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 
 use sha2::{Digest, Sha256};
 

@@ -694,10 +694,8 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.0.0-beta"
+version = "0.15.0"
 dependencies = [
- "baml_version",
- "bridge_ctypes",
  "hex",
  "indexmap",
  "libloading 0.8.9",

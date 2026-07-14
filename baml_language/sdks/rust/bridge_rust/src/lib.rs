@@ -21,6 +21,9 @@ pub mod loader;
 pub mod runtime;
 #[cfg(test)]
 pub(crate) mod test_support;
+mod version;
+#[doc(hidden)]
+pub mod wire;
 
 pub use baml_value::{BamlMapKey, BamlValue, OptionalArg};
 pub use error::{DecodeError, Error, SdkError};
@@ -32,13 +35,9 @@ pub use num_bigint::BigInt;
 /// representation is insertion-ordered).
 pub type Map<K, V> = indexmap::IndexMap<K, V>;
 
-/// The protobuf wire types generated code touches. An implementation
-/// detail of the generated-SDK ↔ runtime boundary, not a public API.
-#[doc(hidden)]
-pub mod wire {
-    pub use bridge_ctypes::baml_bridge::cffi::*;
-}
-
+/// The canonical BAML language version this crate was released as. The
+/// loaded engine library must report the same version (the loader's
+/// handshake enforces it).
 pub fn get_version() -> &'static str {
-    baml_version::CANONICAL_VERSION
+    version::CANONICAL_VERSION
 }

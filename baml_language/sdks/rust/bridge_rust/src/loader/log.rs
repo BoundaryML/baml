@@ -7,9 +7,11 @@
 //! `<timestamp> [BAML <LEVEL>] <message>` shape as the other bridges'
 //! loaders. Level colors are applied only when stderr is a terminal.
 
-use std::io::{IsTerminal, Write};
-use std::sync::OnceLock;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    io::{IsTerminal, Write},
+    sync::OnceLock,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Level {
