@@ -125,9 +125,10 @@ pub enum DecodeError {
         /// Missing field name.
         field: &'static str,
     },
-    /// A class value's wire FQN does not match the expected class.
-    ClassFqnMismatch {
-        /// Expected class FQN.
+    /// A nominally-typed wire value (class or enum) does not match the
+    /// expected type's FQN.
+    FqnMismatch {
+        /// Expected FQN, as baked into the generated impl.
         expected: &'static str,
         /// FQN that arrived on the wire.
         got: String,
@@ -155,8 +156,8 @@ impl fmt::Display for DecodeError {
             DecodeError::MissingField { class, field } => {
                 write!(f, "class {class} is missing required field `{field}`")
             }
-            DecodeError::ClassFqnMismatch { expected, got } => {
-                write!(f, "expected class {expected}, got {got}")
+            DecodeError::FqnMismatch { expected, got } => {
+                write!(f, "expected {expected}, got {got}")
             }
             DecodeError::UnknownEnumVariant { enum_fqn, got } => {
                 write!(f, "enum {enum_fqn} has no variant `{got}`")

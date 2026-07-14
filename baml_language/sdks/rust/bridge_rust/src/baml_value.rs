@@ -61,7 +61,7 @@ fn inbound_null() -> wire::InboundValue {
 }
 
 /// Bounded name of the wire variant that arrived, for `WrongType` errors.
-fn wire_variant_kind(v: &wire::BamlOutboundValue) -> &'static str {
+pub(crate) fn wire_variant_kind(v: &wire::BamlOutboundValue) -> &'static str {
     match &v.value {
         None => "null",
         Some(Out::NullValue(_)) => "null",
@@ -229,6 +229,106 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
             Some(Out::ListValue(list)) => list.items.into_iter().map(T::from_baml).collect(),
             _ => Err(wrong_type("list", &v)),
         }
+    }
+}
+
+/// A key of a BAML `map`. BAML restricts map keys to strings and enums;
+/// like [`BamlValue`] it is bidirectional, but keys have their own wire
+/// shape: a typed key oneof inbound, a stringified key outbound.
+pub trait BamlMapKey: Sized + Eq + std::hash::Hash {
+    /// Encode as an inbound map-entry key.
+    fn to_baml_key(&self) -> wire::inbound_map_entry::Key;
+    /// Decode from an outbound (stringified) map key.
+    fn from_baml_key(key: &str) -> Result<Self, DecodeError>;
+}
+
+impl BamlMapKey for String {
+    fn to_baml_key(&self) -> wire::inbound_map_entry::Key {
+        wire::inbound_map_entry::Key::StringKey(self.clone())
+    }
+
+    fn from_baml_key(key: &str) -> Result<Self, DecodeError> {
+        Ok(key.to_string())
+    }
+}
+
+/// BAML `map<K, V>`. [`crate::Map`] (`IndexMap`) is the declared type in
+/// generated signatures — it preserves the engine's entry order.
+impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::IndexMap<K, V> {
+    fn to_baml(&self) -> wire::InboundValue {
+        inbound(In::MapValue(wire::InboundMapValue {
+            entries: self
+                .iter()
+                .map(|(k, v)| wire::InboundMapEntry {
+                    key: Some(k.to_baml_key()),
+                    value: Some(v.to_baml()),
+                })
+                .collect(),
+        }))
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let v = unwrap(v);
+        match v.value {
+            Some(Out::MapValue(map)) => map
+                .entries
+                .into_iter()
+                .map(|entry| {
+                    Ok((
+                        K::from_baml_key(&entry.key)?,
+                        V::from_baml(entry.value.unwrap_or_default())?,
+                    ))
+                })
+                .collect(),
+            _ => Err(wrong_type("map", &v)),
+        }
+    }
+}
+
+/// `HashMap` convenience: accepted anywhere a BAML `map` is expected, at
+/// the cost of dropping the engine's entry order. Declared types in
+/// generated code are always [`crate::Map`].
+impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for std::collections::HashMap<K, V> {
+    fn to_baml(&self) -> wire::InboundValue {
+        inbound(In::MapValue(wire::InboundMapValue {
+            entries: self
+                .iter()
+                .map(|(k, v)| wire::InboundMapEntry {
+                    key: Some(k.to_baml_key()),
+                    value: Some(v.to_baml()),
+                })
+                .collect(),
+        }))
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let v = unwrap(v);
+        match v.value {
+            Some(Out::MapValue(map)) => map
+                .entries
+                .into_iter()
+                .map(|entry| {
+                    Ok((
+                        K::from_baml_key(&entry.key)?,
+                        V::from_baml(entry.value.unwrap_or_default())?,
+                    ))
+                })
+                .collect(),
+            _ => Err(wrong_type("map", &v)),
+        }
+    }
+}
+
+/// Forwarding impl for boxed values: recursive class fields are boxed at
+/// cycle sites by codegen, and the emitted field conversions go through
+/// this impl unchanged.
+impl<T: __BamlValuePrivate> __BamlValuePrivate for Box<T> {
+    fn to_baml(&self) -> wire::InboundValue {
+        self.as_ref().to_baml()
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        T::from_baml(v).map(Box::new)
     }
 }
 

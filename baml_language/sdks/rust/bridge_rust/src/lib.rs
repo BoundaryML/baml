@@ -14,7 +14,7 @@ pub mod encode;
 pub mod error;
 pub mod runtime;
 
-pub use baml_value::{BamlValue, OptionalArg};
+pub use baml_value::{BamlMapKey, BamlValue, OptionalArg};
 pub use error::{DecodeError, Error, SdkError};
 // reexports
 pub use indexmap::IndexMap;
