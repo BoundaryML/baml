@@ -15,6 +15,23 @@ function openai_strict_schema(t: type) -> json throws baml.errors.Unsupported {
   }
 }
 
+/// Normalize standard runtime JSON Schema, including schemas discovered from
+/// MCP, to OpenAI's strict function-tool dialect.
+function openai_strict_json_schema(schema: json) -> json throws baml.errors.Unsupported {
+  // The normalization pass mutates object nodes, so clone application-owned
+  // MCP schema data before applying provider-specific restrictions.
+  let cloned = baml.json.parse(baml.json.stringify(schema)) catch (e) {
+    _ => throw baml.errors.Unsupported { message: "MCP tool schema was not valid JSON" },
+  };
+  let strict = _openai_strict_schema_node(cloned, "$mcp");
+  match (strict) {
+    let object: map<string, json> if _json_schema_type(object) == "object" && object.has("properties") => object,
+    _ => throw baml.errors.Unsupported {
+      message: "OpenAI strict tool schemas must have an object root with declared properties",
+    },
+  }
+}
+
 function openai_chat_response_format(t: type, name: string) -> map<string, json>
     throws baml.errors.Unsupported {
   {

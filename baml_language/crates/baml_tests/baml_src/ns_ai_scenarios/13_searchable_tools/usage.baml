@@ -1,4 +1,4 @@
-// 13 — a catalog is a source of call-time tools, not a new task modifier.
+// 13 — an MCP catalog can grow the concrete provider tool roster between turns.
 
 // Deferred source-task sketch; compiler desugaring is intentionally disabled:
 // function s13_Support(question: string) -> string {
@@ -27,7 +27,7 @@ function s13_Support_request(
     call_args: `{"query":"order status"}`,
     final_json: `"Order 4821 arrives Tuesday."`,
   },
-  tools: root.ai.Tool[] = [],
+  registry: root.ai.ToolRegistry = root.ai.ToolRegistry.new([s13_search_tool()]),
   dispatch: ((root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never)? = null,
 ) -> root.ai.Request<string> {
   root.ai.task_request<string>(
@@ -35,40 +35,72 @@ function s13_Support_request(
     "s13_Support",
     "ns_ai_scenarios",
     { "question": question },
-    tools,
+    registry.snapshot(),
     root.ai.RequestOptions { dispatch: dispatch },
     {},
-    root.ai.prompt_template(`Help with this support request: ${question}`, false),
-  )
+    root.ai.prompt_template(
+      `Help with this support request: ${question}
+First call tool_search. Then call the newly discovered MCP order tool before answering.`,
+      false,
+    ),
+  ).with_tool_registry(registry)
 }
 
 function s13_Support_agent_manual(
   question: string,
   provider: root.ai.Provider,
-  tools: root.ai.Tool[],
+  registry: root.ai.ToolRegistry,
   dispatch: (root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never,
 ) -> root.ai.Done<string> | root.ai.BudgetReached | root.ai.Handoff
     throws baml.errors.ToolError | baml.errors.UnknownError {
   root.ai.run_agent<string>(s13_Support_request(
     question,
     provider = provider,
-    tools = tools,
+    registry = registry,
     dispatch = dispatch,
   ))
 }
 
 test "13: tool search returns a small catalog page" {
-  let loaded: string[] = [];
-  let result = s13_dispatch(loaded)([
+  let events: string[] = [];
+  let registry = root.ai.ToolRegistry.new([s13_search_tool()]);
+  let result = s13_dispatch(events, registry)([
     root.ai.ToolCall { id: "search-1", name: "tool_search", args: `{"query":"order"}` },
   ]);
-  assert.equal(loaded, ["lookup_order"])
+  assert.equal(events, ["loaded:mcp__orders__lookup_order"])
+  assert.equal(registry.snapshot().length(), 2)
   let output = result.at(0)?.output ?? "";
-  assert.is_true(output.includes("lookup_order"))
+  assert.is_true(output.includes("mcp__orders__lookup_order"))
+}
+
+test "13: OpenAI receives the discovered MCP schema only after registry sync" {
+  let events: string[] = [];
+  let registry = root.ai.ToolRegistry.new([s13_search_tool()]);
+  let provider = root.ai.OpenAi { model: "test", api_key: "unused", base_url: null };
+  let request = s13_Support_request(
+    "Where is order 4821?",
+    provider = provider,
+    registry = registry,
+    dispatch = s13_dispatch(events, registry),
+  );
+  let transcript = provider.begin<string>(request);
+  assert.equal(transcript.tools.length(), 1)
+  assert.equal(baml.json.path_or(transcript.tools[0], ".function.name", ""), "tool_search")
+
+  let _ = s13_dispatch(events, registry)([
+    root.ai.ToolCall { id: "search-1", name: "tool_search", args: `{"query":"order"}` },
+  ]);
+  let updated = provider.sync_tools(transcript, registry.snapshot());
+  assert.equal(updated.tools.length(), 2)
+  assert.equal(
+    baml.json.path_or(updated.tools[1], ".function.name", ""),
+    "mcp__orders__lookup_order",
+  )
 }
 
 test "13: the searchable roster drives the manual agent request" {
-  let loaded: string[] = [];
+  let events: string[] = [];
+  let registry = root.ai.ToolRegistry.new([s13_search_tool()]);
   let outcome = s13_Support_agent_manual(
     "Where is order 4821?",
     root.ai.FakeToolProvider {
@@ -76,10 +108,10 @@ test "13: the searchable roster drives the manual agent request" {
       call_args: `{"query":"order status"}`,
       final_json: `"Order 4821 arrives Tuesday."`,
     },
-    [s13_search_tool(), s13_lookup_tool()],
-    s13_dispatch(loaded),
+    registry,
+    s13_dispatch(events, registry),
   );
-  assert.equal(loaded, ["lookup_order"])
+  assert.equal(events, ["loaded:mcp__orders__lookup_order"])
   match (outcome) {
     let done: root.ai.Done<string> => assert.is_true(done.value.includes("Tuesday")),
     _ => assert.is_true(false),
@@ -88,7 +120,8 @@ test "13: the searchable roster drives the manual agent request" {
 
 testset "integ-test-13-searchable-tools" {
   test "13 live: OpenAI calls tool_search and continues with catalog context" {
-    let loaded: string[] = [];
+    let events: string[] = [];
+    let registry = root.ai.ToolRegistry.new([s13_search_tool()]);
     let outcome = s13_Support_agent_manual(
       "What is the status of order 4821? Search the catalog first.",
       root.ai.OpenAi {
@@ -96,10 +129,11 @@ testset "integ-test-13-searchable-tools" {
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
         base_url: null,
       },
-      [s13_search_tool(), s13_lookup_tool()],
-      s13_dispatch(loaded),
+      registry,
+      s13_dispatch(events, registry),
     );
-    assert.is_true(loaded.length() > 0)
+    assert.is_true(events.includes("loaded:mcp__orders__lookup_order"))
+    assert.is_true(events.includes("called:mcp__orders__lookup_order"))
     match (outcome) {
       let done: root.ai.Done<string> => assert.is_true(done.value.length() > 0),
       _ => assert.is_true(false),

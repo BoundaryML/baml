@@ -127,17 +127,20 @@ Two corollaries with teeth:
 ## Retry
 
 ```baml
-let Reliable = Fast.with_retry(baml.ai.RetryPolicy {
+let Reliable = Fast.with_retry(ai.RetryPolicy {
   max_attempts: 3,
   base_delay: baml.time.Duration.from_milliseconds(200),
 })
 
-let invoice = ExtractInvoice(doc, client = Reliable)
+let invoice = ExtractInvoice(doc, $provider = Reliable)
 ```
 
 `with_retry` returns a wrapper holding the inner provider. The wrapper
 claims the standard capabilities and forwards each with its own rules:
 
+- **drive**: asks the inner `DriveProvider` for its operation replay policy. The
+  default is `Never`, so an agentic default is not restarted after tool side
+  effects. A simple provider may report `Safe` and receive ordinary retries.
 - **generate**: the retry loop consults `may_replay(policy, failure)` per
   error — a rate limit (`NotCommitted`) re-drives with backoff; a 500 with
   `Unknown` commit state on an unkeyed operation surfaces immediately.
@@ -155,25 +158,30 @@ re-discovers capabilities by `match` inside each forwarded method:
 
 ```baml
 class Retry {
-  inner: baml.ai.Provider,          // existential — the inner's concrete type is erased
+  inner: ai.Provider,          // existential — the inner's concrete type is erased
   policy: RetryPolicy,
 
-  implements baml.ai.Provider {}
+  implements ai.Provider {}
 
-  implements baml.ai.Generate {
-    function generate<T>(self, request: baml.ai.Request<T>) -> baml.ai.Response<T>
+  implements ai.DriveProvider {
+    // Match inner for DriveProvider, read inner.replay_policy(task), and retry only
+    // when may_replay permits. DriveProvider defaults to replay Never.
+  }
+
+  implements ai.GenerationProvider {
+    function generate<T>(self, task: ai.Task<T>) -> ai.Response<T>
         throws baml.errors.CallError | baml.errors.UnknownError {
-      let g: baml.ai.Generate = match (self.inner) {
-        let g: baml.ai.Generate => g,
+      let g: ai.GenerationProvider = match (self.inner) {
+        let g: ai.GenerationProvider => g,
         _ => throw baml.errors.Unsupported { message: "inner cannot generate" },
       };
-      let replay = baml.ai.ReplayPolicy { kind: baml.ai.ReplayKind.Safe, idempotency_key: null };
+      let replay = ai.ReplayPolicy { kind: ai.ReplayKind.Safe, idempotency_key: null };
       let attempt = 0;
       while (true) {
-        let r = g.generate<T>(request.for_provider(self.inner)) catch (e) {
+        let r = g.generate<T>(task.with_provider(self.inner)) catch (e) {
           let f: baml.errors.Failure => {
             attempt = attempt + 1;
-            if (attempt >= self.policy.max_attempts || !baml.ai.may_replay(replay, f)) {
+            if (attempt >= self.policy.max_attempts || !ai.may_replay(replay, f)) {
               throw e;                        // futile, unsafe, or out of budget: surface it
             }
             baml.sys.sleep(self.policy.backoff(attempt, f.retry_after()));
@@ -186,8 +194,8 @@ class Retry {
     }
   }
 
-  implements baml.ai.Streaming {
-    // forwards the same way: match inner for Streaming, retry INITIATION only
+  implements ai.StreamingProvider {
+    // forwards the same way: match inner for StreamingProvider, retry INITIATION only
   }
 }
 ```
@@ -197,35 +205,36 @@ alternative looks better and is worse — a per-capability wrapper that
 refuses at *compile* time:
 
 ```baml
-class RetryGenerate {
-  inner: baml.ai.Generate,           // narrow: statically checked...
+class GenerationRetry {
+  inner: ai.GenerationProvider,           // narrow: statically checked...
   policy: RetryPolicy,
-  implements baml.ai.Provider {}
-  implements baml.ai.Generate { ... }
+  implements ai.Provider {}
+  implements ai.GenerationProvider { ... }
 }
 
-let m = baml.ai.OpenAi { ...Fast }             // OpenAi is Generate AND Streaming AND Tools
-let wrapped = RetryGenerate { inner: m, policy: p }
+let m = ai.OpenAi { ...Fast }             // OpenAi is GenerationProvider AND StreamingProvider AND ToolCallingProvider
+let wrapped = GenerationRetry { inner: m, policy: p }
 
-let invoice = ExtractInvoice(doc, client = wrapped)          // fine
-let stream  = ExtractInvoice.stream(doc, client = wrapped)   // Unsupported!
+let invoice = ai.drivers.generate(ExtractInvoice.task(doc, $provider = wrapped)) // fine
+let direct  = ExtractInvoice(doc, $provider = wrapped)          // compile error: no DriveProvider
+let stream  = ai.drivers.unsafe.stream(ExtractInvoice.task(doc, $provider = wrapped)) // Unsupported!
 ```
 
 The narrow field *discarded* the inner's sibling capabilities: `wrapped` is
-only `Generate`, so streaming through it fails even though the inner streams
-fine. Preserving the inner's full surface requires claiming it and checking
+only `GenerationProvider`, so streaming through it fails even though the inner
+streams fine. Preserving the inner's full surface requires claiming it and checking
 at runtime — which is exactly what the existential wrapper does. The
-capability-preserving *and* compile-time-checked version would need
-`with_retry(self) -> typeof(self)` — Self/intersection types, a type-system
-future this design is forward-compatible with. Until then: existential
-wrapper, per-operation refusal, typed errors.
+capability-preserving *and* compile-time-checked version would need a wrapper
+type whose static capability set is derived from its receiver — an
+intersection/refinement-type future this design is forward-compatible with.
+Until then: existential wrapper, per-operation refusal, typed errors.
 
 ## Fallback
 
 ```baml
 let Resilient = Fast.fallback_to(Careful)
 
-let invoice = ExtractInvoice(doc, client = Resilient)
+let invoice = ExtractInvoice(doc, $provider = Resilient)
 ```
 
 Rules that make fallback safe rather than merely convenient:
@@ -234,7 +243,7 @@ Rules that make fallback safe rather than merely convenient:
   refusal does **not** fail over (the second model would happily produce
   what the first was told not to), an unknown-commit-state error does not
   re-drive.
-- Each member gets the request rebound via `request.for_provider(member)`,
+- Each member gets the task rebound via `task.with_provider(member)`,
   so provider-sensitive prompt context re-renders per attempt.
 - Streaming fallback happens only before the first observable chunk.
 - Stateful capabilities do not fail over mid-flight: a session is bound to
@@ -244,8 +253,8 @@ Rules that make fallback safe rather than merely convenient:
 ## Observability
 
 ```baml
-let meter = baml.ai.UsageMeter {}
-let invoice = ExtractInvoice(doc, client = Fast.traced(meter))
+let meter = ai.UsageMeter {}
+let invoice = ExtractInvoice(doc, $provider = Fast.traced(meter))
 log.info(`attempts: ${meter.calls()}, tokens: ${meter.total().input_tokens}`)
 ```
 
@@ -258,12 +267,13 @@ polls and session turns remain visible.
 ## Fluent sugar and out-of-body `implements`
 
 The wrapper value is the semantics; dot syntax is convenience. `Provider`
-remains an empty marker, and the canonical composition operations are the free
-functions `retry`, `fallback`, and `traced` from page 9. The standard library
-adds their fluent spellings through a syntax-only extension interface:
+remains the pure binding/rendering base contract, and the canonical composition
+operations are the free functions `retry`, `fallback`, and `traced` from page
+9. The standard library adds their fluent spellings through a syntax-only
+extension interface:
 
 ```baml
-interface ProviderFluent requires Provider {
+interface ProviderSugar requires Provider {
   function with_retry(self, policy: RetryPolicy) -> Retry {
     Retry { inner: self, policy: policy }
   }
@@ -277,13 +287,13 @@ interface ProviderFluent requires Provider {
   }
 }
 
-implements<T extends Provider> ProviderFluent for T {}
+implements<T extends Provider> ProviderSugar for T {}
 ```
 
 An out-of-body blanket implementation is important here. It gives the sugar
 to every concrete `T` that implements `Provider`, including a provider declared
 by an application and a wrapper such as `Retry`, without adding methods to each
-class declaration. `ProviderFluent` is not a capability: code MUST NOT match on
+class declaration. `ProviderSugar` is not a capability: code MUST NOT match on
 it to discover an interaction shape, and wrappers MUST NOT use it as evidence
 that generation, streaming, sessions, or any other operation is supported.
 
@@ -292,18 +302,18 @@ existentials. Consequently these two layers are intentionally different:
 
 ```baml
 // Concrete receiver: the blanket implementation supplies dot syntax.
-let reliable = baml.ai.OpenAi { ... }.with_retry(policy)
+let reliable = ai.OpenAi { ... }.with_retry(policy)
 
 // Erased receiver: use the canonical negotiation/composition function.
-let selected: baml.ai.Provider = route_for(tenant)
-let reliable = baml.ai.retry(selected, policy)
+let selected: ai.Provider = route_for(tenant)
+let reliable = ai.retry(selected, policy)
 ```
 
-`implements ProviderFluent for Provider {}` is not an escape hatch: interfaces
+`implements ProviderSugar for Provider {}` is not an escape hatch: interfaces
 are not concrete implementation targets. Making `Provider` require
-`ProviderFluent` is also the wrong direction. It would turn optional syntax
-into part of the marker's semantic contract, require every provider to carry
-that implementation explicitly, and cannot also make `ProviderFluent` require
+`ProviderSugar` is also the wrong direction. It would turn optional syntax
+into part of the provider's semantic contract, require every provider to carry
+that implementation explicitly, and cannot also make `ProviderSugar` require
 `Provider` without a cyclic `requires` chain.
 
 ### Library-owned sugar
@@ -324,7 +334,7 @@ class JudgeGated {
   strong: Provider,
   policy: JudgePolicy,
   implements Provider {}
-  implements Generate { ... }
+  implements GenerationProvider { ... }
 }
 
 function judge_gated(
@@ -336,7 +346,7 @@ function judge_gated(
   JudgeGated { cheap: cheap, judge: judge, strong: strong, policy: policy }
 }
 
-interface JudgeGateFluent requires Provider {
+interface JudgeGateSugar requires Provider {
   function judged_by(
     self,
     judge: Provider,
@@ -347,7 +357,7 @@ interface JudgeGateFluent requires Provider {
   }
 }
 
-implements<T extends Provider> JudgeGateFluent for T {}
+implements<T extends Provider> JudgeGateSugar for T {}
 ```
 
 The return type is the concrete `JudgeGated` wrapper, so other blanket fluent
@@ -377,12 +387,12 @@ retry, error, accounting, or capability-forwarding behavior can drift.
 Business routing is ordinary code returning a provider (page 4):
 
 ```baml
-let invoice = ExtractInvoice(doc, client = route_for(tenant))
+let invoice = ExtractInvoice(doc, $provider = route_for(tenant))
 ```
 
 Reserve wrappers for generic policies (retry, fallback, trace, balance);
 use functions for decisions with business meaning. Both compose:
-`baml.ai.retry(route_for(tenant), policy)`.
+`ai.retry(route_for(tenant), policy)`.
 
 ## Alternatives considered
 
@@ -398,11 +408,11 @@ drops them, or fake-implements them with vacuous `false`s; none answers "is
 re-driving safe," which is the only question a combinator has.
 
 **Per-capability wrapper classes as the public surface**
-(`RetryGenerate`, `RetryStreaming`, ...). Rejected as primary for the
+(`GenerationRetry`, `StreamingRetry`, ...). Rejected as primary for the
 narrowing problem above; available as a pattern when narrowing is the
-intent (a function that should only ever hand out a retried `Generate`).
+intent (a function that should only ever hand out a generation-only provider).
 
-**Retry as declarative config only** (a `retry_policy` block on the client
+**Retry as declarative config only** (a `retry_policy` block on the provider
 declaration). Insufficient alone: policies need to differ per call site and
 compose with routing and wrapping. Declarative sugar can lower to
 `with_retry`; the value form is the semantics.

@@ -5,6 +5,7 @@ class TaskIdentity {
 
 class RequestOptions {
   dispatch: ((ToolCall[]) -> ToolResult[] throws never)?,
+  tool_registry: ToolRegistry?,
   tool_middleware: ToolMiddleware[]?,
   observers: AgentObserver[]?,
   recorders: AgentRecorder[]?,
@@ -44,6 +45,12 @@ class Request<T> {
   function provider_name(self) -> string throws never {
     self.provider.display_name()
   }
+  function active_tools(self) -> Tool[] throws never {
+    match (self.options.tool_registry) {
+      let registry: ToolRegistry => registry.snapshot(),
+      null => self.tools,
+    }
+  }
   function for_provider(self, provider: Provider) -> Request<T> throws never {
     Request<T> {
       provider: provider,
@@ -64,7 +71,14 @@ class Request<T> {
       identity: self.identity,
       arguments: self.arguments,
       tools: tools,
-      options: self.options,
+      options: RequestOptions {
+        dispatch: self.options.dispatch,
+        tool_registry: null,
+        tool_middleware: self.options.tool_middleware,
+        observers: self.options.observers,
+        recorders: self.options.recorders,
+        run_id: self.options.run_id,
+      },
       tags: self.tags,
       _render: self._render,
       _messages: self._messages,
@@ -89,6 +103,17 @@ class Request<T> {
   ) -> Request<T> throws never {
     self.with_options(RequestOptions {
       dispatch: dispatch,
+      tool_registry: self.options.tool_registry,
+      tool_middleware: self.options.tool_middleware,
+      observers: self.options.observers,
+      recorders: self.options.recorders,
+      run_id: self.options.run_id,
+    })
+  }
+  function with_tool_registry(self, registry: ToolRegistry) -> Request<T> throws never {
+    self.with_options(RequestOptions {
+      dispatch: self.options.dispatch,
+      tool_registry: registry,
       tool_middleware: self.options.tool_middleware,
       observers: self.options.observers,
       recorders: self.options.recorders,
@@ -98,6 +123,7 @@ class Request<T> {
   function with_tool_middleware(self, middleware: ToolMiddleware[]) -> Request<T> throws never {
     self.with_options(RequestOptions {
       dispatch: self.options.dispatch,
+      tool_registry: self.options.tool_registry,
       tool_middleware: middleware,
       observers: self.options.observers,
       recorders: self.options.recorders,
@@ -107,6 +133,7 @@ class Request<T> {
   function with_observers(self, observers: AgentObserver[]) -> Request<T> throws never {
     self.with_options(RequestOptions {
       dispatch: self.options.dispatch,
+      tool_registry: self.options.tool_registry,
       tool_middleware: self.options.tool_middleware,
       observers: observers,
       recorders: self.options.recorders,
@@ -116,6 +143,7 @@ class Request<T> {
   function with_recorders(self, recorders: AgentRecorder[]) -> Request<T> throws never {
     self.with_options(RequestOptions {
       dispatch: self.options.dispatch,
+      tool_registry: self.options.tool_registry,
       tool_middleware: self.options.tool_middleware,
       observers: self.options.observers,
       recorders: recorders,
@@ -125,6 +153,7 @@ class Request<T> {
   function with_run_id(self, run_id: string) -> Request<T> throws never {
     self.with_options(RequestOptions {
       dispatch: self.options.dispatch,
+      tool_registry: self.options.tool_registry,
       tool_middleware: self.options.tool_middleware,
       observers: self.options.observers,
       recorders: self.options.recorders,

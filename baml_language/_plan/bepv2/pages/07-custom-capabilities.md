@@ -1,6 +1,6 @@
 # 7. Custom Capabilities
 
-The standard modifiers cover the common lifecycles. This page is the
+The standard drivers cover the common lifecycles. This page is the
 complete guide to adding one that BAML does not ship — a moderated
 generation mode, worked end to end. The punchline: it is four ordinary
 declarations, zero compiler hooks.
@@ -9,22 +9,22 @@ declarations, zero compiler hooks.
 
 Three cheaper options usually apply. Check them in order.
 
-**1. If the shape is still request → response, write a wrapper provider**
+**1. If the shape is still task → response, write a wrapper provider**
 (page 4). Moderation that checks input and output around a normal call does
 not change the interaction shape:
 
 ```baml
-let note = ComposeNote(topic, client = Guarded { inner: Fast, policy: Strict })
+let note = ComposeNote(topic, $provider = Guarded { inner: Fast, policy: Strict })
 ```
 
-Done — no new capability, and every task and modifier works through it
+Done — no new capability, and every task and compatible driver works through it
 unchanged.
 
 **2. If only one vendor has the operation, call the vendor's method
-directly** with a request:
+directly** with a task:
 
 ```baml
-let out = Vendor.reasoning_tree(Solve.request(problem, client = Vendor), branches = 8)
+let out = Vendor.reasoning_tree(Solve.task(problem, $provider = Vendor), branches = 8)
 ```
 
 Promote to a capability only when a second provider needs the same
@@ -67,10 +67,10 @@ class ModerationRefused {
   }
 }
 
-interface Moderated requires baml.ai.Provider {
+interface ModeratedGenerationProvider requires ai.Provider {
   function generate_moderated<T>(
     self,
-    request: baml.ai.Request<T>,
+    task: ai.Task<T>,
     policy: string,
   ) -> ModeratedResponse<T> throws ModerationRefused | baml.errors.UnknownError
 }
@@ -83,8 +83,8 @@ handles your capability can triage your error without knowing its concrete
 class, and `may_replay` correctly refuses to re-drive it. It does **not**
 mean a generic retry wrapper automatically intercepts your capability — a
 wrapper participates only in capabilities it implements and forwards
-(page 8); your capability's *driver* is where retry-around-`Moderated`
-would live, and it can reuse `may_replay` for the decision.
+(page 8); your capability's *driver* is where retry policy around moderated
+generation would live, and it can reuse `may_replay` for the decision.
 
 ### Step 2 — implement it on providers
 
@@ -93,14 +93,14 @@ class AcmeModerated {
   model: string,
   api_key: string,
 
-  implements baml.ai.Provider {}
-  implements baml.ai.Generate { ... }          // it is also a normal provider
+  implements ai.Provider {}
+  implements ai.GenerationProvider { ... }          // it is also a normal provider
 
-  implements Moderated {
-    function generate_moderated<T>(self, request: baml.ai.Request<T>, policy: string)
+  implements ModeratedGenerationProvider {
+    function generate_moderated<T>(self, task: ai.Task<T>, policy: string)
         -> ModeratedResponse<T> throws ModerationRefused | baml.errors.UnknownError {
-      let messages = request.messages()
-      let schema = baml.llm.render_output_format(request.output_type())
+      let messages = task.messages()
+      let schema = baml.llm.render_output_format(task.output_type())
       let body = baml.http.send(self._moderated_request(messages, schema, policy))
       if (self._flagged(body)) {
         throw ModerationRefused { categories: self._categories(body) }
@@ -114,25 +114,35 @@ class AcmeModerated {
 }
 ```
 
-Everything a built-in capability implementation can use — `request.messages()`,
-`request.output_type()`, `baml.http.send`, `baml.sap.parse` — is equally
+Everything a built-in capability implementation can use — `task.messages()`,
+`task.output_type()`, `baml.http.send`, `baml.sap.parse` — is equally
 available to yours. There is no privileged stdlib API.
 
 ### Step 3 — write the driver
 
-The driver is the negotiation layer for the existential case — the same
-role `baml.ai.run` plays for `Generate` (page 2, step 4):
+Write the safe driver first, requiring the capability statically:
 
 ```baml
 function run_moderated<T>(
-  request: baml.ai.Request<T>,
+  provider: ModeratedGenerationProvider,
+  task: ai.Task<T>,
   policy: string,
 ) -> ModeratedResponse<T>
-    throws ModerationRefused | baml.errors.Unsupported | baml.errors.UnknownError {
-  match (request.provider) {
-    let p: Moderated => p.generate_moderated<T>(request, policy),
+    throws ModerationRefused | baml.errors.UnknownError {
+  provider.generate_moderated<T>(task.with_provider(provider), policy)
+}
+```
+
+If the library wants to support erased/dynamically routed providers, it may
+also expose an explicitly runtime-negotiated spelling:
+
+```baml
+function unsafe_run_moderated<T>(task: ai.Task<T>, policy: string)
+    -> ModeratedResponse<T> {
+  match (task.$provider) {
+    let p: ModeratedGenerationProvider => run_moderated<T>(p, task, policy),
     _ => throw baml.errors.Unsupported {
-      message: "provider has no Moderated capability: " + request.provider_name(),
+      message: "provider has no moderated-generation capability: " + task.provider_name(),
     },
   }
 }
@@ -142,18 +152,19 @@ function run_moderated<T>(
 
 ```baml
 function ComposeNote(topic: string) -> string {
-  client: AcmeSafe
+  provider: AcmeSafe
   prompt: `Write a short note about ${topic}.`
 }
 
-let r = run_moderated(ComposeNote.request("office move"), "workplace-strict")
+let task = ComposeNote.task("office move", $provider = AcmeSafe)
+let r = run_moderated(AcmeSafe, task, "workplace-strict")
 log.info(`flagged: ${r.verdict.flagged}`)
 let note = r.value
 ```
 
 `ComposeNote` did not change. No task grew a member. Any task in any package
 — including ones written before your library existed — works with
-`run_moderated`, because `.request` is the universal bridge.
+`run_moderated`, because `.task` is the universal bridge.
 
 ## Testing your capability
 
@@ -165,9 +176,9 @@ class ScriptedModerated {
   reply: string,
   flag: bool,
 
-  implements baml.ai.Provider {}
-  implements Moderated {
-    function generate_moderated<T>(self, request: baml.ai.Request<T>, policy: string)
+  implements ai.Provider {}
+  implements ModeratedGenerationProvider {
+    function generate_moderated<T>(self, task: ai.Task<T>, policy: string)
         -> ModeratedResponse<T> throws ModerationRefused | baml.errors.UnknownError {
       if (self.flag) { throw ModerationRefused { categories: ["scripted"] } }
       ModeratedResponse<T> {
@@ -179,14 +190,13 @@ class ScriptedModerated {
 }
 
 test "moderated happy path" {
-  let r = run_moderated(ComposeNote.request("x", client = ScriptedModerated {
-    reply: "\"a note\"", flag: false,
-  }), "strict")
+  let fake = ScriptedModerated { reply: "\"a note\"", flag: false }
+  let r = run_moderated(fake, ComposeNote.task("x", $provider = fake), "strict")
   assert.equal(r.value, "a note")
 }
 
 test "a provider without the capability is a typed Unsupported" {
-  let r = run_moderated(ComposeNote.request("x", client = FixtureProvider {
+  let r = unsafe_run_moderated(ComposeNote.task("x", $provider = FakeProvider {
     reply: "\"irrelevant\"",
   }), "strict") catch (e) {
     let u: baml.errors.Unsupported => "unsupported",
@@ -220,15 +230,15 @@ program-global; installing a library mutates every task's API surface;
 driver signatures become a compiler-validated convention; generated code
 grows as tasks × installed drivers; and host SDKs must emit members they
 cannot vouch for. The free-driver spelling costs one wrapping call
-(`run_moderated(ComposeNote.request(x), p)` vs `ComposeNote.moderated(x, p)`)
+(`run_moderated(p, ComposeNote.task(x), policy)` vs `ComposeNote.moderated(x, policy)`)
 and buys all of that back.
 
-**User-extensible methods on `Request<T>`**
-(`ComposeNote.request(x).run_moderated(policy)`). Requires extension
+**User-extensible methods on `Task<T>`**
+(`ComposeNote.task(x).run_moderated(policy)`). Requires extension
 methods or UFCS in the language — a much larger decision than this BEP. If
 the language grows them, drivers gain the postfix spelling automatically;
 nothing here blocks it.
 
-**Registering into the standard drivers** (make `baml.ai.run` consult a
+**Registering into the standard drivers** (make `ai.drivers.drive` consult a
 mode table). Rejected: dynamic dispatch through a mutable global table is
 exactly the invisible coupling typed drivers exist to avoid.

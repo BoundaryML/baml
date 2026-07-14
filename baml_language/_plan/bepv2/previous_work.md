@@ -4,6 +4,9 @@ This BEP consolidates several prior efforts. The main document and its pages
 present the design fresh and do not reference this lineage; this file is the
 only place it is recorded.
 
+Names in this file are historical and intentionally retain the spelling used
+by the designs being summarized. The normative BEPv2 names are on page 9.
+
 ## The design exploration (`_plan/../llm-provider/ideas/`)
 
 A 47-scenario corpus (single-turn text through durable workflows) written

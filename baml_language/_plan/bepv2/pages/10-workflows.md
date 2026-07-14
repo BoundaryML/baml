@@ -22,7 +22,7 @@ This page proposes a workflow layer above BEP-064's task/provider model:
   deterministic replay;
 - `WorkflowRun<T>` is the resource for observing and controlling one run;
 - provider resources cross durable boundaries through tokens, never by
-  serializing providers, requests, closures, or live resources.
+  serializing providers, tasks, closures, or live resources.
 
 The core rule is:
 
@@ -63,7 +63,7 @@ deliver a signal, or wake a worker after a crash.
 3. Then change the outer declaration to `workflow` and wrap every effect in
    a named `ctx.step`; keep pure control flow as normal BAML.
 4. Cross waits with typed signals and cross process boundaries with tokens,
-   never by serializing providers, requests, closures, or live resources.
+   never by serializing providers, tasks, closures, or live resources.
 5. Let a workflow executor own durability. Let providers keep owning AI
    interaction semantics and provider-specific resources.
 
@@ -110,10 +110,10 @@ The types, concurrency, and LLM tasks are all real language features. If the
 process exits halfway through, the caller runs `build_case` again. Use this
 form when that is acceptable.
 
-### Provider-owned deferred work: use `.background`
+### Provider-owned deferred work: use the background driver
 
 ```baml
-let job = DeepResearch.background(topic, baml.ai.BackgroundOptions {
+let job = ai.drivers.submit_background(DeepResearch.task(topic), ai.BackgroundOptions {
   idempotency_key: "research-" + ticket_id,
 })
 ```
@@ -206,7 +206,7 @@ class ProcessInvoiceOutput {
 }
 
 function ExtractInvoice(document_text: string) -> Invoice {
-  client: InvoiceModel
+  provider: InvoiceModel
   prompt: `Extract the invoice.
 
            ${document_text}
@@ -272,7 +272,7 @@ workflow ProcessInvoice(input: InvoiceRef) -> ProcessInvoiceOutput {
     options = baml.workflow.StepOptions {
       retry: baml.workflow.ActivityRetry {
         max_attempts: 3,
-        replay: baml.ai.ReplayKind.RequiresIdempotencyKey,
+        replay: ai.ReplayKind.RequiresIdempotencyKey,
       },
     },
   )
@@ -429,9 +429,9 @@ ProcessInvoice.resume(token, executor?) -> WorkflowRun<ProcessInvoiceOutput>
 ProcessInvoice.definition -> WorkflowDefinition<InvoiceRef, ProcessInvoiceOutput>
 ```
 
-These selectors belong to workflow declarations only. They do not extend
-the closed modifier set on LLM tasks, and they are not synthesized onto
-arbitrary function values.
+These selectors belong to workflow declarations only. LLM functions expose
+only `.task`; workflow resources need `.start`/`.resume` because they are
+compiler-defined durable declarations rather than library execution policy.
 
 ### Replay, not continuation snapshots
 
@@ -579,7 +579,7 @@ The intended static rule is:
 - lists, tuples, and maps are allowed when their contents are allowed;
 - aliases preserve the property of their target;
 - a versioned explicit codec MAY make a normally opaque value checkpointable;
-- `baml.ai.Request<T>`, `Provider`, closures, function values, `Future`,
+- `ai.Task<T>`, `Provider`, closures, function values, `Future`,
   streams, `Job`, `Session`, `Live`, sockets, database handles, and arbitrary
   host objects are rejected;
 - `unknown` and interface existentials are rejected unless an explicit
@@ -658,7 +658,7 @@ the active executor:
 ```baml
 class baml.workflow.ActivityRetry {
   max_attempts: int,
-  replay: baml.ai.ReplayKind,
+  replay: ai.ReplayKind,
   initial_delay: baml.time.Duration?,
   max_delay: baml.time.Duration?,
 }
@@ -830,7 +830,7 @@ let receipt = ctx.step(
   options = baml.workflow.StepOptions {
     retry: baml.workflow.ActivityRetry {
       max_attempts: 3,
-      replay: baml.ai.ReplayKind.RequiresIdempotencyKey,
+      replay: ai.ReplayKind.RequiresIdempotencyKey,
     },
   },
 )
@@ -840,7 +840,7 @@ If an effect cannot accept an idempotency key and is unsafe to repeat,
 leave activity retries disabled and route an unknown-commit failure to
 manual reconciliation.
 
-`baml.ai.ReplayPolicy` still governs provider wrappers inside the activity
+`ai.ReplayPolicy` still governs provider wrappers inside the activity
 (page 8). It does not automatically declare the *whole activity* replayable;
 the activity may contain other effects the provider policy knows nothing
 about.
@@ -850,7 +850,7 @@ activity. For `RequiresIdempotencyKey`, the executor constructs the policy
 with `activity.idempotency_key()`. A failure retries only when:
 
 1. the failure implements `baml.errors.Failure`;
-2. `baml.ai.may_replay` accepts its
+2. `ai.may_replay` accepts its
    `FailureKind × CommitState` and the activity policy;
 3. `max_attempts` has not been reached.
 
@@ -1097,7 +1097,7 @@ include:
 - token format version and integrity data.
 
 It never contains provider credentials, an executor connection, workflow
-input, a `Request<T>`, or a closure. The configured executor validates token
+input, a `Task<T>`, or a closure. The configured executor validates token
 ownership on resume.
 
 The executor instance name is operationally important. “Resume this run”
@@ -1172,8 +1172,8 @@ This is the default because the LLM function already provides:
 - a stable task identity for traces and evals;
 - a typed input/output contract;
 - prompt rendering and `ctx.output_format`;
-- client overrides;
-- the standard task modifiers and testing surface.
+- provider overrides;
+- the standard `.task` value and testing surface.
 
 The workflow adds durability around the task; it does not replace its DSL.
 
@@ -1186,20 +1186,20 @@ inside a step:
 let verdict = ctx.step(
   "vendor-classification",
   () -> Verdict {
-    let request = baml.ai.request<Verdict>(
+    let task = ai.task<Verdict>(
       AcmeModel,
       prompt`Classify ${document_text}.
              ${ctx.output_format}`,
     )
 
-    AcmeModel.generate<Verdict>(request).value
+    AcmeModel.generate<Verdict>(task).value
   },
 )
 ```
 
 The tagged `prompt` template is converted to a lazy `PromptAst` render
 recipe; once provider and `Verdict` are known, the runtime supplies the
-provider-sensitive context and output schema. This is the same request seam
+provider-sensitive context and output schema. This is the same task seam
 used by an LLM function, just without a named task.
 Inside the tagged template, `ctx` is the prompt-render context (including
 `ctx.output_format`), not the surrounding workflow context.
@@ -1218,7 +1218,7 @@ or construct one from worker-local environment inside its body.
 Suppose a custom provider exposes embeddings:
 
 ```baml
-interface Embeddings requires baml.ai.Provider {
+interface EmbeddingProvider requires ai.Provider {
   function embed(
     self,
     text: string,
@@ -1226,7 +1226,7 @@ interface Embeddings requires baml.ai.Provider {
 }
 
 function embed_document(
-  provider: Embeddings,
+  provider: EmbeddingProvider,
   text: string,
 ) -> float[] throws EmbeddingError {
   provider.embed(text)
@@ -1270,10 +1270,10 @@ class JobTerminated {
 
 let token = ctx.step(
   "submit-research",
-  (activity: baml.workflow.ActivityContext) -> baml.ai.JobToken {
-    let job = DeepResearch.background(
-      topic,
-      baml.ai.BackgroundOptions {
+  (activity: baml.workflow.ActivityContext) -> ai.JobToken {
+    let job = ai.drivers.submit_background(
+      DeepResearch.task(topic),
+      ai.BackgroundOptions {
         idempotency_key: activity.idempotency_key(),
       },
     )
@@ -1338,10 +1338,10 @@ let outcome = ctx.step(
   options = baml.workflow.StepOptions {
     retry: baml.workflow.ActivityRetry { max_attempts: 1 },
   },
-  () -> baml.ai.Done<Report> | baml.ai.BudgetReached | baml.ai.Handoff {
-    ResearchQuestion.agent(
-      question,
-      budget = baml.ai.Budget { max_steps: 12 },
+  () -> ai.Done<Report> | ai.BudgetReached | ai.Handoff {
+    ai.drivers.run_agent(
+      ResearchQuestion.task(question),
+      ai.AgentOptions { budget: ai.Budget { max_steps: 12 } },
     )
   },
 )
@@ -1416,14 +1416,14 @@ For a long-running or waiting workflow, use one of two explicit models:
   status tools; or
 - a durable parent-agent protocol that can propagate suspension.
 
-The workflow does **not** implement `baml.ai.Generate`. That interface is
+The workflow does **not** implement `ai.GenerationProvider`. That interface is
 universally generic:
 
 ```baml
-function generate<T>(request: Request<T>) -> Response<T>
+function generate<T>(task: Task<T>) -> Response<T>
 ```
 
-A fixed `Workflow<I, O>` cannot accept every `Request<T>` or produce every
+A fixed `Workflow<I, O>` cannot accept every `Task<T>` or produce every
 `T` without dynamically decoding a prompt into `I` and casting `O` to an
 unrelated requested type. A typed tool binding preserves the real signature.
 
@@ -1595,7 +1595,7 @@ arguments, approvals, and external identifiers. Executors MUST support:
 - redacted failure snapshots and events;
 - audit records for signals, cancellation, and manual replay.
 
-Provider credentials, provider objects, request render closures, executor
+Provider credentials, provider objects, task render closures, executor
 connections, and live resource handles MUST never be journaled.
 
 An idempotency key is an identifier, not an authorization secret. External
@@ -1611,7 +1611,7 @@ Proposed test shape:
 ```baml
 test "high-value invoice waits, then posts once" {
   let executor = baml.workflow.InMemoryExecutor {
-    activities: baml.workflow.FixtureActivities {
+    activities: baml.workflow.FakeActivities {
       "download": "Vendor: Acme\nTotal: 12000 USD",
       "extract": Invoice {
         vendor: "Acme",
@@ -1721,7 +1721,7 @@ checkpointability or production durability.
 - approval signals inside durable agent loops.
 
 Workflow work is a follow-on track. It does not block BEP-064's provider
-acceptance criteria; the provider/request/resource seam should be stable
+acceptance criteria; the provider/task/resource seam should be stable
 enough for executors to call before native workflows are implemented.
 
 ## Alternatives considered
@@ -1729,7 +1729,7 @@ enough for executors to call before native workflows are implemented.
 ### Make `Workflow` implement `Provider`
 
 Rejected as the general model. A workflow has a fixed `I -> O` signature;
-`Generate` promises `Request<T> -> Response<T>` for every `T`. Bridging them
+`GenerationProvider` promises `Task<T> -> Response<T>` for every `T`. Bridging them
 requires runtime prompt decoding and an unsafe output cast. It also mixes
 orchestration lifecycle with AI interaction capability. Typed tool or child
 workflow adapters cover the honest cases.
@@ -1793,9 +1793,10 @@ substitution of committed results.
 ### Add `.workflow` to every LLM task
 
 Rejected. A workflow is authored orchestration, not a way to execute one
-task. One-task background work is already `Task.background`. A workflow
-declaration gets its own `.start`/`.resume` selectors without expanding the
-closed task modifier set.
+task. One-task background work is already
+`drivers.submit_background(MyTask.task(...))`. A workflow declaration gets
+its own `.start`/`.resume` selectors without adding lifecycle companions to
+LLM functions.
 
 ## Acceptance criteria
 
@@ -1814,7 +1815,7 @@ The workflow proposal is ready to call implemented only when:
    order.
 7. Input or schema drift at an existing coordinate produces a typed
    nondeterminism/version error.
-8. Noncheckpointable captures such as providers, requests, closures,
+8. Noncheckpointable captures such as providers, tasks, closures,
    futures, and live resources receive a compiler diagnostic.
 9. A typed signal atomically records its reply, deduplicates delivery, and
    wakes the exact wait.
@@ -1840,7 +1841,7 @@ The workflow proposal is ready to call implemented only when:
 | --- | --- |
 | Several typed calls that may restart together | Ordinary BAML function |
 | Parallel work in one process | `spawn` / `await` |
-| One provider-owned long call | `Task.background` / `Job<T>` |
+| One provider-owned long call | `drivers.submit_background(Task<T>)` / `Job<T>` |
 | One provider-owned session or live connection | The corresponding resource |
 | Orchestration that survives process death | `workflow` + executor |
 | One typed model operation in that workflow | LLM task inside `ctx.step` |

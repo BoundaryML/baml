@@ -100,6 +100,17 @@ function run_agent<T>(
           TurnFinishedEvent { id: request.options.run_id, turn: steps }, observers, recorders,
         );
         transcript = tools_provider.submit(transcript, results);
+        match (request.options.tool_registry) {
+          let registry: ToolRegistry => {
+            if (!tools_provider.supports_dynamic_tools()) {
+              throw baml.errors.Unsupported {
+                message: "provider cannot change tools during a run: " + request.provider_name(),
+              };
+            }
+            transcript = tools_provider.sync_tools(transcript, registry.snapshot());
+          },
+          null => {},
+        }
       },
       let value: T => {
         let done = Done<T> {
@@ -219,6 +230,17 @@ function run_agent_detailed<T>(
           TurnFinishedEvent { id: request.options.run_id, turn: steps }, observers, recorders,
         );
         transcript = tools_provider.submit(transcript, results);
+        match (request.options.tool_registry) {
+          let registry: ToolRegistry => {
+            if (!tools_provider.supports_dynamic_tools()) {
+              throw baml.errors.Unsupported {
+                message: "provider cannot change tools during a run: " + request.provider_name(),
+              };
+            }
+            transcript = tools_provider.sync_tools(transcript, registry.snapshot());
+          },
+          null => {},
+        }
       },
       let value: T => {
         let provider_step = _tool_step_meta(request.provider);

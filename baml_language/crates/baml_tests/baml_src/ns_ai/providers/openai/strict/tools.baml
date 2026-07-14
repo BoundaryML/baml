@@ -42,4 +42,21 @@ implements Tools for OpenAiStrict {
       append_output_schema: false,
     }.submit(transcript, results)
   }
+
+  function sync_tools(
+    self,
+    transcript: OpenAiToolTranscript,
+    tools: Tool[],
+  ) -> OpenAiToolTranscript throws baml.errors.ToolError | baml.errors.UnknownError {
+    OpenAi {
+      model: self.model,
+      api_key: self.api_key,
+      base_url: self.base_url,
+      extra_headers: self.extra_headers,
+      extra_body: self.extra_body,
+      append_output_schema: false,
+    }.sync_tools(transcript, tools)
+  }
+
+  function supports_dynamic_tools(self) -> bool throws never { true }
 }

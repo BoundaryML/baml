@@ -56,5 +56,7 @@ class FakeToolProvider {
         final_json: transcript.final_json,
       }
     }
+
+    function supports_dynamic_tools(self) -> bool throws never { true }
   }
 }

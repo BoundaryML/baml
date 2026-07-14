@@ -34,25 +34,25 @@ Background operations get their own error channel — `BackgroundError`
 killed the job" (resubmit with the same key) is a different decision than
 "polling timed out" (poll again), and neither is a `CallError`.
 
-Producing one is the `.background` modifier (page 3); consuming one is
+Producing one is the `drivers.submit_background` driver (page 3); consuming one is
 matching on `poll`:
 
 ```baml
-let job = DeepResearch.background(topic, baml.ai.BackgroundOptions {
+let job = ai.drivers.submit_background(DeepResearch.task(topic), ai.BackgroundOptions {
   idempotency_key: "research-" + ticket_id,
 })
 defer { job.cleanup() }
 
 let report = wait_for(job)
 
-function wait_for(job: baml.ai.Job<Report>) -> Report
+function wait_for(job: ai.Job<Report>) -> Report
     throws baml.errors.BackgroundError | baml.errors.UnknownError {
   while (true) {
     match (job.poll()) {
-      let d: baml.ai.Done<Report> => { return d.value; },
-      let p: baml.ai.Pending      => baml.sys.sleep(p.retry_after ?? default_delay),
-      let f: baml.ai.Failed       => throw f.error,
-      let c: baml.ai.Cancelled    => throw baml.errors.UnknownError {
+      let d: ai.Done<Report> => { return d.value; },
+      let p: ai.Pending      => baml.sys.sleep(p.retry_after ?? default_delay),
+      let f: ai.Failed       => throw f.error,
+      let c: ai.Cancelled    => throw baml.errors.UnknownError {
         data: c, message: ["job was cancelled"],
       },
     }
@@ -71,11 +71,11 @@ jobs are different and get different types:
 
 ```baml
 // process 1: submit, persist the claim
-let job = DeepResearch.background(topic, opts)
+let job = ai.drivers.submit_background(DeepResearch.task(topic), opts)
 db.save(ticket_id, baml.json.to_string(job.token()))
 
 // process 2 (hours later): rehydrate on a CONFIGURED provider
-let token: baml.ai.JobToken = baml.sap.parse<baml.ai.JobToken>(db.load(ticket_id))
+let token: ai.JobToken = baml.sap.parse<ai.JobToken>(db.load(ticket_id))
 let job = LongRunningModel.resume_job<Report>(token)
 let report = wait_for(job)
 ```
@@ -87,25 +87,24 @@ provider validates ownership before use.
 
 ## Sessions
 
-A provider-stored conversation is a resource that *executes requests* in its
+A provider-stored conversation is a resource that *executes tasks* in its
 context:
 
 ```baml
-let session = SessionModel.open_session(baml.ai.SessionOptions {})
+let session = SessionModel.open_session(ai.SessionOptions {})
 defer { session.cleanup() }
 
-let greeting = session.run(Greet.request(name))
-let followup = session.run(AskFollowup.request(question))
+let greeting = ai.drivers.run_in_session(session, Greet.task(name))
+let followup = ai.drivers.run_in_session(session, AskFollowup.task(question))
 ```
 
-`session.run` takes any task's `.request` — the whole reason requests exist
-as values. **The execution context wins, unconditionally**: `session.run(request)`
-means `session.run(request.for_provider(session.provider()))`, always. The
-request's own provider binding is just its default for context-free
+`run_in_session` takes any task's `.task` value. **The execution context wins,
+unconditionally**: running a task in a session means executing
+`task.with_provider(session.provider())`. The task's provider binding is its default for context-free
 execution; distinguishing "default" from "explicit override" would require
-storing binding provenance in every request for the sake of an error message
+storing binding provenance in every task for the sake of an error message
 — complexity without a matching benefit. If you handed a session the wrong
-request, the re-rendered prompt is still exactly the task's prompt, run
+task, the re-rendered prompt is still exactly the task's prompt, run
 where you said to run it.
 
 Forking and compaction are session operations, because they mutate
@@ -115,7 +114,7 @@ model it:
 
 ```baml
 interface Session {
-  function run<T>(self, request: Request<T>) -> T throws SessionError | UnknownError
+  function run<T>(self, task: Task<T>) -> Response<T> throws SessionError | UnknownError
   function token(self) -> SessionToken throws never
   function cleanup(self) -> void
 }
@@ -135,16 +134,16 @@ existential `Session` narrows first:
 
 ```baml
 // static requirement — the type says what this function needs:
-function explore_both(session: baml.ai.ForkableSession) -> (Choice, Choice) {
+function explore_both(session: ai.ForkableSession) -> (Choice, Choice) {
   let alt = session.fork()
-  let a = session.run(Choose.request("conservative"))
-  let b = alt.run(Choose.request("experimental"))
+  let a = ai.drivers.run_in_session(session, Choose.task("conservative")).value
+  let b = ai.drivers.run_in_session(alt, Choose.task("experimental")).value
   (a, b)
 }
 
 // dynamic negotiation — an existential Session may or may not fork:
 match (session) {
-  let f: baml.ai.ForkableSession => explore_both(f),
+  let f: ai.ForkableSession => explore_both(f),
   _ => run_sequentially(session),
 }
 ```
@@ -162,19 +161,22 @@ pattern for durable conversations.
 ## Realtime
 
 A live connection is the most stateful resource: it owns the socket, the
-event ordering, and the interruption controls.
+event ordering, and the interruption controls. The intended entry point is an
+explicit realtime driver, not a direct LLM-function call: the caller creates a
+task value with `.task(...)`, supplies a `Channel`, and retains the returned
+`Live` resource.
 
 ```baml
-let live = baml.ai.open_live(
-  VoiceAssistant.request(instructions, client = RealtimeModel),
+let live = ai.drivers.open_live(
+  VoiceAssistant.task(instructions, $provider = RealtimeModel),
   audio_channel,
 )
 defer { live.cleanup() }
 
 for (let event in live.events()) {
   match (event) {
-    let t: baml.ai.TranscriptDelta => ui.append(t.text),
-    let barge: baml.ai.UserSpeechStarted => {
+    let t: ai.TranscriptDelta => ui.append(t.text),
+    let barge: ai.UserSpeechStarted => {
       live.cancel_response()
       live.truncate_assistant_audio(barge.played_ms)
     },
@@ -186,7 +188,9 @@ for (let event in live.events()) {
 `cancel_response` and `truncate_assistant_audio` are methods on the live
 resource — they target *this* provider session, not a channel that might or
 might not correspond to one. The channel remains what it is: an input/output
-adapter, not the identity of the session.
+adapter, not the identity of the session. Returning `void` from a direct call
+would not replace either object: it would define no completion boundary and
+would leave the caller unable to drive or clean up the live interaction.
 
 ## Managed caches
 
@@ -194,12 +198,12 @@ Provider-managed context caches are billed while alive; that lifecycle is
 the resource:
 
 ```baml
-let cache = CacheModel.create_cache(reference_material, baml.ai.CacheOptions {
+let cache = ai.drivers.create_cache(CacheModel, reference_material, ai.CacheOptions {
   ttl: baml.time.Duration.from_hours(1),
 })
 defer { cache.cleanup() }
 
-let answer = cache.run(AskReference.request(question))
+let answer = cache.run(AskReference.task(question)).value
 ```
 
 Implicit provider-side caching (automatic prefix reuse) is *not* a resource
@@ -228,14 +232,15 @@ always explicit and separate.
 Notice the shape that has emerged across pages 5 and 6:
 
 ```baml
-baml.ai.run(req)          // no context
-agent.run(req)            // tool-loop context  (page 5)
-session.run(req)          // conversation context
-cache.run(req)            // cached-prefix context
+ai.drivers.drive(task)                // provider-default context
+ai.drivers.run_agent(task)            // tool-loop context (page 5)
+ai.drivers.run_in_session(s, task)    // conversation context
+cache.run(task)                             // cached-prefix resource context
 ```
 
-**`<context>.run(request)`** — one verb, learned once. Execution contexts
-differ; the currency does not.
+Drivers are the public lifecycle vocabulary. Resource methods remain available
+to custom driver authors, but application code does not need to learn a second
+calling convention.
 
 ## Alternatives considered
 
@@ -255,7 +260,7 @@ resource/token keeps in-process safety and cross-process explicitness.
 Rejected: control must target the provider session; a channel is plumbing
 and can be reattached, multiplexed, or wrong.
 
-**`await`-shaped background** (make `.background` return a `Future<T>`).
+**`await`-shaped background** (make `submit_background` return a `Future<T>`).
 Rejected: futures model in-process concurrency and die with the process; a
 background job is remote, billable, pollable, and resumable. Where in-process
 concurrency is wanted, `spawn { ExtractInvoice(doc) }` already exists and

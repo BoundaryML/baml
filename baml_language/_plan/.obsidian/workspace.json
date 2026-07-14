@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "bep/alternatives_cookbook.md",
+                "file": "bepv2/README.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "alternatives_cookbook"
+              "title": "README"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "bep/alternatives_cookbook.md",
+                "file": "bepv2/README.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for alternatives_cookbook"
+              "title": "Backlinks for README"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "bep/alternatives_cookbook.md",
+                "file": "bepv2/README.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from alternatives_cookbook"
+              "title": "Outgoing links from README"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "bep/alternatives_cookbook.md",
+                "file": "bepv2/README.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of alternatives_cookbook"
+              "title": "Outline of README"
             }
           }
         ]
@@ -185,19 +185,41 @@
   },
   "active": "c1cf60264c354175",
   "lastOpenFiles": [
-    "bepv2/pages/10-workflows.md",
-    "bepv2/pages/09-normative-signatures.md",
-    "bepv2/pages/08-reliability-and-errors.md",
-    "bepv2/pages/07-custom-capabilities.md",
-    "bepv2/pages/06-resources.md",
-    "bepv2/pages/05-tools-and-agents.md",
-    "bepv2/pages/04-clients-and-providers.md",
-    "bepv2/pages/03-modifiers.md",
-    "bepv2/pages/02-desugaring.md",
-    "bepv2/pages/01-tasks-and-philosophy.md",
-    "bepv2/pages",
-    "bepv2/README.md",
-    "bepv2/previous_work.md",
-    "bepv2"
+    "bepv2/pages/11-tool-calling-after-bep-062.md",
+    "bepv2/v2_deviations.md",
+    "bepv2/user-guide/08-external-harnesses/06-implement-a-harness-adapter.md",
+    "bepv2/user-guide/08-external-harnesses/05-save-and-resume-harness.md",
+    "bepv2/user-guide/08-external-harnesses/04-steer-and-interrupt.md",
+    "bepv2/user-guide/08-external-harnesses/03-permissions-and-sandboxes.md",
+    "bepv2/user-guide/08-external-harnesses/02-stream-harness-events.md",
+    "bepv2/user-guide/08-external-harnesses/01-call-a-coding-harness.md",
+    "bepv2/user-guide/08-external-harnesses",
+    "bepv2/user-guide/07-production/04-capability-negotiation.md",
+    "bepv2/user-guide/07-production/03-deployment-and-transports.md",
+    "bepv2/user-guide/07-production/02-caching.md",
+    "bepv2/user-guide/07-production/01-background-jobs.md",
+    "bepv2/user-guide/07-production",
+    "bepv2/user-guide/06-observability-and-testing/06-fakes-and-failure-injection.md",
+    "bepv2/user-guide/06-observability-and-testing/05-evaluate-provider-quality.md",
+    "bepv2/user-guide/06-observability-and-testing/04-test-one-task-across-providers.md",
+    "bepv2/user-guide/06-observability-and-testing/03-usage-and-cost.md",
+    "bepv2/user-guide/06-observability-and-testing/02-observe-an-agent.md",
+    "bepv2/user-guide/06-observability-and-testing/01-observe-a-call.md",
+    "bepv2/user-guide/06-observability-and-testing",
+    "bepv2/user-guide/05-media-and-realtime/05-realtime-tools.md",
+    "bepv2/user-guide/05-media-and-realtime/04-barge-in.md",
+    "bepv2/user-guide/05-media-and-realtime/03-realtime-channel.md",
+    "bepv2/user-guide/05-media-and-realtime/02-bounded-audio-stream.md",
+    "bepv2/user-guide/05-media-and-realtime/01-images-pdfs-and-audio.md",
+    "bepv2/user-guide/05-media-and-realtime",
+    "bepv2/user-guide/04-conversations-and-state/05-save-and-resume.md",
+    "bepv2/user-guide/04-conversations-and-state/04-provider-owned-sessions.md",
+    "bepv2/user-guide/04-conversations-and-state/03-fork-a-conversation.md",
+    "bepv2/user-guide/04-conversations-and-state",
+    "bepv2/user-guide/03-routing-and-reliability",
+    "bepv2/user-guide/02-tools-and-agents",
+    "bepv2/user-guide/01-tasks-and-providers",
+    "bepv2/user-guide",
+    "bepv2/pages"
   ]
 }

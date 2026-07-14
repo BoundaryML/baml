@@ -1,20 +1,15 @@
-# 2. What a Task Desugars To
+# 2. What an LLM Function Desugars To
 
-Nothing in a task is magic. This page removes every layer of sugar, in
-order, until you can see the wire. An SDE1 should be able to debug a task
-call from this page alone.
+This page is normative. The compiler generates one public companion for an
+LLM function: `.task(...)`. All execution policies are ordinary library
+drivers over the resulting value.
 
-## The declaration
+## Source declaration
 
 ```baml
-class Invoice {
-  vendor: string,
-  total: float,
-  currency: string,
-}
-
 function ExtractInvoice(document: pdf) -> Invoice {
-  client: AccurateModel
+  provider: AccurateModel
+  tools: [lookup_vendor]
   prompt: `
     ${role("system")} You extract invoices precisely.
     ${role("user")} Extract this invoice: ${document}
@@ -23,231 +18,265 @@ function ExtractInvoice(document: pdf) -> Invoice {
 }
 ```
 
-Three declarative fields. `client` names a default provider. `prompt` is a
-template. The return type `Invoice` will be used twice: as the type of the
-call expression and as the schema rendered by `${ctx.output_format}`.
+`client:` remains accepted as compatibility syntax, but canonical BEPv2 source
+uses `provider:`. The provider and tool roster are defaults, not an execution
+policy.
 
-## Step 1 — the injected `client` parameter
+## The sole generated companion
 
-The compiler appends a synthetic trailing parameter to the task and every
-modifier:
+### `.task` is a declaration selector, not a function-value member
+
+In BAML source, `MyFunction.task(...)` is resolved specially when
+`MyFunction` is a path that resolves directly to an LLM-function declaration.
+The compiler can therefore typecheck the declaration's arguments, return type,
+prompt recipe, default provider, and synthetic `$provider` parameter together.
+An implementation may lower this selector to a hidden companion item such as
+`MyFunction$task`; it is not a runtime property stored on the function value.
 
 ```baml
-function ExtractInvoice(
+// Valid: ExtractInvoice resolves directly to the LLM-function declaration.
+let task = ExtractInvoice.task(scan)
+
+// Also valid: an ordinary function value remains directly callable.
+let call = ExtractInvoice
+let invoice = call(scan)
+
+// Invalid: the callable value's type has no generated `task` member.
+call.task(scan)
+```
+
+The final line is a compile error even when the local was initialized directly
+from `ExtractInvoice`. Member lookup follows the static type of `call`; it does
+not use constant propagation or declaration-provenance tracking to recover
+compiler selectors. Passing an LLM function through a parameter, collection,
+or returned function value has the same result.
+
+V1 guarantees `.task(...)` in call position on an LLM-function declaration
+path. It does not require `MyFunction.task` itself to be a first-class function
+value. Code that needs a first-class task factory can wrap the declaration-path
+call in an ordinary typed function or closure. Supporting a distinct
+first-class `LlmFunction<Args, T>` value that retains task-construction metadata
+would be a separate language feature, not an accidental consequence of
+ordinary function values.
+
+The public companion has a compiler-defined omitted-argument rule:
+
+```text
+ExtractInvoice.task(document)
+  == ExtractInvoice.task(document, $provider = AccurateModel)
+```
+
+The compiler typechecks the injected or explicit provider expression first,
+infers its static type as `P`, and then lowers to the equivalent required-
+provider helper below:
+
+```baml
+function ExtractInvoice.task<P extends ai.Provider>(
   document: pdf,
-  client: baml.ai.Provider = AccurateModel,
+  $provider: P,
+) -> ai.Task<Invoice, P> {
+  ai.Task<Invoice, P> {
+    $provider: $provider,
+    prompt: <lazy prompt recipe rendered for $provider and Invoice>,
+    identity: ai.TaskIdentity {
+      name: "ExtractInvoice",
+      package: <current package>,
+    },
+    arguments: { "document": document },
+    tools: [lookup_vendor],
+    options: ai.TaskOptions {},
+    tags: {},
+    transcript: null,
+    _render: <private render recipe>,
+  }
+}
+```
+
+This is compiler lowering notation, not a claim that ordinary BAML supports
+overloads or a `typeof(value)` type operator. Calling `.task(...)` without an
+override yields `Task<Invoice, P_default>`, where `P_default` is the static type
+already inferred for `AccurateModel`. Supplying `$provider = CheapModel` yields
+`Task<Invoice, P_cheap>` from the override expression's static type.
+
+`reflect.type_of<Invoice>()` is used by the task's `output_type()` implementation
+and by schema generation. It produces a runtime `type` value for an already
+known type argument; it does not recover the static type of `AccurateModel`.
+
+`$provider` is a compiler-reserved named parameter and task field. The sigil
+makes the execution override visually distinct from the function's domain
+arguments and prevents a user parameter from colliding with it:
+
+```baml
+let task = ExtractInvoice.task(scan, $provider = CheapModel)
+```
+
+No `.stream`, `.agent`, `.background`, `.with_meta`, `.prompt`, or `.parse`
+execution companions are generated. Inspection and parsing are library
+operations on `Task<T>` or its identity/parser recipe.
+
+## Compiler-injected `$...` parameters
+
+LLM functions reserve parameter names beginning with `$` for compiler-injected
+execution controls. The parameters are accepted by both the directly callable
+LLM function and `.task(...)`:
+
+```baml
+ExtractInvoice(scan, $provider = CheapModel)       // executes and returns Invoice
+ExtractInvoice.task(scan, $provider = CheapModel)  // returns Task<Invoice, CheapModel>
+```
+
+They are not part of the user-declared domain signature, captured
+`arguments`, prompt variables, or model-visible schema. This BEP initially
+specifies `$provider`; ordinary user parameters may not begin with `$`.
+
+## Plain calls use the provider's default drive
+
+The original LLM function remains callable and accepts `$provider`. After the
+compiler injects the default when omitted, its conceptual required-provider
+helper is:
+
+```baml
+function ExtractInvoice<P extends DriveProvider>(
+  document: pdf,
+  $provider: P,
 ) -> Invoice
 ```
 
-That is the whole mechanism behind call-site swapping: `ExtractInvoice(doc,
-client = Cheap)` is passing an ordinary named argument. The parameter's type
-is the existential marker `baml.ai.Provider`, so anything implementing it —
-a built-in provider, your own class, a wrapper — is accepted. (The name
-`client` is reserved on tasks; declaring your own parameter with that name
-is an error.)
+The direct form requires `P: DriveProvider`; `.task(...)` only requires `P: Provider`
+because an explicit lifecycle driver may need a provider that is not directly
+drivable, such as a realtime-only provider.
 
-## Step 2 — the prompt is a lazy template
-
-The backtick template does **not** evaluate where it is written. `prompt`
-templates have the conceptual type:
+Calls lower directly to the standard drive function:
 
 ```baml
-type PromptTemplate = (baml.llm.Context) -> baml.llm.PromptAst
+ExtractInvoice(scan)
+
+// lowers to
+ai.drivers.drive(ExtractInvoice.task(scan))
 ```
 
-They are lazy for two reasons:
-
-1. `${ctx.output_format}` depends on the return type `T` — the runtime
-   renders the schema string from `Invoice` and hands it to the template
-   through `ctx`.
-2. Prompt context can be provider-sensitive; the template must render
-   *after* the provider for this attempt is chosen (this matters for
-   fallback, page 8).
-
-`PromptAst` is the rendered result: an opaque structural value that
-preserves roles and media parts. It is never sent to a provider directly;
-providers view it as messages (step 4).
-
-You can hold a template yourself; this is the manual layer under tasks:
+An explicit provider override lowers identically:
 
 ```baml
-let template = prompt`
-  ${role("user")} Extract this invoice: ${document}
-  ${ctx.output_format}
-`
-// template : (baml.llm.Context) -> baml.llm.PromptAst
-```
+ExtractInvoice(scan, $provider = CheapModel)
 
-## Step 3 — the plain call is `run` over `.request`
-
-The body of a task lowers to two calls:
-
-```baml
-// what you wrote:
-let invoice = ExtractInvoice(scan)
-
-// what runs:
-let invoice = baml.ai.run<Invoice>(
-  ExtractInvoice.request(scan, client = AccurateModel),
+// lowers to
+ai.drivers.drive(
+  ExtractInvoice.task(scan, $provider = CheapModel),
 )
 ```
 
-`ExtractInvoice.request(...)` renders the template with a context built from
-`Invoice` and the chosen provider, and packages the result:
+This is the only privileged driver choice. `drivers.drive` invokes the
+selected provider's `DriveProvider` capability. It does not impose “one generation”
+as universal behavior. A normal provider may drive through one `generate`
+call; an agent provider may drive a complete tool loop. In every case the
+direct LLM function returns its declared `T` or throws. Callers wanting
+budget/handoff outcomes call `drivers.run_agent` explicitly.
+
+Conceptually, direct-call lowering can also be read as:
 
 ```baml
-baml.ai.Request<Invoice> {
-  provider: AccurateModel,
-  prompt:   <rendered PromptAst>,
-  identity: TaskIdentity { name: "ExtractInvoice", ... },
-  options:  RequestOptions { ... },
-  tags:     {},
+let task = ExtractInvoice.task(scan, $provider = selected)
+task.$provider.drive<Invoice>(task).value
+```
+
+## `Task<T>` is the universal invocation value
+
+```baml
+class Task<T, P extends Provider = Provider> {
+  $provider: P,
+  prompt: baml.llm.PromptAst,
+  identity: TaskIdentity?,
+  arguments: map<string, unknown>,
+  tools: Tool[],
+  options: TaskOptions,
+  tags: map<string, string>,
+  transcript: Transcript?,
+  _render: PromptRenderRecipe,
+
+  function messages(self) -> Messages throws never
+  function output_type(self) -> type throws never
+  function with_provider<Q extends Provider>(self, provider: Q) -> Task<T, Q> throws never
+  function with_tools(self, tools: Tool[]) -> Task<T, P> throws never
+  function with_transcript(self, transcript: Transcript) -> Task<T, P> throws never
 }
 ```
 
-No I/O has happened. A request is "one invocation that has not run" — you
-can log it, inspect `request.messages()`, hand it to a session, or discard
-it.
+`P` preserves the concrete provider type and therefore its capability
+evidence. `Task<T>` is shorthand for `Task<T, Provider>` after intentional
+existential erasure. `Task<T, P>` means one typed model invocation that has not
+run. It carries no provider wire body and is process-local because its provider
+and private render recipe are values.
 
-Every modifier lowers the same way, differing only in the driver:
+`with_provider` re-renders the prompt from `_render`; it never merely swaps
+the field. This preserves provider-sensitive prompt context during fallback
+and during an intentional mid-loop provider change.
+
+Manual construction remains possible:
 
 ```baml
-ExtractInvoice.stream(scan)      ==>  baml.ai.stream<PartialInvoice, Invoice>(ExtractInvoice.request(scan, ...))
-ExtractInvoice.with_meta(scan)   ==>  baml.ai.run_with_meta<Invoice>(ExtractInvoice.request(scan, ...))
-ExtractInvoice.background(scan)  ==>  baml.ai.submit_background<Invoice>(ExtractInvoice.request(scan, ...), options)
-ExtractInvoice.agent(scan)       ==>  baml.ai.run_agent<Invoice>(ExtractInvoice.request(scan, ...))
+let task = ai.task<Invoice>(Fast, prompt`
+  Extract ${document}.
+  ${ctx.output_format}
+`)
 ```
 
-One seam, many consumers. This is why a custom execution mode needs no
-compiler support — it is just one more consumer of the same value.
+## Streaming projection
 
-**One branch in the lowering:** if the task declares a `tools:` field, the
-request carries the roster (`request.tools`) and the *plain call* lowers
-through `run_agent` in graceful-finish mode instead of `run` — a tool task's
-plain call runs the loop. Which modifiers are valid on a tool task, and with
-what semantics, is defined by the normative matrix on page 5; the lowerings
-above are the no-tools column.
-
-## Step 4 — the driver negotiates capabilities
-
-`baml.ai.run` is an ordinary stdlib function, roughly:
+Streaming needs the compiler-derived partial form of `T`. This does not
+justify a generated execution function. The compiler may project a task at
+the driver boundary:
 
 ```baml
-function run<T>(request: Request<T>) -> T
-    throws baml.errors.CallError | baml.errors.UnknownError {
-  match (request.provider) {
-    let g: Generate => g.generate<T>(request).value,
-    _ => throw baml.errors.Unsupported {
-      message: "client cannot generate: " + request.provider_name(),
-    },
-  }
+type StreamTask<T, TPartial, P extends Provider = Provider>
+  = <compiler-known view of Task<T, P>>
+
+ai.drivers.stream(ExtractInvoice.task(scan))
+// T = Invoice, TPartial = baml.macros.stream_type!(Invoice)
+```
+
+Conceptually the accepted type is
+`StreamTask<T, baml.macros.stream_type!(T), P>`; the projection is PPIR/type
+information, not another network-capable companion.
+
+## Direct provider escape hatch
+
+A custom driver can call a statically known capability directly:
+
+```baml
+function custom_run<T, P extends ai.GenerationProvider>(task: ai.Task<T, P>) -> T {
+  task.$provider.generate<T>(task).value
 }
 ```
 
-This `match` is the *only* place capability negotiation happens for a plain
-call. If the provider implements `Generate`, its method runs; if not, you
-get a typed `Unsupported` naming the provider and the missing capability —
-not a crash, not a silent degrade.
-
-Drivers are the third layer of the surface rule (README): when application
-code holds a *concrete* provider it can skip the driver and call
-`g.generate<T>(req)` directly, because the capability is statically known.
-
-## Step 5 — the provider does the wire work
-
-A provider's `generate` is ordinary BAML. The built-in OpenAI provider,
-abridged:
+Or a hand-written function can build a task and invoke a concrete provider:
 
 ```baml
-class OpenAi {
-  model: string,
-  api_key: string,
-  base_url: string?,
-  extra_headers: map<string, string>?,
-  extra_body: map<string, unknown>?,
-
-  implements baml.ai.Provider {}
-
-  implements baml.ai.Generate {
-    function generate<T>(self, request: baml.ai.Request<T>) -> baml.ai.Response<T>
-        throws baml.errors.CallError | baml.errors.UnknownError {
-      let messages = request.messages()                 // structural view: roles + media
-      let schema = baml.llm.render_output_format(request.output_type())
-      let http = self._build_chat_request(messages, schema)   // private codec helper
-      let body = baml.http.send(http)                          // host transport
-      let value: T = baml.sap.parse<T>(self._content_of(body)) // schema-aligned parse
-      baml.ai.Response<T> { value: value, meta: self._meta_of(body) }
-    }
-  }
+function Blah() -> string {
+  let task = ai.task<string>(MyDefault, prompt`Say hello.`)
+  MyDefault.generate<string>(task).value
 }
 ```
 
-Note what lives where:
+This is intentionally possible, but normal application code should prefer an
+LLM function plus a standard driver so it retains task identity, generated
+SDK typing, tracing, and shared safety policy. There should be no incentive
+to write a raw provider `fetch` call.
 
-- `request.messages()` crosses the one bridge from `PromptAst` to
-  `ChatMessage[]` — roles and media survive structurally; nothing is
-  flattened to a string.
-- Schema strategy is the provider's choice: this one renders a schema
-  string; a strict provider sends native JSON Schema either as
-  `response_format` or as a forced synthetic output tool; a constrained
-  decoder compiles a grammar. The `OpenAiStrict` reference uses the synthetic
-  tool form so top-level BAML unions can live under an object-valued `value`
-  parameter (OpenAI does not accept root-level `anyOf`). All are `Generate`,
-  because the observable shape is unchanged and the synthetic tool is a wire
-  codec detail, not an application `Tools` capability.
-- `_build_chat_request` / `_content_of` / `_meta_of` are private helpers.
-  HTTP codecs are implementation details, not capabilities — a wrapper or a
-  local model implements `generate` without them.
-
-## Step 6 — the response comes back up
-
-`generate` returns `Response<T> { value, meta }` — metadata is produced
-exactly once, on every call. The plain call's driver drops `meta`;
-`.with_meta` keeps it. Nothing ever issues a second model call just to read
-usage.
-
-## The complete trace, end to end
+## End-to-end trace
 
 ```text
-ExtractInvoice(scan, client = Cheap)
-  = baml.ai.run<Invoice>(ExtractInvoice.request(scan, client = Cheap))
-      ExtractInvoice.request:
-        ctx     = Context { output_format: render_output_format(Invoice), ... }
-        prompt  = template(ctx)                        # lazy template renders HERE
-        request = Request<Invoice> { provider: Cheap, prompt, identity, ... }
-      baml.ai.run:
-        match provider → Generate                      # negotiation, once
-        Cheap.generate<Invoice>(request)
-          messages = request.messages()                # PromptAst → ChatMessage[]
-          http     = build + send                      # provider-private codec
-          value    = sap.parse<Invoice>(content)       # response → typed value
-          Response { value, meta }
-        .value                                         # run drops meta
+ExtractInvoice(scan, $provider = Cheap)
+  -> ExtractInvoice.task(scan, $provider = Cheap)       compiler-generated
+       -> Task<Invoice, P> { $provider, ... }            P inferred from Cheap; no I/O
+  -> ai.drivers.drive(task)                        stdlib delegation
+       -> capability check for DriveProvider
+       -> Cheap.drive<Invoice>(task)                    provider default policy
+          -> one generation call, agent loop, or other typed completion
+       -> Response<Invoice> { value, meta }
+       -> value
 ```
 
-Six steps, each one an ordinary function you can read in the stdlib source.
-`baml describe ExtractInvoice` lists the task, its modifiers, the request
-signature, and the default client's capability interfaces.
-
-## Alternatives considered
-
-**Lower the plain call directly to a provider method** (skip the request).
-Rejected: then streaming, metadata, background, sessions, and every custom
-mode each need their own private rendering path, and "the same rendered
-invocation" stops being guaranteed across modes. One seam keeps the
-prompt-render, schema, and identity provably identical however the task
-runs.
-
-**Eager prompt rendering at the call site.** Rejected: `${ctx.output_format}`
-needs `T` and provider-sensitive context needs the chosen provider; eager
-rendering either forbids fallback re-rendering or renders wrong.
-
-**Flatten prompts to strings at the provider boundary.** Rejected: roles and
-media must survive to the wire; a text-only provider must *reject* an image
-part with a typed error, which it can only do if the part still exists.
-
-**A provider interface of codec stages** (`build_request` / `send` / `parse`
-as the capability). Rejected: the stages are meaningless for wrappers, local
-models, and test fixtures, which then implement fake methods; one semantic
-`generate` keeps the contract at the level every provider actually shares.
-Codec stages survive as optional shared helpers for HTTP providers.
+Only `.task` construction and direct-call lowering are compiler-owned.
+Drivers, providers, and capabilities are normal BAML code and may be extended
+with out-of-body `implements` blocks.

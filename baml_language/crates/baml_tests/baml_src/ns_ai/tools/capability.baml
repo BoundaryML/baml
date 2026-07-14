@@ -9,6 +9,13 @@ interface Tools requires Provider {
 
   function submit(self, transcript: Self.Transcript, results: ToolResult[]) -> Self.Transcript
     throws baml.errors.ToolError | baml.errors.UnknownError
+  // Providers that support changing the concrete roster override this. The
+  // identity default preserves compatibility for fixed-roster adapters.
+  function sync_tools(self, transcript: Self.Transcript, tools: Tool[]) -> Self.Transcript
+    throws baml.errors.ToolError | baml.errors.UnknownError {
+    transcript
+  }
+  function supports_dynamic_tools(self) -> bool throws never { false }
 }
 
 // Optional telemetry side-channel. It is deliberately non-generic so wrapping

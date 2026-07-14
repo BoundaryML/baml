@@ -1,22 +1,29 @@
+function _openai_tool_schemas(tools: Tool[]) -> json[] throws baml.errors.UnknownError {
+  tools.map((tool: Tool) -> json {
+    let schema = match (tool.input_schema) {
+      null => openai_strict_schema(tool.parameters),
+      let runtime_schema: json => openai_strict_json_schema(runtime_schema),
+    } catch (e) {
+      _ => throw baml.errors.UnknownError { data: e, message: ["tool schema generation failed"] },
+    };
+    {
+      "type": "function",
+      "function": {
+        "name": tool.name,
+        "description": tool.description,
+        "parameters": schema,
+        "strict": true,
+      },
+    }
+  })
+}
+
 implements Tools for OpenAi {
   type Transcript = OpenAiToolTranscript
 
   function begin<T>(self, request: Request<T>) -> OpenAiToolTranscript
       throws baml.errors.ToolError | baml.errors.UnknownError {
-    let tools_json: json[] = request.tools.map((tool: Tool) -> json {
-      let schema = openai_strict_schema(tool.parameters) catch (e) {
-        _ => throw baml.errors.UnknownError { data: e, message: ["tool schema generation failed"] },
-      };
-      {
-        "type": "function",
-        "function": {
-          "name": tool.name,
-          "description": tool.description,
-          "parameters": schema,
-          "strict": true,
-        },
-      }
-    });
+    let tools_json = _openai_tool_schemas(request.active_tools());
     OpenAiToolTranscript {
       model: self.model,
       api_key: self.api_key,
@@ -131,4 +138,15 @@ implements Tools for OpenAi {
     }
     transcript
   }
+
+  function sync_tools(
+    self,
+    transcript: OpenAiToolTranscript,
+    tools: Tool[],
+  ) -> OpenAiToolTranscript throws baml.errors.ToolError | baml.errors.UnknownError {
+    transcript.tools = _openai_tool_schemas(tools);
+    transcript
+  }
+
+  function supports_dynamic_tools(self) -> bool throws never { true }
 }
