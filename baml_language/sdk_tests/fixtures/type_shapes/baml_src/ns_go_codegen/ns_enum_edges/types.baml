@@ -37,11 +37,11 @@ function defaulted_state(value: ResponseState = ResponseState.pending_review) ->
 // These declarations deliberately project to the same package-scope Go base
 // name as each other. Typed collision allocation must preserve all three.
 enum Collision {
-  value,
+  item,
 }
 
-class CollisionValue {}
+class CollisionItem {}
 
-function collision_value() -> string {
+function collision_item() -> string {
   "function"
 }

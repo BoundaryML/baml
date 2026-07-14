@@ -600,18 +600,10 @@ fn convert_tir_leaf(
         TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(qtn)),
         TirTy::EnumVariant(qtn, _variant, _) => cg::Ty::Enum(name_from_qtn(qtn)),
 
-        // Type aliases: if recursive, keep as TypeAlias (opaque); otherwise inline.
-        TirTy::TypeAlias(qtn, _) => {
-            if recursive_aliases.contains(qtn) {
-                cg::Ty::TypeAlias(name_from_qtn(qtn))
-            } else if let Some(target) = alias_map.get(qtn) {
-                // Inline non-recursive aliases.
-                convert_tir_to_codegen_ty(target, alias_map, recursive_aliases)
-            } else {
-                // Unknown alias (e.g. from another package) — keep opaque as TypeAlias.
-                cg::Ty::TypeAlias(name_from_qtn(qtn))
-            }
-        }
+        // Preserve alias identity at every use site. The declaration carries
+        // the simplified target separately, so language generators can expose
+        // the alias in public APIs while recursively lowering it for wire work.
+        TirTy::TypeAlias(qtn, _) => cg::Ty::TypeAlias(name_from_qtn(qtn)),
 
         // Containers — recurse via convert_tir_to_codegen_ty so children are simplified.
         TirTy::List(inner, _) | TirTy::EvolvingList(inner, _) => cg::Ty::List(Box::new(
@@ -1312,6 +1304,55 @@ function Extract(client: string, text: string) -> string {
         let nullable_string = cg::Ty::Union(vec![cg::Ty::String, cg::Ty::Null]);
         assert_eq!(function.arguments[0].ty, nullable_string);
         assert_eq!(function.return_type, nullable_string);
+    }
+
+    #[test]
+    fn non_recursive_alias_identity_and_simplified_targets_reach_codegen() {
+        let root = Path::new("/tmp/non_recursive_alias_codegen_type");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            "type Text = string\ntype TextChain = Text\nfunction echo(value: TextChain) -> TextChain { value }\n",
+        );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+
+        let pool = build_symbol_pool(&db);
+        let text_name = pool
+            .keys()
+            .find(|name| name.name.as_str() == "Text")
+            .expect("Text alias missing")
+            .clone();
+        let chain_name = pool
+            .keys()
+            .find(|name| name.name.as_str() == "TextChain")
+            .expect("TextChain alias missing")
+            .clone();
+        let cg::Symbol::TypeAlias(text) = &pool[&text_name] else {
+            panic!("Text must be a type alias")
+        };
+        assert_eq!(text.resolves_to, cg::Ty::String);
+        let cg::Symbol::TypeAlias(chain) = &pool[&chain_name] else {
+            panic!("TextChain must be a type alias")
+        };
+        assert_eq!(chain.resolves_to, cg::Ty::TypeAlias(text_name));
+
+        let function = pool
+            .values()
+            .find_map(|symbol| match symbol {
+                cg::Symbol::Function(function) if function.name.as_str() == "echo" => {
+                    Some(function)
+                }
+                _ => None,
+            })
+            .expect("echo function missing from codegen pool");
+        assert_eq!(
+            function.arguments[0].ty,
+            cg::Ty::TypeAlias(chain_name.clone())
+        );
+        assert_eq!(function.return_type, cg::Ty::TypeAlias(chain_name));
     }
 
     #[test]

@@ -102,7 +102,8 @@ pub enum Ty {
     /// Enum type with resolved name.
     Enum(Name),
 
-    /// Type alias with resolved name (used for recursive type aliases).
+    /// Type alias with resolved name. Alias declarations separately carry the
+    /// simplified target, preserving both public identity and resolvability.
     TypeAlias(Name),
 
     /// A type-variable reference — `T` inside `class Box<T> { item T }` or
@@ -172,7 +173,7 @@ impl Ty {
                 ty.validate()
             }
             Ty::Map { key, value } => {
-                if !matches!(key.as_ref(), Ty::String | Ty::Enum(_)) {
+                if !matches!(key.as_ref(), Ty::String | Ty::Enum(_) | Ty::TypeAlias(_)) {
                     return Err(super::CodegenTypeError::InvalidMapKey(*key.clone()));
                 }
                 if matches!(value.as_ref(), Ty::Unit) {

@@ -85,6 +85,17 @@ var (
 	_ func(context.Context, baml_sdk.GoCodegenEnumEdgesEnumMatrix) (baml_sdk.GoCodegenEnumEdgesEnumMatrix, error)                 = baml_sdk.GoCodegenEnumEdgesRoundTripMatrix
 	_ func(context.Context, ...baml_sdk.GoCodegenEnumEdgesDefaultedStateOption) (baml_sdk.GoCodegenEnumEdgesResponseState, error) = baml_sdk.GoCodegenEnumEdgesDefaultedState
 	_ func(baml_sdk.GoCodegenEnumEdgesResponseState) baml_sdk.GoCodegenEnumEdgesDefaultedStateOption                              = baml_sdk.WithGoCodegenEnumEdgesDefaultedStateValue
+
+	_ func(context.Context, baml_sdk.AliasesStringList) (baml_sdk.AliasesStringList, error)                                 = baml_sdk.AliasesRoundTripStringList
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesTextChain) (baml_sdk.GoCodegenAliasEdgesTextChain, error)           = baml_sdk.GoCodegenAliasEdgesRoundTripText
+	_ func(context.Context, *baml_sdk.GoCodegenAliasEdgesTextChain) (*baml_sdk.GoCodegenAliasEdgesTextChain, error)         = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalText
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesOptionalState) (baml_sdk.GoCodegenAliasEdgesOptionalState, error)   = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalState
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesBigNumber) (baml_sdk.GoCodegenAliasEdgesBigNumber, error)           = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalBigNumber
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesStates) (baml_sdk.GoCodegenAliasEdgesStates, error)                 = baml_sdk.GoCodegenAliasEdgesRoundTripStates
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesStatesByKey) (baml_sdk.GoCodegenAliasEdgesStatesByKey, error)       = baml_sdk.GoCodegenAliasEdgesRoundTripStatesByKey
+	_ func(context.Context, baml_sdk.GoCodegenAliasEdgesOptionalStates) (baml_sdk.GoCodegenAliasEdgesOptionalStates, error) = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalStates
+	_ func(context.Context, ...baml_sdk.GoCodegenAliasEdgesDefaultedStateOption) (baml_sdk.GoCodegenAliasEdgesState, error) = baml_sdk.GoCodegenAliasEdgesDefaultedState
+	_ func(baml_sdk.GoCodegenAliasEdgesState) baml_sdk.GoCodegenAliasEdgesDefaultedStateOption                              = baml_sdk.WithGoCodegenAliasEdgesDefaultedStateValue
 )
 
 var (
@@ -633,11 +644,140 @@ func TestDefaultedEnumArgumentAndInvalidValues(t *testing.T) {
 }
 
 func TestEnumPackageScopeCollisionsCompileAndRun(t *testing.T) {
-	_ = baml_sdk.GoCodegenEnumEdgesCollisionValue_5169cfc7
-	_ = baml_sdk.GoCodegenEnumEdgesCollisionValue_538227f1{}
-	got, err := baml_sdk.GoCodegenEnumEdgesCollisionValue_8f55bfa0(context.Background())
+	_ = baml_sdk.GoCodegenEnumEdgesCollisionItem_737da72b
+	_ = baml_sdk.GoCodegenEnumEdgesCollisionItem_3b21dc73{}
+	got, err := baml_sdk.GoCodegenEnumEdgesCollisionItem_40cc0a70(context.Background())
 	if err != nil || got != "function" {
 		t.Fatalf("colliding function = %q, %v", got, err)
+	}
+}
+
+func TestTransparentAliasFunctionsRoundTrip(t *testing.T) {
+	list := baml_sdk.AliasesStringList{"first", "second"}
+	gotList, err := baml_sdk.AliasesRoundTripStringList(context.Background(), list)
+	if err != nil || !reflect.DeepEqual(gotList, list) {
+		t.Fatalf("alias list = %#v, %v, want %#v", gotList, err, list)
+	}
+
+	text := baml_sdk.GoCodegenAliasEdgesTextChain("hello")
+	gotText, err := baml_sdk.GoCodegenAliasEdgesRoundTripText(context.Background(), text)
+	if err != nil || gotText != text {
+		t.Fatalf("alias chain = %q, %v", gotText, err)
+	}
+	gotOptionalText, err := baml_sdk.GoCodegenAliasEdgesRoundTripOptionalText(
+		context.Background(),
+		&text,
+	)
+	if err != nil || gotOptionalText == nil || *gotOptionalText != text {
+		t.Fatalf("optional alias chain = %#v, %v", gotOptionalText, err)
+	}
+	gotOptionalText, err = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalText(
+		context.Background(),
+		nil,
+	)
+	if err != nil || gotOptionalText != nil {
+		t.Fatalf("null optional alias chain = %#v, %v", gotOptionalText, err)
+	}
+
+	state := baml_sdk.GoCodegenAliasEdgesState(
+		baml_sdk.GoCodegenEnumEdgesResponseStateAccepted,
+	)
+	gotState, err := baml_sdk.GoCodegenAliasEdgesRoundTripOptionalState(
+		context.Background(),
+		&state,
+	)
+	if err != nil || gotState == nil || *gotState != state {
+		t.Fatalf("nullable alias over nullable enum = %#v, %v", gotState, err)
+	}
+	gotState, err = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalState(
+		context.Background(),
+		nil,
+	)
+	if err != nil || gotState != nil {
+		t.Fatalf("null alias over nullable enum = %#v, %v", gotState, err)
+	}
+
+	bigNumber := baml_sdk.GoCodegenAliasEdgesBigNumber(big.NewInt(123456789))
+	gotBigNumber, err := baml_sdk.GoCodegenAliasEdgesRoundTripOptionalBigNumber(
+		context.Background(),
+		bigNumber,
+	)
+	if err != nil || gotBigNumber == nil || gotBigNumber.Cmp(bigNumber) != 0 {
+		t.Fatalf("optional bigint alias = %v, %v", gotBigNumber, err)
+	}
+	gotBigNumber, err = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalBigNumber(
+		context.Background(),
+		nil,
+	)
+	if err != nil || gotBigNumber != nil {
+		t.Fatalf("null bigint alias = %v, %v", gotBigNumber, err)
+	}
+}
+
+func TestAliasContainerCompositionAndDefaults(t *testing.T) {
+	pending := baml_sdk.GoCodegenAliasEdgesState(
+		baml_sdk.GoCodegenEnumEdgesResponseStatePendingReview,
+	)
+	httpError := baml_sdk.GoCodegenAliasEdgesState(
+		baml_sdk.GoCodegenEnumEdgesResponseStateHTTPError,
+	)
+	states := baml_sdk.GoCodegenAliasEdgesStates{pending, httpError}
+	statesByKey := baml_sdk.GoCodegenAliasEdgesStatesByKey{
+		baml_sdk.GoCodegenAliasEdgesKey("error"): httpError,
+	}
+	gotStates, err := baml_sdk.GoCodegenAliasEdgesRoundTripStates(context.Background(), states)
+	if err != nil || !reflect.DeepEqual(gotStates, states) {
+		t.Fatalf("aliased list = %#v, %v, want %#v", gotStates, err, states)
+	}
+	gotByKey, err := baml_sdk.GoCodegenAliasEdgesRoundTripStatesByKey(
+		context.Background(),
+		statesByKey,
+	)
+	if err != nil || !reflect.DeepEqual(gotByKey, statesByKey) {
+		t.Fatalf("aliased map key = %#v, %v, want %#v", gotByKey, err, statesByKey)
+	}
+	gotOptionalStates, err := baml_sdk.GoCodegenAliasEdgesRoundTripOptionalStates(
+		context.Background(),
+		&states,
+	)
+	if err != nil || gotOptionalStates == nil || !reflect.DeepEqual(*gotOptionalStates, states) {
+		t.Fatalf("optional aliased list = %#v, %v", gotOptionalStates, err)
+	}
+	gotOptionalStates, err = baml_sdk.GoCodegenAliasEdgesRoundTripOptionalStates(
+		context.Background(),
+		nil,
+	)
+	if err != nil || gotOptionalStates != nil {
+		t.Fatalf("null optional aliased list = %#v, %v", gotOptionalStates, err)
+	}
+
+	defaulted, err := baml_sdk.GoCodegenAliasEdgesDefaultedState(context.Background())
+	if err != nil || defaulted != pending {
+		t.Fatalf("defaulted alias = %q, %v", defaulted, err)
+	}
+	defaulted, err = baml_sdk.GoCodegenAliasEdgesDefaultedState(
+		context.Background(),
+		baml_sdk.WithGoCodegenAliasEdgesDefaultedStateValue(httpError),
+	)
+	if err != nil || defaulted != httpError {
+		t.Fatalf("overridden alias default = %q, %v", defaulted, err)
+	}
+
+	invalid := baml_sdk.GoCodegenAliasEdgesState("not_declared")
+	if _, err := baml_sdk.GoCodegenAliasEdgesDefaultedState(
+		context.Background(),
+		baml_sdk.WithGoCodegenAliasEdgesDefaultedStateValue(invalid),
+	); err == nil || !strings.Contains(err.Error(), `variant "not_declared"`) {
+		t.Fatalf("invalid enum alias error = %v", err)
+	}
+}
+
+func TestAliasPackageScopeCollisionsCompileAndRun(t *testing.T) {
+	_ = baml_sdk.GoCodegenAliasEdgesCollisionItem_ea5961c6("alias")
+	_ = baml_sdk.GoCodegenAliasEdgesCollisionItem_f279d073
+	got, err := baml_sdk.GoCodegenAliasEdgesCollisionItem_77850bc8(context.Background())
+	if err != nil || got != "function" {
+		t.Fatalf("colliding alias function = %q, %v", got, err)
 	}
 }
 

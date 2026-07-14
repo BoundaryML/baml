@@ -1,10 +1,10 @@
 //! Greenfield Go SDK emitter.
 //!
-//! The current vertical slice covers primitive free functions, class- and
-//! enum-typed functions over primitives, enums, classes, lists, string-keyed
-//! maps, and nullable wrappers at any position; defaulted function arguments
-//! via typed functional options; and non-generic class declarations composed
-//! from the same shapes.
+//! The current vertical slice covers primitive free functions, class-, enum-,
+//! and alias-typed functions over primitives, transparent non-recursive type
+//! aliases, enums, classes, lists, string-keyed maps, and nullable wrappers at
+//! any position; defaulted function arguments via typed functional options;
+//! and non-generic class declarations composed from the same shapes.
 //! Nullable and container class edges support finite recursive values, while
 //! impossible required-only direct class cycles remain omitted. A BAML package
 //! becomes one Go package. BAML namespaces stay within that Go package and
@@ -20,7 +20,7 @@ use std::{
 use baml_base::{Literal, Name as BaseName};
 use baml_codegen_types::{
     Class, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention, Symbol,
-    SymbolPool, Ty,
+    SymbolPool, Ty, TypeAlias,
 };
 
 mod names;
@@ -54,6 +54,7 @@ pub fn to_source_code_with_bytecode(
         .get(&BaseName::new("user"))
         .import_path(sdk_import_path);
     let renderable_classes = renderable_class_names(pool);
+    let renderable_aliases = renderable_alias_names(pool, &renderable_classes);
     let wireable_classes = wireable_class_names(pool, &renderable_classes);
     let cyclic_edges = cyclic_class_edges(pool, &renderable_classes);
     let mut files = HashMap::from([(
@@ -66,6 +67,7 @@ pub fn to_source_code_with_bytecode(
         let codecs = WireCodecs::for_functions(&functions, pool);
         let classes = generated_classes(pool, &names, package, &renderable_classes);
         let enums = generated_enums(pool, &names, package);
+        let aliases = generated_aliases(pool, &names, package, &renderable_aliases);
         if !functions.is_empty() || package.baml_name().as_str() == "user" {
             files.insert(
                 package.file("functions.go"),
@@ -80,17 +82,21 @@ pub fn to_source_code_with_bytecode(
                 ),
             );
         }
-        if !classes.is_empty() || !enums.is_empty() {
+        if !aliases.is_empty() || !classes.is_empty() || !enums.is_empty() {
             files.insert(
                 package.file("types.go"),
                 render_types(
+                    &aliases,
                     &enums,
                     &classes,
-                    package.go_name(),
-                    &names,
-                    &packages,
-                    &cyclic_edges,
-                    sdk_import_path,
+                    &TypeRenderContext {
+                        current_package: package.go_name(),
+                        pool,
+                        names: &names,
+                        packages: &packages,
+                        cyclic_edges: &cyclic_edges,
+                        sdk_import_path,
+                    },
                 ),
             );
         }
@@ -109,7 +115,7 @@ fn generated_functions<'a>(
         .filter_map(|(name, symbol)| match symbol {
             Symbol::Function(function)
                 if name.pkg == *package.baml_name()
-                    && supported_function(function, wireable_classes) =>
+                    && supported_function(function, pool, wireable_classes) =>
             {
                 Some((name, function))
             }
@@ -194,6 +200,12 @@ struct GeneratedEnumVariant {
     go_name: GoName,
 }
 
+struct GeneratedAlias<'a> {
+    name: &'a Name,
+    alias: &'a TypeAlias,
+    go_name: GoName,
+}
+
 struct GeneratedField<'a> {
     property: &'a ClassProperty,
     go_name: GoName,
@@ -204,6 +216,7 @@ struct WireCodecs {
     class_indexes: BTreeMap<Name, usize>,
     enum_names: Vec<Name>,
     enum_indexes: BTreeMap<Name, usize>,
+    alias_targets: BTreeMap<Name, Ty>,
 }
 
 impl WireCodecs {
@@ -235,11 +248,21 @@ impl WireCodecs {
             .enumerate()
             .map(|(index, name)| (name, index))
             .collect();
+        let alias_targets = pool
+            .iter()
+            .filter_map(|(name, symbol)| match symbol {
+                Symbol::TypeAlias(alias) if !alias.recursive => {
+                    Some((name.clone(), alias.resolves_to.clone()))
+                }
+                _ => None,
+            })
+            .collect();
         Self {
             class_names,
             class_indexes,
             enum_names,
             enum_indexes,
+            alias_targets,
         }
     }
 
@@ -262,6 +285,12 @@ impl WireCodecs {
                 .expect("enum codec was not registered"),
         )
     }
+
+    fn alias_target(&self, name: &Name) -> &Ty {
+        self.alias_targets
+            .get(name)
+            .expect("type alias codec was not registered")
+    }
 }
 
 fn collect_codec_types(
@@ -270,26 +299,51 @@ fn collect_codec_types(
     class_names: &mut BTreeSet<Name>,
     enum_names: &mut BTreeSet<Name>,
 ) {
+    let mut aliases = HashSet::new();
+    collect_codec_types_inner(ty, pool, class_names, enum_names, &mut aliases);
+}
+
+fn collect_codec_types_inner(
+    ty: &Ty,
+    pool: &SymbolPool,
+    class_names: &mut BTreeSet<Name>,
+    enum_names: &mut BTreeSet<Name>,
+    aliases: &mut HashSet<Name>,
+) {
     if primitive_kind(ty).is_some() {
         return;
     }
     if let Ty::Union(items) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
-        collect_codec_types(inner, pool, class_names, enum_names);
+        collect_codec_types_inner(inner, pool, class_names, enum_names, aliases);
         return;
     }
     match ty {
         Ty::List(inner) => {
-            collect_codec_types(inner, pool, class_names, enum_names);
+            collect_codec_types_inner(inner, pool, class_names, enum_names, aliases);
             return;
         }
         Ty::Map { key, value } => {
-            collect_codec_types(key, pool, class_names, enum_names);
-            collect_codec_types(value, pool, class_names, enum_names);
+            collect_codec_types_inner(key, pool, class_names, enum_names, aliases);
+            collect_codec_types_inner(value, pool, class_names, enum_names, aliases);
             return;
         }
         Ty::Enum(name) => {
             enum_names.insert(name.clone());
+            return;
+        }
+        Ty::TypeAlias(name) => {
+            if !aliases.insert(name.clone()) {
+                return;
+            }
+            let Symbol::TypeAlias(alias) = &pool[name] else {
+                unreachable!("type alias reference did not resolve to a type alias symbol")
+            };
+            debug_assert!(
+                !alias.recursive,
+                "recursive aliases are filtered before codecs"
+            );
+            collect_codec_types_inner(&alias.resolves_to, pool, class_names, enum_names, aliases);
             return;
         }
         _ => {}
@@ -305,7 +359,7 @@ fn collect_codec_types(
         unreachable!()
     };
     for property in &class.properties {
-        collect_codec_types(&property.ty, pool, class_names, enum_names);
+        collect_codec_types_inner(&property.ty, pool, class_names, enum_names, aliases);
     }
 }
 
@@ -397,6 +451,40 @@ fn generated_enums<'a>(
         .collect()
 }
 
+fn generated_aliases<'a>(
+    pool: &'a SymbolPool,
+    names: &GoNames,
+    package: &GoPackage,
+    renderable: &BTreeSet<Name>,
+) -> Vec<GeneratedAlias<'a>> {
+    let mut aliases = pool
+        .iter()
+        .filter_map(|(name, symbol)| match symbol {
+            Symbol::TypeAlias(alias)
+                if name.pkg == *package.baml_name() && renderable.contains(name) =>
+            {
+                Some((name, alias))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    aliases.sort_by(|(left, _), (right, _)| left.cmp(right));
+    aliases
+        .into_iter()
+        .map(|(name, alias)| GeneratedAlias {
+            name,
+            alias,
+            go_name: names
+                .project(
+                    &BamlFqn::symbol(name),
+                    GoNameKind::TypeAlias,
+                    GoVisibility::Exported,
+                )
+                .clone(),
+        })
+        .collect()
+}
+
 fn renderable_class_names(pool: &SymbolPool) -> BTreeSet<Name> {
     let mut candidates = pool
         .iter()
@@ -413,10 +501,9 @@ fn renderable_class_names(pool: &SymbolPool) -> BTreeSet<Name> {
                 let Symbol::Class(class) = &pool[*name] else {
                     unreachable!()
                 };
-                class
-                    .properties
-                    .iter()
-                    .all(|property| supported_class_type(&property.ty, &candidates))
+                class.properties.iter().all(|property| {
+                    supported_declared_type(&property.ty, pool, &candidates, &mut HashSet::new())
+                })
             })
             .cloned()
             .collect::<BTreeSet<_>>();
@@ -427,19 +514,72 @@ fn renderable_class_names(pool: &SymbolPool) -> BTreeSet<Name> {
     }
 }
 
-fn supported_class_type(ty: &Ty, classes: &BTreeSet<Name>) -> bool {
+fn renderable_alias_names(pool: &SymbolPool, classes: &BTreeSet<Name>) -> BTreeSet<Name> {
+    pool.iter()
+        .filter_map(|(name, symbol)| {
+            let Symbol::TypeAlias(alias) = symbol else {
+                return None;
+            };
+            (!alias.recursive
+                && supported_declared_type(
+                    &alias.resolves_to,
+                    pool,
+                    classes,
+                    &mut HashSet::from([name.clone()]),
+                ))
+            .then(|| name.clone())
+        })
+        .collect()
+}
+
+fn supported_declared_type(
+    ty: &Ty,
+    pool: &SymbolPool,
+    classes: &BTreeSet<Name>,
+    aliases: &mut HashSet<Name>,
+) -> bool {
     if primitive_kind(ty).is_some() {
         return true;
     }
     match ty {
         Ty::Enum(_) => true,
         Ty::Class(name, arguments) => arguments.is_empty() && classes.contains(name),
-        Ty::List(inner) => supported_class_type(inner, classes),
-        Ty::Map { key, value } => {
-            matches!(key.as_ref(), Ty::String) && supported_class_type(value, classes)
+        Ty::TypeAlias(name) => {
+            if !aliases.insert(name.clone()) {
+                return false;
+            }
+            let supported = matches!(
+                &pool[name],
+                Symbol::TypeAlias(alias)
+                    if !alias.recursive
+                        && supported_declared_type(&alias.resolves_to, pool, classes, aliases)
+            );
+            aliases.remove(name);
+            supported
         }
-        Ty::Union(items) => {
-            nullable_inner(items).is_some_and(|inner| supported_class_type(inner, classes))
+        Ty::List(inner) => supported_declared_type(inner, pool, classes, aliases),
+        Ty::Map { key, value } => {
+            declared_map_key_is_string(key, pool, aliases)
+                && supported_declared_type(value, pool, classes, aliases)
+        }
+        Ty::Union(items) => nullable_inner(items)
+            .is_some_and(|inner| supported_declared_type(inner, pool, classes, aliases)),
+        _ => false,
+    }
+}
+
+fn declared_map_key_is_string(ty: &Ty, pool: &SymbolPool, aliases: &mut HashSet<Name>) -> bool {
+    match ty {
+        Ty::String => true,
+        Ty::TypeAlias(name) if aliases.insert(name.clone()) => {
+            let is_string = match &pool[name] {
+                Symbol::TypeAlias(alias) if !alias.recursive => {
+                    declared_map_key_is_string(&alias.resolves_to, pool, aliases)
+                }
+                _ => false,
+            };
+            aliases.remove(name);
+            is_string
         }
         _ => false,
     }
@@ -458,14 +598,9 @@ fn wireable_class_names(pool: &SymbolPool, renderable: &BTreeSet<Name>) -> BTree
             let targets = class
                 .properties
                 .iter()
-                .filter_map(|property| match &property.ty {
-                    Ty::Class(target, arguments)
-                        if arguments.is_empty() && renderable.contains(target) =>
-                    {
-                        Some(target.clone())
-                    }
-                    _ => None,
-                })
+                .filter_map(|property| direct_required_class_target(&property.ty, pool))
+                .filter(|target| renderable.contains(target))
+                .cloned()
                 .collect::<BTreeSet<_>>();
             (name.clone(), targets)
         })
@@ -492,7 +627,7 @@ fn wireable_class_names(pool: &SymbolPool, renderable: &BTreeSet<Name>) -> BTree
                     unreachable!()
                 };
                 class.properties.iter().all(|property| {
-                    class_targets(&property.ty)
+                    class_targets(&property.ty, pool, &mut HashSet::new())
                         .into_iter()
                         .all(|target| wireable.contains(target))
                 })
@@ -506,13 +641,53 @@ fn wireable_class_names(pool: &SymbolPool, renderable: &BTreeSet<Name>) -> BTree
     }
 }
 
-fn class_targets(ty: &Ty) -> Vec<&Name> {
+fn class_targets<'a>(
+    ty: &'a Ty,
+    pool: &'a SymbolPool,
+    aliases: &mut HashSet<Name>,
+) -> Vec<&'a Name> {
     match ty {
         Ty::Class(name, arguments) if arguments.is_empty() => vec![name],
-        Ty::List(inner) => class_targets(inner),
-        Ty::Map { value, .. } => class_targets(value),
-        Ty::Union(items) => nullable_inner(items).map_or_else(Vec::new, class_targets),
+        Ty::TypeAlias(name) => {
+            if !aliases.insert(name.clone()) {
+                return Vec::new();
+            }
+            let result = match &pool[name] {
+                Symbol::TypeAlias(alias) if !alias.recursive => {
+                    class_targets(&alias.resolves_to, pool, aliases)
+                }
+                _ => Vec::new(),
+            };
+            aliases.remove(name);
+            result
+        }
+        Ty::List(inner) => class_targets(inner, pool, aliases),
+        Ty::Map { value, .. } => class_targets(value, pool, aliases),
+        Ty::Union(items) => nullable_inner(items)
+            .map(|inner| class_targets(inner, pool, aliases))
+            .unwrap_or_default(),
         _ => Vec::new(),
+    }
+}
+
+fn direct_required_class_target<'a>(ty: &'a Ty, pool: &'a SymbolPool) -> Option<&'a Name> {
+    direct_required_class_target_inner(ty, pool, &mut HashSet::new())
+}
+
+fn direct_required_class_target_inner<'a>(
+    ty: &'a Ty,
+    pool: &'a SymbolPool,
+    aliases: &mut HashSet<Name>,
+) -> Option<&'a Name> {
+    match ty {
+        Ty::Class(name, arguments) if arguments.is_empty() => Some(name),
+        Ty::TypeAlias(name) if aliases.insert(name.clone()) => match &pool[name] {
+            Symbol::TypeAlias(alias) if !alias.recursive => {
+                direct_required_class_target_inner(&alias.resolves_to, pool, aliases)
+            }
+            _ => None,
+        },
+        _ => None,
     }
 }
 
@@ -533,14 +708,9 @@ fn cyclic_class_edges(pool: &SymbolPool, classes: &BTreeSet<Name>) -> BTreeSet<(
             let targets = class
                 .properties
                 .iter()
-                .filter_map(|property| match &property.ty {
-                    Ty::Class(target, arguments)
-                        if arguments.is_empty() && classes.contains(target) =>
-                    {
-                        Some(target.clone())
-                    }
-                    _ => None,
-                })
+                .filter_map(|property| direct_required_class_target(&property.ty, pool))
+                .filter(|target| classes.contains(target))
+                .cloned()
                 .collect::<BTreeSet<_>>();
             (name.clone(), targets)
         })
@@ -575,23 +745,42 @@ fn reaches_class(
     })
 }
 
-fn supported_function(function: &Function, wireable_classes: &BTreeSet<Name>) -> bool {
+fn supported_function(
+    function: &Function,
+    pool: &SymbolPool,
+    wireable_classes: &BTreeSet<Name>,
+) -> bool {
     function.generic_params.is_empty()
         && function
             .arguments
             .iter()
-            .all(|arg| supported_wire_type(&arg.ty, wireable_classes))
-        && (supported_wire_type(&function.return_type, wireable_classes)
-            || matches!(function.return_type, Ty::Unit))
+            .all(|arg| supported_wire_type(&arg.ty, pool, wireable_classes, &mut HashSet::new()))
+        && (supported_wire_type(
+            &function.return_type,
+            pool,
+            wireable_classes,
+            &mut HashSet::new(),
+        ) || matches!(function.return_type, Ty::Unit))
 }
 
-fn supported_wire_type(ty: &Ty, wireable_classes: &BTreeSet<Name>) -> bool {
+fn supported_wire_type(
+    ty: &Ty,
+    pool: &SymbolPool,
+    wireable_classes: &BTreeSet<Name>,
+    aliases: &mut HashSet<Name>,
+) -> bool {
     primitive_kind(ty).is_some()
         || matches!(ty, Ty::Enum(_))
         || matches!(ty, Ty::Class(name, arguments) if arguments.is_empty() && wireable_classes.contains(name))
-        || matches!(ty, Ty::List(inner) if supported_wire_type(inner, wireable_classes))
-        || matches!(ty, Ty::Map { key, value } if matches!(key.as_ref(), Ty::String) && supported_wire_type(value, wireable_classes))
-        || matches!(ty, Ty::Union(items) if nullable_inner(items).is_some_and(|inner| supported_wire_type(inner, wireable_classes)))
+        || matches!(ty, Ty::TypeAlias(name) if aliases.insert(name.clone()) && matches!(
+            &pool[name],
+            Symbol::TypeAlias(alias)
+                if !alias.recursive
+                    && supported_wire_type(&alias.resolves_to, pool, wireable_classes, aliases)
+        ))
+        || matches!(ty, Ty::List(inner) if supported_wire_type(inner, pool, wireable_classes, aliases))
+        || matches!(ty, Ty::Map { key, value } if declared_map_key_is_string(key, pool, aliases) && supported_wire_type(value, pool, wireable_classes, aliases))
+        || matches!(ty, Ty::Union(items) if nullable_inner(items).is_some_and(|inner| supported_wire_type(inner, pool, wireable_classes, aliases)))
 }
 
 #[derive(Clone, Copy)]
@@ -655,11 +844,11 @@ fn render_functions(
     imports.add_generator(context_package, "context");
     if functions.iter().any(|routed| {
         let function = routed.function;
-        function_type_uses_bigint(&function.return_type)
+        function_type_uses_bigint(&function.return_type, codecs)
             || function
                 .arguments
                 .iter()
-                .any(|argument| function_type_uses_bigint(&argument.ty))
+                .any(|argument| function_type_uses_bigint(&argument.ty, codecs))
     }) {
         imports.add_generator(GeneratorIdent::BigPackage, "math/big");
     }
@@ -707,7 +896,7 @@ fn render_functions(
                 format!(
                     "{} {}",
                     argument.go_name.identifier(current_package),
-                    function_go_type(&argument.argument.ty, current_package, names)
+                    function_go_type(&argument.argument.ty, current_package, names, codecs)
                 )
             })
             .collect::<Vec<_>>();
@@ -731,7 +920,7 @@ fn render_functions(
                 out,
                 "\nfunc {go_name}({}) ({}, {error_type}) {{",
                 params.join(", "),
-                function_go_type(&function.return_type, current_package, names)
+                function_go_type(&function.return_type, current_package, names, codecs)
             );
         }
         let _ = writeln!(
@@ -744,7 +933,7 @@ fn render_functions(
             let _ = writeln!(
                 out,
                 "\t\tvar {zero_local} {}",
-                function_go_type(&function.return_type, current_package, names)
+                function_go_type(&function.return_type, current_package, names, codecs)
             );
             let _ = writeln!(out, "\t\treturn {zero_local}, {error_local}\n\t}}");
         }
@@ -823,7 +1012,7 @@ fn render_functions(
             let _ = writeln!(
                 out,
                 "\t\tvar {zero_local} {}",
-                function_go_type(&function.return_type, current_package, names)
+                function_go_type(&function.return_type, current_package, names, codecs)
             );
             let _ = writeln!(out, "\t\treturn {zero_local}, {error_local}\n\t}}");
             let _ = writeln!(
@@ -871,7 +1060,7 @@ fn render_function_options(
         let _ = writeln!(
             out,
             "\nfunc {setter}({value_parameter} {}) {option_type} {{",
-            function_go_type(&argument.argument.ty, current_package, names)
+            function_go_type(&argument.argument.ty, current_package, names, codecs)
         );
         let _ = writeln!(
             out,
@@ -961,6 +1150,31 @@ fn add_wire_type_imports(
             }
             return;
         }
+        Ty::TypeAlias(name) => {
+            let target_package = packages.get(&name.pkg);
+            if target_package.go_name() != current_package {
+                imports.add_package(
+                    target_package.go_name(),
+                    &target_package.import_path(sdk_import_path),
+                );
+            }
+            if !visited.insert(name.clone()) {
+                return;
+            }
+            let Symbol::TypeAlias(alias) = &pool[name] else {
+                unreachable!("type alias reference did not resolve to a type alias symbol")
+            };
+            add_wire_type_imports(
+                &alias.resolves_to,
+                current_package,
+                pool,
+                packages,
+                sdk_import_path,
+                imports,
+                visited,
+            );
+            return;
+        }
         _ => {}
     }
     let Ty::Class(name, arguments) = ty else {
@@ -993,14 +1207,19 @@ fn add_wire_type_imports(
     }
 }
 
-fn function_go_type(ty: &Ty, current_package: &GoPackageName, names: &GoNames) -> String {
+fn function_go_type(
+    ty: &Ty,
+    current_package: &GoPackageName,
+    names: &GoNames,
+    codecs: &WireCodecs,
+) -> String {
     if primitive_kind(ty).is_some() {
         return go_type(ty);
     }
     if let Ty::Union(items) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
-        let rendered = function_go_type(inner, current_package, names);
-        return if matches!(primitive_kind(inner), Some(PrimitiveKind::Bigint)) {
+        let rendered = function_go_type(inner, current_package, names, codecs);
+        return if wire_type_has_pointer_representation(inner, codecs) {
             rendered
         } else {
             format!("*{rendered}")
@@ -1008,14 +1227,16 @@ fn function_go_type(ty: &Ty, current_package: &GoPackageName, names: &GoNames) -
     }
     match ty {
         Ty::List(inner) => {
-            return format!("[]{}", function_go_type(inner, current_package, names));
+            return format!(
+                "[]{}",
+                function_go_type(inner, current_package, names, codecs)
+            );
         }
         Ty::Map { key, value } => {
-            debug_assert!(matches!(key.as_ref(), Ty::String));
             return format!(
                 "map[{}]{}",
-                GeneratorIdent::StringType,
-                function_go_type(value, current_package, names)
+                function_go_type(key, current_package, names, codecs),
+                function_go_type(value, current_package, names, codecs)
             );
         }
         Ty::Enum(name) => {
@@ -1023,6 +1244,16 @@ fn function_go_type(ty: &Ty, current_package: &GoPackageName, names: &GoNames) -
                 .project(
                     &BamlFqn::symbol(name),
                     GoNameKind::Enum,
+                    GoVisibility::Exported,
+                )
+                .identifier(current_package)
+                .to_string();
+        }
+        Ty::TypeAlias(name) => {
+            return names
+                .project(
+                    &BamlFqn::symbol(name),
+                    GoNameKind::TypeAlias,
                     GoVisibility::Exported,
                 )
                 .identifier(current_package)
@@ -1044,21 +1275,51 @@ fn function_go_type(ty: &Ty, current_package: &GoPackageName, names: &GoNames) -
         .to_string()
 }
 
-fn function_type_uses_bigint(ty: &Ty) -> bool {
+fn wire_type_is_bigint(ty: &Ty, codecs: &WireCodecs) -> bool {
     matches!(primitive_kind(ty), Some(PrimitiveKind::Bigint))
-        || matches!(ty, Ty::List(inner) if function_type_uses_bigint(inner))
-        || matches!(ty, Ty::Map { key, value } if function_type_uses_bigint(key) || function_type_uses_bigint(value))
-        || matches!(ty, Ty::Union(items) if nullable_inner(items).is_some_and(function_type_uses_bigint))
+        || matches!(ty, Ty::TypeAlias(name) if wire_type_is_bigint(codecs.alias_target(name), codecs))
+}
+
+fn wire_map_key_is_string(ty: &Ty, codecs: &WireCodecs) -> bool {
+    matches!(ty, Ty::String)
+        || matches!(ty, Ty::TypeAlias(name) if wire_map_key_is_string(codecs.alias_target(name), codecs))
+}
+
+fn wire_type_has_pointer_representation(ty: &Ty, codecs: &WireCodecs) -> bool {
+    wire_type_is_bigint(ty, codecs)
+        || matches!(ty, Ty::Union(_))
+        || matches!(ty, Ty::TypeAlias(name) if wire_type_has_pointer_representation(codecs.alias_target(name), codecs))
+}
+
+fn wire_type_is_nullable_alias(ty: &Ty, codecs: &WireCodecs) -> bool {
+    matches!(ty, Ty::TypeAlias(name) if {
+        let target = codecs.alias_target(name);
+        matches!(target, Ty::Union(_)) || wire_type_is_nullable_alias(target, codecs)
+    })
+}
+
+fn function_type_uses_bigint(ty: &Ty, codecs: &WireCodecs) -> bool {
+    matches!(primitive_kind(ty), Some(PrimitiveKind::Bigint))
+        || matches!(ty, Ty::TypeAlias(name) if function_type_uses_bigint(codecs.alias_target(name), codecs))
+        || matches!(ty, Ty::List(inner) if function_type_uses_bigint(inner, codecs))
+        || matches!(ty, Ty::Map { key, value } if function_type_uses_bigint(key, codecs) || function_type_uses_bigint(value, codecs))
+        || matches!(ty, Ty::Union(items) if nullable_inner(items).is_some_and(|inner| function_type_uses_bigint(inner, codecs)))
 }
 
 fn input_expression(ty: &Ty, value: &str, codecs: &WireCodecs) -> String {
+    if let Ty::TypeAlias(name) = ty {
+        return input_expression(codecs.alias_target(name), value, codecs);
+    }
     let runtime_package = GeneratorIdent::RuntimePackage;
     if primitive_kind(ty).is_some() {
         return format!("{runtime_package}.{}({value})", input_constructor(ty));
     }
     if let Ty::Union(items) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
-        if matches!(primitive_kind(inner), Some(PrimitiveKind::Bigint)) {
+        if wire_type_is_nullable_alias(inner, codecs) {
+            return input_expression(inner, value, codecs);
+        }
+        if wire_type_is_bigint(inner, codecs) {
             return format!("{runtime_package}.OptionalBigInt({value})");
         }
         return format!(
@@ -1070,6 +1331,9 @@ fn input_expression(ty: &Ty, value: &str, codecs: &WireCodecs) -> String {
 }
 
 fn input_encoder(ty: &Ty, codecs: &WireCodecs) -> String {
+    if let Ty::TypeAlias(name) = ty {
+        return input_encoder(codecs.alias_target(name), codecs);
+    }
     if primitive_kind(ty).is_some() {
         return format!(
             "{}.{}",
@@ -1079,7 +1343,10 @@ fn input_encoder(ty: &Ty, codecs: &WireCodecs) -> String {
     }
     if let Ty::Union(items) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
-        if matches!(primitive_kind(inner), Some(PrimitiveKind::Bigint)) {
+        if wire_type_is_nullable_alias(inner, codecs) {
+            return input_encoder(inner, codecs);
+        }
+        if wire_type_is_bigint(inner, codecs) {
             return format!("{}.OptionalBigInt", GeneratorIdent::RuntimePackage);
         }
         return format!(
@@ -1097,7 +1364,7 @@ fn input_encoder(ty: &Ty, codecs: &WireCodecs) -> String {
             );
         }
         Ty::Map { key, value } => {
-            debug_assert!(matches!(key.as_ref(), Ty::String));
+            debug_assert!(wire_map_key_is_string(key, codecs));
             return format!(
                 "{}.MapEncoder({})",
                 GeneratorIdent::RuntimePackage,
@@ -1119,13 +1386,19 @@ fn input_encoder(ty: &Ty, codecs: &WireCodecs) -> String {
 }
 
 fn output_expression(ty: &Ty, value: &str, codecs: &WireCodecs) -> String {
+    if let Ty::TypeAlias(name) = ty {
+        return output_expression(codecs.alias_target(name), value, codecs);
+    }
     let runtime_package = GeneratorIdent::RuntimePackage;
     if primitive_kind(ty).is_some() {
         return format!("{value}.{}()", output_method(ty));
     }
     if let Ty::Union(items) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
-        if matches!(primitive_kind(inner), Some(PrimitiveKind::Bigint)) {
+        if wire_type_is_nullable_alias(inner, codecs) {
+            return output_expression(inner, value, codecs);
+        }
+        if wire_type_is_bigint(inner, codecs) {
             return format!("{runtime_package}.DecodeOptionalBigInt({value})");
         }
         return format!(
@@ -1137,6 +1410,9 @@ fn output_expression(ty: &Ty, value: &str, codecs: &WireCodecs) -> String {
 }
 
 fn output_decoder(ty: &Ty, codecs: &WireCodecs) -> String {
+    if let Ty::TypeAlias(name) = ty {
+        return output_decoder(codecs.alias_target(name), codecs);
+    }
     if primitive_kind(ty).is_some() {
         return format!(
             "{}.Value.{}",
@@ -1146,7 +1422,10 @@ fn output_decoder(ty: &Ty, codecs: &WireCodecs) -> String {
     }
     if let Ty::Union(items) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
-        if matches!(primitive_kind(inner), Some(PrimitiveKind::Bigint)) {
+        if wire_type_is_nullable_alias(inner, codecs) {
+            return output_decoder(inner, codecs);
+        }
+        if wire_type_is_bigint(inner, codecs) {
             return format!("{}.DecodeOptionalBigInt", GeneratorIdent::RuntimePackage);
         }
         return format!(
@@ -1164,7 +1443,7 @@ fn output_decoder(ty: &Ty, codecs: &WireCodecs) -> String {
             );
         }
         Ty::Map { key, value } => {
-            debug_assert!(matches!(key.as_ref(), Ty::String));
+            debug_assert!(wire_map_key_is_string(key, codecs));
             return format!(
                 "{}.MapDecoder({})",
                 GeneratorIdent::RuntimePackage,
@@ -1205,7 +1484,7 @@ fn render_enum_codecs(
         };
         let enum_fqn = BamlFqn::symbol(name);
         let enum_name = names.project(&enum_fqn, GoNameKind::Enum, GoVisibility::Exported);
-        let go_type = function_go_type(&Ty::Enum(name.clone()), current_package, names);
+        let go_type = function_go_type(&Ty::Enum(name.clone()), current_package, names, codecs);
         let encoder = codecs.enum_ident(name, EnumCodecDirection::Encode);
         let decoder = codecs.enum_ident(name, EnumCodecDirection::Decode);
         let wire_variants = enum_
@@ -1269,7 +1548,12 @@ fn render_class_codecs(
         };
         let class_fqn = BamlFqn::symbol(name);
         let class_name = names.project(&class_fqn, GoNameKind::Class, GoVisibility::Exported);
-        let go_type = function_go_type(&Ty::Class(name.clone(), vec![]), current_package, names);
+        let go_type = function_go_type(
+            &Ty::Class(name.clone(), vec![]),
+            current_package,
+            names,
+            codecs,
+        );
         let owner_package = packages.get(&name.pkg).go_name();
         let encoder = codecs.ident(name, ClassCodecDirection::Encode);
         let decoder = codecs.ident(name, ClassCodecDirection::Decode);
@@ -1347,13 +1631,24 @@ fn class_field_output_expression(
     field_wire: &str,
     codecs: &WireCodecs,
 ) -> String {
+    if let Ty::TypeAlias(name) = ty {
+        return class_field_output_expression(
+            codecs.alias_target(name),
+            class_value,
+            field_wire,
+            codecs,
+        );
+    }
     let runtime_package = GeneratorIdent::RuntimePackage;
     if primitive_kind(ty).is_some() {
         return format!("{class_value}.{}({field_wire:?})", output_method(ty));
     }
     if let Ty::Union(items) = ty {
         let inner = nullable_inner(items).expect("class was filtered to nullable wire types");
-        if matches!(primitive_kind(inner), Some(PrimitiveKind::Bigint)) {
+        if wire_type_is_nullable_alias(inner, codecs) {
+            return class_field_output_expression(inner, class_value, field_wire, codecs);
+        }
+        if wire_type_is_bigint(inner, codecs) {
             return format!(
                 "{runtime_package}.DecodeOptionalBigIntField({class_value}, {field_wire:?})"
             );
@@ -1379,32 +1674,48 @@ fn class_field_output_expression(
     )
 }
 
+struct TypeRenderContext<'a> {
+    current_package: &'a GoPackageName,
+    pool: &'a SymbolPool,
+    names: &'a GoNames,
+    packages: &'a GoPackages,
+    cyclic_edges: &'a BTreeSet<(Name, Name)>,
+    sdk_import_path: &'a str,
+}
+
 fn render_types(
+    aliases: &[GeneratedAlias<'_>],
     enums: &[GeneratedEnum<'_>],
     classes: &[GeneratedClass<'_>],
-    current_package: &GoPackageName,
-    names: &GoNames,
-    packages: &GoPackages,
-    cyclic_edges: &BTreeSet<(Name, Name)>,
-    sdk_import_path: &str,
+    context: &TypeRenderContext<'_>,
 ) -> String {
     let mut type_renderer = ClassTypeRenderer {
-        current_package,
-        names,
-        packages,
-        cyclic_edges,
-        sdk_import_path,
+        current_package: context.current_package,
+        pool: context.pool,
+        names: context.names,
+        packages: context.packages,
+        cyclic_edges: context.cyclic_edges,
+        sdk_import_path: context.sdk_import_path,
         imports: GoImports::default(),
     };
     let mut body = String::new();
+    for generated in aliases {
+        debug_assert_eq!(generated.name, &generated.alias.name);
+        debug_assert!(!generated.alias.recursive);
+        let alias_name = generated.go_name.identifier(context.current_package);
+        let target = type_renderer
+            .render(&generated.alias.resolves_to, generated.name, false)
+            .expect("type alias was filtered to a supported target");
+        let _ = writeln!(body, "type {alias_name} = {target}\n");
+    }
     for generated in enums {
         debug_assert_eq!(generated.name, &generated.enum_.name);
-        let enum_name = generated.go_name.identifier(current_package);
+        let enum_name = generated.go_name.identifier(context.current_package);
         let _ = writeln!(body, "type {enum_name} string\n");
         if !generated.variants.is_empty() {
             body.push_str("const (\n");
             for variant in &generated.variants {
-                let variant_name = variant.go_name.identifier(current_package);
+                let variant_name = variant.go_name.identifier(context.current_package);
                 let wire_name = variant.go_name.wire().to_string();
                 let _ = writeln!(body, "\t{variant_name} {enum_name} = {wire_name:?}");
             }
@@ -1413,10 +1724,10 @@ fn render_types(
     }
     for generated in classes {
         debug_assert_eq!(generated.name, &generated.class.name);
-        let class_name = generated.go_name.identifier(current_package);
+        let class_name = generated.go_name.identifier(context.current_package);
         let _ = writeln!(body, "type {class_name} struct {{");
         for field in &generated.fields {
-            let field_name = field.go_name.identifier(current_package);
+            let field_name = field.go_name.identifier(context.current_package);
             let field_type = type_renderer
                 .render(&field.property.ty, generated.name, false)
                 .expect("class was filtered to supported field types");
@@ -1427,7 +1738,7 @@ fn render_types(
     }
 
     let mut out = String::from(BANNER);
-    let _ = writeln!(out, "package {}\n", current_package.as_str());
+    let _ = writeln!(out, "package {}\n", context.current_package.as_str());
     out.push_str(&type_renderer.imports.render());
     out.push_str(&body);
     out
@@ -1435,6 +1746,7 @@ fn render_types(
 
 struct ClassTypeRenderer<'a> {
     current_package: &'a GoPackageName,
+    pool: &'a SymbolPool,
     names: &'a GoNames,
     packages: &'a GoPackages,
     cyclic_edges: &'a BTreeSet<(Name, Name)>,
@@ -1467,6 +1779,34 @@ impl ClassTypeRenderer<'_> {
         }
 
         match ty {
+            Ty::TypeAlias(target) => {
+                let target_package = self.packages.get(&target.pkg);
+                if target_package.go_name() != self.current_package {
+                    self.imports.add_package(
+                        target_package.go_name(),
+                        &target_package.import_path(self.sdk_import_path),
+                    );
+                }
+                let target_name = self
+                    .names
+                    .project(
+                        &BamlFqn::symbol(target),
+                        GoNameKind::TypeAlias,
+                        GoVisibility::Exported,
+                    )
+                    .identifier(self.current_package)
+                    .to_string();
+                let cyclic = direct_required_class_target(ty, self.pool).is_some_and(|class| {
+                    self.cyclic_edges.contains(&(owner.clone(), class.clone()))
+                });
+                let target_is_pointer =
+                    alias_target_is_pointer(target, self.pool, &mut HashSet::new());
+                Some(if cyclic || (optional && !target_is_pointer) {
+                    format!("*{target_name}")
+                } else {
+                    target_name
+                })
+            }
             Ty::Enum(target) => {
                 let target_package = self.packages.get(&target.pkg);
                 if target_package.go_name() != self.current_package {
@@ -1499,9 +1839,12 @@ impl ClassTypeRenderer<'_> {
                     rendered
                 })
             }
-            Ty::Map { key, value } if matches!(key.as_ref(), Ty::String) => {
+            Ty::Map { key, value }
+                if declared_map_key_is_string(key, self.pool, &mut HashSet::new()) =>
+            {
+                let key = self.render(key, owner, false)?;
                 let value = self.render(value, owner, false)?;
-                let rendered = format!("map[{}]{value}", GeneratorIdent::StringType);
+                let rendered = format!("map[{key}]{value}");
                 Some(if optional {
                     format!("*{rendered}")
                 } else {
@@ -1536,6 +1879,20 @@ impl ClassTypeRenderer<'_> {
             Ty::Union(items) => self.render(nullable_inner(items)?, owner, true),
             _ => None,
         }
+    }
+}
+
+fn alias_target_is_pointer(name: &Name, pool: &SymbolPool, visited: &mut HashSet<Name>) -> bool {
+    if !visited.insert(name.clone()) {
+        return false;
+    }
+    let Symbol::TypeAlias(alias) = &pool[name] else {
+        unreachable!("type alias reference did not resolve to a type alias symbol")
+    };
+    match &alias.resolves_to {
+        Ty::Bigint | Ty::Union(_) => true,
+        Ty::TypeAlias(target) => alias_target_is_pointer(target, pool, visited),
+        _ => false,
     }
 }
 
@@ -1649,6 +2006,16 @@ mod tests {
             origin: origin(),
         };
         (name, Symbol::Enum(enum_))
+    }
+
+    fn alias(name: Name, resolves_to: Ty, recursive: bool) -> (Name, Symbol) {
+        let alias = TypeAlias {
+            name: name.clone(),
+            resolves_to,
+            recursive,
+            origin: origin(),
+        };
+        (name, Symbol::TypeAlias(alias))
     }
 
     fn round_trip_function(name: Name, argument: &str, ty: Ty) -> (Name, Symbol) {
@@ -1863,6 +2230,88 @@ mod tests {
         assert!(functions.contains("\"state\": _bamlEncodeEnum0(value.State)"));
         assert!(functions.contains("baml_go.Optional(value.Optional, _bamlEncodeEnum0)"));
         assert!(functions.contains("baml_go.ListEncoder(_bamlEncodeEnum0)"));
+    }
+
+    #[test]
+    fn emits_transparent_aliases_and_lowers_them_for_wire_codecs() {
+        let text = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("aliases")],
+            BaseName::new("text"),
+        );
+        let text_chain = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("aliases")],
+            BaseName::new("text_chain"),
+        );
+        let bigint = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("aliases")],
+            BaseName::new("big_number"),
+        );
+        let recursive = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("aliases")],
+            BaseName::new("recursive"),
+        );
+        let round_trip = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("aliases")],
+            BaseName::new("round_trip_text"),
+        );
+        let optional_bigint = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("aliases")],
+            BaseName::new("round_trip_optional_big_number"),
+        );
+        let recursive_function = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("aliases")],
+            BaseName::new("round_trip_recursive"),
+        );
+        let pool = SymbolPool::from([
+            alias(text.clone(), Ty::String, false),
+            alias(text_chain.clone(), Ty::TypeAlias(text), false),
+            alias(bigint.clone(), Ty::Bigint, false),
+            alias(
+                recursive.clone(),
+                Ty::Union(vec![
+                    Ty::Int,
+                    Ty::List(Box::new(Ty::TypeAlias(recursive.clone()))),
+                ]),
+                true,
+            ),
+            round_trip_function(round_trip, "value", Ty::TypeAlias(text_chain)),
+            round_trip_function(
+                optional_bigint,
+                "value",
+                Ty::Union(vec![Ty::TypeAlias(bigint), Ty::Null]),
+            ),
+            round_trip_function(recursive_function, "value", Ty::TypeAlias(recursive)),
+        ]);
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let types = &files[&PathBuf::from("types.go")];
+        assert!(types.contains("type AliasesText = string"));
+        assert!(types.contains("type AliasesTextChain = AliasesText"));
+        assert!(types.contains("type AliasesBigNumber = *big.Int"));
+        assert!(!types.contains("AliasesRecursive"));
+
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert!(functions.contains(
+            "func AliasesRoundTripText(ctx context.Context, value AliasesTextChain) (AliasesTextChain, error)"
+        ));
+        assert!(functions.contains("baml_go.String(value)"));
+        assert!(functions.contains(
+            "func AliasesRoundTripOptionalBigNumber(ctx context.Context, value AliasesBigNumber) (AliasesBigNumber, error)"
+        ));
+        assert!(!functions.contains("**big.Int"));
+        assert!(!functions.contains("AliasesRoundTripRecursive"));
     }
 
     #[test]

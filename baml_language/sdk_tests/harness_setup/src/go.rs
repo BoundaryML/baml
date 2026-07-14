@@ -11,7 +11,7 @@ use std::{collections::HashMap, env, fs, path::PathBuf};
 use baml_base::Name as BaseName;
 use baml_codegen_types::{
     Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, NamingConvention,
-    Origin, Symbol, SymbolPool, Ty,
+    Origin, Symbol, SymbolPool, Ty, TypeAlias,
 };
 
 use crate::{
@@ -97,6 +97,12 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
     let snake = Name::new(BaseName::new("foo_bar"), vec![], BaseName::new("Thing"));
     let models = Name::new(BaseName::new("models"), vec![], BaseName::new("Thing"));
     let status = Name::new(BaseName::new("models"), vec![], BaseName::new("Status"));
+    let status_alias = Name::new(
+        BaseName::new("models"),
+        vec![],
+        BaseName::new("StatusAlias"),
+    );
+    let thing_alias = Name::new(BaseName::new("models"), vec![], BaseName::new("ThingAlias"));
     let holder = Name::new(BaseName::new("user"), vec![], BaseName::new("Holder"));
     let envelope = Name::new(BaseName::new("user"), vec![], BaseName::new("Envelope"));
     let enum_holder = Name::new(BaseName::new("user"), vec![], BaseName::new("EnumHolder"));
@@ -120,12 +126,28 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
         vec![],
         BaseName::new("round_trip_enum_holder"),
     );
+    let status_alias_round_trip = Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("round_trip_status_alias"),
+    );
+    let thing_alias_round_trip = Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("round_trip_thing_alias"),
+    );
     let pool = SymbolPool::from([
         synthetic_class(context.clone(), vec![("value", Ty::String)]),
         synthetic_class(dashed.clone(), vec![("value", Ty::Int)]),
         synthetic_class(snake.clone(), vec![("value", Ty::Bool)]),
         synthetic_class(models.clone(), vec![("value", Ty::String)]),
         synthetic_enum(status.clone(), &["ready", "done"]),
+        synthetic_type_alias(status_alias.clone(), Ty::Enum(status), false),
+        synthetic_type_alias(
+            thing_alias.clone(),
+            Ty::Class(models.clone(), vec![]),
+            false,
+        ),
         synthetic_class(
             holder.clone(),
             vec![
@@ -138,7 +160,10 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
             envelope.clone(),
             vec![("holder", Ty::Class(holder, vec![]))],
         ),
-        synthetic_class(enum_holder.clone(), vec![("status", Ty::Enum(status))]),
+        synthetic_class(
+            enum_holder.clone(),
+            vec![("status", Ty::TypeAlias(status_alias.clone()))],
+        ),
         (
             round_trip,
             Symbol::Function(Function {
@@ -231,6 +256,8 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
                 },
             }),
         ),
+        round_trip_function(status_alias_round_trip, Ty::TypeAlias(status_alias)),
+        round_trip_function(thing_alias_round_trip, Ty::TypeAlias(thing_alias)),
     ]);
     let output = sdkgen_go::to_source_code_with_bytecode(
         &pool,
@@ -283,4 +310,39 @@ fn synthetic_enum(name: Name, variants: &[&str]) -> (Name, Symbol) {
         },
     };
     (name, Symbol::Enum(enum_))
+}
+
+fn synthetic_type_alias(name: Name, resolves_to: Ty, recursive: bool) -> (Name, Symbol) {
+    let alias = TypeAlias {
+        name: name.clone(),
+        resolves_to,
+        recursive,
+        origin: Origin {
+            source_file_path: "synthetic.baml".to_string(),
+            span_start: 0,
+        },
+    };
+    (name, Symbol::TypeAlias(alias))
+}
+
+fn round_trip_function(name: Name, ty: Ty) -> (Name, Symbol) {
+    let function = Function {
+        name: name.name.clone(),
+        generic_params: vec![],
+        docstring: None,
+        arguments: vec![FunctionArgument {
+            name: BaseName::new("value"),
+            docstring: None,
+            ty: ty.clone(),
+            default: None,
+        }],
+        return_type: ty,
+        throws: None,
+        watchers: vec![],
+        origin: Origin {
+            source_file_path: "synthetic.baml".to_string(),
+            span_start: 0,
+        },
+    };
+    (name, Symbol::Function(function))
 }
