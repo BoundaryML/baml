@@ -463,7 +463,7 @@ fn legacy_tests_from_program(program: &bex_vm_types::Program) -> Vec<LegacyTest>
         // `relative_source_path` — the same project-root-relative form
         // `discover_legacy_tests` uses, so `--list` output is identical
         // between a fresh compile and a bytecode-cache hit. Empty only for a
-        // pre-FORMAT_VERSION-3 blob (impossible after the version bump).
+        // blob predating the source_file field (impossible: the format version gates it).
         let file_path = if tc.source_file.is_empty() {
             PathBuf::from("<unknown>")
         } else {

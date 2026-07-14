@@ -37,50 +37,14 @@ use sha2::{Digest, Sha256};
 /// invalidates on any binary change, so the version bump is belt-and-braces: it
 /// also protects hand-copied blobs via the entry header's version check.
 ///
-/// v4 introduced the symbolic multi-unit image that first enabled incremental
-/// bytecode reuse. v10 replaces that monolithic representation with the per-unit
-/// CAS described below.
-///
-/// v5 (per-file diagnostics cache): each [`ManifestFile`] now carries the
-/// opaque borsh blob of the diagnostics `check_file` produced for that file, so
-/// an incremental compile can serve a clean file's diagnostics without
-/// re-checking it. The bump turns every pre-v5 manifest into a miss (the blob
-/// did not exist), so `plan_reuse` never reads a manifest lacking the field.
-///
-/// v6 added a per-unit interface blob used to seed `callable_throws`. The field
-/// changes the image wire format, so no pre-v6 entry is reused.
-///
-/// v7 (layout-scoped sentinel): each [`ManifestFile`] now carries a
-/// `layout_hash` beside its `signature_hash` — a hash of exactly the file's
-/// type-layout-affecting surface (class/enum/interface/alias/impl declarations,
-/// function bodies blanked). The dirty-set computation raises the layout
-/// sentinel only when a modified file's `layout_hash` moves, not on every
-/// signature change in a type-defining file. The added trailing field makes
-/// every pre-v7 manifest fail to decode (borsh runs off the end), so
-/// `plan_reuse` falls back to a full compile rather than reading a manifest
-/// lacking the field. No hand migration.
-///
-/// v8 (transitive signature-meaning cascade): each [`ManifestFile`] now carries
-/// `sig_referenced_names` — the type names named in exactly the file's
-/// *signature* surface (the bodies-blanked source `signature_hash` covers),
-/// separated out from the full `referenced_names` (which also folds in
-/// body-level bytecode references). The dirty-set computation uses it to cascade
-/// a type-identity change (e.g. an alias re-target) through a *content-unchanged*
-/// callee whose resolved signature moved, dirtying its callers — a hole the
-/// one-hop propagation left open. The added trailing field makes every pre-v8
-/// manifest fail to decode (borsh runs off the end), so `plan_reuse` falls back
-/// to a full compile. No hand migration.
-///
-/// v9 narrows that blob to `CallableThrowsFragment` and removes
-/// the never-populated `CompilationUnit::lets` and `throw_facts` fields. The
-/// compiler fingerprint also rekeys these entries, but the explicit bump keeps
-/// copied or externally stored images unambiguous.
-///
-/// v10 replaces the monolithic linkable-image entry with independently
-/// content-addressed [`CompilationUnit`] entries. Each [`ManifestFile`] gains a
-/// trailing `unit_key` pointer; pre-v10 manifests and unit entries are rejected
-/// by the entry-header version before their payload is decoded.
-pub const FORMAT_VERSION: u32 = 10;
+/// Version 1 is the initial shipped format: content-addressed entries with
+/// the 80-byte validated header, independently content-addressed
+/// [`CompilationUnit`] entries referenced by per-file `unit_key` pointers in
+/// the manifest, per-file diagnostics blobs, the layout/signature hash pair,
+/// `sig_referenced_names`, and the stdlib bytecode + typed-interface blobs.
+/// Any bump turns every older entry into a miss via the header version check —
+/// there is never a hand-written migration.
+pub const FORMAT_VERSION: u32 = 1;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -801,7 +765,7 @@ mod tests {
     }
 
     #[test]
-    fn pre_v10_manifest_entry_is_a_miss() {
+    fn stale_format_manifest_entry_is_a_miss() {
         #[derive(borsh::BorshSerialize)]
         struct LegacyManifestFile {
             rel_path: String,
