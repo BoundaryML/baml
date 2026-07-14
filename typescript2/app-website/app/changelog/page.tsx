@@ -2,15 +2,18 @@ import { createMetadata } from '@/app/_lib/metadata';
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 import { ChangelogList } from './changelog-list';
+import { fetchChangelogEntries } from './feed';
 
-// This page is intentionally STATIC (no `force-dynamic`, no server-side data
-// fetch). It is prerendered to plain HTML and served from the CDN, so the page
-// itself can never 500. The entries are loaded client-side from
-// `/api/changelog-feed/entries`, a Next route handler that reads the
-// changelogEntries table DIRECTLY from Convex (see that route) — no dependency
-// on a running changelog backend service. Code blocks are syntax-highlighted
-// client-side with shiki (incl. the BAML grammar). Clicking a release opens its
-// article via a `?v=` query param, handled fully client-side.
+// This page is prerendered with ISR (`revalidate = 60`), NOT force-dynamic, so
+// it keeps the never-500 property: visitors always get CDN-cached HTML with the
+// release list already rendered, and Convex is only consulted during background
+// regeneration — if that fails, the stale page keeps serving. Entry BODIES are
+// deliberately left out of the list payload (they dwarf everything else);
+// clicking a release opens its article via a `?v=` query param and the client
+// fetches the body from `/api/changelog-feed/entries/[version]`. Code blocks
+// are syntax-highlighted client-side with shiki (incl. the BAML grammar).
+
+export const revalidate = 60;
 
 export const metadata = createMetadata({
   description: 'The latest releases of BAML, shipped continuously.',
@@ -96,14 +99,44 @@ const CSS = `
 .chlog-md th, .chlog-md td { border: 1px solid #e7e2d6; padding: 8px 12px; text-align: left; }
 `;
 
-export default function ChangelogPage() {
+// First paragraph of the markdown body, flattened to plain text, for the list
+// preview. Strips fenced code, headings, list markers, and inline markdown.
+function lede(body: string): string {
+  const withoutCode = body.replace(/```[\s\S]*?```/g, '');
+  const para =
+    withoutCode
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .find((p) => p && !p.startsWith('#')) ?? '';
+  return para
+    .replace(/^[#>\-*\s]+/, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export default async function ChangelogPage() {
+  // Degrade to an empty list rather than failing the render: a fresh build
+  // with Convex down shows "No entries yet." and self-heals on revalidation.
+  const entries = await fetchChangelogEntries({ revalidate: 60 }).catch(
+    () => [],
+  );
+  const listEntries = entries.map((e) => ({
+    date: e.date,
+    lede: lede(e.body),
+    title: e.title,
+    version: e.version,
+  }));
+
   return (
     <>
       {/* eslint-disable-next-line react/no-danger */}
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <Navbar />
       <main className="chlog-wrap">
-        <ChangelogList />
+        <ChangelogList entries={listEntries} />
       </main>
       <FooterSection />
     </>
