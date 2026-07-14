@@ -61,7 +61,13 @@ pub fn run_all() {
     emit_cargo_line(format_args!("cargo:rerun-if-changed=build.rs"));
     watch_dir(&fixtures_root);
     for fixture in &fixtures {
-        watch_dir(&manifest_dir.join(fixture).join("customizable"));
+        let custom = manifest_dir.join(fixture).join("customizable");
+        watch_dir(&custom);
+        // watch_dir registers existing files only; watching the directory
+        // path itself makes cargo detect newly added test files too.
+        if custom.exists() {
+            emit_cargo_line(format_args!("cargo:rerun-if-changed={}", custom.display()));
+        }
     }
 }
 
