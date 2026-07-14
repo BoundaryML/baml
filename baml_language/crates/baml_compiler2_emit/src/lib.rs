@@ -1835,7 +1835,8 @@ fn tail_generic_dupes_clean(
     effective_clean: &HashSet<String>,
 ) -> bool {
     // (base fn fq name, type args) of every generic value clean files own.
-    let mut clean_keys: Vec<(String, Vec<RuntimeTy>)> = Vec::new();
+    // `GenericFunction::type_args` is `RealizedTy` (runtime narrowing, #3998).
+    let mut clean_keys: Vec<(String, Vec<baml_type::RealizedTy>)> = Vec::new();
     for unit in prev_units {
         if !effective_clean.contains(&unit.source_file) {
             continue;
@@ -3638,26 +3639,33 @@ fn compute_function_metadata_from_item_tree(
         );
     }
     // Inside an interface's own method signature, `Self` is the rigid type variable
-    // bound by that interface — register the bound so a `Self.Item` projection
+    // bound by that interface. Resolve that declaring interface as an `Interface`
+    // constraint (its qualified name plus its own generic params as rigid type
+    // vars) once: it is both `Self`'s registered bound — so a `Self.Item` projection
     // determines its declaring interface through `Self`'s bound closure (the same
-    // recipe as TIR's signature realization).
-    if let Some(iface_data) = enclosing_interface
-        && let Some(def) = pkg_items.lookup_type(&pkg_info.namespace_path, &iface_data.name)
-        && matches!(
-            def,
-            baml_compiler2_hir::contributions::Definition::Interface(_)
-        )
-    {
-        let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &iface_data.name);
-        let args = iface_data
-            .generic_params
-            .iter()
-            .map(|p| baml_compiler2_tir::ty::Ty::TypeVar(p.clone(), baml_type::TyAttr::default()))
-            .collect();
-        scope_bounds.insert(
-            Name::new("Self"),
-            vec![baml_type::Interface::new(qtn, args, Vec::new())],
-        );
+    // recipe as TIR's signature realization) — and the qualifier of each
+    // `Self.<assoc>` projection built below.
+    let self_declaring_interface: Option<baml_type::Interface> =
+        enclosing_interface.and_then(|iface_data| {
+            let def = pkg_items.lookup_type(&pkg_info.namespace_path, &iface_data.name)?;
+            if !matches!(
+                def,
+                baml_compiler2_hir::contributions::Definition::Interface(_)
+            ) {
+                return None;
+            }
+            let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &iface_data.name);
+            let args = iface_data
+                .generic_params
+                .iter()
+                .map(|p| {
+                    baml_compiler2_tir::ty::Ty::TypeVar(p.clone(), baml_type::TyAttr::default())
+                })
+                .collect();
+            Some(baml_type::Interface::new(qtn, args, Vec::new()))
+        });
+    if let Some(iface) = &self_declaring_interface {
+        scope_bounds.insert(Name::new("Self"), vec![iface.clone()]);
     }
 
     // A method declared inside an interface resolves its associated types
@@ -3693,7 +3701,11 @@ fn compute_function_metadata_from_item_tree(
                         assoc.name.clone(),
                         baml_compiler2_tir::ty::Ty::AssociatedTypeProjection {
                             base: Box::new(self_var()),
-                            interface: None,
+                            // The declaring interface resolved above; we are in the
+                            // `Some(iface_data)` arm, so it is present.
+                            interface: Box::new(self_declaring_interface.clone().unwrap_or_else(
+                                || unreachable!("interface method has a declaring interface"),
+                            )),
                             member: assoc.name.clone(),
                             attr: baml_type::TyAttr::default(),
                         },

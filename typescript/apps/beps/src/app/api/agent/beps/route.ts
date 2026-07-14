@@ -265,6 +265,7 @@ interface CreateBepRequest {
     slug: string;
     title: string;
     content: string;
+    parentSlug?: string;
   }>;
   shepherds?: string[];
 }
@@ -317,6 +318,9 @@ export async function POST(request: NextRequest): Promise<Response> {
       }
       if (!page.content || typeof page.content !== "string") {
         return jsonResponse({ error: `Page ${i}: missing or invalid 'content'.` }, 400);
+      }
+      if (page.parentSlug !== undefined && typeof page.parentSlug !== "string") {
+        return jsonResponse({ error: `Page ${i}: 'parentSlug' must be a string.` }, 400);
       }
     }
   }
@@ -378,6 +382,7 @@ interface UpdateBepRequest {
     slug: string;
     title: string;
     content: string;
+    parentSlug?: string;
   }>;
   editNote?: string;
   versionMode?: "new" | "current";
@@ -437,6 +442,9 @@ export async function PUT(request: NextRequest): Promise<Response> {
       if (!page.content || typeof page.content !== "string") {
         return jsonResponse({ error: `Page ${i}: missing or invalid 'content'.` }, 400);
       }
+      if (page.parentSlug !== undefined && typeof page.parentSlug !== "string") {
+        return jsonResponse({ error: `Page ${i}: 'parentSlug' must be a string.` }, 400);
+      }
     }
   }
 
@@ -473,8 +481,11 @@ export async function PUT(request: NextRequest): Promise<Response> {
   try {
     const result = await convex.mutation(api.beps.importVersion, {
       bepId: targetBep._id as Id<"beps">,
-      content: body.content ?? "",
-      pages: body.pages ?? [],
+      title: body.title,
+      // Omitted fields keep their current values (importVersion treats
+      // undefined as "leave unchanged"); pages: [] would delete all pages.
+      content: body.content,
+      pages: body.pages,
       editNote: body.editNote,
       userId: user._id as Id<"users">,
       versionMode: body.versionMode ?? "new",

@@ -166,7 +166,7 @@ fn generic_base_name(
 fn resolve_object_import(
     sym: &Symbol,
     obj_by_name: &HashMap<String, usize>,
-    canonical_pos: &HashMap<String, HashMap<Vec<baml_type::RuntimeTy>, usize>>,
+    canonical_pos: &HashMap<String, HashMap<Vec<baml_type::RealizedTy>, usize>>,
 ) -> Result<usize, LinkError> {
     match sym.kind {
         SymbolKind::GenericFn => {
@@ -284,7 +284,7 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         .map(|unit| vec![false; unit.code.len()])
         .collect();
     let mut code_abs: Vec<Vec<usize>> = units.iter().map(|u| vec![0usize; u.code.len()]).collect();
-    let mut canonical_pos: HashMap<String, HashMap<Vec<baml_type::RuntimeTy>, usize>> =
+    let mut canonical_pos: HashMap<String, HashMap<Vec<baml_type::RealizedTy>, usize>> =
         HashMap::new();
 
     // ---- Object bucket bases (pass-major, group-major) ----------------------

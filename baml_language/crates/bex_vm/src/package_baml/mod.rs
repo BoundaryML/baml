@@ -83,7 +83,7 @@ pub enum NativeCallResult {
     YieldToCall {
         callee: HeapPtr,
         args: Vec<Value>,
-        type_args: Vec<baml_type::RuntimeTy>,
+        type_args: Vec<baml_type::RealizedTy>,
         continuation: Box<dyn Continuation>,
     },
 }
@@ -138,7 +138,7 @@ impl Continuation for PassThroughContinuation {
 /// builtins take it in place of `&[Value]` with no body changes.
 pub struct ArrayView<'a> {
     /// The receiver array's declared element type (`T` of `T[]`).
-    pub ty: &'a baml_type::RuntimeTy,
+    pub ty: &'a baml_type::RealizedTy,
     /// The receiver array's elements.
     pub data: &'a [Value],
 }
@@ -159,9 +159,9 @@ impl std::ops::Deref for ArrayView<'_> {
 /// it in place of `&IndexMap<BexStr, Value>` with no body changes.
 pub struct MapView<'a> {
     /// The receiver map's declared key type (`K` of `map<K, V>`).
-    pub key_ty: &'a baml_type::RuntimeTy,
+    pub key_ty: &'a baml_type::RealizedTy,
     /// The receiver map's declared value type (`V` of `map<K, V>`).
-    pub value_ty: &'a baml_type::RuntimeTy,
+    pub value_ty: &'a baml_type::RealizedTy,
     /// The receiver map's entries.
     pub data: &'a indexmap::IndexMap<bex_str::BexStr, Value>,
 }

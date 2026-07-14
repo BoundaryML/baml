@@ -16,7 +16,7 @@
 //! local operands through the existing `relink` operand walkers.
 //!
 use baml_base::Name;
-use baml_type::{RuntimeTy, TyTemplate};
+use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
@@ -59,8 +59,9 @@ pub struct GenericFnKey {
     pub base_fn: String,
     /// Concrete type arguments seeded into `frame.type_args` when the value is
     /// called. Together with `base_fn` this is the whole-program intern key
-    /// (mirrors `GenericFunction::type_args`).
-    pub type_args: Vec<RuntimeTy>,
+    /// (mirrors `GenericFunction::type_args`, which the runtime narrowed to
+    /// `RealizedTy` in #3998 — typevars are invalid in a called frame's args).
+    pub type_args: Vec<RealizedTy>,
 }
 
 /// A cross-unit symbol: what an import references. Exports never use a `Symbol`

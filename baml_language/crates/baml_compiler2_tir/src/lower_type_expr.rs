@@ -1329,14 +1329,7 @@ mod tests {
                 interface, member, ..
             } => {
                 assert_eq!(member.as_str(), "Item");
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "Iterator"
-                );
+                assert_eq!(interface.name.name().as_str(), "Iterator");
             }
             other => panic!("expected a symbolic Self.Item projection, got {other:?}"),
         }
@@ -1453,7 +1446,7 @@ mod tests {
         );
         let projection = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::TypeVar(Name::new("Self"), TyAttr::default())),
-            interface: Some(Box::new(foo)),
+            interface: Box::new(foo),
             member: Name::new("Assoc"),
             attr: TyAttr::default(),
         };
@@ -1497,7 +1490,7 @@ mod tests {
             base: Box::new(Ty::Int {
                 attr: TyAttr::default(),
             }),
-            interface: Some(Box::new(foo)),
+            interface: Box::new(foo),
             member: Name::new("Assoc"),
             attr: TyAttr::default(),
         };
@@ -1925,15 +1918,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(**base, string_ty, "base must be the realized argument");
-                assert_eq!(
-                    interface
-                        .as_ref()
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "HasItem"
-                );
+                assert_eq!(interface.as_ref().name.name().as_str(), "HasItem");
                 assert_eq!(member.as_str(), "Item");
             }
             other => panic!("expected a symbolic T.Item projection, got {other:?}"),
@@ -2808,14 +2793,7 @@ mod tests {
                 interface, member, ..
             } => {
                 assert_eq!(member.as_str(), "X");
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "Base"
-                );
+                assert_eq!(interface.name.name().as_str(), "Base");
             }
             other => panic!("expected a symbolic projection through Base, got {other:?}"),
         }
@@ -2836,14 +2814,7 @@ mod tests {
                 ..
             } => {
                 assert!(matches!(*base, Ty::TypeVar(ref n, _) if n.as_str() == "T"));
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "HasItem"
-                );
+                assert_eq!(interface.name.name().as_str(), "HasItem");
                 assert_eq!(member.as_str(), "Item");
             }
             other => panic!("expected a symbolic T.Item projection, got {other:?}"),
@@ -2912,14 +2883,7 @@ mod tests {
                     matches!(*base, Ty::AssociatedTypeProjection { ref member, .. } if member.as_str() == "A"),
                     "outer projection's base is the inner `T.A` projection",
                 );
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "Inner"
-                );
+                assert_eq!(interface.name.name().as_str(), "Inner");
                 assert_eq!(member.as_str(), "B");
             }
             other => panic!("expected a symbolic T.A.B projection, got {other:?}"),
@@ -2972,14 +2936,7 @@ mod tests {
             Ty::AssociatedTypeProjection {
                 interface, member, ..
             } => {
-                assert_eq!(
-                    interface
-                        .expect("interface determined")
-                        .name
-                        .name()
-                        .as_str(),
-                    "L3"
-                );
+                assert_eq!(interface.name.name().as_str(), "L3");
                 assert_eq!(member.as_str(), "C");
             }
             other => panic!("expected a symbolic T.A.B.C projection, got {other:?}"),
@@ -3005,7 +2962,7 @@ mod tests {
             panic!("expected a symbolic T.A.B projection, got {ty:?}");
         };
         assert_eq!(member.as_str(), "B");
-        let interface = interface.as_ref().expect("interface determined");
+        let interface = interface.as_ref();
         assert_eq!(interface.name.name().as_str(), "Inner");
         // `Inner`'s sole argument must be the symbolic `T.C` projection, not `TypeVar("C")`.
         match interface.generics.as_slice() {
@@ -3040,7 +2997,7 @@ mod tests {
             panic!("expected a symbolic T.A.X projection, got {ty:?}");
         };
         assert_eq!(member.as_str(), "X");
-        let interface = interface.as_ref().expect("interface determined");
+        let interface = interface.as_ref();
         assert_eq!(interface.name.name().as_str(), "J");
         // `J`'s arg is the finite symbolic `T.B` projection; B's own `K<A>` bound is not opened.
         match interface.generics.as_slice() {

@@ -623,7 +623,7 @@ mod tests {
     fn instance_field_helpers_load_and_store_checked_slots() {
         let instance = Instance::new(
             HeapPtr::null(),
-            vec![],
+            Box::new([]),
             vec![Value::int(10), Value::int(20)],
         );
 
@@ -640,7 +640,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "index out of bounds")]
     fn instance_load_field_panics_for_invalid_slot() {
-        let instance = Instance::new(HeapPtr::null(), vec![], vec![Value::int(10)]);
+        let instance = Instance::new(HeapPtr::null(), Box::new([]), vec![Value::int(10)]);
 
         let _ = instance.load_field(1);
     }

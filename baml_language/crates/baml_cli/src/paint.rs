@@ -14,11 +14,10 @@
 
 use std::{cell::RefCell, collections::HashMap, fmt::Write, path::Path, rc::Rc};
 
-use baml_db::{
-    FileId, SourceFile,
-    baml_compiler_lexer::{TokenKind, lex_lossless},
+use baml_db::SourceFile;
+use baml_lsp2_actions::{
+    DefinitionKind, ModifierSet, SemanticToken, SemanticTokenType, semantic_tokens,
 };
-use baml_lsp2_actions::{DefinitionKind, SemanticToken, SemanticTokenType, semantic_tokens};
 use baml_project::ProjectDatabase;
 use console::Style;
 use text_size::{TextRange, TextSize};
@@ -86,31 +85,64 @@ pub fn init_color(choice: ColorChoice) {
     }
 }
 
-/// Color for each semantic token type. Loosely mirrors a typical editor theme.
+/// Style for a semantic token, honoring its modifiers.
+///
+/// Colors are restricted to the terminal's *named* ANSI palette plus the
+/// dim/bold attributes — never fixed 256-color values and never a concrete
+/// white/black — so the theme decides what every color looks like and output
+/// stays legible on light and dark backgrounds alike. Modifiers overlay
+/// attributes the way editor themes do: declarations are bold, stdlib
+/// entities italic, deprecated ones struck through.
 ///
 /// Styling is **forced** so emission is decided by the caller per output stream
 /// (gating on `colors_enabled()` for stdout vs `colors_enabled_stderr()` for
 /// stderr), not by console's ambient stdout flag.
-fn style_for(token_type: SemanticTokenType) -> Style {
+fn style_for(token_type: SemanticTokenType, modifiers: ModifierSet) -> Style {
     use SemanticTokenType as T;
-    let style = match token_type {
-        T::Keyword | T::Modifier => Style::new().magenta(),
+    // (base color, dimmed) — dim is a *base* trait of quiet token types, kept
+    // separate so a declaration can trade it for bold instead of stacking the
+    // two contradictory weights.
+    let (style, base_dim) = match token_type {
+        T::Keyword | T::Modifier => (Style::new().magenta(), false),
         T::Class | T::Struct | T::Interface | T::Enum | T::Type | T::TypeParameter => {
-            Style::new().yellow()
+            (Style::new().yellow(), false)
         }
-        T::Function | T::Method | T::Macro => Style::new().blue().bright(),
-        T::EnumMember | T::Property => Style::new().cyan(),
-        T::Parameter => Style::new().color256(173),
-        T::Namespace => Style::new().cyan().bright(),
-        T::String | T::Regexp => Style::new().green(),
-        T::EscapeSequence => Style::new().color256(214),
-        T::Number | T::Boolean => Style::new().yellow().bright(),
-        T::Comment => Style::new().color256(244),
-        T::Decorator => Style::new().color256(179),
-        T::Operator => Style::new().color256(245),
-        T::Variable | T::Event => Style::new().white(),
+        T::Function | T::Method | T::Macro => (Style::new().blue().bright(), false),
+        T::EnumMember | T::Property => (Style::new().cyan(), false),
+        T::Parameter => (Style::new().yellow(), true),
+        T::Namespace => (Style::new().cyan().bright(), false),
+        T::String | T::Regexp => (Style::new().green(), false),
+        T::EscapeSequence => (Style::new().magenta().bright(), false),
+        T::Number | T::Boolean => (Style::new().yellow().bright(), false),
+        T::Comment => (Style::new(), true),
+        T::Decorator => (Style::new().magenta(), true),
+        T::Operator => (Style::new(), true),
+        // Ordinary names keep the terminal's default foreground: forcing any
+        // concrete color here would assume a background.
+        T::Variable | T::Event => (Style::new(), false),
     };
+    let declaration = modifiers.contains(ModifierSet::DECLARATION);
+    let mut style = if base_dim && !declaration {
+        style.dim()
+    } else {
+        style
+    };
+    if declaration {
+        style = style.bold();
+    }
+    if modifiers.contains(ModifierSet::DEFAULT_LIBRARY) {
+        style = style.italic();
+    }
+    if modifiers.contains(ModifierSet::DEPRECATED) {
+        style = style.strikethrough();
+    }
     style.force_styling(true)
+}
+
+/// [`style_for`] with no modifiers, for synthesized text (labels, paths) that
+/// has no real token behind it.
+fn style_for_plain(token_type: SemanticTokenType) -> Style {
+    style_for(token_type, ModifierSet::empty())
 }
 
 /// Color for a definition kind, used to highlight listing rows (which have no
@@ -118,7 +150,7 @@ fn style_for(token_type: SemanticTokenType) -> Style {
 fn kind_style(kind: DefinitionKind) -> Style {
     use DefinitionKind as K;
     use SemanticTokenType as T;
-    style_for(match kind {
+    style_for_plain(match kind {
         K::Class => T::Class,
         K::Enum => T::Enum,
         K::Interface => T::Interface,
@@ -143,8 +175,8 @@ fn highlight_fqn(name: &str, leaf_kind: DefinitionKind) -> String {
 /// Like [`highlight_fqn`] but the leaf kind is optional; `None` (a namespace or
 /// package path) colors the whole path in the namespace color.
 fn highlight_fqn_opt(name: &str, leaf_kind: Option<DefinitionKind>) -> String {
-    let namespace = style_for(SemanticTokenType::Namespace);
-    let dot = style_for(SemanticTokenType::Operator);
+    let namespace = style_for_plain(SemanticTokenType::Namespace);
+    let dot = style_for_plain(SemanticTokenType::Operator);
     let leaf = leaf_kind.map_or_else(|| namespace.clone(), kind_style);
     let mut out = String::new();
     let mut parts = name.split('.').peekable();
@@ -169,173 +201,67 @@ fn highlight_name_padded(name: &str, leaf_kind: DefinitionKind, width: usize) ->
     format!("{}{}", highlight_fqn(name, leaf_kind), " ".repeat(pad))
 }
 
-// ── Lexer-based highlighting for synthesized fragments ──────────────────────────
-
-/// Primitive/builtin type names the lexer emits as plain words; colored as types.
-const PRIMITIVE_TYPES: &[&str] = &[
-    "string",
-    "int",
-    "bigint",
-    "float",
-    "bool",
-    "null",
-    "bytes",
-    "uint8array",
-    "image",
-    "audio",
-    "video",
-    "pdf",
-    "json",
-    "true",
-    "false",
-];
-
-/// The definition kind a declaration keyword introduces, so the name token that
-/// follows can be colored accordingly (`function Foo` -> `Foo` as a function).
-fn decl_keyword_kind(kind: TokenKind) -> Option<DefinitionKind> {
-    use DefinitionKind as K;
-    use TokenKind as T;
-    Some(match kind {
-        T::Class => K::Class,
-        T::Enum => K::Enum,
-        T::Interface => K::Interface,
-        T::Function => K::Function,
-        T::TemplateString => K::TemplateString,
-        T::Client => K::Client,
-        T::Test => K::Test,
-        T::RetryPolicy => K::RetryPolicy,
-        _ => return None,
-    })
-}
-
-fn is_keyword(kind: TokenKind) -> bool {
-    use TokenKind as T;
-    matches!(
-        kind,
-        T::Class
-            | T::Enum
-            | T::Interface
-            | T::Implements
-            | T::Implement
-            | T::Extends
-            | T::Requires
-            | T::Function
-            | T::Client
-            | T::Generator
-            | T::Test
-            | T::TestSet
-            | T::RetryPolicy
-            | T::TypeBuilder
-            | T::Dynamic
-            | T::Let
-            | T::If
-            | T::Else
-            | T::For
-            | T::While
-            | T::Match
-            | T::Return
-            | T::Break
-            | T::Continue
-            | T::Throw
-            | T::Throws
-            | T::Catch
-            | T::CatchAll
-            | T::Defer
-            | T::Spawn
-            | T::Await
-            | T::In
-            | T::Is
-            | T::Instanceof
-    )
-}
+// ── Classifier-based highlighting for synthesized fragments ─────────────────────
 
 /// Highlight an arbitrary BAML fragment that has no source backing (synthesized
 /// signatures, keyword-doc examples).
 ///
-/// Lexer-based, so it is *syntactic only*: it colors keywords, primitive types,
-/// names introduced by a declaration keyword, strings, line comments, numbers,
-/// and operators. It cannot tell a user type from a variable the way the
-/// type-aware [`Highlighter`] (used for real source ranges) can.
+/// Runs the exact compiler classifier the LSP uses: the fragment is parsed as a
+/// scratch file in a private in-memory project and rendered from the resulting
+/// tokens. Everything syntactic (keywords, strings, numbers, comments,
+/// declarations, primitive types) classifies as it would in an editor; a name
+/// only a real project could resolve (a user type mentioned in prose-level
+/// example code) stays at the default foreground — the same neutrality the
+/// editor shows for an unresolved name.
 ///
 /// Always emits color; callers go through [`Painter::fragment`], which gates.
 fn highlight_str(text: &str) -> String {
-    let toks = lex_lossless(text, FileId::new(0));
-    let mut out = String::new();
-    let mut i = 0;
-    // Set after a declaration keyword so the next name token is colored by kind.
-    let mut pending_decl: Option<DefinitionKind> = None;
-    while i < toks.len() {
-        let t = &toks[i];
-
-        // Trivia passes through and does not clear a pending declaration.
-        if matches!(t.kind, TokenKind::Whitespace | TokenKind::Newline) {
-            out.push_str(&t.text);
-            i += 1;
-            continue;
-        }
-
-        // Line comment: `//` through end of line.
-        if t.kind == TokenKind::Slash && toks.get(i + 1).map(|n| n.kind) == Some(TokenKind::Slash) {
-            let mut buf = String::new();
-            while i < toks.len()
-                && toks[i].kind != TokenKind::Newline
-                && !toks[i].text.contains('\n')
-            {
-                buf.push_str(&toks[i].text);
-                i += 1;
-            }
-            push_styled(&mut out, &buf, &style_for(SemanticTokenType::Comment));
-            pending_decl = None;
-            continue;
-        }
-
-        // Double-quoted string: consume through the closing unescaped quote.
-        if t.kind == TokenKind::Quote {
-            let mut buf = String::from(t.text.as_str());
-            let mut j = i + 1;
-            while j < toks.len() {
-                buf.push_str(&toks[j].text);
-                let closes =
-                    toks[j].kind == TokenKind::Quote && toks[j - 1].kind != TokenKind::Backslash;
-                j += 1;
-                if closes {
-                    break;
-                }
-            }
-            push_styled(&mut out, &buf, &style_for(SemanticTokenType::String));
-            i = j;
-            pending_decl = None;
-            continue;
-        }
-
-        // A single significant token.
-        let style = if is_keyword(t.kind) {
-            Some(style_for(SemanticTokenType::Keyword))
-        } else if matches!(
-            t.kind,
-            TokenKind::IntegerLiteral | TokenKind::FloatLiteral | TokenKind::BigintLiteral
-        ) {
-            Some(style_for(SemanticTokenType::Number))
-        } else if t.kind == TokenKind::Word {
-            if let Some(k) = pending_decl {
-                Some(kind_style(k))
-            } else if PRIMITIVE_TYPES.contains(&t.text.as_str()) {
-                Some(style_for(SemanticTokenType::Type))
-            } else {
-                None // bare identifier: leave at the default foreground
-            }
-        } else {
-            Some(style_for(SemanticTokenType::Operator)) // punctuation / operators
-        };
-        match style {
-            Some(s) => {
-                let _ = write!(out, "{}", s.apply_to(&t.text));
-            }
-            None => out.push_str(&t.text),
-        }
-        pending_decl = decl_keyword_kind(t.kind);
-        i += 1;
+    thread_local! {
+        static SCRATCH_DB: RefCell<ProjectDatabase> = RefCell::new({
+            let mut db = ProjectDatabase::new();
+            db.set_project_root(Path::new("/baml-fragment-scratch"));
+            db
+        });
     }
+    SCRATCH_DB.with(|db| {
+        let db = &mut *db.borrow_mut();
+        let file = db.add_or_update_file(Path::new("/baml-fragment-scratch/fragment.baml"), text);
+        let mut toks = semantic_tokens(db, file).clone();
+        toks.sort_by_key(|t| t.range.start());
+        styled_from_tokens(text, 0, &toks)
+    })
+}
+
+/// Render `slice` (the source text starting at byte offset `slice_start`) with
+/// every overlapping token colored; bytes no token claims stay plain. Assumes
+/// `tokens` is sorted by start; on overlap the first writer wins.
+fn styled_from_tokens(slice: &str, slice_start: usize, tokens: &[SemanticToken]) -> String {
+    let end = slice_start + slice.len();
+    let mut out = String::new();
+    let mut cursor = 0usize;
+    for tok in tokens {
+        let ts: usize = tok.range.start().into();
+        let te: usize = tok.range.end().into();
+        if te <= slice_start {
+            continue;
+        }
+        if ts >= end {
+            break;
+        }
+        let s = ts.max(slice_start) - slice_start;
+        let e = te.min(end) - slice_start;
+        if s < cursor {
+            continue;
+        }
+        out.push_str(&slice[cursor..s]);
+        push_styled(
+            &mut out,
+            &slice[s..e],
+            &style_for(tok.token_type, tok.modifiers),
+        );
+        cursor = e;
+    }
+    out.push_str(&slice[cursor..]);
     out
 }
 
@@ -443,7 +369,7 @@ impl Painter {
     /// `text` styled as a keyword (for keyword-doc headers).
     pub fn keyword(&self, text: &str) -> String {
         if self.enabled {
-            style_for(SemanticTokenType::Keyword)
+            style_for_plain(SemanticTokenType::Keyword)
                 .apply_to(text)
                 .to_string()
         } else {
@@ -506,29 +432,7 @@ impl<'db> Highlighter<'db> {
             return String::new();
         }
         let slice = &text[start..end];
-
-        let mut out = String::new();
-        let mut cursor = 0usize;
-        for tok in self.tokens(file).iter() {
-            let ts: usize = tok.range.start().into();
-            let te: usize = tok.range.end().into();
-            if te <= start {
-                continue;
-            }
-            if ts >= end {
-                break; // tokens are sorted by start; nothing further overlaps
-            }
-            let s = ts.max(start) - start;
-            let e = te.min(end) - start;
-            if s < cursor {
-                continue; // overlapping token; the first writer wins
-            }
-            out.push_str(&slice[cursor..s]); // gap (whitespace/punctuation) stays plain
-            push_styled(&mut out, &slice[s..e], &style_for(tok.token_type));
-            cursor = e;
-        }
-        out.push_str(&slice[cursor..]);
-        out
+        styled_from_tokens(slice, start, &self.tokens(file))
     }
 
     /// Highlight the full source line(s) enclosing `range`, trimmed of
@@ -560,5 +464,179 @@ fn push_styled(out: &mut String, seg: &str, style: &Style) {
         if !line.is_empty() {
             let _ = write!(out, "{}", style.apply_to(line));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use baml_lsp2_actions::{ModifierSet, SemanticTokenType};
+    use baml_project::ProjectDatabase;
+
+    use super::{Highlighter, highlight_str, style_for};
+
+    /// One rendering effect of an SGR escape, decoded from its parameter list.
+    /// Modeling decoded effects (not raw byte fragments) keeps the assertions
+    /// valid however `console` chooses to batch attributes into sequences
+    /// (`\x1b[1m\x1b[33m` and `\x1b[1;33m` decode identically).
+    #[derive(Debug, PartialEq)]
+    enum Sgr {
+        Attr(u16),
+        /// `38;5;N` indexed foreground.
+        Palette(u16),
+        /// `38;2;r;g;b` truecolor foreground.
+        Rgb,
+    }
+
+    /// Decode every SGR effect applied anywhere in `out`.
+    fn sgr_effects(out: &str) -> Vec<Sgr> {
+        let mut effects = Vec::new();
+        for seq in out.split("\u{1b}[").skip(1) {
+            let Some(params) = seq.split('m').next() else {
+                continue;
+            };
+            let mut nums = params.split(';').map(|n| n.parse::<u16>().unwrap_or(0));
+            while let Some(n) = nums.next() {
+                match n {
+                    38 | 48 => match nums.next() {
+                        Some(5) => {
+                            effects.push(Sgr::Palette(nums.next().unwrap_or(0)));
+                        }
+                        Some(2) => {
+                            let _ = (nums.next(), nums.next(), nums.next());
+                            effects.push(Sgr::Rgb);
+                        }
+                        _ => {}
+                    },
+                    n => effects.push(Sgr::Attr(n)),
+                }
+            }
+        }
+        effects
+    }
+
+    /// The effects active exactly where `needle` is rendered: decode the text
+    /// before it and drop everything cancelled by a reset (`0`).
+    fn effects_at(out: &str, needle: &str) -> Vec<Sgr> {
+        let prefix = &out[..out.find(needle).unwrap_or_else(|| {
+            panic!("{needle:?} not found in {out:?}");
+        })];
+        let mut active = Vec::new();
+        for effect in sgr_effects(prefix) {
+            if effect == Sgr::Attr(0) {
+                active.clear();
+            } else {
+                active.push(effect);
+            }
+        }
+        active
+    }
+
+    const BOLD: Sgr = Sgr::Attr(1);
+    const ITALIC: Sgr = Sgr::Attr(3);
+    const YELLOW: Sgr = Sgr::Attr(33);
+
+    /// Ordinary names must keep the terminal's default foreground: forcing a
+    /// concrete color (the old white) breaks on light backgrounds.
+    #[test]
+    fn variable_keeps_default_foreground() {
+        let styled = style_for(SemanticTokenType::Variable, ModifierSet::empty())
+            .apply_to("x")
+            .to_string();
+        assert_eq!(styled, "x", "no escape codes expected, got {styled:?}");
+    }
+
+    #[test]
+    fn modifiers_overlay_attributes() {
+        let decl = style_for(SemanticTokenType::Class, ModifierSet::DECLARATION)
+            .apply_to("Foo")
+            .to_string();
+        assert!(
+            effects_at(&decl, "Foo").contains(&BOLD),
+            "declaration not bold: {decl:?}"
+        );
+        let lib = style_for(SemanticTokenType::Type, ModifierSet::DEFAULT_LIBRARY)
+            .apply_to("string")
+            .to_string();
+        assert!(
+            effects_at(&lib, "string").contains(&ITALIC),
+            "defaultLibrary not italic: {lib:?}"
+        );
+    }
+
+    /// The whole palette must be background-agnostic: named ANSI colors and
+    /// attributes only — no fixed 256-color values, no truecolor, no forced
+    /// white/black.
+    #[test]
+    fn rendered_body_uses_no_fixed_colors() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(Path::new("/test"));
+        let src = r#"/// Doc.
+class Point { x int }
+function make(v: int) -> Point {
+  let p = Point { x: v };
+  return p
+}
+"#;
+        let file = db.add_or_update_file(Path::new("/test/main.baml"), src);
+        let hl = Highlighter::new(&db);
+        let out = hl.range(
+            file,
+            text_size::TextRange::new(0.into(), (src.len() as u32).into()),
+        );
+        for effect in sgr_effects(&out) {
+            match effect {
+                // Palette slots 0-15 are theme-controlled (console renders
+                // bright colors as `38;5;8..=15`); 16 and up is the fixed
+                // cube, which ignores the terminal scheme.
+                Sgr::Palette(idx) => {
+                    assert!(idx < 16, "fixed-cube 256-color {idx} in: {out:?}");
+                }
+                Sgr::Rgb => panic!("truecolor in: {out:?}"),
+                // 30/37 are concrete black/white foregrounds.
+                Sgr::Attr(n) => {
+                    assert!(n != 30 && n != 37, "forced black/white in: {out:?}");
+                }
+            }
+        }
+    }
+
+    /// Fragments run through the real compiler classifier, not a side lexer:
+    /// a declaration gets the class color *and* the bold declaration modifier,
+    /// and stdlib types the italic `defaultLibrary` modifier — signals the old
+    /// lexer path could never produce.
+    #[test]
+    fn fragment_classifies_via_compiler() {
+        let out = highlight_str("class Foo {\n  x int\n}");
+        let at_decl = effects_at(&out, "Foo");
+        assert!(
+            at_decl.contains(&YELLOW) && at_decl.contains(&BOLD),
+            "class decl not bold+yellow ({at_decl:?}) in: {out:?}"
+        );
+        let at_type = effects_at(&out, "int");
+        assert!(
+            at_type.contains(&ITALIC),
+            "stdlib type not italic ({at_type:?}) in: {out:?}"
+        );
+    }
+
+    /// A fragment that mentions names with no project behind them must not
+    /// crash. Syntactic positions still classify (a constructor name reads as
+    /// a type even unresolved), but a member on an unresolvable receiver has
+    /// no signal and stays at the default foreground — the same neutrality an
+    /// editor shows.
+    #[test]
+    fn fragment_with_unresolved_names_stays_neutral() {
+        let out = highlight_str("let x = SomeUnknownClass { field: rcv.member() };");
+        assert!(out.contains("SomeUnknownClass"), "text preserved: {out:?}");
+        assert!(
+            effects_at(&out, "SomeUnknownClass").contains(&YELLOW),
+            "constructor position not typed: {out:?}"
+        );
+        assert!(
+            effects_at(&out, "member").is_empty(),
+            "member on unresolved receiver styled: {out:?}"
+        );
     }
 }

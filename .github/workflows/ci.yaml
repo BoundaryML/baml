@@ -185,8 +185,6 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':fern/**' \
-            ':typescript/apps/ask-baml-client/**' \
-            ':typescript/apps/sage-backend/**' \
             ':.github/workflows/docs.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"

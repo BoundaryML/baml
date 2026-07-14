@@ -431,12 +431,7 @@ fn var_under_union(name: &Name, ty: &Ty) -> bool {
             | Ty::Future(k, v, _) => occurs(name, k, in_union) || occurs(name, v, in_union),
             Ty::AssociatedTypeProjection {
                 base, interface, ..
-            } => {
-                occurs(name, base, in_union)
-                    || interface
-                        .as_ref()
-                        .is_some_and(|i| i.tys().any(|t| occurs(name, t, in_union)))
-            }
+            } => occurs(name, base, in_union) || interface.tys().any(|t| occurs(name, t, in_union)),
             Ty::Function {
                 params,
                 ret,
@@ -543,9 +538,7 @@ fn nf(ty: &Ty, enum_variants: EnumVariants) -> Ty {
             attr,
         } => Ty::AssociatedTypeProjection {
             base: Box::new(nf(base, enum_variants)),
-            interface: interface
-                .as_ref()
-                .map(|i| Box::new(i.map_tys(|t| nf(t, enum_variants)))),
+            interface: Box::new(interface.map_tys(|t| nf(t, enum_variants))),
             member: member.clone(),
             attr: attr.clone(),
         },
@@ -1373,9 +1366,7 @@ fn occurs_in(n: &Name, t: &Ty, vars: &[Name], bindings: &TypeBindings) -> bool {
             base, interface, ..
         } => {
             occurs_in(n, base, vars, bindings)
-                || interface
-                    .as_ref()
-                    .is_some_and(|i| i.tys().any(|t| occurs_in(n, t, vars, bindings)))
+                || interface.tys().any(|t| occurs_in(n, t, vars, bindings))
         }
         Ty::Function {
             params,
@@ -1810,7 +1801,11 @@ mod tests {
         // not `Unknown` (which is only for search-budget exhaustion).
         let proj = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::type_var("T")),
-            interface: None,
+            interface: Box::new(
+                interface("Iter", vec![])
+                    .as_interface()
+                    .expect("interface() builds an existential"),
+            ),
             member: Name::new("Item"),
             attr: TyAttr::default(),
         };
