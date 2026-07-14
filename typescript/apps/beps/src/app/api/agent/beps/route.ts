@@ -481,8 +481,11 @@ export async function PUT(request: NextRequest): Promise<Response> {
   try {
     const result = await convex.mutation(api.beps.importVersion, {
       bepId: targetBep._id as Id<"beps">,
-      content: body.content ?? "",
-      pages: body.pages ?? [],
+      title: body.title,
+      // Omitted fields keep their current values (importVersion treats
+      // undefined as "leave unchanged"); pages: [] would delete all pages.
+      content: body.content,
+      pages: body.pages,
       editNote: body.editNote,
       userId: user._id as Id<"users">,
       versionMode: body.versionMode ?? "new",
