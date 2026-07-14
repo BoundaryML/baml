@@ -33,17 +33,19 @@ if compgen -G "baml_sdk/src/*.cpp" > /dev/null; then
     SOURCES+=(baml_sdk/src/*.cpp)
 fi
 
+# The compile and run checks execute concurrently under nextest; each mode
+# writes its own binary so they cannot clobber each other mid-execution.
 compile() {
-    c++ -std=c++17 -Wall -Wextra "${INCLUDES[@]}" "${SOURCES[@]}" -o fixture_tests \
+    c++ -std=c++17 -Wall -Wextra "${INCLUDES[@]}" "${SOURCES[@]}" -o "$1" \
         -L"$LIBDIR" -lbridge_cffi -Wl,-rpath,"$LIBDIR"
 }
 
 case "${1:-}" in
     compile)
-        compile
+        compile fixture_tests_compile_check
         ;;
     run)
-        compile
+        compile fixture_tests
         ./fixture_tests
         ;;
     *)

@@ -68,3 +68,28 @@ pub extern "C" fn invoke_runtime_cli(_args: *const *const libc::c_char) -> libc:
     eprintln!("invoke_runtime_cli not implemented in bridge_cffi");
     1
 }
+
+/// Create/initialize the BAML runtime (global BexEngine) from serialized
+/// BAML bytecode — the borsh-encoded `Program` payload that `baml pack`
+/// embeds and that generated SDKs inline. The bytecode-first counterpart of
+/// [`create_baml_runtime`], enabling SDKs to boot without shipping `.baml`
+/// sources.
+///
+/// # Returns
+/// Non-null pointer on success (value is opaque, not used), null on failure.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[unsafe(no_mangle)]
+pub extern "C" fn create_baml_runtime_from_bytecode(
+    bytecode: *const u8,
+    length: usize,
+) -> *const libc::c_void {
+    ffi_safe_ptr(|| -> Result<*const libc::c_void, String> {
+        if bytecode.is_null() {
+            return Err("null bytecode pointer".to_string());
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(bytecode, length) };
+        crate::initialize_runtime_from_bytecode(bytes)
+            .map_err(|e| format!("Failed to initialize runtime from bytecode: {e}"))?;
+        Ok(std::ptr::dangling::<libc::c_void>())
+    })
+}

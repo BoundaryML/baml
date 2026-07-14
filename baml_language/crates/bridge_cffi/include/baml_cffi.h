@@ -305,6 +305,18 @@ void destroy_baml_runtime(const void *_runtime);
  */
 int invoke_runtime_cli(const char *const *_args);
 
+/**
+ * Create/initialize the BAML runtime (global BexEngine) from serialized
+ * BAML bytecode — the borsh-encoded `Program` payload that `baml pack`
+ * embeds and that generated SDKs inline. The bytecode-first counterpart of
+ * [`create_baml_runtime`], enabling SDKs to boot without shipping `.baml`
+ * sources.
+ *
+ * # Returns
+ * Non-null pointer on success (value is opaque, not used), null on failure.
+ */
+const void *create_baml_runtime_from_bytecode(const uint8_t *bytecode, uintptr_t length);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus

@@ -29,6 +29,20 @@ static void test_initialize_runtime() {
     std::printf("runtime initialized\n");
 }
 
+static void test_bytecode_init_rejects_garbage() {
+    // The happy path is exercised once generated SDKs embed bytecode; here we
+    // pin that the export exists and reports failure as a catchable error.
+    const uint8_t garbage[] = {0xde, 0xad, 0xbe, 0xef};
+    bool threw = false;
+    try {
+        baml::initialize_runtime_from_bytecode(garbage, sizeof(garbage));
+    } catch (const baml::BamlError&) {
+        threw = true;
+    }
+    assert(threw);
+    std::printf("bytecode init rejects garbage ok\n");
+}
+
 static void test_call_function_end_to_end() {
     {
         baml::detail::ArgsEncoder args;
@@ -153,6 +167,7 @@ static void test_owned_buffer_move() {
 int main() {
     test_version();
     test_initialize_runtime();
+    test_bytecode_init_rejects_garbage();
     test_call_function_end_to_end();
     test_call_registry_round_trip();
     test_arg_two_state();

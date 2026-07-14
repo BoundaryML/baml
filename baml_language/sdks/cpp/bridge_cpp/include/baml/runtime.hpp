@@ -32,8 +32,15 @@ inline void initialize_runtime(const std::string& root_path,
     }
 }
 
-// initialize_runtime_from_bytecode: pending the C ABI export of the engine's
-// bytecode-init entry point (bridge_cffi has it as a Rust function only).
+// Initializes the process-global BAML runtime from serialized bytecode (the
+// payload generated SDKs embed). Replaces any previously initialized runtime.
+inline void initialize_runtime_from_bytecode(const uint8_t* bytecode, size_t length) {
+    const void* runtime = create_baml_runtime_from_bytecode(bytecode, length);
+    if (runtime == nullptr) {
+        throw BamlError(
+            "failed to initialize BAML runtime from bytecode (engine details on stderr)");
+    }
+}
 
 }  // namespace baml
 
