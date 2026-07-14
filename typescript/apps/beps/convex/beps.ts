@@ -276,6 +276,7 @@ export const create = mutation({
           slug: v.string(),
           title: v.string(),
           content: v.string(),
+          parentSlug: v.optional(v.string()),
         })
       )
     ),
@@ -316,6 +317,7 @@ export const create = mutation({
       title: string;
       content: string;
       order: number;
+      parentSlug?: string;
     }> = [];
 
     if (args.pages && args.pages.length > 0) {
@@ -327,6 +329,7 @@ export const create = mutation({
           title: page.title,
           content: page.content,
           order: i,
+          parentSlug: page.parentSlug,
           createdAt: now,
           updatedAt: now,
         });
@@ -335,6 +338,7 @@ export const create = mutation({
           title: page.title,
           content: page.content,
           order: i,
+          parentSlug: page.parentSlug,
         });
       }
     }
@@ -373,6 +377,7 @@ export const update = mutation({
           title: v.string(),
           content: v.string(),
           order: v.number(),
+          parentSlug: v.optional(v.string()),
         })
       )
     ),
@@ -421,6 +426,7 @@ export const update = mutation({
             title: page.title,
             content: page.content,
             order: page.order,
+            parentSlug: page.parentSlug,
             updatedAt: now,
           });
         } else {
@@ -431,6 +437,7 @@ export const update = mutation({
             title: page.title,
             content: page.content,
             order: page.order,
+            parentSlug: page.parentSlug,
             createdAt: now,
             updatedAt: now,
           });
@@ -449,6 +456,7 @@ export const update = mutation({
       title: p.title,
       content: p.content,
       order: p.order,
+      parentSlug: p.parentSlug,
     }));
 
     // Get the latest version for this BEP
@@ -554,6 +562,7 @@ export const createPage = mutation({
     slug: v.string(),
     title: v.string(),
     content: v.string(),
+    parentSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -575,6 +584,7 @@ export const createPage = mutation({
       title: args.title,
       content: args.content,
       order: maxOrder + 1,
+      parentSlug: args.parentSlug,
       createdAt: now,
       updatedAt: now,
     });
@@ -592,6 +602,7 @@ export const updatePage = mutation({
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     slug: v.optional(v.string()),
+    parentSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const page = await ctx.db.get(args.pageId);
@@ -603,6 +614,7 @@ export const updatePage = mutation({
     if (args.title !== undefined) updates.title = args.title;
     if (args.content !== undefined) updates.content = args.content;
     if (args.slug !== undefined) updates.slug = args.slug;
+    if (args.parentSlug !== undefined) updates.parentSlug = args.parentSlug;
 
     await ctx.db.patch(args.pageId, updates);
 
@@ -659,6 +671,7 @@ export const importVersion = mutation({
         slug: v.string(),
         title: v.string(),
         content: v.string(),
+        parentSlug: v.optional(v.string()),
       })
     ),
     editNote: v.optional(v.string()),
@@ -710,6 +723,7 @@ export const importVersion = mutation({
       title: string;
       content: string;
       order: number;
+      parentSlug?: string;
     }> = [];
 
     // Create a set of imported page slugs for efficient lookup
@@ -733,6 +747,7 @@ export const importVersion = mutation({
         await ctx.db.patch(existingPage._id, {
           title: importedPage.title,
           content: importedPage.content,
+          parentSlug: importedPage.parentSlug,
           updatedAt: now,
         });
         processedPages.push({
@@ -740,6 +755,7 @@ export const importVersion = mutation({
           title: importedPage.title,
           content: importedPage.content,
           order: existingPage.order,
+          parentSlug: importedPage.parentSlug,
         });
       } else {
         // Create new page with incremental order
@@ -750,6 +766,7 @@ export const importVersion = mutation({
           title: importedPage.title,
           content: importedPage.content,
           order: maxOrder,
+          parentSlug: importedPage.parentSlug,
           createdAt: now,
           updatedAt: now,
         });
@@ -758,6 +775,7 @@ export const importVersion = mutation({
           title: importedPage.title,
           content: importedPage.content,
           order: maxOrder,
+          parentSlug: importedPage.parentSlug,
         });
       }
     }
