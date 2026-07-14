@@ -54,7 +54,7 @@ fn ensure_runtime() {
         let root = std::env::temp_dir();
         let root = root.to_string_lossy();
         let root = root.trim_end_matches('/');
-        runtime::initialize_from_files(root, files).expect("runtime initializes");
+        runtime::initialize_from_files(root, &files).expect("runtime initializes");
     });
 }
 

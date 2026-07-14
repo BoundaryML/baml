@@ -697,17 +697,12 @@ name = "baml_bridge"
 version = "0.0.0-beta"
 dependencies = [
  "baml_version",
- "bex_events",
- "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
  "indexmap",
- "log",
  "num-bigint",
  "prost",
  "serde_json",
- "sys_native",
- "sys_types",
  "tokio",
 ]
 
