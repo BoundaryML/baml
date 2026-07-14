@@ -20,12 +20,43 @@ pub(crate) enum GeneratorIdent {
     ZeroLocal,
     ClassValueLocal,
     DecodedLocal,
+    CodecValueParameter,
     StringType,
     Int64Type,
     Float64Type,
     BoolType,
     ByteType,
     ErrorType,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ClassCodecDirection {
+    Encode,
+    Decode,
+}
+
+/// A generator-owned package declaration. Projected BAML declarations are
+/// exported and can never start with `_`, so this namespace cannot collide
+/// with user code. The stable index comes from sorted BAML class FQNs.
+pub(crate) struct ClassCodecIdent {
+    direction: ClassCodecDirection,
+    index: usize,
+}
+
+impl ClassCodecIdent {
+    pub(crate) fn new(direction: ClassCodecDirection, index: usize) -> Self {
+        Self { direction, index }
+    }
+}
+
+impl fmt::Display for ClassCodecIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let direction = match self.direction {
+            ClassCodecDirection::Encode => "Encode",
+            ClassCodecDirection::Decode => "Decode",
+        };
+        write!(f, "_baml{direction}Class{}", self.index)
+    }
 }
 
 impl GeneratorIdent {
@@ -65,6 +96,7 @@ impl GeneratorIdent {
             Self::ZeroLocal => "zero",
             Self::ClassValueLocal => "classValue",
             Self::DecodedLocal => "decoded",
+            Self::CodecValueParameter => "value",
             Self::StringType => "string",
             Self::Int64Type => "int64",
             Self::Float64Type => "float64",
@@ -132,6 +164,18 @@ impl fmt::Display for GeneratorIdent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn class_codec_identifiers_are_generator_owned_and_stable() {
+        assert_eq!(
+            ClassCodecIdent::new(ClassCodecDirection::Encode, 7).to_string(),
+            "_bamlEncodeClass7"
+        );
+        assert_eq!(
+            ClassCodecIdent::new(ClassCodecDirection::Decode, 7).to_string(),
+            "_bamlDecodeClass7"
+        );
+    }
 
     #[test]
     fn imports_are_deduplicated_and_alias_generated_packages_explicitly() {

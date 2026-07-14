@@ -37,3 +37,47 @@ class WirePrimitives {
 function round_trip_wire_primitives(value: WirePrimitives) -> WirePrimitives {
   value
 }
+
+class NullableWire {
+  string_value string?
+  int_value int?
+  bigint_value bigint?
+  float_value float?
+  bool_value bool?
+  bytes_value uint8array?
+  class_value WirePrimitives?
+}
+
+function round_trip_nullable_wire(value: NullableWire) -> NullableWire {
+  value
+}
+
+// Spell both union orders explicitly so codegen does not depend on `?` sugar
+// or on null appearing in one particular position.
+function round_trip_optional_string(value: null | string) -> string | null {
+  value
+}
+
+function round_trip_optional_int(value: int?) -> int? {
+  value
+}
+
+function round_trip_optional_bigint(value: bigint?) -> bigint? {
+  value
+}
+
+function round_trip_optional_float(value: float?) -> float? {
+  value
+}
+
+function round_trip_optional_bool(value: bool?) -> bool? {
+  value
+}
+
+function round_trip_optional_bytes(value: uint8array?) -> uint8array? {
+  value
+}
+
+function round_trip_optional_class(value: WirePrimitives?) -> WirePrimitives? {
+  value
+}

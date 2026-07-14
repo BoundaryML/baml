@@ -7,6 +7,17 @@ import (
 	"github.com/boundaryml/baml/sdks/go/baml_go/internal/cffi"
 )
 
+func (value Value) isNull() (bool, error) {
+	if value.value == nil {
+		return false, fmt.Errorf("BAML value is uninitialized")
+	}
+	if value.value.Value == nil {
+		return true, nil
+	}
+	_, ok := value.value.Value.(*cffi.BamlOutboundValue_NullValue)
+	return ok, nil
+}
+
 func (value Value) String() (string, error) {
 	if value.value == nil {
 		return "", fmt.Errorf("BAML value is uninitialized")
