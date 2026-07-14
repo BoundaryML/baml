@@ -4418,7 +4418,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 let result_ty = if let Some(else_id) = else_branch {
                     let else_ty = self.infer_expr(*else_id, body);
-                    Self::join_types(&then_ty, &else_ty)
+                    self.join_types(&then_ty, &else_ty)
                 } else {
                     Ty::Void {
                         attr: TyAttr::default(),
@@ -4502,23 +4502,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else {
                     let elem_types: Vec<Ty> =
                         elements.iter().map(|e| self.infer_expr(*e, body)).collect();
-                    let elem_ty = Self::join_all(&elem_types).widen_fresh();
+                    let elem_ty = self.join_all(&elem_types).widen_fresh();
                     Ty::List(Box::new(elem_ty), TyAttr::default())
                 }
             }
             Expr::Map { entries } => {
-                let mut key_types = Vec::new();
-                let mut val_types = Vec::new();
-                for (k, v) in entries {
-                    key_types.push(self.infer_expr(*k, body));
-                    val_types.push(self.infer_expr(*v, body));
-                }
-                let key_ty = Self::join_all(&key_types).widen_fresh();
-                let val_ty = Self::join_all(&val_types).widen_fresh();
-                Ty::Map {
-                    key: Box::new(key_ty),
-                    value: Box::new(val_ty),
-                    attr: TyAttr::default(),
+                // An empty map literal evolves to fit its use rather than
+                // committing to the unsound `map<never, never>` (see
+                // `empty_evolving_map`).
+                if entries.is_empty() {
+                    Self::empty_evolving_map()
+                } else {
+                    let mut key_types = Vec::new();
+                    let mut val_types = Vec::new();
+                    for (k, v) in entries {
+                        key_types.push(self.infer_expr(*k, body));
+                        val_types.push(self.infer_expr(*v, body));
+                    }
+                    let key_ty = self.join_all(&key_types).widen_fresh();
+                    let val_ty = self.join_all(&val_types).widen_fresh();
+                    Ty::Map {
+                        key: Box::new(key_ty),
+                        value: Box::new(val_ty),
+                        attr: TyAttr::default(),
+                    }
                 }
             }
             Expr::Binary { op, lhs, rhs } => {
@@ -5554,7 +5561,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .iter()
             .map(|(_, value)| self.infer_expr(*value, body))
             .collect();
-        let val_ty = Self::join_all(&val_types).widen_fresh();
+        let val_ty = self.join_all(&val_types).widen_fresh();
         Ty::Map {
             key: Box::new(Ty::string()),
             value: Box::new(val_ty),
@@ -6576,7 +6583,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 let ty = if let Some(else_id) = else_branch {
                     let else_ty = self.check_expr(*else_id, body, expected);
-                    Self::join_types(&then_ty, &else_ty)
+                    self.join_types(&then_ty, &else_ty)
                 } else {
                     if !matches!(expected, Ty::Void { .. } | Ty::Unknown { .. }) {
                         self.context
@@ -7762,7 +7769,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
 
-        Self::join_all(&arm_types)
+        self.join_all(&arm_types)
     }
 
     /// Type-check `if let PATTERN = SCRUTINEE { THEN } else { ELSE }`.
@@ -7912,7 +7919,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         match else_ty {
-            Some(else_ty) => Self::join_types(&then_ty, &else_ty),
+            Some(else_ty) => self.join_types(&then_ty, &else_ty),
             None => Ty::Void {
                 attr: TyAttr::default(),
             },
@@ -7987,7 +7994,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 }
             } else {
-                Self::facts_to_ty(&residual)
+                self.facts_to_ty(&residual)
             };
             // Record the clause binding type in the bindings map so MIR can read it.
             self.pattern_types
@@ -8077,7 +8084,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     narrowed_ty = if matches!(narrowed_ty, Ty::Never { .. }) {
                         panic_subset_ty
                     } else {
-                        Self::join_all(&[narrowed_ty, panic_subset_ty])
+                        self.join_all(&[narrowed_ty, panic_subset_ty])
                     };
                 }
 
@@ -8090,12 +8097,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
 
-                let mut narrowed_binding_ty = Self::facts_to_ty(&throw_matches.may_match);
+                let mut narrowed_binding_ty = self.facts_to_ty(&throw_matches.may_match);
                 if let Some(panic_subset_ty) = panic_subset_ty {
                     narrowed_binding_ty = if matches!(narrowed_binding_ty, Ty::Never { .. }) {
                         panic_subset_ty
                     } else {
-                        Self::join_all(&[narrowed_binding_ty, panic_subset_ty])
+                        self.join_all(&[narrowed_binding_ty, panic_subset_ty])
                     };
                 }
 
@@ -8186,7 +8193,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         self.catch_residual_throws
             .insert(catch_expr_id, residual.clone());
-        Self::join_all(&result_members)
+        self.join_all(&result_members)
     }
 
     /// Validate declared `throws` against effective escaping throws from the body.
@@ -8504,7 +8511,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     {
                         elem_tys.push(*elem);
                     }
-                    let elem_ty = (!elem_tys.is_empty()).then(|| Self::join_all(&elem_tys))?;
+                    let elem_ty = (!elem_tys.is_empty()).then(|| self.join_all(&elem_tys))?;
                     Ty::List(Box::new(elem_ty), TyAttr::default())
                 }
             }
@@ -8525,7 +8532,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         None => is_full = false,
                     }
                 }
-                let ty = (!tys.is_empty()).then(|| Self::join_all(&tys))?;
+                let ty = (!tys.is_empty()).then(|| self.join_all(&tys))?;
                 return Some(if is_full {
                     PatternExpectedTy::Full(ty)
                 } else {
@@ -8687,7 +8694,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if panic_members.is_empty() {
                     None
                 } else {
-                    Some(Self::join_all(&panic_members))
+                    Some(self.join_all(&panic_members))
                 }
             }
             _ => None,
@@ -8701,14 +8708,14 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Join a set of throw fact types into a single type.
-    fn facts_to_ty(facts: &BTreeSet<Ty>) -> Ty {
+    fn facts_to_ty(&self, facts: &BTreeSet<Ty>) -> Ty {
         if facts.is_empty() {
             return Ty::Never {
                 attr: TyAttr::default(),
             };
         }
         let tys: Vec<Ty> = facts.iter().cloned().collect();
-        Self::join_all(&tys)
+        self.join_all(&tys)
     }
 
     /// Check if a pattern type covers a throw fact type.
@@ -12904,7 +12911,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn join_types(a: &Ty, b: &Ty) -> Ty {
+    fn join_types(&self, a: &Ty, b: &Ty) -> Ty {
         if matches!(a, Ty::Never { .. }) {
             return b.clone();
         }
@@ -12934,6 +12941,26 @@ impl<'db> TypeInferenceBuilder<'db> {
                 );
             }
         }
+        // Two still-evolving containers join element-wise and stay evolving, so a
+        // later mutation can still establish the result (`if c { [] } else { [] }`
+        // then `x.push(5)`). Mirrors typescript-go's getUnionOrEvolvingArrayType,
+        // which combines evolving arrays at flow junctions instead of unioning.
+        match (a, b) {
+            (Ty::EvolvingList(elem_a, _), Ty::EvolvingList(elem_b, _)) => {
+                return Ty::EvolvingList(
+                    Box::new(self.join_types(elem_a, elem_b)),
+                    TyAttr::default(),
+                );
+            }
+            (Ty::EvolvingMap(key_a, val_a, _), Ty::EvolvingMap(key_b, val_b, _)) => {
+                return Ty::EvolvingMap(
+                    Box::new(self.join_types(key_a, key_b)),
+                    Box::new(self.join_types(val_a, val_b)),
+                    TyAttr::default(),
+                );
+            }
+            _ => {}
+        }
         // Build a flat union, deduplicating members
         let mut members = Vec::new();
         let mut push = |ty: &Ty| {
@@ -12949,6 +12976,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         push(a);
         push(b);
+        self.remove_subtype_members(&mut members);
         if members.len() == 1 {
             members.into_iter().next().unwrap()
         } else {
@@ -12958,7 +12986,63 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn join_all(types: &[Ty]) -> Ty {
+    /// Drop union members that are subtypes of other members - typescript-go's
+    /// `removeSubtypes`, the `UnionReduction.Subtype` mode its checker applies to
+    /// unions synthesized at expression joins (ternaries, return-type inference,
+    /// array literals). `1 | int` joins to `int`, `Color.Red | Color` to `Color`.
+    ///
+    /// An unestablished empty `[]` / `{}` is additionally absorbed by any
+    /// same-category container member. It cannot be a *subtype* of one (lists
+    /// and maps are invariant), but the join is an establishing use exactly like
+    /// a `push`, and the `Evolving` wrapper proves the value is a fresh literal
+    /// no committed alias can observe. This is what TypeScript gets from
+    /// `never[]`'s covariance, restricted to the sound fresh-literal case; a
+    /// committed `never[]` (user-annotated) is not absorbed (B-236).
+    ///
+    /// Members are scanned back-to-front so the first of two mutually-subtype
+    /// (equivalent) members survives.
+    fn remove_subtype_members(&self, members: &mut Vec<Ty>) {
+        // The recovery sentinels compare bidirectionally subtype-compatible to
+        // everything (and `Infer` must not reach the normalizer at all);
+        // reducing against them would collapse the union to a sentinel and
+        // lose real members. Keep the union as built.
+        if members
+            .iter()
+            .any(|m| matches!(m, Ty::Unknown { .. } | Ty::Error { .. } | Ty::Infer { .. }))
+        {
+            return;
+        }
+        let mut i = members.len();
+        while i > 0 {
+            i -= 1;
+            let absorbed = members.iter().enumerate().any(|(j, target)| {
+                j != i
+                    && (Self::join_establishes(&members[i], target)
+                        || self.is_subtype(&members[i], target))
+            });
+            if absorbed {
+                members.remove(i);
+            }
+        }
+    }
+
+    /// Whether `source` is an unestablished empty-collection literal type that a
+    /// same-category container member establishes at a join.
+    fn join_establishes(source: &Ty, target: &Ty) -> bool {
+        match source {
+            Ty::EvolvingList(inner, _) if matches!(**inner, Ty::Never { .. }) => {
+                matches!(target, Ty::List(..) | Ty::EvolvingList(..))
+            }
+            Ty::EvolvingMap(key, value, _)
+                if matches!(**key, Ty::Never { .. }) && matches!(**value, Ty::Never { .. }) =>
+            {
+                matches!(target, Ty::Map { .. } | Ty::EvolvingMap(..))
+            }
+            _ => false,
+        }
+    }
+
+    fn join_all(&self, types: &[Ty]) -> Ty {
         if types.is_empty() {
             return Ty::Never {
                 attr: TyAttr::default(),
@@ -12967,7 +13051,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         types
             .iter()
             .skip(1)
-            .fold(types[0].clone(), |acc, t| Self::join_types(&acc, t))
+            .fold(types[0].clone(), |acc, t| self.join_types(&acc, t))
     }
 
     /// The diagnostic for a type argument `actual` checked against an interface `bound`,
@@ -13589,7 +13673,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else if self.is_subtype(&inner_lhs, rhs) {
                     rhs.clone()
                 } else {
-                    Self::join_types(&inner_lhs, rhs)
+                    self.join_types(&inner_lhs, rhs)
                 }
             }
         }
@@ -14916,7 +15000,7 @@ impl TypeInferenceBuilder<'_> {
                             pt_joined
                                 .entry(*k)
                                 .and_modify(|acc| {
-                                    *acc = Self::join_all(&[acc.clone(), v.clone()]);
+                                    *acc = self.join_all(&[acc.clone(), v.clone()]);
                                 })
                                 .or_insert_with(|| v.clone());
                         }
@@ -14950,7 +15034,7 @@ impl TypeInferenceBuilder<'_> {
                             |(name, (pat_id, tys))| crate::pattern_lowering::PatternBinding {
                                 name,
                                 pat_id,
-                                ty: Self::join_all(&tys),
+                                ty: self.join_all(&tys),
                             },
                         )
                         .collect();
@@ -14959,9 +15043,9 @@ impl TypeInferenceBuilder<'_> {
                     required_ty: if required_tys.is_empty() {
                         None
                     } else {
-                        Some(Self::join_all(&required_tys))
+                        Some(self.join_all(&required_tys))
                     },
-                    matched_ty: Self::join_all(&matched_tys),
+                    matched_ty: self.join_all(&matched_tys),
                     bindings: joined_bindings,
                 };
             }
@@ -15320,7 +15404,7 @@ impl TypeInferenceBuilder<'_> {
                     let elem = if elem_tys.is_empty() {
                         unconstrained.clone()
                     } else {
-                        Self::join_all(&elem_tys)
+                        self.join_all(&elem_tys)
                     };
                     Ty::List(Box::new(elem), TyAttr::default())
                 }
@@ -15330,7 +15414,7 @@ impl TypeInferenceBuilder<'_> {
                     .iter()
                     .map(|&p| self.pattern_natural_type(p, body, unconstrained))
                     .collect();
-                Self::join_all(&part_tys)
+                self.join_all(&part_tys)
             }
         };
         self.pattern_natural_cache
@@ -16046,7 +16130,7 @@ impl TypeInferenceBuilder<'_> {
         } else if element_required_tys.is_empty() {
             None
         } else {
-            let joined = Self::join_all(&element_required_tys);
+            let joined = self.join_all(&element_required_tys);
             Some(Ty::List(Box::new(joined), TyAttr::default()))
         };
 
@@ -16156,9 +16240,9 @@ impl TypeInferenceBuilder<'_> {
         let required = if required_tys.is_empty() {
             None
         } else {
-            Some(Self::join_all(&required_tys))
+            Some(self.join_all(&required_tys))
         };
-        let matched = Self::join_all(&matched_tys);
+        let matched = self.join_all(&matched_tys);
 
         let dpat = if alts.len() == 1 {
             alts.into_iter().next().unwrap()

@@ -239,3 +239,140 @@ async fn map_with_int_alias_key_is_rejected_at_compile_time() {
     "#
     );
 }
+
+// ============================================================================
+// §N - Control-flow joins subtype-reduce instead of accumulating unions (B-236)
+// ============================================================================
+//
+// Port of TypeScript's flow-join simplification (typescript-go
+// `getUnionOrEvolvingArrayType` + `removeSubtypes`): at an if/else or match
+// join, an unestablished empty `[]` / `{}` branch is established by the other
+// branch's concrete container type, and union members that are subtypes of
+// other members are dropped.
+
+/// The original B-236 repro: `if c { xs } else { [] }` must join `string[]`
+/// with the empty `[]` to `string[]`, not the union `string[] | _[]`. The
+/// union made `.join` unresolvable (and before that, mis-dispatched it to the
+/// Map impl, aborting the VM with `expected map, got array`).
+#[tokio::test]
+async fn if_else_concrete_list_with_empty_else_branch_runs() {
+    let output = baml_test!(
+        r#"
+        function f(xs: string[], m: int) -> string {
+            let top = if (m > 0) { xs.slice(0, m) } else { [] };
+            top.join(" ")
+        }
+        function main() -> string {
+            f(["a", "b", "c"], 2)
+        }
+    "#
+    );
+    assert!(
+        matches!(&output.result, Ok(BexExternalValue::String(s)) if s == "a b"),
+        "expected \"a b\", got: {:?}",
+        output.result
+    );
+}
+
+/// The empty branch is not just typeable - it also runs: with `m = 0` the
+/// else-branch's actual empty array flows through the `string[]`-typed binding
+/// and `.join` returns `""`.
+#[tokio::test]
+async fn if_else_empty_else_branch_taken_at_runtime() {
+    let output = baml_test!(
+        r#"
+        function f(xs: string[], m: int) -> string {
+            let top = if (m > 0) { xs.slice(0, m) } else { [] };
+            top.join(" ")
+        }
+        function main() -> string {
+            f(["a", "b", "c"], 0)
+        }
+    "#
+    );
+    assert!(
+        matches!(&output.result, Ok(BexExternalValue::String(s)) if s.is_empty()),
+        "expected \"\", got: {:?}",
+        output.result
+    );
+}
+
+/// The map analogue: `if c { {"a": 1} } else { {} }` joins to
+/// `map<string, int>`, so indexing resolves.
+#[tokio::test]
+async fn if_else_concrete_map_with_empty_else_branch_runs() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let m = if (true) { {"a": 1} } else { {} };
+            m["a"]
+        }
+    "#
+    );
+    assert!(
+        matches!(output.result, Ok(BexExternalValue::Int(1))),
+        "expected 1, got: {:?}",
+        output.result
+    );
+}
+
+/// Two empty branches stay *evolving*: the join must not prematurely commit
+/// the container, so a later `push` still establishes the element type.
+#[tokio::test]
+async fn if_else_both_empty_branches_still_establishable() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            let x = if (true) { [] } else { [] };
+            x.push(5);
+            x[0]
+        }
+    "#
+    );
+    assert!(
+        matches!(output.result, Ok(BexExternalValue::Int(5))),
+        "expected 5, got: {:?}",
+        output.result
+    );
+}
+
+/// Two *committed* lists of different element types do NOT element-join to
+/// `(int | string)[]` (that would let a write through the joined view corrupt
+/// an aliased `int[]`). The join stays a union, on which mutation is rejected.
+#[tokio::test]
+#[should_panic(expected = "has no member `push`")]
+async fn if_else_committed_lists_of_different_elements_stay_a_union() {
+    let _ = baml_test!(
+        r#"
+        function main() -> int {
+            let v = if (true) { [1] } else { ["a"] };
+            v.push(2);
+            0
+        }
+    "#
+    );
+}
+
+/// Subtype reduction at the join: a literal branch joined with its base type
+/// reduces to the base (`1 | int` -> `int`), so the result stays usable as a
+/// plain `int` binding.
+#[tokio::test]
+async fn if_else_literal_and_base_reduce_to_base() {
+    let output = baml_test!(
+        r#"
+        function f(n: int) -> int {
+            let v = if (n > 0) { 1 } else { n };
+            let w: int = v;
+            w
+        }
+        function main() -> int {
+            f(-3)
+        }
+    "#
+    );
+    assert!(
+        matches!(output.result, Ok(BexExternalValue::Int(-3))),
+        "expected -3, got: {:?}",
+        output.result
+    );
+}
