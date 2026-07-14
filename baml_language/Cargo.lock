@@ -2981,7 +2981,7 @@ dependencies = [
 
 [[package]]
 name = "forked_google_cloud_auth"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "base64",

@@ -1295,6 +1295,33 @@ fn dispatch_keyword_interfaces() {
     insta::assert_snapshot!(output);
 }
 
+#[test]
+fn dispatch_keyword_google_ai_documents_enterprise_vertex_delegation() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "google-ai");
+    assert!(
+        output.contains("Google AI Studio API")
+            && output.contains("gemini-3.5-flash")
+            && output.contains("GOOGLE_GENAI_USE_ENTERPRISE=true")
+            && output.contains("passthrough to the `vertex-ai` backend"),
+        "google-ai documentation must explain enterprise delegation to Vertex AI:\n{output}"
+    );
+}
+
+#[test]
+fn dispatch_keyword_vertex_ai_documents_google_cloud_setup() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "vertex-ai");
+    assert!(
+        output.contains("Google Cloud Vertex AI")
+            && output.contains("gemini-3.1-pro-preview")
+            && output.contains("location \"global\"")
+            && output.contains("GOOGLE_CLOUD_PROJECT")
+            && output.contains("Application Default Credentials"),
+        "vertex-ai documentation must explain Google Cloud setup:\n{output}"
+    );
+}
+
 /// Unknown keyword should fall through to normal resolution.
 #[test]
 fn dispatch_nonexistent_keyword() {
