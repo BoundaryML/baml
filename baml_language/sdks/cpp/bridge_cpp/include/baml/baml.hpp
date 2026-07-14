@@ -5,6 +5,7 @@
 // includes this and refers to everything as ::baml::*.
 
 #include <baml/arg.hpp>
+#include <baml/bigint.hpp>
 #include <baml/box.hpp>
 #include <baml/buffer.hpp>
 #include <baml/codec.hpp>
@@ -13,6 +14,7 @@
 #include <baml/detail/registry.hpp>
 #include <baml/errors.hpp>
 #include <baml/future.hpp>
+#include <baml/handle.hpp>
 #include <baml/runtime.hpp>
 #include <baml/ty.hpp>
 

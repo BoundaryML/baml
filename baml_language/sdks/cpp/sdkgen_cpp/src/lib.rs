@@ -588,6 +588,27 @@ fn emit_class(
             }
         }
     }
+    // Method optional params become Arg<T> fields on opts structs nested in
+    // this class's body, so their types must be complete (= defined earlier)
+    // too. Delay the class while such a dep is merely not-yet-emitted; once
+    // the cycle pass runs (boxed non-empty), stop blocking -- a dep that
+    // still cannot resolve there means pass 3 skips that method, so no opts
+    // struct references it.
+    if boxed.is_empty() {
+        for method in class_def
+            .static_methods
+            .iter()
+            .chain(&class_def.instance_methods)
+        {
+            for arg in method.arguments.iter().filter(|a| a.default.is_some()) {
+                if let Translated::NotYet =
+                    translate_ty(pool, names, &arg.ty, emitted_types, boxed, &generic_params)
+                {
+                    return Ok(None);
+                }
+            }
+        }
+    }
     Ok(Some(EmittedClass {
         pool_name: name.clone(),
         ns: allocated_namespace(names, name, true),
@@ -843,13 +864,15 @@ fn translate_ty(
         Ty::Bool => "bool".to_string(),
         Ty::Null => "std::monostate".to_string(),
         Ty::Uint8Array => "std::vector<uint8_t>".to_string(),
+        // Opaque engine-managed state (`$rust_type` fields of handle-backed
+        // stdlib classes): an owned engine handle.
+        Ty::RustType => "::baml::Handle".to_string(),
+        Ty::Bigint => "::baml::BigInt".to_string(),
         Ty::Literal(lit) => {
             // Literal types widen to their base type (Python parity).
             match lit {
                 baml_base::Literal::Int(_) => "int64_t".to_string(),
-                baml_base::Literal::Bigint(_) => {
-                    return Translated::Unsupported("bigint literal".to_string());
-                }
+                baml_base::Literal::Bigint(_) => "::baml::BigInt".to_string(),
                 baml_base::Literal::Float(_) => "double".to_string(),
                 baml_base::Literal::String(_) => "std::string".to_string(),
                 baml_base::Literal::Bool(_) => "bool".to_string(),
@@ -1190,6 +1213,19 @@ fn render_body(
     let w = GeneratorIdent::WriterParam.token();
     let m = GeneratorIdent::TyWriterParam.token();
     let opts = GeneratorIdent::OptsParam.token();
+    // Inside a template body, a codec<ConcreteClass> reference is
+    // non-dependent and would be checked at definition -- before the codec
+    // specializations, which render after the classes. dependent_t defers
+    // the lookup to instantiation time.
+    let codec_ty = |ty: &str| -> String {
+        match f.class_type_params.iter().chain(&f.type_params).next() {
+            Some(dep) => format!(
+                "::baml::detail::dependent_t<{ty}, {dep}>",
+                dep = dep.identifier()
+            ),
+            None => ty.to_string(),
+        }
+    };
     let _ = writeln!(
         buf,
         "{indent}::baml_sdk::{detail}::{ensure}();",
@@ -1210,7 +1246,8 @@ fn render_body(
         let _ = writeln!(
             buf,
             "{indent}{args}.add_arg(\"self\", [&](::baml::detail::wire::Writer& {w}) {{ \
-             ::baml::codec<{self_type}>::encode({w}, *this); }});"
+             ::baml::codec<{ty}>::encode({w}, *this); }});",
+            ty = codec_ty(self_type)
         );
     }
     for p in &f.params {
@@ -1235,7 +1272,7 @@ fn render_body(
                 "{indent}{args}.add_arg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
                  ::baml::codec<{ty}>::encode({w}, {value}); }});",
                 wire = p.name.wire(),
-                ty = p.ty,
+                ty = codec_ty(&p.ty),
                 value = p.name.identifier()
             );
         }
@@ -1248,7 +1285,7 @@ fn render_body(
              {args}.add_arg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
              ::baml::codec<{ty}>::encode({w}, {opts}.{field}.value()); }});\n{indent}}}",
             wire = p.name.wire(),
-            ty = p.ty
+            ty = codec_ty(&p.ty)
         );
     }
     let call = if async_variant {

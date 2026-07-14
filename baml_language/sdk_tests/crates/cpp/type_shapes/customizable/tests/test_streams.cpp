@@ -4,9 +4,6 @@
 // these tests probe that a host-constructed stream_types::* struct can be
 // encoded and round-tripped through a $stream-typed parameter.
 //
-// Deviation from the Python file: round_trip_resume_or_http_response is
-// not ported yet -- its baml.http.Response union arm is handle-backed and
-// lands with the handle slice.
 #include <optional>
 #include <variant>
 
@@ -36,4 +33,14 @@ BAML_TEST(round_trip_resume_or_resume_stream) {
     // Union arm Resume (the non-stream side) is host-constructible.
     const std::variant<Resume, StreamResume> u = Resume{"hopper", std::nullopt};
     BAML_ASSERT(baml_sdk::lorem::round_trip_resume_or_resume_stream(u) == u);
+}
+
+BAML_TEST(round_trip_resume_or_http_response) {
+    // Pass the Resume arm; the baml.http.Response arm isn't
+    // host-constructible.
+    const std::variant<Resume, baml_sdk::baml::http::Response> u =
+        Resume{"lovelace", std::string("a@x.com")};
+    const auto result = baml_sdk::lorem::round_trip_resume_or_http_response(u);
+    BAML_ASSERT(std::holds_alternative<Resume>(result));
+    BAML_ASSERT(std::get<Resume>(result) == std::get<Resume>(u));
 }

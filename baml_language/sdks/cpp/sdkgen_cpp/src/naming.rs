@@ -587,6 +587,10 @@ pub(crate) struct CppNames {
     allocations: HashMap<NameRequest, CppName>,
     /// Source namespace path -> allocated C++ namespace path.
     ns_paths: HashMap<Vec<Box<str>>, Vec<Box<str>>>,
+    /// Source namespace path -> allocated child namespace segment names.
+    /// Namespaces allocate first; phase 2 consults this so a symbol cannot
+    /// take the name of a sibling namespace (a C++ redefinition error).
+    ns_children: HashMap<Vec<Box<str>>, BTreeSet<Box<str>>>,
 }
 
 impl CppNames {
@@ -594,6 +598,7 @@ impl CppNames {
         let mut names = CppNames {
             allocations: HashMap::new(),
             ns_paths: HashMap::new(),
+            ns_children: HashMap::new(),
         };
         names.ns_paths.insert(Vec::new(), Vec::new());
 
@@ -637,7 +642,9 @@ impl CppNames {
     fn allocate_group(&mut self, group: Vec<&NameRequest>) {
         let scope_kind = group[0].kind;
         let preferred = preferred_token(group[0]);
-        let needs_suffix = group.len() > 1 || reserved_in(scope_kind, &preferred);
+        let needs_suffix = group.len() > 1
+            || reserved_in(scope_kind, &preferred)
+            || self.collides_with_namespace(group[0], &preferred);
         for request in group {
             let name = if needs_suffix {
                 format!("{preferred}_{}", collision_suffix(request))
@@ -645,6 +652,22 @@ impl CppNames {
                 preferred.clone()
             };
             self.insert(request, name.into());
+        }
+    }
+
+    /// `true` when a non-namespace symbol's preferred name matches an
+    /// allocated sibling namespace segment (C++ rejects a namespace and any
+    /// other entity sharing a name in one scope).
+    fn collides_with_namespace(&self, request: &NameRequest, preferred: &str) -> bool {
+        if request.kind == CppNameKind::Namespace {
+            return false;
+        }
+        match request.fqn.scope(request.kind) {
+            NameScope::Namespace(path) => self
+                .ns_children
+                .get(&path)
+                .is_some_and(|children| children.contains(preferred)),
+            NameScope::Owner(_) => false,
         }
     }
 
@@ -658,6 +681,10 @@ impl CppNames {
             let mut allocated = self.ns_paths.get(&source_ns).cloned().unwrap_or_default();
             allocated.push(name.clone());
             self.ns_paths.insert(source_path, allocated);
+            self.ns_children
+                .entry(source_ns.clone())
+                .or_default()
+                .insert(name.clone());
         }
         let ns = self
             .ns_paths

@@ -17,11 +17,13 @@
 
 #include <baml_cffi.h>
 
+#include <baml/bigint.hpp>
 #include <baml/box.hpp>
 #include <baml/detail/host_value.hpp>
 #include <baml/detail/proto.hpp>
 #include <baml/detail/wire.hpp>
 #include <baml/errors.hpp>
+#include <baml/handle.hpp>
 
 namespace baml {
 
@@ -34,6 +36,17 @@ namespace detail {
     throw BamlError(std::string("BAML decode error: expected ") + expected + ", got " +
                     got.kind_name());
 }
+
+// dependent_t<X, Deps...> is X, made formally dependent on Deps. Generated
+// template bodies reference codec<X> for concrete X through this alias so
+// the lookup defers to instantiation time -- codec specializations are
+// defined after the classes whose inline template methods mention them.
+template <typename X, typename...>
+struct dependent {
+    using type = X;
+};
+template <typename X, typename... Deps>
+using dependent_t = typename dependent<X, Deps...>::type;
 
 }  // namespace detail
 
@@ -116,6 +129,39 @@ struct codec<std::monostate> {
             detail::kind_mismatch("null", v);
         }
         return std::monostate{};
+    }
+};
+
+template <>
+struct codec<BigInt> {
+    static void encode(detail::wire::Writer& value_msg, const BigInt& v) {
+        value_msg.string_field(12, v.hex());  // InboundValue.bigint_value
+    }
+    static BigInt decode(const detail::OutboundValue& v) {
+        // Engine ints widen to bigint when the declared type is bigint.
+        if (v.kind == detail::OutboundValue::Kind::Int) {
+            return BigInt(v.int_v);
+        }
+        if (v.kind != detail::OutboundValue::Kind::BigInt) {
+            detail::kind_mismatch("bigint", v);
+        }
+        return BigInt::from_hex(v.string_v);
+    }
+};
+
+template <>
+struct codec<Handle> {
+    static void encode(detail::wire::Writer& value_msg, const Handle& v) {
+        detail::wire::Writer handle;  // BamlHandle
+        handle.uint64_field(1, v.clone_key_for_wire());
+        handle.int64_field(2, v.handle_type());
+        value_msg.message_field(10, handle);  // InboundValue.handle
+    }
+    static Handle decode(const detail::OutboundValue& v) {
+        if (v.kind != detail::OutboundValue::Kind::Handle) {
+            detail::kind_mismatch("handle", v);
+        }
+        return Handle(v.handle_key, v.handle_type);
     }
 };
 
