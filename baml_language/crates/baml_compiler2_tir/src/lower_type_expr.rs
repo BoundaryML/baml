@@ -498,379 +498,67 @@ pub fn lower_type_expr(
     ctx: &dyn TypeExprContext<'_>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
-    let db = ctx.db();
-    match &type_expr.kind {
-        TypeExprKind::Path {
+    // Transitional shim: lower the AST node into a scratch span-free arena and
+    // run the native lowering. Diagnostics carry no spans (callers position
+    // them from their own `TypeExpr`), so nothing is lost by the round-trip.
+    let mut type_refs = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
+    let id = type_refs.lower(type_expr);
+    let (store, _spans) = type_refs.finish();
+    lower_type_ref(&store, id, ctx, diagnostics)
+}
+
+/// Resolve a span-free [`TypeRef`](baml_compiler2_hir::type_ref::TypeRef) to a
+/// `Ty` — the native form of [`lower_type_expr`], for callers holding firewall
+/// data (`function_data` / `class_data` / …) rather than AST nodes.
+pub fn lower_type_ref(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    id: baml_compiler2_hir::type_ref::TypeRefId,
+    ctx: &dyn TypeExprContext<'_>,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
+    use baml_compiler2_hir::type_ref::TypeRefKind;
+
+    match &store[id].kind {
+        TypeRefKind::Path {
             segments,
             generic_args,
             associated_type_bindings,
-            ..
-        } => {
-            // `Self` / `Self.Member…`: resolve the receiver through the context, but only
-            // when `Self` is in scope (`lower_self` is `Some`). A bare `Self` is the
-            // receiver type; `Self.Item` is an associated-type projection rooted at it.
-            // Falls through otherwise, so a stray `Self` still takes the unresolved path.
-            if segments[0].as_str() == "Self"
-                && generic_args.is_empty()
-                && associated_type_bindings.is_empty()
-                && let Some(self_ty) = ctx.lower_self()
-            {
-                if segments.len() == 1 {
-                    return self_ty;
-                }
-                let mut ty = self_ty;
-                for member in &segments[1..] {
-                    let lowered = crate::builder::associated_projection::lower_projection(
-                        ctx,
-                        ty,
-                        None,
-                        member.clone(),
-                    );
-                    diagnostics.extend(lowered.diagnostics);
-                    ty = lowered.ty;
-                }
-                return ty;
-            }
-            match ctx.resolve_type(segments) {
-                Ok(def) => {
-                    let short = segments.last().expect("non-empty path");
-                    match def {
-                        Definition::Class(class_loc) => {
-                            // Collect and lower generic args, storing them in Ty::Class.
-                            let lowered_args: Vec<Ty> = generic_args
-                                .iter()
-                                .map(|ga| lower_type_expr(ga, ctx, diagnostics))
-                                .collect();
-
-                            let class_tree =
-                                baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-                            let expected_type_args = class_tree
-                                .classes
-                                .get(&class_loc.id(db))
-                                .map(|class| class.generic_params.len())
-                                .unwrap_or(0);
-                            // A bare generic name (`generic_args.is_empty()`) is left
-                            // unchecked here: it is a deliberate wildcard in several
-                            // positions (`reflect.type_of<Box>()`, construction
-                            // `Box { .. }` where args infer from fields, an interface's
-                            // own `Self` type). Object construction that cannot infer
-                            // its args is reported by `infer_object_expr`
-                            // (`CannotInferTypeParameter`) instead.
-                            if !generic_args.is_empty() && generic_args.len() != expected_type_args
-                            {
-                                diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
-                                    type_name: short.clone(),
-                                    expected: expected_type_args,
-                                    got: generic_args.len(),
-                                });
-                            }
-
-                            // BEP-034: `baml.future.Future<T, E>` resolves to the
-                            // dedicated `Ty::Future` variant rather than the
-                            // generic `Ty::Class`. The class declaration exists
-                            // as a regular `.baml` file (for method dispatch via
-                            // the standard PackageBaml path), but `spawn` /
-                            // `await` keys off `Ty::Future` directly. Mirrors
-                            // how `int[]` resolves to `Ty::List` even though
-                            // `class Array<T>` is a regular class declaration.
-                            let qtn = qualify_def(db, def, short);
-                            if qtn.name().as_str() == "Future"
-                                && qtn.package().as_str() == "baml"
-                                && qtn.namespace().len() == 1
-                                && qtn.namespace()[0].as_str() == "future"
-                                && lowered_args.len() == 2
-                            {
-                                return Ty::Future(
-                                    Box::new(lowered_args[0].clone()),
-                                    Box::new(lowered_args[1].clone()),
-                                    TyAttr::default(),
-                                );
-                            }
-
-                            Ty::Class(qtn, lowered_args, TyAttr::default())
-                        }
-                        Definition::Interface(iface_loc) => {
-                            // Same generic-arg handling as `Class` — interface
-                            // parameters are valid in the same positions.
-                            let lowered_args: Vec<Ty> = generic_args
-                                .iter()
-                                .map(|ga| lower_type_expr(ga, ctx, diagnostics))
-                                .collect();
-                            let iface_tree =
-                                baml_compiler2_ppir::file_item_tree(db, iface_loc.file(db));
-                            let expected_type_args = iface_tree
-                                .interfaces
-                                .get(&iface_loc.id(db))
-                                .map(|iface| iface.generic_params.len())
-                                .unwrap_or(0);
-                            if !generic_args.is_empty() && generic_args.len() != expected_type_args
-                            {
-                                diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
-                                    type_name: short.clone(),
-                                    expected: expected_type_args,
-                                    got: generic_args.len(),
-                                });
-                            }
-                            let known_associated_types: FxHashSet<baml_base::Name> = iface_tree
-                                .interfaces
-                                .get(&iface_loc.id(db))
-                                .map(|iface| {
-                                    iface
-                                        .associated_types
-                                        .iter()
-                                        .map(|assoc| assoc.name.clone())
-                                        .collect()
-                                })
-                                .unwrap_or_default();
-                            let iface_qtn = qualify_def(db, def, short);
-                            let mut seen_associated_bindings = FxHashSet::default();
-                            let lowered_associated_bindings: Vec<(baml_base::Name, Ty)> =
-                                associated_type_bindings
-                                    .iter()
-                                    .map(|binding| {
-                                        if !known_associated_types.contains(&binding.name) {
-                                            diagnostics.push(TirTypeError::UnresolvedType {
-                                                name: binding.name.clone(),
-                                                suggestions: known_associated_types
-                                                    .iter()
-                                                    .cloned()
-                                                    .collect(),
-                                            });
-                                        }
-                                        // The same associated type specified twice in an
-                                        // existential's arguments (`I<Item = a, Item = b>`) — the
-                                        // existential counterpart of the impl-side duplicate.
-                                        if !seen_associated_bindings.insert(binding.name.clone()) {
-                                            diagnostics.push(
-                                                TirTypeError::DuplicateAssociatedTypeBinding {
-                                                    interface: iface_qtn.clone(),
-                                                    name: binding.name.clone(),
-                                                },
-                                            );
-                                        }
-                                        (
-                                            binding.name.clone(),
-                                            lower_type_expr(&binding.ty, ctx, diagnostics),
-                                        )
-                                    })
-                                    .collect();
-                            // §1.7(a): eagerly fill each omitted, defaulted associated type at
-                            // this existential. `Self` is the existential itself (its explicit
-                            // pins plus the defaults filled so far), so a Self-referencing
-                            // default (`type Items = Self.Item[]`) reduces against them. The
-                            // default is lowered once — with a symbolic `Self` — by
-                            // `interface_associated_type_default`, and substituted here.
-                            let (iface_generic_params, iface_assoc_names): (Vec<_>, Vec<_>) =
-                                iface_tree
-                                    .interfaces
-                                    .get(&iface_loc.id(db))
-                                    .map(|iface| {
-                                        (
-                                            iface.generic_params.clone(),
-                                            iface
-                                                .associated_types
-                                                .iter()
-                                                .map(|assoc| assoc.name.clone())
-                                                .collect(),
-                                        )
-                                    })
-                                    .unwrap_or_default();
-                            let mut associated_bindings = lowered_associated_bindings;
-                            for assoc_name in iface_assoc_names {
-                                if associated_bindings.iter().any(|(n, _)| *n == assoc_name) {
-                                    continue;
-                                }
-                                if let Some((default, _)) =
-                                    crate::interfaces::interface_associated_type_default(
-                                        db,
-                                        iface_loc,
-                                        assoc_name.clone(),
-                                    )
-                                {
-                                    let self_ty = Ty::Interface(
-                                        iface_qtn.clone(),
-                                        lowered_args.clone(),
-                                        associated_bindings.clone(),
-                                        TyAttr::default(),
-                                    );
-                                    let filled = crate::interfaces::realize_associated_default(
-                                        &default,
-                                        &iface_generic_params,
-                                        &lowered_args,
-                                        &self_ty,
-                                    );
-                                    associated_bindings.push((assoc_name, filled));
-                                }
-                            }
-                            Ty::Interface(
-                                iface_qtn,
-                                lowered_args,
-                                associated_bindings,
-                                TyAttr::default(),
-                            )
-                        }
-                        Definition::Enum(_) => {
-                            // Enums are not generic — validate args and emit a diagnostic if any were supplied.
-                            for ga in generic_args {
-                                let _ = lower_type_expr(ga, ctx, diagnostics);
-                            }
-                            if !generic_args.is_empty() {
-                                diagnostics.push(TirTypeError::TypeIsNotGeneric {
-                                    type_name: short.clone(),
-                                    kind: "enum",
-                                });
-                            }
-                            Ty::Enum(qualify_def(db, def, short), TyAttr::default())
-                        }
-                        Definition::TypeAlias(_) => {
-                            // Type aliases are not generic — validate args and emit a diagnostic if any were supplied.
-                            for ga in generic_args {
-                                let _ = lower_type_expr(ga, ctx, diagnostics);
-                            }
-                            if !generic_args.is_empty() {
-                                diagnostics.push(TirTypeError::TypeIsNotGeneric {
-                                    type_name: short.clone(),
-                                    kind: "type alias",
-                                });
-                            }
-                            Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
-                        }
-                        // Unreachable in practice: the package `types` namespace only holds
-                        // class/enum/interface/alias contributions (hir builder). Defensive —
-                        // if a non-type definition ever lands here, report it rather than
-                        // silently producing a compatible-with-everything sentinel.
-                        _ => {
-                            diagnostics.push(TirTypeError::UnresolvedType {
-                                name: short.clone(),
-                                suggestions: Box::new([]),
-                            });
-                            Ty::Error {
-                                attr: TyAttr::default(),
-                            }
-                        }
-                    }
-                }
-                Err(suggestions) => {
-                    // A single-segment name that is an in-scope type variable
-                    // (e.g. T, K, V) lowers to `Ty::TypeVar`, not an error.
-                    if segments.len() == 1 && ctx.type_var_bounds(&segments[0]).is_some() {
-                        return Ty::TypeVar(segments[0].clone(), TyAttr::default());
-                    }
-                    // Enum-variant fallback: a path like `Status.Active` (or
-                    // `pkg.ns.Status.Active`) won't resolve as a type — `Active`
-                    // isn't a type, it's a variant. Try interpreting the last
-                    // segment as the variant and the rest as the enum's path.
-                    if segments.len() >= 2 {
-                        let (variant, enum_path) = segments.split_last().unwrap();
-                        let enum_short = enum_path.last().unwrap();
-                        if let Ok(def @ Definition::Enum(enum_loc)) = ctx.resolve_type(enum_path) {
-                            // Verify the variant actually exists on the enum;
-                            // otherwise `Status.Typo` would silently produce a
-                            // bogus `Ty::EnumVariant` and downstream code would
-                            // never see `UnresolvedType`.
-                            let item_tree =
-                                baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
-                            let enum_data = &item_tree[enum_loc.id(db)];
-                            if enum_data.variants.iter().any(|v| v.name == *variant) {
-                                return Ty::EnumVariant(
-                                    qualify_def(db, def, enum_short),
-                                    variant.clone(),
-                                    TyAttr::default(),
-                                );
-                            }
-                        }
-                    }
-                    // Associated type projection fallback: after ordinary type
-                    // paths and enum variants have had first refusal, treat
-                    // `Base.Member` as shorthand for an associated type projection.
-                    // This preserves enum disambiguation (`Status.Active`) and
-                    // still accepts aliases, type variables, concrete classes,
-                    // interfaces, and nested projections as projection bases.
-                    if segments.len() >= 2
-                        && generic_args.is_empty()
-                        && associated_type_bindings.is_empty()
-                    {
-                        let base_expr = TypeExprKind::Path {
-                            segments: segments[..segments.len() - 1].to_vec(),
-                            generic_args: Vec::new(),
-                            associated_type_bindings: Vec::new(),
-                            attrs: Vec::new(),
-                        }
-                        .at(type_expr.span);
-                        let mut base_diags = Vec::new();
-                        let base_ty = lower_type_expr(&base_expr, ctx, &mut base_diags);
-                        if base_diags.is_empty() && can_be_associated_type_projection_base(&base_ty)
-                        {
-                            let member = segments.last().expect("non-empty path").clone();
-                            let lowered = crate::builder::associated_projection::lower_projection(
-                                ctx, base_ty, None, member,
-                            );
-                            diagnostics.extend(lowered.diagnostics);
-                            return lowered.ty;
-                        }
-                    }
-                    let name_str = segments
-                        .iter()
-                        .map(smol_str::SmolStr::as_str)
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    // If this otherwise-unresolved single-segment name is an associated
-                    // type of the enclosing interface's `Self`, the user almost certainly
-                    // meant the projection `Self.<name>` (bare associated-type names are
-                    // illegal). Surface that as the leading "did you mean" on the ordinary
-                    // unresolved-type error — a real in-scope type of the same name resolves
-                    // in the `Ok` branch above and never reaches here.
-                    let suggestions = if segments.len() == 1
-                        && generic_args.is_empty()
-                        && associated_type_bindings.is_empty()
-                        && ctx.self_associated_type_names().contains(&segments[0])
-                    {
-                        std::iter::once(baml_base::Name::new(format!("Self.{name_str}")))
-                            .chain(suggestions.iter().cloned())
-                            .collect()
-                    } else {
-                        suggestions
-                    };
-                    diagnostics.push(TirTypeError::UnresolvedType {
-                        name: baml_base::Name::new(&name_str),
-                        suggestions,
-                    });
-                    // An unresolved name is unrecoverable — `Ty::Error` (diagnosed, poisons
-                    // downstream), never `Ty::Unknown` (the missing/inferable sentinel).
-                    Ty::Error {
-                        attr: TyAttr::default(),
-                    }
-                }
-            }
-        }
-        TypeExprKind::Int { .. } => Ty::Int {
+        } => lower_path(
+            store,
+            segments,
+            generic_args,
+            associated_type_bindings,
+            ctx,
+            diagnostics,
+        ),
+        TypeRefKind::Int => Ty::Int {
             attr: TyAttr::default(),
         },
-        TypeExprKind::Bigint { .. } => Ty::Bigint {
+        TypeRefKind::Bigint => Ty::Bigint {
             attr: TyAttr::default(),
         },
-        TypeExprKind::Float { .. } => Ty::Float {
+        TypeRefKind::Float => Ty::Float {
             attr: TyAttr::default(),
         },
-        TypeExprKind::String { .. } => Ty::String {
+        TypeRefKind::String => Ty::String {
             attr: TyAttr::default(),
         },
-        TypeExprKind::Bool { .. } => Ty::Bool {
+        TypeRefKind::Bool => Ty::Bool {
             attr: TyAttr::default(),
         },
-        TypeExprKind::Null { .. } => Ty::Null {
+        TypeRefKind::Null => Ty::Null {
             attr: TyAttr::default(),
         },
-        TypeExprKind::Never { .. } => Ty::Never {
+        TypeRefKind::Never => Ty::Never {
             attr: TyAttr::default(),
         },
-        TypeExprKind::Void { .. } => Ty::Void {
+        TypeRefKind::Void => Ty::Void {
             attr: TyAttr::default(),
         },
-        TypeExprKind::Uint8Array { .. } => Ty::Uint8Array {
+        TypeRefKind::Uint8Array => Ty::Uint8Array {
             attr: TyAttr::default(),
         },
-        TypeExprKind::Media { kind, .. } => match kind {
+        TypeRefKind::Media { kind } => match kind {
             baml_base::MediaKind::Image => Ty::Media(MediaKind::Image, TyAttr::default()),
             baml_base::MediaKind::Audio => Ty::Media(MediaKind::Audio, TyAttr::default()),
             baml_base::MediaKind::Video => Ty::Media(MediaKind::Video, TyAttr::default()),
@@ -881,19 +569,19 @@ pub fn lower_type_expr(
             },
         },
         // `T?` is sugar for `T | null` — lower it directly to a nullable union.
-        TypeExprKind::Optional { inner, .. } => {
-            Ty::optional(lower_type_expr(inner, ctx, diagnostics))
+        TypeRefKind::Optional { inner } => {
+            Ty::optional(lower_type_ref(store, *inner, ctx, diagnostics))
         }
-        TypeExprKind::List { inner, .. } => Ty::List(
-            Box::new(lower_type_expr(inner, ctx, diagnostics)),
+        TypeRefKind::List { inner } => Ty::List(
+            Box::new(lower_type_ref(store, *inner, ctx, diagnostics)),
             TyAttr::default(),
         ),
-        TypeExprKind::Map { key, value, .. } => {
-            let key_ty = lower_type_expr(key, ctx, diagnostics);
-            let value_ty = lower_type_expr(value, ctx, diagnostics);
+        TypeRefKind::Map { key, value } => {
+            let key_ty = lower_type_ref(store, *key, ctx, diagnostics);
+            let value_ty = lower_type_ref(store, *value, ctx, diagnostics);
             // Map keys are strings at runtime, so the key type must denote `string`
             // (or a subset of it) — E0067.
-            if !is_supported_map_key_type(db, &key_ty, &mut FxHashSet::default()) {
+            if !is_supported_map_key_type(ctx.db(), &key_ty, &mut FxHashSet::default()) {
                 diagnostics.push(TirTypeError::InvalidMapKeyType {
                     key: key_ty.clone(),
                 });
@@ -904,20 +592,17 @@ pub fn lower_type_expr(
                 attr: TyAttr::default(),
             }
         }
-        TypeExprKind::Union {
-            variants: members, ..
-        } => Ty::Union(
-            members
+        TypeRefKind::Union { variants } => Ty::Union(
+            variants
                 .iter()
-                .map(|m| lower_type_expr(m, ctx, diagnostics))
+                .map(|&member| lower_type_ref(store, member, ctx, diagnostics))
                 .collect(),
             TyAttr::default(),
         ),
-        TypeExprKind::Function {
+        TypeRefKind::Function {
             params,
             ret,
             throws,
-            ..
         } => {
             // A function type carries no generics of its own; its type variables
             // come from the enclosing context.
@@ -926,7 +611,7 @@ pub fn lower_type_expr(
                     .iter()
                     .map(|p| FunctionParamTy {
                         name: p.name.clone(),
-                        ty: lower_type_expr(&p.ty, ctx, diagnostics),
+                        ty: lower_type_ref(store, p.ty, ctx, diagnostics),
                         mode: if p.optional {
                             FunctionParamMode::Optional
                         } else {
@@ -934,11 +619,10 @@ pub fn lower_type_expr(
                         },
                     })
                     .collect(),
-                ret: Box::new(lower_type_expr(ret, ctx, diagnostics)),
+                ret: Box::new(lower_type_ref(store, *ret, ctx, diagnostics)),
                 throws: Box::new(
                     throws
-                        .as_deref()
-                        .map(|throws| lower_type_expr(throws, ctx, diagnostics))
+                        .map(|throws| lower_type_ref(store, throws, ctx, diagnostics))
                         .unwrap_or(Ty::Never {
                             attr: TyAttr::default(),
                         }),
@@ -946,16 +630,14 @@ pub fn lower_type_expr(
                 attr: TyAttr::default(),
             }
         }
-        TypeExprKind::AssociatedTypeProjection {
+        TypeRefKind::AssociatedTypeProjection {
             base,
             interface,
             member,
-            ..
         } => {
-            let base_ty = lower_type_expr(base, ctx, diagnostics);
-            let explicit_interface = interface
-                .as_ref()
-                .map(|interface| lower_type_expr(interface, ctx, diagnostics));
+            let base_ty = lower_type_ref(store, *base, ctx, diagnostics);
+            let explicit_interface =
+                interface.map(|interface| lower_type_ref(store, interface, ctx, diagnostics));
             let lowered = crate::builder::associated_projection::lower_projection(
                 ctx,
                 base_ty,
@@ -965,35 +647,376 @@ pub fn lower_type_expr(
             diagnostics.extend(lowered.diagnostics);
             lowered.ty
         }
-        TypeExprKind::Literal { value: lit, .. } => {
+        TypeRefKind::Literal { value: lit } => {
             Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default())
         }
-        TypeExprKind::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
+        TypeRefKind::BuiltinUnknown => Ty::BuiltinUnknown {
             attr: TyAttr::default(),
         },
         // Parse recovery: the parser already reported the syntax error — unrecoverable.
-        TypeExprKind::Error { .. } => Ty::Error {
+        TypeRefKind::Error => Ty::Error {
             attr: TyAttr::default(),
         },
         // A missing type (an unannotated lambda param, an elided receiver type): genuinely
         // "not yet known", to be filled by inference — NOT an error sentinel.
-        TypeExprKind::Unknown { .. } => Ty::Unknown {
+        TypeRefKind::Unknown => Ty::Unknown {
             attr: TyAttr::default(),
         },
         // Dedicated Ty::Type variant — see ty.rs doc comment for design rationale.
-        TypeExprKind::Type { .. } => Ty::Type {
+        TypeRefKind::Type => Ty::Type {
             attr: TyAttr::default(),
         },
         // `$rust_type` — opaque Rust-managed state field type.
-        TypeExprKind::Rust { .. } => Ty::RustType {
+        TypeRefKind::Rust => Ty::RustType {
             attr: TyAttr::default(),
         },
         // The wildcard `_` (a type-inference placeholder) cannot be inferred — inference for
         // `_` is unimplemented. Reject it with a diagnostic and lower to `Ty::Error` — never
         // `Ty::Infer`, which the canonical normalizer treats as `unreachable!`. The user must
         // write the type explicitly.
-        TypeExprKind::Infer { .. } => {
+        TypeRefKind::Infer => {
             diagnostics.push(TirTypeError::CannotInferType);
+            Ty::Error {
+                attr: TyAttr::default(),
+            }
+        }
+    }
+}
+
+/// The `Path` arm of [`lower_type_ref`], factored out so the associated-type
+/// projection fallback can re-lower a path *prefix* by recursing with a shorter
+/// segment list — where the AST form had to synthesize a fresh `TypeExpr` node.
+fn lower_path(
+    store: &baml_compiler2_hir::type_ref::TypeRefStore,
+    segments: &[baml_base::Name],
+    generic_args: &[baml_compiler2_hir::type_ref::TypeRefId],
+    associated_type_bindings: &[baml_compiler2_hir::type_ref::AssociatedTypeBindingRef],
+    ctx: &dyn TypeExprContext<'_>,
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
+    let db = ctx.db();
+    // `Self` / `Self.Member…`: resolve the receiver through the context, but only
+    // when `Self` is in scope (`lower_self` is `Some`). A bare `Self` is the
+    // receiver type; `Self.Item` is an associated-type projection rooted at it.
+    // Falls through otherwise, so a stray `Self` still takes the unresolved path.
+    if segments[0].as_str() == "Self"
+        && generic_args.is_empty()
+        && associated_type_bindings.is_empty()
+        && let Some(self_ty) = ctx.lower_self()
+    {
+        if segments.len() == 1 {
+            return self_ty;
+        }
+        let mut ty = self_ty;
+        for member in &segments[1..] {
+            let lowered = crate::builder::associated_projection::lower_projection(
+                ctx,
+                ty,
+                None,
+                member.clone(),
+            );
+            diagnostics.extend(lowered.diagnostics);
+            ty = lowered.ty;
+        }
+        return ty;
+    }
+    match ctx.resolve_type(segments) {
+        Ok(def) => {
+            let short = segments.last().expect("non-empty path");
+            match def {
+                Definition::Class(class_loc) => {
+                    // Collect and lower generic args, storing them in Ty::Class.
+                    let lowered_args: Vec<Ty> = generic_args
+                        .iter()
+                        .map(|&ga| lower_type_ref(store, ga, ctx, diagnostics))
+                        .collect();
+
+                    let class_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+                    let expected_type_args = class_tree
+                        .classes
+                        .get(&class_loc.id(db))
+                        .map(|class| class.generic_params.len())
+                        .unwrap_or(0);
+                    // A bare generic name (`generic_args.is_empty()`) is left
+                    // unchecked here: it is a deliberate wildcard in several
+                    // positions (`reflect.type_of<Box>()`, construction
+                    // `Box { .. }` where args infer from fields, an interface's
+                    // own `Self` type). Object construction that cannot infer
+                    // its args is reported by `infer_object_expr`
+                    // (`CannotInferTypeParameter`) instead.
+                    if !generic_args.is_empty() && generic_args.len() != expected_type_args {
+                        diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
+                            type_name: short.clone(),
+                            expected: expected_type_args,
+                            got: generic_args.len(),
+                        });
+                    }
+
+                    // BEP-034: `baml.future.Future<T, E>` resolves to the
+                    // dedicated `Ty::Future` variant rather than the
+                    // generic `Ty::Class`. The class declaration exists
+                    // as a regular `.baml` file (for method dispatch via
+                    // the standard PackageBaml path), but `spawn` /
+                    // `await` keys off `Ty::Future` directly. Mirrors
+                    // how `int[]` resolves to `Ty::List` even though
+                    // `class Array<T>` is a regular class declaration.
+                    let qtn = qualify_def(db, def, short);
+                    if qtn.name().as_str() == "Future"
+                        && qtn.package().as_str() == "baml"
+                        && qtn.namespace().len() == 1
+                        && qtn.namespace()[0].as_str() == "future"
+                        && lowered_args.len() == 2
+                    {
+                        return Ty::Future(
+                            Box::new(lowered_args[0].clone()),
+                            Box::new(lowered_args[1].clone()),
+                            TyAttr::default(),
+                        );
+                    }
+
+                    Ty::Class(qtn, lowered_args, TyAttr::default())
+                }
+                Definition::Interface(iface_loc) => {
+                    // Same generic-arg handling as `Class` — interface
+                    // parameters are valid in the same positions.
+                    let lowered_args: Vec<Ty> = generic_args
+                        .iter()
+                        .map(|&ga| lower_type_ref(store, ga, ctx, diagnostics))
+                        .collect();
+                    let iface_tree = baml_compiler2_ppir::file_item_tree(db, iface_loc.file(db));
+                    let expected_type_args = iface_tree
+                        .interfaces
+                        .get(&iface_loc.id(db))
+                        .map(|iface| iface.generic_params.len())
+                        .unwrap_or(0);
+                    if !generic_args.is_empty() && generic_args.len() != expected_type_args {
+                        diagnostics.push(TirTypeError::WrongNumberOfTypeArgs {
+                            type_name: short.clone(),
+                            expected: expected_type_args,
+                            got: generic_args.len(),
+                        });
+                    }
+                    let known_associated_types: FxHashSet<baml_base::Name> = iface_tree
+                        .interfaces
+                        .get(&iface_loc.id(db))
+                        .map(|iface| {
+                            iface
+                                .associated_types
+                                .iter()
+                                .map(|assoc| assoc.name.clone())
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let iface_qtn = qualify_def(db, def, short);
+                    let mut seen_associated_bindings = FxHashSet::default();
+                    let lowered_associated_bindings: Vec<(baml_base::Name, Ty)> =
+                        associated_type_bindings
+                            .iter()
+                            .map(|binding| {
+                                if !known_associated_types.contains(&binding.name) {
+                                    diagnostics.push(TirTypeError::UnresolvedType {
+                                        name: binding.name.clone(),
+                                        suggestions: known_associated_types
+                                            .iter()
+                                            .cloned()
+                                            .collect(),
+                                    });
+                                }
+                                // The same associated type specified twice in an
+                                // existential's arguments (`I<Item = a, Item = b>`) — the
+                                // existential counterpart of the impl-side duplicate.
+                                if !seen_associated_bindings.insert(binding.name.clone()) {
+                                    diagnostics.push(
+                                        TirTypeError::DuplicateAssociatedTypeBinding {
+                                            interface: iface_qtn.clone(),
+                                            name: binding.name.clone(),
+                                        },
+                                    );
+                                }
+                                (
+                                    binding.name.clone(),
+                                    lower_type_ref(store, binding.ty, ctx, diagnostics),
+                                )
+                            })
+                            .collect();
+                    // §1.7(a): eagerly fill each omitted, defaulted associated type at
+                    // this existential. `Self` is the existential itself (its explicit
+                    // pins plus the defaults filled so far), so a Self-referencing
+                    // default (`type Items = Self.Item[]`) reduces against them. The
+                    // default is lowered once — with a symbolic `Self` — by
+                    // `interface_associated_type_default`, and substituted here.
+                    let (iface_generic_params, iface_assoc_names): (Vec<_>, Vec<_>) = iface_tree
+                        .interfaces
+                        .get(&iface_loc.id(db))
+                        .map(|iface| {
+                            (
+                                iface.generic_params.clone(),
+                                iface
+                                    .associated_types
+                                    .iter()
+                                    .map(|assoc| assoc.name.clone())
+                                    .collect(),
+                            )
+                        })
+                        .unwrap_or_default();
+                    let mut associated_bindings = lowered_associated_bindings;
+                    for assoc_name in iface_assoc_names {
+                        if associated_bindings.iter().any(|(n, _)| *n == assoc_name) {
+                            continue;
+                        }
+                        if let Some((default, _)) =
+                            crate::interfaces::interface_associated_type_default(
+                                db,
+                                iface_loc,
+                                assoc_name.clone(),
+                            )
+                        {
+                            let self_ty = Ty::Interface(
+                                iface_qtn.clone(),
+                                lowered_args.clone(),
+                                associated_bindings.clone(),
+                                TyAttr::default(),
+                            );
+                            let filled = crate::interfaces::realize_associated_default(
+                                &default,
+                                &iface_generic_params,
+                                &lowered_args,
+                                &self_ty,
+                            );
+                            associated_bindings.push((assoc_name, filled));
+                        }
+                    }
+                    Ty::Interface(
+                        iface_qtn,
+                        lowered_args,
+                        associated_bindings,
+                        TyAttr::default(),
+                    )
+                }
+                Definition::Enum(_) => {
+                    // Enums are not generic — validate args and emit a diagnostic if any were supplied.
+                    for &ga in generic_args {
+                        let _ = lower_type_ref(store, ga, ctx, diagnostics);
+                    }
+                    if !generic_args.is_empty() {
+                        diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                            type_name: short.clone(),
+                            kind: "enum",
+                        });
+                    }
+                    Ty::Enum(qualify_def(db, def, short), TyAttr::default())
+                }
+                Definition::TypeAlias(_) => {
+                    // Type aliases are not generic — validate args and emit a diagnostic if any were supplied.
+                    for &ga in generic_args {
+                        let _ = lower_type_ref(store, ga, ctx, diagnostics);
+                    }
+                    if !generic_args.is_empty() {
+                        diagnostics.push(TirTypeError::TypeIsNotGeneric {
+                            type_name: short.clone(),
+                            kind: "type alias",
+                        });
+                    }
+                    Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
+                }
+                // Unreachable in practice: the package `types` namespace only holds
+                // class/enum/interface/alias contributions (hir builder). Defensive —
+                // if a non-type definition ever lands here, report it rather than
+                // silently producing a compatible-with-everything sentinel.
+                _ => {
+                    diagnostics.push(TirTypeError::UnresolvedType {
+                        name: short.clone(),
+                        suggestions: Box::new([]),
+                    });
+                    Ty::Error {
+                        attr: TyAttr::default(),
+                    }
+                }
+            }
+        }
+        Err(suggestions) => {
+            // A single-segment name that is an in-scope type variable
+            // (e.g. T, K, V) lowers to `Ty::TypeVar`, not an error.
+            if segments.len() == 1 && ctx.type_var_bounds(&segments[0]).is_some() {
+                return Ty::TypeVar(segments[0].clone(), TyAttr::default());
+            }
+            // Enum-variant fallback: a path like `Status.Active` (or
+            // `pkg.ns.Status.Active`) won't resolve as a type — `Active`
+            // isn't a type, it's a variant. Try interpreting the last
+            // segment as the variant and the rest as the enum's path.
+            if segments.len() >= 2 {
+                let (variant, enum_path) = segments.split_last().unwrap();
+                let enum_short = enum_path.last().unwrap();
+                if let Ok(def @ Definition::Enum(enum_loc)) = ctx.resolve_type(enum_path) {
+                    // Verify the variant actually exists on the enum;
+                    // otherwise `Status.Typo` would silently produce a
+                    // bogus `Ty::EnumVariant` and downstream code would
+                    // never see `UnresolvedType`.
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
+                    let enum_data = &item_tree[enum_loc.id(db)];
+                    if enum_data.variants.iter().any(|v| v.name == *variant) {
+                        return Ty::EnumVariant(
+                            qualify_def(db, def, enum_short),
+                            variant.clone(),
+                            TyAttr::default(),
+                        );
+                    }
+                }
+            }
+            // Associated type projection fallback: after ordinary type
+            // paths and enum variants have had first refusal, treat
+            // `Base.Member` as shorthand for an associated type projection.
+            // This preserves enum disambiguation (`Status.Active`) and
+            // still accepts aliases, type variables, concrete classes,
+            // interfaces, and nested projections as projection bases.
+            if segments.len() >= 2 && generic_args.is_empty() && associated_type_bindings.is_empty()
+            {
+                let mut base_diags = Vec::new();
+                let base_ty = lower_path(
+                    store,
+                    &segments[..segments.len() - 1],
+                    &[],
+                    &[],
+                    ctx,
+                    &mut base_diags,
+                );
+                if base_diags.is_empty() && can_be_associated_type_projection_base(&base_ty) {
+                    let member = segments.last().expect("non-empty path").clone();
+                    let lowered = crate::builder::associated_projection::lower_projection(
+                        ctx, base_ty, None, member,
+                    );
+                    diagnostics.extend(lowered.diagnostics);
+                    return lowered.ty;
+                }
+            }
+            let name_str = segments
+                .iter()
+                .map(smol_str::SmolStr::as_str)
+                .collect::<Vec<_>>()
+                .join(".");
+            // If this otherwise-unresolved single-segment name is an associated
+            // type of the enclosing interface's `Self`, the user almost certainly
+            // meant the projection `Self.<name>` (bare associated-type names are
+            // illegal). Surface that as the leading "did you mean" on the ordinary
+            // unresolved-type error — a real in-scope type of the same name resolves
+            // in the `Ok` branch above and never reaches here.
+            let suggestions = if segments.len() == 1
+                && generic_args.is_empty()
+                && associated_type_bindings.is_empty()
+                && ctx.self_associated_type_names().contains(&segments[0])
+            {
+                std::iter::once(baml_base::Name::new(format!("Self.{name_str}")))
+                    .chain(suggestions.iter().cloned())
+                    .collect()
+            } else {
+                suggestions
+            };
+            diagnostics.push(TirTypeError::UnresolvedType {
+                name: baml_base::Name::new(&name_str),
+                suggestions,
+            });
+            // An unresolved name is unrecoverable — `Ty::Error` (diagnosed, poisons
+            // downstream), never `Ty::Unknown` (the missing/inferable sentinel).
             Ty::Error {
                 attr: TyAttr::default(),
             }
