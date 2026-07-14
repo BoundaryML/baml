@@ -125,6 +125,15 @@ pub(crate) enum Commands {
 
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
+
+    // Hidden from `baml --help` by default: the first-run notice + the
+    // `boundaryml.com/telemetry` docs page cover discovery for users who
+    // want to opt out, and hiding keeps the top-level command list from
+    // reading like an ops-console. Still fully functional (`baml
+    // telemetry`, `baml telemetry disable`, etc.) and re-listed
+    // automatically by `parse_from_smart` when `BAML_INTERNAL=1`.
+    #[command(about = "Show or change BAML CLI telemetry preferences", hide = true)]
+    Telemetry(crate::telemetry_command::TelemetryArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     // Repl(baml_runtime::cli::repl::ReplArgs),
 
@@ -224,6 +233,7 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            Commands::Telemetry(args) => args.run(),
             Commands::Format(args) => args.run(),
         }
     }
