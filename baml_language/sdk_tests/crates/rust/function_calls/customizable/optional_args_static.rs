@@ -11,7 +11,7 @@
 //! Shared preamble for every snippet:
 //!
 //! ```text
-//! use baml_rs::OptionalArg::Unset;
+//! use baml_bridge::OptionalArg::Unset;
 //! use baml_sdk::optional_args_probe;
 //! ```
 

@@ -11,7 +11,7 @@
 // `&self` and return `Result`, with plain data fields (`status_code`)
 // public, and that literal-union-typed params (`open`'s mode, `seek_from`'s
 // whence) surface as plain `String`.
-use baml_rs::OptionalArg::Unset;
+use baml_bridge::OptionalArg::Unset;
 use baml_sdk::baml::fs::{File, open as baml_open};
 use baml_sdk::baml::http::fetch;
 use baml_sdk::baml::media::Image;

@@ -17,7 +17,7 @@
 //! parameterized receiver is a turbofished struct literal
 //! (`GenericBox::<i64> { .. }`).
 
-use baml_rs::Map;
+use baml_bridge::Map;
 use baml_sdk::generic_tests::{
     ContainerShapes, ContainerShapesMixed, GenericBox, GenericPair, GenericRecursive,
     GenericTriple, NamedStatic, StringIntPair, choose, consume_int_wrapper, extract, identity,

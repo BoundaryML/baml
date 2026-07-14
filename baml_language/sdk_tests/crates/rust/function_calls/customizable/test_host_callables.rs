@@ -24,7 +24,7 @@ use baml_sdk::host_callable_tests::{
 
 // Provisional shapes for the throwing-callable cases: the generated callback
 // parameter is assumed to also accept a fallible closure
-// (`Fn(i64) -> Result<String, E>`), and the surfaced `baml_rs::Error` is
+// (`Fn(i64) -> Result<String, E>`), and the surfaced `baml_bridge::Error` is
 // assumed to expose the original host error via an anyhow-style
 // `downcast_ref`.
 
@@ -207,10 +207,10 @@ fn test_throwing_callable_bamlerror_propagates_back_with_typed_fields() {
 
     let err = call_with_typed_throws_propagating(cb, 1)
         .expect_err("the uncaught typed throw must propagate to the caller");
-    // Provisional: `baml_rs::Error<E>` is assumed to expose a declared typed
+    // Provisional: `baml_bridge::Error<E>` is assumed to expose a declared typed
     // throw as a `Thrown` variant carrying the codegenned class.
     let decoded = match err {
-        baml_rs::Error::Thrown(decoded) => decoded,
+        baml_bridge::Error::Thrown(decoded) => decoded,
         other => panic!("expected the typed throw, got {other}"),
     };
     assert_eq!(decoded.code, 7);

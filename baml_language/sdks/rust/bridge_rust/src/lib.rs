@@ -1,4 +1,4 @@
-//! `baml_rs` — the runtime layer generated Rust SDKs link against.
+//! `baml_bridge` — the runtime layer generated Rust SDKs link against.
 //!
 //! A generated `baml_sdk` crate embeds compiled BAML bytecode, boots the
 //! process-global BEX engine lazily on first call, and converts values

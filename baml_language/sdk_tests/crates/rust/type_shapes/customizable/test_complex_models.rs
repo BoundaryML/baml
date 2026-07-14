@@ -5,7 +5,7 @@
 // arms as unit variants from their value, class/primitive arms wrapping
 // their payload — and a trailing `| null` lowering to `Option<...>`
 // around the enum.
-use baml_rs::Map;
+use baml_bridge::Map;
 use baml_sdk::complex_models::{
     AccountTier, AuditEvent, CardPayment, CardPaymentOrWirePayment, ComplexProfile, ContactMethod,
     CreatedOrUpdatedOrApproved, DraftOrSentOrPaid, GeoPoint, IntOrStringOrBool, Invoice,

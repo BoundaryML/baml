@@ -16,7 +16,7 @@
 // Rust naming. This port mirrors the python binding names (`ExtractResume`,
 // `ExtractResume_async`, `ExtractResume__build_request`, …) and assumes the
 // `Request` returned by `*__build_request` exposes
-// `headers: baml_rs::Map<String, String>`.
+// `headers: baml_bridge::Map<String, String>`.
 
 #[test]
 fn test_root_imports_cleanly() {
@@ -206,7 +206,7 @@ fn test_extract_resume_build_request_includes_openai_api_key() {
     // Authorization header is added by `auth_openai`; case-insensitive
     // because reqwest may normalize the casing on the wire, but the
     // build_request output preserves what we set.
-    let headers_lower: baml_rs::Map<String, String> = request
+    let headers_lower: baml_bridge::Map<String, String> = request
         .headers
         .iter()
         .map(|(k, v)| (k.to_lowercase(), v.clone()))
@@ -234,7 +234,7 @@ fn test_streaming_extract_build_request_includes_openai_api_key() {
 
     let request =
         lorem::StreamingExtract__build_request("Some text to summarize".to_string()).unwrap();
-    let headers_lower: baml_rs::Map<String, String> = request
+    let headers_lower: baml_bridge::Map<String, String> = request
         .headers
         .iter()
         .map(|(k, v)| (k.to_lowercase(), v.clone()))
@@ -258,7 +258,7 @@ fn test_classify_sentiment_build_request_includes_anthropic_api_key() {
     unsafe { std::env::set_var("ANTHROPIC_API_KEY", "sk-ant-shorthand-test") };
 
     let request = ipsum::ClassifySentiment__build_request("I love this!".to_string()).unwrap();
-    let headers_lower: baml_rs::Map<String, String> = request
+    let headers_lower: baml_bridge::Map<String, String> = request
         .headers
         .iter()
         .map(|(k, v)| (k.to_lowercase(), v.clone()))

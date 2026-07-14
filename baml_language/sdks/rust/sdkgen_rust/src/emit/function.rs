@@ -1,5 +1,5 @@
 //! Free-function emission: one sync + one `_async` binding per BAML
-//! function, both thin wrappers over `baml_rs::runtime`.
+//! function, both thin wrappers over `baml_bridge::runtime`.
 
 use baml_codegen_types::{Function, Name};
 use proc_macro2::TokenStream;
@@ -55,10 +55,10 @@ pub(crate) fn emit(
             // value, `None` for explicit null, or `Unset` to let the
             // engine evaluate the default.
             params.push(quote! {
-                #param: impl ::std::convert::Into<::baml_rs::OptionalArg<#ty>>
+                #param: impl ::std::convert::Into<::baml_bridge::OptionalArg<#ty>>
             });
             converts.push(quote! {
-                let #param = ::std::convert::Into::<::baml_rs::OptionalArg<#ty>>::into(#param);
+                let #param = ::std::convert::Into::<::baml_bridge::OptionalArg<#ty>>::into(#param);
             });
             kwarg_entries.push(quote! { (#arg_name, #param.to_baml_opt()) });
         } else {
@@ -77,7 +77,7 @@ pub(crate) fn emit(
                 (
                     #arg_name,
                     ::std::option::Option::Some(
-                        ::baml_rs::baml_value::internal::__BamlValuePrivate::to_baml(&#param),
+                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&#param),
                     ),
                 )
             });
@@ -87,26 +87,26 @@ pub(crate) fn emit(
     let doc_attrs = doc_attrs(function.docstring.as_deref());
     let sync_name = idents::ident(name.name.as_str());
     let async_name = format_ident!("{}_async", idents::dir_segment(name.name.as_str()));
-    let result_ty = quote! { ::std::result::Result<#ret, ::baml_rs::Error<#throws>> };
+    let result_ty = quote! { ::std::result::Result<#ret, ::baml_bridge::Error<#throws>> };
 
     Ok(quote! {
         #(#doc_attrs)*
         pub fn #sync_name(#(#params),*) -> #result_ty {
-            crate::_runtime::ensure_init().map_err(::baml_rs::Error::Sdk)?;
+            crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
-            ::baml_rs::runtime::invoke_sync(
+            ::baml_bridge::runtime::invoke_sync(
                 #fqn,
-                ::baml_rs::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
             )
         }
 
         #(#doc_attrs)*
         pub async fn #async_name(#(#params),*) -> #result_ty {
-            crate::_runtime::ensure_init().map_err(::baml_rs::Error::Sdk)?;
+            crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
             #(#converts)*
-            ::baml_rs::runtime::invoke(
+            ::baml_bridge::runtime::invoke(
                 #fqn,
-                ::baml_rs::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
+                ::baml_bridge::encode::kwargs(::std::vec![#(#kwarg_entries),*]),
             )
             .await
         }

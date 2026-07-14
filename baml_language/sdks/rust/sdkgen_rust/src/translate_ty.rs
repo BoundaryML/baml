@@ -62,7 +62,7 @@ pub(crate) fn type_path(name: &Name, analysis: &Analysis) -> TokenStream {
 fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenStream, Unsupported> {
     match ty {
         Ty::Int => Ok(quote! { ::core::primitive::i64 }),
-        Ty::Bigint => Ok(quote! { ::baml_rs::BigInt }),
+        Ty::Bigint => Ok(quote! { ::baml_bridge::BigInt }),
         Ty::Float => Ok(quote! { ::core::primitive::f64 }),
         Ty::String => Ok(quote! { ::std::string::String }),
         Ty::Bool => Ok(quote! { ::core::primitive::bool }),
@@ -74,7 +74,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         // from `Literal[42]`-style types to `number`).
         Ty::Literal(lit) => Ok(match lit {
             baml_base::Literal::Int(_) => quote! { ::core::primitive::i64 },
-            baml_base::Literal::Bigint(_) => quote! { ::baml_rs::BigInt },
+            baml_base::Literal::Bigint(_) => quote! { ::baml_bridge::BigInt },
             baml_base::Literal::Float(_) => quote! { ::core::primitive::f64 },
             baml_base::Literal::String(_) => quote! { ::std::string::String },
             baml_base::Literal::Bool(_) => quote! { ::core::primitive::bool },
@@ -93,7 +93,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                 other => return Err(unsupported(&format!("map key type ({other})"))),
             }
             let value = translate_inner(value, ctx, true)?;
-            Ok(quote! { ::baml_rs::Map<::std::string::String, #value> })
+            Ok(quote! { ::baml_bridge::Map<::std::string::String, #value> })
         }
         Ty::Union(items) => {
             // A `null` arm is optionality: strip it and wrap the rest in
@@ -190,10 +190,10 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
 
 #[cfg(test)]
 mod tests {
+    use std::sync::LazyLock;
+
     use baml_codegen_types::{Class, ClassProperty, Origin, Symbol, SymbolPool};
     use pretty_assertions::assert_eq;
-
-    use std::sync::LazyLock;
 
     use super::*;
     use crate::analyze::analyze;
@@ -255,7 +255,7 @@ mod tests {
         assert_eq!(rendered(&Ty::String), ":: std :: string :: String");
         assert_eq!(rendered(&Ty::Unit), "()");
         assert_eq!(rendered(&Ty::Null), "()");
-        assert_eq!(rendered(&Ty::Bigint), ":: baml_rs :: BigInt");
+        assert_eq!(rendered(&Ty::Bigint), ":: baml_bridge :: BigInt");
         assert_eq!(
             rendered(&Ty::Uint8Array),
             ":: std :: vec :: Vec < :: core :: primitive :: u8 >"
@@ -290,7 +290,7 @@ mod tests {
                 key: Box::new(Ty::String),
                 value: Box::new(Ty::Int),
             }),
-            ":: baml_rs :: Map < :: std :: string :: String , :: core :: primitive :: i64 >"
+            ":: baml_bridge :: Map < :: std :: string :: String , :: core :: primitive :: i64 >"
         );
         let analysis = empty_analysis();
         let ctx = TyCtx {

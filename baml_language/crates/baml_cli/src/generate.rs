@@ -193,7 +193,7 @@ impl GenerateArgs {
                             package_name: "baml_sdk".to_string(),
                             // The runtime crate is not published yet; pin the
                             // matching version for when it is.
-                            baml_rs_dep: format!("\"={}\"", baml_version::CANONICAL_VERSION),
+                            runtime_dep: format!("\"={}\"", baml_version::CANONICAL_VERSION),
                             manifest_extra: None,
                             edition: "2024".to_string(),
                         },

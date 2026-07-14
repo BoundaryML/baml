@@ -1,12 +1,19 @@
 [package]
-name = "bridge_rust"
+name = "baml_bridge"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
 license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+description = "BAML runtime bridge for Rust: embeds the BAML engine behind generated, typed SDKs"
+readme = "README.md"
+keywords = [ "baml", "llm", "ai", "sdk" ]
+categories = [ "api-bindings", "development-tools" ]
 
 [lib]
-name = "baml_rs"
+name = "baml_bridge"
 doc = false
 doctest = false
 

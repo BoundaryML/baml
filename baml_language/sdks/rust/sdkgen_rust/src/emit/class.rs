@@ -61,7 +61,7 @@ pub(crate) fn emit(
         encode_entries.push(quote! {
             (
                 #field_name,
-                ::baml_rs::baml_value::internal::__BamlValuePrivate::to_baml(&self.#field_ident),
+                ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&self.#field_ident),
             )
         });
         decode_fields.push(quote! {
@@ -73,12 +73,12 @@ pub(crate) fn emit(
     // has nothing to take from the accessor afterwards.
     let decode_body = if class.properties.is_empty() {
         quote! {
-            ::baml_rs::decode::ClassFields::new(v, #fqn)?;
+            ::baml_bridge::decode::ClassFields::new(v, #fqn)?;
             ::std::result::Result::Ok(Self {})
         }
     } else {
         quote! {
-            let mut fields = ::baml_rs::decode::ClassFields::new(v, #fqn)?;
+            let mut fields = ::baml_bridge::decode::ClassFields::new(v, #fqn)?;
             ::std::result::Result::Ok(Self {
                 #(#decode_fields,)*
             })
@@ -92,14 +92,14 @@ pub(crate) fn emit(
             #(#field_defs,)*
         }
 
-        impl ::baml_rs::baml_value::internal::__BamlValuePrivate for #ident {
-            fn to_baml(&self) -> ::baml_rs::wire::InboundValue {
-                ::baml_rs::encode::class(#fqn, ::std::vec![#(#encode_entries,)*])
+        impl ::baml_bridge::baml_value::internal::__BamlValuePrivate for #ident {
+            fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {
+                ::baml_bridge::encode::class(#fqn, ::std::vec![#(#encode_entries,)*])
             }
 
             fn from_baml(
-                v: ::baml_rs::wire::BamlOutboundValue,
-            ) -> ::std::result::Result<Self, ::baml_rs::DecodeError> {
+                v: ::baml_bridge::wire::BamlOutboundValue,
+            ) -> ::std::result::Result<Self, ::baml_bridge::DecodeError> {
                 #decode_body
             }
         }
