@@ -43,7 +43,7 @@ macro_rules! define_lsp_request_trait {
                 /// runtimes use this to race handler completion against
                 /// cancellation and to route reused request IDs through a
                 /// session-scoped response token instead of the shared
-                /// sender (I7).
+                /// sender.
                 fn handle_request_with_responder(
                     &self,
                     notif: lsp_server::Request,
@@ -55,7 +55,7 @@ macro_rules! define_lsp_request_trait {
                     self.handle_request_with_cancellation(notif, None, responder);
                 }
 
-                /// Dispatch with an operation-owned cancellation token (B2).
+                /// Dispatch with an operation-owned cancellation token.
                 /// The token is observed only at safe handler boundaries —
                 /// entry, source-gate acquisition (see
                 /// `multi_project::read_for_request`), and completion — and

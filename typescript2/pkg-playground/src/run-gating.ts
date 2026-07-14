@@ -1,5 +1,5 @@
 /**
- * Run gating for the fail-closed playground server (design decision D6/D7).
+ * Run gating for the fail-closed playground server.
  *
  * The server refuses `startRun`/`startPreviewRun`/`startTestRun` with a
  * `projectNotReady` command error while a rebuild is pending or the project

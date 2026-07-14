@@ -3,7 +3,7 @@
 //! Implements `bex_project::LspClientSenderTrait` by reserving bounded
 //! [`crate::OutboundFrame`]s and enqueueing them for the stdio writer thread.
 //! Saturation and oversize map to their typed `LspError`s instead of blocking
-//! or silently dropping (B2: no unbounded writer queue).
+//! or silently dropping; the writer queue is always bounded.
 
 use std::sync::Weak;
 

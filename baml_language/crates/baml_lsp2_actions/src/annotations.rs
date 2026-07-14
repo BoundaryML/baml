@@ -102,7 +102,7 @@ pub struct InlineAnnotation {
 /// Returns annotations sorted in document order (required by the LSP
 /// `textDocument/inlayHint` contract).
 ///
-/// Salsa tracked query (design B1): walks every function body against type
+/// Salsa tracked query: walks every function body against type
 /// inference (measured 40–150ms on real projects), which is too slow to
 /// recompute per request while the file is unchanged. Editors re-request
 /// inlay hints on every scroll, so this is the hottest read path.

@@ -1,6 +1,6 @@
 //! LSP request handlers.
 //!
-//! Every handler follows the same discipline (design C1 + Phase 0C):
+//! Every handler follows the same discipline:
 //!
 //! - Database access is a *bounded* read ([`super::read_for_request`]):
 //!   busy projects produce typed `ContentModified`/`RequestFailed` errors
@@ -30,7 +30,7 @@ use crate::bex_lsp::{
 ///
 /// Defined here so that both the native stdio server and the WASM bridge
 /// share a single source of truth for what the LSP implementation supports.
-/// `encoding` is the negotiated position encoding (C1) — advertising it is
+/// `encoding` is the negotiated position encoding; advertising it is
 /// mandatory whenever the client offered `positionEncodings`.
 pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilities {
     ServerCapabilities {
@@ -148,7 +148,7 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("initialize"),
     ) -> Result<lsp_request_result!("initialize"), LspError> {
-        // Negotiate the position encoding first (C1): UTF-8 when offered,
+        // Negotiate the position encoding first: UTF-8 when offered,
         // UTF-16 baseline otherwise. Everything after this reads the cell.
         let encoding = self.negotiate_encoding(&params.capabilities);
 
@@ -271,7 +271,7 @@ impl BexLspRequest for BexMulitProject {
         let codec = PositionCodec::new(text, encoding);
         let range = codec.range_to_byte_range(params.range)?;
 
-        // Inline annotations are Salsa-memoized per file revision (B1); the
+        // Inline annotations are Salsa-memoized per file revision; the
         // handler only converts the cached hints into the requested range.
         let hints = baml_lsp2_actions::file_annotations(lsp_db, source_file);
 
@@ -319,13 +319,13 @@ impl BexLspRequest for BexMulitProject {
         let text = source_file.text(lsp_db);
         let codec = PositionCodec::new(text, encoding);
 
-        // Semantic tokens are Salsa-memoized per file revision (B1); the
+        // Semantic tokens are Salsa-memoized per file revision; the
         // handler only delta-encodes the cached classification.
         let tokens = baml_lsp2_actions::semantic_tokens(lsp_db, source_file);
 
         // Delta-encode in the negotiated encoding. Multiline tokens are split
         // into same-line segments — VS Code does not advertise the multiline
-        // token capability, and splitting is valid for every client (C1).
+        // token capability, and splitting is valid for every client.
         let mut lsp_tokens = Vec::with_capacity(tokens.len());
         let mut prev_line = 0u32;
         let mut prev_start = 0u32;

@@ -1,39 +1,39 @@
 //! Project core: one source gate, owned build candidates, and a coherent
 //! runtime state with revision-conditional engine commits.
 //!
-//! # Architecture (docs/design/lsp-latency-and-mutex-fix.md)
+//! # Concurrency and publication invariants
 //!
-//! - **I1 — `SourceRevision` is authoritative.** [`SourceState`] holds the
+//! - **`SourceRevision` is authoritative.** [`SourceState`] holds the
 //!   Salsa database, a monotonic revision, and the open-document version map
 //!   behind one mutex (the *source gate*). Every accepted source-mutation
 //!   batch advances the revision in the same critical section that mutates
 //!   the database and version map. A lock-free [`BexProject::observed_revision`]
 //!   mirror exists for observation (error mapping) only — it never
 //!   authorizes a commit.
-//! - **I2 — background work produces owned, revision-tagged candidates.**
+//! - **Background work produces owned, revision-tagged candidates.**
 //!   [`CompilationOutcome`] / [`DiagnosticCandidate`] / [`EngineCandidate`]
 //!   are fully owned; no database guard survives candidate creation.
-//! - **I3 — engine installation is one atomic conditional commit.**
+//! - **Engine installation is one atomic conditional commit.**
 //!   [`BexProject::commit_engine_if_current`] takes the *same* source gate
 //!   used by mutations, compares revisions, and only then installs. A
 //!   superseded candidate changes no runtime state and drops quietly
 //!   (profiling was never activated).
-//! - **I4 — runtime identity is coherent.** [`RuntimeState`] replaces the
+//! - **Runtime identity is coherent.** [`RuntimeState`] replaces the
 //!   old `(bool, Option<Arc<BexEngine>>)` currentness flag and separate
 //!   `TestState`. Currentness is *derived* from
 //!   `installed.source_revision == source.revision`, so a source mutation
 //!   makes the engine non-current by definition, not by flag ordering.
-//! - **I5 — run and test entry use coherent snapshots.**
+//! - **Run and test entry use coherent snapshots.**
 //!   [`BexProject::prepare_function_run`] and [`BexProject::lease_registry`]
 //!   validate and capture engine/generation/graph/registry in one
 //!   source→runtime transaction.
-//! - **Phase 0C — bounded request waits.**
+//! - **Request waits are bounded.**
 //!   [`BexProject::read_source_for_request`] retries `try_lock` for up to
 //!   [`REQUEST_DB_DEADLINE`] instead of failing instantly (the pre-0.14.2
 //!   `-32001` burst) or blocking forever. Poison is terminal
 //!   ([`BexProject::mark_broken`]), never treated as recoverable contention.
 //!
-//! Lock order (I8): source gate → runtime state → caches. The `run_cfgs`
+//! Lock order: source gate → runtime state → caches. The `run_cfgs`
 //! cache is a leaf mutex: it may be taken while the source gate is held
 //! ([`BexProject::prepare_function_run`]'s cached-graph fast path), and no
 //! source or runtime lock is ever acquired while holding it.
@@ -56,7 +56,7 @@ use crate::RuntimeError;
 // Source revision
 // ---------------------------------------------------------------------------
 
-/// Monotonic revision of the project's sources (I1).
+/// Monotonic revision of the project's sources.
 ///
 /// Advances exactly once per accepted source-mutation batch: open/change/
 /// close, watched-file refresh, full replacement, file add/remove, and
@@ -72,7 +72,7 @@ impl std::fmt::Display for SourceRevision {
 }
 
 // ---------------------------------------------------------------------------
-// Bounded request wait configuration (Phase 0C)
+// Bounded request wait configuration
 // ---------------------------------------------------------------------------
 
 /// Deadline for a request handler waiting on the source gate. Ordinary
@@ -99,12 +99,12 @@ pub(crate) const REQUEST_DB_LOG_THRESHOLD: std::time::Duration =
 
 /// The project observed a poisoned lock: a writer panicked while holding
 /// shared mutable state. The state cannot be trusted, so the project enters
-/// a terminal broken state (I7): requests are rejected with an internal
+/// a terminal broken state: requests are rejected with an internal
 /// error, and no path "clears" the poison and continues.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ProjectBroken;
 
-/// Typed outcome of a bounded database read on the request lane (I6/I7).
+/// Typed outcome of a bounded database read on the request lane.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DbReadError {
     /// The gate stayed contended past the deadline. `revision_changed`
@@ -117,7 +117,7 @@ pub(crate) enum DbReadError {
 }
 
 // ---------------------------------------------------------------------------
-// Owned candidates (I2)
+// Owned candidates
 // ---------------------------------------------------------------------------
 
 /// Diagnostics for one file, captured with the exact open-document version
@@ -129,7 +129,7 @@ pub(crate) struct DocumentDiagnostics {
     pub diagnostics: Vec<baml_compiler_diagnostics::Diagnostic>,
 }
 
-/// Owned, revision-tagged diagnostics for a whole project (I2).
+/// Owned, revision-tagged diagnostics for a whole project.
 ///
 /// Spans stay byte-based (`baml_compiler_diagnostics::Diagnostic`); the LSP
 /// boundary converts them with the negotiated position codec at publish
@@ -166,13 +166,13 @@ pub(crate) enum CompilationOutcome {
 
 /// An unpublished engine built from a [`CompiledCandidate`]. Its profiling
 /// lifecycle is inactive; only a winning conditional commit activates it and
-/// wraps it in the installed `Arc<BexEngine>` (I3).
+/// wraps it in the installed `Arc<BexEngine>`.
 pub(crate) struct EngineCandidate {
     pub source_revision: SourceRevision,
     engine: BexEngine,
 }
 
-/// Proof of a winning conditional commit (I3). The installed engine itself
+/// Proof of a winning conditional commit. The installed engine itself
 /// lives in [`RuntimeState`]; consumers re-capture it transactionally.
 #[derive(Clone)]
 pub(crate) struct CommitReceipt {
@@ -213,7 +213,7 @@ pub(crate) struct RebuildReport {
 }
 
 /// Collect an owned, revision-tagged diagnostics candidate from a held
-/// source guard (I2). Every source file is represented — files with zero
+/// source guard. Every source file is represented — files with zero
 /// diagnostics get an empty entry so stale editor markers clear — and each
 /// document records the exact open-document version its text was checked at.
 pub(crate) fn collect_diagnostic_candidate(guard: &SourceGuard<'_>) -> DiagnosticCandidate {
@@ -255,7 +255,7 @@ pub(crate) fn collect_diagnostic_candidate(guard: &SourceGuard<'_>) -> Diagnosti
 // Source state (the one mutation gate)
 // ---------------------------------------------------------------------------
 
-/// Database + revision + open-document versions behind one mutex (I1).
+/// Database + revision + open-document versions behind one mutex.
 struct SourceState {
     db: baml_project::ProjectDatabase,
     revision: SourceRevision,
@@ -314,7 +314,7 @@ impl Drop for SourceGuard<'_> {
     }
 }
 
-/// One accepted source-mutation batch (I1): database mutation, revision
+/// One accepted source-mutation batch: database mutation, revision
 /// advance, and open-document version updates commit atomically.
 #[derive(Default)]
 pub(crate) struct SourceBatch {
@@ -328,7 +328,7 @@ pub(crate) struct SourceBatch {
 }
 
 // ---------------------------------------------------------------------------
-// Runtime state (I4)
+// Runtime state
 // ---------------------------------------------------------------------------
 
 /// The installed engine plus the identity it was built from.
@@ -348,12 +348,12 @@ struct InstalledRegistry {
     /// collected", which is `RuntimeState::registry == None`.
     handle: Option<Handle>,
     /// Serializes expansion mutations: the registry heap object has exactly
-    /// one mutation owner (Phase 0A.8).
+    /// one mutation owner.
     #[cfg(not(target_arch = "wasm32"))]
     expansion_gate: Arc<tokio::sync::Mutex<()>>,
 }
 
-/// Coherent runtime identity (I4). All fields swap together under one lock.
+/// Coherent runtime identity. All fields swap together under one lock.
 struct RuntimeState {
     installed: Option<InstalledEngine>,
     /// Allocator for engine generations; only a winning commit consumes one.
@@ -362,10 +362,10 @@ struct RuntimeState {
     /// every source mutation and every commit.
     derived_epoch: u64,
     /// Cancels project-derived work when source moves or an engine commit
-    /// supersedes it. Never cancels run-owned function/test tokens (D8).
+    /// supersedes it. Never cancels run-owned function/test tokens.
     derived_cancel: sys_types::CancellationToken,
     /// Fences test-collection installs so two collections on one engine
-    /// generation cannot complete out of order (Phase 0A.7).
+    /// generation cannot complete out of order.
     collection_epoch: u64,
     registry: Option<InstalledRegistry>,
 }
@@ -390,7 +390,7 @@ impl RuntimeState {
     }
 }
 
-/// Ticket for one test-collection attempt, captured atomically (I5).
+/// Ticket for one test-collection attempt, captured atomically.
 pub(crate) struct CollectionTicket {
     pub generation: u64,
     pub collection_epoch: u64,
@@ -419,8 +419,8 @@ pub(crate) struct RegistryLease {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RegistryLeaseError {
     /// Requested generation is not the installed one, or the installed
-    /// engine no longer matches current source (D7: never silently run
-    /// last-known-good).
+    /// engine no longer matches current source. Runs never silently use a
+    /// last-known-good engine.
     NeedsCurrentBuild,
     /// Collection has not produced a registry for this generation yet.
     NoRegistry,
@@ -429,7 +429,7 @@ pub(crate) enum RegistryLeaseError {
     Broken,
 }
 
-/// Coherent snapshot for launching a function run (I5). The overlay
+/// Coherent snapshot for launching a function run. The overlay
 /// control-flow graph is pinned into the generation-keyed cache as part of
 /// preparation; runs resolve it later via
 /// [`BexProject::control_flow_graph_for_generation`].
@@ -441,7 +441,7 @@ pub(crate) struct RunSnapshot {
 /// Why a run snapshot could not be produced.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PrepareRunError {
-    /// No engine, or the installed engine predates current source (D7).
+    /// No engine, or the installed engine predates current source.
     NeedsCurrentBuild,
     Busy,
     Broken,
@@ -505,14 +505,14 @@ impl RunCfgCache {
 // ---------------------------------------------------------------------------
 
 pub(crate) struct BexProject {
-    /// The source gate (I1): database + revision + open-document versions.
+    /// The source gate: database + revision + open-document versions.
     source: Mutex<SourceState>,
     /// Lock-free mirror of `source.revision`, updated inside the mutation
     /// critical section. Observation only (timeout error mapping); never
     /// authorizes commits or publication.
     observed_revision: AtomicU64,
     /// Terminal broken marker (poisoned lock observed). Set once; never
-    /// cleared (I8: clearing mutex poison is not recovery).
+    /// cleared; clearing mutex poison is not recovery.
     broken: OnceLock<String>,
     sys_ops: Arc<SysOps>,
     runtime: Mutex<RuntimeState>,
@@ -572,7 +572,7 @@ impl BexProject {
         }
     }
 
-    /// Request lane (Phase 0C): bounded wait on the source gate — 1s
+    /// Request lane: bounded wait on the source gate — 1s
     /// deadline, 2ms retry interval, 50ms wait-log threshold. On WASM the
     /// server is single-threaded, so this is a single non-waiting attempt.
     pub(crate) fn read_source_for_request(&self) -> Result<SourceGuard<'_>, DbReadError> {
@@ -631,7 +631,7 @@ impl BexProject {
         }
     }
 
-    /// Classify a request-lane timeout (Phase 0C): a revision that moved
+    /// Classify a request-lane timeout: a revision that moved
     /// while the request waited means the result would have been stale
     /// anyway (`ContentModified` at the LSP boundary); an unchanged revision
     /// is plain congestion (`RequestFailed`).
@@ -643,8 +643,7 @@ impl BexProject {
     }
 
     /// Loop lane: one non-waiting attempt. `Ok(None)` means "busy, skip me"
-    /// (only `WouldBlock`); poison is terminal, never conflated with busy
-    /// (I6).
+    /// (only `WouldBlock`); poison is terminal and never conflated with busy.
     pub(crate) fn read_source_nowait(&self) -> Result<Option<SourceGuard<'_>>, ProjectBroken> {
         if self.broken.get().is_some() {
             return Err(ProjectBroken);
@@ -658,7 +657,7 @@ impl BexProject {
         }
     }
 
-    // ── Source mutation (I1) ─────────────────────────────────────────────
+    // ── Source mutation ──────────────────────────────────────────────────
 
     /// Apply one source-mutation batch. Database mutation, revision advance,
     /// and document-version updates happen under the source gate; runtime
@@ -704,10 +703,10 @@ impl BexProject {
         let revision = source.revision;
         self.observed_revision.store(revision.0, Ordering::Release);
 
-        // Same-transaction runtime invalidation (I4): derived work for the
+        // Same-transaction runtime invalidation: derived work for the
         // previous engine state is superseded immediately; the installed
         // engine becomes non-current by revision comparison. Run-owned
-        // function/test tokens are untouched (D8).
+        // function/test tokens are untouched.
         {
             let mut runtime = self.lock_runtime()?;
             runtime.supersede_derived();
@@ -725,12 +724,12 @@ impl BexProject {
         Ok(revision)
     }
 
-    /// Latest committed source revision, readable without any lock (I1).
+    /// Latest committed source revision, readable without any lock.
     pub(crate) fn current_revision(&self) -> SourceRevision {
         SourceRevision(self.observed_revision.load(Ordering::Acquire))
     }
 
-    // ── Candidate construction (I2) ──────────────────────────────────────
+    // ── Candidate construction ───────────────────────────────────────────
 
     /// Capture the current revision and compile an owned
     /// [`CompilationOutcome`]. The source gate is held only while reading
@@ -776,8 +775,7 @@ impl BexProject {
 
     /// Construct an engine candidate from a compiled program. Runs `$init`
     /// synchronously and candidate-locally, outside the source gate; the
-    /// profiling lifecycle stays inactive until a winning commit
-    /// (Phase 0A.9/0A.10).
+    /// profiling lifecycle stays inactive until the candidate wins a commit.
     pub(crate) fn construct_engine_candidate(
         &self,
         compiled: CompiledCandidate,
@@ -794,7 +792,7 @@ impl BexProject {
         })
     }
 
-    // ── Conditional commit (I3) ──────────────────────────────────────────
+    // ── Conditional commit ───────────────────────────────────────────────
 
     /// Atomically install `candidate` iff its revision still matches the
     /// authoritative source revision. Uses the same gate as source
@@ -931,7 +929,7 @@ impl BexProject {
 
     // ── Status / compat accessors ────────────────────────────────────────
 
-    /// Derived currentness (I4): `installed.source_revision == current
+    /// Derived currentness: `installed.source_revision == current
     /// revision`, read under both gates. For reporting; work capture uses
     /// the transactional APIs below.
     pub(crate) fn is_bex_current(&self) -> bool {
@@ -999,7 +997,7 @@ impl BexProject {
         let _ = self.rebuild_once();
     }
 
-    // ── Test collection (Phase 0A.7) ─────────────────────────────────────
+    // ── Test collection ──────────────────────────────────────────────────
 
     /// Begin a test-collection attempt against the installed engine.
     /// Returns `None` when there is no current engine to collect against.
@@ -1014,7 +1012,7 @@ impl BexProject {
         };
         if installed.source_revision != source_revision {
             // Stale engine: collection would be derived work for a dead
-            // revision (D8 cancels stale tree maintenance).
+            // revision; source changes cancel stale tree maintenance.
             return Ok(None);
         }
         runtime.supersede_derived();
@@ -1057,7 +1055,7 @@ impl BexProject {
         Ok(true)
     }
 
-    /// Emission fence for collection results (0A.7): `true` while the
+    /// Emission fence for collection results: `true` while the
     /// ticket's engine generation and collection epoch are still installed.
     pub(crate) fn collection_ticket_is_current(&self, ticket: &CollectionTicket) -> bool {
         let Ok(runtime) = self.lock_runtime() else {
@@ -1088,9 +1086,9 @@ impl BexProject {
     }
 
     /// The installed engine iff its generation matches (no currency
-    /// requirement): the cancel-targeting lookup for already-launched runs
-    /// (D8). Runs pin their own engine handle at launch; this covers
-    /// adapters that only kept the generation.
+    /// requirement), used to target cancellation for already-launched runs.
+    /// Runs pin their own engine handle at launch; this covers adapters that
+    /// only kept the generation.
     pub(crate) fn engine_for_generation(&self, generation: u64) -> Option<Arc<BexEngine>> {
         let runtime = self.lock_runtime().ok()?;
         runtime
@@ -1102,7 +1100,7 @@ impl BexProject {
 
     /// Coherent lease for registry work (test run / expansion): validates
     /// `generation` against the installed engine, requires the engine to
-    /// match current source (D7), and captures the registry handle plus its
+    /// match current source, and captures the registry handle plus its
     /// expansion gate in one transaction.
     pub(crate) fn lease_registry(
         &self,
@@ -1144,10 +1142,10 @@ impl BexProject {
         Ok(lease)
     }
 
-    // ── Run preparation (I5) ─────────────────────────────────────────────
+    // ── Run preparation ──────────────────────────────────────────────────
 
     /// Prepare a function run: one transaction that validates the installed
-    /// engine against current source (D7), captures the engine + generation,
+    /// engine against current source, captures the engine + generation,
     /// and — when `overlay_function` is set — obtains the pinned
     /// control-flow graph for that generation.
     ///
@@ -1155,7 +1153,7 @@ impl BexProject {
     /// or active-run locks); the cached-graph fast path briefly takes the
     /// leaf `run_cfgs` mutex while the source gate is held, and the
     /// generation-keyed CFG cache is populated only after all guards are
-    /// released (I5 ordering).
+    /// released.
     pub(crate) fn prepare_function_run(
         &self,
         overlay_function: Option<&str>,
@@ -1207,7 +1205,7 @@ impl BexProject {
         drop(source);
 
         // Populate the generation-keyed cache only after the source/runtime
-        // guards are released (I5 step 3).
+        // guards are released.
         if let Some((generation, name, graph)) = built_graph {
             if let Ok(mut cache) = self.run_cfgs.lock() {
                 cache.insert(generation, &name, graph);
@@ -1307,7 +1305,7 @@ mod tests {
         assert_eq!(cache.order.len(), 2);
     }
 
-    // ── Revision / commit-race tests (I1/I3/I4) ──────────────────────────
+    // ── Revision / commit-race tests ─────────────────────────────────────
 
     fn test_project() -> BexProject {
         let root = vfs::VfsPath::new(vfs::MemoryFS::new());
@@ -1412,7 +1410,7 @@ mod tests {
         assert!(project.is_bex_current());
         assert_eq!(project.current_generation(), 1);
 
-        // The next mutation makes the engine non-current by definition (I4)
+        // The next mutation makes the engine non-current by definition
         // and the next winning commit consumes the next generation.
         project
             .mutate_sources(batch(&[("/p/a.baml", VALID_SOURCE)], &[]))
@@ -1484,7 +1482,7 @@ mod tests {
         });
 
         // The installed engine remains last-known-good but is not current,
-        // so run admission refuses it (D7).
+        // so run admission refuses it.
         assert_eq!(project.current_generation(), 1);
         assert!(!project.is_bex_current());
         assert!(matches!(
@@ -1646,7 +1644,8 @@ mod tests {
             RegistryLeaseError::NeedsCurrentBuild
         );
 
-        // A mutation invalidates the lease path (D7: no last-known-good).
+        // A mutation invalidates the lease path; there is no last-known-good
+        // fallback.
         project
             .mutate_sources(batch(&[("/p/a.baml", VALID_SOURCE)], &[]))
             .unwrap();
@@ -1673,7 +1672,7 @@ mod tests {
         assert_eq!(snapshot.generation, 1);
 
         // The engine of a retained generation stays addressable for cancel
-        // targeting (D8); a superseded generation stops matching once a new
+        // targeting; a superseded generation stops matching once a new
         // engine installs.
         assert!(project.engine_for_generation(1).is_some());
         project
@@ -1735,7 +1734,7 @@ mod tests {
         assert!(!project.is_bex_current());
     }
 
-    // ── Scale / phase timings (local dev; prints to stderr) ───────────────
+    // ── Scale / pipeline timings (local dev; prints to stderr) ────────────
 
     fn load_disk_project(root: &std::path::Path) -> Option<(BexProject, usize, usize)> {
         if !root.join("baml.toml").exists() {

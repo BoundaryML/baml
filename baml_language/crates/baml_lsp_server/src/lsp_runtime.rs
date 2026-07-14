@@ -1,9 +1,9 @@
-//! Process-owned, transport-neutral LSP ingress runtime (design §4 Track B).
+//! Process-owned, transport-neutral LSP ingress runtime.
 //!
 //! One [`IngressScheduler`] behind one process-owned mutex serves every LSP
 //! transport: the stdio loop and each `/api/lsp` browser socket submit the
 //! same [`lsp_server::Message`] representation and share admission, lifecycle
-//! (B2), cancellation, and outbound-response accounting. Dispatch runs on one
+//! state, cancellation, and outbound-response accounting. Dispatch runs on one
 //! dedicated worker thread in FIFO order; `$/cancelRequest` is processed on
 //! the *submitting transport thread* so it can claim a response while the
 //! worker is inside a slow synchronous handler.
@@ -47,7 +47,7 @@ pub(crate) type ServerRequestResponder = Box<dyn FnOnce(lsp_server::Response) + 
 
 /// Connection-owned LSP output. The sink lives behind a tombstone so an
 /// asynchronous tail retaining an old `BexLsp` session clone cannot write
-/// after browser takeover (D2) or transport close.
+/// after browser takeover or transport close.
 pub(crate) struct RevocableSessionSender {
     sink: Mutex<Option<Sink>>,
 }
@@ -211,7 +211,7 @@ impl LspRuntime {
         let opened = self.scheduler.lock().unwrap().open_session(transport);
         if let Some(takeover) = opened.takeover.clone() {
             // Revoke the old sink and reconcile its overlays before exposing
-            // the replacement endpoint (D2). A surviving stdio owner is
+            // the replacement endpoint. A surviving stdio owner is
             // restored instead of being erased by the synthetic didClose.
             self.finish_termination(takeover);
         }
@@ -569,7 +569,7 @@ impl LspRuntime {
             Err(error) => lsp_server::Response {
                 id: token.request_id().clone(),
                 result: None,
-                // The one request error-code mapping boundary (I7).
+                // The one request error-code mapping boundary.
                 error: Some(error.to_response_error()),
             },
         };

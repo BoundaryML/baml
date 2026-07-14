@@ -1,4 +1,4 @@
-//! Ambient, dispatch-scoped request cancellation (design §4 Track B, B2).
+//! Ambient, dispatch-scoped request cancellation.
 //!
 //! The ingress runtime dispatches one request at a time per worker thread and
 //! hands the operation-owned [`sys_types::CancellationToken`] to

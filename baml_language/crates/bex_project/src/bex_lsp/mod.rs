@@ -108,7 +108,7 @@ pub enum LspError {
 }
 
 impl LspError {
-    /// The one LSP error-code mapping (I7). Every request error is serialized
+    /// The one LSP error-code mapping. Every request error is serialized
     /// through this table; `-32001 UnknownErrorCode` is never emitted.
     #[must_use]
     pub fn to_response_error(&self) -> lsp_server::ResponseError {
@@ -128,7 +128,7 @@ impl LspError {
             // Request before initialize completed.
             LspError::ServerNotInitialized(_) => ErrorCode::ServerNotInitialized,
 
-            // Explicit cancellation claimed the response (B2).
+            // Explicit cancellation claimed the response.
             LspError::RequestCanceled(_) => ErrorCode::RequestCanceled,
 
             // The request's view became stale under an applied source change.
@@ -310,10 +310,10 @@ pub trait PlaygroundSender: Send + Sync {
     fn send_playground_notification(&self, notification: PlaygroundNotification);
 }
 
-/// A coherent run-launch snapshot (I5): engine and generation captured in one
+/// A coherent run-launch snapshot: engine and generation captured in one
 /// source→runtime transaction, with the overlay control-flow graph already
 /// pinned for that generation. Holding `engine` keeps the launched-on engine
-/// alive for the run's duration, so cancel can always target it (D8).
+/// alive for the run's duration, so cancel can always target it.
 pub struct PreparedRun {
     pub generation: u64,
     pub engine: Arc<dyn crate::Bex>,
@@ -327,11 +327,11 @@ pub struct PreparedRun {
 // state (e.g. in playground_server's WsState), which must be Clone + Send + Sync.
 #[async_trait]
 pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexLspRequest {
-    /// Create a connection-scoped LSP dispatcher (I7): it shares the
+    /// Create a connection-scoped LSP dispatcher: it shares the
     /// process-owned project registry but owns a fresh position-encoding
-    /// negotiation (C1) and fresh initialize workspace roots, and writes only
+    /// negotiation and fresh initialize workspace roots, and writes only
     /// through `sender` — the connection's revocable outbound sink. Browser
-    /// takeover (D2) revokes that sink, so a retained clone of the old
+    /// takeover revokes that sink, so a retained clone of the old
     /// session can no longer leak output into the replacement.
     fn new_lsp_session(
         &self,
@@ -343,7 +343,7 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
         project_root: &crate::fs::FsPath,
     ) -> Result<Arc<dyn crate::Bex>, crate::RuntimeError>;
 
-    /// Capture a coherent run-launch snapshot (I5): validates that the
+    /// Capture a coherent run-launch snapshot: validates that the
     /// installed engine matches current sources, and pins the overlay
     /// control-flow graph for `overlay_function` under the same transaction.
     ///
@@ -356,7 +356,7 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     ) -> Result<PreparedRun, LspError>;
 
     /// The engine a run launched on, looked up by its pinned generation
-    /// (D8 cancel targeting). `None` once that generation has been replaced
+    /// for cancel targeting. `None` once that generation has been replaced
     /// and released.
     fn engine_for_generation(
         &self,
@@ -467,7 +467,7 @@ mod tests {
     use super::*;
 
     /// The retired catch-all code (pre-0.14.2 `UnknownErrorCode`). No error
-    /// may serialize to it (design I7).
+    /// may serialize to it.
     const LEGACY_UNKNOWN: i32 = -32001;
 
     fn code(e: &LspError) -> i32 {
