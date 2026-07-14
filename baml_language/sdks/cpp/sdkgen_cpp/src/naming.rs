@@ -30,12 +30,25 @@ use baml_codegen_types::Name;
 /// The source namespace path a symbol routes to, pkg-aware: `user` symbols
 /// live at the generated root, `baml` under `baml/`, any other package under
 /// `vendor/<pkg>/` (mirroring the Python generator's routing rules).
-pub(crate) fn source_ns(symbol: &Name) -> Vec<Box<str>> {
-    let mut out: Vec<Box<str>> = match symbol.pkg.as_str() {
-        "user" => Vec::new(),
-        "baml" => vec![Box::from("baml")],
-        vendor => vec![Box::from("vendor"), Box::from(vendor)],
-    };
+///
+/// With `honor_stream_suffix`, a `$stream` companion routes under a leading
+/// `stream_types/` segment. Class-like symbols honor the suffix; function
+/// companions route alongside their parent function (Python routing
+/// parity), so callers pass the symbol kind's
+/// [`CppNameKind::honors_stream_suffix`].
+pub(crate) fn source_ns(symbol: &Name, honor_stream_suffix: bool) -> Vec<Box<str>> {
+    let mut out: Vec<Box<str>> = Vec::new();
+    if honor_stream_suffix && symbol.is_stream() {
+        out.push(Box::from("stream_types"));
+    }
+    match symbol.pkg.as_str() {
+        "user" => {}
+        "baml" => out.push(Box::from("baml")),
+        vendor => {
+            out.push(Box::from("vendor"));
+            out.push(Box::from(vendor));
+        }
+    }
     out.extend(
         symbol
             .namespace_path
@@ -82,10 +95,12 @@ impl BamlFqn {
     }
 
     /// The scope this identity's *own* name competes in: the parent
-    /// namespace for top-level symbols, the owning identity otherwise.
-    fn scope(&self) -> NameScope {
+    /// namespace for top-level symbols (stream companions route to their
+    /// own `stream_types` namespaces, so kind-aware), the owning identity
+    /// otherwise.
+    fn scope(&self, kind: CppNameKind) -> NameScope {
         if self.members.is_empty() {
-            NameScope::Namespace(source_ns(&self.symbol))
+            NameScope::Namespace(source_ns(&self.symbol, kind.honors_stream_suffix()))
         } else {
             let mut parent = self.clone();
             parent.members.pop();
@@ -171,6 +186,16 @@ impl CppNameKind {
             CppNameKind::OptsStruct => 10,
             CppNameKind::Setter => 11,
         }
+    }
+
+    /// Class-like symbols route their `$stream` companions under
+    /// `stream_types/`; function companions route alongside their parent
+    /// (Python routing parity).
+    pub(crate) fn honors_stream_suffix(self) -> bool {
+        matches!(
+            self,
+            CppNameKind::Class | CppNameKind::Enum | CppNameKind::TypeAlias
+        )
     }
 }
 
@@ -624,7 +649,8 @@ impl CppNames {
     }
 
     fn insert(&mut self, request: &NameRequest, name: Box<str>) {
-        let source_ns: Vec<Box<str>> = source_ns(&request.fqn.symbol);
+        let source_ns: Vec<Box<str>> =
+            source_ns(&request.fqn.symbol, request.kind.honors_stream_suffix());
         if request.kind == CppNameKind::Namespace {
             // Record the allocated path for this source path + segment.
             let mut source_path = source_ns.clone();
@@ -679,7 +705,7 @@ fn group_by_scope_and_preferred<'a>(
     let mut grouped: BTreeMap<(NameScope, String), Vec<&'a NameRequest>> = BTreeMap::new();
     for request in requests {
         grouped
-            .entry((request.fqn.scope(), preferred_token(request)))
+            .entry((request.fqn.scope(request.kind), preferred_token(request)))
             .or_default()
             .push(request);
     }

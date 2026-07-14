@@ -80,12 +80,13 @@ pub fn to_source_code_with_bytecode(
     }
 
     // Pass 2: class fields, to a fixed point so field dependencies resolve
-    // in emission (= declaration) order.
+    // in emission (= declaration) order. `$stream` companions emit like any
+    // class; the naming layer routes them under stream_types::.
     let mut classes: Vec<EmittedClass> = Vec::new();
     let mut pending: Vec<&Name> = pool_names
         .iter()
         .copied()
-        .filter(|name| !name.is_stream() && matches!(&pool[*name], Symbol::Class(_)))
+        .filter(|name| matches!(&pool[*name], Symbol::Class(_)))
         .collect();
     loop {
         let mut progressed = false;
@@ -214,7 +215,7 @@ pub fn to_source_code_with_bytecode(
             &[],
         ) {
             Ok(emitted) => {
-                let ns = allocated_namespace(&names, name);
+                let ns = allocated_namespace(&names, name, false);
                 fns_by_namespace.entry(ns).or_default().push(emitted);
             }
             Err(reason) => skipped.push(format!("{name}: {reason}")),
@@ -252,12 +253,12 @@ const OPTS_MEMBER: &str = "opts";
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
     let mut requests = BTreeSet::new();
     for (name, symbol) in pool {
-        if name.is_stream() {
-            continue;
+        if name.is_stream() && matches!(symbol, Symbol::Function(_)) {
+            continue; // function stream companions land in a later slice
         }
         match symbol {
             Symbol::Enum(enum_def) => {
-                request_namespace_segments(&mut requests, name);
+                request_namespace_segments(&mut requests, name, true);
                 requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum));
                 for variant in &enum_def.variants {
                     requests.insert(NameRequest::new(
@@ -267,7 +268,7 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 }
             }
             Symbol::Class(class_def) => {
-                request_namespace_segments(&mut requests, name);
+                request_namespace_segments(&mut requests, name, true);
                 requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
                 for param in &class_def.generic_params {
                     requests.insert(NameRequest::new(
@@ -295,7 +296,7 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 if name.bare_name().contains('$') {
                     continue; // companion functions land in a later slice
                 }
-                request_namespace_segments(&mut requests, name);
+                request_namespace_segments(&mut requests, name, false);
                 let fqn = BamlFqn::symbol(name);
                 requests.insert(NameRequest::new(fqn.clone(), CppNameKind::Function));
                 request_callable_members(&mut requests, &fqn, function);
@@ -310,10 +311,15 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
 
 /// One request per namespace segment, each scoped by its parent path, so
 /// segment names allocate top-down. Segments come from the pkg-aware source
-/// path (`baml`/`vendor/<pkg>` prefixes included) and are anchored in the
-/// `user` package so identical C++ scopes dedupe across packages.
-fn request_namespace_segments(requests: &mut BTreeSet<NameRequest>, name: &Name) {
-    let segments = naming::source_ns(name);
+/// path (`baml`/`vendor/<pkg>`/`stream_types` prefixes included) and are
+/// anchored in the `user` package so identical C++ scopes dedupe across
+/// packages.
+fn request_namespace_segments(
+    requests: &mut BTreeSet<NameRequest>,
+    name: &Name,
+    honor_stream_suffix: bool,
+) {
+    let segments = naming::source_ns(name, honor_stream_suffix);
     for depth in 0..segments.len() {
         let segment = Name::new(
             baml_base::Name::from("user"),
@@ -379,8 +385,8 @@ fn setter_request(callable: &BamlFqn, param: &str) -> NameRequest {
 
 /// The allocated C++ namespace path for a symbol, as owned segments for the
 /// namespace open/close renderers and the free-function grouping key.
-fn allocated_namespace(names: &CppNames, name: &Name) -> Vec<String> {
-    let source: Vec<Box<str>> = naming::source_ns(name);
+fn allocated_namespace(names: &CppNames, name: &Name, honor_stream_suffix: bool) -> Vec<String> {
+    let source: Vec<Box<str>> = naming::source_ns(name, honor_stream_suffix);
     names
         .ns_path(&source)
         .iter()
@@ -434,7 +440,7 @@ struct EmittedEnum {
 
 fn emit_enum(names: &CppNames, name: &Name, enum_def: &Enum) -> EmittedEnum {
     EmittedEnum {
-        ns: allocated_namespace(names, name),
+        ns: allocated_namespace(names, name, true),
         name: names
             .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum))
             .clone(),
@@ -584,7 +590,7 @@ fn emit_class(
     }
     Ok(Some(EmittedClass {
         pool_name: name.clone(),
-        ns: allocated_namespace(names, name),
+        ns: allocated_namespace(names, name, true),
         name: names
             .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
             .clone(),

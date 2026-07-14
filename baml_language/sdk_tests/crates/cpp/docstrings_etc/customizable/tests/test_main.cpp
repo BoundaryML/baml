@@ -79,10 +79,12 @@ BAML_TEST(enum_summary_only_omits_members_section) {
 }
 
 BAML_TEST(no_inline_field_or_variant_doc_artifacts) {
-    // Field/variant /// docs live exclusively in the parent's rollup - each
-    // doc text appears exactly once in the generated header.
+    // Field/variant /// docs live exclusively in the parent's rollup, never
+    // inline per field. The class doc appears twice - once on the class and
+    // once on its stream_types:: companion, both rollups; the enum has no
+    // companion, so its variant doc appears exactly once.
     const std::string text = header_text();
-    BAML_ASSERT_EQ(count_occurrences(text, "Title shown in lists"), size_t{1});
+    BAML_ASSERT_EQ(count_occurrences(text, "Title shown in lists"), size_t{2});
     BAML_ASSERT_EQ(count_occurrences(text, "Smiling face."), size_t{1});
 }
 
