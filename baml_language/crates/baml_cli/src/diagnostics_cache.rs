@@ -14,15 +14,28 @@
 //!   serving an incomplete set.
 //! - Any decode / rehydrate failure degrades to a re-check; the cache never
 //!   serves a partial or stale set.
+//!
+//! The same [`CachedDiagnostic`] machinery also backs the **stdlib (builtin)
+//! diagnostics** blob ([`serialize_builtin_diagnostics`] /
+//! [`rehydrate_builtin_blob`]). That blob is the mirror image of the per-file
+//! case: its spans are keyed by the stable `<builtin>/...` virtual path (a
+//! compile-build constant) rather than a project-root-relative path, and a span
+//! that points at a *user* file — not a builtin — makes it uncacheable. The
+//! shared span-mapping core ([`dehydrate_with`] / [`rehydrate_with`]) keeps the
+//! two keyings in one place.
 
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::Path,
+};
 
 use baml_db::{
-    FileId, Span,
+    FileId, SourceFile, Span,
     baml_compiler_diagnostics::{
         Diagnostic, DiagnosticId, DiagnosticPhase, Severity,
         diagnostic::{Annotation, RelatedInfo},
     },
+    baml_compiler2_hir,
 };
 use baml_project::ProjectDatabase;
 use text_size::{TextRange, TextSize};
@@ -99,14 +112,18 @@ fn dehydrate_span(db: &ProjectDatabase, root: &Path, span: Span) -> Option<Cache
     })
 }
 
-/// Project a live diagnostic into its rel-path-keyed cache form. `None` if any
-/// span can't be mapped to a tracked user file — the whole diagnostic is then
-/// uncacheable (its owner file is poisoned by the caller).
-fn dehydrate(db: &ProjectDatabase, root: &Path, diag: &Diagnostic) -> Option<CachedDiagnostic> {
+/// Project a live diagnostic into its cache form, mapping each span through
+/// `map_span`. `None` (short-circuited) if any span can't be mapped — the whole
+/// diagnostic is then uncacheable. The per-file (rel-path) and builtin
+/// (`<builtin>/...` path) keyings differ only in `map_span`.
+fn dehydrate_with(
+    diag: &Diagnostic,
+    map_span: impl Fn(Span) -> Option<CachedSpan>,
+) -> Option<CachedDiagnostic> {
     let mut annotations = Vec::with_capacity(diag.annotations.len());
     for a in &diag.annotations {
         annotations.push(CachedAnnotation {
-            span: dehydrate_span(db, root, a.span)?,
+            span: map_span(a.span)?,
             message: a.message.clone(),
             is_primary: a.is_primary,
         });
@@ -114,7 +131,7 @@ fn dehydrate(db: &ProjectDatabase, root: &Path, diag: &Diagnostic) -> Option<Cac
     let mut related_info = Vec::with_capacity(diag.related_info.len());
     for r in &diag.related_info {
         related_info.push(CachedRelatedInfo {
-            span: dehydrate_span(db, root, r.span)?,
+            span: map_span(r.span)?,
             message: r.message.clone(),
             file_path: r.file_path.clone(),
         });
@@ -127,6 +144,46 @@ fn dehydrate(db: &ProjectDatabase, root: &Path, diag: &Diagnostic) -> Option<Cac
         annotations,
         related_info,
     })
+}
+
+/// Rebuild a live diagnostic with current-process `FileId`s, mapping each cached
+/// span through `map_span`. `None` if any span no longer maps to a tracked file
+/// or is out of range — the caller degrades to a re-check.
+fn rehydrate_with(
+    cached: &CachedDiagnostic,
+    map_span: impl Fn(&CachedSpan) -> Option<Span>,
+) -> Option<Diagnostic> {
+    let mut annotations = Vec::with_capacity(cached.annotations.len());
+    for a in &cached.annotations {
+        annotations.push(Annotation {
+            span: map_span(&a.span)?,
+            message: a.message.clone(),
+            is_primary: a.is_primary,
+        });
+    }
+    let mut related_info = Vec::with_capacity(cached.related_info.len());
+    for r in &cached.related_info {
+        related_info.push(RelatedInfo {
+            span: map_span(&r.span)?,
+            message: r.message.clone(),
+            file_path: r.file_path.clone(),
+        });
+    }
+    Some(Diagnostic {
+        id: cached.id,
+        severity: cached.severity,
+        message: cached.message.clone(),
+        annotations,
+        related_info,
+        phase: cached.phase,
+    })
+}
+
+/// Project a live diagnostic into its rel-path-keyed cache form. `None` if any
+/// span can't be mapped to a tracked user file — the whole diagnostic is then
+/// uncacheable (its owner file is poisoned by the caller).
+fn dehydrate(db: &ProjectDatabase, root: &Path, diag: &Diagnostic) -> Option<CachedDiagnostic> {
+    dehydrate_with(diag, |span| dehydrate_span(db, root, span))
 }
 
 fn rehydrate_span(db: &ProjectDatabase, root: &Path, span: &CachedSpan) -> Option<Span> {
@@ -148,30 +205,7 @@ fn rehydrate_span(db: &ProjectDatabase, root: &Path, span: &CachedSpan) -> Optio
 /// no longer maps to a tracked file or is out of range — the caller degrades to
 /// a re-check.
 fn rehydrate(db: &ProjectDatabase, root: &Path, cached: &CachedDiagnostic) -> Option<Diagnostic> {
-    let mut annotations = Vec::with_capacity(cached.annotations.len());
-    for a in &cached.annotations {
-        annotations.push(Annotation {
-            span: rehydrate_span(db, root, &a.span)?,
-            message: a.message.clone(),
-            is_primary: a.is_primary,
-        });
-    }
-    let mut related_info = Vec::with_capacity(cached.related_info.len());
-    for r in &cached.related_info {
-        related_info.push(RelatedInfo {
-            span: rehydrate_span(db, root, &r.span)?,
-            message: r.message.clone(),
-            file_path: r.file_path.clone(),
-        });
-    }
-    Some(Diagnostic {
-        id: cached.id,
-        severity: cached.severity,
-        message: cached.message.clone(),
-        annotations,
-        related_info,
-        phase: cached.phase,
-    })
+    rehydrate_with(cached, |span| rehydrate_span(db, root, span))
 }
 
 /// Serialize one file's diagnostics into the opaque manifest blob. Returns a
@@ -257,6 +291,122 @@ pub(crate) fn fresh_blobs_by_file(
         .into_iter()
         .map(|(rel, diags)| (rel, serialize_file_blob(db, root, &diags)))
         .collect()
+}
+
+// ── Stdlib (builtin) diagnostics blob ───────────────────────────────────────
+//
+// The builtin diagnostic set is a compile-build constant (no user file
+// contributes to a stdlib package) and, for a valid stdlib, empty. It is cached
+// once per toolchain under `stdlib_diagnostics_key`, so a warm dirty compile
+// serves it instead of re-checking every builtin scope. Spans are keyed by the
+// stable `<builtin>/...` virtual path (the mirror of the user-file rel-path
+// keying), reusing the same `CachedDiagnostic` wire format.
+
+/// The stable `<builtin>/...` virtual path for a builtin file id, or `None` for
+/// a user / untracked file. A cached builtin diagnostic must reference only
+/// builtin files (a user span would make the set project-dependent — decline).
+fn builtin_path_of(db: &ProjectDatabase, file_id: FileId) -> Option<String> {
+    let path = db.file_id_to_path(file_id)?;
+    let s = path.to_string_lossy();
+    s.starts_with("<builtin>/").then(|| s.into_owned())
+}
+
+fn dehydrate_builtin_span(db: &ProjectDatabase, span: Span) -> Option<CachedSpan> {
+    Some(CachedSpan {
+        rel_path: builtin_path_of(db, span.file_id)?,
+        start: span.range.start().into(),
+        end: span.range.end().into(),
+    })
+}
+
+/// Live builtin files keyed by their `<builtin>/...` virtual path — the lookup
+/// table for rehydrating cached builtin spans onto current-process `FileId`s.
+/// Builtins live in `compiler2_file_map`, not `file_map`, so `path_to_file_id`
+/// (which consults only `file_map`) never resolves them; this map is the seam.
+fn builtin_files_by_path(db: &ProjectDatabase) -> HashMap<String, SourceFile> {
+    baml_compiler2_hir::compiler2_all_files(db)
+        .into_iter()
+        .filter_map(|sf| {
+            let p = sf.path(db).to_string_lossy().into_owned();
+            p.starts_with("<builtin>/").then_some((p, sf))
+        })
+        .collect()
+}
+
+fn rehydrate_builtin_span(
+    db: &ProjectDatabase,
+    builtins: &HashMap<String, SourceFile>,
+    span: &CachedSpan,
+) -> Option<Span> {
+    let sf = builtins.get(&span.rel_path)?;
+    // Out-of-range guard (a builtin shrank across builds — the fingerprint would
+    // normally have changed, but degrade rather than index past the source).
+    let text_len = sf.text(db).len() as u32;
+    if span.end > text_len || span.start > span.end {
+        return None;
+    }
+    Some(Span {
+        file_id: sf.file_id(db),
+        range: TextRange::new(TextSize::new(span.start), TextSize::new(span.end)),
+    })
+}
+
+/// Run `check_file` over every builtin (stdlib) file and return the honest
+/// diagnostics. Called only off the warm serve path — the cold/miss store and
+/// the `BAML_CACHE_VERIFY` oracle. On a database that already checked the
+/// builtins (the same compile's honest pass) every scope is Salsa-memoized, so
+/// this re-walk pulls no fresh inference.
+pub(crate) fn collect_builtin_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for sf in baml_compiler2_hir::compiler2_all_files(db) {
+        if sf.path(db).to_string_lossy().starts_with("<builtin>/") {
+            out.extend(db.check_file(sf));
+        }
+    }
+    out
+}
+
+/// Serialize a set of builtin-owned diagnostics into the opaque
+/// stdlib-diagnostics blob (`borsh(Option<Vec<CachedDiagnostic>>)`, spans keyed
+/// by `<builtin>/...` path). A poison blob (`None` inside) if any span is not a
+/// builtin file, so the warm path degrades to the honest builtin check rather
+/// than serving an incomplete set. (Split from
+/// [`serialize_builtin_diagnostics`] so the verify oracle's negative test can
+/// build a stale, non-empty blob from fabricated builtin diagnostics.)
+pub(crate) fn serialize_builtin_blob(db: &ProjectDatabase, diags: &[&Diagnostic]) -> Vec<u8> {
+    let mut cached = Vec::with_capacity(diags.len());
+    for d in diags {
+        match dehydrate_with(d, |span| dehydrate_builtin_span(db, span)) {
+            Some(c) => cached.push(c),
+            None => return borsh::to_vec(&CachedFileBlob::None).unwrap_or_default(),
+        }
+    }
+    borsh::to_vec(&CachedFileBlob::Some(cached)).unwrap_or_default()
+}
+
+/// Run the honest builtin check and serialize it into the stdlib-diagnostics
+/// blob. Expected empty for a valid stdlib, but caches whatever the honest
+/// check produces.
+pub(crate) fn serialize_builtin_diagnostics(db: &ProjectDatabase) -> Vec<u8> {
+    let diags = collect_builtin_diagnostics(db);
+    serialize_builtin_blob(db, &diags.iter().collect::<Vec<_>>())
+}
+
+/// Rehydrate the stdlib-diagnostics blob onto current-process builtin
+/// `FileId`s. `None` — a poison marker, an undecodable blob, or an unmappable /
+/// out-of-range span — means "check the builtins honestly"; the cache never
+/// serves a partial or stale set.
+pub(crate) fn rehydrate_builtin_blob(db: &ProjectDatabase, blob: &[u8]) -> Option<Vec<Diagnostic>> {
+    let cached: CachedFileBlob = borsh::from_slice(blob).ok()?;
+    let cached = cached?;
+    let builtins = builtin_files_by_path(db);
+    let mut out = Vec::with_capacity(cached.len());
+    for c in &cached {
+        out.push(rehydrate_with(c, |span| {
+            rehydrate_builtin_span(db, &builtins, span)
+        })?);
+    }
+    Some(out)
 }
 
 #[cfg(test)]
@@ -415,6 +565,74 @@ mod tests {
                 .unwrap()
                 .is_empty(),
             "an explicit empty blob rehydrates to no diagnostics"
+        );
+    }
+
+    #[test]
+    fn builtin_blob_round_trips_a_fabricated_builtin_diagnostic() {
+        let (db, _root) = build_db(&[("a.baml", "function a() -> int {\n  1\n}\n")]);
+        // A synthetic diagnostic anchored in a real builtin file must survive
+        // the `<builtin>/...`-path-keyed round-trip onto current-process FileIds.
+        let builtin = baml_compiler2_hir::compiler2_all_files(&db)
+            .into_iter()
+            .find(|sf| sf.path(&db).to_string_lossy().starts_with("<builtin>/"))
+            .expect("a builtin file exists");
+        let file_id = builtin.file_id(&db);
+        let diag = Diagnostic::error(DiagnosticId::TypeMismatch, "synthetic builtin diag")
+            .with_primary_span(Span {
+                file_id,
+                range: TextRange::new(TextSize::new(0), TextSize::new(3)),
+            });
+
+        let cached = dehydrate_with(&diag, |span| dehydrate_builtin_span(&db, span))
+            .expect("builtin span dehydrates");
+        let blob = borsh::to_vec(&CachedFileBlob::Some(vec![cached])).unwrap();
+        let restored = rehydrate_builtin_blob(&db, &blob).expect("rehydrates");
+        assert_eq!(restored.len(), 1);
+        assert_eq!(
+            restored[0], diag,
+            "round-trip preserves the builtin diagnostic"
+        );
+    }
+
+    #[test]
+    fn builtin_blob_declines_user_span_and_degrades() {
+        let (db, root) = build_db(&[("a.baml", "function a() -> int {\n  1\n}\n")]);
+        let a = root.join("a.baml");
+        // A user-file span cannot belong to the build-constant builtin set: the
+        // whole diagnostic is uncacheable as a builtin (mirror of the per-file
+        // path declining a `<builtin>/` span).
+        let user_diag = Diagnostic::error(DiagnosticId::TypeMismatch, "bad")
+            .with_primary_span(span_in(&db, &a, 0, 3));
+        assert!(
+            dehydrate_with(&user_diag, |span| dehydrate_builtin_span(&db, span)).is_none(),
+            "a user-file span is not cacheable as a builtin diagnostic"
+        );
+        // Undecodable blob → honest check.
+        assert!(
+            rehydrate_builtin_blob(&db, &[]).is_none(),
+            "an empty/garbage blob degrades to the honest builtin check"
+        );
+        // An explicit empty set (the valid-stdlib case) rehydrates to nothing.
+        let empty = borsh::to_vec(&CachedFileBlob::Some(Vec::<CachedDiagnostic>::new())).unwrap();
+        assert!(
+            rehydrate_builtin_blob(&db, &empty).unwrap().is_empty(),
+            "an explicit empty builtin blob rehydrates to no diagnostics"
+        );
+    }
+
+    #[test]
+    fn serialize_builtin_diagnostics_round_trips_the_live_set() {
+        // Whatever the honest builtin check produces (empty for a valid stdlib)
+        // must round-trip through the blob unchanged and in the same order, so a
+        // warm serve reproduces the honest builtin contribution exactly.
+        let (db, _root) = build_db(&[("a.baml", "function a() -> int {\n  1\n}\n")]);
+        let honest = collect_builtin_diagnostics(&db);
+        let blob = serialize_builtin_diagnostics(&db);
+        let restored = rehydrate_builtin_blob(&db, &blob).expect("live builtin blob rehydrates");
+        assert_eq!(
+            restored, honest,
+            "the cached builtin set equals the honest builtin set"
         );
     }
 }

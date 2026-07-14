@@ -282,6 +282,35 @@ pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> C
     CacheKey(h.finalize().into())
 }
 
+/// Key for the cached stdlib **builtin diagnostics** blob — the diagnostics that
+/// `check_file` produces for the builtin (stdlib) files.
+///
+/// Like [`stdlib_interface_key`] and [`stdlib_key`], it depends only on the
+/// compiler build + opt level: the builtin diagnostic set is a build constant
+/// (no user file contributes to a stdlib package, the same soundness basis as
+/// B-694), so one entry per compiler build serves every project on the machine.
+/// For a valid stdlib the set is empty, but the blob caches whatever the honest
+/// check produces. The `b"stdlib-diagnostics"` domain separator keeps it a
+/// distinct entry from the bytecode slice ([`stdlib_key`]) and the typed
+/// interface ([`stdlib_interface_key`]), which share the same `(fingerprint,
+/// opt_level)` inputs. `opt_level` is included for parity even though the
+/// builtin diagnostic set is opt-invariant.
+///
+/// The stored payload's typed form lives in the CLI (`borsh(Option<Vec<
+/// CachedDiagnostic>>)`, the same opaque machinery as the per-file diagnostics
+/// blob), so `bex_cache` does not depend on its shape; a change to that wire
+/// format is covered by [`FORMAT_VERSION`], which is folded into this key and
+/// the entry header.
+pub fn stdlib_diagnostics_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
+    let mut h = Sha256::new();
+    h.update(MAGIC);
+    h.update(FORMAT_VERSION.to_le_bytes());
+    h.update(b"stdlib-diagnostics");
+    h.update(compiler_fingerprint);
+    h.update([opt_level]);
+    CacheKey(h.finalize().into())
+}
+
 /// Key for the cached `baml test --list` **discovery output** — the flattened,
 /// unfiltered test list (legacy function-attached tests + fully-expanded testset
 /// leaf names) that a `--list` invocation renders.
@@ -861,6 +890,28 @@ mod tests {
         // Sensitive to both keying inputs.
         assert_ne!(base, stdlib_interface_key(&[4u8; 32], 2), "fingerprint");
         assert_ne!(base, stdlib_interface_key(&fp, 0), "opt level");
+    }
+
+    #[test]
+    fn stdlib_diagnostics_key_is_distinct_and_input_sensitive() {
+        let fp = [3u8; 32];
+        let base = stdlib_diagnostics_key(&fp, 2);
+
+        // Never collides with its two siblings under the same inputs (distinct
+        // domain separators over the same `(fingerprint, opt_level)`).
+        assert_ne!(
+            base,
+            stdlib_key(&fp, 2),
+            "diagnostics key must not collide with the bytecode-slice key"
+        );
+        assert_ne!(
+            base,
+            stdlib_interface_key(&fp, 2),
+            "diagnostics key must not collide with the typed-interface key"
+        );
+        // Sensitive to both keying inputs.
+        assert_ne!(base, stdlib_diagnostics_key(&[4u8; 32], 2), "fingerprint");
+        assert_ne!(base, stdlib_diagnostics_key(&fp, 0), "opt level");
     }
 
     #[test]

@@ -212,6 +212,7 @@ impl TestArgs {
                 ctx.verify_against(&compiled.program)?;
                 ctx.verify_stdlib_interface(&db)?;
                 ctx.verify_diagnostics(&db)?;
+                ctx.verify_stdlib_diagnostics(&db)?;
                 ctx.verify_callable_throws_fragments(&db)?;
                 let fresh = fresh_diagnostics
                     .as_ref()
@@ -230,6 +231,9 @@ impl TestArgs {
                 if !stdlib_interface_hit {
                     ctx.store_stdlib_interface(&db);
                 }
+                // Materialize the per-toolchain builtin-diagnostics blob on a
+                // miss (self-gating on blob presence, so a warm hit is a no-op).
+                ctx.store_stdlib_diagnostics(&db);
                 // Sampled field verification (rustc-style 1-in-32): after the
                 // compile result exists, ~1 warm run in 32 re-derives one served
                 // clean file on a fresh, un-seeded database and hard-errors on

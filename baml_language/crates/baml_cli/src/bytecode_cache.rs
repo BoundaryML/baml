@@ -22,7 +22,9 @@
 //!   key-derived, RNG-free sampling decision.
 //! - `BAML_NO_DIAGNOSTICS_CACHE=1` — check every file instead of serving clean
 //!   files from the per-file diagnostics cache (reuse / throws-seed unaffected),
-//!   to isolate that feature's win.
+//!   to isolate that feature's win. Also forces the builtin (stdlib) files to be
+//!   checked honestly instead of served from the per-toolchain
+//!   stdlib-diagnostics blob — one knob governs all diagnostics serving.
 //! - `BAML_NO_CALLABLE_THROWS_CACHE=1` — empty the per-function `callable_throws`
 //!   seed so every function infers its throws honestly (reuse / diagnostics
 //!   serving unaffected), to isolate the Phase 2 fragment seed's win.
@@ -48,7 +50,7 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 use bex_cache::{
     BytecodeCache, CacheKey, KeyInputs, ManifestFile, ProjectManifest, compiler_fingerprint,
-    compute_key, manifest_key, stdlib_interface_key, test_discovery_key,
+    compute_key, manifest_key, stdlib_diagnostics_key, stdlib_interface_key, test_discovery_key,
 };
 use bex_vm_types::{CompilationUnit, Object, Program, relink};
 use sha2::{Digest, Sha256};
@@ -102,6 +104,11 @@ pub(crate) struct CacheContext {
     /// Cached stdlib typed-interface blob (B-694), keyed by compiler build +
     /// opt level only — like `stdlib_key`, the stdlib is a build constant.
     stdlib_interface_key: CacheKey,
+    /// Cached stdlib **builtin diagnostics** blob, keyed by compiler build + opt
+    /// level only — the builtin diagnostic set is a build constant (empty for a
+    /// valid stdlib). Served on the warm path so builtins drop out of the
+    /// per-file diagnostics check.
+    stdlib_diagnostics_key: CacheKey,
     /// Latest-compile manifest, fixed per (project root, options, build).
     manifest_key: CacheKey,
     /// Cached `baml test --list` discovery output (flattened, unfiltered test
@@ -149,6 +156,7 @@ impl CacheContext {
             key,
             stdlib_key: bex_cache::stdlib_key(&fingerprint, CLI_OPT_LEVEL as u8),
             stdlib_interface_key: stdlib_interface_key(&fingerprint, CLI_OPT_LEVEL as u8),
+            stdlib_diagnostics_key: stdlib_diagnostics_key(&fingerprint, CLI_OPT_LEVEL as u8),
             manifest_key: manifest_key(
                 &fingerprint,
                 CLI_OPT_LEVEL as u8,
@@ -308,6 +316,85 @@ impl CacheContext {
     ) -> Option<std::collections::BTreeMap<String, Vec<u8>>> {
         let bytes = self.cache.load_raw(&self.stdlib_interface_key)?;
         borsh::from_slice::<std::collections::BTreeMap<String, Vec<u8>>>(&bytes).ok()
+    }
+
+    /// Load the cached stdlib **builtin diagnostics** blob, if present: the
+    /// opaque payload that `collect_diagnostics_incremental` rehydrates onto
+    /// current-process builtin `FileId`s. `None` on a miss or when the
+    /// diagnostics cache is disabled (`BAML_NO_DIAGNOSTICS_CACHE=1`) — both fall
+    /// through to the honest builtin check, the one knob that governs all
+    /// diagnostics serving.
+    pub(crate) fn load_stdlib_diagnostics(&self) -> Option<Vec<u8>> {
+        if Self::diagnostics_cache_disabled() {
+            return None;
+        }
+        self.cache.load_raw(&self.stdlib_diagnostics_key)
+    }
+
+    /// Materialize the stdlib builtin-diagnostics blob on a miss (write-through
+    /// after a passing compile), mirroring [`Self::store_stdlib_interface`]. The
+    /// builtin set is a per-toolchain build constant, so this self-gates on blob
+    /// presence: it writes only when no entry exists yet (a genuine miss) and
+    /// never rewrites a served blob. Deriving the blob re-checks the builtins,
+    /// but on the just-compiled database every builtin scope is Salsa-memoized,
+    /// so no fresh inference is pulled. Best-effort; skipped when the diagnostics
+    /// cache is disabled.
+    pub(crate) fn store_stdlib_diagnostics(&self, db: &ProjectDatabase) {
+        if Self::diagnostics_cache_disabled() {
+            return;
+        }
+        if self.cache.load_raw(&self.stdlib_diagnostics_key).is_some() {
+            return;
+        }
+        let blob = crate::diagnostics_cache::serialize_builtin_diagnostics(db);
+        if let Err(e) = self.cache.store_raw(&self.stdlib_diagnostics_key, &blob) {
+            cache_debug(format_args!("stdlib diagnostics store failed: {e}"));
+        }
+    }
+
+    /// Localized builtin-diagnostics verify oracle (analog of
+    /// [`Self::verify_stdlib_interface`] / [`Self::verify_diagnostics`]): under
+    /// `BAML_CACHE_VERIFY` the builtin serve is disabled, so
+    /// `collect_diagnostics_incremental` checks the builtins honestly and this
+    /// compares any cached blob against a fresh builtin check. A mismatch means
+    /// the cached builtin diagnostics are a stale substitute that would change
+    /// what a warm run reports — a hard error.
+    pub(crate) fn verify_stdlib_diagnostics(&self, db: &ProjectDatabase) -> anyhow::Result<()> {
+        if !Self::verify_enabled() {
+            return Ok(());
+        }
+        // Read the on-disk blob directly, bypassing the disable knob (verify must
+        // still compare against whatever is on disk).
+        let Some(cached_blob) = self.cache.load_raw(&self.stdlib_diagnostics_key) else {
+            return Ok(());
+        };
+        let honest = crate::diagnostics_cache::collect_builtin_diagnostics(db);
+        Self::compare_stdlib_diagnostics(db, &cached_blob, &honest)
+    }
+
+    /// The env-independent core of [`Self::verify_stdlib_diagnostics`], so the
+    /// oracle's discriminating power (pass on a faithful blob, bail on a stale
+    /// one) is unit-testable without mutating the process environment. An
+    /// undecodable blob is *not* a violation — the warm path degrades to the
+    /// honest builtin check, never serving a partial set — so it passes.
+    pub(crate) fn compare_stdlib_diagnostics(
+        db: &ProjectDatabase,
+        cached_blob: &[u8],
+        honest: &[baml_db::baml_compiler_diagnostics::Diagnostic],
+    ) -> anyhow::Result<()> {
+        let Some(cached) = crate::diagnostics_cache::rehydrate_builtin_blob(db, cached_blob) else {
+            return Ok(());
+        };
+        if !diagnostic_sets_equal(&cached, honest) {
+            anyhow::bail!(
+                "BAML_CACHE_VERIFY: cached stdlib (builtin) diagnostics differ from a fresh \
+                 check ({} cached vs {} honest). The cached builtin-diagnostics blob is a stale \
+                 substitute — please report this.",
+                cached.len(),
+                honest.len(),
+            );
+        }
+        Ok(())
     }
 }
 
@@ -1659,6 +1746,24 @@ impl CacheContext {
             }
         }
 
+        // Serve the builtin (stdlib) diagnostics from the per-toolchain constant
+        // blob when present: the builtins then drop out of `should_check` below
+        // and their (usually empty) diagnostics fold into `precomputed`, exactly
+        // like a clean user file's served blob. This removes the ~1,900-scope
+        // stdlib re-inference tail from every warm dirty compile. It is
+        // independent of the per-file reuse `plan` (even a first-ever compile of
+        // a project can serve a blob written by any earlier compile on the same
+        // toolchain). A missing / corrupt blob, `BAML_NO_DIAGNOSTICS_CACHE`, and
+        // `BAML_CACHE_VERIFY` all fall through to the honest builtin check
+        // (`load_stdlib_diagnostics` gates the disable knob; verify is gated
+        // here so its oracle exercises the honest path).
+        let serve_builtins = !Self::verify_enabled()
+            && self
+                .load_stdlib_diagnostics()
+                .and_then(|blob| crate::diagnostics_cache::rehydrate_builtin_blob(db, &blob))
+                .map(|mut diags| precomputed.append(&mut diags))
+                .is_some();
+
         let rel_of = |sf: SourceFile| -> Option<String> {
             let path = sf.path(db);
             if path.to_string_lossy().starts_with("<builtin>/") {
@@ -1673,8 +1778,10 @@ impl CacheContext {
         };
         let should_check = |sf: SourceFile| -> bool {
             match rel_of(sf) {
-                // Builtins are never in the manifest / clean set — always check.
-                None => true,
+                // Builtin: served from the per-toolchain constant blob when
+                // present (its diagnostics are already folded into `precomputed`);
+                // otherwise checked honestly, and its blob stored afterward.
+                None => !serve_builtins,
                 Some(rel) => match &plan {
                     Some(plan) => !plan.clean_files.contains(&rel) || degrade.contains(&rel),
                     None => true,
@@ -3921,5 +4028,138 @@ mod tests {
         ctx.maybe_sampled_verify(None, || panic!("hit path must not build an honest DB"))
             .expect("a None plan is a no-op");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    // ── Stdlib (builtin) diagnostics cache ──────────────────────────────────
+
+    /// A synthetic diagnostic anchored in a real builtin file, for the verify
+    /// oracle's negative tests (there are usually no real builtin diagnostics).
+    fn fabricate_builtin_diag(
+        db: &ProjectDatabase,
+    ) -> baml_db::baml_compiler_diagnostics::Diagnostic {
+        use baml_db::baml_compiler_diagnostics::{Diagnostic, DiagnosticId};
+        let builtin = baml_compiler2_hir::compiler2_all_files(db)
+            .into_iter()
+            .find(|sf| sf.path(db).to_string_lossy().starts_with("<builtin>/"))
+            .expect("a builtin file exists");
+        Diagnostic::error(DiagnosticId::TypeMismatch, "synthetic builtin diag").with_primary_span(
+            baml_db::Span {
+                file_id: builtin.file_id(db),
+                range: text_size::TextRange::new(
+                    text_size::TextSize::new(0),
+                    text_size::TextSize::new(3),
+                ),
+            },
+        )
+    }
+
+    #[test]
+    fn stdlib_diagnostics_blob_serves_builtins_leaving_merged_identical() {
+        // The headline invariant: with the per-toolchain builtin-diagnostics blob
+        // present, `collect_diagnostics_incremental` drops the builtins from
+        // `should_check` yet the merged set stays byte-identical to the honest
+        // full collector (builtins contribute exactly their cached — here empty —
+        // diagnostics, folded into `precomputed`).
+        if cache_disabled() || CacheContext::diagnostics_cache_disabled() {
+            return;
+        }
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+        let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let db = crate::project_load::build_db_from_sources(&r, |_| {});
+        let ctx = CacheContext::open(&r, false).expect("cache opens");
+
+        let honest = baml_project::collect_compiler2_diagnostics(&db);
+
+        // No blob yet: the honest builtin check runs; merged equals honest.
+        assert!(
+            ctx.load_stdlib_diagnostics().is_none(),
+            "no blob on a cold cache"
+        );
+        let before = ctx.collect_diagnostics_incremental(&db, None).merged;
+        assert_eq!(
+            before, honest,
+            "the no-blob path equals the honest collector"
+        );
+
+        // Materialize and serve: builtins are skipped, their cached diagnostics
+        // fold into precomputed, and merged stays identical.
+        ctx.store_stdlib_diagnostics(&db);
+        assert!(
+            ctx.load_stdlib_diagnostics().is_some(),
+            "the builtin-diagnostics blob is materialized on the miss path"
+        );
+        let after = ctx.collect_diagnostics_incremental(&db, None).merged;
+        assert_eq!(
+            after, honest,
+            "serving builtins from the cached blob leaves the merged set byte-identical"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn compare_stdlib_diagnostics_passes_on_faithful_blob() {
+        // The verify oracle's env-independent core: a blob that equals a fresh
+        // builtin check is a pass.
+        let db = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let blob = crate::diagnostics_cache::serialize_builtin_diagnostics(&db);
+        let honest = crate::diagnostics_cache::collect_builtin_diagnostics(&db);
+        assert!(
+            CacheContext::compare_stdlib_diagnostics(&db, &blob, &honest).is_ok(),
+            "a faithful builtin-diagnostics blob passes the verify core"
+        );
+    }
+
+    #[test]
+    fn compare_stdlib_diagnostics_bails_on_dropped_diagnostic() {
+        // A cache that dropped a builtin diagnostic the honest check produces:
+        // the soundness direction — serving would hide a real diagnostic — bails.
+        let db = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let cached = crate::diagnostics_cache::serialize_builtin_diagnostics(&db);
+        let mut honest = crate::diagnostics_cache::collect_builtin_diagnostics(&db);
+        honest.push(fabricate_builtin_diag(&db));
+        let err = CacheContext::compare_stdlib_diagnostics(&db, &cached, &honest)
+            .expect_err("a blob missing a diagnostic must bail");
+        assert!(
+            err.to_string()
+                .contains("stdlib (builtin) diagnostics differ"),
+            "the bail message must name the builtin divergence: {err}"
+        );
+    }
+
+    #[test]
+    fn compare_stdlib_diagnostics_bails_on_stale_extra() {
+        // A cache carrying a stale diagnostic the honest check no longer produces
+        // also bails (a non-empty cached blob vs the honest set).
+        let db = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let fabricated = fabricate_builtin_diag(&db);
+        let stale = crate::diagnostics_cache::serialize_builtin_blob(&db, &[&fabricated]);
+        assert_eq!(
+            crate::diagnostics_cache::rehydrate_builtin_blob(&db, &stale)
+                .expect("stale blob rehydrates")
+                .len(),
+            1,
+            "the fabricated builtin diagnostic serializes into the blob"
+        );
+        let honest = crate::diagnostics_cache::collect_builtin_diagnostics(&db);
+        let err = CacheContext::compare_stdlib_diagnostics(&db, &stale, &honest)
+            .expect_err("a stale extra diagnostic must bail");
+        assert!(
+            err.to_string()
+                .contains("stdlib (builtin) diagnostics differ"),
+            "the bail message must name the builtin divergence: {err}"
+        );
+    }
+
+    #[test]
+    fn compare_stdlib_diagnostics_passes_on_undecodable_blob() {
+        // Degradation: an undecodable blob is NOT a verify violation (the warm
+        // path falls back to the honest builtin check), so the core passes.
+        let db = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let honest = vec![fabricate_builtin_diag(&db)];
+        assert!(
+            CacheContext::compare_stdlib_diagnostics(&db, b"not-a-valid-blob", &honest).is_ok(),
+            "an undecodable blob degrades to the honest check, not a verify bail"
+        );
     }
 }

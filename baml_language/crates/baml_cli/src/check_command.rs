@@ -52,6 +52,7 @@ impl CheckArgs {
         );
         if let Some(cache) = &cache {
             cache.verify_diagnostics(&db)?;
+            cache.verify_stdlib_diagnostics(&db)?;
             // Sampled field verification (rustc-style 1-in-32): `baml check`
             // serves clean files' cached diagnostics and seeds their throws, so
             // it is a warm serving path like run/test. After the served result
@@ -60,7 +61,21 @@ impl CheckArgs {
             cache.maybe_sampled_verify(reuse_plan.as_ref(), || {
                 build_db_from_sources(&resolved, |_| {})
             })?;
+            // Materialize the per-toolchain builtin-diagnostics blob on a miss.
+            // Unlike the manifest, this blob is a build constant (keyed only by
+            // the compiler fingerprint), so a read-only `check` may safely write
+            // it — letting a check-only workflow drop the builtin re-inference
+            // tail on its second run. Self-gates on blob presence, and the honest
+            // re-derivation is Salsa-memoized against the check just performed.
+            cache.store_stdlib_diagnostics(&db);
         }
+        // Warm-incremental evidence (mirrors run/test): with the diagnostics
+        // cache serving clean user files and the stdlib blob serving builtins,
+        // this counts only the dirty files' scopes; a cold check walks every one.
+        crate::bytecode_cache::cache_debug(format_args!(
+            "scope inferences: {} this process",
+            baml_db::baml_compiler2_tir::inference::scope_inferences()
+        ));
         if !diagnostics.is_empty() {
             let rendered = render_project_diagnostics(&db, &diagnostics);
             reporter.suspend(|| {
