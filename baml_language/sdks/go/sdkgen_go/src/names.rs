@@ -11,7 +11,7 @@ use std::{
 
 use baml_codegen_types::{Name, Symbol, SymbolPool};
 
-use crate::rendering::GeneratorIdent;
+use crate::{packages::GoPackages, rendering::GeneratorIdent};
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct BamlFqn {
@@ -51,6 +51,7 @@ pub(crate) enum GoNameKind {
     Enum,
     TypeAlias,
     Parameter,
+    Field,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -119,6 +120,10 @@ impl GoIdent {
     fn with_suffix(&self, suffix: &str) -> Self {
         Self::new(self.package.clone(), format!("{}_{suffix}", self.name))
     }
+
+    fn with_trailing_underscore(&self) -> Self {
+        Self::new(self.package.clone(), format!("{}{}", self.name, '_'))
+    }
 }
 
 /// A Go identifier rendered from the perspective of one package.
@@ -184,10 +189,15 @@ impl NameRequest {
             GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
                 NameScope::Package(self.fqn.symbol.pkg.clone())
             }
-            GoNameKind::Parameter => NameScope::Owner(
+            GoNameKind::Parameter => NameScope::Function(
                 self.fqn
                     .parent()
                     .expect("parameter FQN must include its owning callable"),
+            ),
+            GoNameKind::Field => NameScope::Class(
+                self.fqn
+                    .parent()
+                    .expect("field FQN must include its owning class"),
             ),
         }
     }
@@ -196,7 +206,55 @@ impl NameRequest {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 enum NameScope {
     Package(baml_base::Name),
-    Owner(BamlFqn),
+    Function(BamlFqn),
+    Class(BamlFqn),
+}
+
+impl NameScope {
+    fn escape_reserved(&self, mut candidate: GoIdent) -> GoIdent {
+        let reserved = match self {
+            Self::Function(_) => GeneratorIdent::FUNCTION_SCOPE,
+            Self::Package(_) | Self::Class(_) => &[],
+        };
+        while reserved
+            .iter()
+            .any(|identifier| identifier.as_str() == candidate.name.as_ref())
+        {
+            candidate = candidate.with_trailing_underscore();
+        }
+        candidate
+    }
+}
+
+struct GoScope {
+    used: HashSet<GoIdent>,
+}
+
+impl GoScope {
+    fn new() -> Self {
+        Self {
+            used: HashSet::new(),
+        }
+    }
+
+    fn allocate(&mut self, candidate: GoIdent, request: &NameRequest) -> GoIdent {
+        if self.used.insert(candidate.clone()) {
+            return candidate;
+        }
+
+        let hashed = candidate.with_suffix(&short_hash(request));
+        if self.used.insert(hashed.clone()) {
+            return hashed;
+        }
+
+        for suffix in 2.. {
+            let numbered = hashed.with_suffix(&suffix.to_string());
+            if self.used.insert(numbered.clone()) {
+                return numbered;
+            }
+        }
+        unreachable!()
+    }
 }
 
 pub(crate) struct GoNames {
@@ -204,16 +262,11 @@ pub(crate) struct GoNames {
 }
 
 impl GoNames {
-    /// Build the name table for the generated `user` package. All top-level
-    /// symbols reserve their package-scope identifiers even when their codegen
-    /// feature has not been implemented yet.
-    pub(crate) fn for_user_package(pool: &SymbolPool, package: &GoPackageName) -> Self {
+    /// Build one name table for every generated package. All declarations
+    /// reserve names even when their codegen feature has not been implemented.
+    pub(crate) fn for_pool(pool: &SymbolPool, packages: &GoPackages) -> Self {
         let mut requests = Vec::new();
         for (name, symbol) in pool {
-            if name.pkg.as_str() != "user" {
-                continue;
-            }
-
             let fqn = BamlFqn::symbol(name);
             let kind = match symbol {
                 Symbol::Function(_) => GoNameKind::Function,
@@ -232,8 +285,19 @@ impl GoNames {
                     )
                 }));
             }
+            if let Symbol::Class(class) = symbol {
+                requests.extend(class.properties.iter().map(|property| {
+                    NameRequest::new(
+                        fqn.member(&property.name),
+                        GoNameKind::Field,
+                        GoVisibility::Exported,
+                    )
+                }));
+            }
         }
-        Self::new(package, requests)
+        Self::allocate(requests, |request| {
+            packages.get(&request.fqn.symbol.pkg).go_name().clone()
+        })
     }
 
     /// The canonical naming operation: `(FQN, kind, visibility) -> GoName`.
@@ -249,11 +313,19 @@ impl GoNames {
             .expect("name request was not registered during allocation")
     }
 
+    #[cfg(test)]
     fn new(package: &GoPackageName, requests: Vec<NameRequest>) -> Self {
+        Self::allocate(requests, |_| package.clone())
+    }
+
+    fn allocate(
+        requests: Vec<NameRequest>,
+        package_for: impl Fn(&NameRequest) -> GoPackageName,
+    ) -> Self {
         let mut groups = BTreeMap::<NameScope, BTreeMap<GoIdent, Vec<NameRequest>>>::new();
         for request in requests {
             let scope = request.scope();
-            let base = project_base(package.clone(), &request);
+            let base = scope.escape_reserved(project_base(package_for(&request), &request));
             groups
                 .entry(scope)
                 .or_default()
@@ -264,7 +336,7 @@ impl GoNames {
 
         let mut allocations = HashMap::new();
         for base_groups in groups.values_mut() {
-            let mut used = HashSet::new();
+            let mut scope = GoScope::new();
             for (base, requests) in base_groups {
                 requests.sort();
                 let collides = requests.len() > 1;
@@ -274,7 +346,7 @@ impl GoNames {
                     } else {
                         base.clone()
                     };
-                    let canonical = allocate_unique(candidate, request, &mut used);
+                    let canonical = scope.allocate(candidate, request);
                     allocations.insert(
                         request.clone(),
                         GoName {
@@ -298,7 +370,9 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
             }
             push_upper_component(&mut value, &request.fqn.symbol.name);
         }
-        GoNameKind::Parameter => push_upper_component(&mut value, request.fqn.leaf()),
+        GoNameKind::Parameter | GoNameKind::Field => {
+            push_upper_component(&mut value, request.fqn.leaf());
+        }
     }
 
     if value.is_empty() {
@@ -313,7 +387,7 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
         lowercase_first(&mut value);
     }
 
-    while is_go_keyword(&value) || is_generator_local(request.kind, &value) {
+    while is_go_keyword(&value) {
         value.push('_');
     }
     GoIdent::new(package, value)
@@ -324,7 +398,7 @@ fn wire_name(request: &NameRequest) -> BamlWireName {
         GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
             BamlWireName::Symbol(request.fqn.symbol.clone())
         }
-        GoNameKind::Parameter => BamlWireName::Key(request.fqn.leaf().clone()),
+        GoNameKind::Parameter | GoNameKind::Field => BamlWireName::Key(request.fqn.leaf().clone()),
     }
 }
 
@@ -352,36 +426,6 @@ fn lowercase_first(value: &mut String) {
     *value = lowered;
 }
 
-fn is_generator_local(kind: GoNameKind, value: &str) -> bool {
-    matches!(kind, GoNameKind::Parameter)
-        && GeneratorIdent::FUNCTION_SCOPE
-            .iter()
-            .any(|identifier| identifier.as_str() == value)
-}
-
-fn allocate_unique(
-    candidate: GoIdent,
-    request: &NameRequest,
-    used: &mut HashSet<GoIdent>,
-) -> GoIdent {
-    if used.insert(candidate.clone()) {
-        return candidate;
-    }
-
-    let hashed = candidate.with_suffix(&short_hash(request));
-    if used.insert(hashed.clone()) {
-        return hashed;
-    }
-
-    for suffix in 2.. {
-        let numbered = hashed.with_suffix(&suffix.to_string());
-        if used.insert(numbered.clone()) {
-            return numbered;
-        }
-    }
-    unreachable!()
-}
-
 fn short_hash(request: &NameRequest) -> String {
     let mut hash = StableFnv::new();
     hash.component(request.fqn.symbol.pkg.as_str());
@@ -400,6 +444,7 @@ fn short_hash(request: &NameRequest) -> String {
         GoNameKind::Enum => 2,
         GoNameKind::TypeAlias => 3,
         GoNameKind::Parameter => 4,
+        GoNameKind::Field => 5,
     });
     hash.byte(match request.visibility {
         GoVisibility::Exported => 0,
@@ -445,7 +490,7 @@ fn is_go_identifier(value: &str) -> bool {
         && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
 }
 
-fn is_go_keyword(value: &str) -> bool {
+pub(crate) fn is_go_keyword(value: &str) -> bool {
     matches!(
         value,
         "break"
@@ -751,6 +796,34 @@ mod tests {
         assert_eq!(
             class_name,
             reverse.project(&class, GoNameKind::Class, GoVisibility::Exported)
+        );
+    }
+
+    #[test]
+    fn field_collisions_are_local_to_their_class_and_keep_wire_keys() {
+        let class = symbol(&[], "record");
+        let snake = class.member(&BaseName::new("foo_bar"));
+        let camel = class.member(&BaseName::new("fooBar"));
+        let names = GoNames::new(
+            &generated_package(),
+            vec![
+                request(snake.clone(), GoNameKind::Field, GoVisibility::Exported),
+                request(camel.clone(), GoNameKind::Field, GoVisibility::Exported),
+            ],
+        );
+        let snake_name = names.project(&snake, GoNameKind::Field, GoVisibility::Exported);
+        let camel_name = names.project(&camel, GoNameKind::Field, GoVisibility::Exported);
+
+        assert!(identifier(snake_name).starts_with("FooBar_"));
+        assert!(identifier(camel_name).starts_with("FooBar_"));
+        assert_ne!(identifier(snake_name), identifier(camel_name));
+        assert_eq!(
+            snake_name.wire(),
+            &BamlWireName::Key(BaseName::new("foo_bar"))
+        );
+        assert_eq!(
+            camel_name.wire(),
+            &BamlWireName::Key(BaseName::new("fooBar"))
         );
     }
 }
