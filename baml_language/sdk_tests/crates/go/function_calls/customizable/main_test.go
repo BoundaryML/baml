@@ -26,3 +26,14 @@ func TestScalarFunctions(t *testing.T) {
 		t.Fatalf("SingleRequiredArg() = %q, want %q", echo, "hi")
 	}
 }
+
+func TestPersonRoundTrip(t *testing.T) {
+	want := baml_sdk.Person{Person: "record", Name: "Ada", Age: 37}
+	got, err := baml_sdk.RoundTripPerson(context.Background(), want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("RoundTripPerson() = %#v, want %#v", got, want)
+	}
+}

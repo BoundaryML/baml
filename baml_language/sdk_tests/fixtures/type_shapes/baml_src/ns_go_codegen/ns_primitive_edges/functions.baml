@@ -21,3 +21,19 @@ class PrimitiveHolder {
   big_value bigint
   optional_int int?
 }
+
+// Exhaustive first-stage class wire fixture. Keep optional and nested fields
+// out of this class so every supported primitive is exercised independently.
+class WirePrimitives {
+  string_value string
+  int_value int
+  bigint_value bigint
+  float_value float
+  bool_value bool
+  null_value null
+  bytes_value uint8array
+}
+
+function round_trip_wire_primitives(value: WirePrimitives) -> WirePrimitives {
+  value
+}

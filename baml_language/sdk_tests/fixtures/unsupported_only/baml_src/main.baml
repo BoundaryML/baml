@@ -1,8 +1,12 @@
 // Every callable in this fixture is deliberately outside the current Go
 // primitive-function slice. The generated package must still compile without
 // dangling imports or partial declarations.
-class Payload {
+class PayloadValue {
   value string
+}
+
+class Payload {
+  value PayloadValue
 }
 
 function round_trip_payload(payload: Payload) -> Payload {

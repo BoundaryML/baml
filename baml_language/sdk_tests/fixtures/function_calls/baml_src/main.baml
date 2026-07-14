@@ -13,6 +13,20 @@ function single_required_arg(value: string) -> string {
   value
 }
 
+// First nominal-value bridge proof: the generated Go struct crosses the FFI
+// boundary in both directions with exact class and field wire names.
+class Person {
+  // Projects to the same Go identifier as the surrounding class. Generated
+  // decoding must never introduce this field as a local variable.
+  person string
+  name string
+  age int
+}
+
+function round_trip_person(person: Person) -> Person {
+  person
+}
+
 // Helper used as an *expression* default below — `opt2`'s default is a call to
 // this function, so the engine evaluates it whenever `opt2` is omitted.
 function make_opt2() -> int {

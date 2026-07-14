@@ -5,7 +5,7 @@
 //! opaque [`GoName`]. Raw strings are exposed only when source text is emitted.
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fmt,
 };
 
@@ -211,7 +211,11 @@ enum NameScope {
 }
 
 impl NameScope {
-    fn escape_reserved(&self, mut candidate: GoIdent) -> GoIdent {
+    fn escape_reserved(
+        &self,
+        mut candidate: GoIdent,
+        generated_package_aliases: &BTreeSet<String>,
+    ) -> GoIdent {
         let reserved = match self {
             Self::Function(_) => GeneratorIdent::FUNCTION_SCOPE,
             Self::Package(_) | Self::Class(_) => &[],
@@ -219,6 +223,8 @@ impl NameScope {
         while reserved
             .iter()
             .any(|identifier| identifier.as_str() == candidate.name.as_ref())
+            || matches!(self, Self::Function(_))
+                && generated_package_aliases.contains(candidate.name.as_ref())
         {
             candidate = candidate.with_trailing_underscore();
         }
@@ -295,9 +301,15 @@ impl GoNames {
                 }));
             }
         }
-        Self::allocate(requests, |request| {
-            packages.get(&request.fqn.symbol.pkg).go_name().clone()
-        })
+        let generated_package_aliases = packages
+            .iter()
+            .map(|package| package.go_name().as_str().to_string())
+            .collect();
+        Self::allocate(
+            requests,
+            |request| packages.get(&request.fqn.symbol.pkg).go_name().clone(),
+            &generated_package_aliases,
+        )
     }
 
     /// The canonical naming operation: `(FQN, kind, visibility) -> GoName`.
@@ -315,17 +327,21 @@ impl GoNames {
 
     #[cfg(test)]
     fn new(package: &GoPackageName, requests: Vec<NameRequest>) -> Self {
-        Self::allocate(requests, |_| package.clone())
+        Self::allocate(requests, |_| package.clone(), &BTreeSet::default())
     }
 
     fn allocate(
         requests: Vec<NameRequest>,
         package_for: impl Fn(&NameRequest) -> GoPackageName,
+        generated_package_aliases: &BTreeSet<String>,
     ) -> Self {
         let mut groups = BTreeMap::<NameScope, BTreeMap<GoIdent, Vec<NameRequest>>>::new();
         for request in requests {
             let scope = request.scope();
-            let base = scope.escape_reserved(project_base(package_for(&request), &request));
+            let base = scope.escape_reserved(
+                project_base(package_for(&request), &request),
+                generated_package_aliases,
+            );
             groups
                 .entry(scope)
                 .or_default()

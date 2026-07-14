@@ -10,7 +10,8 @@ use std::{collections::HashMap, env, fs, path::PathBuf};
 
 use baml_base::Name as BaseName;
 use baml_codegen_types::{
-    Class, ClassProperty, Name, NamingConvention, Origin, Symbol, SymbolPool, Ty,
+    Class, ClassProperty, Function, FunctionArgument, Name, NamingConvention, Origin, Symbol,
+    SymbolPool, Ty,
 };
 
 use crate::{
@@ -19,6 +20,7 @@ use crate::{
 };
 
 const SOURCE_FIXTURES: &[&str] = &["function_calls", "type_shapes", "unsupported_only"];
+const RUNTIME_GO_SUM: &str = include_str!("../../../sdks/go/baml_go/go.sum");
 const FIXTURES: &[&str] = &[
     "function_calls",
     "type_shapes",
@@ -83,27 +85,90 @@ fn stage_output(manifest_dir: &std::path::Path, fixture: &str, output: HashMap<P
     }
     fs::write(
         generated.join("go.mod"),
-        "module baml.local/sdk\n\ngo 1.23\n\nrequire github.com/boundaryml/baml/sdks/go/baml_go v0.0.0\n\nreplace github.com/boundaryml/baml/sdks/go/baml_go => ../../../../../sdks/go/baml_go\n",
+        "module baml.local/sdk\n\ngo 1.23\n\nrequire github.com/boundaryml/baml/sdks/go/baml_go v0.0.0\n\nrequire google.golang.org/protobuf v1.36.6 // indirect\n\nreplace github.com/boundaryml/baml/sdks/go/baml_go => ../../../../../sdks/go/baml_go\n",
     )
     .unwrap();
+    fs::write(generated.join("go.sum"), RUNTIME_GO_SUM).unwrap();
 }
 
 fn stage_package_edges(manifest_dir: &std::path::Path) {
     let context = Name::new(BaseName::new("context"), vec![], BaseName::new("Thing"));
     let dashed = Name::new(BaseName::new("foo-bar"), vec![], BaseName::new("Thing"));
     let snake = Name::new(BaseName::new("foo_bar"), vec![], BaseName::new("Thing"));
+    let models = Name::new(BaseName::new("models"), vec![], BaseName::new("Thing"));
     let holder = Name::new(BaseName::new("user"), vec![], BaseName::new("Holder"));
+    let round_trip = Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("round_trip_context_thing"),
+    );
+    let shadowed_package = Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("round_trip_models_thing"),
+    );
     let pool = SymbolPool::from([
         synthetic_class(context.clone(), vec![("value", Ty::String)]),
         synthetic_class(dashed.clone(), vec![("value", Ty::Int)]),
         synthetic_class(snake.clone(), vec![("value", Ty::Bool)]),
+        synthetic_class(models.clone(), vec![("value", Ty::String)]),
         synthetic_class(
             holder,
             vec![
-                ("context_thing", Ty::Class(context, vec![])),
+                ("context_thing", Ty::Class(context.clone(), vec![])),
                 ("dashed_thing", Ty::Class(dashed, vec![])),
                 ("snake_thing", Ty::Class(snake, vec![])),
             ],
+        ),
+        (
+            round_trip,
+            Symbol::Function(Function {
+                name: BaseName::new("round_trip_context_thing"),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: Ty::Class(context.clone(), vec![]),
+                    default: None,
+                }],
+                return_type: Ty::Class(context, vec![]),
+                throws: None,
+                watchers: vec![],
+                origin: Origin {
+                    source_file_path: "synthetic.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        ),
+        (
+            shadowed_package,
+            Symbol::Function(Function {
+                name: BaseName::new("round_trip_models_thing"),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![
+                    FunctionArgument {
+                        name: BaseName::new("models"),
+                        docstring: None,
+                        ty: Ty::String,
+                        default: None,
+                    },
+                    FunctionArgument {
+                        name: BaseName::new("value"),
+                        docstring: None,
+                        ty: Ty::Class(models.clone(), vec![]),
+                        default: None,
+                    },
+                ],
+                return_type: Ty::Class(models, vec![]),
+                throws: None,
+                watchers: vec![],
+                origin: Origin {
+                    source_file_path: "synthetic.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
         ),
     ]);
     let output = sdkgen_go::to_source_code_with_bytecode(
