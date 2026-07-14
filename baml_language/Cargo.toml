@@ -2,6 +2,7 @@
 members = [
   "crates/*",
   "forks/*",
+  "sdks/cpp/sdkgen_cpp",
   "sdks/go/sdkgen_go",
   "sdks/nodejs/bridge_nodejs",
   "sdks/nodejs/sdkgen_typescript_node",
@@ -9,6 +10,7 @@ members = [
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
+  "sdk_tests/crates/cpp",
   "sdk_tests/crates/python_pydantic2",
   # `sdk_tests/crates/typescript_node`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
@@ -55,6 +57,7 @@ baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
+sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
 sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
