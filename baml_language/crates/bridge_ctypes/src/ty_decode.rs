@@ -141,10 +141,6 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         TyVariant::Void(_) => RuntimeTy::Void {
             attr: TyAttr::default(),
         },
-        TyVariant::WatchAccessor(w) => RuntimeTy::WatchAccessor(
-            Box::new(opt_to_runtime_ty(w.inner.as_deref())?),
-            TyAttr::default(),
-        ),
         TyVariant::TypeVar(v) => RuntimeTy::TypeVar(Name::new(&v.name), TyAttr::default()),
         TyVariant::AssociatedTypeProjection(p) => RuntimeTy::AssociatedTypeProjection {
             base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),

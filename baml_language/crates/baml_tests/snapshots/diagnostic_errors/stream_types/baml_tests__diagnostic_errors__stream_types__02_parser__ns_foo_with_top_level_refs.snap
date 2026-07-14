@@ -22,7 +22,7 @@ SOURCE_FILE
       WORD "Beta"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "NsAlias"
     EQUALS "="
     TYPE_EXPR "string | int"

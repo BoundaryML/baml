@@ -671,22 +671,11 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
             count_in_rvalue(value, uses);
         }
         crate::StatementKind::Drop(p) => count_in_place(p, uses),
-        crate::StatementKind::Unwatch(l) => {
-            uses[l.0] += 1;
-        }
-        crate::StatementKind::WatchOptions { local, filter } => {
-            uses[local.0] += 1;
-            count_in_operand(filter, uses);
-        }
-        crate::StatementKind::WatchNotify(l) => {
-            uses[l.0] += 1;
-        }
         crate::StatementKind::FreshCell(l) => {
             uses[l.0] += 1;
         }
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
-        | crate::StatementKind::NotifyBlock { .. }
         | crate::StatementKind::Nop => {}
         crate::StatementKind::Intrinsic { args, .. } => {
             for arg in args {
@@ -1027,9 +1016,6 @@ fn apply_subst_to_statement(stmt: &mut crate::Statement, subst: &HashMap<Local, 
         crate::StatementKind::Assign { value, .. } => {
             apply_subst_to_rvalue(value, subst);
         }
-        crate::StatementKind::WatchOptions { filter, .. } => {
-            apply_subst_to_operand(filter, subst);
-        }
         crate::StatementKind::Intrinsic { args, .. } => {
             for arg in args {
                 apply_subst_to_operand(arg, subst);
@@ -1154,10 +1140,7 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
     let mut new_locals: Vec<crate::LocalDecl> = Vec::new();
 
     for (i, local_decl) in body.locals.iter().enumerate() {
-        let keep = i == 0              // return place
-            || i <= arity              // parameter
-            || uses[i] > 0            // has uses (including force-alive)
-            || local_decl.is_watched; // watched variable
+        let keep = i == 0 || i <= arity || uses[i] > 0;
         if keep {
             let new_id = Local(new_locals.len());
             old_to_new[i] = Some(new_id);
@@ -1314,16 +1297,9 @@ fn rewrite_locals_in_statement(stmt: &mut crate::Statement, map: &[Option<Local>
             remap_rvalue(value, map);
         }
         crate::StatementKind::Drop(p) => remap_place(p, map),
-        crate::StatementKind::Unwatch(l) => remap_local(l, map),
-        crate::StatementKind::WatchOptions { local, filter } => {
-            remap_local(local, map);
-            remap_operand(filter, map);
-        }
-        crate::StatementKind::WatchNotify(l) => remap_local(l, map),
         crate::StatementKind::FreshCell(l) => remap_local(l, map),
         crate::StatementKind::VizEnter(_)
         | crate::StatementKind::VizExit(_)
-        | crate::StatementKind::NotifyBlock { .. }
         | crate::StatementKind::Nop => {}
         crate::StatementKind::Intrinsic { args, .. } => {
             for arg in args {
@@ -1570,12 +1546,6 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     }
                 }
                 crate::StatementKind::Drop(p) => check_place(p, &blk),
-                crate::StatementKind::Unwatch(l) => check_local(*l, &blk),
-                crate::StatementKind::WatchOptions { local, filter } => {
-                    check_local(*local, &blk);
-                    check_operand(filter, &blk);
-                }
-                crate::StatementKind::WatchNotify(l) => check_local(*l, &blk),
                 crate::StatementKind::FreshCell(l) => check_local(*l, &blk),
                 _ => {}
             }
@@ -1701,37 +1671,6 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                     is_unreachable,
                     "exhaustive switch in {:?} has non-unreachable default block {:?} in MIR function {}",
                     block.id, otherwise, name,
-                );
-            }
-        }
-    }
-
-    // 6. Watch invariants: watched locals must have names, watch statements
-    //    must reference watched locals.
-    //    (Same as V1 verifier.rs:90-145)
-    for (idx, decl) in body.locals.iter().enumerate() {
-        if decl.is_watched {
-            assert!(
-                decl.name.is_some(),
-                "watched local _{idx} must have a user-visible name in MIR function {name}",
-            );
-        }
-    }
-
-    for block in &body.blocks {
-        for stmt in &block.statements {
-            let watch_local = match &stmt.kind {
-                crate::StatementKind::Unwatch(l)
-                | crate::StatementKind::WatchNotify(l)
-                | crate::StatementKind::WatchOptions { local: l, .. } => Some(*l),
-                _ => None,
-            };
-            if let Some(local) = watch_local {
-                let decl = &body.locals[local.0];
-                assert!(
-                    decl.is_watched,
-                    "watch statement references non-watched local _{} in MIR function {}",
-                    local.0, name,
                 );
             }
         }

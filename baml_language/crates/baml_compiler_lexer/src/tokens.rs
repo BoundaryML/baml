@@ -111,8 +111,6 @@ pub enum TokenKind {
     Defer,
 
     // Other keywords
-    #[token("watch")]
-    Watch,
     #[token("instanceof")]
     Instanceof,
     #[token("is")]
@@ -122,7 +120,7 @@ pub enum TokenKind {
 
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
-    /// Also matches $-prefixed identifiers like $watch for special builtin methods
+    /// Also matches $-prefixed identifiers and `$`-separated names.
     /// and `$`-separated names like `Foo$bar`. A *trailing* `$` is intentionally
     /// rejected so that `${` inside a backtick string (BEP-049 interpolation
     /// marker) doesn't get absorbed into a preceding identifier — e.g.
@@ -352,7 +350,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Spawn => "spawn",
             TokenKind::Await => "await",
             TokenKind::Defer => "defer",
-            TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Is => "is",
             TokenKind::Dynamic => "dynamic",
@@ -579,8 +576,8 @@ mod tests {
             .collect();
         assert_eq!(words, vec!["ExtractResume$render_prompt", "Foo$bar"]);
 
-        // $-prefixed words work with dot access: foo.$watch
-        let source2 = "foo.$watch";
+        // $-prefixed words work with dot access.
+        let source2 = "foo.$value";
         let tokens2 = lex_no_whitespace(source2);
         assert_eq!(
             tokens2,
@@ -592,7 +589,7 @@ mod tests {
             .filter(|t| t.kind == TokenKind::Word)
             .map(|t| t.text.as_str())
             .collect();
-        assert_eq!(words2, vec!["foo", "$watch"]);
+        assert_eq!(words2, vec!["foo", "$value"]);
     }
 
     #[test]

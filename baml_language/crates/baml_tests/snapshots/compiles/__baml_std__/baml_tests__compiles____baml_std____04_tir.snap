@@ -2264,7 +2264,7 @@ class baml.llm.PrimitiveClientOptions {
   allowed_roles: string[] | null
   remap_roles: map<string, string> | null
   api_key: string | null
-  provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.VertexAiOptions | null
+  provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.GoogleAiOptions | baml.llm.VertexAiOptions | null
   media_url_handler: baml.llm.MediaUrlHandler | null
   headers: map<string, string>
   query_params: map<string, string>
@@ -2278,6 +2278,13 @@ class baml.llm.AzureOpenAiOptions {
 }
 class baml.llm.AnthropicOptions {
   max_tokens: int | null
+}
+class baml.llm.GoogleAiOptions {
+  enterprise: bool | null
+  credentials: string | null
+  credentials_content: string | null
+  location: string | null
+  project_id: string | null
 }
 class baml.llm.VertexAiOptions {
   credentials: string | null
@@ -2482,7 +2489,7 @@ class baml.llm.PrimitiveClientOptions$stream {
   allowed_roles: string[] | null
   remap_roles: map<string, string> | null
   api_key: string | null
-  provider_options: baml.llm.AnthropicOptions$stream | baml.llm.AzureOpenAiOptions$stream | baml.llm.BedrockOptions$stream | baml.llm.VertexAiOptions$stream | null
+  provider_options: baml.llm.AnthropicOptions$stream | baml.llm.AzureOpenAiOptions$stream | baml.llm.BedrockOptions$stream | baml.llm.GoogleAiOptions$stream | baml.llm.VertexAiOptions$stream | null
   media_url_handler: baml.llm.MediaUrlHandler$stream | null
   headers: map<string, string>
   query_params: map<string, string>
@@ -2496,6 +2503,13 @@ class baml.llm.AzureOpenAiOptions$stream {
 }
 class baml.llm.AnthropicOptions$stream {
   max_tokens: int | null
+}
+class baml.llm.GoogleAiOptions$stream {
+  enterprise: bool | null
+  credentials: string | null
+  credentials_content: string | null
+  location: string | null
+  project_id: string | null
 }
 class baml.llm.VertexAiOptions$stream {
   credentials: string | null

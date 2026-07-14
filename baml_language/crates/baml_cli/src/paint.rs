@@ -103,7 +103,8 @@ fn style_for(token_type: SemanticTokenType) -> Style {
         T::Parameter => Style::new().color256(173),
         T::Namespace => Style::new().cyan().bright(),
         T::String | T::Regexp => Style::new().green(),
-        T::Number => Style::new().yellow().bright(),
+        T::EscapeSequence => Style::new().color256(214),
+        T::Number | T::Boolean => Style::new().yellow().bright(),
         T::Comment => Style::new().color256(244),
         T::Decorator => Style::new().color256(179),
         T::Operator => Style::new().color256(245),
@@ -242,7 +243,6 @@ fn is_keyword(kind: TokenKind) -> bool {
             | T::Defer
             | T::Spawn
             | T::Await
-            | T::Watch
             | T::In
             | T::Is
             | T::Instanceof
@@ -487,7 +487,7 @@ impl<'db> Highlighter<'db> {
         if let Some(cached) = self.cache.borrow().get(&file) {
             return Rc::clone(cached);
         }
-        let mut toks = semantic_tokens(self.db, file);
+        let mut toks = semantic_tokens(self.db, file).clone();
         toks.sort_by_key(|t| t.range.start());
         let rc: Rc<[SemanticToken]> = toks.into();
         self.cache.borrow_mut().insert(file, Rc::clone(&rc));

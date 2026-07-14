@@ -107,9 +107,6 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
             | I::Spawn
             | I::Await
             | I::AwaitAny
-            | I::Watch(..)
-            | I::Unwatch(..)
-            | I::Notify(..)
             | I::CallIndirect
             | I::CallIndirectWithRuntimeId
             | I::VirtualCall { .. }

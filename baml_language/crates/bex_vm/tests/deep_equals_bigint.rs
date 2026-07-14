@@ -2,8 +2,8 @@
 //!
 //! `==` on bigint at the BAML surface goes through a specialized `CmpBigintOp`
 //! opcode that compares numeric values, so the user never observes the
-//! `deep_equals` path directly. But class-instance equality, watch-filter
-//! diffing, and any future recursive consumer routes through
+//! `deep_equals` path directly. But class-instance equality and any future
+//! recursive consumer route through
 //! `deep_equals_recursive`, which must compare `Arc<BigInt>`s by numeric value
 //! rather than pointer identity.
 

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 29405
 ---
 === MIR2 ===
 fn user.TestClient$new(lenient: bool) -> null {

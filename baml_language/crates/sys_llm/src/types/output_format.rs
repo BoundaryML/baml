@@ -598,7 +598,6 @@ impl OutputFormatContent {
 
             RuntimeTy::Function { .. }
             | RuntimeTy::Void { .. }
-            | RuntimeTy::WatchAccessor(..)
             | RuntimeTy::BuiltinUnknown { .. }
             | RuntimeTy::EnumVariant(..)
             | RuntimeTy::Future(..)

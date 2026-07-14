@@ -454,10 +454,6 @@ fn match_template(
             }
             _ => false,
         },
-        TyTemplate::WatchAccessor(inner, _) => match concrete {
-            RuntimeTy::WatchAccessor(cinner, _) => match_template(inner, cinner, bindings),
-            _ => false,
-        },
         // Order-insensitive union match: each pattern member must pair with a
         // distinct concrete member, with type-var bindings consistent across the
         // chosen pairing (so `Box<T | int>` matches a value `Box<int | string>`).
@@ -615,12 +611,11 @@ pub(super) fn ty_equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
             },
         ) => ty_equivalent(ak, bk) && ty_equivalent(av, bv),
         // The remaining nested-type-bearing constructors, so a union buried in a future,
-        // watch accessor, function signature, or associated projection is still compared
+        // function signature, or associated projection is still compared
         // order-insensitively rather than falling to the order-sensitive `==` below.
         (RuntimeTy::Future(av, ae, _), RuntimeTy::Future(bv, be, _)) => {
             ty_equivalent(av, bv) && ty_equivalent(ae, be)
         }
-        (RuntimeTy::WatchAccessor(ai, _), RuntimeTy::WatchAccessor(bi, _)) => ty_equivalent(ai, bi),
         (
             RuntimeTy::AssociatedTypeProjection {
                 base: abase,
@@ -814,7 +809,7 @@ fn max_type_arg_ref(t: &TyTemplate) -> Option<u32> {
     match t {
         #[expect(deprecated)]
         TyTemplate::TypeArgRef(n) | TyTemplate::TypeArgRefOrWildcard(n) => Some(*n),
-        TyTemplate::List(inner, _) | TyTemplate::WatchAccessor(inner, _) => max_type_arg_ref(inner),
+        TyTemplate::List(inner, _) => max_type_arg_ref(inner),
         TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
             max_type_arg_ref(key).max(max_type_arg_ref(value))
         }
@@ -859,9 +854,7 @@ fn template_has_type_arg_ref(t: &TyTemplate) -> bool {
     match t {
         #[expect(deprecated)]
         TyTemplate::TypeArgRef(_) | TyTemplate::TypeArgRefOrWildcard(_) => true,
-        TyTemplate::List(inner, _) | TyTemplate::WatchAccessor(inner, _) => {
-            template_has_type_arg_ref(inner)
-        }
+        TyTemplate::List(inner, _) => template_has_type_arg_ref(inner),
         TyTemplate::Map { key, value, .. } | TyTemplate::Future(key, value, _) => {
             template_has_type_arg_ref(key) || template_has_type_arg_ref(value)
         }

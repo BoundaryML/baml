@@ -432,7 +432,7 @@ impl UnionTypeMember {
                 let open_paren = t::LParen::from_cst(first)?;
                 if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
                     let base: Type = it.expect_parse()?;
-                    let as_token: t::Word = it.expect_parse()?;
+                    let as_token: t::As = it.expect_parse()?;
                     let interface: Type = it.expect_parse()?;
                     let close_paren: t::RParen = it.expect_parse()?;
                     let dot: t::Dot = it.expect_parse()?;
@@ -755,7 +755,7 @@ impl Printable for GenericType {
 pub struct AssociatedProjectionType {
     pub open_paren: t::LParen,
     pub base: Box<Type>,
-    pub as_token: t::Word,
+    pub as_token: t::As,
     pub interface: Box<Type>,
     pub close_paren: t::RParen,
     pub dot: t::Dot,

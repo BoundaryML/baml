@@ -27,7 +27,7 @@ use crate::baml_bridge::cffi::{
     BamlTyEnumVariant, BamlTyFunction, BamlTyFunctionParam, BamlTyFunctionParamMode, BamlTyFuture,
     BamlTyInterface, BamlTyList, BamlTyLiteral, BamlTyMap, BamlTyMediaKind, BamlTyOptional,
     BamlTyPrimitive, BamlTyPrimitiveKind, BamlTyTypeAlias, BamlTyTypeVar, BamlTyUnion,
-    BamlTyWatchAccessor, baml_ty::Ty as TyVariant, baml_ty_literal::Literal as TyLiteralVariant,
+    baml_ty::Ty as TyVariant, baml_ty_literal::Literal as TyLiteralVariant,
 };
 
 /// Encode a `RuntimeTy` into a wire `BamlTy`.
@@ -161,11 +161,6 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
             error: Some(Box::new(runtime_ty_to_proto_ty(error))),
         })),
-        RuntimeTy::WatchAccessor(inner, _) => {
-            TyVariant::WatchAccessor(Box::new(BamlTyWatchAccessor {
-                inner: Some(Box::new(runtime_ty_to_proto_ty(inner))),
-            }))
-        }
         RuntimeTy::TypeVar(name, _) => TyVariant::TypeVar(BamlTyTypeVar {
             name: name.as_str().to_string(),
         }),

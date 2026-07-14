@@ -621,6 +621,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
+ "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
  "sha1",
@@ -994,6 +995,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_workspace",
+ "bitflags 2.11.1",
  "indexmap",
  "insta",
  "rowan 0.16.1",
@@ -1014,6 +1016,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "salsa",
  "syn 2.0.117",
  "text-size",
  "walkdir",
@@ -1050,6 +1053,7 @@ dependencies = [
  "sys_native",
  "sys_ops",
  "sys_types",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
  "tower-http",
@@ -1356,6 +1360,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sys_native",
  "sys_ops",
  "sys_types",
  "text-size",
@@ -1363,6 +1368,7 @@ dependencies = [
  "tokio",
  "tracing",
  "vfs",
+ "walkdir",
  "wasm-bindgen-futures",
 ]
 
@@ -2997,7 +3003,7 @@ dependencies = [
 
 [[package]]
 name = "forked_google_cloud_auth"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "base64",
@@ -7705,6 +7711,21 @@ dependencies = [
 [[package]]
 name = "tools_sccache"
 version = "0.1.0"
+
+[[package]]
+name = "tools_semantic_tokens"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "axum",
+ "baml_lsp2_actions",
+ "baml_lsp2_actions_tests",
+ "baml_project",
+ "clap",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "tower"

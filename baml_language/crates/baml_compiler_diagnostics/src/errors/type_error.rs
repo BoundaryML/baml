@@ -100,10 +100,6 @@ pub enum TypeError<C: ErrorContext> {
         variant_name: String,
         location: C::Location,
     },
-    /// Using $watch on a non-variable expression (e.g., `arr[0].$watch`).
-    WatchOnNonVariable { location: C::Location },
-    /// Using $watch on a variable not declared with `watch let`.
-    WatchOnUnwatchedVariable { name: String, location: C::Location },
     /// Function body has no return expression but requires a non-void return type.
     MissingReturnExpression {
         expected: C::Ty,

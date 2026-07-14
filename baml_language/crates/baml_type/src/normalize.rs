@@ -253,8 +253,8 @@ pub trait TypeContext {
     ///   the enum, and a custom `Equals` on `E` could equate distinct variants.
     /// - **An instantiation with a not-yet-resolved argument** (`Box<T>` for a
     ///   generic `T`, or an error sentinel): it could still resolve to match.
-    /// - Functions (not invariant — contravariant/covariant), watch accessors
-    ///   (identity), interfaces, bare type variables, and a bare `unknown`.
+    /// - Functions (not invariant — contravariant/covariant), interfaces, bare
+    ///   type variables, and a bare `unknown`.
     fn definitely_disjoint(&self, a: &Ty, b: &Ty) -> bool
     where
         Self: Sized,
@@ -387,7 +387,6 @@ enum Category {
     Enum,
     Function,
     Future,
-    WatchAccessor,
 }
 
 impl NormalTy {
@@ -415,7 +414,6 @@ impl NormalTy {
             NormalTy::Enum(_) | NormalTy::EnumVariant(..) => Category::Enum,
             NormalTy::Function { .. } => Category::Function,
             NormalTy::Future(..) => Category::Future,
-            NormalTy::WatchAccessor(_) => Category::WatchAccessor,
             // Not a ground concrete head — nothing provable.
             NormalTy::Interface(..)
             | NormalTy::Union(_)
@@ -470,9 +468,7 @@ impl NormalTy {
             | NormalTy::Never
             // A μ-bound recursion variable refers to its enclosing (ground) μ-type.
             | NormalTy::RecVar(_) => true,
-            NormalTy::List(inner)
-            | NormalTy::WatchAccessor(inner)
-            | NormalTy::Mu { body: inner, .. } => inner.is_ground(),
+            NormalTy::List(inner) | NormalTy::Mu { body: inner, .. } => inner.is_ground(),
             NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
                 key.is_ground() && value.is_ground()
             }
@@ -523,10 +519,8 @@ impl NormalTy {
             }
 
             // Functions are *not* invariant (contravariant args, covariant
-            // return/throws), and watch accessors compare by identity — neither is
-            // provably disjoint from another of its kind here.
-            (NormalTy::Function { .. }, NormalTy::Function { .. })
-            | (NormalTy::WatchAccessor(_), NormalTy::WatchAccessor(_)) => false,
+            // return/throws), so they are not provably disjoint here.
+            (NormalTy::Function { .. }, NormalTy::Function { .. }) => false,
 
             // A value's `eq` dispatches on its enum, so only *different* enums are
             // disjoint — a custom (or later-added) `Equals` on one enum could
@@ -632,7 +626,6 @@ enum NormalTy {
         throws: Box<NormalTy>,
     },
     Future(Box<NormalTy>, Box<NormalTy>),
-    WatchAccessor(Box<NormalTy>),
     AssociatedTypeProjection {
         base: Box<NormalTy>,
         interface: Option<Box<NormalTy>>,
@@ -766,9 +759,6 @@ impl NormalTy {
                 Box::new(Self::from_ty(value, ctx, expanding, fuel)),
                 Box::new(Self::from_ty(error, ctx, expanding, fuel)),
             ),
-            Ty::WatchAccessor(inner, _) => {
-                NormalTy::WatchAccessor(Box::new(Self::from_ty(inner, ctx, expanding, fuel)))
-            }
             Ty::TypeVar(name, _) => NormalTy::TypeVar(name.clone()),
             Ty::AssociatedTypeProjection {
                 base,
@@ -853,7 +843,7 @@ impl NormalTy {
                 args.iter().any(|a| a.mentions_rec_var(var))
                     || bindings.iter().any(|(_, t)| t.mentions_rec_var(var))
             }
-            NormalTy::List(inner) | NormalTy::WatchAccessor(inner) => inner.mentions_rec_var(var),
+            NormalTy::List(inner) => inner.mentions_rec_var(var),
             NormalTy::Map { key, value } => {
                 key.mentions_rec_var(var) || value.mentions_rec_var(var)
             }
@@ -931,9 +921,6 @@ impl NormalTy {
                 Box::new(value.canonicalize(ctx)),
                 Box::new(error.canonicalize(ctx)),
             ),
-            NormalTy::WatchAccessor(inner) => {
-                NormalTy::WatchAccessor(Box::new(inner.canonicalize(ctx)))
-            }
             NormalTy::AssociatedTypeProjection {
                 base,
                 interface,
@@ -1217,15 +1204,11 @@ impl NormalTy {
                     && v1.invariant_compatible(v2, ctx, assumptions)
             }
 
-            // Future/WatchAccessor are invariant containers.
+            // Future is an invariant container.
             (NormalTy::Future(v1, e1), NormalTy::Future(v2, e2)) => {
                 v1.invariant_compatible(v2, ctx, assumptions)
                     && e1.invariant_compatible(e2, ctx, assumptions)
             }
-            (NormalTy::WatchAccessor(a), NormalTy::WatchAccessor(b)) => {
-                a.invariant_compatible(b, ctx, assumptions)
-            }
-
             // Literal types are subtypes of their (same-representation) base only.
             (NormalTy::Literal(Literal::Int(_)), NormalTy::Int) => true,
             (NormalTy::Literal(Literal::Bigint(_)), NormalTy::Bigint) => true,
@@ -1322,7 +1305,6 @@ impl NormalTy {
             NormalTy::Future(value, error) => {
                 Ty::Future(Box::new(value.into_ty()), Box::new(error.into_ty()), attr)
             }
-            NormalTy::WatchAccessor(inner) => Ty::WatchAccessor(Box::new(inner.into_ty()), attr),
             NormalTy::AssociatedTypeProjection {
                 base,
                 interface,
@@ -1526,9 +1508,6 @@ impl NormalTy {
                     .collect(),
             ),
             NormalTy::List(inner) => NormalTy::List(Box::new(inner.substitute(var, replacement))),
-            NormalTy::WatchAccessor(inner) => {
-                NormalTy::WatchAccessor(Box::new(inner.substitute(var, replacement)))
-            }
             NormalTy::Map { key, value } => NormalTy::Map {
                 key: Box::new(key.substitute(var, replacement)),
                 value: Box::new(value.substitute(var, replacement)),

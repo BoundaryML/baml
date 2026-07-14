@@ -186,8 +186,8 @@ fn record_installed_commit(commit: &str) {
 
 /// Installs with no commit identity (custom `--from` sources, or a default
 /// archive whose pax header carried no commit) drop any previously recorded
-/// provenance so the wrapper doesn't report the installed content as up to
-/// date with (or behind) the official skill repo.
+/// provenance so the passive skill check doesn't report the installed content
+/// as up to date with (or behind) the official skill repo.
 fn clear_installed_commit() {
     if let Err(err) = baml_release::skills::clear_skills_state(&baml_release::skills::state_path())
     {
@@ -458,6 +458,16 @@ fn normalize_skills(raw: Vec<RawSkill>) -> Result<Vec<Skill>> {
 
     let mut found = BTreeMap::<String, RawSkill>::new();
     for skill in raw {
+        // The archive directory lives inside the skills directory, so a
+        // skill claiming its name would collide with it on replacement
+        // (renaming skills/baml-old_skills into its own archive slot).
+        if skill.name == OLD_SKILLS_DIR {
+            anyhow::bail!(
+                "BAML agent skills source contains a skill named `{OLD_SKILLS_DIR}` at {}; \
+                 that name is reserved for archived previous skill versions",
+                skill.source_path.display()
+            );
+        }
         if let Some(previous) = found.insert(skill.name.clone(), skill) {
             anyhow::bail!(
                 "BAML agent skills source contains duplicate skill `{}` at {}",
@@ -644,16 +654,37 @@ fn install_skills_to(root: &Path, relative_skills_dir: PathBuf, skills: &[Skill]
     }
 }
 
+/// Directory (inside each skills dir) where the previous version of a skill
+/// is kept when an install replaces it. One slot per skill: each install
+/// overwrites the slot with the version it just replaced. The name doesn't
+/// clash with real skills because archived copies sit one level deeper than
+/// the `<skills>/<name>/SKILL.md` layout agent harnesses discover.
+const OLD_SKILLS_DIR: &str = "baml-old_skills";
+
 fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, skill: &Skill) -> Result<()> {
     let final_dir = skills_dir.join(&skill.name);
     let next_dir = tmp_dir.join(&skill.name);
-    let backup_dir = unique_backup_dir(skills_dir, &skill.name)?;
-    let mut has_backup = false;
+    let mut archive = None;
 
     if final_dir.exists() {
-        fs::rename(&final_dir, &backup_dir)
-            .with_context(|| format!("failed to stage existing {}", final_dir.display()))?;
-        has_backup = true;
+        let archive_dir = skills_dir.join(OLD_SKILLS_DIR).join(&skill.name);
+        if archive_dir.exists() {
+            fs::remove_dir_all(&archive_dir).with_context(|| {
+                format!("failed to clear old-skill slot {}", archive_dir.display())
+            })?;
+        }
+        if let Some(parent) = archive_dir.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create {}", parent.display()))?;
+        }
+        fs::rename(&final_dir, &archive_dir).with_context(|| {
+            format!(
+                "failed to archive existing {} into {}",
+                final_dir.display(),
+                archive_dir.display()
+            )
+        })?;
+        archive = Some(archive_dir);
     }
 
     if let Err(err) = fs::rename(&next_dir, &final_dir) {
@@ -662,18 +693,18 @@ fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, skill: &Skill) -> Result
             skill.name,
             final_dir.display()
         ));
-        if has_backup {
+        if let Some(archive_dir) = archive {
             if final_dir.exists() {
                 error = error.context(format!(
                     "previous {} skill remains at {}",
                     skill.name,
-                    backup_dir.display()
+                    archive_dir.display()
                 ));
-            } else if let Err(restore_err) = fs::rename(&backup_dir, &final_dir) {
+            } else if let Err(restore_err) = fs::rename(&archive_dir, &final_dir) {
                 error = error.context(format!(
                     "failed to restore previous {} skill from {} to {}: {restore_err}",
                     skill.name,
-                    backup_dir.display(),
+                    archive_dir.display(),
                     final_dir.display()
                 ));
             }
@@ -681,25 +712,7 @@ fn replace_skill_dir(skills_dir: &Path, tmp_dir: &Path, skill: &Skill) -> Result
         return Err(error);
     }
 
-    if has_backup {
-        fs::remove_dir_all(&backup_dir)
-            .with_context(|| format!("failed to remove backup {}", backup_dir.display()))?;
-    }
-
     Ok(())
-}
-
-fn unique_backup_dir(skills_dir: &Path, skill_name: &str) -> Result<PathBuf> {
-    for attempt in 0..1000 {
-        let backup_dir = skills_dir.join(format!(
-            ".baml-agent-install-backup-{}-{skill_name}-{attempt}",
-            std::process::id()
-        ));
-        if !backup_dir.exists() {
-            return Ok(backup_dir);
-        }
-    }
-    anyhow::bail!("failed to find available backup directory for {skill_name}");
 }
 
 fn write_atomic(path: &Path, content: &str) -> Result<()> {
@@ -728,7 +741,7 @@ fn write_atomic(path: &Path, content: &str) -> Result<()> {
 /// The summary string (without a trailing newline).
 fn success_message(root: &Path) -> String {
     format!(
-        "Installed BAML agent skills in {}\n\nClaude Code:\n  .claude/skills/baml-*/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-*/SKILL.md\n\nNote: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core').\n\nRestart any already-running agent session to pick them up.",
+        "Installed BAML agent skills in {}\n\nClaude Code:\n  .claude/skills/baml-*/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-*/SKILL.md\n\nNote: skill names are prefixed with 'baml-' on install to avoid registry collisions (e.g. upstream 'core' becomes 'baml-core'). Replaced skills are kept in baml-old_skills/ next to the new ones.\n\nRestart any already-running agent session to pick them up.",
         root.display()
     )
 }
@@ -873,15 +886,77 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(unrelated).unwrap(), "keep");
         assert!(root.join(".claude/skills/baml-bridges/SKILL.md").is_file());
-        assert!(
-            fs::read_dir(root.join(".agents/skills"))
-                .unwrap()
-                .all(|entry| !entry
-                    .unwrap()
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(".baml-agent-install-backup-"))
+        // The replaced skill is archived, not deleted.
+        assert_eq!(
+            fs::read_to_string(root.join(".agents/skills/baml-old_skills/baml-core/SKILL.md"))
+                .unwrap(),
+            "stale"
         );
+        // A skill that wasn't previously installed leaves no archive slot.
+        assert!(
+            !root
+                .join(".agents/skills/baml-old_skills/baml-bridges")
+                .exists()
+        );
+    }
+
+    #[test]
+    fn reserved_archive_name_is_rejected_in_direct_layout() {
+        let content = skill("baml-old_skills");
+        let archive = make_archive(&[("skills/baml-old_skills/SKILL.md", content.as_str())]);
+
+        let err = format!("{:#}", skills_from_archive(&archive).unwrap_err());
+        assert!(
+            err.contains("reserved for archived previous skill versions"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn reserved_archive_name_is_rejected_in_legacy_layout() {
+        // Legacy `old_skills` gets the baml- prefix and would land exactly on
+        // the archive directory name.
+        let content = "---\nname: old_skills\ndescription: test\n---\n# old\n";
+        let archive = make_archive(&[("plugins/baml/skills/old_skills/SKILL.md", content)]);
+
+        let err = format!("{:#}", skills_from_archive(&archive).unwrap_err());
+        assert!(
+            err.contains("reserved for archived previous skill versions"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn old_skill_archive_keeps_only_the_previous_version() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let install = |content: &str| {
+            install_skills(
+                root,
+                &[Skill {
+                    name: "baml-core".to_string(),
+                    content: content.to_string(),
+                }],
+            )
+            .unwrap();
+        };
+
+        install("v1");
+        install("v2");
+        install("v3");
+
+        for skills_dir in [".agents/skills", ".claude/skills"] {
+            let dir = root.join(skills_dir);
+            assert_eq!(
+                fs::read_to_string(dir.join("baml-core/SKILL.md")).unwrap(),
+                "v3"
+            );
+            // Single slot: only the immediately-previous version is kept.
+            assert_eq!(
+                fs::read_to_string(dir.join("baml-old_skills/baml-core/SKILL.md")).unwrap(),
+                "v2"
+            );
+        }
     }
 
     #[test]

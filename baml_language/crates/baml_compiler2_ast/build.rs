@@ -21,6 +21,7 @@ fn main() {
     let client_option_fields = extract_class_fields(&source, "PrimitiveClientOptions");
     let provider_configs = extract_provider_configs(&source);
     let no_options_providers = extract_no_options_providers(&source);
+    assert_google_vertex_options_match(&source);
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     let out_path = format!("{out_dir}/client_fields_generated.rs");
@@ -102,8 +103,41 @@ struct ProviderConfig {
     fields: Vec<String>,
 }
 
+/// Keep the Vertex-compatible portion of `GoogleAiOptions` synchronized with
+/// `VertexAiOptions`. `enterprise` is the only Google-only field.
+///
+/// This check intentionally compares both field order and type spelling: the
+/// lowering code constructs provider option objects positionally in schema
+/// order, and `sys_llm` projects Google options into the generated Vertex type.
+fn assert_google_vertex_options_match(source: &str) {
+    let google = extract_class_shape(source, "GoogleAiOptions");
+    let vertex = extract_class_shape(source, "VertexAiOptions");
+
+    let enterprise = google
+        .first()
+        .unwrap_or_else(|| panic!("GoogleAiOptions must declare enterprise as its first field"));
+    assert_eq!(
+        enterprise,
+        &("enterprise".to_string(), "bool | null".to_string()),
+        "GoogleAiOptions.enterprise must have type `bool | null`"
+    );
+    assert_eq!(
+        &google[1..],
+        vertex.as_slice(),
+        "GoogleAiOptions fields after `enterprise` must exactly match VertexAiOptions"
+    );
+}
+
 /// Extract field names from a BAML class definition.
 fn extract_class_fields(source: &str, class_name: &str) -> Vec<String> {
+    extract_class_shape(source, class_name)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect()
+}
+
+/// Extract top-level `(field name, type)` pairs from a BAML class definition.
+fn extract_class_shape(source: &str, class_name: &str) -> Vec<(String, String)> {
     let marker = format!("class {class_name} {{");
     let Some(start) = source.find(&marker) else {
         panic!("class {class_name} not found in {LLM_TYPES_BAML}");
@@ -129,12 +163,12 @@ fn extract_class_fields(source: &str, class_name: &str) -> Vec<String> {
             continue;
         }
         // Field line: first word is the field name
-        if let Some(name) = code.split_whitespace().next() {
+        if let Some((name, field_type)) = code.split_once(char::is_whitespace) {
             // Skip keywords
             if name == "class" || name == "}" || name == "{" {
                 continue;
             }
-            fields.push(name.to_string());
+            fields.push((name.to_string(), field_type.trim().to_string()));
         }
     }
     fields

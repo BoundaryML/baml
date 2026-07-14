@@ -52,6 +52,14 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
             | SyntaxKind::KW_INTERFACE
             | SyntaxKind::KW_EXTENDS
             | SyntaxKind::KW_REQUIRES
+            // Contextual keywords re-lexed from a `Word`: still lower by text
+            // (the literal/identifier arms below switch on the text), so they
+            // must read as ident tokens just as they did when they were `Word`.
+            | SyntaxKind::KW_AS
+            | SyntaxKind::KW_TYPE
+            | SyntaxKind::KW_TRUE
+            | SyntaxKind::KW_FALSE
+            | SyntaxKind::KW_NULL
     )
 }
 
@@ -655,8 +663,7 @@ impl LoweringContext {
             match element {
                 BlockElement::Stmt(node) => {
                     let stmt_id = match node.kind() {
-                        SyntaxKind::LET_STMT => self.lower_let_stmt(node, false),
-                        SyntaxKind::WATCH_LET => self.lower_let_stmt(node, true),
+                        SyntaxKind::LET_STMT => self.lower_let_stmt(node),
                         SyntaxKind::RETURN_STMT => self.lower_return_stmt(node),
                         SyntaxKind::THROW_STMT => self.lower_throw_stmt(node),
                         SyntaxKind::WHILE_STMT => self.lower_while_stmt(node),
@@ -3095,7 +3102,6 @@ impl LoweringContext {
             Stmt::Let {
                 pattern: acc_pat,
                 initializer: Some(empty_init),
-                is_watched: false,
                 origin: LetOrigin::Source,
                 else_branch: None,
             },
@@ -3232,7 +3238,6 @@ impl LoweringContext {
             Stmt::Let {
                 pattern: acc_pat,
                 initializer: Some(empty_init),
-                is_watched: false,
                 origin: LetOrigin::Source,
                 else_branch: None,
             },
@@ -3310,7 +3315,6 @@ impl LoweringContext {
             Stmt::Let {
                 pattern: acc_pat,
                 initializer: Some(empty_init),
-                is_watched: false,
                 origin: LetOrigin::Source,
                 else_branch: None,
             },
@@ -3540,7 +3544,6 @@ impl LoweringContext {
             Stmt::Let {
                 pattern: cur_pat,
                 initializer: Some(cur_init),
-                is_watched: false,
                 origin: LetOrigin::Source,
                 else_branch: None,
             },
@@ -3751,7 +3754,6 @@ impl LoweringContext {
             Stmt::Let {
                 pattern: pat,
                 initializer: Some(empty),
-                is_watched: false,
                 origin: LetOrigin::Source,
                 else_branch: None,
             },
@@ -3902,7 +3904,7 @@ impl LoweringContext {
             let init_node = child_nodes
                 .iter()
                 .find(|n| n.kind() == SyntaxKind::LET_STMT)?;
-            let init = self.lower_let_stmt(init_node, false);
+            let init = self.lower_let_stmt(init_node);
             // The remaining expression nodes, in order, are [cond, step].
             let expr_nodes: Vec<&SyntaxNode> = child_nodes
                 .iter()
@@ -4418,9 +4420,9 @@ impl LoweringContext {
         }
     }
 
-    fn lower_let_stmt(&mut self, node: &SyntaxNode, is_watched: bool) -> StmtId {
+    fn lower_let_stmt(&mut self, node: &SyntaxNode) -> StmtId {
         // LET_STMT shape (post-pattern-rewrite):
-        //   KW_WATCH? (KW_LET|KW_CONST)? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
+        //   (KW_LET|KW_CONST)? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
         //
         // The pattern carries its own `: T` narrow as a Chain link, so all we
         // do here is locate the PATTERN child, the initialiser child, and an
@@ -4463,19 +4465,11 @@ impl LoweringContext {
 
         self.check_pattern_void_in_annotation(pattern, "a let binding annotation");
 
-        let origin = if is_watched {
-            // TODO: Handle watched let statements
-            LetOrigin::Source
-        } else {
-            LetOrigin::Source
-        };
-
         self.alloc_stmt(
             Stmt::Let {
                 pattern,
                 initializer,
-                is_watched,
-                origin,
+                origin: LetOrigin::Source,
                 else_branch,
             },
             node.span_range(),
@@ -4761,7 +4755,7 @@ impl LoweringContext {
 
         // Lower the initializer as a Let statement.
         let init_stmt = if let Some(let_node) = init_node {
-            self.lower_let_stmt(&let_node, false)
+            self.lower_let_stmt(&let_node)
         } else {
             self.alloc_stmt(Stmt::Missing, range)
         };

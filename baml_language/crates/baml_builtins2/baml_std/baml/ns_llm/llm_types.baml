@@ -511,7 +511,7 @@ class Client {
 // if it has provider-specific options).
 // ---------------------------------------------------------------------------
 
-// @providers-no-options: openai, openai-generic, openai-responses, ai-gateway-images, ollama, openrouter, google-ai, fallback, round-robin
+// @providers-no-options: openai, openai-generic, openai-responses, ai-gateway-images, ollama, openrouter, fallback, round-robin
 
 class MediaUrlHandler {
   image string | null
@@ -531,7 +531,7 @@ class PrimitiveClientOptions {
   allowed_roles string[] | null
   remap_roles map<string, string> | null
   api_key string | null
-  provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | VertexAiOptions | null
+  provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | GoogleAiOptions | VertexAiOptions | null
   media_url_handler MediaUrlHandler | null
 
   // request stuff here
@@ -555,10 +555,33 @@ class AnthropicOptions {
   max_tokens int | null
 }
 
+// @providers: google-ai
+/// Provider-specific options for `google-ai` clients.
+///
+/// The Google Cloud fields are ignored while the client uses the Gemini API.
+/// When `enterprise` or a `GOOGLE_GENAI_USE_*` environment flag selects the
+/// Vertex backend, they have exactly the same meaning as on `VertexAiOptions`.
+class GoogleAiOptions {
+  /// Route this client through the Gemini Enterprise backend, an alias for
+  /// Vertex AI (google-genai's `GOOGLE_GENAI_USE_ENTERPRISE`). Uses Google
+  /// Cloud credentials (ADC), and an unset location defaults to `global`.
+  /// Equivalent to setting `GOOGLE_GENAI_USE_ENTERPRISE=true`.
+  enterprise bool | null
+  credentials string | null
+  credentials_content string | null
+  location string | null
+  project_id string | null
+}
+
 // @providers: vertex-ai
 /// Provider-specific options for `vertex-ai` clients.
 class VertexAiOptions {
+  /// Path to a Google credential JSON file (service account, authorized user,
+  /// workload identity federation, or impersonated service account). Inline
+  /// JSON is not supported here; use `credentials_content` for inline
+  /// credentials. When neither is set, Application Default Credentials apply.
   credentials string | null
+  /// Inline credential JSON string. Used when `credentials` is not set.
   credentials_content string | null
   location string | null
   project_id string | null
