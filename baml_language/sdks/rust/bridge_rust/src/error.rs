@@ -24,8 +24,10 @@ pub enum Error<E = Infallible> {
     /// A value thrown by BAML code, decoded as the function's declared
     /// `throws` type.
     Thrown {
-        /// The thrown BAML value.
-        value: E,
+        /// The thrown BAML value. Boxed so a large user error class
+        /// doesn't inflate every generated function's `Result` — the Ok
+        /// path never pays for the throw payload's size.
+        value: Box<E>,
         /// BAML stack-trace lines, outermost first.
         trace: Vec<String>,
     },

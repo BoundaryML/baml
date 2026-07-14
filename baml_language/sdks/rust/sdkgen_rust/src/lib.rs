@@ -39,6 +39,7 @@ mod emit;
 mod idents;
 mod routing;
 mod translate_ty;
+mod unions;
 
 /// Caller-provided knobs for the generated crate.
 pub struct RustGenOptions {
@@ -155,6 +156,7 @@ pub fn to_source_code_with_bytecode(
     );
 
     let (analysis, mut warnings) = analyze::analyze(pool);
+    let union_registry = unions::collect(pool, &analysis);
 
     // Items per module path, keyed for a deterministic tree. Iterate the
     // pool in Name order so both output and warnings are stable. Placement
@@ -182,8 +184,11 @@ pub fn to_source_code_with_bytecode(
         };
         match symbol {
             Symbol::Function(function) => {
+                let leaf = placement(&analysis);
                 let ctx = translate_ty::TyCtx {
                     analysis: &analysis,
+                    unions: &union_registry,
+                    leaf: &leaf,
                     boxing_for: None,
                 };
                 match emit::function::emit(name, function, &ctx) {
@@ -191,6 +196,7 @@ pub fn to_source_code_with_bytecode(
                         .entry(placement(&analysis))
                         .or_default()
                         .push(LeafItem {
+                            rank: 0,
                             source_file_path: function.origin.source_file_path.clone(),
                             span_start: function.origin.span_start,
                             tokens,
@@ -203,8 +209,11 @@ pub fn to_source_code_with_bytecode(
                     // Skip warning already recorded by the analysis.
                     continue;
                 }
+                let leaf = placement(&analysis);
                 let ctx = translate_ty::TyCtx {
                     analysis: &analysis,
+                    unions: &union_registry,
+                    leaf: &leaf,
                     boxing_for: Some(name),
                 };
                 match emit::class::emit(name, class, &ctx) {
@@ -214,6 +223,7 @@ pub fn to_source_code_with_bytecode(
                             .entry(placement(&analysis))
                             .or_default()
                             .push(LeafItem {
+                                rank: 0,
                                 source_file_path: class.origin.source_file_path.clone(),
                                 span_start: class.origin.span_start,
                                 tokens,
@@ -227,6 +237,7 @@ pub fn to_source_code_with_bytecode(
                     .entry(placement(&analysis))
                     .or_default()
                     .push(LeafItem {
+                        rank: 0,
                         source_file_path: enum_.origin.source_file_path.clone(),
                         span_start: enum_.origin.span_start,
                         tokens: emit::enum_::emit(name, enum_),
@@ -237,8 +248,11 @@ pub fn to_source_code_with_bytecode(
                     // Skip warning already recorded by the analysis.
                     continue;
                 }
+                let leaf = placement(&analysis);
                 let ctx = translate_ty::TyCtx {
                     analysis: &analysis,
+                    unions: &union_registry,
+                    leaf: &leaf,
                     boxing_for: None,
                 };
                 match emit::type_alias::emit(name, alias, &ctx) {
@@ -246,6 +260,7 @@ pub fn to_source_code_with_bytecode(
                         .entry(placement(&analysis))
                         .or_default()
                         .push(LeafItem {
+                            rank: 0,
                             source_file_path: alias.origin.source_file_path.clone(),
                             span_start: alias.origin.span_start,
                             tokens,
@@ -253,6 +268,26 @@ pub fn to_source_code_with_bytecode(
                     Err(warning) => warnings.push(warning),
                 }
             }
+        }
+    }
+
+    // Synthesized union enums land after their leaf's own symbols, in
+    // shape order.
+    for (leaf, union_enum) in union_registry.iter() {
+        let ctx = translate_ty::TyCtx {
+            analysis: &analysis,
+            unions: &union_registry,
+            leaf,
+            boxing_for: None,
+        };
+        match emit::union::emit(union_enum, &ctx) {
+            Ok(tokens) => leaves.entry(leaf.clone()).or_default().push(LeafItem {
+                rank: 1,
+                source_file_path: union_enum.rust_name.clone(),
+                span_start: 0,
+                tokens,
+            }),
+            Err(warning) => warnings.push(warning),
         }
     }
 
@@ -296,7 +331,11 @@ pub fn to_source_code_with_bytecode(
 
     for (path, mut items) in leaves {
         items.sort_by(|a, b| {
-            (&a.source_file_path, a.span_start).cmp(&(&b.source_file_path, b.span_start))
+            (a.rank, &a.source_file_path, a.span_start).cmp(&(
+                b.rank,
+                &b.source_file_path,
+                b.span_start,
+            ))
         });
         let mod_decls: Vec<TokenStream> = children
             .get(&path)
@@ -348,6 +387,8 @@ pub fn to_source_code_with_bytecode(
 }
 
 struct LeafItem {
+    /// Synthesized items (union enums) sort after a leaf's own symbols.
+    rank: u8,
     source_file_path: String,
     span_start: u32,
     tokens: TokenStream,
@@ -491,6 +532,109 @@ mod tests {
                 span_start: 0,
             },
         }
+    }
+
+    fn unary_fn(n: &Name, arg_ty: Ty, return_type: Ty) -> Function {
+        let mut function = nullary_string_fn(n);
+        function
+            .arguments
+            .push(baml_codegen_types::FunctionArgument {
+                name: baml_base::Name::new("u"),
+                docstring: None,
+                ty: arg_ty,
+                default: None,
+            });
+        function.return_type = return_type;
+        function
+    }
+
+    #[test]
+    fn multi_arm_unions_synthesize_an_enum_with_from_and_into_params() {
+        let n = name("user", &[], "f");
+        let union = Ty::Union(vec![Ty::Int, Ty::String]);
+        let pool = SymbolPool::from([(
+            n.clone(),
+            Symbol::Function(unary_fn(&n, union.clone(), union)),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub enum IntOrString"), "{lib}");
+        assert!(
+            lib.contains("impl ::std::convert::From<::core::primitive::i64> for IntOrString"),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("u: impl ::std::convert::Into<crate::IntOrString>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn nullable_multi_arm_unions_wrap_the_enum_in_option() {
+        let n = name("user", &[], "f");
+        let union = Ty::Union(vec![Ty::Int, Ty::String, Ty::Null]);
+        let pool = SymbolPool::from([(
+            n.clone(),
+            Symbol::Function(unary_fn(&n, union.clone(), union)),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            lib.contains("::std::option::Option<crate::IntOrString>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn string_arm_with_string_literal_arm_skips_fail_closed() {
+        let n = name("user", &[], "f");
+        let union = Ty::Union(vec![
+            Ty::String,
+            Ty::Literal(baml_base::Literal::String("draft".to_string())),
+        ]);
+        let pool =
+            SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, union, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(generated.warnings.len(), 1);
+        assert!(
+            generated.warnings[0].reason.contains("indistinguishable"),
+            "{}",
+            generated.warnings[0].reason
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_union_boxes_the_enum_reference() {
+        let a = name("user", &[], "A");
+        let union_field = Ty::Union(vec![Ty::Class(a.clone(), Vec::new()), Ty::Int]);
+        let pool = SymbolPool::from([(
+            a.clone(),
+            Symbol::Class(baml_codegen_types::Class {
+                name: a,
+                generic_params: Vec::new(),
+                docstring: None,
+                properties: vec![baml_codegen_types::ClassProperty {
+                    name: baml_base::Name::new("x"),
+                    docstring: None,
+                    ty: union_field,
+                }],
+                static_methods: Vec::new(),
+                instance_methods: Vec::new(),
+                origin: Origin {
+                    source_file_path: "main.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            lib.contains("pub x: ::std::boxed::Box<crate::AOrInt>"),
+            "{lib}"
+        );
     }
 
     #[test]
