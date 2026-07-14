@@ -8,7 +8,6 @@ license.workspace = true
 [lib]
 name = "baml_rs"
 doc = false
-test = false
 doctest = false
 
 [features]
@@ -24,17 +23,19 @@ bex_project = { workspace = true }
 bridge_cffi = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true }
+sys_types = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
+num-bigint = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
-[[bin]]
-name = "stub_gen"
-path = "src/bin/stub_gen.rs"
-doc = false
-test = false
+[dev-dependencies]
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread", "macros" ] }
+
+[lints]
+workspace = true
 
 [package.metadata.ci]
 wasm_support = false

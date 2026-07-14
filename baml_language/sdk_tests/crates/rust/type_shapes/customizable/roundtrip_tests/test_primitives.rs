@@ -64,7 +64,7 @@ fn test_round_trip_float_accepts_int() {
     // API instead so the wire-level intent (int out, float back) is
     // preserved. PROVISIONAL: the exact runtime/wire API shape below is
     // speculative and may need fixups when this file is flipped on.
-    let result = baml_rs::runtime::invoke_sync::<f64, baml_rs::NeverThrows>(
+    let result = baml_rs::runtime::invoke_sync::<f64, core::convert::Infallible>(
         "user.primitives.round_trip_float",
         [("x", baml_rs::wire::InboundValue::Int(7))],
     )
