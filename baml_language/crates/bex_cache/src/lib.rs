@@ -282,6 +282,33 @@ pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> C
     CacheKey(h.finalize().into())
 }
 
+/// Key for the cached `baml test --list` **discovery output** — the flattened,
+/// unfiltered test list (legacy function-attached tests + fully-expanded testset
+/// leaf names) that a `--list` invocation renders.
+///
+/// Derived deterministically from the Program blob's own key: the discovery
+/// output is a pure function of that Program (same sources + compiler build ⇒
+/// same tests), so it shares the Program's invalidation for free (Go model:
+/// different inputs → different program key → different discovery key → miss).
+/// The `b"test-discovery"` domain separator keeps it a distinct entry from the
+/// Program blob stored under that same program key, mirroring how the other
+/// derived entries ([`unit_key`], [`stdlib_interface_key`]) separate themselves
+/// from blobs that share their key inputs. A warm `--list` serves the rendered
+/// list from this entry and skips engine boot + in-VM discovery entirely.
+///
+/// The stored payload's typed form lives in the CLI (`borsh`-encoded opaque
+/// bytes, like the per-file diagnostics blob), so `bex_cache` does not depend on
+/// its shape; a change to that wire format is covered by [`FORMAT_VERSION`],
+/// which is folded into this key and the entry header.
+pub fn test_discovery_key(program_key: &[u8; 32]) -> CacheKey {
+    let mut h = Sha256::new();
+    h.update(MAGIC);
+    h.update(FORMAT_VERSION.to_le_bytes());
+    h.update(b"test-discovery");
+    h.update(program_key);
+    CacheKey(h.finalize().into())
+}
+
 /// Identity of the running compiler build: SHA-256 of the current executable's
 /// bytes, mixed with the stamped product version.
 ///
@@ -834,6 +861,60 @@ mod tests {
         // Sensitive to both keying inputs.
         assert_ne!(base, stdlib_interface_key(&[4u8; 32], 2), "fingerprint");
         assert_ne!(base, stdlib_interface_key(&fp, 0), "opt level");
+    }
+
+    #[test]
+    fn test_discovery_key_is_distinct_and_derived_from_program_key() {
+        let program_key = [5u8; 32];
+        let base = test_discovery_key(&program_key);
+
+        // Never collides with the Program blob or a sibling content-addressed
+        // entry keyed off the same bytes (distinct domain separators).
+        assert_ne!(
+            base.0, program_key,
+            "discovery key must not equal the raw program key"
+        );
+        assert_ne!(
+            base,
+            unit_key(&program_key),
+            "discovery key must not collide with a unit key over the same bytes"
+        );
+        // A different Program yields a different discovery entry.
+        assert_ne!(base, test_discovery_key(&[6u8; 32]), "program key");
+    }
+
+    #[test]
+    fn test_discovery_entry_roundtrips_and_rejects_corruption() {
+        // The discovery blob is stored via the payload-agnostic `store_raw` /
+        // `load_raw` seam (opaque CLI-owned bytes), so it inherits the same
+        // header + checksum integrity as every other entry.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cache = BytecodeCache::open(dir.path().to_path_buf());
+        let key = test_discovery_key(&[1u8; 32]);
+
+        assert!(cache.load_raw(&key).is_none(), "miss on empty cache");
+        let payload = b"opaque-discovery-bytes".to_vec();
+        cache.store_raw(&key, &payload).expect("store");
+        assert_eq!(cache.load_raw(&key).as_deref(), Some(payload.as_slice()));
+
+        // Corrupt one payload byte: checksum must reject, silently.
+        let path = cache.entry_path(&key);
+        let mut bytes = std::fs::read(&path).expect("read entry");
+        let last = bytes.len() - 1;
+        bytes[last] ^= 0xFF;
+        std::fs::write(&path, &bytes).expect("rewrite");
+        assert!(cache.load_raw(&key).is_none(), "corrupt discovery rejected");
+
+        // A stale format version is a silent miss too (the version-bump escape
+        // hatch): a discovery blob is only meaningful against a matching build.
+        cache.store_raw(&key, &payload).expect("re-store");
+        let mut bytes = std::fs::read(&path).expect("read entry");
+        bytes[4..8].copy_from_slice(&(FORMAT_VERSION - 1).to_le_bytes());
+        std::fs::write(&path, &bytes).expect("rewrite version");
+        assert!(
+            cache.load_raw(&key).is_none(),
+            "stale-version discovery rejected"
+        );
     }
 
     #[test]
