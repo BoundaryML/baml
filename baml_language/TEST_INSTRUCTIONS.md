@@ -71,6 +71,9 @@ UPDATE_EXPECT=1 cargo test --package baml_lsp2_actions_tests
 ### 7. Verify all tests pass
 
 ```bash
+# Library unit tests — always run these when Rust code changes
+cargo test --lib
+
 # Run all tests (can skip slow parser_stress with --skip parser_stress)
 cargo test --package baml_tests -- --skip parser_stress
 cargo test --package baml_lsp2_actions_tests
@@ -108,13 +111,13 @@ cargo insta review
 - **Type checking**: `crates/baml_compiler2_tir/src/builder.rs`
 
 
-DO NOT EDIT the diagnostics manually in baml_lsp2_actions_tests. Use update_expect=1
+DO NOT EDIT the diagnostics manually in baml_lsp2_actions_tests. Use UPDATE_EXPECT=1
 
 Find the base-case that makes syntax fail and add that to baml_test with a good name and good folder organization.
 
 A good place to start when given a diagnostic failure or some parser issue is to look at the snapshot test (create one if missing) and checking the .snap files for CST/HIR etc.
 
-BEFORE you run these lsp tests with update_expect, make sure to just run without it and figure out if the new results are what you expect.
+BEFORE you run these lsp tests with UPDATE_EXPECT, make sure to just run without it and figure out if the new results are what you expect.
 
 Just because the existing file may say 'no diagnostics expected' doesn't mean it is correct by the way. We haven't finished implementing all diagnostics. You have to see if we added some other comments elsewhere in the file to see what we should sort of expect, or just inspect the behavior manually.
 

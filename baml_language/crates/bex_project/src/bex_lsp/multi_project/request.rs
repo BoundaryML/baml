@@ -592,13 +592,19 @@ impl BexLspRequest for BexMulitProject {
                 // Use compiler2 usages_at — returns Vec<Location> (file + TextRange).
                 let usages = baml_lsp2_actions::usages_at(db, source_file, offset);
 
+                // Building a codec scans the whole target file for its line
+                // table; many usages land in the same file, so build one
+                // codec per distinct file, not per result.
+                let mut codecs = std::collections::HashMap::new();
                 usages
                     .into_iter()
                     .filter_map(|loc| {
                         let file_id = loc.file.file_id(db);
                         let path = db.file_id_to_path(file_id)?;
                         let target_uri = wasm_helpers::from_file_path(path).ok()?;
-                        let target_codec = PositionCodec::new(loc.file.text(db), encoding);
+                        let target_codec = codecs
+                            .entry(file_id)
+                            .or_insert_with(|| PositionCodec::new(loc.file.text(db), encoding));
                         let range = target_codec.byte_range_to_lsp(loc.range);
                         Some(lsp_types::Location {
                             uri: target_uri,
@@ -679,6 +685,10 @@ impl BexLspRequest for BexMulitProject {
             let source_files = lsp_db.get_source_files();
             let results = baml_lsp2_actions::search_symbols(lsp_db, &source_files, query);
 
+            // One codec per distinct file: a broad query matches many
+            // symbols in the same file, and codec construction scans the
+            // whole file for its line table.
+            let mut codecs = std::collections::HashMap::new();
             for sym in results {
                 let file_id = sym.file.file_id(lsp_db);
                 let Some(path) = lsp_db.file_id_to_path(file_id) else {
@@ -687,7 +697,9 @@ impl BexLspRequest for BexMulitProject {
                 let Ok(uri) = wasm_helpers::from_file_path(path) else {
                     continue;
                 };
-                let codec = PositionCodec::new(sym.file.text(lsp_db), encoding);
+                let codec = codecs
+                    .entry(file_id)
+                    .or_insert_with(|| PositionCodec::new(sym.file.text(lsp_db), encoding));
                 let range = codec.byte_range_to_lsp(sym.name_span);
 
                 symbols.push(lsp_types::WorkspaceSymbol {
