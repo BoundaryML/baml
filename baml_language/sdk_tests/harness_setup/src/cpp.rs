@@ -89,8 +89,14 @@ fn codegen_fixture(
 
     let pool = loaded.pool;
     let user_baml_files = loaded.user_baml_files;
+    let baml_bytecode = loaded.baml_bytecode;
     let codegen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        sdkgen_cpp::to_source_code(&pool, &user_baml_files, NamingConvention::PreserveCase)
+        sdkgen_cpp::to_source_code_with_bytecode(
+            &pool,
+            &user_baml_files,
+            &baml_bytecode,
+            NamingConvention::PreserveCase,
+        )
     }));
     match codegen_result {
         Ok(output) => {
@@ -116,7 +122,11 @@ fn codegen_fixture(
             }
         }
         Err(_) => {
-            diagnostics.record("codegen", fixture, "sdkgen_cpp::to_source_code panicked");
+            diagnostics.record(
+                "codegen",
+                fixture,
+                "sdkgen_cpp::to_source_code_with_bytecode panicked",
+            );
         }
     }
 
