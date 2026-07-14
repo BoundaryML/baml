@@ -13418,7 +13418,16 @@ impl LoweringContext<'_> {
                 }
 
                 self.builder.set_current_block(array_success);
-                let has_rest_test = rest.as_ref().and_then(|r| r.pat).is_some();
+                // A rest sub-pattern needs a test-phase slice projection only
+                // when it is refutable (e.g. a `: T` ascription link). Plain
+                // bindings and `.._` match unconditionally; bindings get
+                // their slice in the arm-binding phase instead, so testing
+                // here would just copy the middle twice.
+                let rest_test_pat = rest
+                    .as_ref()
+                    .and_then(|r| r.pat)
+                    .filter(|p| !self.is_irrefutable_catch_all(*p));
+                let has_rest_test = rest_test_pat.is_some();
                 let element_count = prefix.len() + suffix.len();
                 let has_nested_tests = element_count > 0 || has_rest_test;
                 let after_len = if has_nested_tests {
@@ -13477,9 +13486,7 @@ impl LoweringContext<'_> {
                     }
                 }
 
-                if let Some(rest) = rest
-                    && let Some(rest_pat) = rest.pat
-                {
+                if let Some(rest_pat) = rest_test_pat {
                     if let Some(rest_entry) = rest_entry {
                         self.builder.set_current_block(rest_entry);
                     }
@@ -13616,6 +13623,8 @@ impl LoweringContext<'_> {
                 }
                 if let Some(rest) = rest
                     && let Some(rest_pat) = rest.pat
+                    // Wildcard rests bind nothing; skip the slice copy.
+                    && !matches!(self.body.patterns[rest_pat], AstPattern::Wildcard)
                 {
                     let rest_local = self.project_array_pattern_rest(
                         scrutinee,
