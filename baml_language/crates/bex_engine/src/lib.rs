@@ -4111,6 +4111,28 @@ impl BexEngine {
                         ?future_id,
                         "spawn thread terminated with engine error"
                     );
+                    // The event loop settles the future itself on the VM-error
+                    // paths (`InternalError` / `TracedInternalError` /
+                    // unhandled-throw arms), but an `EngineError` escaping
+                    // through any other `?` in the loop arrives here with the
+                    // future still `Pending` — and an unsettled future parks
+                    // every awaiter forever (the parent, its parent, …). This
+                    // arm is the single choke point that restores the
+                    // propagation chain: settle the future with the engine
+                    // error so the awaiter re-raises it, *its* terminal path
+                    // settles the next future up, and the root surfaces the
+                    // original error to the host. The thread's own permit died
+                    // with the event loop, so settle under a fresh rootless
+                    // permit (`()` roots nothing; the future entry itself
+                    // roots the heap object).
+                    let admin = engine.heap_permit_manager.new_permit(()).await;
+                    let active = admin.acquire().await;
+                    engine
+                        .futures
+                        .acquire(active.proof())
+                        .await
+                        .settle_spawn_engine_error(future_id, err);
+                    child_cancel.cancel();
                 }
             }
         };

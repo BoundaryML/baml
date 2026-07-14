@@ -832,13 +832,21 @@ pub fn tir2_to_template(
             }),
         // FIXME(typevar-templates): `Self` is the one type variable that may
         // legitimately survive to a template (it is a real, if unresolved,
-        // reference to the concrete implementor type). It maps to `Wildcard` as
-        // a temporary bandaid — correct for a top-level `x is Self` (emits
-        // `false`), but it OVER-MATCHES in a nested position (`Foo<Self>`), where
-        // the guard treats `Wildcard` as "any". Give `Self` a real frame slot so
-        // it lowers to a `TypeArgRef` (interface default-method / class-body
-        // work) and delete this arm.
-        Tir2Ty::TypeVar(name, _) if name == "Self" => TyTemplate::Wildcard,
+        // reference to the concrete implementor type). It has no frame slot in
+        // the current calling model, so a materialization position demotes it
+        // to the realized top type `unknown` — the same honest reflection an
+        // unspecialized generic slot gets (the out-of-range `TypeArgRef` rule
+        // in `TyTemplate::substitute`), decided and documented here at compile
+        // time rather than smuggled through a `Wildcard` hole for the runtime
+        // to erase (a hole has no concrete form, so `substitute` rejects it as
+        // an internal error). Dispatch-guard positions never reach this arm:
+        // `tir2_to_dispatch_guard_template` intercepts every `TypeVar` before
+        // delegating here, and there `Self` stays a `Wildcard` hole (matching
+        // "any" — over-matching in nested positions like `Foo<Self>`). Give
+        // `Self` a real frame slot so it lowers to a `TypeArgRef` (interface
+        // default-method / class-body work), fix the guard over-match with the
+        // same slot, and delete this arm.
+        Tir2Ty::TypeVar(name, _) if name == "Self" => realized_leaf_template(&RuntimeTy::unknown()),
         Tir2Ty::TypeVar(name, _) => {
             let Some(n) = generic_params.iter().position(|p| p == name) else {
                 // A non-`Self` type variable with no frame position is a defect:
