@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-interface Entry {
-  authors: string[];
-  body: string;
+// List item shape the server component passes in — deliberately body-free
+// (bodies dwarf the rest of the feed; the article view fetches its own).
+export interface ChangelogListEntry {
   date: string;
+  lede: string;
   title: string;
   version: string;
 }
@@ -19,24 +20,6 @@ function formatDate(iso: string): string {
     timeZone: 'UTC',
     year: 'numeric',
   });
-}
-
-// First paragraph of the markdown body, flattened to plain text, for the list
-// preview. Strips fenced code, headings, list markers, and inline markdown.
-function lede(body: string): string {
-  const withoutCode = body.replace(/```[\s\S]*?```/g, '');
-  const para =
-    withoutCode
-      .split(/\n\s*\n/)
-      .map((p) => p.trim())
-      .find((p) => p && !p.startsWith('#')) ?? '';
-  return para
-    .replace(/^[#>\-*\s]+/, '')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 // ---- release channels --------------------------------------------------------
@@ -135,20 +118,38 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function Article({ entry, onBack }: { entry: Entry; onBack: () => void }) {
+function Article({
+  entry,
+  onBack,
+}: {
+  entry: ChangelogListEntry;
+  onBack: () => void;
+}) {
+  const [authors, setAuthors] = useState<string[]>([]);
   const [html, setHtml] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
+  // The list payload has no bodies, so fetch this release's full entry, then
+  // render its markdown. Shiki failures degrade to escaped plain text.
   useEffect(() => {
     let alive = true;
-    getRenderer()
-      .then((render) => render(entry.body))
-      .then((h) => alive && setHtml(h))
-      // If shiki ever fails, degrade to escaped plain text rather than blow up.
-      .catch(() => alive && setHtml(`<pre>${escapeHtml(entry.body)}</pre>`));
+    fetch(`/api/changelog-feed/entries/${encodeURIComponent(entry.version)}`)
+      .then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error('bad status')),
+      )
+      .then(async (full: { authors: string[]; body: string }) => {
+        if (!alive) return;
+        setAuthors(full.authors ?? []);
+        const h = await getRenderer()
+          .then((render) => render(full.body))
+          .catch(() => `<pre>${escapeHtml(full.body)}</pre>`);
+        if (alive) setHtml(h);
+      })
+      .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
     };
-  }, [entry.body]);
+  }, [entry.version]);
 
   return (
     <article>
@@ -168,37 +169,32 @@ function Article({ entry, onBack }: { entry: Entry; onBack: () => void }) {
       </p>
       <h1 className="chlog-article-title">{entry.title}</h1>
 
-      {html === null ? (
+      {failed ? (
+        <p style={{ color: '#6b6456' }}>
+          Could not load this release. Please try again.
+        </p>
+      ) : html === null ? (
         <p style={{ color: '#6b6456' }}>Loading…</p>
       ) : (
         // eslint-disable-next-line react/no-danger
         <div className="chlog-md" dangerouslySetInnerHTML={{ __html: html }} />
       )}
 
-      {entry.authors.length > 0 && (
-        <p className="chlog-authors">By {entry.authors.join(', ')}</p>
+      {authors.length > 0 && (
+        <p className="chlog-authors">By {authors.join(', ')}</p>
       )}
     </article>
   );
 }
 
-export function ChangelogList() {
-  const [entries, setEntries] = useState<Entry[] | null>(null);
+export function ChangelogList({
+  entries,
+}: {
+  entries: ChangelogListEntry[];
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   // Default the view to the Canary channel (the recommended channel).
   const [filter, setFilter] = useState<string | null>('canary');
-
-  // Load entries from the same-origin edge proxy (see next.config.mjs rewrites).
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/changelog-feed/entries')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad status'))))
-      .then((d: { entries?: Entry[] }) => alive && setEntries(d.entries ?? []))
-      .catch(() => alive && setEntries([]));
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   // Selected article is driven by the `?v=` query param so URLs are shareable
   // and the browser back button works — all client-side, page stays static.
@@ -224,10 +220,6 @@ export function ChangelogList() {
     window.history.pushState({}, '', '/changelog');
     setSelected(null);
   }, []);
-
-  if (entries === null) {
-    return <p style={{ color: '#6b6456' }}>Loading…</p>;
-  }
 
   const active = selected
     ? entries.find((e) => e.version === selected)
@@ -314,7 +306,7 @@ export function ChangelogList() {
                       {c.label}
                     </span>
                   </div>
-                  <p className="chlog-tl-lede">{lede(e.body)}</p>
+                  <p className="chlog-tl-lede">{e.lede}</p>
                   <button
                     type="button"
                     className="chlog-tl-read"
