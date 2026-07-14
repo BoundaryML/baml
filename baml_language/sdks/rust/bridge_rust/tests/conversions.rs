@@ -7,7 +7,7 @@
 
 use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
 
-use baml_rs::{
+use baml_bridge::{
     BamlValue, DecodeError, Error, Map, baml_value::internal::__BamlValuePrivate, decode, encode,
     runtime, wire,
 };

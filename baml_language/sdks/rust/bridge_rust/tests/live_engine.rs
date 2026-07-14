@@ -1,10 +1,10 @@
-//! End-to-end tests of the `baml_rs` call path against a live engine:
+//! End-to-end tests of the `baml_bridge` call path against a live engine:
 //! inline BAML source → compile → invoke → decode, exercising the same
 //! `bridge_cffi` / `bridge_ctypes` machinery a generated SDK composes.
 
 use std::{collections::HashMap, convert::Infallible, sync::OnceLock};
 
-use baml_rs::{BamlValue, BigInt, Error, OptionalArg, encode, runtime};
+use baml_bridge::{BamlValue, BigInt, Error, OptionalArg, encode, runtime};
 
 const BAML_SRC: &str = r#"
 function rt_int(x: int) -> int { x }
@@ -41,12 +41,12 @@ fn round_trip<T: BamlValue>(fqn: &str, value: &T) -> T {
 }
 
 trait ToBamlForTest {
-    fn to_baml(&self) -> baml_rs::wire::InboundValue;
+    fn to_baml(&self) -> baml_bridge::wire::InboundValue;
 }
 
 impl<T: BamlValue> ToBamlForTest for T {
-    fn to_baml(&self) -> baml_rs::wire::InboundValue {
-        baml_rs::baml_value::internal::__BamlValuePrivate::to_baml(self)
+    fn to_baml(&self) -> baml_bridge::wire::InboundValue {
+        baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(self)
     }
 }
 

@@ -2,7 +2,7 @@
 //!
 //! Consumes the language-agnostic [`baml_codegen_types::SymbolPool`] and
 //! emits a standalone Cargo crate — the generated `baml_sdk` — whose code
-//! links against the `bridge_rust` runtime crate (library name `baml_rs`).
+//! links against the `baml_bridge` runtime crate.
 //!
 //! The emitter surface mirrors `sdkgen_python_pydantic2` /
 //! `sdkgen_typescript_node`: one entry point returning a map of
@@ -10,7 +10,7 @@
 //! generated artifact is a complete Cargo *crate* (`Cargo.toml` + `src/`
 //! tree): a Rust SDK cannot exist as a bare source tree because it needs a
 //! manifest to carry its dependency on the runtime. Callers inject the
-//! `bridge_rust` dependency spec via [`RustGenOptions::baml_rs_dep`] — the
+//! `baml_bridge` dependency spec via [`RustGenOptions::runtime_dep`] — the
 //! CLI pins the release version, while `sdk_tests` uses a path dependency.
 //!
 //! The generated module tree mirrors the BAML namespace tree: one module
@@ -51,10 +51,10 @@ pub struct RustGenOptions {
     /// SDKs) regardless of the package name, so callers can de-collide
     /// package names without changing how user code imports the SDK.
     pub package_name: String,
-    /// Dependency spec for the `bridge_rust` runtime crate, verbatim TOML
+    /// Dependency spec for the `baml_bridge` runtime crate, verbatim TOML
     /// to the right of the `=`: e.g. `"1.2.3"` or
     /// `{ path = "../../sdks/rust/bridge_rust" }`.
-    pub baml_rs_dep: String,
+    pub runtime_dep: String,
     /// Extra TOML appended verbatim at the end of the generated
     /// `Cargo.toml`. Must only introduce new tables (TOML cannot reopen
     /// earlier ones). The `sdk_tests` harness uses this for
@@ -419,12 +419,12 @@ fn render_runtime_module() -> String {
         RUST_BANNER,
         quote! {
             static INIT: ::std::sync::OnceLock<
-                ::std::result::Result<(), ::baml_rs::SdkError>,
+                ::std::result::Result<(), ::baml_bridge::SdkError>,
             > = ::std::sync::OnceLock::new();
 
-            pub(crate) fn ensure_init() -> ::std::result::Result<(), ::baml_rs::SdkError> {
+            pub(crate) fn ensure_init() -> ::std::result::Result<(), ::baml_bridge::SdkError> {
                 INIT.get_or_init(|| {
-                    ::baml_rs::runtime::initialize_from_bytecode(crate::_inlinedbaml::BYTECODE)
+                    ::baml_bridge::runtime::initialize_from_bytecode(crate::_inlinedbaml::BYTECODE)
                 })
                 .clone()
             }
@@ -434,8 +434,8 @@ fn render_runtime_module() -> String {
             /// Optional: every generated function initializes lazily on
             /// first call. Call this at startup to surface initialization
             /// failures early and at a predictable point.
-            pub fn init() -> ::std::result::Result<(), ::baml_rs::Error> {
-                ensure_init().map_err(::baml_rs::Error::Sdk)
+            pub fn init() -> ::std::result::Result<(), ::baml_bridge::Error> {
+                ensure_init().map_err(::baml_bridge::Error::Sdk)
             }
         },
     )
@@ -445,7 +445,7 @@ fn render_manifest(options: &RustGenOptions) -> String {
     let RustGenOptions {
         naming_convention: _,
         package_name,
-        baml_rs_dep,
+        runtime_dep,
         manifest_extra,
         edition,
     } = options;
@@ -472,7 +472,7 @@ doctest = false
 [workspace]
 
 [dependencies]
-bridge_rust = {baml_rs_dep}
+baml_bridge = {runtime_dep}
 "#
     );
     if let Some(extra) = manifest_extra {
@@ -496,7 +496,7 @@ mod tests {
         RustGenOptions {
             naming_convention: NamingConvention::PreserveCase,
             package_name: "baml_sdk".to_string(),
-            baml_rs_dep: "{ path = \"../bridge_rust\" }".to_string(),
+            runtime_dep: "{ path = \"../bridge_rust\" }".to_string(),
             manifest_extra: None,
             edition: "2024".to_string(),
         }
@@ -718,7 +718,7 @@ mod tests {
         let manifest = render_manifest(&options());
         assert!(manifest.contains("[workspace]"));
         assert!(manifest.contains("name = \"baml_sdk\""));
-        assert!(manifest.contains("bridge_rust = { path = \"../bridge_rust\" }"));
+        assert!(manifest.contains("baml_bridge = { path = \"../bridge_rust\" }"));
     }
 
     #[test]

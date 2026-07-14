@@ -1,4 +1,4 @@
-use baml_rs::OptionalArg::Unset;
+use baml_bridge::OptionalArg::Unset;
 use baml_sdk::{OptBox, optional_args_probe, optional_args_probe_async};
 
 #[test]

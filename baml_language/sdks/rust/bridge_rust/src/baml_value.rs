@@ -20,7 +20,7 @@ use crate::{
 /// Implemented by types that can be converted to and from BAML
 /// across the FFI boundary.
 ///
-/// Should only be implemented in the generated SDK and `baml_rs`;
+/// Should only be implemented in the generated SDK and `baml_bridge`;
 /// implementing [`internal::__BamlValuePrivate`] yields this trait via a
 /// blanket impl.
 pub trait BamlValue: internal::__BamlValuePrivate {}

@@ -24,7 +24,7 @@
 //!
 //! ## Build cost
 //!
-//! Each fixture crate path-depends on `bridge_rust` and therefore compiles
+//! Each fixture crate path-depends on `baml_bridge` and therefore compiles
 //! the BEX runtime stack. All fixtures share one cargo build directory —
 //! `<workspace>/target/sdk-rust-target` — threaded through the emitted
 //! tests as `CARGO_TARGET_DIR` (the same `run_test_cmd` plumbing python
@@ -60,12 +60,12 @@ const SETUP_ENV_VAR: &str = "SDK_TEST_RUST_SETUP";
 /// flowing from this one const.
 const GENERATED_EDITION: &str = "2024";
 
-/// Dependency spec wiring each fixture crate to the local `bridge_rust`
+/// Dependency spec wiring each fixture crate to the local `baml_bridge`
 /// sources. 5 ancestors up from `crates/rust/<F>/generated/Cargo.toml`:
 /// `generated` → `<F>` → `rust` → `crates` → `sdk_tests` → `baml_language`
 /// (same relative depth as python's `[tool.uv.sources]` and node's
 /// `file:` dep).
-const BAML_RS_DEP: &str = r#"{ path = "../../../../../sdks/rust/bridge_rust" }"#;
+const BAML_BRIDGE_DEP: &str = r#"{ path = "../../../../../sdks/rust/bridge_rust" }"#;
 
 /// Appended verbatim to each generated `Cargo.toml`
 /// (`RustGenOptions::manifest_extra`): dependencies of the ported test
@@ -290,7 +290,7 @@ fn codegen_fixture(
     let options = RustGenOptions {
         naming_convention: NamingConvention::PreserveCase,
         package_name: format!("sdk-tests-rust-{}", fixture.replace('_', "-")),
-        baml_rs_dep: BAML_RS_DEP.to_string(),
+        runtime_dep: BAML_BRIDGE_DEP.to_string(),
         manifest_extra: Some(MANIFEST_EXTRA.to_string()),
         edition: GENERATED_EDITION.to_string(),
     };

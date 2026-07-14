@@ -1,26 +1,26 @@
 //! Cancellation coverage for `throws_test.SleepMs`.
 //!
 //! PROVISIONAL API: the Rust bridge has not pinned its explicit-cancellation
-//! surface yet. This port assumes a `baml_rs::runtime::BamlCallContext`
+//! surface yet. This port assumes a `baml_bridge::runtime::BamlCallContext`
 //! handle with `abort()`, threaded into a call through a `*_with_ctx`
 //! sibling — the analogue of python's `_ctx=` keyword argument. (A
-//! `baml_rs::runtime::cancel_function_call(call_id)`-style free function is
+//! `baml_bridge::runtime::cancel_function_call(call_id)`-style free function is
 //! the other candidate shape.) Expect fixups here when the surface lands.
 
 use std::time::{Duration, Instant};
 
-use baml_rs::runtime::BamlCallContext;
+use baml_bridge::runtime::BamlCallContext;
 use baml_sdk::throws_test;
 
 const _MAX_CANCELLATION_SECONDS: f64 = 0.5;
 
-/// python asserts `isinstance(exc.value, Cancelled)`; `baml_rs::Error::Panic`
+/// python asserts `isinstance(exc.value, Cancelled)`; `baml_bridge::Error::Panic`
 /// carries only the rendered message + trace, so the class check adapts to
 /// the message naming the `Cancelled` panic class (provisional until
 /// structured panic payloads are pinned).
-fn _assert_cancelled_panic<E: std::fmt::Debug>(exc: baml_rs::Error<E>) {
+fn _assert_cancelled_panic<E: std::fmt::Debug>(exc: baml_bridge::Error<E>) {
     match exc {
-        baml_rs::Error::Panic { message, .. } => {
+        baml_bridge::Error::Panic { message, .. } => {
             assert!(message.contains("Cancelled"), "{message}");
         }
         other => panic!("expected Error::Panic, got {other:?}"),
@@ -31,7 +31,7 @@ fn _assert_cancelled_panic<E: std::fmt::Debug>(exc: baml_rs::Error<E>) {
 /// whose `reason` wraps the `Cancelled` panic; tokio has no cross-task
 /// exception injection, so the aborted call itself returns the cancellation
 /// panic and the reason check collapses onto [`_assert_cancelled_panic`].
-fn _assert_cancelled_reason<E: std::fmt::Debug>(exc: baml_rs::Error<E>) {
+fn _assert_cancelled_reason<E: std::fmt::Debug>(exc: baml_bridge::Error<E>) {
     _assert_cancelled_panic(exc);
 }
 

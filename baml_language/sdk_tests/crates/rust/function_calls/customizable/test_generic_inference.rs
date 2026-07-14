@@ -19,7 +19,7 @@
 //! unbound instances) are compile-time impossibilities here and keep their
 //! names with `DIVERGENCE(rust)` notes and empty bodies.
 
-use baml_rs::Map;
+use baml_bridge::Map;
 use baml_sdk::generic_tests::{
     ContainerShapes, GenericBox, GenericPair, GenericRecursive, NamedStatic, SomeEnum,
     StringIntPair, apply, choose, elem_type, extract, first_or, glue, identity, list_head,

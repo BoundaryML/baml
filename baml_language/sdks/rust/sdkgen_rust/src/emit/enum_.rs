@@ -40,20 +40,20 @@ pub(crate) fn emit(name: &Name, enum_: &Enum) -> TokenStream {
             #(#variant_defs,)*
         }
 
-        impl ::baml_rs::baml_value::internal::__BamlValuePrivate for #ident {
-            fn to_baml(&self) -> ::baml_rs::wire::InboundValue {
-                ::baml_rs::encode::enum_value(#fqn, match self {
+        impl ::baml_bridge::baml_value::internal::__BamlValuePrivate for #ident {
+            fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {
+                ::baml_bridge::encode::enum_value(#fqn, match self {
                     #(#encode_arms,)*
                 })
             }
 
             fn from_baml(
-                v: ::baml_rs::wire::BamlOutboundValue,
-            ) -> ::std::result::Result<Self, ::baml_rs::DecodeError> {
-                match ::baml_rs::decode::enum_variant(v, #fqn)?.as_str() {
+                v: ::baml_bridge::wire::BamlOutboundValue,
+            ) -> ::std::result::Result<Self, ::baml_bridge::DecodeError> {
+                match ::baml_bridge::decode::enum_variant(v, #fqn)?.as_str() {
                     #(#decode_arms,)*
                     other => ::std::result::Result::Err(
-                        ::baml_rs::DecodeError::UnknownEnumVariant {
+                        ::baml_bridge::DecodeError::UnknownEnumVariant {
                             enum_fqn: #fqn,
                             got: other.to_string(),
                         },
