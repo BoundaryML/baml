@@ -155,11 +155,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         Gate::Later("needs streaming"),
     ),
     ("type_shapes", "test_main.rs", Gate::Now),
-    (
-        "type_shapes",
-        "test_complex_models.rs",
-        Gate::Later("needs unions (anonymous union fields)"),
-    ),
+    ("type_shapes", "test_complex_models.rs", Gate::Now),
     (
         "type_shapes",
         "test_generic.rs",
@@ -221,11 +217,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "roundtrip_tests/test_symbol_collisions.rs",
         Gate::Now,
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_unions.rs",
-        Gate::Later("needs unions"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_unions.rs", Gate::Now),
     ("type_shapes", "roundtrip_tests/test_void.rs", Gate::Now),
 ];
 

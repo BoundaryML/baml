@@ -62,7 +62,17 @@ pub(crate) fn emit(
             });
             kwarg_entries.push(quote! { (#arg_name, #param.to_baml_opt()) });
         } else {
-            params.push(quote! { #param: #ty });
+            // Union-typed parameters accept anything convertible into the
+            // synthesized enum, so call sites pass bare arm values
+            // through the per-arm `From` impls.
+            if is_multi_arm_union(&arg.ty) {
+                params.push(quote! { #param: impl ::std::convert::Into<#ty> });
+                converts.push(quote! {
+                    let #param: #ty = ::std::convert::Into::into(#param);
+                });
+            } else {
+                params.push(quote! { #param: #ty });
+            }
             kwarg_entries.push(quote! {
                 (
                     #arg_name,
@@ -101,6 +111,16 @@ pub(crate) fn emit(
             .await
         }
     })
+}
+
+/// Whether a parameter type is a multi-arm union after null-stripping —
+/// i.e. its translation is (an `Option` of) a synthesized union enum,
+/// which parameters accept via `impl Into<_>`.
+fn is_multi_arm_union(ty: &baml_codegen_types::Ty) -> bool {
+    match ty {
+        baml_codegen_types::Ty::Union(items) => crate::unions::strip_null(items).0.len() >= 2,
+        _ => false,
+    }
 }
 
 /// BAML docstring → `#[doc = "…"]` attributes (rendered as `///` by the

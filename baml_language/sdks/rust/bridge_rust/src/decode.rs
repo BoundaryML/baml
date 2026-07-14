@@ -67,7 +67,7 @@ pub fn decode_result<R: BamlValue, E: BamlValue>(bytes: &[u8]) -> Result<R, Erro
             let value = err.value.unwrap_or_default();
             match E::from_baml(value.clone()) {
                 Ok(thrown) => Err(Error::Thrown {
-                    value: thrown,
+                    value: Box::new(thrown),
                     trace: err.trace,
                 }),
                 Err(_) => Err(Error::Runtime {
@@ -179,6 +179,15 @@ pub fn enum_variant(
             expected: expected_fqn,
             got: crate::baml_value::wire_variant_kind(&v),
         }),
+    }
+}
+
+/// Error for a union value none of whose arms matched, used by generated
+/// union `from_baml` impls after their arm trials are exhausted.
+pub fn no_union_arm(expected: &'static str, v: &wire::BamlOutboundValue) -> crate::DecodeError {
+    crate::DecodeError::WrongType {
+        expected,
+        got: crate::baml_value::wire_variant_kind(v),
     }
 }
 

@@ -12,7 +12,11 @@ use baml_codegen_types::{Name, Ty};
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::{analyze::Analysis, idents, routing};
+use crate::{
+    analyze::Analysis,
+    idents, routing,
+    unions::{self, UnionRegistry},
+};
 
 /// A type the generator cannot translate yet. The reason names the
 /// missing capability for the skip warning.
@@ -30,6 +34,10 @@ fn unsupported(what: &str) -> Unsupported {
 /// Context for one type translation.
 pub(crate) struct TyCtx<'a> {
     pub(crate) analysis: &'a Analysis,
+    /// Synthesized union enums, and the (renamed) leaf the translated
+    /// symbol lives in — union references resolve to that leaf's enums.
+    pub(crate) unions: &'a UnionRegistry,
+    pub(crate) leaf: &'a [String],
     /// Set when translating the fields of a class: that class's name.
     /// References to classes in the same containment SCC are boxed at
     /// the field site (outside heap-indirected containers) so recursive
@@ -88,19 +96,46 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             Ok(quote! { ::baml_rs::Map<::std::string::String, #value> })
         }
         Ty::Union(items) => {
-            // A two-arm union with a `null` member is BAML optionality
-            // (`T?`); anything else needs real union codegen.
-            if let [a, b] = items.as_slice() {
-                let inner = match (a, b) {
-                    (Ty::Null, other) | (other, Ty::Null) => Some(other),
-                    _ => None,
-                };
-                if let Some(inner) = inner {
-                    let inner = translate_inner(inner, ctx, under_heap)?;
-                    return Ok(quote! { ::std::option::Option<#inner> });
+            // A `null` arm is optionality: strip it and wrap the rest in
+            // `Option`. One remaining arm is the arm itself; several
+            // become the leaf's synthesized union enum.
+            let (arms, had_null) = unions::strip_null(items);
+            let inner = match arms.as_slice() {
+                [] => quote! { () },
+                [only] => translate_inner(only, ctx, under_heap)?,
+                arms => {
+                    let Some(union_enum) = ctx.unions.lookup(ctx.leaf, arms) else {
+                        return Err(Unsupported {
+                            reason: unions::shape_error(arms).unwrap_or_else(|| {
+                                "union references a skipped or unknown type".to_string()
+                            }),
+                        });
+                    };
+                    let enum_ident = idents::ident(&union_enum.rust_name);
+                    let mods = ctx.leaf.iter().map(|seg| idents::ident(seg));
+                    let path = quote! { crate::#(#mods::)*#enum_ident };
+                    // The enum holds class arms by value, so a same-SCC
+                    // class arm makes the enum itself part of the
+                    // containment cycle — box the enum reference.
+                    let boxed = !under_heap
+                        && ctx.boxing_for.is_some_and(|owner| {
+                            arms.iter().any(|arm| match arm {
+                                Ty::Class(name, _) => ctx.analysis.needs_box(owner, name),
+                                _ => false,
+                            })
+                        });
+                    if boxed {
+                        quote! { ::std::boxed::Box<#path> }
+                    } else {
+                        path
+                    }
                 }
+            };
+            if had_null {
+                Ok(quote! { ::std::option::Option<#inner> })
+            } else {
+                Ok(inner)
             }
-            Err(unsupported("union"))
         }
         Ty::Class(name, args) => {
             if !args.is_empty() {
@@ -158,8 +193,14 @@ mod tests {
     use baml_codegen_types::{Class, ClassProperty, Origin, Symbol, SymbolPool};
     use pretty_assertions::assert_eq;
 
+    use std::sync::LazyLock;
+
     use super::*;
     use crate::analyze::analyze;
+
+    /// Tests that exercise non-union translation share an empty registry
+    /// and the crate-root leaf.
+    static NO_UNIONS: LazyLock<UnionRegistry> = LazyLock::new(UnionRegistry::default);
 
     fn name(pkg: &str, ns: &[&str], leaf: &str) -> Name {
         Name::new(
@@ -199,6 +240,8 @@ mod tests {
         let analysis = empty_analysis();
         let ctx = TyCtx {
             analysis: &analysis,
+            unions: &NO_UNIONS,
+            leaf: &[],
             boxing_for: None,
         };
         translate(ty, &ctx)
@@ -252,6 +295,8 @@ mod tests {
         let analysis = empty_analysis();
         let ctx = TyCtx {
             analysis: &analysis,
+            unions: &NO_UNIONS,
+            leaf: &[],
             boxing_for: None,
         };
         let enum_keyed = Ty::Map {
@@ -266,6 +311,8 @@ mod tests {
         let analysis = empty_analysis();
         let ctx = TyCtx {
             analysis: &analysis,
+            unions: &NO_UNIONS,
+            leaf: &[],
             boxing_for: None,
         };
         assert!(translate(&Ty::Union(vec![Ty::Int, Ty::String]), &ctx).is_err());
@@ -281,6 +328,8 @@ mod tests {
         assert!(warnings.is_empty());
         let ctx = TyCtx {
             analysis: &analysis,
+            unions: &NO_UNIONS,
+            leaf: &[],
             boxing_for: None,
         };
         assert_eq!(
@@ -304,6 +353,8 @@ mod tests {
         assert_eq!(warnings.len(), 1);
         let ctx = TyCtx {
             analysis: &analysis,
+            unions: &NO_UNIONS,
+            leaf: &[],
             boxing_for: None,
         };
         assert!(translate(&Ty::Class(bad, Vec::new()), &ctx).is_err());
@@ -330,6 +381,8 @@ mod tests {
         assert!(warnings.is_empty());
         let ctx = TyCtx {
             analysis: &analysis,
+            unions: &NO_UNIONS,
+            leaf: &[],
             boxing_for: Some(&tree),
         };
         assert_eq!(
@@ -437,6 +490,8 @@ mod tests {
 
         let ctx = TyCtx {
             analysis: &analysis,
+            unions: &NO_UNIONS,
+            leaf: &[],
             boxing_for: None,
         };
         assert_eq!(
@@ -484,6 +539,8 @@ mod tests {
                 &Ty::Class(in_foo_ns, Vec::new()),
                 &TyCtx {
                     analysis: &analysis,
+                    unions: &NO_UNIONS,
+                    leaf: &[],
                     boxing_for: None
                 }
             )

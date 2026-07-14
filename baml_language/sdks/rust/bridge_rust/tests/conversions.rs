@@ -40,6 +40,10 @@ function make_other(x: int) -> Other { Other { x: x } }
 function point_tag(p: Point) -> string? { p.tag }
 function rt_map(m: map<string, int>) -> map<string, int> { m }
 function rt_tree(t: TreeNode) -> TreeNode { t }
+function rt_int_or_string(u: int | string) -> int | string { u }
+function rt_point_or_string(u: Point | string) -> Point | string { u }
+function rt_opt_union(u: int | string | null) -> int | string | null { u }
+function rt_status(s: "draft" | "sent") -> "draft" | "sent" { s }
 "#;
 
 fn ensure_runtime() {
@@ -149,9 +153,184 @@ impl __BamlValuePrivate for TreeNode {
     }
 }
 
+/// Synthesized union enum shape: one variant per (null-stripped) arm,
+/// `From` per payload arm, inbound encodes the bare arm value, decode
+/// trial-matches arms in declared order (wire kinds / FQNs / literal
+/// values discriminate every supported combination).
+#[derive(Debug, Clone, PartialEq)]
+enum IntOrString {
+    Int(i64),
+    String(String),
+}
+
+impl From<i64> for IntOrString {
+    fn from(value: i64) -> Self {
+        Self::Int(value)
+    }
+}
+
+impl From<String> for IntOrString {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl __BamlValuePrivate for IntOrString {
+    fn to_baml(&self) -> wire::InboundValue {
+        match self {
+            Self::Int(value) => value.to_baml(),
+            Self::String(value) => value.to_baml(),
+        }
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let v = decode::unwrap(v);
+        if let Ok(value) = i64::from_baml(v.clone()) {
+            return Ok(Self::Int(value));
+        }
+        if let Ok(value) = String::from_baml(v.clone()) {
+            return Ok(Self::String(value));
+        }
+        Err(decode::no_union_arm("IntOrString", &v))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum PointOrString {
+    Point(Point),
+    String(String),
+}
+
+impl From<Point> for PointOrString {
+    fn from(value: Point) -> Self {
+        Self::Point(value)
+    }
+}
+
+impl From<String> for PointOrString {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl __BamlValuePrivate for PointOrString {
+    fn to_baml(&self) -> wire::InboundValue {
+        match self {
+            Self::Point(value) => value.to_baml(),
+            Self::String(value) => value.to_baml(),
+        }
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let v = decode::unwrap(v);
+        if let Ok(value) = Point::from_baml(v.clone()) {
+            return Ok(Self::Point(value));
+        }
+        if let Ok(value) = String::from_baml(v.clone()) {
+            return Ok(Self::String(value));
+        }
+        Err(decode::no_union_arm("PointOrString", &v))
+    }
+}
+
+/// String-literal arms become unit variants carrying their wire value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum DraftOrSent {
+    Draft,
+    Sent,
+}
+
+impl __BamlValuePrivate for DraftOrSent {
+    fn to_baml(&self) -> wire::InboundValue {
+        match self {
+            Self::Draft => "draft".to_string().to_baml(),
+            Self::Sent => "sent".to_string().to_baml(),
+        }
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        let v = decode::unwrap(v);
+        if let Ok(value) = String::from_baml(v.clone()) {
+            match value.as_str() {
+                "draft" => return Ok(Self::Draft),
+                "sent" => return Ok(Self::Sent),
+                _ => {}
+            }
+        }
+        Err(decode::no_union_arm("DraftOrSent", &v))
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Round trips through the live engine.
 // ---------------------------------------------------------------------------
+
+#[test]
+fn round_trips_union_arms() {
+    assert_eq!(
+        call::<IntOrString>(
+            "user.rt_int_or_string",
+            vec![("u", IntOrString::Int(7).to_baml())]
+        ),
+        IntOrString::Int(7)
+    );
+    assert_eq!(
+        call::<IntOrString>(
+            "user.rt_int_or_string",
+            vec![("u", IntOrString::String("s".to_string()).to_baml())]
+        ),
+        IntOrString::String("s".to_string())
+    );
+}
+
+#[test]
+fn round_trips_class_arm_union() {
+    let point = Point {
+        x: 1,
+        y: 2,
+        tag: None,
+    };
+    assert_eq!(
+        call::<PointOrString>(
+            "user.rt_point_or_string",
+            vec![("u", PointOrString::Point(point.clone()).to_baml())]
+        ),
+        PointOrString::Point(point)
+    );
+    assert_eq!(
+        call::<PointOrString>(
+            "user.rt_point_or_string",
+            vec![("u", PointOrString::String("s".to_string()).to_baml())]
+        ),
+        PointOrString::String("s".to_string())
+    );
+}
+
+#[test]
+fn round_trips_nullable_union_as_option() {
+    assert_eq!(
+        call::<Option<IntOrString>>(
+            "user.rt_opt_union",
+            vec![("u", Some(IntOrString::Int(3)).to_baml())]
+        ),
+        Some(IntOrString::Int(3))
+    );
+    assert_eq!(
+        call::<Option<IntOrString>>(
+            "user.rt_opt_union",
+            vec![("u", None::<IntOrString>.to_baml())]
+        ),
+        None
+    );
+}
+
+#[test]
+fn round_trips_literal_union_variants() {
+    assert_eq!(
+        call::<DraftOrSent>("user.rt_status", vec![("s", DraftOrSent::Sent.to_baml())]),
+        DraftOrSent::Sent
+    );
+}
 
 #[test]
 fn round_trips_enum() {

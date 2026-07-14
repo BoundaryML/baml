@@ -23,6 +23,9 @@ pub(crate) struct Analysis {
     /// (Rust puts `mod` and type names in one namespace). Keyed by the
     /// original routed path; values are the fully renamed path.
     renames: HashMap<Vec<String>, Vec<String>>,
+    /// Emitted type names per (renamed) leaf — the namespace synthesized
+    /// union enums must not collide with.
+    type_names_by_leaf: HashMap<Vec<String>, HashSet<String>>,
 }
 
 impl Analysis {
@@ -46,6 +49,14 @@ impl Analysis {
             Some(renamed) => renamed,
             None => path,
         }
+    }
+
+    /// Emitted type names in a (renamed) leaf.
+    pub(crate) fn type_names_in(&self, leaf: &[String]) -> HashSet<String> {
+        self.type_names_by_leaf
+            .get(leaf)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -203,11 +214,30 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
 
     let renames = compute_renames(pool, &emitted);
 
+    // Emitted type names per renamed leaf, for synthesized-name
+    // de-collision.
+    let mut type_names_by_leaf: HashMap<Vec<String>, HashSet<String>> = HashMap::new();
+    for (name, symbol) in pool {
+        if matches!(
+            symbol,
+            Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_)
+        ) && emitted.contains(name)
+        {
+            let routed = routing::route(name).segments;
+            let leaf = renames.get(&routed).cloned().unwrap_or(routed);
+            type_names_by_leaf
+                .entry(leaf)
+                .or_default()
+                .insert(name.name.as_str().to_string());
+        }
+    }
+
     (
         Analysis {
             emitted,
             scc,
             renames,
+            type_names_by_leaf,
         },
         warnings,
     )
@@ -238,16 +268,21 @@ fn field_deps(ty: &Ty, deps: &mut Vec<Name>) -> Result<(), String> {
             field_deps(value, deps)
         }
         Ty::Union(items) => {
-            if let [a, b] = items.as_slice() {
-                let inner = match (a, b) {
-                    (Ty::Null, other) | (other, Ty::Null) => Some(other),
-                    _ => None,
-                };
-                if let Some(inner) = inner {
-                    return field_deps(inner, deps);
+            let (arms, _) = crate::unions::strip_null(items);
+            match arms.as_slice() {
+                // Pure optionality (or the degenerate all-null union).
+                [] => Ok(()),
+                [only] => field_deps(only, deps),
+                arms => {
+                    if let Some(reason) = crate::unions::shape_error(arms) {
+                        return Err(reason);
+                    }
+                    for arm in arms {
+                        field_deps(arm, deps)?;
+                    }
+                    Ok(())
                 }
             }
-            Err("unsupported type: union".to_string())
         }
         Ty::Class(name, args) => {
             if args.is_empty() {

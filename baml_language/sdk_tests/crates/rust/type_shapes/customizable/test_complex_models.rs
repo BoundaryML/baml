@@ -1,18 +1,16 @@
 //! Roundtrip coverage for a complex nested object graph.
 
-// PROVISIONAL(rust-codegen): BAML's anonymous unions have no final Rust
-// naming yet (python renders them structurally as `Union[...]`/`Literal[...]`,
-// which Rust cannot). This port assumes a synthesized enum per union site,
-// named `<Class><FieldCamelCase>` (`<Class><FieldCamelCase>Item` for a
-// list-element union), with one variant per arm — literal-string arms as
-// CamelCase unit variants, class/primitive arms wrapping their payload — and
-// a trailing `| null` arm lowering to `Option<...>` around the enum. Expect
-// fixups at flip time.
+// Anonymous unions surface as one synthesized enum per (null-stripped)
+// union shape, named by joining the arm names with `Or` — literal-string
+// arms as unit variants from their value, class/primitive arms wrapping
+// their payload — and a trailing `| null` lowering to `Option<...>`
+// around the enum.
 use baml_rs::Map;
 use baml_sdk::complex_models::{
-    AccountTier, AuditEvent, AuditEventAction, CardPayment, ComplexProfile, ComplexProfileFeatured,
-    ComplexProfileFlagsItem, ContactMethod, GeoPoint, Invoice, InvoicePayment, InvoiceStatus,
-    LineItem, PostalAddress, ProfileOwner, WirePayment, round_trip_complex_profile,
+    AccountTier, AuditEvent, CardPayment, CardPaymentOrWirePayment, ComplexProfile, ContactMethod,
+    CreatedOrUpdatedOrApproved, DraftOrSentOrPaid, GeoPoint, IntOrStringOrBool, Invoice,
+    InvoiceOrPostalAddressOrString, LineItem, PostalAddress, ProfileOwner, WirePayment,
+    round_trip_complex_profile,
 };
 
 #[test]
@@ -48,7 +46,7 @@ fn test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
     };
     let invoice = Invoice {
         id: "inv-001".to_string(),
-        status: InvoiceStatus::Sent,
+        status: DraftOrSentOrPaid::Sent,
         items: vec![LineItem {
             sku: "sdk-pro".to_string(),
             quantity: 2,
@@ -59,7 +57,7 @@ fn test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
                 ("support".to_string(), "priority".to_string()),
             ]),
         }],
-        payment: Some(InvoicePayment::CardPayment(CardPayment {
+        payment: Some(CardPaymentOrWirePayment::CardPayment(CardPayment {
             brand: "visa".to_string(),
             last4: "4242".to_string(),
             billing_address: home.clone(),
@@ -68,7 +66,7 @@ fn test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
     };
     let wire_invoice = Invoice {
         id: "inv-002".to_string(),
-        status: InvoiceStatus::Paid,
+        status: DraftOrSentOrPaid::Paid,
         items: vec![LineItem {
             sku: "sdk-enterprise".to_string(),
             quantity: 1,
@@ -82,7 +80,7 @@ fn test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
                 ("term".to_string(), "annual".to_string()),
             ]),
         }],
-        payment: Some(InvoicePayment::WirePayment(WirePayment {
+        payment: Some(CardPaymentOrWirePayment::WirePayment(WirePayment {
             bank_name: "Boundary Bank".to_string(),
             routing_code: "110000000".to_string(),
             reference: None,
@@ -102,12 +100,12 @@ fn test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
         audit_trail: vec![
             AuditEvent {
                 actor: "system".to_string(),
-                action: AuditEventAction::Created,
+                action: CreatedOrUpdatedOrApproved::Created,
                 context: Map::from([("source".to_string(), "fixture".to_string())]),
             },
             AuditEvent {
                 actor: "reviewer".to_string(),
-                action: AuditEventAction::Approved,
+                action: CreatedOrUpdatedOrApproved::Approved,
                 context: Map::from([
                     ("level".to_string(), "2".to_string()),
                     ("region".to_string(), "us".to_string()),
@@ -118,11 +116,11 @@ fn test_round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class() {
             ("cohort".to_string(), "beta".to_string()),
             ("owner_kind".to_string(), "internal".to_string()),
         ]),
-        featured: Some(ComplexProfileFeatured::Invoice(invoice)),
+        featured: Some(InvoiceOrPostalAddressOrString::Invoice(invoice)),
         flags: vec![
-            ComplexProfileFlagsItem::Int(7),
-            ComplexProfileFlagsItem::String("manual-review".to_string()),
-            ComplexProfileFlagsItem::Bool(true),
+            IntOrStringOrBool::Int(7),
+            IntOrStringOrBool::String("manual-review".to_string()),
+            IntOrStringOrBool::Bool(true),
         ],
     };
 
