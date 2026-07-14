@@ -75,21 +75,22 @@ they contain hidden model metadata and authentication material.
 
 ## Reproduce
 
-The benchmark runner lives in the companion benchmark repository:
-
-<https://github.com/ashley-ha/bamallama/blob/agent-benchmark/scripts/run-describe-dependencies-benchmark.sh>
-
-Run the full matrix:
+Use the standalone runner in this directory with any local BAML project and
+dependency question:
 
 ```bash
-./scripts/run-describe-dependencies-benchmark.sh
+./docs/benchmarks/baml-describe-dependencies/run-claude-benchmark.sh \
+  ../baml-demos/bamlcode \
+  "For agent.tool_edit_file, identify its contract and implementation dependencies. Include file:line citations."
 ```
 
-Run a cheaper natural-versus-describe smoke test:
+Run a cheaper natural-versus-describe smoke test with one repetition:
 
 ```bash
 REPS=1 VARIANTS=natural,guided-hybrid-slim \
-  ./scripts/run-describe-dependencies-benchmark.sh
+  ./docs/benchmarks/baml-describe-dependencies/run-claude-benchmark.sh \
+  ../baml-demos/bamlcode \
+  "For agent.tool_edit_file, identify its contract and implementation dependencies. Include file:line citations."
 ```
 
 The frozen BAML binary for the final parser rerun came from commit `45d70704e`.
