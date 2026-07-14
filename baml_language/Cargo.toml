@@ -32,6 +32,10 @@ exclude = [
   # unsupported features through resolver feature unification.
   "forks/aws-config-systest",
   "forks/google-cloud-auth-systest",
+  # Rust SDK release-verification fixtures (a `baml.toml` BAML project + a
+  # consumer smoke, not a crate); the `sdks/rust/*` members glob would
+  # otherwise try to load it as a workspace member.
+  "sdks/rust/verify",
 ]
 resolver = "2"
 
@@ -408,10 +412,20 @@ inherits = "release"
 # two artifacts with `unwind` turns an engine panic into a catchable
 # `BamlPanic` / JS error instead of killing the host process.
 #
+# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
+# target, language-neutral) that dylib-loader SDKs — the Rust `baml_bridge`
+# crate today, the Go bridge when it migrates — dlopen at runtime, again
+# *inside the user's process*. It needs `unwind` for the same reason:
+# `bridge_cffi`'s `catch_unwind` -> `SdkPanic` boundary only fires when the
+# stack can unwind. Host-process safety over the ~+5 MB of unwind tables (the
+# contract mandates `panic = "unwind"` for a library loaded into a user's
+# server).
+#
 # `panic` is a whole-artifact setting (it can't be overridden per-crate, and one
-# binary can't mix strategies), so the SDKs need their own profile rather than a
-# package override. maturin (`--profile release-bridge-python`) and napi
-# (`--profile release-bridge-node`) select these at build time. The CLI and wasm
+# binary can't mix strategies), so these artifacts need their own profile rather
+# than a package override. maturin (`--profile release-bridge-python`), napi
+# (`--profile release-bridge-node`), and the standalone cdylib matrix
+# (`--profile release-bridge-cffi`) select these at build time. The CLI and wasm
 # stay on `release`/`abort`: each owns its own process and is size-gated, so an
 # abort there is acceptable and the ~+5 MB of unwind tables isn't worth paying.
 [profile.release-bridge-python]
@@ -422,11 +436,6 @@ panic = "unwind"
 inherits = "release"
 panic = "unwind"
 
-# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
-# target, language-neutral) that dylib-loader SDKs dlopen at runtime, again
-# *inside the user's process* — so it needs `unwind` for the same reason: its
-# `catch_unwind` -> `SdkPanic` boundary only fires when the stack can unwind.
-# The standalone cdylib matrix selects it via `--profile release-bridge-cffi`.
 [profile.release-bridge-cffi]
 inherits = "release"
 panic = "unwind"
