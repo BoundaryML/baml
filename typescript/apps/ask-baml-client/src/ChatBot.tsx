@@ -541,7 +541,7 @@ const ChatBot: React.FC<{}> = () => {
                     animation: 'pulse 1.5s ease-in-out infinite 0.4s',
                   }}
                 />
-                <span>Thinking...</span>
+                <span style={{ color: 'inherit' }}>Thinking...</span>
               </div>
             );
           }
@@ -616,7 +616,9 @@ const ChatBot: React.FC<{}> = () => {
                     components={{
                       // Custom styles for markdown elements
                       p: ({ children }) => (
-                        <p style={{ margin: '0 0 12px 0', lineHeight: '1.6' }}>{children}</p>
+                        <p style={{ margin: '0 0 12px 0', lineHeight: '1.6', color: 'inherit' }}>
+                          {children}
+                        </p>
                       ),
                       h1: ({ children }) => (
                         <h1
@@ -708,6 +710,7 @@ const ChatBot: React.FC<{}> = () => {
                             margin: '0 0 12px 0',
                             paddingLeft: '20px',
                             listStyleType: 'disc',
+                            color: 'inherit',
                           }}
                         >
                           {children}

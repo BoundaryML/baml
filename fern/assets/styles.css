@@ -66,6 +66,22 @@ span:not(a span) {
   color: rgba(237, 237, 237, 0.9);
 }
 
+/* The Ask Baaaml chatbot (#fern-chatbot-root) and custom search (#baml-search-wrap)
+   style themselves inline with a light theme. Without this guard, the global
+   text-color rules above wash out their text in dark mode (near-white on white). */
+#fern-chatbot-root p,
+#fern-chatbot-root ul,
+#fern-chatbot-root h1,
+#fern-chatbot-root h2,
+#fern-chatbot-root h3,
+#fern-chatbot-root h4,
+#fern-chatbot-root h5,
+#fern-chatbot-root h6,
+#fern-chatbot-root span:not(a span),
+#baml-search-wrap span:not(a span) {
+  color: inherit;
+}
+
 /* Background Colors */
 .dark body {
   background-color: var(--background) !important;
