@@ -154,10 +154,7 @@ pub(crate) fn display_instruction(
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
-        | Instruction::StoreVarLoadVar(index)
-        | Instruction::Watch(index)
-        | Instruction::Unwatch(index)
-        | Instruction::Notify(index) => match function.local_names.get(*index) {
+        | Instruction::StoreVarLoadVar(index) => match function.local_names.get(*index) {
             Some(name) => format!("({name})"),
             None => "(?)".to_string(),
         },
@@ -423,9 +420,6 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::Spawn
         | Instruction::Await
         | Instruction::AwaitAny => Style::new().green().bright(),
-        Instruction::Watch(_) | Instruction::Unwatch(_) | Instruction::Notify(_) => {
-            Style::new().red().bright()
-        }
         Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
@@ -906,11 +900,6 @@ fn display_instruction_textual(
         Instruction::Return => "return".to_string(),
         Instruction::Unreachable => "unreachable".to_string(),
 
-        // --- Watch/Notify ---
-        Instruction::Watch(idx) => format!("watch {}", meta_str(idx)),
-        Instruction::Unwatch(idx) => format!("unwatch {}", meta_str(idx)),
-        Instruction::Notify(idx) => format!("notify {}", meta_str(idx)),
-
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
         Instruction::TypeTag => "type_tag".to_string(),
@@ -1139,10 +1128,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::SysOpWithRuntimeId(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
-        | Instruction::AllocVariant(_)
-        | Instruction::Watch(_)
-        | Instruction::Unwatch(_)
-        | Instruction::Notify(_) => meta
+        | Instruction::AllocVariant(_) => meta
             .map(|m| format!("({})", sanitize_operand_text(m.as_str())))
             .unwrap_or_default(),
 
@@ -1330,9 +1316,6 @@ pub fn display_compact_bytecode(
             | OpCode::AllocVariant
             | OpCode::SysOp
             | OpCode::SysOpWithRuntimeId
-            | OpCode::Watch
-            | OpCode::Unwatch
-            | OpCode::Notify
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType

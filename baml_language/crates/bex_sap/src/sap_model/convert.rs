@@ -500,7 +500,6 @@ impl TypeCtx {
             | baml_type::RuntimeTy::PromptAst { .. }
             | baml_type::RuntimeTy::Function { .. }
             | baml_type::RuntimeTy::Void { .. }
-            | baml_type::RuntimeTy::WatchAccessor(_, _)
             | baml_type::RuntimeTy::BuiltinUnknown { .. }
             | baml_type::RuntimeTy::Future(_, _, _)
             | baml_type::RuntimeTy::TypeVar(_, _)
@@ -590,7 +589,6 @@ impl TypeCtx {
             | ::baml_type::RuntimeTy::PromptAst { .. }
             | ::baml_type::RuntimeTy::Function { .. }
             | ::baml_type::RuntimeTy::Void { .. }
-            | ::baml_type::RuntimeTy::WatchAccessor(_, _)
             | ::baml_type::RuntimeTy::BuiltinUnknown { .. }
             | ::baml_type::RuntimeTy::Future(_, _, _)
             | ::baml_type::RuntimeTy::TypeVar(_, _)
@@ -777,7 +775,6 @@ fn is_sap_parseable(ty: &baml_type::RuntimeTy) -> Result<Vec<TypeName>, ()> {
         | baml_type::RuntimeTy::PromptAst { .. }
         | baml_type::RuntimeTy::Function { .. }
         | baml_type::RuntimeTy::Void { .. }
-        | baml_type::RuntimeTy::WatchAccessor(..)
         | baml_type::RuntimeTy::BuiltinUnknown { .. }
         | baml_type::RuntimeTy::Future(..)
         | baml_type::RuntimeTy::TypeVar(..)

@@ -127,11 +127,11 @@ SOURCE_FILE
           WORD "expressions"
           QUOTE """
         SEMICOLON ";"
-        WORD "true"
+        KW_TRUE "true"
         SEMICOLON ";"
-        WORD "false"
+        KW_FALSE "false"
         SEMICOLON ";"
-        WORD "null"
+        KW_NULL "null"
         SEMICOLON ";"
         RAW_STRING_LITERAL
           HASH "#"
@@ -336,7 +336,7 @@ SOURCE_FILE
         SEMICOLON ";"
         UNARY_EXPR "!true"
           NOT "!"
-          WORD "true"
+          KW_TRUE "true"
         SEMICOLON ";"
         UNARY_EXPR
           MINUS "-"

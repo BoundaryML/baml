@@ -22,7 +22,6 @@ mod type_context;
 mod type_match;
 pub mod types;
 pub mod vm;
-pub mod watch;
 
 pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;

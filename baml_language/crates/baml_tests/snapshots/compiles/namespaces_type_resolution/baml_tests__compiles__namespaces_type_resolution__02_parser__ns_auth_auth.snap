@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 13750
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -55,7 +54,7 @@ SOURCE_FILE
         WORD "Role"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "TokenAlias"
     EQUALS "="
     TYPE_EXPR "Token"
@@ -263,7 +262,7 @@ SOURCE_FILE
                 OBJECT_FIELD "expired: true"
                   WORD "expired"
                   COLON ":"
-                  WORD "true"
+                  KW_TRUE "true"
                 R_BRACE "}"
             COMMA ","
           MATCH_ARM

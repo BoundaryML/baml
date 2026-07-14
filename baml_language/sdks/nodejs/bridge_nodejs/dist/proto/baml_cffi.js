@@ -251,7 +251,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -733,7 +733,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundListValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -981,7 +981,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundMapValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -1285,7 +1285,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundMapEntry.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -1619,7 +1619,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundClassValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -1894,7 +1894,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 InboundEnumValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -2145,7 +2145,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyArg.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -2416,7 +2416,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 CallFunctionArgs.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -2737,7 +2737,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 CallAck.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -3019,7 +3019,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlHandle.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -3310,7 +3310,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {baml_bridge.cffi.v1.IBamlTyResource|null} [resource] BamlTy resource
                  * @property {baml_bridge.cffi.v1.IBamlTyPromptAst|null} [promptAst] BamlTy promptAst
                  * @property {baml_bridge.cffi.v1.IBamlTyVoid|null} ["void"] BamlTy void
-                 * @property {baml_bridge.cffi.v1.IBamlTyWatchAccessor|null} [watchAccessor] BamlTy watchAccessor
                  * @property {baml_bridge.cffi.v1.IBamlTyTypeVar|null} [typeVar] BamlTy typeVar
                  * @property {baml_bridge.cffi.v1.IBamlTyAssociatedTypeProjection|null} [associatedTypeProjection] BamlTy associatedTypeProjection
                  * @property {baml_bridge.cffi.v1.IBamlTyNever|null} [never] BamlTy never
@@ -3492,14 +3491,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 BamlTy.prototype["void"] = null;
 
                 /**
-                 * BamlTy watchAccessor.
-                 * @member {baml_bridge.cffi.v1.IBamlTyWatchAccessor|null|undefined} watchAccessor
-                 * @memberof baml_bridge.cffi.v1.BamlTy
-                 * @instance
-                 */
-                BamlTy.prototype.watchAccessor = null;
-
-                /**
                  * BamlTy typeVar.
                  * @member {baml_bridge.cffi.v1.IBamlTyTypeVar|null|undefined} typeVar
                  * @memberof baml_bridge.cffi.v1.BamlTy
@@ -3528,12 +3519,12 @@ export const baml_bridge = $root.baml_bridge = (() => {
 
                 /**
                  * BamlTy ty.
-                 * @member {"primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"function"|"future"|"rustType"|"metaType"|"resource"|"promptAst"|"void"|"watchAccessor"|"typeVar"|"associatedTypeProjection"|"never"|undefined} ty
+                 * @member {"primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"function"|"future"|"rustType"|"metaType"|"resource"|"promptAst"|"void"|"typeVar"|"associatedTypeProjection"|"never"|undefined} ty
                  * @memberof baml_bridge.cffi.v1.BamlTy
                  * @instance
                  */
                 Object.defineProperty(BamlTy.prototype, "ty", {
-                    get: $util.oneOfGetter($oneOfFields = ["primitive", "classTy", "enum", "list", "map", "optional", "union", "literal", "typeAlias", "unknown", "media", "interface", "enumVariant", "function", "future", "rustType", "metaType", "resource", "promptAst", "void", "watchAccessor", "typeVar", "associatedTypeProjection", "never"]),
+                    get: $util.oneOfGetter($oneOfFields = ["primitive", "classTy", "enum", "list", "map", "optional", "union", "literal", "typeAlias", "unknown", "media", "interface", "enumVariant", "function", "future", "rustType", "metaType", "resource", "promptAst", "void", "typeVar", "associatedTypeProjection", "never"]),
                     set: $util.oneOfSetter($oneOfFields)
                 });
 
@@ -3605,8 +3596,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         $root.baml_bridge.cffi.v1.BamlTyPromptAst.encode(message.promptAst, writer.uint32(/* id 19, wireType 2 =*/154).fork(), q + 1).ldelim();
                     if (message["void"] != null && Object.hasOwnProperty.call(message, "void"))
                         $root.baml_bridge.cffi.v1.BamlTyVoid.encode(message["void"], writer.uint32(/* id 20, wireType 2 =*/162).fork(), q + 1).ldelim();
-                    if (message.watchAccessor != null && Object.hasOwnProperty.call(message, "watchAccessor"))
-                        $root.baml_bridge.cffi.v1.BamlTyWatchAccessor.encode(message.watchAccessor, writer.uint32(/* id 21, wireType 2 =*/170).fork(), q + 1).ldelim();
                     if (message.typeVar != null && Object.hasOwnProperty.call(message, "typeVar"))
                         $root.baml_bridge.cffi.v1.BamlTyTypeVar.encode(message.typeVar, writer.uint32(/* id 22, wireType 2 =*/178).fork(), q + 1).ldelim();
                     if (message.associatedTypeProjection != null && Object.hasOwnProperty.call(message, "associatedTypeProjection"))
@@ -3626,7 +3615,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTy.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -3731,10 +3720,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             }
                         case 20: {
                                 message["void"] = $root.baml_bridge.cffi.v1.BamlTyVoid.decode(reader, reader.uint32(), undefined, long + 1);
-                                break;
-                            }
-                        case 21: {
-                                message.watchAccessor = $root.baml_bridge.cffi.v1.BamlTyWatchAccessor.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 22: {
@@ -3987,16 +3972,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "void." + error;
                         }
                     }
-                    if (message.watchAccessor != null && message.hasOwnProperty("watchAccessor")) {
-                        if (properties.ty === 1)
-                            return "ty: multiple values";
-                        properties.ty = 1;
-                        {
-                            let error = $root.baml_bridge.cffi.v1.BamlTyWatchAccessor.verify(message.watchAccessor, long + 1);
-                            if (error)
-                                return "watchAccessor." + error;
-                        }
-                    }
                     if (message.typeVar != null && message.hasOwnProperty("typeVar")) {
                         if (properties.ty === 1)
                             return "ty: multiple values";
@@ -4148,11 +4123,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             throw TypeError(".baml_bridge.cffi.v1.BamlTy.void: object expected");
                         message["void"] = $root.baml_bridge.cffi.v1.BamlTyVoid.fromObject(object["void"], long + 1);
                     }
-                    if (object.watchAccessor != null) {
-                        if (!$util.isObject(object.watchAccessor))
-                            throw TypeError(".baml_bridge.cffi.v1.BamlTy.watchAccessor: object expected");
-                        message.watchAccessor = $root.baml_bridge.cffi.v1.BamlTyWatchAccessor.fromObject(object.watchAccessor, long + 1);
-                    }
                     if (object.typeVar != null) {
                         if (!$util.isObject(object.typeVar))
                             throw TypeError(".baml_bridge.cffi.v1.BamlTy.typeVar: object expected");
@@ -4287,11 +4257,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object["void"] = $root.baml_bridge.cffi.v1.BamlTyVoid.toObject(message["void"], options, q + 1);
                         if (options.oneofs)
                             object.ty = "void";
-                    }
-                    if (message.watchAccessor != null && message.hasOwnProperty("watchAccessor")) {
-                        object.watchAccessor = $root.baml_bridge.cffi.v1.BamlTyWatchAccessor.toObject(message.watchAccessor, options, q + 1);
-                        if (options.oneofs)
-                            object.ty = "watchAccessor";
                     }
                     if (message.typeVar != null && message.hasOwnProperty("typeVar")) {
                         object.typeVar = $root.baml_bridge.cffi.v1.BamlTyTypeVar.toObject(message.typeVar, options, q + 1);
@@ -4441,7 +4406,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyPrimitive.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -4730,7 +4695,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyClass.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -5002,7 +4967,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyTypeAlias.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -5261,7 +5226,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyEnum.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -5488,7 +5453,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyList.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -5731,7 +5696,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyMap.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -5981,7 +5946,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyOptional.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -6215,7 +6180,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyUnion.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -6450,7 +6415,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyUnknown.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -6714,7 +6679,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyLiteral.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -7051,7 +7016,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyMedia.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -7343,7 +7308,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyInterface.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -7645,7 +7610,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyAssociatedBinding.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -7901,7 +7866,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyEnumVariant.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -8188,7 +8153,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyFunctionParam.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -8511,7 +8476,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyFunction.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -8831,7 +8796,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyFuture.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -9070,7 +9035,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyRustType.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -9265,7 +9230,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyMetaType.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -9460,7 +9425,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyResource.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -9655,7 +9620,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyPromptAst.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -9850,7 +9815,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyVoid.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -9981,238 +9946,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 return BamlTyVoid;
             })();
 
-            v1.BamlTyWatchAccessor = (function() {
-
-                /**
-                 * Properties of a BamlTyWatchAccessor.
-                 * @memberof baml_bridge.cffi.v1
-                 * @interface IBamlTyWatchAccessor
-                 * @property {baml_bridge.cffi.v1.IBamlTy|null} [inner] BamlTyWatchAccessor inner
-                 */
-
-                /**
-                 * Constructs a new BamlTyWatchAccessor.
-                 * @memberof baml_bridge.cffi.v1
-                 * @classdesc Represents a BamlTyWatchAccessor.
-                 * @implements IBamlTyWatchAccessor
-                 * @constructor
-                 * @param {baml_bridge.cffi.v1.IBamlTyWatchAccessor=} [properties] Properties to set
-                 */
-                function BamlTyWatchAccessor(properties) {
-                    if (properties)
-                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
-                                this[keys[i]] = properties[keys[i]];
-                }
-
-                /**
-                 * BamlTyWatchAccessor inner.
-                 * @member {baml_bridge.cffi.v1.IBamlTy|null|undefined} inner
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @instance
-                 */
-                BamlTyWatchAccessor.prototype.inner = null;
-
-                /**
-                 * Creates a new BamlTyWatchAccessor instance using the specified properties.
-                 * @function create
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @static
-                 * @param {baml_bridge.cffi.v1.IBamlTyWatchAccessor=} [properties] Properties to set
-                 * @returns {baml_bridge.cffi.v1.BamlTyWatchAccessor} BamlTyWatchAccessor instance
-                 */
-                BamlTyWatchAccessor.create = function create(properties) {
-                    return new BamlTyWatchAccessor(properties);
-                };
-
-                /**
-                 * Encodes the specified BamlTyWatchAccessor message. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyWatchAccessor.verify|verify} messages.
-                 * @function encode
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @static
-                 * @param {baml_bridge.cffi.v1.IBamlTyWatchAccessor} message BamlTyWatchAccessor message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                BamlTyWatchAccessor.encode = function encode(message, writer, q) {
-                    if (!writer)
-                        writer = $Writer.create();
-                    if (q === undefined)
-                        q = 0;
-                    if (q > $util.recursionLimit)
-                        throw Error("max depth exceeded");
-                    if (message.inner != null && Object.hasOwnProperty.call(message, "inner"))
-                        $root.baml_bridge.cffi.v1.BamlTy.encode(message.inner, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
-                    return writer;
-                };
-
-                /**
-                 * Encodes the specified BamlTyWatchAccessor message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyWatchAccessor.verify|verify} messages.
-                 * @function encodeDelimited
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @static
-                 * @param {baml_bridge.cffi.v1.IBamlTyWatchAccessor} message BamlTyWatchAccessor message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                BamlTyWatchAccessor.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
-                };
-
-                /**
-                 * Decodes a BamlTyWatchAccessor message from the specified reader or buffer.
-                 * @function decode
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @param {number} [length] Message length if known beforehand
-                 * @returns {baml_bridge.cffi.v1.BamlTyWatchAccessor} BamlTyWatchAccessor
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                BamlTyWatchAccessor.decode = function decode(reader, length, error, long) {
-                    if (!(reader instanceof $Reader))
-                        reader = $Reader.create(reader);
-                    if (long === undefined)
-                        long = 0;
-                    if (long > $Reader.recursionLimit)
-                        throw Error("maximum nesting depth exceeded");
-                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlTyWatchAccessor();
-                    while (reader.pos < end) {
-                        let tag = reader.uint32();
-                        if (tag === error)
-                            break;
-                        switch (tag >>> 3) {
-                        case 1: {
-                                message.inner = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
-                                break;
-                            }
-                        default:
-                            reader.skipType(tag & 7, long);
-                            break;
-                        }
-                    }
-                    return message;
-                };
-
-                /**
-                 * Decodes a BamlTyWatchAccessor message from the specified reader or buffer, length delimited.
-                 * @function decodeDelimited
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @returns {baml_bridge.cffi.v1.BamlTyWatchAccessor} BamlTyWatchAccessor
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                BamlTyWatchAccessor.decodeDelimited = function decodeDelimited(reader) {
-                    if (!(reader instanceof $Reader))
-                        reader = new $Reader(reader);
-                    return this.decode(reader, reader.uint32());
-                };
-
-                /**
-                 * Verifies a BamlTyWatchAccessor message.
-                 * @function verify
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @static
-                 * @param {Object.<string,*>} message Plain object to verify
-                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
-                 */
-                BamlTyWatchAccessor.verify = function verify(message, long) {
-                    if (typeof message !== "object" || message === null)
-                        return "object expected";
-                    if (long === undefined)
-                        long = 0;
-                    if (long > $util.recursionLimit)
-                        return "maximum nesting depth exceeded";
-                    if (message.inner != null && message.hasOwnProperty("inner")) {
-                        let error = $root.baml_bridge.cffi.v1.BamlTy.verify(message.inner, long + 1);
-                        if (error)
-                            return "inner." + error;
-                    }
-                    return null;
-                };
-
-                /**
-                 * Creates a BamlTyWatchAccessor message from a plain object. Also converts values to their respective internal types.
-                 * @function fromObject
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @static
-                 * @param {Object.<string,*>} object Plain object
-                 * @returns {baml_bridge.cffi.v1.BamlTyWatchAccessor} BamlTyWatchAccessor
-                 */
-                BamlTyWatchAccessor.fromObject = function fromObject(object, long) {
-                    if (object instanceof $root.baml_bridge.cffi.v1.BamlTyWatchAccessor)
-                        return object;
-                    if (!$util.isObject(object))
-                        throw TypeError(".baml_bridge.cffi.v1.BamlTyWatchAccessor: object expected");
-                    if (long === undefined)
-                        long = 0;
-                    if (long > $util.recursionLimit)
-                        throw Error("maximum nesting depth exceeded");
-                    let message = new $root.baml_bridge.cffi.v1.BamlTyWatchAccessor();
-                    if (object.inner != null) {
-                        if (!$util.isObject(object.inner))
-                            throw TypeError(".baml_bridge.cffi.v1.BamlTyWatchAccessor.inner: object expected");
-                        message.inner = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.inner, long + 1);
-                    }
-                    return message;
-                };
-
-                /**
-                 * Creates a plain object from a BamlTyWatchAccessor message. Also converts values to other types if specified.
-                 * @function toObject
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @static
-                 * @param {baml_bridge.cffi.v1.BamlTyWatchAccessor} message BamlTyWatchAccessor
-                 * @param {$protobuf.IConversionOptions} [options] Conversion options
-                 * @returns {Object.<string,*>} Plain object
-                 */
-                BamlTyWatchAccessor.toObject = function toObject(message, options, q) {
-                    if (!options)
-                        options = {};
-                    if (q === undefined)
-                        q = 0;
-                    if (q > $util.recursionLimit)
-                        throw Error("max depth exceeded");
-                    let object = {};
-                    if (options.defaults)
-                        object.inner = null;
-                    if (message.inner != null && message.hasOwnProperty("inner"))
-                        object.inner = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.inner, options, q + 1);
-                    return object;
-                };
-
-                /**
-                 * Converts this BamlTyWatchAccessor to JSON.
-                 * @function toJSON
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @instance
-                 * @returns {Object.<string,*>} JSON object
-                 */
-                BamlTyWatchAccessor.prototype.toJSON = function toJSON() {
-                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-                };
-
-                /**
-                 * Gets the default type url for BamlTyWatchAccessor
-                 * @function getTypeUrl
-                 * @memberof baml_bridge.cffi.v1.BamlTyWatchAccessor
-                 * @static
-                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns {string} The default type url
-                 */
-                BamlTyWatchAccessor.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
-                    if (typeUrlPrefix === undefined) {
-                        typeUrlPrefix = "type.googleapis.com";
-                    }
-                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlTyWatchAccessor";
-                };
-
-                return BamlTyWatchAccessor;
-            })();
-
             v1.BamlTyTypeVar = (function() {
 
                 /**
@@ -10288,7 +10021,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyTypeVar.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -10537,7 +10270,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyAssociatedTypeProjection.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -10788,7 +10521,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlTyNever.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -11030,7 +10763,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundResult.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -11328,7 +11061,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundError.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -11622,7 +11355,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundPanic.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -12112,7 +11845,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -12734,7 +12467,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundHandle.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -13080,7 +12813,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueNull.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -13299,7 +13032,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueList.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -13574,7 +13307,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlOutboundMapEntry.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -13843,7 +13576,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueMap.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -14151,7 +13884,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueClass.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -14464,7 +14197,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueEnum.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -14771,7 +14504,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueUnionVariant.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -15155,7 +14888,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValueMedia.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -15526,7 +15259,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAst.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -15833,7 +15566,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAstMessage.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -16092,7 +15825,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAstMultiple.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -16374,7 +16107,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAstSimple.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -16655,7 +16388,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlValuePromptAstSimpleMultiple.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -16903,7 +16636,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlToHostCall.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -17171,7 +16904,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlToHostArg.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**
@@ -17486,7 +17219,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @returns {$protobuf.Writer} Writer
                  */
                 BamlLiteralValue.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer).ldelim();
+                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
                 };
 
                 /**

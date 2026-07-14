@@ -64,16 +64,6 @@ function user.for_loop_restores_outer() -> int throws never {
     x : int
   }
 }
-function user.watch_block_cleanup() -> int throws never {
-  { : int
-    let x = 1 : 1 -> int
-    { : void
-      let x = 2 : 2 -> int
-      x : int
-    }
-    x : int
-  }
-}
 function user.nested_outer_restored() -> int throws never {
   { : int
     let x = 1 : 1 -> int

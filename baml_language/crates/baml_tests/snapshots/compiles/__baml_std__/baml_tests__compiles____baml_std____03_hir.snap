@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 4473
 ---
 === HIR2 ===
 
@@ -978,6 +977,13 @@ class baml.llm.ContextClient {
   default_role: string
   allowed_roles: string[]
 }
+class baml.llm.GoogleAiOptions {
+  enterprise: bool | null
+  credentials: string | null
+  credentials_content: string | null
+  location: string | null
+  project_id: string | null
+}
 class baml.llm.MediaUrlHandler {
   image: string | null
   audio: string | null
@@ -1003,7 +1009,7 @@ class baml.llm.PrimitiveClientOptions {
   allowed_roles: string[] | null
   remap_roles: map<string, string> | null
   api_key: string | null
-  provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.VertexAiOptions | null
+  provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | baml.llm.BedrockOptions | baml.llm.GoogleAiOptions | baml.llm.VertexAiOptions | null
   media_url_handler: baml.llm.MediaUrlHandler | null
   headers: map<string, string>
   query_params: map<string, string>

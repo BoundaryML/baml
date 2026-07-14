@@ -52,7 +52,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Continue => SyntaxKind::KW_CONTINUE,
         TokenKind::Return => SyntaxKind::KW_RETURN,
         TokenKind::Throw => SyntaxKind::KW_THROW,
-        TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
         TokenKind::Is => SyntaxKind::KW_IS,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
@@ -1228,8 +1227,7 @@ impl<'a> Parser<'a> {
             || matches!(
                 self.current().map(|t| t.kind),
                 Some(
-                    TokenKind::Watch
-                        | TokenKind::Return
+                    TokenKind::Return
                         | TokenKind::While
                         | TokenKind::For
                         | TokenKind::Break
@@ -3078,7 +3076,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::LParen);
         self.parse_type();
         if self.at_contextual_kw("as") {
-            self.bump();
+            self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
         } else {
             self.error_unexpected_token("`as`".to_string());
         }
@@ -3732,7 +3730,7 @@ impl<'a> Parser<'a> {
             }
 
             if p.at_contextual_kw("as") {
-                p.bump();
+                p.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
             } else {
                 p.error_unexpected_token("`as`".to_string());
             }
@@ -3825,7 +3823,7 @@ impl<'a> Parser<'a> {
     fn parse_associated_type_decl(&mut self, require_binding: bool) {
         self.with_node(SyntaxKind::ASSOCIATED_TYPE_DECL, |p| {
             if p.at_contextual_kw("type") {
-                p.bump();
+                p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
             } else {
                 p.error_unexpected_token("`type`".to_string());
             }
@@ -4479,9 +4477,7 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        if self.at(TokenKind::Watch) {
-            self.parse_watch_let_stmt();
-        } else if self.at_binding_intro_stmt() {
+        if self.at_binding_intro_stmt() {
             self.parse_let_stmt();
         } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
@@ -4567,32 +4563,6 @@ impl<'a> Parser<'a> {
                 } else {
                     p.error_unexpected_token("block after 'else'".to_string());
                 }
-            }
-
-            // Consume trailing semicolon
-            p.eat(TokenKind::Semicolon);
-        });
-    }
-
-    fn parse_watch_let_stmt(&mut self) {
-        self.with_node(SyntaxKind::WATCH_LET, |p| {
-            p.expect(TokenKind::Watch);
-            // Same invariant as parse_let_stmt: pattern must start with `let`.
-            if !p.at_binding_intro_stmt() {
-                p.error_unexpected_token("'let'".to_string());
-            }
-            if p.binding_intro_is_followed_by_array_pattern() {
-                p.bump_binding_intro(); // statement-level binding introducer
-                p.parse_pattern();
-            } else {
-                p.parse_pattern();
-            }
-
-            // Initializer
-            if p.eat(TokenKind::Equals) {
-                p.parse_expr_bp(3);
-            } else {
-                p.error_unexpected_token("initializer (=)".to_string());
             }
 
             // Consume trailing semicolon
@@ -5988,7 +5958,7 @@ impl<'a> Parser<'a> {
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);
                 self.bump(); // .
-                self.bump(); // contextual `as`
+                self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
                 self.parse_generic_args();
                 self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
@@ -6004,7 +5974,6 @@ impl<'a> Parser<'a> {
                 // uses PATH_EXPR instead (see `parse_path_or_ident`). PATH_EXPR is
                 // created during primary expression parsing when we see `WORD.WORD`.
                 //
-                // Also handles special `.$field` syntax for watch variables.
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::FIELD_ACCESS_EXPR);
                 self.bump(); // . or $
@@ -6371,12 +6340,12 @@ impl<'a> Parser<'a> {
             {
                 // env.FIELD sugar (not followed by `(`) — desugar to baml.env.get_or_panic("FIELD")
                 self.parse_env_access();
-            } else if text == "true" || text == "false" {
-                // Boolean literal
-                self.bump();
+            } else if text == "true" {
+                self.bump_contextual_kw_as("true", SyntaxKind::KW_TRUE);
+            } else if text == "false" {
+                self.bump_contextual_kw_as("false", SyntaxKind::KW_FALSE);
             } else if text == "null" {
-                // Null literal
-                self.bump();
+                self.bump_contextual_kw_as("null", SyntaxKind::KW_NULL);
             } else {
                 // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
                 self.parse_path_or_ident();
@@ -7915,7 +7884,7 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TYPE_ALIAS_DEF, |p| {
             // 'type' keyword
             if p.at(TokenKind::Word) && p.current().map(|t| t.text == "type").unwrap_or(false) {
-                p.bump();
+                p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
             } else {
                 p.error_unexpected_token("'type' keyword".to_string());
             }
@@ -8993,35 +8962,6 @@ function Demo() -> string {{
                 "raw string should retain marker {marker:?}: {raw_string:?}"
             );
         }
-    }
-
-    #[test]
-    fn incomplete_map_field_value_stops_before_watch_let() {
-        let (root, _errors) = parse_source(
-            r#"
-function GuessGameAgent() -> string {
-  log.info({"famous_person_name":
-  watch let user_input = SimulateHumanGuess(history)
-  user_input
-}
-"#,
-        );
-
-        let map = root
-            .descendants()
-            .find(|node| node.kind() == SyntaxKind::MAP_LITERAL)
-            .expect("map literal should still be parsed");
-        assert!(
-            !map.text().to_string().contains("watch let"),
-            "unterminated map literal swallowed the following watched statement: {}",
-            map.text()
-        );
-
-        assert!(
-            root.descendants()
-                .any(|node| node.kind() == SyntaxKind::WATCH_LET),
-            "`watch let` should recover as its own statement"
-        );
     }
 
     #[test]
@@ -11747,23 +11687,6 @@ function f(r: int | string) -> int {
         assert!(
             !errors.is_empty(),
             "expected parse error for `let ... else if ...`"
-        );
-    }
-
-    #[test]
-    fn let_else_rejected_in_watch_let() {
-        // `watch let X = y else { ... };` — combining watched bindings with
-        // let-else divergence is rejected at parse time.
-        let source = r#"
-function f(r: int | string) -> int {
-  watch let v: int = r else { return 0; };
-  v
-}
-"#;
-        let (_, errors) = parse_source(source);
-        assert!(
-            !errors.is_empty(),
-            "expected parse error for `watch let ... else {{ ... }}`"
         );
     }
 

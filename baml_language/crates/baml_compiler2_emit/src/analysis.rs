@@ -581,36 +581,11 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                 StatementKind::Drop(place) => {
                     collect_uses_in_place(place, block.id, stmt_ref, &mut def_use);
                 }
-                StatementKind::Unwatch(local) => {
-                    // Unwatch uses the local (we need to read its value to unlink from watch graph)
-                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
-                        block: block.id,
-                        statement_ref: stmt_ref,
-                    });
-                }
-                StatementKind::NotifyBlock { .. } => {
-                    // NotifyBlock doesn't use any locals - it's a pure side effect
-                }
                 StatementKind::Intrinsic { args, .. } => {
                     // Intrinsic args are reads — record uses for each operand
                     for arg in args {
                         collect_uses_in_operand(arg, block.id, stmt_ref, &mut def_use);
                     }
-                }
-                StatementKind::WatchOptions { local, filter } => {
-                    // WatchOptions uses the local and the filter operand
-                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
-                        block: block.id,
-                        statement_ref: stmt_ref,
-                    });
-                    collect_uses_in_operand(filter, block.id, stmt_ref, &mut def_use);
-                }
-                StatementKind::WatchNotify(local) => {
-                    // WatchNotify uses the local
-                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
-                        block: block.id,
-                        statement_ref: stmt_ref,
-                    });
                 }
                 StatementKind::FreshCell(local) => {
                     // FreshCell only has an effect when the local is captured
@@ -1022,11 +997,7 @@ fn classify_locals(
         // Compiler temps have name=None and are always eligible for optimization.
         let is_user_local = local_decl.name.is_some();
 
-        let classification = if local_decl.is_watched {
-            // Watched variables must always be Real - no optimizations allowed.
-            // This ensures they have a stable stack slot for Watch/Unwatch instructions.
-            LocalClassification::Real
-        } else if idx > 0 && idx <= arity {
+        let classification = if idx > 0 && idx <= arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
         } else if local_decl.is_captured {
@@ -1209,18 +1180,11 @@ fn is_short_circuit_phi(local: Local, du: &LocalDefUse, body: &MirFunctionBody) 
 fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
     match kind {
         // These don't touch the stack at all - just update external state
-        StatementKind::Unwatch(_) => true,
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true,
-        StatementKind::NotifyBlock { .. } => true,
-        StatementKind::WatchNotify(_) => true,
         StatementKind::FreshCell(_) => true,
         // Intrinsics push args then SendEvent consumes them - net neutral
         StatementKind::Intrinsic { .. } => true,
         StatementKind::Nop => true,
-
-        // WatchOptions pushes 2 (channel, filter) then Watch pops 2 - net neutral
-        // The return value stays at TOS throughout
-        StatementKind::WatchOptions { .. } => true,
 
         // These modify the stack
         StatementKind::Assign { .. } => false,
@@ -1231,7 +1195,7 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
 /// Check if `_0` (the return place) is a "return-phi" local.
 ///
 /// Return-phi applies when `_0` is assigned before Return in each defining block,
-/// with only stack-neutral statements (like Unwatch, `VizExit`) between the assignment
+/// with only stack-neutral statements (like `VizExit`) between the assignment
 /// and Return. This allows us to:
 /// - At def sites: emit rvalue but NOT `StoreVar` (leave value on stack)
 /// - At Return: skip `LoadVar` for _0 (value already on stack)
@@ -1641,10 +1605,6 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
             false
         }
         StatementKind::Drop(_) => true,
-        StatementKind::Unwatch(_) => true, // Unwatch has side effects on watch graph
-        StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
-        StatementKind::WatchOptions { .. } => true, // WatchOptions has side effects on watch graph
-        StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
         StatementKind::FreshCell(local) => rvalue_reads.contains(local),
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
@@ -2027,7 +1987,6 @@ mod tests {
             },
             span: None,
             scope_span: None,
-            is_watched: false,
             is_captured: false,
         }
     }

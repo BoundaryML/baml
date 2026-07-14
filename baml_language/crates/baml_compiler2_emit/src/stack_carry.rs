@@ -464,23 +464,11 @@ fn simulate_statement_stack(
             };
             pull_semantics::walk_drop_statement(&mut sink, place).is_ok()
         }
-        StatementKind::Unwatch(_)
-        | StatementKind::NotifyBlock { .. }
-        | StatementKind::WatchNotify(_)
-        | StatementKind::FreshCell(_)
+        StatementKind::FreshCell(_)
         | StatementKind::VizEnter(_)
         | StatementKind::VizExit(_)
         | StatementKind::Intrinsic { .. }
         | StatementKind::Nop => true,
-        StatementKind::WatchOptions { local, filter } => {
-            let mut sink = StackCarryPullSink {
-                sim,
-                carried_local,
-                classifications,
-                def_use,
-            };
-            pull_semantics::walk_watch_options_statement(&mut sink, *local, None, filter).is_ok()
-        }
     }
 }
 
@@ -1450,22 +1438,6 @@ impl StackEffectSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn push_watch_channel(
-        &mut self,
-        _local: Local,
-        _channel_name: Option<&str>,
-    ) -> Result<(), Self::Error> {
-        self.sim.push();
-        Ok(())
-    }
-
-    fn watch_local(&mut self, _local: Local) -> Result<(), Self::Error> {
-        if !self.sim.pop_n(2) {
-            return Err(());
-        }
-        Ok(())
-    }
-
     fn store_capture_value(&mut self, _idx: usize) -> Result<(), Self::Error> {
         // StoreCapture pops one value (the value to store into the capture cell).
         if !self.sim.pop_n(1) {
@@ -1500,7 +1472,6 @@ mod tests {
             ty,
             span: None,
             scope_span: None,
-            is_watched: false,
             is_captured: false,
         }
     }

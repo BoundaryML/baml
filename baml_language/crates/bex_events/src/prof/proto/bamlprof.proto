@@ -20,9 +20,6 @@
 //   row (synthetic entry trampolines, host-injected callables). Display such
 //   calls under the reserved `baml.<unknown-function>` table row; no record
 //   ever references that row's id directly.
-// - Watch-filter calls appear in the stream like any other call (they are
-//   code that runs, attached under the interrupted call). Program-only views
-//   may hide subtrees rooted at calls to watch-filter functions.
 // - A call's effective $id at a point in time is its most recent
 //   SetFunctionId; for a single display label take the last one (last-wins).
 //   One record is emitted per baml.id.set() call, deliberately undeduplicated.

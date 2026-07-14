@@ -374,9 +374,15 @@ fn format_semantic_tokens_results(
         let len = end_offset - start_offset;
         let text = &file_content[start_offset..end_offset];
         let token_type_str = token.token_type.as_str();
+        let mods: Vec<&str> = token.modifiers.names().collect();
+        let mods_str = if mods.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", mods.join(","))
+        };
 
         output.push_str(&format!(
-            "// {filename}:{line}:{col} ({token_type_str}) len={len} {text:?}\n"
+            "// {filename}:{line}:{col} ({token_type_str}){mods_str} len={len} {text:?}\n"
         ));
     }
 

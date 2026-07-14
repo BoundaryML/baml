@@ -91,7 +91,7 @@ pub fn parse_cli_value(raw: &str, ty: &RuntimeTy) -> Result<BexExternalValue> {
         // faithfully represent must be delivered via `--json-args`.
         // Structured types (class/list/map/union) are the obvious case;
         // media, literals, type aliases, opaque types, and the engine-
-        // internal types (function/void/watch/future) fall in the same
+        // internal types (function/void/future) fall in the same
         // bucket — they either can't survive shell quoting or aren't
         // valid CLI parameter types. The previous catchall silently
         // String-coerced everything that fell through; that hides

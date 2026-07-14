@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 10955
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -23,7 +22,7 @@ SOURCE_FILE
             KW_IF "if"
             PAREN_EXPR "(true)"
               L_PAREN "("
-              WORD "true"
+              KW_TRUE "true"
               R_PAREN ")"
             BLOCK_EXPR "{ 2 }"
               L_BRACE "{"
@@ -104,7 +103,7 @@ SOURCE_FILE
               KW_IF "if"
               PAREN_EXPR "(true)"
                 L_PAREN "("
-                WORD "true"
+                KW_TRUE "true"
                 R_PAREN ")"
               BLOCK_EXPR "{ 1 }"
                 L_BRACE "{"
@@ -123,7 +122,7 @@ SOURCE_FILE
               KW_IF "if"
               PAREN_EXPR "(false)"
                 L_PAREN "("
-                WORD "false"
+                KW_FALSE "false"
                 R_PAREN ")"
               BLOCK_EXPR "{ 3 }"
                 L_BRACE "{"
@@ -155,7 +154,7 @@ SOURCE_FILE
             KW_IF "if"
             PAREN_EXPR "(true)"
               L_PAREN "("
-              WORD "true"
+              KW_TRUE "true"
               R_PAREN ")"
             BLOCK_EXPR "{ 7 }"
               L_BRACE "{"

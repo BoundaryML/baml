@@ -63,10 +63,13 @@ pub(super) fn server_capabilities(encoding: PositionEncoding) -> ServerCapabilit
                         .iter()
                         .map(|t| lsp_types::SemanticTokenType::new(t.as_str()))
                         .collect(),
-                    token_modifiers: vec![],
+                    token_modifiers: baml_lsp2_actions::TOKEN_MODIFIERS
+                        .iter()
+                        .map(|name| lsp_types::SemanticTokenModifier::new(name))
+                        .collect(),
                 },
-                full: Some(SemanticTokensFullOptions::Bool(true)),
-                range: None,
+                full: Some(SemanticTokensFullOptions::Delta { delta: Some(true) }),
+                range: Some(true),
                 ..Default::default()
             },
         )),
@@ -322,35 +325,96 @@ impl BexLspRequest for BexMulitProject {
         // Semantic tokens are Salsa-memoized per file revision; the
         // handler only delta-encodes the cached classification.
         let tokens = baml_lsp2_actions::semantic_tokens(lsp_db, source_file);
-
-        // Delta-encode in the negotiated encoding. Multiline tokens are split
-        // into same-line segments — VS Code does not advertise the multiline
-        // token capability, and splitting is valid for every client.
-        let mut lsp_tokens = Vec::with_capacity(tokens.len());
-        let mut prev_line = 0u32;
-        let mut prev_start = 0u32;
-
-        for token in tokens {
-            for segment in codec.token_segments(token.range) {
-                let delta_line = segment.line - prev_line;
-                let delta_start = if delta_line == 0 {
-                    segment.start_character - prev_start
-                } else {
-                    segment.start_character
-                };
-                lsp_tokens.push(lsp_types::SemanticToken {
-                    delta_line,
-                    delta_start,
-                    length: segment.length,
-                    token_type: token.token_type.legend_index(),
-                    token_modifiers_bitset: 0,
-                });
-                prev_line = segment.line;
-                prev_start = segment.start_character;
-            }
-        }
+        let lsp_tokens = encode_semantic_tokens(tokens, &codec);
+        let result_id = self.cache_semantic_tokens(&path, lsp_tokens.clone());
 
         Ok(Some(lsp_types::SemanticTokensResult::Tokens(
+            lsp_types::SemanticTokens {
+                result_id: Some(result_id),
+                data: lsp_tokens,
+            },
+        )))
+    }
+
+    /// Incremental semantic tokens — rust-analyzer's `full/delta`. Diffs the new
+    /// token array against the cached one for the client's `previous_result_id`
+    /// and returns just the edits; falls back to the full set on a cache miss.
+    fn on_request_text_document_semantic_tokens_full_delta(
+        &self,
+        params: lsp_request_params!("textDocument/semanticTokens/full/delta"),
+    ) -> Result<lsp_request_result!("textDocument/semanticTokens/full/delta"), LspError> {
+        let encoding = self.encoding_for_request()?;
+        let path = self.get_path_from_uri(&params.text_document.uri)?;
+        let root_path = Self::get_baml_project_root(&path)?;
+        let project_handle = self.get_or_create_project(root_path)?;
+
+        let guard = read_for_request(&project_handle.project)?;
+        let lsp_db = guard.db();
+        let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
+            return Ok(None);
+        };
+        let text = source_file.text(lsp_db);
+        let codec = PositionCodec::new(text, encoding);
+
+        let tokens = baml_lsp2_actions::semantic_tokens(lsp_db, source_file);
+        let new_tokens = encode_semantic_tokens(tokens, &codec);
+
+        // The previous token array iff its result_id matches what the client holds.
+        let key = crate::fs::FsPath::from_vfs(&path);
+        let prev = {
+            let cache = self.semantic_tokens_cache.lock().unwrap();
+            cache
+                .get(&key)
+                .filter(|(id, _)| *id == params.previous_result_id)
+                .map(|(_, toks)| toks.clone())
+        };
+        let result_id = self.cache_semantic_tokens(&path, new_tokens.clone());
+
+        match prev {
+            Some(prev_tokens) => Ok(Some(lsp_types::SemanticTokensFullDeltaResult::TokensDelta(
+                lsp_types::SemanticTokensDelta {
+                    result_id: Some(result_id),
+                    edits: diff_semantic_tokens(&prev_tokens, &new_tokens),
+                },
+            ))),
+            None => Ok(Some(lsp_types::SemanticTokensFullDeltaResult::Tokens(
+                lsp_types::SemanticTokens {
+                    result_id: Some(result_id),
+                    data: new_tokens,
+                },
+            ))),
+        }
+    }
+
+    /// Viewport semantic tokens — rust-analyzer's `highlight_range`. Resolves
+    /// only the scopes the requested range touches.
+    fn on_request_text_document_semantic_tokens_range(
+        &self,
+        params: lsp_request_params!("textDocument/semanticTokens/range"),
+    ) -> Result<lsp_request_result!("textDocument/semanticTokens/range"), LspError> {
+        let encoding = self.encoding_for_request()?;
+        let path = self.get_path_from_uri(&params.text_document.uri)?;
+        let root_path = Self::get_baml_project_root(&path)?;
+        let project_handle = self.get_or_create_project(root_path)?;
+
+        let guard = read_for_request(&project_handle.project)?;
+        let lsp_db = guard.db();
+        let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
+            return Ok(None);
+        };
+        let text = source_file.text(lsp_db);
+        let codec = PositionCodec::new(text, encoding);
+
+        let range = codec.range_to_byte_range(params.range)?;
+        let tokens = baml_lsp2_actions::tokens::semantic_tokens_in_range(
+            lsp_db,
+            source_file,
+            range.start().into(),
+            range.end().into(),
+        );
+        let lsp_tokens = encode_semantic_tokens(&tokens, &codec);
+
+        Ok(Some(lsp_types::SemanticTokensRangeResult::Tokens(
             lsp_types::SemanticTokens {
                 result_id: None,
                 data: lsp_tokens,
@@ -836,6 +900,184 @@ impl BexLspRequest for BexMulitProject {
     }
 }
 
+/// Delta-encode classified tokens through the connection's negotiated codec
+/// into the LSP wire format. `delta_start` and `length` are in negotiated code
+/// units, not bytes. Shared by the `full` and `range` requests.
+/// Multiline tokens are split into same-line segments — VS Code does not
+/// advertise the multiline token capability, and splitting is valid for every
+/// client.
+fn encode_semantic_tokens(
+    tokens: &[baml_lsp2_actions::tokens::SemanticToken],
+    codec: &PositionCodec<'_>,
+) -> Vec<lsp_types::SemanticToken> {
+    let mut out = Vec::with_capacity(tokens.len());
+    let mut prev_line = 0u32;
+    let mut prev_start = 0u32;
+    for token in tokens {
+        for segment in codec.token_segments(token.range) {
+            let delta_line = segment.line - prev_line;
+            let delta_start = if delta_line == 0 {
+                segment.start_character - prev_start
+            } else {
+                segment.start_character
+            };
+            out.push(lsp_types::SemanticToken {
+                delta_line,
+                delta_start,
+                length: segment.length,
+                token_type: token.token_type.legend_index(),
+                token_modifiers_bitset: token.modifiers.bits(),
+            });
+            prev_line = segment.line;
+            prev_start = segment.start_character;
+        }
+    }
+    out
+}
+
+/// Minimal single-edit diff of two encoded token arrays (rust-analyzer's
+/// approach): trim the common prefix and suffix at token granularity and
+/// replace only the differing middle. `start`/`delete_count` are offsets into
+/// the flat LSP `u32` stream (5 integers per token), so they scale by 5.
+fn diff_semantic_tokens(
+    prev: &[lsp_types::SemanticToken],
+    new: &[lsp_types::SemanticToken],
+) -> Vec<lsp_types::SemanticTokensEdit> {
+    let mut p = 0;
+    while p < prev.len() && p < new.len() && prev[p] == new[p] {
+        p += 1;
+    }
+    let mut s = 0;
+    while s < prev.len() - p
+        && s < new.len() - p
+        && prev[prev.len() - 1 - s] == new[new.len() - 1 - s]
+    {
+        s += 1;
+    }
+    let deleted = prev.len() - p - s;
+    let data = new[p..new.len() - s].to_vec();
+    if deleted == 0 && data.is_empty() {
+        return Vec::new();
+    }
+    vec![lsp_types::SemanticTokensEdit {
+        start: u32::try_from(p * 5).unwrap_or(u32::MAX),
+        delete_count: u32::try_from(deleted * 5).unwrap_or(u32::MAX),
+        data: Some(data),
+    }]
+}
+
+#[cfg(test)]
+mod semantic_tokens_delta_tests {
+    use super::diff_semantic_tokens;
+
+    fn tok(line: u32) -> lsp_types::SemanticToken {
+        lsp_types::SemanticToken {
+            delta_line: line,
+            delta_start: 0,
+            length: 1,
+            token_type: 0,
+            token_modifiers_bitset: 0,
+        }
+    }
+
+    #[test]
+    fn identical_yields_no_edits() {
+        let a = vec![tok(1), tok(2), tok(3)];
+        assert!(diff_semantic_tokens(&a, &a).is_empty());
+    }
+
+    #[test]
+    fn middle_replacement_scales_by_five() {
+        let edits = diff_semantic_tokens(&[tok(1), tok(2), tok(3)], &[tok(1), tok(9), tok(3)]);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].start, 5); // one unchanged leading token
+        assert_eq!(edits[0].delete_count, 5); // one token replaced
+        assert_eq!(edits[0].data.as_ref().unwrap(), &[tok(9)]);
+    }
+
+    #[test]
+    fn append_is_pure_insert() {
+        let edits = diff_semantic_tokens(&[tok(1)], &[tok(1), tok(2)]);
+        assert_eq!(edits[0].start, 5);
+        assert_eq!(edits[0].delete_count, 0);
+        assert_eq!(edits[0].data.as_ref().unwrap(), &[tok(2)]);
+    }
+
+    #[test]
+    fn truncate_is_pure_delete() {
+        let edits = diff_semantic_tokens(&[tok(1), tok(2)], &[tok(1)]);
+        assert_eq!(edits[0].start, 5);
+        assert_eq!(edits[0].delete_count, 5);
+        assert!(edits[0].data.as_ref().unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod semantic_tokens_encoding_tests {
+    use baml_lsp2_actions::tokens::{ModifierSet, SemanticToken, SemanticTokenType};
+    use text_size::TextRange;
+
+    use super::encode_semantic_tokens;
+    use crate::bex_lsp::position_codec::{PositionCodec, PositionEncoding};
+
+    fn tok(start: u32, end: u32) -> SemanticToken {
+        SemanticToken {
+            range: TextRange::new(start.into(), end.into()),
+            token_type: SemanticTokenType::Variable,
+            modifiers: ModifierSet::empty(),
+        }
+    }
+
+    /// `delta_start`/`length` are code units of the negotiated encoding, not
+    /// bytes — the miscount the #3867 revert called out for non-ASCII sources.
+    #[test]
+    fn utf16_lengths_and_columns_are_code_units_not_bytes() {
+        // "名前" is 6 bytes / 2 UTF-16 units; "é" is 2 bytes / 1 unit.
+        let text = "let 名前 = \"café\"";
+        let codec = PositionCodec::new(text, PositionEncoding::UTF16);
+        // `名前` at bytes 4..10, `"café"` at bytes 13..20.
+        let out = encode_semantic_tokens(&[tok(4, 10), tok(13, 20)], &codec);
+
+        assert_eq!(out.len(), 2);
+        assert_eq!((out[0].delta_start, out[0].length), (4, 2));
+        // Same line: delta from col 4 to col 9 (4 + 2 + " = ").
+        assert_eq!(
+            (out[1].delta_line, out[1].delta_start, out[1].length),
+            (0, 5, 6)
+        );
+    }
+
+    /// A surrogate-pair character counts as 2 UTF-16 units (4 under UTF-8).
+    #[test]
+    fn surrogate_pairs_count_two_utf16_units() {
+        let text = "\u{1D54F} = 1"; // 𝕏: 4 bytes, one astral char
+        let utf16 = PositionCodec::new(text, PositionEncoding::UTF16);
+        let utf8 = PositionCodec::new(text, PositionEncoding::UTF8);
+
+        assert_eq!(encode_semantic_tokens(&[tok(0, 4)], &utf16)[0].length, 2);
+        assert_eq!(encode_semantic_tokens(&[tok(0, 4)], &utf8)[0].length, 4);
+    }
+
+    /// Multiline tokens split into per-line segments (clients don't advertise
+    /// the multiline token capability), with line-relative `delta_start`.
+    #[test]
+    fn multiline_token_splits_into_line_segments() {
+        let text = "ab\ncdef";
+        let codec = PositionCodec::new(text, PositionEncoding::UTF16);
+        let out = encode_semantic_tokens(&[tok(0, 5)], &codec);
+
+        assert_eq!(out.len(), 2);
+        assert_eq!(
+            (out[0].delta_line, out[0].delta_start, out[0].length),
+            (0, 0, 2)
+        );
+        assert_eq!(
+            (out[1].delta_line, out[1].delta_start, out[1].length),
+            (1, 0, 2)
+        );
+    }
+}
+
 /// Convert a compiler2 `DefinitionKind` to an LSP `SymbolKind`.
 ///
 /// Used by the `textDocument/documentSymbol` and `workspace/symbol` handlers
@@ -865,6 +1107,27 @@ fn definition_kind_to_lsp_symbol_kind(
 }
 
 impl BexMulitProject {
+    /// Store `tokens` as the latest semantic tokens for `path` under a fresh
+    /// `result_id`, returning that id so the next `full/delta` can diff against it.
+    ///
+    /// The cache is connection-scoped (tokens are encoded in this connection's
+    /// negotiated encoding); only the id sequence is shared process-wide.
+    fn cache_semantic_tokens(
+        &self,
+        path: &vfs::VfsPath,
+        tokens: Vec<lsp_types::SemanticToken>,
+    ) -> String {
+        let id = self
+            .semantic_tokens_seq
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            .to_string();
+        self.semantic_tokens_cache
+            .lock()
+            .unwrap()
+            .insert(crate::fs::FsPath::from_vfs(path), (id.clone(), tokens));
+        id
+    }
+
     /// Shared scaffolding for position-based requests: bounded read, file
     /// lookup, and incoming position conversion through the negotiated codec.
     ///

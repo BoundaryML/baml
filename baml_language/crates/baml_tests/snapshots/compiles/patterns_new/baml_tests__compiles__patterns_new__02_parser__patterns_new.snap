@@ -1002,7 +1002,7 @@ SOURCE_FILE
           R_BRACE "}"
         R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "Number"
     EQUALS "="
     TYPE_EXPR "int | float"

@@ -173,6 +173,13 @@ impl LiveProject {
     }
 }
 
+/// Per-file `result_id` + last-sent encoded token array, keyed by file path.
+type SemanticTokensCache = std::sync::Arc<
+    std::sync::Mutex<
+        std::collections::HashMap<crate::fs::FsPath, (String, Vec<lsp_types::SemanticToken>)>,
+    >,
+>;
+
 #[derive(Clone)]
 struct BexMulitProject {
     projects:
@@ -195,6 +202,21 @@ struct BexMulitProject {
     fs: crate::fs::BamlVFS,
 
     spawner: BackgroundSpawner,
+
+    /// Per-file cache of the last semantic tokens returned (its `result_id` and
+    /// the encoded token array), so `semanticTokens/full/delta` can reply with
+    /// only the changed edits instead of the whole array.
+    ///
+    /// Connection-scoped, like `negotiated_encoding`: the cached arrays are
+    /// encoded in this connection's negotiated encoding, and each client owns
+    /// its delta baseline — a shared cache would serve tokens encoded for the
+    /// wrong client and let concurrent sessions trample each other's
+    /// `previous_result_id`.
+    semantic_tokens_cache: SemanticTokensCache,
+    /// Monotonic source of semantic-token `result_id`s. Process-global on
+    /// purpose: ids only ever need to be unique, never dense, so one sequence
+    /// shared across connections keeps them unambiguous in logs.
+    semantic_tokens_seq: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 pub trait LspClientSenderTrait {
@@ -287,13 +309,18 @@ impl BexMulitProject {
             workspace_roots: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
             fs,
             spawner,
+            semantic_tokens_cache: std::sync::Arc::new(std::sync::Mutex::new(
+                std::collections::HashMap::new(),
+            )),
+            semantic_tokens_seq: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
     /// Connection-scoped dispatcher: shares the process-owned project
     /// registry (and everything hanging off it) but owns a fresh
-    /// position-encoding negotiation and fresh initialize workspace
-    /// roots, and writes only through the connection's revocable `sender`.
+    /// position-encoding negotiation, fresh initialize workspace
+    /// roots, and a fresh semantic-token delta cache (encoding-dependent),
+    /// and writes only through the connection's revocable `sender`.
     /// After browser takeover revokes that sender, a retained clone of
     /// this session fails `send_*` with `ClientClosed` instead of leaking
     /// into the replacement session.
@@ -305,6 +332,8 @@ impl BexMulitProject {
         session.sender = sender;
         session.negotiated_encoding = std::sync::Arc::new(OnceLock::new());
         session.workspace_roots = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        session.semantic_tokens_cache =
+            std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
         session
     }
 
@@ -2345,12 +2374,24 @@ mod tests {
         let session_sender = Arc::new(RecordingSender {
             notifications: std::sync::Mutex::new(Vec::new()),
         });
+        root.semantic_tokens_cache.lock().unwrap().insert(
+            crate::fs::FsPath::from_str("/main.baml".to_string()),
+            ("0".to_string(), Vec::new()),
+        );
+
         let session = root.connection_scoped_lsp_session(session_sender.clone());
 
-        // Fresh negotiation and roots; shared project registry.
+        // Fresh negotiation, roots, and semantic-token delta cache (its
+        // entries are encoded per-connection); shared project registry and
+        // result-id sequence.
         assert!(session.negotiated_encoding.get().is_none());
         assert!(session.workspace_roots.lock().unwrap().is_empty());
+        assert!(session.semantic_tokens_cache.lock().unwrap().is_empty());
         assert!(Arc::ptr_eq(&session.projects, &root.projects));
+        assert!(Arc::ptr_eq(
+            &session.semantic_tokens_seq,
+            &root.semantic_tokens_seq
+        ));
 
         // Output routes only through the session's own sender.
         session.handle_notification(lsp_server::Notification::new(
