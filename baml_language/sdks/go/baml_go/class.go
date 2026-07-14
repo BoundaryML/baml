@@ -87,6 +87,16 @@ func (value ClassValue) Field(name string) (Value, error) {
 	return field, nil
 }
 
+// Class decodes a nested class field and validates its exact BAML class name.
+func (value ClassValue) Class(fieldName string, className string) (ClassValue, error) {
+	field, err := value.Field(fieldName)
+	if err != nil {
+		return ClassValue{}, err
+	}
+	result, err := field.Class(className)
+	return result, classFieldError(value.name, fieldName, err)
+}
+
 func (value ClassValue) String(name string) (string, error) {
 	field, err := value.Field(name)
 	if err != nil {

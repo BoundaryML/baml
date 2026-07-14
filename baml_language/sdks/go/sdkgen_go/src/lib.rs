@@ -1,11 +1,12 @@
 //! Greenfield Go SDK emitter.
 //!
 //! The current vertical slice covers primitive free functions, class-typed
-//! functions whose classes contain only primitive fields, and non-generic
-//! class declarations composed from primitives, class references, and nullable
-//! variants of those types. A BAML package becomes one Go package. BAML
-//! namespaces stay within that Go package and qualify exported identifiers,
-//! preserving legal cyclic references between namespaces.
+//! functions whose class graphs contain primitives and required acyclic class
+//! references, and non-generic class declarations composed from primitives,
+//! class references, and nullable variants of those types. A BAML package
+//! becomes one Go package. BAML namespaces stay within that Go package and
+//! qualify exported identifiers, preserving legal cyclic references between
+//! namespaces.
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -248,24 +249,39 @@ fn supported_class_type(ty: &Ty, classes: &BTreeSet<Name>) -> bool {
 }
 
 /// Classes crossing the runtime boundary are intentionally narrower than the
-/// classes whose declarations can be rendered. This first class wire stage
-/// covers every primitive field while nested and optional values remain
-/// deferred as whole function signatures.
+/// classes whose declarations can be rendered. Starting from primitive-only
+/// classes and growing a fixed point admits required acyclic nesting while
+/// naturally excluding nullable fields and recursive class graphs.
 fn wireable_class_names(pool: &SymbolPool) -> BTreeSet<Name> {
-    pool.iter()
+    let candidates = pool
+        .iter()
         .filter_map(|(name, symbol)| match symbol {
-            Symbol::Class(class)
-                if class.generic_params.is_empty()
-                    && class
-                        .properties
-                        .iter()
-                        .all(|property| primitive_kind(&property.ty).is_some()) =>
-            {
-                Some(name.clone())
-            }
+            Symbol::Class(class) if class.generic_params.is_empty() => Some(name.clone()),
             _ => None,
         })
-        .collect()
+        .collect::<BTreeSet<_>>();
+    let mut wireable = BTreeSet::new();
+    loop {
+        let previous_len = wireable.len();
+        for name in &candidates {
+            let Symbol::Class(class) = &pool[name] else {
+                unreachable!()
+            };
+            if class.properties.iter().all(|property| {
+                primitive_kind(&property.ty).is_some()
+                    || matches!(
+                        &property.ty,
+                        Ty::Class(target, arguments)
+                            if arguments.is_empty() && wireable.contains(target)
+                    )
+            }) {
+                wireable.insert(name.clone());
+            }
+        }
+        if wireable.len() == previous_len {
+            return wireable;
+        }
+    }
 }
 
 fn nullable_inner(items: &[Ty]) -> Option<&Ty> {
@@ -416,6 +432,7 @@ fn render_functions(
         runtime_package,
         "github.com/boundaryml/baml/sdks/go/baml_go",
     );
+    let mut visited_class_imports = HashSet::new();
     for routed in functions {
         for ty in routed
             .function
@@ -424,16 +441,15 @@ fn render_functions(
             .map(|argument| &argument.ty)
             .chain(std::iter::once(&routed.function.return_type))
         {
-            if let Ty::Class(name, arguments) = ty {
-                debug_assert!(arguments.is_empty());
-                let target_package = packages.get(&name.pkg);
-                if target_package.go_name() != current_package {
-                    imports.add_package(
-                        target_package.go_name(),
-                        &target_package.import_path(sdk_import_path),
-                    );
-                }
-            }
+            add_wire_type_imports(
+                ty,
+                current_package,
+                pool,
+                packages,
+                sdk_import_path,
+                &mut imports,
+                &mut visited_class_imports,
+            );
         }
     }
     out.push_str(&imports.render());
@@ -550,6 +566,48 @@ fn render_functions(
     out
 }
 
+fn add_wire_type_imports(
+    ty: &Ty,
+    current_package: &GoPackageName,
+    pool: &SymbolPool,
+    packages: &GoPackages,
+    sdk_import_path: &str,
+    imports: &mut GoImports,
+    visited: &mut HashSet<Name>,
+) {
+    if primitive_kind(ty).is_some() || matches!(ty, Ty::Unit) {
+        return;
+    }
+    let Ty::Class(name, arguments) = ty else {
+        unreachable!("function was filtered to supported wire types")
+    };
+    debug_assert!(arguments.is_empty());
+    if !visited.insert(name.clone()) {
+        return;
+    }
+    let target_package = packages.get(&name.pkg);
+    if target_package.go_name() != current_package {
+        imports.add_package(
+            target_package.go_name(),
+            &target_package.import_path(sdk_import_path),
+        );
+    }
+    let Symbol::Class(class) = &pool[name] else {
+        unreachable!("class type did not resolve to a class symbol")
+    };
+    for property in &class.properties {
+        add_wire_type_imports(
+            &property.ty,
+            current_package,
+            pool,
+            packages,
+            sdk_import_path,
+            imports,
+            visited,
+        );
+    }
+}
+
 fn function_go_type(ty: &Ty, current_package: &GoPackageName, names: &GoNames) -> String {
     if primitive_kind(ty).is_some() {
         return go_type(ty);
@@ -604,12 +662,19 @@ fn input_expression(
                 GoNameKind::Field,
                 GoVisibility::Exported,
             );
+            let field_value = format!("{value}.{}", field.identifier(owner_package));
+            let field_input = input_expression(
+                &property.ty,
+                &field_value,
+                &format!("{indent}\t"),
+                pool,
+                names,
+                packages,
+            );
             let _ = writeln!(
                 out,
-                "{indent}\t{:?}: {runtime_package}.{}({value}.{}),",
+                "{indent}\t{:?}: {field_input},",
                 field.wire().to_string(),
-                input_constructor(&property.ty),
-                field.identifier(owner_package),
             );
         }
         out.push_str(indent);
@@ -626,12 +691,38 @@ fn render_class_output(
     names: &GoNames,
     packages: &GoPackages,
 ) {
+    let result_local = GeneratorIdent::ResultLocal;
+    let Ty::Class(name, arguments) = ty else {
+        unreachable!("function was filtered to supported class output")
+    };
+    debug_assert!(arguments.is_empty());
+    let class_name = names.project(
+        &BamlFqn::symbol(name),
+        GoNameKind::Class,
+        GoVisibility::Exported,
+    );
+    let source = format!("{result_local}.Class({:?})", class_name.wire().to_string());
+    let expression =
+        class_output_expression(ty, &source, "\t", current_package, pool, names, packages);
+    let _ = writeln!(out, "\treturn {expression}");
+}
+
+/// Render a decoder expression whose source returns `(baml_go.ClassValue,
+/// error)`. Nested class fields recursively use the same shape, so each level
+/// owns its fixed locals and user field names only ever appear as selectors.
+fn class_output_expression(
+    ty: &Ty,
+    source: &str,
+    indent: &str,
+    current_package: &GoPackageName,
+    pool: &SymbolPool,
+    names: &GoNames,
+    packages: &GoPackages,
+) -> String {
     let runtime_package = GeneratorIdent::RuntimePackage;
     let error_type = GeneratorIdent::ErrorType;
     let error_local = GeneratorIdent::ErrorLocal;
-    let result_local = GeneratorIdent::ResultLocal;
     let zero_local = GeneratorIdent::ZeroLocal;
-    let value_parameter = GeneratorIdent::WireValueParameter;
     let class_value_local = GeneratorIdent::ClassValueLocal;
     let decoded_local = GeneratorIdent::DecodedLocal;
     let Ty::Class(name, arguments) = ty else {
@@ -642,23 +733,18 @@ fn render_class_output(
         unreachable!("class type did not resolve to a class symbol")
     };
     let class_fqn = BamlFqn::symbol(name);
-    let class_name = names.project(&class_fqn, GoNameKind::Class, GoVisibility::Exported);
-    let go_type = class_name.identifier(current_package).to_string();
+    let go_type = function_go_type(ty, current_package, names);
     let owner_package = packages.get(&name.pkg).go_name();
-
+    let mut out = format!(
+        "func({class_value_local} {runtime_package}.ClassValue, {error_local} {error_type}) ({go_type}, {error_type}) {{\n"
+    );
+    let _ = writeln!(out, "{indent}\tif {error_local} != nil {{");
+    let _ = writeln!(out, "{indent}\t\tvar {zero_local} {go_type}");
     let _ = writeln!(
         out,
-        "\treturn func({value_parameter} {runtime_package}.Value) ({go_type}, {error_type}) {{"
+        "{indent}\t\treturn {zero_local}, {error_local}\n{indent}\t}}"
     );
-    let _ = writeln!(
-        out,
-        "\t\t{class_value_local}, {error_local} := {value_parameter}.Class({:?})",
-        class_name.wire().to_string()
-    );
-    let _ = writeln!(out, "\t\tif {error_local} != nil {{");
-    let _ = writeln!(out, "\t\t\tvar {zero_local} {go_type}");
-    let _ = writeln!(out, "\t\t\treturn {zero_local}, {error_local}\n\t\t}}");
-    let _ = writeln!(out, "\t\tvar {decoded_local} {go_type}");
+    let _ = writeln!(out, "{indent}\tvar {decoded_local} {go_type}");
 
     for property in &class.properties {
         let field = names.project(
@@ -667,18 +753,55 @@ fn render_class_output(
             GoVisibility::Exported,
         );
         let field_identifier = field.identifier(owner_package);
+        if primitive_kind(&property.ty).is_some() {
+            let _ = writeln!(
+                out,
+                "{indent}\t{decoded_local}.{field_identifier}, {error_local} = {class_value_local}.{}({:?})",
+                output_method(&property.ty),
+                field.wire().to_string(),
+            );
+        } else {
+            let Ty::Class(target, arguments) = &property.ty else {
+                unreachable!("wireable class field was not primitive or class")
+            };
+            debug_assert!(arguments.is_empty());
+            let target_name = names.project(
+                &BamlFqn::symbol(target),
+                GoNameKind::Class,
+                GoVisibility::Exported,
+            );
+            let nested_source = format!(
+                "{class_value_local}.Class({:?}, {:?})",
+                field.wire().to_string(),
+                target_name.wire().to_string(),
+            );
+            let nested = class_output_expression(
+                &property.ty,
+                &nested_source,
+                &format!("{indent}\t"),
+                current_package,
+                pool,
+                names,
+                packages,
+            );
+            let _ = writeln!(
+                out,
+                "{indent}\t{decoded_local}.{field_identifier}, {error_local} = {nested}"
+            );
+        }
+        let _ = writeln!(out, "{indent}\tif {error_local} != nil {{");
+        let _ = writeln!(out, "{indent}\t\tvar {zero_local} {go_type}");
         let _ = writeln!(
             out,
-            "\t\t{decoded_local}.{field_identifier}, {error_local} = {class_value_local}.{}({:?})",
-            output_method(&property.ty),
-            field.wire().to_string(),
+            "{indent}\t\treturn {zero_local}, {error_local}\n{indent}\t}}"
         );
-        let _ = writeln!(out, "\t\tif {error_local} != nil {{");
-        let _ = writeln!(out, "\t\t\tvar {zero_local} {go_type}");
-        let _ = writeln!(out, "\t\t\treturn {zero_local}, {error_local}\n\t\t}}");
     }
 
-    let _ = writeln!(out, "\t\treturn {decoded_local}, nil\n\t}}({result_local})");
+    let _ = write!(
+        out,
+        "{indent}\treturn {decoded_local}, nil\n{indent}}}({source})"
+    );
+    out
 }
 
 fn render_classes(
@@ -877,6 +1000,25 @@ mod tests {
         (name, Symbol::Class(class))
     }
 
+    fn round_trip_function(name: Name, argument: &str, ty: Ty) -> (Name, Symbol) {
+        let function = Function {
+            name: name.name.clone(),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new(argument),
+                docstring: None,
+                ty: ty.clone(),
+                default: None,
+            }],
+            return_type: ty,
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        (name, Symbol::Function(function))
+    }
+
     #[test]
     fn emits_context_scalar_call_and_bootstrap() {
         let name = Name::new(BaseName::new("user"), vec![], BaseName::new("echo_text"));
@@ -997,7 +1139,7 @@ mod tests {
         ));
         assert!(functions.contains("baml_go.Class(\"user.people.person_record\""));
         assert!(functions.contains("\"class_value\": baml_go.String(ctx_.ClassValue)"));
-        assert!(functions.contains("value.Class(\"user.people.person_record\")"));
+        assert!(functions.contains("result.Class(\"user.people.person_record\")"));
         assert!(functions.contains("classValue.String(\"class_value\")"));
         assert!(functions.contains("decoded.ClassValue, err = classValue.String(\"class_value\")"));
     }
@@ -1104,6 +1246,61 @@ mod tests {
             format!("{BANNER}package baml_sdk\n\n")
         );
         assert!(files[&PathBuf::from("types.go")].contains("type Outer struct"));
+    }
+
+    #[test]
+    fn required_acyclic_nested_class_calls_are_emitted() {
+        let inner = Name::new(BaseName::new("user"), vec![], BaseName::new("inner"));
+        let outer = Name::new(BaseName::new("user"), vec![], BaseName::new("outer"));
+        let function = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("round_trip_outer"),
+        );
+        let pool = SymbolPool::from([
+            class(inner.clone(), vec![("value", Ty::Int)]),
+            class(outer.clone(), vec![("inner", Ty::Class(inner, vec![]))]),
+            round_trip_function(function, "outer", Ty::Class(outer, vec![])),
+        ]);
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert!(functions.contains("\"inner\": baml_go.Class(\"user.inner\""));
+        assert!(functions.contains("classValue.Class(\"inner\", \"user.inner\")"));
+    }
+
+    #[test]
+    fn required_recursive_class_calls_remain_omitted() {
+        let node = Name::new(BaseName::new("user"), vec![], BaseName::new("node"));
+        let function = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("round_trip_node"),
+        );
+        let pool = SymbolPool::from([
+            class(
+                node.clone(),
+                vec![("next", Ty::Class(node.clone(), vec![]))],
+            ),
+            round_trip_function(function, "node", Ty::Class(node, vec![])),
+        ]);
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        assert_eq!(
+            files[&PathBuf::from("functions.go")],
+            format!("{BANNER}package baml_sdk\n\n")
+        );
+        assert!(files[&PathBuf::from("types.go")].contains("Next *Node"));
     }
 
     #[test]

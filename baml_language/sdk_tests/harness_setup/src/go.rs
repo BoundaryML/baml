@@ -97,6 +97,7 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
     let snake = Name::new(BaseName::new("foo_bar"), vec![], BaseName::new("Thing"));
     let models = Name::new(BaseName::new("models"), vec![], BaseName::new("Thing"));
     let holder = Name::new(BaseName::new("user"), vec![], BaseName::new("Holder"));
+    let envelope = Name::new(BaseName::new("user"), vec![], BaseName::new("Envelope"));
     let round_trip = Name::new(
         BaseName::new("user"),
         vec![],
@@ -107,18 +108,27 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
         vec![],
         BaseName::new("round_trip_models_thing"),
     );
+    let nested_packages = Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("round_trip_envelope"),
+    );
     let pool = SymbolPool::from([
         synthetic_class(context.clone(), vec![("value", Ty::String)]),
         synthetic_class(dashed.clone(), vec![("value", Ty::Int)]),
         synthetic_class(snake.clone(), vec![("value", Ty::Bool)]),
         synthetic_class(models.clone(), vec![("value", Ty::String)]),
         synthetic_class(
-            holder,
+            holder.clone(),
             vec![
                 ("context_thing", Ty::Class(context.clone(), vec![])),
                 ("dashed_thing", Ty::Class(dashed, vec![])),
                 ("snake_thing", Ty::Class(snake, vec![])),
             ],
+        ),
+        synthetic_class(
+            envelope.clone(),
+            vec![("holder", Ty::Class(holder, vec![]))],
         ),
         (
             round_trip,
@@ -162,6 +172,27 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
                     },
                 ],
                 return_type: Ty::Class(models, vec![]),
+                throws: None,
+                watchers: vec![],
+                origin: Origin {
+                    source_file_path: "synthetic.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        ),
+        (
+            nested_packages,
+            Symbol::Function(Function {
+                name: BaseName::new("round_trip_envelope"),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: Ty::Class(envelope.clone(), vec![]),
+                    default: None,
+                }],
+                return_type: Ty::Class(envelope, vec![]),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {

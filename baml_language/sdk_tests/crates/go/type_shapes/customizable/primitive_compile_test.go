@@ -48,6 +48,8 @@ var (
 	_ func(context.Context, *big.Int) (*big.Int, error) = baml_sdk.GoCodegenPrimitiveEdgesRoundTripLiteralBigint
 	_ func(context.Context, *big.Int, int64, float64, []byte, string, string) (*big.Int, error) = baml_sdk.GoCodegenPrimitiveEdgesReservedTypeNames
 	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives) (baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives, error) = baml_sdk.GoCodegenPrimitiveEdgesRoundTripWirePrimitives
+	_ func(context.Context, int64) (baml_sdk.ClassRefsOuter, error) = baml_sdk.ClassRefsMakeOuter
+	_ func(context.Context, baml_sdk.ClassRefsOuter) (baml_sdk.ClassRefsOuter, error) = baml_sdk.ClassRefsRoundTripOuter
 )
 
 var (
@@ -94,5 +96,24 @@ func TestPrimitiveClassRoundTrip(t *testing.T) {
 		got.BoolValue != want.BoolValue ||
 		!bytes.Equal(got.BytesValue, want.BytesValue) {
 		t.Fatalf("round trip = %#v, want %#v", got, want)
+	}
+}
+
+func TestNestedClassRoundTrip(t *testing.T) {
+	want := baml_sdk.ClassRefsOuter{Inner: baml_sdk.ClassRefsInner{Value: 42}}
+	got, err := baml_sdk.ClassRefsRoundTripOuter(context.Background(), want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("round trip = %#v, want %#v", got, want)
+	}
+
+	made, err := baml_sdk.ClassRefsMakeOuter(context.Background(), 73)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if made.Inner.Value != 73 {
+		t.Fatalf("MakeOuter() = %#v, want nested value 73", made)
 	}
 }

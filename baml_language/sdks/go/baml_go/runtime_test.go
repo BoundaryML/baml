@@ -96,3 +96,44 @@ func TestClassValueValidatesNameAndDecodesFields(t *testing.T) {
 		t.Fatal("missing field unexpectedly succeeded")
 	}
 }
+
+func TestClassValueDecodesNestedClass(t *testing.T) {
+	value := Value{value: &cffi.BamlOutboundValue{
+		Value: &cffi.BamlOutboundValue_ClassValue{ClassValue: &cffi.BamlValueClass{
+			Name: "user.Outer",
+			Fields: []*cffi.BamlOutboundMapEntry{{
+				Key: "inner",
+				Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_ClassValue{
+					ClassValue: &cffi.BamlValueClass{
+						Name: "user.Inner",
+						Fields: []*cffi.BamlOutboundMapEntry{{
+							Key: "value",
+							Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_IntValue{
+								IntValue: 42,
+							}},
+						}},
+					},
+				}},
+			}},
+		}},
+	}}
+
+	outer, err := value.Class("user.Outer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner, err := outer.Class("inner", "user.Inner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := inner.Int64("value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 42 {
+		t.Fatalf("got %d, want 42", got)
+	}
+	if _, err := outer.Class("inner", "user.Other"); err == nil {
+		t.Fatal("wrong nested class name unexpectedly succeeded")
+	}
+}
