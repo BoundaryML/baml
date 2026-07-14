@@ -207,6 +207,35 @@ fn pascal_case(name: &str) -> String {
     out
 }
 
+/// Doc rollup shared by classes and enums: summary, then an
+/// `Attributes:`/`Members:` section listing every member when at least one
+/// member carries a doc (documented as `name: doc`, undocumented bare).
+fn compose_doc(
+    summary: Option<&String>,
+    section: &str,
+    members: &[(String, Option<String>)],
+) -> Option<String> {
+    let mut doc = summary.cloned().unwrap_or_default();
+    if members.iter().any(|(_, d)| d.is_some()) {
+        if !doc.is_empty() {
+            doc.push_str("\n\n");
+        }
+        doc.push_str(section);
+        for (name, member_doc) in members {
+            match member_doc {
+                Some(text) => {
+                    let text = text.replace('\n', " ");
+                    let _ = write!(doc, "\n    {name}: {text}");
+                }
+                None => {
+                    let _ = write!(doc, "\n    {name}");
+                }
+            }
+        }
+    }
+    if doc.is_empty() { None } else { Some(doc) }
+}
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -227,7 +256,15 @@ fn emit_enum(name: &Name, enum_def: &Enum) -> EmittedEnum {
         cpp_name: sanitize(name.bare_name()),
         qualified: qualified_cpp_name(name),
         fqn: name.to_string(),
-        doc: enum_def.docstring.clone(),
+        doc: compose_doc(
+            enum_def.docstring.as_ref(),
+            "Members:",
+            &enum_def
+                .variants
+                .iter()
+                .map(|v| (v.name.to_string(), v.docstring.clone()))
+                .collect::<Vec<_>>(),
+        ),
         variants: enum_def
             .variants
             .iter()
@@ -282,7 +319,15 @@ fn emit_class(
         cpp_name: sanitize(name.bare_name()),
         qualified: qualified_cpp_name(name),
         fqn: name.to_string(),
-        doc: class_def.docstring.clone(),
+        doc: compose_doc(
+            class_def.docstring.as_ref(),
+            "Attributes:",
+            &class_def
+                .properties
+                .iter()
+                .map(|p| (p.name.to_string(), p.docstring.clone()))
+                .collect::<Vec<_>>(),
+        ),
         fields,
         static_methods: Vec::new(),
         instance_methods: Vec::new(),
@@ -593,7 +638,11 @@ enum RenderPos<'a> {
 fn push_doc(buf: &mut String, indent: &str, doc: Option<&String>, raises: &[String]) {
     if let Some(doc) = doc {
         for line in doc.lines() {
-            let _ = writeln!(buf, "{indent}/// {line}");
+            if line.is_empty() {
+                let _ = writeln!(buf, "{indent}///");
+            } else {
+                let _ = writeln!(buf, "{indent}/// {line}");
+            }
         }
     }
     if !raises.is_empty() {

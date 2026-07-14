@@ -31,5 +31,3 @@ BAML_TEST(round_trip_enums) {
     const Enums e{Sentiment::Positive, Sentiment::Positive};
     BAML_ASSERT(baml_sdk::enums::round_trip_enums(e) == e);
 }
-
-BAML_TEST_MAIN()
