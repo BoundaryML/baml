@@ -5628,6 +5628,81 @@ async fn out_of_body_implements_is_visible_to_reflection_registry() {
     assert_eq!(output.result.unwrap(), BexExternalValue::Bool(true));
 }
 
+#[tokio::test]
+async fn in_body_and_cross_file_impls_share_runtime_registry() {
+    let program = baml_tests::engine::compile_multi_file(&[
+        (
+            "interfaces.baml",
+            r#"
+                interface Provider {
+                    function name(self) -> string throws never
+                }
+                interface ToolCallingProvider requires Provider {
+                    function tool_name(self) -> string throws never
+                }
+            "#,
+        ),
+        (
+            "providers/in_body.baml",
+            r#"
+                class InBodyProvider {
+                    implements Provider {
+                        function name(self) -> string { return "in-body" }
+                    }
+                    implements ToolCallingProvider {
+                        function tool_name(self) -> string { return "in-body" }
+                    }
+                }
+            "#,
+        ),
+        (
+            "providers/example/provider.baml",
+            r#"
+                class ExampleProvider {}
+                implements Provider for ExampleProvider {
+                    function name(self) -> string { return "example" }
+                }
+            "#,
+        ),
+        (
+            "providers/example/tools.baml",
+            r#"
+                implements ToolCallingProvider for ExampleProvider {
+                    function tool_name(self) -> string { return "search" }
+                }
+            "#,
+        ),
+        (
+            "main.baml",
+            r#"
+                function narrow(provider: Provider) -> string {
+                    match (provider) {
+                        let tools: ToolCallingProvider => tools.tool_name(),
+                        _ => "NO MATCH",
+                    }
+                }
+                function main() -> string {
+                    let in_body: Provider = InBodyProvider {}
+                    let cross_file: Provider = ExampleProvider {}
+                    return narrow(in_body) + "|" + narrow(cross_file)
+                }
+            "#,
+        ),
+    ]);
+    let output = baml_tests::engine::run_compiled(
+        program,
+        "main",
+        baml_tests::engine::IndexMap::new(),
+        false,
+    )
+    .await;
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("in-body|search".into())
+    );
+}
+
 #[test]
 fn out_of_body_and_in_body_for_same_interface_is_error() {
     assert_compile_error_code(
