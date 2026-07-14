@@ -167,6 +167,22 @@ struct codec<Box<T>> {
 };
 
 template <typename T>
+struct codec<OptionalBox<T>> {
+    static void encode(detail::wire::Writer& value_msg, const OptionalBox<T>& v) {
+        if (v.has_value()) {
+            codec<T>::encode(value_msg, *v);
+        }
+        // empty = BAML null = absent oneof: write nothing.
+    }
+    static OptionalBox<T> decode(const detail::OutboundValue& v) {
+        if (v.kind == detail::OutboundValue::Kind::Null) {
+            return OptionalBox<T>();
+        }
+        return OptionalBox<T>(codec<T>::decode(v));
+    }
+};
+
+template <typename T>
 struct codec<std::optional<T>> {
     static void encode(detail::wire::Writer& value_msg, const std::optional<T>& v) {
         if (v.has_value()) {

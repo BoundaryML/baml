@@ -13,5 +13,6 @@
 #include <baml/errors.hpp>
 #include <baml/future.hpp>
 #include <baml/runtime.hpp>
+#include <baml/ty.hpp>
 
 #endif  // BAML_BAML_HPP
