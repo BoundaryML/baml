@@ -11,6 +11,8 @@ use std::{
 
 use baml_codegen_types::{Name, Symbol, SymbolPool};
 
+use crate::rendering::GeneratorIdent;
+
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct BamlFqn {
     symbol: Name,
@@ -72,12 +74,34 @@ impl fmt::Display for BamlWireName {
     }
 }
 
-/// A validated Go identifier used internally by collision allocation.
+/// A validated Go package name.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-struct GoIdent(Box<str>);
+pub(crate) struct GoPackageName(Box<str>);
+
+impl GoPackageName {
+    pub(crate) fn new(value: &str) -> Self {
+        assert!(is_go_identifier(value), "invalid Go package name: {value}");
+        assert!(
+            !is_go_keyword(value),
+            "Go package name is a keyword: {value}"
+        );
+        Self(value.into())
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A validated Go identifier together with the package that owns it.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+struct GoIdent {
+    package: GoPackageName,
+    name: Box<str>,
+}
 
 impl GoIdent {
-    fn new(value: String) -> Self {
+    fn new(package: GoPackageName, value: String) -> Self {
         assert!(
             is_go_identifier(&value),
             "invalid projected Go name: {value}"
@@ -86,11 +110,35 @@ impl GoIdent {
             !is_go_keyword(&value),
             "Go keyword escaped too late: {value}"
         );
-        Self(value.into_boxed_str())
+        Self {
+            package,
+            name: value.into_boxed_str(),
+        }
     }
 
     fn with_suffix(&self, suffix: &str) -> Self {
-        Self::new(format!("{}_{suffix}", self.0))
+        Self::new(self.package.clone(), format!("{}_{suffix}", self.name))
+    }
+}
+
+/// A Go identifier rendered from the perspective of one package.
+pub(crate) struct GoIdentifier<'a> {
+    identifier: &'a GoIdent,
+    current_package: &'a GoPackageName,
+}
+
+impl fmt::Display for GoIdentifier<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.identifier.package == *self.current_package {
+            f.write_str(&self.identifier.name)
+        } else {
+            write!(
+                f,
+                "{}.{}",
+                self.identifier.package.as_str(),
+                self.identifier.name
+            )
+        }
     }
 }
 
@@ -103,8 +151,11 @@ pub(crate) struct GoName {
 }
 
 impl GoName {
-    pub(crate) fn as_str(&self) -> &str {
-        &self.canonical.0
+    pub(crate) fn identifier<'a>(&'a self, current_package: &'a GoPackageName) -> GoIdentifier<'a> {
+        GoIdentifier {
+            identifier: &self.canonical,
+            current_package,
+        }
     }
 
     pub(crate) fn wire(&self) -> &BamlWireName {
@@ -156,7 +207,7 @@ impl GoNames {
     /// Build the name table for the generated `user` package. All top-level
     /// symbols reserve their package-scope identifiers even when their codegen
     /// feature has not been implemented yet.
-    pub(crate) fn for_user_package(pool: &SymbolPool) -> Self {
+    pub(crate) fn for_user_package(pool: &SymbolPool, package: &GoPackageName) -> Self {
         let mut requests = Vec::new();
         for (name, symbol) in pool {
             if name.pkg.as_str() != "user" {
@@ -182,7 +233,7 @@ impl GoNames {
                 }));
             }
         }
-        Self::new(requests)
+        Self::new(package, requests)
     }
 
     /// The canonical naming operation: `(FQN, kind, visibility) -> GoName`.
@@ -198,11 +249,11 @@ impl GoNames {
             .expect("name request was not registered during allocation")
     }
 
-    fn new(requests: Vec<NameRequest>) -> Self {
+    fn new(package: &GoPackageName, requests: Vec<NameRequest>) -> Self {
         let mut groups = BTreeMap::<NameScope, BTreeMap<GoIdent, Vec<NameRequest>>>::new();
         for request in requests {
             let scope = request.scope();
-            let base = project_base(&request);
+            let base = project_base(package.clone(), &request);
             groups
                 .entry(scope)
                 .or_default()
@@ -238,7 +289,7 @@ impl GoNames {
     }
 }
 
-fn project_base(request: &NameRequest) -> GoIdent {
+fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
     let mut value = String::new();
     match request.kind {
         GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
@@ -265,7 +316,7 @@ fn project_base(request: &NameRequest) -> GoIdent {
     while is_go_keyword(&value) || is_generator_local(request.kind, &value) {
         value.push('_');
     }
-    GoIdent::new(value)
+    GoIdent::new(package, value)
 }
 
 fn wire_name(request: &NameRequest) -> BamlWireName {
@@ -302,7 +353,10 @@ fn lowercase_first(value: &mut String) {
 }
 
 fn is_generator_local(kind: GoNameKind, value: &str) -> bool {
-    matches!(kind, GoNameKind::Parameter) && matches!(value, "ctx" | "err" | "result" | "zero")
+    matches!(kind, GoNameKind::Parameter)
+        && GeneratorIdent::FUNCTION_SCOPE
+            .iter()
+            .any(|identifier| identifier.as_str() == value)
 }
 
 fn allocate_unique(
@@ -444,6 +498,14 @@ mod tests {
         NameRequest::new(fqn, kind, visibility)
     }
 
+    fn generated_package() -> GoPackageName {
+        GoPackageName::new("baml_sdk")
+    }
+
+    fn identifier(name: &GoName) -> String {
+        name.identifier(&generated_package()).to_string()
+    }
+
     #[test]
     fn projects_fqn_kind_and_visibility_without_initialism_rules() {
         let cases = [
@@ -467,6 +529,7 @@ mod tests {
             ),
         ];
         let names = GoNames::new(
+            &generated_package(),
             cases
                 .iter()
                 .map(|(fqn, kind, visibility, _)| request(fqn.clone(), *kind, *visibility))
@@ -475,9 +538,35 @@ mod tests {
 
         for (fqn, kind, visibility, expected) in cases {
             let projected = names.project(&fqn, kind, visibility);
-            assert_eq!(projected.as_str(), expected);
+            assert_eq!(identifier(projected), expected);
             assert_eq!(projected.wire(), &BamlWireName::Symbol(fqn.symbol.clone()));
         }
+    }
+
+    #[test]
+    fn identifier_is_relative_to_the_current_package() {
+        let fqn = symbol(&[], "lookup_invoice");
+        let names = GoNames::new(
+            &generated_package(),
+            vec![request(
+                fqn.clone(),
+                GoNameKind::Function,
+                GoVisibility::Exported,
+            )],
+        );
+        let projected = names.project(&fqn, GoNameKind::Function, GoVisibility::Exported);
+
+        assert_eq!(
+            projected.identifier(&generated_package()).to_string(),
+            "LookupInvoice"
+        );
+        assert_eq!(
+            projected
+                .identifier(&GoPackageName::new("consumer"))
+                .to_string(),
+            "baml_sdk.LookupInvoice"
+        );
+        assert_eq!(projected.wire().to_string(), "user.lookup_invoice");
     }
 
     #[test]
@@ -487,6 +576,7 @@ mod tests {
         let left_value = left.member(&BaseName::new("user_id"));
         let right_value = right.member(&BaseName::new("user_id"));
         let ctx = left.member(&BaseName::new("ctx"));
+        let bootstrap = left.member(&BaseName::new("bootstrap"));
         let type_ = left.member(&BaseName::new("type"));
         let requests = vec![
             request(
@@ -500,14 +590,20 @@ mod tests {
                 GoVisibility::Exported,
             ),
             request(ctx.clone(), GoNameKind::Parameter, GoVisibility::Exported),
+            request(
+                bootstrap.clone(),
+                GoNameKind::Parameter,
+                GoVisibility::Exported,
+            ),
             request(type_.clone(), GoNameKind::Parameter, GoVisibility::Exported),
         ];
-        let names = GoNames::new(requests);
+        let names = GoNames::new(&generated_package(), requests);
 
         assert_eq!(
             names
                 .project(&left_value, GoNameKind::Parameter, GoVisibility::Exported,)
-                .as_str(),
+                .identifier(&generated_package())
+                .to_string(),
             "userId"
         );
         assert_eq!(
@@ -519,19 +615,29 @@ mod tests {
         assert_eq!(
             names
                 .project(&right_value, GoNameKind::Parameter, GoVisibility::Exported,)
-                .as_str(),
+                .identifier(&generated_package())
+                .to_string(),
             "userId"
         );
         assert_eq!(
             names
                 .project(&ctx, GoNameKind::Parameter, GoVisibility::Exported,)
-                .as_str(),
+                .identifier(&generated_package())
+                .to_string(),
             "ctx_"
         );
         assert_eq!(
             names
+                .project(&bootstrap, GoNameKind::Parameter, GoVisibility::Exported,)
+                .identifier(&generated_package())
+                .to_string(),
+            "bootstrap_"
+        );
+        assert_eq!(
+            names
                 .project(&type_, GoNameKind::Parameter, GoVisibility::Exported,)
-                .as_str(),
+                .identifier(&generated_package())
+                .to_string(),
             "type_"
         );
     }
@@ -548,15 +654,15 @@ mod tests {
             ),
             request(class.clone(), GoNameKind::Class, GoVisibility::Exported),
         ];
-        let forward = GoNames::new(requests.clone());
-        let reverse = GoNames::new(requests.into_iter().rev().collect());
+        let forward = GoNames::new(&generated_package(), requests.clone());
+        let reverse = GoNames::new(&generated_package(), requests.into_iter().rev().collect());
 
         let function_name =
             forward.project(&function, GoNameKind::Function, GoVisibility::Exported);
         let class_name = forward.project(&class, GoNameKind::Class, GoVisibility::Exported);
-        assert!(function_name.as_str().starts_with("FooBar_"));
-        assert!(class_name.as_str().starts_with("FooBar_"));
-        assert_ne!(function_name.as_str(), class_name.as_str());
+        assert!(identifier(function_name).starts_with("FooBar_"));
+        assert!(identifier(class_name).starts_with("FooBar_"));
+        assert_ne!(identifier(function_name), identifier(class_name));
         assert_eq!(
             function_name,
             reverse.project(&function, GoNameKind::Function, GoVisibility::Exported,)

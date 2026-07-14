@@ -42,5 +42,5 @@ var (
 
 	_ func(context.Context, string) (string, error)              = baml_sdk.GoCodegenLeftEcho
 	_ func(context.Context, string) (string, error)              = baml_sdk.GoCodegenRightEcho
-	_ func(context.Context, string, int64, bool) (string, error) = baml_sdk.GoCodegenNestedReservedArgs
+	_ func(context.Context, string, int64, bool, string, string) (string, error) = baml_sdk.GoCodegenNestedReservedArgs
 )
