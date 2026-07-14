@@ -16,6 +16,10 @@
 //! - `BAML_NO_CALLABLE_THROWS_CACHE=1` — empty the per-function `callable_throws`
 //!   seed so every function infers its throws honestly (reuse / diagnostics
 //!   serving unaffected), to isolate the Phase 2 fragment seed's win.
+//! - `BAML_NO_DISCOVERY_CACHE=1` — never serve `baml test --list` from the
+//!   cached discovery output (the flattened test list), forcing the honest
+//!   engine-boot + in-VM discovery every time, to A/B the discovery cache's win.
+//!   The rest of the cache (bytecode reuse, diagnostics, throws) is unaffected.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -34,7 +38,7 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 use bex_cache::{
     BytecodeCache, CacheKey, KeyInputs, ManifestFile, ProjectManifest, compiler_fingerprint,
-    compute_key, manifest_key, stdlib_interface_key,
+    compute_key, manifest_key, stdlib_interface_key, test_discovery_key,
 };
 use bex_vm_types::{CompilationUnit, Object, Program, relink};
 use sha2::{Digest, Sha256};
@@ -90,6 +94,10 @@ pub(crate) struct CacheContext {
     stdlib_interface_key: CacheKey,
     /// Latest-compile manifest, fixed per (project root, options, build).
     manifest_key: CacheKey,
+    /// Cached `baml test --list` discovery output (flattened, unfiltered test
+    /// list), derived from `key` — a warm `--list` serves it and skips engine
+    /// boot + in-VM discovery entirely.
+    test_discovery_key: CacheKey,
     /// Whether test cases are emitted — needed to decompose a full compile back
     /// into independently persisted units.
     emit_test_cases: bool,
@@ -138,6 +146,7 @@ impl CacheContext {
                 &resolved.root,
                 resolved.manifest.as_deref(),
             ),
+            test_discovery_key: test_discovery_key(key.as_bytes()),
             emit_test_cases,
         })
     }
@@ -289,6 +298,138 @@ impl CacheContext {
     ) -> Option<std::collections::BTreeMap<String, Vec<u8>>> {
         let bytes = self.cache.load_raw(&self.stdlib_interface_key)?;
         borsh::from_slice::<std::collections::BTreeMap<String, Vec<u8>>>(&bytes).ok()
+    }
+}
+
+/// One legacy (`function + test` block) test as it appears in `baml test --list`
+/// output — the render inputs, decoupled from the Rust-side `LegacyTest` so the
+/// cache payload does not depend on `test_command.rs`'s private type.
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub(crate) struct CachedLegacyTest {
+    pub(crate) function_name: String,
+    pub(crate) test_name: String,
+    /// Project-root-relative display path (the `--list` `(path)` suffix).
+    pub(crate) file_path: String,
+}
+
+/// The cached `baml test --list` **discovery output**: everything a `--list`
+/// invocation renders, in the exact order it renders it, *unfiltered* so any
+/// `-i`/`-x` selection is served from one entry (the filter is re-applied live
+/// in Rust via `TestFilter`, which mirrors `testing.leaf_selected`).
+///
+/// This is a pure function of the compiled Program (same sources + compiler
+/// build ⇒ same tests), so it is keyed by the Program's own cache key
+/// ([`test_discovery_key`]). A warm hit renders directly from this and skips
+/// engine boot, `$init`/`$init_test`, and in-VM testset expansion entirely.
+///
+/// R1 (design §5): a testset generator running IO/LLM could make discovery
+/// depend on state outside the cache key. Posture 1 mitigations: the
+/// `BAML_CACHE_VERIFY` tripwire ([`CacheContext::verify_test_discovery`]) and
+/// the `BAML_NO_DISCOVERY_CACHE` opt-out. The datum is only ever written from a
+/// discovery that completed without error.
+#[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub(crate) struct TestDiscovery {
+    /// Legacy function-attached tests, unfiltered, in discovery order.
+    pub(crate) legacy: Vec<CachedLegacyTest>,
+    /// Fully-expanded testset leaf names (full slash paths), unfiltered, in
+    /// `collect_leaf_names` order.
+    pub(crate) testset_leaf_names: Vec<String>,
+}
+
+impl CacheContext {
+    /// Isolation / A-B toggle for the `--list` discovery cache:
+    /// `BAML_NO_DISCOVERY_CACHE=1` disables *only* serving/writing the flattened
+    /// test list, so `--list` always boots the engine and discovers honestly,
+    /// leaving bytecode reuse / diagnostics / throws seeding intact.
+    /// `BAML_NO_BYTECODE_CACHE` already disables the whole cache, so this is the
+    /// finer-grained knob.
+    fn discovery_cache_disabled() -> bool {
+        std::env::var_os("BAML_NO_DISCOVERY_CACHE").is_some_and(|v| v == "1")
+    }
+
+    /// Load the cached `--list` discovery output, if present: `load_raw` + borsh
+    /// decode. `None` on a miss, a decode failure, or when the discovery cache is
+    /// disabled — every case falls through to honest engine-boot discovery.
+    pub(crate) fn load_test_discovery(&self) -> Option<TestDiscovery> {
+        if Self::discovery_cache_disabled() {
+            return None;
+        }
+        let bytes = self.cache.load_raw(&self.test_discovery_key)?;
+        match borsh::from_slice::<TestDiscovery>(&bytes) {
+            Ok(disco) => Some(disco),
+            Err(e) => {
+                cache_debug(format_args!("test discovery undecodable: {e}"));
+                None
+            }
+        }
+    }
+
+    /// Write-through the discovery output after a successful honest discovery.
+    /// Best-effort, like every cache write; a failed write just means
+    /// re-discovering next run. Skipped when the discovery cache is disabled.
+    /// Callers must only pass a discovery that completed without error
+    /// (never-save-on-error, design §6).
+    pub(crate) fn store_test_discovery(&self, disco: &TestDiscovery) {
+        if Self::discovery_cache_disabled() {
+            return;
+        }
+        match borsh::to_vec(disco) {
+            Ok(payload) => {
+                if let Err(e) = self.cache.store_raw(&self.test_discovery_key, &payload) {
+                    cache_debug(format_args!("test discovery store failed: {e}"));
+                }
+            }
+            Err(e) => cache_debug(format_args!("test discovery serialize failed: {e}")),
+        }
+    }
+
+    /// The `BAML_CACHE_VERIFY` tripwire for `--list` discovery (design §6): under
+    /// verify the discovery cache is *not* served (the caller ran the honest
+    /// engine-boot discovery), so this compares that honest result byte-for-byte
+    /// against any cached blob on disk. A mismatch means discovery is
+    /// nondeterministic or reads uncached state (an impure testset generator) —
+    /// a hard error, our `gocacheverify` for tests.
+    pub(crate) fn verify_test_discovery(&self, honest: &TestDiscovery) -> anyhow::Result<()> {
+        if !Self::verify_enabled() {
+            return Ok(());
+        }
+        // Read the on-disk blob directly, bypassing the `BAML_NO_DISCOVERY_CACHE`
+        // disable (verify must still compare against whatever is on disk).
+        let Some(bytes) = self.cache.load_raw(&self.test_discovery_key) else {
+            return Ok(());
+        };
+        let Ok(cached) = borsh::from_slice::<TestDiscovery>(&bytes) else {
+            return Ok(());
+        };
+        Self::compare_test_discovery(&cached, honest)
+    }
+
+    /// The env-independent core of [`Self::verify_test_discovery`], so the
+    /// oracle's discriminating power (pass on a faithful cache, bail on a stale
+    /// one) is unit-testable without mutating the process environment.
+    pub(crate) fn compare_test_discovery(
+        cached: &TestDiscovery,
+        honest: &TestDiscovery,
+    ) -> anyhow::Result<()> {
+        if cached.legacy != honest.legacy {
+            anyhow::bail!(
+                "BAML_CACHE_VERIFY: cached `test --list` legacy-test discovery differs from a \
+                 fresh discovery ({} vs {} tests). Test discovery is nondeterministic or reads \
+                 uncached state — please report this.",
+                cached.legacy.len(),
+                honest.legacy.len(),
+            );
+        }
+        if cached.testset_leaf_names != honest.testset_leaf_names {
+            anyhow::bail!(
+                "BAML_CACHE_VERIFY: cached `test --list` testset discovery differs from a fresh \
+                 discovery ({} vs {} leaf tests). A testset generator is nondeterministic or reads \
+                 uncached state (IO/env/LLM) — please report this.",
+                cached.testset_leaf_names.len(),
+                honest.testset_leaf_names.len(),
+            );
+        }
+        Ok(())
     }
 }
 
@@ -3257,6 +3398,119 @@ mod tests {
         assert!(
             !baml_iface.functions.is_empty() || !baml_iface.types.is_empty(),
             "an unseeded stdlib package must still derive its real interface"
+        );
+    }
+
+    // ── Engine-boot floor: `baml test --list` discovery cache ────────────────
+
+    fn sample_discovery() -> TestDiscovery {
+        TestDiscovery {
+            legacy: vec![
+                CachedLegacyTest {
+                    function_name: "Greet".to_string(),
+                    test_name: "hello".to_string(),
+                    file_path: "greet.baml".to_string(),
+                },
+                CachedLegacyTest {
+                    function_name: "Greet".to_string(),
+                    test_name: "world".to_string(),
+                    file_path: "greet.baml".to_string(),
+                },
+            ],
+            testset_leaf_names: vec![
+                "suite/one".to_string(),
+                "suite/two".to_string(),
+                "nested/inner/leaf".to_string(),
+            ],
+        }
+    }
+
+    #[test]
+    fn test_discovery_roundtrips_through_cache_context() {
+        // Store then load the flattened test list through the CacheContext seam;
+        // a fresh key misses, a written key round-trips byte-for-byte.
+        if cache_disabled() {
+            return;
+        }
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+        let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let ctx = CacheContext::open(&r, true).expect("cache opens");
+
+        assert!(
+            ctx.load_test_discovery().is_none(),
+            "discovery miss on an empty cache"
+        );
+
+        let disco = sample_discovery();
+        ctx.store_test_discovery(&disco);
+        assert_eq!(
+            ctx.load_test_discovery().as_ref(),
+            Some(&disco),
+            "a stored discovery blob round-trips through the cache"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn test_discovery_load_degrades_on_undecodable_blob() {
+        // Graceful degradation: an entry that decodes as a valid cache blob but
+        // is NOT a valid `TestDiscovery` (wire skew) is a silent `None`, so the
+        // caller falls back to honest engine-boot discovery instead of rendering
+        // garbage.
+        if cache_disabled() {
+            return;
+        }
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+        let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
+        let ctx = CacheContext::open(&r, true).expect("cache opens");
+
+        ctx.cache
+            .store_raw(&ctx.test_discovery_key, b"not-a-valid-borsh-TestDiscovery")
+            .expect("store raw garbage under the discovery key");
+        assert!(
+            ctx.load_test_discovery().is_none(),
+            "an undecodable discovery blob degrades to a miss, not a crash"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn compare_test_discovery_passes_on_identical() {
+        // The verify oracle's env-independent core: identical discovery is a pass.
+        let disco = sample_discovery();
+        assert!(
+            CacheContext::compare_test_discovery(&disco, &disco).is_ok(),
+            "a faithful cached discovery must pass the verify core"
+        );
+    }
+
+    #[test]
+    fn compare_test_discovery_bails_on_legacy_mismatch() {
+        // A drifted legacy list is a hard error (the `gocacheverify` signal).
+        let cached = sample_discovery();
+        let mut honest = sample_discovery();
+        honest.legacy.pop();
+        let err = CacheContext::compare_test_discovery(&cached, &honest)
+            .expect_err("a legacy-list mismatch must bail");
+        assert!(
+            err.to_string().contains("legacy-test discovery differs"),
+            "the bail message must name the legacy divergence: {err}"
+        );
+    }
+
+    #[test]
+    fn compare_test_discovery_bails_on_testset_mismatch() {
+        // A drifted testset leaf set (e.g. a nondeterministic generator) bails.
+        let cached = sample_discovery();
+        let mut honest = sample_discovery();
+        honest.testset_leaf_names[0] = "suite/one-CHANGED".to_string();
+        let err = CacheContext::compare_test_discovery(&cached, &honest)
+            .expect_err("a testset-list mismatch must bail");
+        assert!(
+            err.to_string().contains("testset discovery differs"),
+            "the bail message must name the testset divergence: {err}"
         );
     }
 }

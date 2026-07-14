@@ -92,6 +92,21 @@ impl TestArgs {
         }
 
         let cache = CacheContext::open(&resolved, /* emit_test_cases */ true);
+
+        // Warm `--list` fast path. The flattened test list (legacy tests +
+        // fully-expanded testset leaf names) is a pure function of the compiled
+        // Program, cached under its key. On a hit we render + select directly
+        // and skip engine boot, `$init`/`$init_test`, and in-VM testset
+        // expansion entirely — the whole `--list` discovery floor. Gated off
+        // under BAML_CACHE_VERIFY (the oracle must run honest discovery) and
+        // BAML_NO_DISCOVERY_CACHE; any miss/corruption falls through to the
+        // honest path below.
+        if self.list {
+            if let Some(exit) = self.try_cached_list(&reporter, cache.as_ref()) {
+                return Ok(exit);
+            }
+        }
+
         let cached_program = if CacheContext::verify_enabled() {
             None
         } else {
@@ -298,31 +313,44 @@ impl TestArgs {
                 None => Vec::new(),
             };
 
-            if legacy_selected.is_empty() && testset_names.is_empty() {
-                reporter.finish("Finished", "no tests selected");
-                return Ok(crate::ExitCode::NoTestsRun);
+            // Write-through the discovery cache (+ BAML_CACHE_VERIFY oracle) so a
+            // later `--list` skips engine boot entirely. The cached datum is the
+            // UNFILTERED flattened list, so any -i/-x is served from one entry;
+            // with no filters the display list above already IS the unfiltered
+            // list, so no extra VM call. Written only from an error-free
+            // discovery (never-save-on-error).
+            if let Some(ctx) = &cache {
+                let all_leaf_names = if self.include.is_empty() && self.exclude.is_empty() {
+                    testset_names.clone()
+                } else {
+                    match &registry {
+                        Some(reg) => match list_selected_testset_names(&run_ctx, reg, &[], &[]) {
+                            Ok(names) => names,
+                            Err(e) => {
+                                reporter.abandon();
+                                crate::reporter::print_error(format_args!(
+                                    "failed to list tests: {e}"
+                                ));
+                                return Ok(crate::ExitCode::Other);
+                            }
+                        },
+                        None => Vec::new(),
+                    }
+                };
+                let disco = crate::bytecode_cache::TestDiscovery {
+                    legacy: legacy.iter().map(cached_legacy_test).collect(),
+                    testset_leaf_names: all_leaf_names,
+                };
+                ctx.verify_test_discovery(&disco)?;
+                ctx.store_test_discovery(&disco);
             }
 
-            reporter.status(
-                "Selected",
-                format!("{} test(s)", legacy_selected.len() + testset_names.len()),
-            );
-            // Indented list under the cargo-style status line. These are
-            // content (the actual list), not status updates, so they go to
-            // stdout as plain prints.
-            for t in &legacy_selected {
-                println!(
-                    "  {}::{}  ({})",
-                    t.function_name,
-                    t.test_name,
-                    t.file_path.display()
-                );
-            }
-            for name in &testset_names {
-                let (func, test) = split_top(name);
-                println!("  {func}::{test}  (<testset>)");
-            }
-            return Ok(crate::ExitCode::Success);
+            let legacy_lines: Vec<crate::bytecode_cache::CachedLegacyTest> = legacy_selected
+                .iter()
+                .copied()
+                .map(cached_legacy_test)
+                .collect();
+            return Ok(render_test_list(&reporter, &legacy_lines, &testset_names));
         }
 
         // ── 8. Execute ─────────────────────────────────────────────────────
@@ -403,6 +431,87 @@ impl TestArgs {
             reporter.finish("Finished", summary);
             Ok(crate::ExitCode::Success)
         }
+    }
+
+    /// Warm `--list` fast path: render the flattened test list straight from the
+    /// discovery cache and skip engine boot entirely. The include/exclude filter
+    /// is re-applied live in Rust via [`TestFilter`] — which mirrors the BAML
+    /// `testing.leaf_selected` used on the honest path, so the selection (and
+    /// hence stdout) is byte-identical to a cold run. Returns `None` when the
+    /// cache is absent/disabled, under `BAML_CACHE_VERIFY`, or on a discovery
+    /// miss/corruption — every case falls through to honest discovery.
+    fn try_cached_list(
+        &self,
+        reporter: &Reporter,
+        cache: Option<&CacheContext>,
+    ) -> Option<crate::ExitCode> {
+        if CacheContext::verify_enabled() {
+            return None;
+        }
+        let disco = cache?.load_test_discovery()?;
+        let filter = TestFilter::new(
+            self.include.iter().map(|s| s.as_str()),
+            self.exclude.iter().map(|s| s.as_str()),
+        );
+        let legacy_selected: Vec<crate::bytecode_cache::CachedLegacyTest> = disco
+            .legacy
+            .into_iter()
+            .filter(|t| filter.includes(&t.function_name, &t.test_name))
+            .collect();
+        let testset_names: Vec<String> = disco
+            .testset_leaf_names
+            .into_iter()
+            .filter(|name| {
+                let (func, test) = split_top(name);
+                filter.includes(&func, &test)
+            })
+            .collect();
+        crate::bytecode_cache::cache_debug(format_args!(
+            "served `test --list` from discovery cache ({} legacy + {} testset leaf(s) selected); \
+             engine boot skipped",
+            legacy_selected.len(),
+            testset_names.len(),
+        ));
+        Some(render_test_list(reporter, &legacy_selected, &testset_names))
+    }
+}
+
+/// Render the selected `--list` output to stdout and return the exit code.
+/// Shared by the honest path and the warm discovery-cache path so both produce
+/// byte-identical stdout. Status/`Selected` lines go to stderr (via the
+/// reporter); only the list itself is stdout content.
+fn render_test_list(
+    reporter: &Reporter,
+    legacy_selected: &[crate::bytecode_cache::CachedLegacyTest],
+    testset_names: &[String],
+) -> crate::ExitCode {
+    if legacy_selected.is_empty() && testset_names.is_empty() {
+        reporter.finish("Finished", "no tests selected");
+        return crate::ExitCode::NoTestsRun;
+    }
+    reporter.status(
+        "Selected",
+        format!("{} test(s)", legacy_selected.len() + testset_names.len()),
+    );
+    // Indented list under the cargo-style status line. These are content (the
+    // actual list), not status updates, so they go to stdout as plain prints.
+    for t in legacy_selected {
+        println!("  {}::{}  ({})", t.function_name, t.test_name, t.file_path);
+    }
+    for name in testset_names {
+        let (func, test) = split_top(name);
+        println!("  {func}::{test}  (<testset>)");
+    }
+    crate::ExitCode::Success
+}
+
+/// Project a Rust-side [`LegacyTest`] into the cache/render payload shape (its
+/// root-relative `file_path` rendered to the display string `--list` prints).
+fn cached_legacy_test(t: &LegacyTest) -> crate::bytecode_cache::CachedLegacyTest {
+    crate::bytecode_cache::CachedLegacyTest {
+        function_name: t.function_name.clone(),
+        test_name: t.test_name.clone(),
+        file_path: t.file_path.display().to_string(),
     }
 }
 
