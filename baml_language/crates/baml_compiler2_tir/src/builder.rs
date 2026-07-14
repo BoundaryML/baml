@@ -752,7 +752,7 @@ pub struct TypeInferenceBuilder<'db> {
     /// `package_resolved_aliases` value (not rebuilt per scope) so
     /// `is_same_normalized_type` and `is_subtype_of` reuse the
     /// precomputed `recursive` set instead of re-DFS'ing the alias
-    /// graph on every call. See `crates/baml_compiler2_profile/README.md`
+    /// graph on every call. See `crates/tools_compile_profile/README.md`
     /// for the audit that surfaced the redundant work this fixes.
     aliases: &'db baml_type::ResolvedAliases,
     /// Namespace path for the file being analyzed (e.g. `["env"]` for `baml/env.baml`).

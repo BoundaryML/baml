@@ -1,4 +1,4 @@
-//! `baml_compiler2_profile`: A standalone profiling harness for the BAML compiler.
+//! `tools_compile_profile`: A standalone profiling harness for the BAML compiler.
 //!
 //! This tool loads a BAML project, runs the full compiler pipeline
 //! (parse → HIR → PPIR → TIR → MIR → emit) end-to-end, and reports:
@@ -32,23 +32,23 @@
 //!
 //! ```text
 //! # Human-readable report (cold-only)
-//! cargo run --release -p baml_compiler2_profile -- /path/to/baml/project
+//! cargo run --release -p tools_compile_profile -- /path/to/baml/project
 //!
 //! # Cold run followed by 2 warm re-runs on the same db (measures cache)
-//! cargo run --release -p baml_compiler2_profile -- --warm-runs 2 /path/to/project
+//! cargo run --release -p tools_compile_profile -- --warm-runs 2 /path/to/project
 //!
 //! # JSON output for programmatic diffing
-//! cargo run --release -p baml_compiler2_profile -- --json /path/to/project
+//! cargo run --release -p tools_compile_profile -- --json /path/to/project
 //!
 //! # Repeat N times (useful for measuring cold-cache variance)
-//! cargo run --release -p baml_compiler2_profile -- --repeat 3 /path/to/project
+//! cargo run --release -p tools_compile_profile -- --repeat 3 /path/to/project
 //!
 //! # Skip bytecode generation (measure just `check`, not `check + emit`)
-//! cargo run --release -p baml_compiler2_profile -- --check-only /path/to/project
+//! cargo run --release -p tools_compile_profile -- --check-only /path/to/project
 //!
 //! # Combine with a CPU sampler for a flamegraph
-//! cargo build --release -p baml_compiler2_profile
-//! samply record ./target/release/baml_compiler2_profile /path/to/project
+//! cargo build --release -p tools_compile_profile
+//! samply record ./target/release/tools_compile_profile /path/to/project
 //! ```
 
 use std::{
@@ -78,7 +78,7 @@ use salsa::{Database, Event, EventKind};
 /// Profile a full BAML compile pipeline against a project on disk.
 #[derive(Parser, Debug)]
 #[command(
-    name = "baml_compiler2_profile",
+    name = "tools_compile_profile",
     about = "Profile a full BAML compile (parse → HIR → PPIR → TIR → MIR → emit) end-to-end."
 )]
 struct Args {
@@ -146,22 +146,22 @@ fn main() -> Result<()> {
         .map(|(_, text)| text.matches('\n').count() + 1)
         .sum();
 
-    eprintln!("[baml_compiler2_profile] project: {}", root.display());
+    eprintln!("[tools_compile_profile] project: {}", root.display());
     eprintln!(
-        "[baml_compiler2_profile] {} files, {} lines, {} bytes",
+        "[tools_compile_profile] {} files, {} lines, {} bytes",
         sources.len(),
         total_lines,
         total_bytes,
     );
     if args.repeat > 1 {
-        eprintln!("[baml_compiler2_profile] running {} times", args.repeat);
+        eprintln!("[tools_compile_profile] running {} times", args.repeat);
     }
 
     let cold_runs = args.repeat.max(1);
     let mut runs: Vec<RunReport> = Vec::with_capacity(cold_runs * (1 + args.warm_runs));
     for i in 0..cold_runs {
         eprintln!(
-            "[baml_compiler2_profile] cold run {}/{} (fresh database, empty Salsa cache)",
+            "[tools_compile_profile] cold run {}/{} (fresh database, empty Salsa cache)",
             i + 1,
             cold_runs
         );
@@ -172,7 +172,7 @@ fn main() -> Result<()> {
         let reports = run_cold_plus_warm(&root, &sources, args.check_only, args.warm_runs)?;
         for r in &reports {
             eprintln!(
-                "[baml_compiler2_profile]   [{}] total: {:.3}s  (check {:.3}s, emit {:.3}s, exec {} queries, hit {})",
+                "[tools_compile_profile]   [{}] total: {:.3}s  (check {:.3}s, emit {:.3}s, exec {} queries, hit {})",
                 r.mode.label(),
                 r.total.as_secs_f64(),
                 r.check.as_secs_f64(),
@@ -530,7 +530,7 @@ fn invoke_pipeline(
         // Matches the CLI: `check` errors abort the pipeline before
         // bytecode generation.
         eprintln!(
-            "[baml_compiler2_profile]   [{}] skipping emit: {error_count} error(s) reported by check",
+            "[tools_compile_profile]   [{}] skipping emit: {error_count} error(s) reported by check",
             mode.label()
         );
         (Duration::ZERO, false)
@@ -1031,7 +1031,7 @@ fn print_human(
     println!();
     println!("Tips:");
     println!("  * For a CPU flamegraph, wrap this binary with a sampler:");
-    println!("      samply record ./target/release/baml_compiler2_profile <project>");
+    println!("      samply record ./target/release/tools_compile_profile <project>");
     println!("  * The 'suspect' table above is a first place to look for repeated");
     println!("    work — a query that fires many times but is rarely a cache hit");
     println!("    is either recomputing per-call, or keyed too finely.");

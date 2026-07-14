@@ -1715,7 +1715,7 @@ unsafe impl salsa::Update for ClassTypeTags {
 /// Salsa-tracked: the map is a pure function of the project, but it was
 /// rebuilt (walking every file's item tree) inside every `LoweringContext`
 /// construction — once per function lowered, ~13% of cold CPU on the test
-/// corpus. See `crates/baml_compiler2_profile/README.md`.
+/// corpus. See `crates/tools_compile_profile/README.md`.
 #[salsa::tracked(returns(ref))]
 fn class_type_tags_for_project(
     db: &dyn crate::Db,

@@ -1,5 +1,5 @@
 [package]
-name = "baml_compiler2_profile"
+name = "tools_compile_profile"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -11,7 +11,7 @@ license = { workspace = true }
 description = "Standalone profiling harness for the BAML compiler pipeline (parse → HIR → PPIR → TIR → MIR → emit)."
 
 [[bin]]
-name = "baml_compiler2_profile"
+name = "tools_compile_profile"
 path = "src/main.rs"
 
 [dependencies]

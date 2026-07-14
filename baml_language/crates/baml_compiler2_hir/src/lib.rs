@@ -126,7 +126,7 @@ unsafe impl salsa::Update for FileAst {
 /// project-wide expansion-map collectors, and the LSP check pass). Before
 /// this query existed each of them re-lowered the syntax tree from scratch —
 /// ~31% of cold-compile CPU on the test corpus was repeated CST traversal.
-/// See `crates/baml_compiler2_profile/README.md`.
+/// See `crates/tools_compile_profile/README.md`.
 #[salsa::tracked(returns(ref))]
 pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     let tree = baml_compiler_parser::syntax_tree(db, file);

@@ -3019,7 +3019,7 @@ pub fn enum_variants<'db>(
 /// Salsa-tracked and keyed by package: before this was a query, the map was
 /// rebuilt (with a full clone of every alias `Ty` plus a recursive-alias DFS)
 /// on every `infer_scope_types` execution — ~16k times per compile on the
-/// test corpus, ~13% of cold CPU. See `crates/baml_compiler2_profile/README.md`.
+/// test corpus, ~13% of cold CPU. See `crates/tools_compile_profile/README.md`.
 /// Cycle seed for `package_resolved_aliases`: aliases whose RHS is an
 /// associated-type projection resolve through `package_items` →
 /// `infer_scope_types`, which itself consults this query — a legitimate
@@ -3053,7 +3053,7 @@ pub fn package_resolved_aliases<'db>(
     }
     // Compute the recursive-alias set once here so `is_same_normalized_type` /
     // `is_subtype_of` don't re-DFS the alias graph on every call — see the
-    // audit in `crates/baml_compiler2_profile/README.md`. Callers now hold
+    // audit in `crates/tools_compile_profile/README.md`. Callers now hold
     // `ResolvedAliases` end-to-end and pass it into the normalizer directly.
     let recursive = crate::normalize::find_recursive_aliases(&aliases);
     baml_type::ResolvedAliases { aliases, recursive }

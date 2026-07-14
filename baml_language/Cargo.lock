@@ -858,22 +858,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_compiler2_profile"
-version = "0.0.0-beta"
-dependencies = [
- "anyhow",
- "baml_compiler2_tir",
- "baml_compiler_diagnostics",
- "baml_project",
- "baml_workspace",
- "clap",
- "mimalloc",
- "salsa",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "baml_compiler2_tir"
 version = "0.1.0"
 dependencies = [
@@ -7675,6 +7659,22 @@ name = "toml_writer"
 version = "1.1.1+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
+
+[[package]]
+name = "tools_compile_profile"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "baml_compiler2_tir",
+ "baml_compiler_diagnostics",
+ "baml_project",
+ "baml_workspace",
+ "clap",
+ "mimalloc",
+ "salsa",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "tools_onionskin"

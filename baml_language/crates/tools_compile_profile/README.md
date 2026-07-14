@@ -1,4 +1,4 @@
-# baml_compiler2_profile
+# tools_compile_profile
 
 Standalone profiling harness for the BAML compiler pipeline.
 
@@ -73,26 +73,26 @@ The cold-vs-warm table then makes three failure modes visible:
 
 ```bash
 # Build once
-cargo build --release -p baml_compiler2_profile
+cargo build --release -p tools_compile_profile
 
 # Point at any directory that contains .baml files or a baml_src/ dir
-./target/release/baml_compiler2_profile /path/to/baml/project
+./target/release/tools_compile_profile /path/to/baml/project
 
 # Cold + warm re-runs on the same db — measures Salsa's cache effect
-./target/release/baml_compiler2_profile --warm-runs 2 /path/to/project
+./target/release/tools_compile_profile --warm-runs 2 /path/to/project
 
 # JSON output (diff two runs, feed a spreadsheet, etc.)
-./target/release/baml_compiler2_profile --json /path/to/project > run.json
+./target/release/tools_compile_profile --json /path/to/project > run.json
 
 # Multiple cold-cache runs for variance measurement
-./target/release/baml_compiler2_profile --repeat 5 /path/to/project
+./target/release/tools_compile_profile --repeat 5 /path/to/project
 
 # Just measure `check`, skip bytecode (matches what `baml check` does
 # when there are diagnostic errors)
-./target/release/baml_compiler2_profile --check-only /path/to/project
+./target/release/tools_compile_profile --check-only /path/to/project
 
 # Compact one-liner for logs / dashboards
-./target/release/baml_compiler2_profile --summary-line /path/to/project | tail -1
+./target/release/tools_compile_profile --summary-line /path/to/project | tail -1
 ```
 
 ## Combining with `samply` for a real CPU flamegraph
@@ -102,13 +102,13 @@ find **which lines inside a query are hot**, sample the process:
 
 ```bash
 # Build with symbols; the workspace `release` profile already keeps them
-cargo build --release -p baml_compiler2_profile
+cargo build --release -p tools_compile_profile
 
 # Record and open in the web UI (macOS)
-samply record ./target/release/baml_compiler2_profile /path/to/project
+samply record ./target/release/tools_compile_profile /path/to/project
 
 # On Linux
-samply record ./target/release/baml_compiler2_profile /path/to/project
+samply record ./target/release/tools_compile_profile /path/to/project
 ```
 
 `samply` opens a browser UI with an inverted call tree, a top function
@@ -171,7 +171,7 @@ Reading this:
 This section documents the audit this tool was built for, both as a
 record of *why* the compiler's hot paths look the way they do now and as
 a worked example of the methodology. Several `// See
-crates/baml_compiler2_profile/README.md` comments in the compiler point
+crates/tools_compile_profile/README.md` comments in the compiler point
 here.
 
 **Result: cold `check` + `emit` on the test corpus (78 files, 25,838

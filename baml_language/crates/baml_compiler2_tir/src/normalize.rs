@@ -16,7 +16,7 @@ use crate::ty::{FunctionParamMode, LiteralValue, MediaKind, QualifiedTypeName, T
 
 // TEMPORARY: perf-audit counters. These count how many times the public
 // entry points and internal helpers fire during a compile. Values are
-// read by `baml_compiler2_profile` at the end of a run to quantify
+// read by `tools_compile_profile` at the end of a run to quantify
 // redundant work. Remove after the audit lands.
 pub static PROF_IS_SAME_NORMALIZED_TYPE_CALLS: AtomicU64 = AtomicU64::new(0);
 pub static PROF_IS_SUBTYPE_OF_CALLS: AtomicU64 = AtomicU64::new(0);
@@ -24,7 +24,7 @@ pub static PROF_FIND_RECURSIVE_ALIASES_CALLS: AtomicU64 = AtomicU64::new(0);
 pub static PROF_HAS_CYCLE_CALLS: AtomicU64 = AtomicU64::new(0);
 pub static PROF_NORMALIZE_CALLS: AtomicU64 = AtomicU64::new(0);
 
-/// Reset all counters. Called by `baml_compiler2_profile` between runs.
+/// Reset all counters. Called by `tools_compile_profile` between runs.
 pub fn perf_audit_reset() {
     PROF_IS_SAME_NORMALIZED_TYPE_CALLS.store(0, Ordering::Relaxed);
     PROF_IS_SUBTYPE_OF_CALLS.store(0, Ordering::Relaxed);
@@ -44,7 +44,7 @@ pub fn perf_audit_reset() {
 /// re-DFS'd the alias graph on every invocation via
 /// `find_recursive_aliases` — with ~1M calls per compile that was the
 /// single biggest lever on cold-compile time. See
-/// `crates/baml_compiler2_profile/README.md` for the audit that surfaced
+/// `crates/tools_compile_profile/README.md` for the audit that surfaced
 /// this.
 pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &ResolvedAliases) -> bool {
     PROF_IS_SUBTYPE_OF_CALLS.fetch_add(1, Ordering::Relaxed);
