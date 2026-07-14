@@ -7,7 +7,13 @@ import { ShikiCodeBlock } from "@/components/ui/shiki-code-block";
 import Link from "next/link";
 import { ReactNode, isValidElement, useMemo } from "react";
 import type { Components } from "react-markdown";
+import type { Element } from "hast";
 import { BepLinkContext, resolveBepLink } from "@/lib/bep-link-resolver";
+import {
+  extractHeadings,
+  slugifyHeading,
+  stripFrontmatter,
+} from "@/lib/heading-utils";
 
 interface BepContentProps {
   content: string;
@@ -44,24 +50,50 @@ function getHeadingText(children: ReactNode): string {
   return "";
 }
 
-function slugifyHeading(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+/**
+ * Deterministic heading-id lookup, precomputed from the raw markdown.
+ *
+ * Ids must not depend on render order or count: react-markdown re-invokes
+ * the heading components on every re-render, so a mutable dedup counter in
+ * a closure drifts (summary → summary-2 → …) and breaks TOC anchors. We
+ * key by source line (exact) with heading text as a fallback.
+ */
+interface HeadingIdLookup {
+  byLine: Map<number, string>;
+  byText: Map<string, string>;
+}
+
+function buildHeadingIdLookup(content: string): HeadingIdLookup {
+  const byLine = new Map<number, string>();
+  const byText = new Map<string, string>();
+  for (const heading of extractHeadings(content)) {
+    byLine.set(heading.line, heading.id);
+    // First occurrence wins for the text fallback
+    if (!byText.has(heading.text)) {
+      byText.set(heading.text, heading.id);
+    }
+  }
+  return { byLine, byText };
 }
 
 function createHeadingComponent(
   tag: "h1" | "h2" | "h3" | "h4",
   className: string,
-  getId: (headingText: string) => string | undefined
+  lookup: HeadingIdLookup
 ): Components["h1"] {
-  const Heading = ({ children }: { children?: ReactNode }) => {
-    const headingText = getHeadingText(children);
-    const id = headingText ? getId(headingText) : undefined;
+  const Heading = ({
+    children,
+    node,
+  }: {
+    children?: ReactNode;
+    node?: Element;
+  }) => {
+    const headingText = getHeadingText(children).trim();
+    const line = node?.position?.start.line;
+    const id =
+      (line !== undefined ? lookup.byLine.get(line) : undefined) ??
+      lookup.byText.get(headingText) ??
+      (headingText ? slugifyHeading(headingText) || undefined : undefined);
     const Tag = tag;
     return (
       <Tag id={id} className={className}>
@@ -72,36 +104,30 @@ function createHeadingComponent(
   return Heading;
 }
 
-function createComponents(linkContext?: BepLinkContext): Components {
-  const slugCounts = new Map<string, number>();
-  const getUniqueId = (headingText: string) => {
-    const base = slugifyHeading(headingText);
-    if (!base) return undefined;
-    const count = (slugCounts.get(base) ?? 0) + 1;
-    slugCounts.set(base, count);
-    return count === 1 ? base : `${base}-${count}`;
-  };
-
+function createComponents(
+  lookup: HeadingIdLookup,
+  linkContext?: BepLinkContext
+): Components {
   return {
     h1: createHeadingComponent(
       "h1",
       "text-3xl font-bold mt-8 mb-4 first:mt-0 scroll-mt-24",
-      getUniqueId
+      lookup
     ),
     h2: createHeadingComponent(
       "h2",
       "text-2xl font-semibold mt-6 mb-3 pb-2 border-b border-border scroll-mt-24",
-      getUniqueId
+      lookup
     ),
     h3: createHeadingComponent(
       "h3",
       "text-xl font-semibold mt-5 mb-2 scroll-mt-24",
-      getUniqueId
+      lookup
     ),
     h4: createHeadingComponent(
       "h4",
       "text-lg font-medium mt-4 mb-2 scroll-mt-24",
-      getUniqueId
+      lookup
     ),
     pre: ({ children, node }) => {
       const codeElement = node?.children?.find(
@@ -162,13 +188,22 @@ function createComponents(linkContext?: BepLinkContext): Components {
 }
 
 export function BepContent({ content, linkContext }: BepContentProps) {
-  const components = useMemo(() => createComponents(linkContext), [linkContext]);
+  const contentWithoutFrontmatter = useMemo(
+    () => stripFrontmatter(content ?? ""),
+    [content]
+  );
+  const components = useMemo(
+    () =>
+      createComponents(
+        buildHeadingIdLookup(contentWithoutFrontmatter),
+        linkContext
+      ),
+    [contentWithoutFrontmatter, linkContext]
+  );
 
   if (!content) {
     return <div className="text-muted-foreground">No content</div>;
   }
-
-  const contentWithoutFrontmatter = content.replace(/^---[\s\S]*?---\n*/, "");
 
   return (
     <article

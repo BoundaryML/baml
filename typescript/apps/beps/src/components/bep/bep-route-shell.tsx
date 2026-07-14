@@ -919,7 +919,8 @@ const [copied, setCopied] = useState(false);
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <aside className="lg:col-span-1">
-            <div className="sticky top-8">
+            {/* max-h + overflow so a long page list stays reachable while stuck */}
+            <div className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain pr-1">
               <BepNav
                 sections={allSections}
                 activeSection={activeSection}
