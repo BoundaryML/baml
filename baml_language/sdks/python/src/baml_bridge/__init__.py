@@ -53,7 +53,7 @@ from .typemap import (
 # Flush buffered trace events on process exit so nothing is lost.
 atexit.register(flush_events)
 
-__version__ = "0.14.1"
+__version__ = "0.15.0"
 
 
 # ---------------------------------------------------------------------------
