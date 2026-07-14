@@ -61,7 +61,7 @@ pub fn to_source_code_with_bytecode(
                             .project(
                                 &fqn.member(&argument.name),
                                 GoNameKind::Parameter,
-                                GoVisibility::Unexported,
+                                GoVisibility::Exported,
                             )
                             .clone()
                     })

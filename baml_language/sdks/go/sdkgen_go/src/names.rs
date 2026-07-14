@@ -51,7 +51,6 @@ pub(crate) enum GoNameKind {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum GoVisibility {
     Exported,
-    Unexported,
 }
 
 /// A validated Go identifier. Its textual representation is intentionally
@@ -146,7 +145,7 @@ impl GoNames {
                     NameRequest::new(
                         fqn.member(&argument.name),
                         GoNameKind::Parameter,
-                        GoVisibility::Unexported,
+                        GoVisibility::Exported,
                     )
                 }));
             }
@@ -218,7 +217,10 @@ fn project_base(request: &NameRequest) -> GoName {
     } else if value.starts_with(|ch: char| ch.is_ascii_digit()) {
         value.insert_str(0, "Baml");
     }
-    if matches!(request.visibility, GoVisibility::Unexported) {
+    // Parameters are local identifiers, not declarations with package
+    // visibility. Their spelling is controlled by their kind; every generated
+    // declaration currently uses exported visibility.
+    if matches!(request.kind, GoNameKind::Parameter) {
         lowercase_first(&mut value);
     }
 
@@ -296,7 +298,6 @@ fn short_hash(request: &NameRequest) -> String {
     });
     hash.byte(match request.visibility {
         GoVisibility::Exported => 0,
-        GoVisibility::Unexported => 1,
     });
     format!("{:016x}", hash.finish())[..8].to_string()
 }
@@ -438,47 +439,39 @@ mod tests {
             request(
                 left_value.clone(),
                 GoNameKind::Parameter,
-                GoVisibility::Unexported,
+                GoVisibility::Exported,
             ),
             request(
                 right_value.clone(),
                 GoNameKind::Parameter,
-                GoVisibility::Unexported,
+                GoVisibility::Exported,
             ),
-            request(ctx.clone(), GoNameKind::Parameter, GoVisibility::Unexported),
-            request(
-                type_.clone(),
-                GoNameKind::Parameter,
-                GoVisibility::Unexported,
-            ),
+            request(ctx.clone(), GoNameKind::Parameter, GoVisibility::Exported),
+            request(type_.clone(), GoNameKind::Parameter, GoVisibility::Exported),
         ];
         let names = GoNames::new(requests);
 
         assert_eq!(
             names
-                .project(&left_value, GoNameKind::Parameter, GoVisibility::Unexported,)
+                .project(&left_value, GoNameKind::Parameter, GoVisibility::Exported,)
                 .as_str(),
             "userId"
         );
         assert_eq!(
             names
-                .project(
-                    &right_value,
-                    GoNameKind::Parameter,
-                    GoVisibility::Unexported,
-                )
+                .project(&right_value, GoNameKind::Parameter, GoVisibility::Exported,)
                 .as_str(),
             "userId"
         );
         assert_eq!(
             names
-                .project(&ctx, GoNameKind::Parameter, GoVisibility::Unexported,)
+                .project(&ctx, GoNameKind::Parameter, GoVisibility::Exported,)
                 .as_str(),
             "ctx_"
         );
         assert_eq!(
             names
-                .project(&type_, GoNameKind::Parameter, GoVisibility::Unexported,)
+                .project(&type_, GoNameKind::Parameter, GoVisibility::Exported,)
                 .as_str(),
             "type_"
         );
