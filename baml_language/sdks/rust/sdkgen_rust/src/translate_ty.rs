@@ -131,7 +131,20 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             Ok(type_path(name, ctx.analysis))
         }
         Ty::Media(kind) => Err(unsupported(&format!("media ({kind})"))),
-        Ty::TypeAlias(_) => Err(unsupported("type alias")),
+        // Opaque alias references (in-package non-recursive aliases are
+        // inlined upstream, so these are recursive or cross-package ones).
+        // A Rust `type` alias is transparent, so the reference resolves to
+        // the underlying type's conversions; no boxing is needed because
+        // package dependencies are acyclic, so a cross-package alias can
+        // never sit on a containment cycle.
+        Ty::TypeAlias(name) => {
+            if !ctx.analysis.is_emitted(name) {
+                return Err(Unsupported {
+                    reason: format!("references skipped or unknown type `{name}`"),
+                });
+            }
+            Ok(type_path(name, ctx.analysis))
+        }
         Ty::TypeVar(_) => Err(unsupported("type variable (generics)")),
         Ty::BuiltinUnknown => Err(unsupported("unknown")),
         Ty::Callable { .. } => Err(unsupported("callable")),
@@ -387,6 +400,70 @@ mod tests {
                 .iter()
                 .any(|w| w.fqn == "user.Holder" && w.reason.contains("user.Bad")),
             "holder should name its poisoned dependency"
+        );
+    }
+
+    fn alias(n: &Name, resolves_to: Ty, recursive: bool) -> Symbol {
+        Symbol::TypeAlias(baml_codegen_types::TypeAlias {
+            name: n.clone(),
+            resolves_to,
+            recursive,
+            origin: Origin {
+                source_file_path: "main.baml".to_string(),
+                span_start: 0,
+            },
+        })
+    }
+
+    #[test]
+    fn emitted_alias_references_resolve_and_recursive_aliases_fail_closed() {
+        let plain = name("user", &["aliases"], "StringList");
+        let recursive = name("user", &["aliases"], "RecList");
+        let pool = SymbolPool::from([
+            (
+                plain.clone(),
+                alias(&plain, Ty::List(Box::new(Ty::String)), false),
+            ),
+            (
+                recursive.clone(),
+                alias(&recursive, Ty::List(Box::new(Ty::Int)), true),
+            ),
+        ]);
+        let (analysis, warnings) = analyze(&pool);
+        assert!(analysis.is_emitted(&plain));
+        assert!(!analysis.is_emitted(&recursive));
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].reason.contains("recursive"));
+
+        let ctx = TyCtx {
+            analysis: &analysis,
+            boxing_for: None,
+        };
+        assert_eq!(
+            translate(&Ty::TypeAlias(plain), &ctx).unwrap().to_string(),
+            "crate :: aliases :: StringList"
+        );
+        assert!(translate(&Ty::TypeAlias(recursive), &ctx).is_err());
+    }
+
+    #[test]
+    fn classes_with_recursive_alias_fields_skip_transitively() {
+        let rec = name("user", &[], "RecList");
+        let container = name("user", &[], "AliasContainer");
+        let pool = SymbolPool::from([
+            (rec.clone(), alias(&rec, Ty::List(Box::new(Ty::Int)), true)),
+            (
+                container.clone(),
+                class(&container, vec![("rec_field", Ty::TypeAlias(rec.clone()))]),
+            ),
+        ]);
+        let (analysis, warnings) = analyze(&pool);
+        assert!(!analysis.is_emitted(&container));
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.fqn == "user.AliasContainer" && w.reason.contains("user.RecList")),
+            "container should name its poisoned alias dependency"
         );
     }
 

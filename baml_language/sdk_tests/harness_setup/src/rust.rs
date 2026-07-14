@@ -165,11 +165,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "test_generic.rs",
         Gate::Later("needs generics"),
     ),
-    (
-        "type_shapes",
-        "roundtrip_tests/test_aliases.rs",
-        Gate::Later("needs type aliases"),
-    ),
+    ("type_shapes", "roundtrip_tests/test_aliases.rs", Gate::Now),
     (
         "type_shapes",
         "roundtrip_tests/test_class_refs.rs",
