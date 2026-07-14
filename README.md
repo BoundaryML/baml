@@ -37,6 +37,25 @@ baml ide install --code
 
 Or read the [quickstart](https://boundaryml.com/quickstart).
 
+## Telemetry
+
+The `baml` CLI sends anonymous usage telemetry so we can see which commands are used and on which platforms. It is sent on each CLI invocation to [PostHog](https://posthog.com) (US cloud) and includes:
+
+- the subcommand run (e.g. `generate`, `test`)
+- `baml` version and release channel
+- OS and CPU architecture
+- whether the invocation looks like CI
+- a randomly-generated anonymous ID
+
+It does **not** include your BAML source, prompts, file contents, or any personal information.
+
+### Opting out
+
+Set either environment variable to disable it:
+
+- `DO_NOT_TRACK=1` (the [Console Do Not Track](https://consoledonottrack.com) convention), or
+- `BAML_TELEMETRY=0`
+
 ## Contributing
 
 See our [guide on getting started](/CONTRIBUTING.md).
