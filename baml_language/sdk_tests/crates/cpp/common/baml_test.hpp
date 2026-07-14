@@ -33,6 +33,42 @@ struct Failure {
     std::string message;
 };
 
+// Child-process entry points (for tests that must observe process exit
+// codes, e.g. the baml.sys.exit contract). Registered with
+// BAML_TEST_CHILD(name); the parent re-executes itself as
+// `<binary> --child <name>`.
+struct Child {
+    const char* name;
+    int (*fn)();
+};
+
+inline std::vector<Child>& child_registry() {
+    static std::vector<Child> children;
+    return children;
+}
+
+struct RegisterChild {
+    RegisterChild(const char* name, int (*fn)()) { child_registry().push_back(Child{name, fn}); }
+};
+
+inline const char*& argv0_storage() {
+    static const char* argv0 = "";
+    return argv0;
+}
+
+// The test binary's own path, for spawning child processes.
+inline const char* argv0() { return argv0_storage(); }
+
+inline int run_child(const char* name) {
+    for (const Child& c : child_registry()) {
+        if (std::string(c.name) == name) {
+            return c.fn();
+        }
+    }
+    std::fprintf(stderr, "unknown --child '%s'\n", name);
+    return 127;
+}
+
 [[noreturn]] inline void fail(std::string message) { throw Failure{std::move(message)}; }
 
 inline int run_all() {
@@ -85,7 +121,20 @@ inline int run_all() {
         }                                                                      \
     } while (0)
 
-#define BAML_TEST_MAIN() \
-    int main() { return ::baml_test::run_all(); }
+#define BAML_TEST_CHILD(name)                                                   \
+    static int baml_test_child_##name();                                        \
+    static ::baml_test::RegisterChild baml_test_child_reg_##name{               \
+        #name, &baml_test_child_##name};                                        \
+    static int baml_test_child_##name()
+
+#define BAML_TEST_MAIN()                                          \
+    int main(int argc, char** argv) {                             \
+        ::baml_test::argv0_storage() = argv[0];                   \
+        if (argc >= 3 && std::string(argv[1]) == "--child") {     \
+            return ::baml_test::run_child(argv[2]);               \
+        }                                                         \
+        (void)argc;                                               \
+        return ::baml_test::run_all();                            \
+    }
 
 #endif  // BAML_TEST_HPP

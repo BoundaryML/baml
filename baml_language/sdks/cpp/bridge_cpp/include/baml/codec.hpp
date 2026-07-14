@@ -294,6 +294,26 @@ inline void decode_result<void>(const std::vector<uint8_t>& envelope) {
 }
 
 }  // namespace detail
+
+// Typed access to a thrown BAML value: re-decode the raw error payload the
+// envelope carried. Declared in errors.hpp; defined here because decoding
+// needs the codec.
+template <typename T>
+T BamlError::get() const {
+    detail::wire::Reader r(payload().data(), payload().size());
+    return codec<T>::decode(detail::parse_outbound_value(r));
+}
+
+template <typename T>
+bool BamlError::is() const {
+    try {
+        (void)get<T>();
+        return true;
+    } catch (const BamlError&) {
+        return false;
+    }
+}
+
 }  // namespace baml
 
 #endif  // BAML_CODEC_HPP
