@@ -852,8 +852,12 @@ class User {
   function label(self) -> string { self.name }
 }
 
+function normalize(name: string) -> string {
+  name
+}
+
 function make_user(name: string) -> User {
-  let local_name = name;
+  let local_name = normalize(name);
   User { name: local_name }
 }
 "#,
@@ -903,6 +907,36 @@ function make_user(name: string) -> User {
     assert!(
         local_stderr.contains("baml describe --search local_name"),
         "{local_stderr}"
+    );
+
+    let dependencies = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "make_user", "--view", "dependencies"],
+    );
+    assert!(dependencies.status.success());
+    let dependencies_stdout = String::from_utf8_lossy(&dependencies.stdout);
+    assert!(
+        dependencies_stdout.contains("contract (1)"),
+        "{dependencies_stdout}"
+    );
+    assert!(
+        dependencies_stdout.contains("class            User"),
+        "{dependencies_stdout}"
+    );
+    assert!(
+        dependencies_stdout.contains("function         normalize"),
+        "{dependencies_stdout}"
+    );
+
+    let depth = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "make_user", "--depth", "1"],
+    );
+    assert!(
+        !depth.status.success(),
+        "removed --depth should be rejected"
     );
 }
 
@@ -1344,7 +1378,7 @@ function get_public_key() -> (AccountRecord as PublicIdentity).Key {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["run", "get_public_key", "--from", ".", "--features", "beta"],
+        &["--features", "beta", "run", "get_public_key", "--from", "."],
     );
 
     assert!(
@@ -1432,7 +1466,7 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["run", "--list", "--from", ".", "--features", "beta"],
+        &["--features", "beta", "run", "--list", "--from", "."],
     );
 
     assert!(
@@ -1470,14 +1504,14 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
         built,
         tmp.path(),
         &[
+            "--features",
+            "beta",
             "run",
             "--list",
             "--output-format",
             "json",
             "--from",
             ".",
-            "--features",
-            "beta",
         ],
     );
     assert!(

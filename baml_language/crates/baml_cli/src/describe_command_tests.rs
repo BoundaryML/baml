@@ -1337,14 +1337,14 @@ fn dispatch_root_prefix_nonexistent() {
     );
 }
 
-// ── Overview / usage / impact view tests ────────────────────────────────────
+// ── Overview / usage / impact / dependencies view tests ─────────────────────
 //
 // Ported from the `dhilan-atb-rewrite` prototype and adapted to the combined
-// renderer: depth-aware dependency expansion, cycle protection, and the
-// shared line budget across all views.
+// renderer and the shared line budget across all views.
 
 use crate::describe_command::{
-    MAX_BUDGET_OVERRUN, write_impact_view, write_overview, write_usage_view,
+    MAX_BUDGET_OVERRUN, write_dependencies_view, write_impact_view, write_overview,
+    write_usage_view,
 };
 
 /// Capture `write_overview` output as a String.
@@ -1352,20 +1352,10 @@ fn capture_overview(
     db: &ProjectDatabase,
     desc: &baml_lsp2_actions::SymbolDescription,
     budget: usize,
-    depth: usize,
 ) -> String {
     let files = baml_compiler2_hir::compiler2_all_files(db);
     let mut buf = Vec::new();
-    write_overview(
-        &mut buf,
-        db,
-        &files,
-        desc,
-        budget,
-        depth,
-        Path::new("/test"),
-    )
-    .unwrap();
+    write_overview(&mut buf, db, &files, desc, budget, Path::new("/test")).unwrap();
     String::from_utf8(buf).unwrap()
 }
 
@@ -1402,7 +1392,7 @@ test PlanTest {
     )]);
     let desc = describe_one(&db, "Plan");
 
-    let output = capture_overview(&db, &desc, 30, 1);
+    let output = capture_overview(&db, &desc, 30);
 
     assert!(output.contains("signature"), "missing signature: {output}");
     assert!(
@@ -1430,24 +1420,24 @@ test PlanTest {
 }
 
 #[test]
-fn overview_depth_zero_lists_dependency_names_without_shapes() {
+fn overview_expands_direct_dependency_shapes_by_default() {
     let db = simple_project();
     let desc = describe_one(&db, "ExtractPoint");
 
-    let output = capture_overview(&db, &desc, 30, 0);
+    let output = capture_overview(&db, &desc, 30);
 
     assert!(
         output.contains("output Point"),
-        "dependency name must stay discoverable at depth 0: {output}"
+        "dependency name must stay discoverable: {output}"
     );
     assert!(
-        !output.contains("class Point {"),
-        "depth 0 must not expand shapes: {output}"
+        output.contains("class Point {"),
+        "direct dependency shape must expand: {output}"
     );
 }
 
 #[test]
-fn overview_depth_two_expands_nested_dependencies() {
+fn overview_does_not_expand_transitive_dependencies() {
     let db = make_db(&[(
         "nested.baml",
         r#"
@@ -1466,25 +1456,19 @@ function Use(outer: Outer) -> string {
     )]);
     let desc = describe_one(&db, "Use");
 
-    let depth1 = capture_overview(&db, &desc, 40, 1);
+    let output = capture_overview(&db, &desc, 40);
     assert!(
-        !depth1.contains("class Inner {"),
-        "depth 1 must not expand nested shapes: {depth1}"
-    );
-
-    let depth2 = capture_overview(&db, &desc, 40, 2);
-    assert!(
-        depth2.contains("dependency Inner"),
-        "depth 2 must name nested dependencies: {depth2}"
+        output.contains("class Outer {"),
+        "direct dependency shape must render: {output}"
     );
     assert!(
-        depth2.contains("class Inner {"),
-        "depth 2 must expand nested shapes: {depth2}"
+        !output.contains("class Inner {"),
+        "transitive dependency must remain an explicit follow-up: {output}"
     );
 }
 
 #[test]
-fn overview_marks_cycles_instead_of_recursing() {
+fn overview_stops_at_direct_dependency_shape() {
     let db = make_db(&[(
         "cycle.baml",
         r#"
@@ -1504,17 +1488,14 @@ function First(alpha: Alpha) -> string {
     )]);
     let desc = describe_one(&db, "First");
 
-    let output = capture_overview(&db, &desc, 60, 3);
+    let output = capture_overview(&db, &desc, 60);
 
-    assert!(
-        output.contains("shown above"),
-        "cycle must be marked, not re-expanded: {output}"
-    );
     assert_eq!(
         output.matches("class Alpha {").count(),
         1,
-        "cyclic shape must render exactly once: {output}"
+        "direct dependency shape must render exactly once: {output}"
     );
+    assert!(!output.contains("class Beta {"), "{output}");
 }
 
 #[test]
@@ -1540,7 +1521,7 @@ class Worker {
     )]);
     let desc = describe_one(&db, "Processor");
 
-    let output = capture_overview(&db, &desc, 30, 1);
+    let output = capture_overview(&db, &desc, 30);
 
     assert!(
         output.contains("requires (2)"),
@@ -1603,6 +1584,51 @@ fn capture_impact(
     let mut buf = Vec::new();
     write_impact_view(&mut buf, db, desc, budget, Path::new("/test")).unwrap();
     String::from_utf8(buf).unwrap()
+}
+
+fn capture_dependencies(
+    db: &ProjectDatabase,
+    desc: &baml_lsp2_actions::SymbolDescription,
+    budget: usize,
+) -> String {
+    let mut buf = Vec::new();
+    write_dependencies_view(&mut buf, db, desc, budget, Path::new("/test")).unwrap();
+    String::from_utf8(buf).unwrap()
+}
+
+#[test]
+fn dependencies_view_separates_contract_and_implementation() {
+    let db = make_db(&[(
+        "dependencies.baml",
+        r#"
+class Request {
+    text: string,
+}
+
+class Result {
+    answer: string,
+}
+
+function helper(req: Request) -> Result {
+    Result { answer: req.text }
+}
+
+function Plan(req: Request) -> Result {
+    helper(req)
+}
+"#,
+    )]);
+    let desc = describe_one(&db, "Plan");
+
+    let output = capture_dependencies(&db, &desc, 20);
+
+    assert!(output.contains("dependencies of Plan"), "{output}");
+    assert!(output.contains("contract (2)"), "{output}");
+    assert!(output.contains("class            Request"), "{output}");
+    assert!(output.contains("class            Result"), "{output}");
+    assert!(output.contains("implementation (1)"), "{output}");
+    assert!(output.contains("function         helper"), "{output}");
+    assert!(!output.contains("function         Plan"), "{output}");
 }
 
 #[test]
@@ -1686,7 +1712,7 @@ fn overview_large_enum_respects_budget() {
     let desc = describe_one(&db, "Big");
 
     let budget = 15;
-    let output = capture_overview(&db, &desc, budget, 1);
+    let output = capture_overview(&db, &desc, budget);
 
     assert!(
         output.lines().count() <= budget + MAX_BUDGET_OVERRUN,
@@ -1715,7 +1741,7 @@ function Pair(a: Shared, b: Shared) -> Shared {
     )]);
     let desc = describe_one(&db, "Pair");
 
-    let output = capture_overview(&db, &desc, 40, 1);
+    let output = capture_overview(&db, &desc, 40);
 
     assert_eq!(
         output.matches("class Shared {").count(),
@@ -1733,7 +1759,6 @@ fn batch_args(budget: usize) -> DescribeArgs {
         from: Some(PathBuf::from("/test")),
         view: DescribeView::Source,
         max_lines: budget,
-        depth: 0,
         output: DescribeOutput::Text,
     }
 }

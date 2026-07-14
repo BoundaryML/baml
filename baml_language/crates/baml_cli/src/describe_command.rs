@@ -59,6 +59,7 @@ pub enum DescribeView {
     Source,
     Usage,
     Impact,
+    Dependencies,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -204,18 +205,13 @@ pub struct DescribeArgs {
     #[arg(long, value_name = "PATH")]
     pub from: Option<PathBuf>,
 
-    /// What to show: overview (default), source, usage, or impact
+    /// What to show: overview (default), source, usage, impact, or dependencies
     #[arg(long, value_enum, default_value_t = DescribeView::Overview)]
     pub view: DescribeView,
 
     /// Maximum output lines (soft cap; default 30)
     #[arg(long, default_value_t = 30, value_name = "LINES")]
     pub max_lines: usize,
-
-    /// Dependency expansion depth in overview: 0 = names only (default),
-    /// 1 = direct shapes, 2+ = recurse into nested dependencies (cycle-safe)
-    #[arg(long, default_value_t = 0)]
-    pub depth: usize,
 
     /// Output format
     #[arg(long, value_enum, default_value_t = DescribeOutput::Text)]
@@ -858,6 +854,7 @@ impl DescribeArgs {
             DescribeView::Usage | DescribeView::Impact => {
                 baml_lsp2_actions::DescribeOptions::usage()
             }
+            DescribeView::Dependencies => baml_lsp2_actions::DescribeOptions::dependencies(),
             DescribeView::Overview => baml_lsp2_actions::DescribeOptions::overview(),
         }
     }
@@ -993,7 +990,6 @@ impl DescribeArgs {
                             &desc,
                             self.view,
                             self.max_lines,
-                            self.depth,
                             &from,
                         );
                     }
@@ -1029,7 +1025,6 @@ impl DescribeArgs {
                             &desc,
                             self.view,
                             self.max_lines,
-                            self.depth,
                             &from,
                         );
                     }
@@ -1388,6 +1383,23 @@ fn method_json(
         .collect()
 }
 
+fn dependency_json(
+    db: &ProjectDatabase,
+    project_root: &std::path::Path,
+    dependency: &describe::DepRef,
+) -> serde_json::Value {
+    let path = relative_path(&dependency.file.path(db), project_root);
+    serde_json::json!({
+        "name": dependency.name,
+        "kind": dependency.kind.as_str(),
+        "file": path.to_string_lossy(),
+        "line": line_number_at_offset(
+            dependency.file.text(db),
+            dependency.name_span.start().into(),
+        ),
+    })
+}
+
 pub fn description_to_json(
     db: &ProjectDatabase,
     desc: &SymbolDescription,
@@ -1404,14 +1416,12 @@ pub fn description_to_json(
         "body": budget_body(desc, budget),
         "docstring": desc.docstring,
         "resolved_type": desc.resolved_type,
-        "dependencies": desc.dependencies.iter().map(|dependency| {
-            let path = relative_path(&dependency.file.path(db), project_root);
-            serde_json::json!({
-                "name": dependency.name, "kind": dependency.kind.as_str(),
-                "file": path.to_string_lossy(),
-                "line": line_number_at_offset(dependency.file.text(db), dependency.name_span.start().into()),
-            })
-        }).collect::<Vec<_>>(),
+        "dependencies": desc.dependencies.iter()
+            .map(|dependency| dependency_json(db, project_root, dependency))
+            .collect::<Vec<_>>(),
+        "implementation_dependencies": desc.implementation_dependencies.iter()
+            .map(|dependency| dependency_json(db, project_root, dependency))
+            .collect::<Vec<_>>(),
         "references": desc.references.iter().map(|reference| {
             let path = relative_path(&reference.file.path(db), project_root);
             serde_json::json!({
@@ -1473,6 +1483,26 @@ fn batch_description_to_json(
             }).collect::<Vec<_>>(),
             "omitted": desc.references.len().saturating_sub(budget),
         }),
+        DescribeView::Dependencies => {
+            let contract_shown = desc.dependencies.len().min(budget);
+            let implementation_budget = budget.saturating_sub(contract_shown);
+            let implementation_shown = desc
+                .implementation_dependencies
+                .len()
+                .min(implementation_budget);
+            serde_json::json!({
+                "identity": identity,
+                "contract": desc.dependencies.iter().take(contract_shown)
+                    .map(|dependency| dependency_json(db, project_root, dependency))
+                    .collect::<Vec<_>>(),
+                "implementation": desc.implementation_dependencies.iter()
+                    .take(implementation_shown)
+                    .map(|dependency| dependency_json(db, project_root, dependency))
+                    .collect::<Vec<_>>(),
+                "omitted": desc.dependencies.len() + desc.implementation_dependencies.len()
+                    - contract_shown - implementation_shown,
+            })
+        }
     }
 }
 
@@ -1729,7 +1759,6 @@ pub(crate) fn write_search_output(
                 preview,
                 args.view,
                 remaining,
-                args.depth,
                 project_root,
             )?;
             let preview_output = String::from_utf8_lossy(&preview_output);
@@ -1747,6 +1776,7 @@ fn describe_view_name(view: DescribeView) -> &'static str {
         DescribeView::Source => "source",
         DescribeView::Usage => "usage",
         DescribeView::Impact => "impact",
+        DescribeView::Dependencies => "dependencies",
     }
 }
 
@@ -1776,7 +1806,6 @@ pub(crate) fn write_batch_output(
                     files,
                     description,
                     output_max_lines,
-                    args.depth,
                     project_root,
                 )?;
             }
@@ -1785,6 +1814,15 @@ pub(crate) fn write_batch_output(
             }
             DescribeView::Impact => {
                 write_impact_view(&mut bytes, db, description, output_max_lines, project_root)?;
+            }
+            DescribeView::Dependencies => {
+                write_dependencies_view(
+                    &mut bytes,
+                    db,
+                    description,
+                    output_max_lines,
+                    project_root,
+                )?;
             }
         }
         let rendered = String::from_utf8_lossy(&bytes)
@@ -1798,7 +1836,7 @@ pub(crate) fn write_batch_output(
         if compact && args.view == DescribeView::Source {
             block.extend(description.full_body.lines().map(ToOwned::to_owned));
         }
-        if compact {
+        if compact && args.view != DescribeView::Dependencies {
             let mut seen_relationships = std::collections::HashSet::new();
             for dependency in description.dependencies.iter().take(6) {
                 let path = relative_path(&dependency.file.path(db), project_root);
@@ -2281,14 +2319,14 @@ pub fn write_view(
     desc: &SymbolDescription,
     view: DescribeView,
     budget: usize,
-    depth: usize,
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
     match view {
         DescribeView::Source => write_description(w, db, desc, budget, project_root),
-        DescribeView::Overview => write_overview(w, db, files, desc, budget, depth, project_root),
+        DescribeView::Overview => write_overview(w, db, files, desc, budget, project_root),
         DescribeView::Usage => write_usage_view(w, db, desc, budget, project_root),
         DescribeView::Impact => write_impact_view(w, db, desc, budget, project_root),
+        DescribeView::Dependencies => write_dependencies_view(w, db, desc, budget, project_root),
     }
 }
 
@@ -2299,11 +2337,10 @@ pub fn render_view(
     desc: &SymbolDescription,
     view: DescribeView,
     budget: usize,
-    depth: usize,
     project_root: &std::path::Path,
 ) {
     let w = &mut std::io::stdout();
-    let _ = write_view(w, db, files, desc, view, budget, depth, project_root);
+    let _ = write_view(w, db, files, desc, view, budget, project_root);
 }
 
 /// Render the `overview` view: the most useful bounded summary of a symbol.
@@ -2319,7 +2356,6 @@ pub fn write_overview(
     files: &[baml_db::SourceFile],
     desc: &SymbolDescription,
     budget: usize,
-    depth: usize,
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
     use baml_lsp2_actions::DefinitionKind as K;
@@ -2363,9 +2399,8 @@ pub fn write_overview(
         b.charge(1);
     }
 
-    // One visited set for the whole overview: a dependency shape renders once
-    // and stays name-only everywhere else, and recursive expansion at
-    // `--depth 2+` terminates on cycles instead of re-expanding.
+    // One visited set for the whole overview: a direct dependency shape renders
+    // once and stays name-only everywhere else.
     let mut visited: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
     visited.insert((desc.file.path(db).display().to_string(), desc.name.clone()));
 
@@ -2376,7 +2411,6 @@ pub fn write_overview(
                 db,
                 files,
                 desc,
-                depth,
                 &mut b,
                 &mut visited,
                 project_root,
@@ -2391,7 +2425,6 @@ pub fn write_overview(
                 db,
                 files,
                 desc,
-                depth,
                 &mut b,
                 &mut visited,
                 project_root,
@@ -2423,7 +2456,6 @@ fn write_function_overview(
     db: &ProjectDatabase,
     files: &[baml_db::SourceFile],
     desc: &SymbolDescription,
-    depth: usize,
     b: &mut LineBudget,
     visited: &mut std::collections::HashSet<(String, String)>,
     project_root: &std::path::Path,
@@ -2458,19 +2490,7 @@ fn write_function_overview(
         .partition(|dep| !type_mentions(&ret, &dep.name));
     for (side, deps) in [("input", inputs), ("output", outputs)] {
         for dep in deps {
-            write_dep_node(
-                w,
-                db,
-                files,
-                dep,
-                side,
-                depth,
-                0,
-                b,
-                visited,
-                project_root,
-                painter,
-            )?;
+            write_dep_node(w, db, files, dep, side, b, visited, project_root, painter)?;
         }
     }
 
@@ -2510,7 +2530,6 @@ fn write_class_overview(
     db: &ProjectDatabase,
     files: &[baml_db::SourceFile],
     desc: &SymbolDescription,
-    depth: usize,
     b: &mut LineBudget,
     visited: &mut std::collections::HashSet<(String, String)>,
     project_root: &std::path::Path,
@@ -2538,19 +2557,7 @@ fn write_class_overview(
         if !matches!(dep.kind, K::Class | K::Enum | K::TypeAlias) {
             continue;
         }
-        write_dep_node(
-            w,
-            db,
-            files,
-            dep,
-            "type",
-            depth,
-            0,
-            b,
-            visited,
-            project_root,
-            painter,
-        )?;
+        write_dep_node(w, db, files, dep, "type", b, visited, project_root, painter)?;
     }
 
     write_overview_methods(w, "methods", &desc.instance_methods, b)?;
@@ -2666,11 +2673,9 @@ fn write_bounded_lines(
 
 /// Render one dependency of the described symbol.
 ///
-/// The name line always renders — contract names stay discoverable at any
-/// depth or budget. The shape renders when `depth ≥ 1` and budget allows;
-/// `depth ≥ 2` recurses into the dependency's own type dependencies, indented
-/// one level per hop. The shared `visited` set makes recursion cycle-safe and
-/// keeps any shape from rendering twice in one output.
+/// The name line always renders, and the direct shape renders when budget
+/// allows. Deeper relationships stay explicit follow-up actions instead of a
+/// public recursion control.
 #[allow(clippy::too_many_arguments)]
 fn write_dep_node(
     w: &mut impl std::io::Write,
@@ -2678,27 +2683,20 @@ fn write_dep_node(
     files: &[baml_db::SourceFile],
     dep: &baml_lsp2_actions::DepRef,
     label: &str,
-    depth: usize,
-    level: usize,
     b: &mut LineBudget,
     visited: &mut std::collections::HashSet<(String, String)>,
     project_root: &std::path::Path,
     painter: &crate::paint::Painter,
 ) -> std::io::Result<()> {
-    use baml_lsp2_actions::DefinitionKind as K;
     const MAX_SHAPE_LINES: usize = 12;
-    const MAX_NESTED_DEPS: usize = 4;
 
-    let pad = "  ".repeat(level);
     let dep_abs = dep.file.path(db);
-    if level == 0 {
-        writeln!(w)?;
-        b.charge(1);
-    }
+    writeln!(w)?;
+    b.charge(1);
     if !visited.insert((dep_abs.display().to_string(), dep.name.clone())) {
         writeln!(
             w,
-            "{pad}{label} {}  ↳ shown above; not re-expanded",
+            "{label} {}  ↳ shown above; not re-expanded",
             painter.fqn(&dep.name, dep.kind)
         )?;
         b.charge(1);
@@ -2711,17 +2709,10 @@ fn write_dep_node(
         &dep_rel.display().to_string(),
         &dep_line.to_string(),
     );
-    writeln!(
-        w,
-        "{pad}{label} {}  {loc}",
-        painter.fqn(&dep.name, dep.kind)
-    )?;
+    writeln!(w, "{label} {}  {loc}", painter.fqn(&dep.name, dep.kind))?;
     b.charge(1);
-    if depth == 0 {
-        return Ok(());
-    }
     if b.remaining() <= USAGE_RESERVE {
-        writeln!(w, "{pad}  … shape elided — baml describe {}", dep.name)?;
+        writeln!(w, "  … shape elided — baml describe {}", dep.name)?;
         b.charge(1);
         return Ok(());
     }
@@ -2737,41 +2728,8 @@ fn write_dep_node(
         .min(b.remaining().saturating_sub(USAGE_RESERVE))
         .max(1);
     let hint = format!("baml describe {}", dep.name);
-    let written = write_bounded_lines(w, &dep_desc.shape, avail, &format!("{pad}  "), &hint)?;
+    let written = write_bounded_lines(w, &dep_desc.shape, avail, "  ", &hint)?;
     b.charge(written);
-
-    if depth > 1 {
-        let nested: Vec<_> = dep_desc
-            .dependencies
-            .iter()
-            .filter(|d| matches!(d.kind, K::Class | K::Enum | K::TypeAlias))
-            .collect();
-        for nd in nested.iter().take(MAX_NESTED_DEPS) {
-            write_dep_node(
-                w,
-                db,
-                files,
-                nd,
-                "dependency",
-                depth - 1,
-                level + 1,
-                b,
-                visited,
-                project_root,
-                painter,
-            )?;
-        }
-        if nested.len() > MAX_NESTED_DEPS {
-            writeln!(
-                w,
-                "{pad}  … {} more dependencies — baml describe {} --depth {}",
-                nested.len() - MAX_NESTED_DEPS,
-                dep.name,
-                depth - 1
-            )?;
-            b.charge(1);
-        }
-    }
     Ok(())
 }
 
@@ -2969,6 +2927,69 @@ pub(crate) fn write_impact_view(
                 "… {omitted_sites} more sites — re-run with --max-lines {needed}"
             )?;
         }
+    }
+    Ok(())
+}
+
+/// Render the symbols this definition directly depends on. Contract
+/// dependencies come from signatures and field types; implementation
+/// dependencies come from resolved references inside the definition body.
+pub(crate) fn write_dependencies_view(
+    w: &mut impl std::io::Write,
+    db: &ProjectDatabase,
+    desc: &SymbolDescription,
+    budget: usize,
+    project_root: &std::path::Path,
+) -> std::io::Result<()> {
+    let painter = crate::paint::Painter::stdout();
+    let mut b = LineBudget::new(budget);
+    let contract_total = desc.dependencies.len();
+    let implementation_total = desc.implementation_dependencies.len();
+    writeln!(
+        w,
+        "dependencies of {}  ({contract_total} contract, {implementation_total} implementation)",
+        painter.fqn(&desc.name, desc.kind),
+    )?;
+    b.charge(1);
+
+    let mut omitted = 0usize;
+    for (label, dependencies) in [
+        ("contract", &desc.dependencies),
+        ("implementation", &desc.implementation_dependencies),
+    ] {
+        if dependencies.is_empty() {
+            continue;
+        }
+        if b.remaining() <= 1 {
+            omitted += dependencies.len();
+            continue;
+        }
+        writeln!(w)?;
+        writeln!(w, "{label} ({})", dependencies.len())?;
+        b.charge(2);
+        for dependency in dependencies {
+            if b.remaining() <= 1 {
+                omitted += 1;
+                continue;
+            }
+            let abs = dependency.file.path(db);
+            let rel = relative_path(&abs, project_root);
+            let line = line_number_at_offset(
+                dependency.file.text(db),
+                dependency.name_span.start().into(),
+            );
+            let loc = painter.location(&abs, &rel.display().to_string(), &line.to_string());
+            write_symbol_row(w, &painter, "  ", dependency.kind, &dependency.name, &loc)?;
+            b.charge(1);
+        }
+    }
+
+    if omitted > 0 {
+        let needed = contract_total + implementation_total + 5;
+        writeln!(
+            w,
+            "… {omitted} more dependencies — re-run with --max-lines {needed}"
+        )?;
     }
     Ok(())
 }

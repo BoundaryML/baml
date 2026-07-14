@@ -154,12 +154,16 @@ $BAML describe baml.json            # drill into a namespace → its types + fun
 $BAML describe Array                # drill into a type → full method list + docs
 $BAML describe String --max-lines 200  # output is line-capped; raise --max-lines to see all methods
 $BAML describe <YourSymbol>         # also works on symbols in the loaded project
+$BAML describe <YourSymbol> --view impact       # what depends on this symbol
+$BAML describe <YourSymbol> --view dependencies # what this symbol directly depends on
 ```
 
 `describe` resolves symbols against a project. From inside a project dir it just works; from
 elsewhere pass `--from <project-dir>`. Output is capped by `--max-lines` (default 30) and tells
 you "… N more lines (re-run with a higher --max-lines)" — raise it to see everything. Anything
-you can't see, `describe` it; do not guess stdlib names or signatures.
+you can't see, `describe` it; do not guess stdlib names or signatures. The default overview
+expands direct contract types automatically; follow the named symbols for deeper exploration
+instead of recursively expanding the whole dependency graph.
 
 ## Setting up a project
 

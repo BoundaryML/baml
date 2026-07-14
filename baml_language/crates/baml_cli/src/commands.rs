@@ -312,7 +312,6 @@ mod tests {
             "--from <PATH>",
             "--view <VIEW>",
             "--max-lines <LINES>",
-            "--depth <DEPTH>",
             "--output <OUTPUT>",
         ] {
             assert!(help.contains(expected), "missing {expected}: {help}");
@@ -327,6 +326,7 @@ mod tests {
             "--budget",
             "--color",
             "--features",
+            "--depth",
         ] {
             assert!(!help.contains(removed), "unexpected {removed}: {help}");
         }
@@ -334,6 +334,7 @@ mod tests {
             help.contains("possible values: text, compact, json"),
             "{help}"
         );
+        assert!(help.contains("dependencies"), "{help}");
         for kind in [
             "class",
             "enum",

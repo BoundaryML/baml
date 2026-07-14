@@ -187,6 +187,48 @@ fn describe_function() {
 }
 
 #[test]
+fn describe_function_collects_implementation_dependencies() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "dependencies.baml",
+        r#"
+class Request {
+    text string
+}
+
+class Result {
+    answer string
+}
+
+function helper(req: Request) -> Result {
+    Result { answer: req.text }
+}
+
+function Plan(req: Request) -> Result {
+    helper(req)
+}
+"#,
+    );
+    let project = builder.build();
+    let desc = project.describe("Plan").remove(0);
+
+    assert_eq!(
+        desc.dependencies
+            .iter()
+            .map(|dependency| dependency.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Request", "Result"]
+    );
+    assert_eq!(
+        desc.implementation_dependencies
+            .iter()
+            .map(|dependency| dependency.name.as_str())
+            .collect::<Vec<_>>(),
+        ["helper"]
+    );
+}
+
+#[test]
 fn describe_function_with_enum_param() {
     let project = make_project();
     let descs = project.describe("UseColor");
