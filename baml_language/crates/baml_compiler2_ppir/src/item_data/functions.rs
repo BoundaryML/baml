@@ -92,9 +92,22 @@ pub struct ElaboratedFunctionData {
     /// The arena for the *elaborated* types below — distinct from
     /// [`FunctionData::type_refs`], which holds the raw signature.
     pub type_refs: TypeRefStore,
-    pub params: Vec<FunctionParamData>,
+    pub params: Vec<ElaboratedParamData>,
     pub return_type: Option<TypeRefId>,
     pub throws: Option<TypeRefId>,
+}
+
+/// A parameter of an *elaborated* signature.
+///
+/// Unlike [`FunctionParamData`](crate::item_data::FunctionParamData) — where
+/// `type_ref: Option` mirrors the user writing or omitting an annotation —
+/// `type_ref` here is total: elaboration substitutes `Unknown` for a missing
+/// annotation before this struct is built, so "no type" is unrepresentable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElaboratedParamData {
+    pub name: Name,
+    pub type_ref: TypeRefId,
+    pub has_default: bool,
 }
 
 /// Spans for an [`ElaboratedFunctionData`]. Synthetic nodes (effect params,
@@ -137,9 +150,9 @@ fn lower_elaborated<'db>(
     let params = sig
         .params
         .iter()
-        .map(|param| FunctionParamData {
+        .map(|param| ElaboratedParamData {
             name: param.name.clone(),
-            type_ref: Some(type_refs.lower(&param.ty)),
+            type_ref: type_refs.lower(&param.ty),
             has_default: param.has_default,
         })
         .collect();

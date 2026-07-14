@@ -1914,7 +1914,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(crate::inference::MemberResolution::Free { func_loc }) =
             self.resolutions.get(&expr)
         {
-            !baml_compiler2_ppir::elaborated_function_signature(self.context.db(), *func_loc)
+            !baml_compiler2_ppir::item_data::elaborated_function_data(self.context.db(), *func_loc)
                 .user_generic_params
                 .is_empty()
         } else {
@@ -2001,7 +2001,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             _ => return None,
         };
         let db = self.context.db();
-        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+        let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
         // The enclosing class's generic params (`[]` for a free function). These
         // are always in scope when lowering the method's *bounds* — a bound may
         // reference a class generic (`<U extends Eq<C>>` on a method of
@@ -9825,7 +9825,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 expr_id,
                 crate::inference::MemberResolution::Free { func_loc },
             );
-            let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+            let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
             let function_generic_params: Vec<Name> = sig
                 .user_generic_params
                 .iter()
@@ -9849,8 +9849,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .iter()
                     .map(|param| FunctionParamTy {
                         name: Some(param.name.clone()),
-                        ty: crate::lower_type_expr::lower_type_expr(
-                            &param.ty, &sig_scope, &mut diags,
+                        ty: crate::lower_type_expr::lower_type_ref(
+                            &sig.type_refs,
+                            param.type_ref,
+                            &sig_scope,
+                            &mut diags,
                         ),
                         mode: if param.has_default {
                             FunctionParamMode::Optional
@@ -9861,9 +9864,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .collect(),
                 ret: Box::new(
                     sig.return_type
-                        .as_ref()
-                        .map(|te| {
-                            crate::lower_type_expr::lower_type_expr(te, &sig_scope, &mut diags)
+                        .map(|id| {
+                            crate::lower_type_expr::lower_type_ref(
+                                &sig.type_refs,
+                                id,
+                                &sig_scope,
+                                &mut diags,
+                            )
                         })
                         .unwrap_or(Ty::Unknown {
                             attr: TyAttr::default(),
@@ -9984,7 +9991,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Definition::Function(func_loc) => {
                     // Get function signature to build the function type
                     let db = self.context.db();
-                    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+                    let sig =
+                        baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
                     let function_generic_params: Vec<Name> = sig
                         .user_generic_params
                         .iter()
@@ -10014,8 +10022,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .iter()
                             .map(|param| FunctionParamTy {
                                 name: Some(param.name.clone()),
-                                ty: crate::lower_type_expr::lower_type_expr(
-                                    &param.ty, &sig_scope, &mut diags,
+                                ty: crate::lower_type_expr::lower_type_ref(
+                                    &sig.type_refs,
+                                    param.type_ref,
+                                    &sig_scope,
+                                    &mut diags,
                                 ),
                                 mode: if param.has_default {
                                     FunctionParamMode::Optional
@@ -10026,10 +10037,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .collect(),
                         ret: Box::new(
                             sig.return_type
-                                .as_ref()
-                                .map(|te| {
-                                    crate::lower_type_expr::lower_type_expr(
-                                        te, &sig_scope, &mut diags,
+                                .map(|id| {
+                                    crate::lower_type_expr::lower_type_ref(
+                                        &sig.type_refs,
+                                        id,
+                                        &sig_scope,
+                                        &mut diags,
                                     )
                                 })
                                 .unwrap_or(Ty::Unknown {
@@ -12063,7 +12076,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
-                let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+                let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
                 let mut diags = Vec::new();
 
                 // Build the self type WITH concrete type args, or TypeVars for
@@ -12196,17 +12209,21 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .params
                         .iter()
                         .map(|param| {
-                            let param_ty = if param.name.as_str() == "self"
+                            let is_unannotated_self = param.name.as_str() == "self"
                                 && matches!(
-                                    param.ty.kind,
-                                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
-                                ) {
+                                    sig.type_refs[param.type_ref].kind,
+                                    baml_compiler2_hir::type_ref::TypeRefKind::Unknown
+                                );
+                            let param_ty = if is_unannotated_self {
                                 // self with no annotation → use the enclosing class type
                                 class_ty.clone()
                             } else {
                                 crate::generics::substitute_ty(
-                                    &crate::lower_type_expr::lower_type_expr(
-                                        &param.ty, &ctx, &mut diags,
+                                    &crate::lower_type_expr::lower_type_ref(
+                                        &sig.type_refs,
+                                        param.type_ref,
+                                        &ctx,
+                                        &mut diags,
                                     ),
                                     &bindings,
                                 )
@@ -12224,10 +12241,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .collect(),
                     ret: Box::new(
                         sig.return_type
-                            .as_ref()
-                            .map(|te| {
+                            .map(|id| {
                                 crate::generics::substitute_ty(
-                                    &crate::lower_type_expr::lower_type_expr(te, &ctx, &mut diags),
+                                    &crate::lower_type_expr::lower_type_ref(
+                                        &sig.type_refs,
+                                        id,
+                                        &ctx,
+                                        &mut diags,
+                                    ),
                                     &bindings,
                                 )
                             })
@@ -12384,7 +12405,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // every param and the return type below.
                 let generic_params: Vec<_> = bindings.keys().cloned().collect();
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
-                let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+                let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
                 let mut diags = Vec::new();
                 // Build the class type for self parameter resolution.
                 // For generics, apply type_args (e.g. Array<int>).
@@ -12459,16 +12480,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .params
                     .iter()
                     .map(|param| {
-                        let ty = if param.name.as_str() == "self"
+                        let is_unannotated_self = param.name.as_str() == "self"
                             && matches!(
-                                param.ty.kind,
-                                baml_compiler2_ast::TypeExprKind::Unknown { .. }
-                            ) {
+                                sig.type_refs[param.type_ref].kind,
+                                baml_compiler2_hir::type_ref::TypeRefKind::Unknown
+                            );
+                        let ty = if is_unannotated_self {
                             builtin_class_ty.clone()
                         } else {
                             crate::generics::substitute_ty(
-                                &crate::lower_type_expr::lower_type_expr(
-                                    &param.ty,
+                                &crate::lower_type_expr::lower_type_ref(
+                                    &sig.type_refs,
+                                    param.type_ref,
                                     &crate::lower_type_expr::ScopeCtx {
                                         db,
                                         package_items: self.package_items,
@@ -12495,11 +12518,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .collect();
                 let ret = sig
                     .return_type
-                    .as_ref()
-                    .map(|te| {
+                    .map(|id| {
                         crate::generics::substitute_ty(
-                            &crate::lower_type_expr::lower_type_expr(
-                                te,
+                            &crate::lower_type_expr::lower_type_ref(
+                                &sig.type_refs,
+                                id,
                                 &crate::lower_type_expr::ScopeCtx {
                                     db,
                                     package_items: self.package_items,

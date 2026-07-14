@@ -90,13 +90,10 @@ fn signature_cycle_initial_callable_throws<'db>(
     };
     let mut facts = BTreeSet::new();
     for param in &sig.params {
-        let Some(param_ty) = param.type_ref else {
-            continue;
-        };
         let mut diags = Vec::new();
         let lowered = crate::lower_type_expr::lower_type_ref(
             &sig.type_refs,
-            param_ty,
+            param.type_ref,
             &param_scope,
             &mut diags,
         );
