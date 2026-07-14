@@ -201,10 +201,6 @@ pub fn to_source_code_with_bytecode(
         let Symbol::Function(function) = &pool[*name] else {
             continue;
         };
-        if name.is_stream() || name.bare_name().contains('$') {
-            skipped.push(format!("{name}: companion functions land in a later slice"));
-            continue;
-        }
         match emit_callable(
             pool,
             &names,
@@ -253,9 +249,6 @@ const OPTS_MEMBER: &str = "opts";
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
     let mut requests = BTreeSet::new();
     for (name, symbol) in pool {
-        if name.is_stream() && matches!(symbol, Symbol::Function(_)) {
-            continue; // function stream companions land in a later slice
-        }
         match symbol {
             Symbol::Enum(enum_def) => {
                 request_namespace_segments(&mut requests, name, true);
@@ -270,6 +263,9 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
             Symbol::Class(class_def) => {
                 request_namespace_segments(&mut requests, name, true);
                 requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
+                if is_tagged_heap_handle_class(name) {
+                    requests.insert(tagged_handle_field_request(name));
+                }
                 for param in &class_def.generic_params {
                     requests.insert(NameRequest::new(
                         BamlFqn::member(name, param.as_str()),
@@ -293,12 +289,9 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 }
             }
             Symbol::Function(function) => {
-                if name.bare_name().contains('$') {
-                    continue; // companion functions land in a later slice
-                }
                 request_namespace_segments(&mut requests, name, false);
                 let fqn = BamlFqn::symbol(name);
-                requests.insert(NameRequest::new(fqn.clone(), CppNameKind::Function));
+                requests.insert(function_request(name));
                 request_callable_members(&mut requests, &fqn, function);
             }
             // Aliases resolve transparently this slice: no declaration, so
@@ -361,6 +354,50 @@ fn request_callable_members(
             requests.insert(setter_request(fqn, arg.name.as_str()));
         }
     }
+}
+
+/// Python-parity companion spelling for `$`-suffixed compiler-synthesized
+/// functions: `foo$stream` -> `foo_stream`, `Foo$parse` -> `Foo__parse`,
+/// `Foo$build_request` -> `Foo__build_request`. `None` for ordinary
+/// functions.
+fn companion_preferred(name: &Name) -> Option<String> {
+    let raw = name.name.as_str();
+    let (base, companion) = raw.split_once('$')?;
+    if companion == "stream" {
+        Some(format!("{base}_stream"))
+    } else {
+        Some(format!("{base}__{companion}"))
+    }
+}
+
+/// The name request for a free function, companion-aware. Shared between
+/// collection and emission so the lookup key cannot drift.
+fn function_request(name: &Name) -> NameRequest {
+    let fqn = BamlFqn::symbol(name);
+    match companion_preferred(name) {
+        Some(preferred) => NameRequest::synthesized(fqn, CppNameKind::Function, &preferred),
+        None => NameRequest::new(fqn, CppNameKind::Function),
+    }
+}
+
+/// `baml.llm.Stream` crosses the wire as a bare tagged-heap-handle value
+/// (never as a `class_value`), so it emits with a single synthesized handle
+/// field and a bare-handle codec.
+fn is_tagged_heap_handle_class(name: &Name) -> bool {
+    name.to_string() == "baml.llm.Stream"
+}
+
+/// `BamlHandleType.ADT_TAGGED_HEAP_HANDLE` (`baml_handle.proto`).
+const ADT_TAGGED_HEAP_HANDLE: i32 = 14;
+
+/// The synthesized `_handle` field request of a tagged-heap-handle class.
+/// Shared between collection and emission so the lookup key cannot drift.
+fn tagged_handle_field_request(class: &Name) -> NameRequest {
+    NameRequest::synthesized(
+        BamlFqn::member(class, "_handle"),
+        CppNameKind::Field,
+        "_handle",
+    )
 }
 
 /// The request for a callable's synthesized opts struct. Shared between
@@ -569,6 +606,26 @@ fn emit_class(
         })
         .collect();
     let mut fields = Vec::new();
+    if is_tagged_heap_handle_class(name) {
+        // The wire form is a bare tagged heap handle; the class's declared
+        // fields are engine-internal and never cross the boundary.
+        fields.push(EmittedField {
+            name: names.get(&tagged_handle_field_request(name)).clone(),
+            ty: "::baml::Handle".to_string(),
+        });
+        return Ok(Some(EmittedClass {
+            pool_name: name.clone(),
+            ns: allocated_namespace(names, name, true),
+            name: names
+                .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
+                .clone(),
+            doc: class_def.docstring.clone(),
+            generic_params,
+            fields,
+            static_methods: Vec::new(),
+            instance_methods: Vec::new(),
+        }));
+    }
     for prop in &class_def.properties {
         match translate_ty(pool, names, &prop.ty, emitted_types, boxed, &generic_params) {
             Translated::Cpp(ty) => {
@@ -692,7 +749,12 @@ fn emit_callable(
     emitted_types: &BTreeSet<Name>,
     class_type_params: &[CppName],
 ) -> Result<EmittedFn, String> {
-    let name = names.get(&NameRequest::new(fqn.clone(), kind)).clone();
+    let request = if kind == CppNameKind::Function {
+        function_request(&fqn.symbol)
+    } else {
+        NameRequest::new(fqn.clone(), kind)
+    };
+    let name = names.get(&request).clone();
     let type_params: Vec<CppName> = function
         .generic_params
         .iter()
@@ -1572,6 +1634,31 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             );
         }
         buf.push_str("        m.message_field(2, class_ty);\n    }\n};\n");
+
+        if is_tagged_heap_handle_class(&c.pool_name) {
+            // Bare tagged-heap-handle wire form (Python parity: BamlStream
+            // encodes handle_value(ADT_TAGGED_HEAP_HANDLE), never a
+            // class_value; the engine substitutes the type params from the
+            // tagged handle).
+            let handle_field = c.fields[0].name.identifier();
+            let tag = ADT_TAGGED_HEAP_HANDLE;
+            let _ = write!(buf, "\n{spec_prefix}");
+            let _ = writeln!(
+                buf,
+                "struct codec<{q}> {{\n    \
+                 static void encode(detail::wire::Writer& value_msg, const {q}& v) {{\n        \
+                 detail::wire::Writer handle;\n        \
+                 handle.uint64_field(1, v.{handle_field}.clone_key_for_wire());\n        \
+                 handle.int64_field(2, {tag});\n        \
+                 value_msg.message_field(10, handle);\n    }}\n    \
+                 static {q} decode(const detail::OutboundValue& v) {{\n        \
+                 if (v.kind != detail::OutboundValue::Kind::Handle ||\n            \
+                 v.handle_type != {tag}) {{\n            \
+                 detail::kind_mismatch(\"stream handle {fqn}\", v);\n        }}\n        \
+                 return {q}{{::baml::Handle(v.handle_key, v.handle_type)}};\n    }}\n}};"
+            );
+            continue;
+        }
 
         let _ = write!(buf, "\n{spec_prefix}");
         let _ = writeln!(buf, "struct codec<{q}> {{");
