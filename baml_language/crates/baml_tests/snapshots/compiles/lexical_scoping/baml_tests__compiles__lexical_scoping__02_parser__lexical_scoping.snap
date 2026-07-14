@@ -532,7 +532,7 @@ SOURCE_FILE
               KW_LET "let"
               WORD "once"
           EQUALS "="
-          WORD "true"
+          KW_TRUE "true"
           SEMICOLON ";"
         WHILE_STMT
           KW_WHILE "while"
@@ -553,7 +553,7 @@ SOURCE_FILE
             BINARY_EXPR "once = false"
               WORD "once"
               EQUALS "="
-              WORD "false"
+              KW_FALSE "false"
             SEMICOLON ";"
             R_BRACE "}"
         SEMICOLON ";"

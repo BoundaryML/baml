@@ -81,6 +81,7 @@ sys_native = { path = "crates/sys_native", default-features = false }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
+baml_lsp2_actions_tests = { path = "crates/baml_lsp2_actions_tests" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
@@ -128,6 +129,7 @@ aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
 aws-bedrock = { path = "forks/aws-bedrock", package = "forked_aws_bedrock" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
+bitflags = "2"
 # Native `borsh` derives on the entire Program type graph (bex_vm_types +
 # baml_type + baml_exec envelope). The pack envelope was previously
 # bitcode-with-serde; borsh's native derive avoids both the bitcode crate

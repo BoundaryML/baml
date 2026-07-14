@@ -22,7 +22,7 @@ SOURCE_FILE
         WORD "string"
     R_BRACE "}"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "A"
     EQUALS "="
     TYPE_EXPR "int"

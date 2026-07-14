@@ -52,6 +52,12 @@ pub enum SyntaxKind {
     KW_IS,
     KW_DYNAMIC,
     KW_WITH,
+    // Contextual keywords re-lexed from a `Word` at parse time (no lexer token).
+    KW_AS,    // `.as<T>` cast / `(T as I)` / `field as field`
+    KW_TYPE,  // associated-type / type-alias `type Name ...`
+    KW_TRUE,  // `true` boolean literal
+    KW_FALSE, // `false` boolean literal
+    KW_NULL,  // `null` literal
 
     // Literals
     WORD,            // Any word (non-keyword identifier)
@@ -547,6 +553,7 @@ impl SyntaxKind {
                 | Self::KW_LET
                 | Self::KW_CONST
                 | Self::KW_IN
+                | Self::KW_IS
                 | Self::KW_BREAK
                 | Self::KW_CONTINUE
                 | Self::KW_RETURN
@@ -562,6 +569,9 @@ impl SyntaxKind {
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC
+                | Self::KW_WITH
+                | Self::KW_AS
+                | Self::KW_TYPE
         )
     }
 }
