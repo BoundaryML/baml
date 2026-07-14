@@ -106,6 +106,119 @@ enum ProviderStrategy {
     StandardOpenAI { provider: String },
 }
 
+fn responses_content_part(
+    part: &ChatMessagePart,
+    role: &str,
+    allowed_metadata: &AllowedRoleMetadata,
+) -> Result<serde_json::Value> {
+    match part {
+        ChatMessagePart::Text(text) => {
+            let content_type = if role == "assistant" {
+                "output_text"
+            } else {
+                "input_text"
+            };
+            Ok(json!({
+                "type": content_type,
+                "text": text
+            }))
+        }
+        ChatMessagePart::Media(media) => {
+            // For assistant role, we only support text outputs in Responses API.
+            if role == "assistant" {
+                anyhow::bail!(
+                    "BAML internal error (openai-responses): assistant messages must be text; media not supported for assistant in Responses API"
+                );
+            }
+            match media.media_type {
+                baml_types::BamlMediaType::Image => {
+                    let image_url = match &media.content {
+                        baml_types::BamlMediaContent::Url(url_content) => url_content.url.clone(),
+                        baml_types::BamlMediaContent::Base64(b64_media) => {
+                            format!(
+                                "data:{};base64,{}",
+                                media.mime_type_as_ok()?,
+                                b64_media.base64
+                            )
+                        }
+                        baml_types::BamlMediaContent::File(_) => {
+                            anyhow::bail!(
+                                "BAML internal error (openai-responses): image file should have been resolved, not processed directly."
+                            );
+                        }
+                    };
+                    Ok(json!({
+                        "type": "input_image",
+                        "detail": "auto",
+                        "image_url": image_url
+                    }))
+                }
+                baml_types::BamlMediaType::Audio => match &media.content {
+                    baml_types::BamlMediaContent::Base64(b64_media) => {
+                        let mime_type = media.mime_type_as_ok()?;
+                        let format = mime_type.strip_prefix("audio/").unwrap_or(&mime_type);
+                        Ok(json!({
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": b64_media.base64,
+                                "format": format
+                            }
+                        }))
+                    }
+                    _ => {
+                        anyhow::bail!(
+                            "BAML internal error (openai-responses): audio must be base64 encoded for Responses API"
+                        );
+                    }
+                },
+                baml_types::BamlMediaType::Pdf => match &media.content {
+                    baml_types::BamlMediaContent::Url(url_content) => Ok(json!({
+                        "type": "input_file",
+                        "file_url": url_content.url,
+                        "filename": "document.pdf"
+                    })),
+                    baml_types::BamlMediaContent::File(file_content) => {
+                        anyhow::bail!(
+                            "BAML internal error (openai-responses): Local PDF files are not supported by OpenAI Responses API - use file_url for remote files or upload file and use file_id. File path: {:?}",
+                            file_content.relpath
+                        );
+                    }
+                    baml_types::BamlMediaContent::Base64(b64_media) => Ok(json!({
+                        "type": "input_file",
+                        "file_data": format!(
+                            "data:{};base64,{}",
+                            media.mime_type_as_ok()?,
+                            b64_media.base64
+                        ),
+                        "filename": "document.pdf"
+                    })),
+                },
+                baml_types::BamlMediaType::Video => {
+                    anyhow::bail!(
+                        "BAML internal error (openai-responses): video is not yet supported by OpenAI Responses API"
+                    );
+                }
+            }
+        }
+        ChatMessagePart::WithMeta(inner_part, metadata) => {
+            let mut content = responses_content_part(inner_part, role, allowed_metadata)?;
+            {
+                let content_object = content.as_object_mut().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "BAML internal error (openai-responses): content part must be an object"
+                    )
+                })?;
+                for (key, value) in metadata {
+                    if allowed_metadata.is_allowed(key) {
+                        content_object.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+            Ok(content)
+        }
+    }
+}
+
 impl ProviderStrategy {
     fn get_endpoint(&self, base_url: &str, is_completion: bool) -> String {
         match self {
@@ -138,151 +251,27 @@ impl ProviderStrategy {
                     }
                     either::Either::Right(messages) => {
                         let structured_messages: Result<Vec<_>> = messages
-                                .iter()
-                                .map(|msg| {
-                                    // Convert message parts to Responses API format
-                                    let content_parts: Result<Vec<_>> = msg
-                                        .parts
-                                        .iter()
-                                        .map(|part| match part {
-                                            ChatMessagePart::Text(text) => {
-                                                let content_type = if msg.role == "assistant" {
-                                                    "output_text"
-                                                } else {
-                                                    "input_text"
-                                                };
-                                                Ok(json!({
-                                                    "type": content_type,
-                                                    "text": text
-                                                }))
-                                            }
-                                            ChatMessagePart::Media(media) => {
-                                                // For assistant role, we only support text outputs in Responses API
-                                                if msg.role == "assistant" {
-                                                    anyhow::bail!(
-                                                        "BAML internal error (openai-responses): assistant messages must be text; media not supported for assistant in Responses API"
-                                                    );
-                                                }
-                                                match media.media_type {
-                                                    baml_types::BamlMediaType::Image => {
-                                                        let image_url = match &media.content {
-                                                            baml_types::BamlMediaContent::Url(url_content) => url_content.url.clone(),
-                                                            baml_types::BamlMediaContent::Base64(b64_media) => {
-                                                                format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
-                                                            }
-                                                            baml_types::BamlMediaContent::File(_) => {
-                                                                anyhow::bail!("BAML internal error (openai-responses): image file should have been resolved, not processed directly.");
-                                                            }
-                                                        };
-                                                        Ok(json!({
-                                                            "type": "input_image",
-                                                            "detail": "auto",
-                                                            "image_url": image_url
-                                                        }))
-                                                    }
-                                                    baml_types::BamlMediaType::Audio => {
-                                                        match &media.content {
-                                                            baml_types::BamlMediaContent::Base64(b64_media) => {
-                                                                let mime_type = media.mime_type_as_ok()?;
-                                                                let format = mime_type
-                                                                    .strip_prefix("audio/")
-                                                                    .unwrap_or(&mime_type);
-                                                                Ok(json!({
-                                                                    "type": "input_audio",
-                                                                    "input_audio": {
-                                                                        "data": b64_media.base64,
-                                                                        "format": format
-                                                                    }
-                                                                }))
-                                                            }
-                                                            _ => {
-                                                                anyhow::bail!("BAML internal error (openai-responses): audio must be base64 encoded for Responses API");
-                                                            }
-                                                        }
-                                                    }
-                                                    baml_types::BamlMediaType::Pdf => {
-                                                        match &media.content {
-                                                            baml_types::BamlMediaContent::Url(url_content) => {
-                                                                Ok(json!({
-                                                                    "type": "input_file",
-                                                                    "file_url": url_content.url,
-                                                                    "filename": "document.pdf"
-                                                                }))
-                                                            }
-                                                            baml_types::BamlMediaContent::File(file_content) => {
-                                                                anyhow::bail!("BAML internal error (openai-responses): Local PDF files are not supported by OpenAI Responses API - use file_url for remote files or upload file and use file_id. File path: {:?}", file_content.relpath);
-                                                            }
-                                                            baml_types::BamlMediaContent::Base64(b64_media) => {
-                                                                Ok(json!({
-                                                                    "type": "input_file",
-                                                                    "file_data": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64),
-                                                                    "filename": "document.pdf"
-                                                                }))
-                                                            }
-                                                        }
-                                                    }
-                                                    baml_types::BamlMediaType::Video => {
-                                                        anyhow::bail!("BAML internal error (openai-responses): video is not yet supported by OpenAI Responses API");
-                                                    }
-                                                }
-                                            }
-                                            ChatMessagePart::WithMeta(inner_part, _meta) => {
-                                                // Recursively handle the inner part, ignoring metadata for now
-                                                match inner_part.as_ref() {
-                                                    ChatMessagePart::Text(text) => {
-                                                        let content_type = if msg.role == "assistant" {
-                                                            "output_text"
-                                                        } else {
-                                                            "input_text"
-                                                        };
-                                                        Ok(json!({
-                                                            "type": content_type,
-                                                            "text": text
-                                                        }))
-                                                    }
-                                                    ChatMessagePart::Media(media) => {
-                                                        // Handle media same as above - could refactor into helper function
-                                                        if msg.role == "assistant" {
-                                                            anyhow::bail!(
-                                                                "BAML internal error (openai-responses): assistant messages must be text; media not supported for assistant in Responses API"
-                                                            );
-                                                        }
-                                                        match media.media_type {
-                                                            baml_types::BamlMediaType::Image => {
-                                                                let image_url = match &media.content {
-                                                                    baml_types::BamlMediaContent::Url(url_content) => url_content.url.clone(),
-                                                                    baml_types::BamlMediaContent::Base64(b64_media) => {
-                                                                        format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
-                                                                    }
-                                                                    baml_types::BamlMediaContent::File(_) => {
-                                                                        anyhow::bail!("BAML internal error (openai-responses): image file should have been resolved, not processed directly.");
-                                                                    }
-                                                                };
-                                                                Ok(json!({
-                                                                    "type": "input_image",
-                                                                    "detail": "auto",
-                                                                    "image_url": image_url
-                                                                }))
-                                                            }
-                                                            _ => {
-                                                                anyhow::bail!("BAML internal error (openai-responses): nested WithMeta media types other than images not yet supported");
-                                                            }
-                                                        }
-                                                    }
-                                                    _ => {
-                                                        anyhow::bail!("BAML internal error (openai-responses): nested WithMeta parts not supported");
-                                                    }
-                                                }
-                                            }
-                                        })
-                                        .collect();
+                            .iter()
+                            .map(|msg| {
+                                // Convert message parts to Responses API format
+                                let content_parts: Result<Vec<_>> = msg
+                                    .parts
+                                    .iter()
+                                    .map(|part| {
+                                        responses_content_part(
+                                            part,
+                                            &msg.role,
+                                            &chat_converter.model_features().allowed_metadata,
+                                        )
+                                    })
+                                    .collect();
 
-                                    Ok(json!({
-                                        "role": msg.role,
-                                        "content": content_parts?
-                                    }))
-                                })
-                                .collect();
+                                Ok(json!({
+                                    "role": msg.role,
+                                    "content": content_parts?
+                                }))
+                            })
+                            .collect();
                         json!(structured_messages?)
                     }
                 };
@@ -1002,6 +991,36 @@ mod tests {
         let strategy = ProviderStrategy::ResponsesApi;
         let endpoint = strategy.get_endpoint("https://api.openai.com/v1", false);
         assert_eq!(endpoint, "https://api.openai.com/v1/responses");
+    }
+
+    #[test]
+    fn test_responses_api_adds_allowed_metadata_to_content_block() {
+        let part = ChatMessagePart::WithMeta(
+            Box::new(ChatMessagePart::Text("stable prefix".to_string())),
+            HashMap::from([
+                (
+                    "prompt_cache_breakpoint".to_string(),
+                    json!({ "mode": "explicit" }),
+                ),
+                ("not_allowed".to_string(), json!(true)),
+            ]),
+        );
+
+        let content = responses_content_part(
+            &part,
+            "user",
+            &AllowedRoleMetadata::Only(vec!["prompt_cache_breakpoint".to_string()]),
+        )
+        .expect("should build content part");
+
+        assert_eq!(
+            content,
+            json!({
+                "type": "input_text",
+                "text": "stable prefix",
+                "prompt_cache_breakpoint": { "mode": "explicit" }
+            })
+        );
     }
 
     #[test]
