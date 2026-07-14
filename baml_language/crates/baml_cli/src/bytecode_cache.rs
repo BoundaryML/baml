@@ -34,9 +34,9 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 use bex_cache::{
     BytecodeCache, CacheKey, KeyInputs, ManifestFile, ProjectManifest, compiler_fingerprint,
-    compute_key, image_key, manifest_key, stdlib_interface_key,
+    compute_key, manifest_key, stdlib_interface_key,
 };
-use bex_vm_types::{CompilationUnit, LinkableImage, Object, Program, relink};
+use bex_vm_types::{CompilationUnit, Object, Program, relink};
 use sha2::{Digest, Sha256};
 
 use crate::{
@@ -83,9 +83,6 @@ pub(crate) struct CacheContext {
     cache: BytecodeCache,
     /// Whole-project Program, keyed by sources + options + compiler build.
     key: CacheKey,
-    /// Symbolic [`LinkableImage`] accompanying the Program blob (B-693 Stage 3),
-    /// derived from `key` — the source of `prev_units` for the next compile.
-    image_key: CacheKey,
     /// Precompiled stdlib slice, keyed by compiler build + opt level only.
     stdlib_key: CacheKey,
     /// Cached stdlib typed-interface blob (B-694), keyed by compiler build +
@@ -93,8 +90,8 @@ pub(crate) struct CacheContext {
     stdlib_interface_key: CacheKey,
     /// Latest-compile manifest, fixed per (project root, options, build).
     manifest_key: CacheKey,
-    /// Whether test cases are emitted — needed to decompose the compiled
-    /// Program back into units for the image blob.
+    /// Whether test cases are emitted — needed to decompose a full compile back
+    /// into independently persisted units.
     emit_test_cases: bool,
 }
 
@@ -132,7 +129,6 @@ impl CacheContext {
         Some(CacheContext {
             cache: BytecodeCache::open(dir).with_remote_from_env(),
             key,
-            image_key: image_key(key.as_bytes()),
             stdlib_key: bex_cache::stdlib_key(&fingerprint, CLI_OPT_LEVEL as u8),
             stdlib_interface_key: stdlib_interface_key(&fingerprint, CLI_OPT_LEVEL as u8),
             manifest_key: manifest_key(
@@ -339,7 +335,13 @@ pub(crate) fn compile_program(
 
 pub(crate) struct CompiledArtifacts {
     pub(crate) program: Program,
-    pub(crate) image: Option<LinkableImage>,
+    pub(crate) units: Option<Vec<CompilationUnit>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CacheStoreStats {
+    pub(crate) unit_entries_written: usize,
+    pub(crate) manifest_entries_written: usize,
 }
 
 pub(crate) fn compile_program_artifacts(
@@ -351,7 +353,7 @@ pub(crate) fn compile_program_artifacts(
     let Some(ctx) = cache else {
         return generate_project_bytecode(db, options).map(|program| CompiledArtifacts {
             program,
-            image: None,
+            units: None,
         });
     };
     let base = match ctx.cache.load_shared(&ctx.stdlib_key) {
@@ -374,12 +376,12 @@ pub(crate) fn compile_program_artifacts(
             Ok((program, units)) => {
                 return Ok(CompiledArtifacts {
                     program,
-                    image: Some(LinkableImage { units }),
+                    units: Some(units),
                 });
             }
             // A real compile error must surface — it is not a reuse problem.
             Err(err @ LoweringError::ProjectHasErrors { .. }) => return Err(err),
-            // A corrupt/incompatible previous image or an unrelocatable
+            // A corrupt/incompatible previous unit or an unrelocatable
             // construct: fall back to the full (stdlib-spliced) compile, which
             // is byte-identical. Never an error the user should see.
             Err(other) => {
@@ -390,7 +392,7 @@ pub(crate) fn compile_program_artifacts(
     generate_project_bytecode_with_stdlib(db, options, CLI_OPT_LEVEL, &base).map(|program| {
         CompiledArtifacts {
             program,
-            image: None,
+            units: None,
         }
     })
 }
@@ -409,6 +411,10 @@ pub(crate) struct ReusePlan {
     /// The previous compile's symbolic units (B-693 Stage 3): clean files' units
     /// are reused verbatim, the rest re-emitted, then linked.
     pub(crate) prev_units: Vec<CompilationUnit>,
+    /// Content-addressed unit keys for the clean files in `prev_units`. The
+    /// store path copies these pointers into the next manifest without
+    /// serializing or probing unchanged units again.
+    pub(crate) unit_keys: HashMap<String, [u8; 32]>,
     /// Per-file throw facts (full path → facts), to be seeded into the database
     /// before compiling. Clean files' facts come from the manifest (their bodies
     /// are never re-walked); dirty/added files' facts are the ones the dirty-set
@@ -458,6 +464,7 @@ pub(crate) fn prepare_reuse_plan(
         if !plan.clean_files.remove(&rel) {
             continue;
         }
+        plan.unit_keys.remove(&rel);
         plan.clean_diagnostics.remove(&rel);
         let full = root
             .as_ref()
@@ -1137,13 +1144,13 @@ impl CacheContext {
     /// Decide which files can reuse their previously compiled bytecode.
     ///
     /// `None` means no reuse is possible (first compile, compiler changed,
-    /// previous blob trimmed, or everything is dirty) — callers take the
+    /// previous units trimmed, or everything is dirty) — callers take the
     /// stdlib-splice path and gate diagnostics on all files.
     ///
     /// The clean/dirty partition (with the throws-taint closure) is computed by
-    /// [`compute_dirty_partition`]; this method loads the manifest and previous
-    /// image, then attaches the reuse seeds (throw facts, `callable_throws`
-    /// fragments) and clean-file diagnostics blobs for the clean set.
+    /// [`compute_dirty_partition`]; this method loads each candidate clean
+    /// file's content-addressed unit, degrades individual misses to dirty, then
+    /// attaches the reuse seeds and clean-file diagnostics for what remains.
     pub(crate) fn plan_reuse(&self, db: &ProjectDatabase) -> Option<ReusePlan> {
         // The verify tripwire must exercise the full compile path — a
         // relink-produced blob verified against a relink compile would only
@@ -1160,28 +1167,56 @@ impl CacheContext {
             cache_debug(format_args!("manifest undecodable — full compile"));
             return None;
         };
-        // Load the previous compile's symbolic image (B-693 Stage 3), keyed off
-        // the Program blob's key. A missing / undecodable image means no reuse.
-        let Some(image_bytes) = self.cache.load_raw(&image_key(&manifest.program_key)) else {
-            cache_debug(format_args!("previous image missing — full compile"));
-            return None;
-        };
-        let Ok(prev_image) = borsh::from_slice::<LinkableImage>(&image_bytes) else {
-            cache_debug(format_args!("previous image undecodable — full compile"));
-            return None;
-        };
-        let prev_units = prev_image.units;
-
         let partition = compute_dirty_partition(db, &manifest);
         if partition.clean_files.is_empty() {
             cache_debug(format_args!("all files dirty — full compile"));
             return None;
         }
         let DirtyPartition {
-            clean_files,
-            dirty_files,
+            mut clean_files,
+            mut dirty_files,
             fresh_throw_facts,
         } = partition;
+
+        let current_files: HashMap<String, SourceFile> = user_files_with_rel_paths(db)
+            .into_iter()
+            .map(|(file, rel)| (rel, file))
+            .collect();
+        let mut prev_units = Vec::with_capacity(clean_files.len());
+        let mut unit_keys = HashMap::with_capacity(clean_files.len());
+        let mut degraded = Vec::new();
+        for entry in &manifest.files {
+            if !clean_files.contains(&entry.rel_path) {
+                continue;
+            }
+            let key = CacheKey::from_bytes(entry.unit_key);
+            match self.cache.load_unit_shared(&key) {
+                Some(unit)
+                    if unit.source_file == entry.rel_path
+                        && !std::path::Path::new(&unit.source_file).is_absolute() =>
+                {
+                    unit_keys.insert(entry.rel_path.clone(), entry.unit_key);
+                    prev_units.push(unit);
+                }
+                _ => degraded.push(entry.rel_path.clone()),
+            }
+        }
+        for rel in degraded {
+            cache_debug(format_args!(
+                "unit `{rel}` missing or invalid — degraded to dirty"
+            ));
+            clean_files.remove(&rel);
+            unit_keys.remove(&rel);
+            if let Some(file) = current_files.get(&rel)
+                && !dirty_files.contains(file)
+            {
+                dirty_files.push(*file);
+            }
+        }
+        if clean_files.is_empty() {
+            cache_debug(format_args!("all reusable units missing — full compile"));
+            return None;
+        }
         cache_debug(format_args!(
             "reuse plan: {} clean, {} dirty",
             clean_files.len(),
@@ -1235,6 +1270,7 @@ impl CacheContext {
             clean_files,
             dirty_files,
             prev_units,
+            unit_keys,
             seeded_throw_facts,
             seeded_callable_throws,
             clean_diagnostics,
@@ -1254,7 +1290,7 @@ impl CacheContext {
         program: &Program,
         fresh_by_file: &std::collections::BTreeMap<String, Vec<u8>>,
         plan: Option<&ReusePlan>,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<CacheStoreStats> {
         self.store_artifacts_with_manifest(db, program, None, fresh_by_file, plan)
     }
 
@@ -1262,37 +1298,78 @@ impl CacheContext {
         &self,
         db: &ProjectDatabase,
         program: &Program,
-        image: Option<&LinkableImage>,
+        units: Option<&[CompilationUnit]>,
         fresh_by_file: &std::collections::BTreeMap<String, Vec<u8>>,
         plan: Option<&ReusePlan>,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<CacheStoreStats> {
         self.store(program)?;
 
-        // Store the symbolic image alongside the Program blob (B-693 Stage 3) so
-        // the next incremental compile can reuse clean files' units. Best-effort:
-        // if the decomposition fails, the next compile simply full-compiles.
-        let store_image = |image: &LinkableImage| match borsh::to_vec(image) {
-            Ok(payload) => {
-                if let Err(e) = self.cache.store_raw(&self.image_key, &payload) {
-                    cache_debug(format_args!("image store failed: {e}"));
-                }
+        let reused_units = units.is_some();
+        let owned_units;
+        let units = match units {
+            Some(units) => units,
+            None => {
+                let options = CompileOptions {
+                    emit_test_cases: self.emit_test_cases,
+                };
+                owned_units = decompose_units(db, &options, program).map_err(|error| {
+                    std::io::Error::other(format!("unit decomposition failed: {error}"))
+                })?;
+                &owned_units
             }
-            Err(e) => cache_debug(format_args!("image serialize failed: {e}")),
         };
-        if let Some(image) = image {
-            store_image(image);
-        } else {
-            let options = CompileOptions {
-                emit_test_cases: self.emit_test_cases,
-            };
-            match decompose_units(db, &options, program) {
-                Ok(units) => store_image(&LinkableImage { units }),
-                Err(e) => cache_debug(format_args!("image decompose failed: {e}")),
+
+        let mut units_by_source = HashMap::with_capacity(units.len());
+        for unit in units {
+            if units_by_source
+                .insert(unit.source_file.as_str(), unit)
+                .is_some()
+            {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("duplicate compilation unit for `{}`", unit.source_file),
+                ));
             }
         }
 
+        let user_files = user_files_with_rel_paths(db);
+        // Only a successful reuse compile returns assembled `units`. A full
+        // fallback must persist freshly decomposed units for every file rather
+        // than carrying pointers from the abandoned reuse plan.
+        let pointer_plan = if reused_units { plan } else { None };
+        let mut unit_keys = HashMap::with_capacity(user_files.len());
+        let mut unit_entries_written = 0usize;
+        for (_, rel) in &user_files {
+            if let Some(key) = pointer_plan
+                .filter(|plan| plan.clean_files.contains(rel))
+                .and_then(|plan| plan.unit_keys.get(rel))
+            {
+                unit_keys.insert(rel.clone(), *key);
+                continue;
+            }
+            let Some(unit) = units_by_source.get(rel.as_str()) else {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("compiled output has no unit for `{rel}`"),
+                ));
+            };
+            if std::path::Path::new(&unit.source_file).is_absolute() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("unit source path is not root-relative: `{rel}`"),
+                ));
+            }
+            let (key, wrote) = self.cache.store_unit_shared(unit)?;
+            unit_entries_written += usize::from(wrote);
+            unit_keys.insert(rel.clone(), *key.as_bytes());
+        }
+        cache_debug(format_args!(
+            "unit store: wrote {unit_entries_written}, reused {}",
+            user_files.len().saturating_sub(unit_entries_written)
+        ));
+
         let mut referenced = referenced_names_by_file(program);
-        let mut files: Vec<ManifestFile> = user_files_with_rel_paths(db)
+        let mut files: Vec<ManifestFile> = user_files
             .into_iter()
             .map(|(sf, rel)| {
                 // Union the bytecode-derived references (desugared calls,
@@ -1341,6 +1418,7 @@ impl CacheContext {
                         .cloned()
                         .or_else(|| plan.and_then(|p| p.clean_diagnostics.get(&rel).cloned()))
                         .unwrap_or_else(crate::diagnostics_cache::empty_blob),
+                    unit_key: unit_keys[&rel],
                     rel_path: rel,
                 }
             })
@@ -1353,7 +1431,11 @@ impl CacheContext {
         };
         let payload = borsh::to_vec(&manifest)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        self.cache.store_raw(&self.manifest_key, &payload)
+        self.cache.store_raw(&self.manifest_key, &payload)?;
+        Ok(CacheStoreStats {
+            unit_entries_written,
+            manifest_entries_written: 1,
+        })
     }
 
     /// Gate diagnostics on the warm path: run `check_file` only for the reuse
@@ -1516,14 +1598,17 @@ impl CacheContext {
 
     /// Load the previous compile's symbolic units for the verify oracle,
     /// bypassing the `plan_reuse` verify short-circuit.
-    fn load_prev_units_for_verify(
-        &self,
-        manifest: &ProjectManifest,
-    ) -> Option<Vec<CompilationUnit>> {
-        let image_bytes = self.cache.load_raw(&image_key(&manifest.program_key))?;
-        borsh::from_slice::<LinkableImage>(&image_bytes)
-            .ok()
-            .map(|image| image.units)
+    fn load_prev_units_for_verify(&self, manifest: &ProjectManifest) -> Vec<CompilationUnit> {
+        manifest
+            .files
+            .iter()
+            .filter_map(|entry| {
+                let unit = self
+                    .cache
+                    .load_unit_shared(&CacheKey::from_bytes(entry.unit_key))?;
+                (unit.source_file == entry.rel_path).then_some(unit)
+            })
+            .collect()
     }
 
     /// Localized interface-fragment / `callable_throws`-seed verify oracle
@@ -1559,9 +1644,7 @@ impl CacheContext {
         let Some(manifest) = self.load_prev_manifest_for_verify() else {
             return Ok(());
         };
-        let Some(prev_units) = self.load_prev_units_for_verify(&manifest) else {
-            return Ok(());
-        };
+        let prev_units = self.load_prev_units_for_verify(&manifest);
         let Some(root) = db.get_project().map(|p| p.root(db).clone()) else {
             return Ok(());
         };
@@ -1624,9 +1707,9 @@ impl CacheContext {
             .expect("manifest re-stored");
     }
 
-    /// Test hook: overwrite one file's stored interface fragment in the previous
-    /// image, simulating a stale/corrupt fragment (as a mis-projected seed would
-    /// be). Used by the fragment verify oracle's negative test.
+    /// Test hook: point one manifest entry at a newly content-addressed unit
+    /// carrying a poisoned interface fragment. Used by the fragment verify
+    /// oracle's negative test.
     #[cfg(test)]
     pub(crate) fn poison_callable_throws_fragment_for_test(
         &self,
@@ -1637,20 +1720,27 @@ impl CacheContext {
             .cache
             .load_raw(&self.manifest_key)
             .expect("manifest present");
-        let manifest: ProjectManifest =
+        let mut manifest: ProjectManifest =
             borsh::from_slice(&manifest_bytes).expect("manifest decodes");
-        let img_key = image_key(&manifest.program_key);
-        let image_bytes = self.cache.load_raw(&img_key).expect("image present");
-        let mut image: LinkableImage = borsh::from_slice(&image_bytes).expect("image decodes");
-        for unit in &mut image.units {
-            if unit.source_file == rel_path {
-                unit.callable_throws_fragment = fragment.clone();
-            }
-        }
-        let payload = borsh::to_vec(&image).expect("image serializes");
+        let entry = manifest
+            .files
+            .iter_mut()
+            .find(|entry| entry.rel_path == rel_path)
+            .expect("manifest file present");
+        let mut unit = self
+            .cache
+            .load_unit_shared(&CacheKey::from_bytes(entry.unit_key))
+            .expect("unit present");
+        unit.callable_throws_fragment = fragment;
+        let (key, _) = self
+            .cache
+            .store_unit_shared(&unit)
+            .expect("poisoned unit stored");
+        entry.unit_key = *key.as_bytes();
+        let payload = borsh::to_vec(&manifest).expect("manifest serializes");
         self.cache
-            .store_raw(&img_key, &payload)
-            .expect("image re-stored");
+            .store_raw(&self.manifest_key, &payload)
+            .expect("manifest re-stored");
     }
 }
 
@@ -1879,7 +1969,7 @@ mod tests {
         let root = unique_root();
         let _ = std::fs::remove_dir_all(&root);
 
-        // v1: compile and store the manifest + image.
+        // v1: compile and store the manifest + per-file units.
         let r1 = resolved(&root, initial);
         let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
         let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
@@ -2945,7 +3035,142 @@ mod tests {
         );
     }
 
-    // ── B-694: stdlib typed-interface cache ("export data") ──────────────────
+    // Per-file content-addressed unit storage.
+
+    #[test]
+    fn missing_unit_degrades_only_that_file_and_relinks_identically() {
+        if cache_disabled() {
+            return;
+        }
+        let files = [
+            ("a.baml", "function a() -> int {\n  1\n}\n"),
+            ("b.baml", "function b() -> int {\n  2\n}\n"),
+            ("c.baml", "function c() -> int {\n  3\n}\n"),
+        ];
+        let root = unique_root();
+        let r = resolved(&root, &files);
+        let db1 = crate::project_load::build_db_from_sources(&r, |_| {});
+        let ctx1 = CacheContext::open(&r, false).expect("cache opens");
+        let initial = compile_program(&db1, &opts(), Some(&ctx1), None).expect("compile");
+        let fresh = ctx1
+            .collect_diagnostics_incremental(&db1, None)
+            .fresh_by_file;
+        ctx1.store_with_manifest(&db1, &initial, &fresh, None)
+            .expect("initial cache store");
+
+        let manifest_bytes = ctx1
+            .cache
+            .load_raw(&ctx1.manifest_key)
+            .expect("manifest present");
+        let manifest: ProjectManifest =
+            borsh::from_slice(&manifest_bytes).expect("manifest decodes");
+        let missing_key = CacheKey::from_bytes(
+            manifest
+                .files
+                .iter()
+                .find(|entry| entry.rel_path == "b.baml")
+                .expect("b entry")
+                .unit_key,
+        );
+        let hex = missing_key.hex();
+        let missing_path = ctx1
+            .cache
+            .dir()
+            .join("bytecode")
+            .join(&hex[..2])
+            .join(format!("{hex}.bexc"));
+        std::fs::remove_file(missing_path).expect("remove b unit");
+
+        let mut db2 = crate::project_load::build_db_from_sources(&r, |_| {});
+        let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
+        let pending = ctx2.plan_reuse(&db2).expect("partial reuse survives");
+        let dirty: HashSet<String> = pending
+            .dirty_files
+            .iter()
+            .filter_map(|file| {
+                file.path(&db2)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+            })
+            .collect();
+        assert_eq!(dirty, HashSet::from(["b.baml".to_string()]));
+        assert_eq!(
+            pending.clean_files,
+            HashSet::from(["a.baml".to_string(), "c.baml".to_string()])
+        );
+
+        let plan = prepare_reuse_plan(&mut db2, Some(pending)).expect("reuse plan");
+        let _ = baml_db::baml_compiler2_emit::take_lowered_files();
+        let relinked =
+            compile_program(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("incremental compile");
+        let lowered = baml_db::baml_compiler2_emit::take_lowered_files();
+        assert_eq!(lowered, vec!["b.baml".to_string()]);
+
+        let honest_db = crate::project_load::build_db_from_sources(&r, |_| {});
+        let full = compile_program(&honest_db, &opts(), Some(&ctx2), None).expect("full compile");
+        assert_eq!(
+            borsh::to_vec(&relinked).expect("serialize relink"),
+            borsh::to_vec(&full).expect("serialize full")
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn warm_body_edit_writes_one_unit_and_one_manifest() {
+        if cache_disabled() {
+            return;
+        }
+        let initial = [
+            ("a.baml", "function a() -> int {\n  1\n}\n"),
+            ("b.baml", "function b() -> int {\n  2\n}\n"),
+            ("c.baml", "function c() -> int {\n  3\n}\n"),
+        ];
+        let edited = [
+            ("a.baml", "function a() -> int {\n  10 + 1\n}\n"),
+            ("b.baml", "function b() -> int {\n  2\n}\n"),
+            ("c.baml", "function c() -> int {\n  3\n}\n"),
+        ];
+        let root = unique_root();
+
+        let r1 = resolved(&root, &initial);
+        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
+        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
+        let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("compile");
+        let fresh1 = ctx1
+            .collect_diagnostics_incremental(&db1, None)
+            .fresh_by_file;
+        let cold_stats = ctx1
+            .store_with_manifest(&db1, &program1, &fresh1, None)
+            .expect("cold store");
+        assert_eq!(cold_stats.unit_entries_written, 3);
+        assert_eq!(cold_stats.manifest_entries_written, 1);
+
+        let r2 = resolved(&root, &edited);
+        let mut db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
+        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
+        let pending = ctx2.plan_reuse(&db2);
+        let plan = prepare_reuse_plan(&mut db2, pending).expect("reuse plan");
+        assert_eq!(plan.dirty_files.len(), 1);
+        let fresh2 = ctx2
+            .collect_diagnostics_incremental(&db2, Some(&plan))
+            .fresh_by_file;
+        let compiled =
+            compile_program_artifacts(&db2, &opts(), Some(&ctx2), Some(&plan)).expect("compile");
+        let stats = ctx2
+            .store_artifacts_with_manifest(
+                &db2,
+                &compiled.program,
+                compiled.units.as_deref(),
+                &fresh2,
+                Some(&plan),
+            )
+            .expect("warm store");
+        assert_eq!(stats.unit_entries_written, 1);
+        assert_eq!(stats.manifest_entries_written, 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    // B-694: stdlib typed-interface cache ("export data").
 
     #[test]
     fn stdlib_interface_is_deterministic_across_fresh_dbs() {

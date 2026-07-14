@@ -16,34 +16,30 @@
 //! failure path in [`BytecodeCache::load`] returns `None` (recompile) and
 //! [`BytecodeCache::store`] is best-effort.
 
-#[cfg(unix)]
-use std::time::SystemTime;
 use std::{
     fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
+    time::SystemTime,
 };
 
-use bex_vm_types::Program;
+use bex_vm_types::{CompilationUnit, Program};
 use sha2::{Digest, Sha256};
 
 /// Bump whenever the serialized `Program` layout or the entry header changes.
 /// Part of both the cache key and the entry header.
 ///
-/// This contract also covers the two auxiliary blobs stored under their own
-/// keys: bump whenever the [`LinkableImage`](bex_vm_types::LinkableImage) wire
-/// format changes, **or** whenever the stdlib-interface blob's wire format
-/// changes — i.e. any layout change to
+/// This contract also covers auxiliary blobs stored under their own keys: bump
+/// whenever the [`CompilationUnit`] wire format changes, **or** whenever the
+/// stdlib-interface blob's wire format changes — i.e. any layout change to
 /// `PackageInterface`/`ExportedType`/`ExportedFunction`/`FunctionThrowSets`/
 /// `BuiltinKind` or a leaf of the `Ty` family. The compiler fingerprint already
 /// invalidates on any binary change, so the version bump is belt-and-braces: it
 /// also protects hand-copied blobs via the entry header's version check.
 ///
-/// v4 (B-693 Stage 3): alongside the linked `Program` blob, a compile now also
-/// stores a symbolic [`LinkableImage`](bex_vm_types::LinkableImage) under
-/// [`image_key`] so an incremental compile can reuse clean files' units. The
-/// bump turns every pre-v4 entry into a universal miss (no image blob existed),
-/// so `plan_reuse` never finds a manifest without a matching image.
+/// v4 introduced the symbolic multi-unit image that first enabled incremental
+/// bytecode reuse. v10 replaces that monolithic representation with the per-unit
+/// CAS described below.
 ///
 /// v5 (per-file diagnostics cache): each [`ManifestFile`] now carries the
 /// opaque borsh blob of the diagnostics `check_file` produced for that file, so
@@ -79,7 +75,12 @@ use sha2::{Digest, Sha256};
 /// the never-populated `CompilationUnit::lets` and `throw_facts` fields. The
 /// compiler fingerprint also rekeys these entries, but the explicit bump keeps
 /// copied or externally stored images unambiguous.
-pub const FORMAT_VERSION: u32 = 9;
+///
+/// v10 replaces the monolithic linkable-image entry with independently
+/// content-addressed [`CompilationUnit`] entries. Each [`ManifestFile`] gains a
+/// trailing `unit_key` pointer; pre-v10 manifests and unit entries are rejected
+/// by the entry-header version before their payload is decoded.
+pub const FORMAT_VERSION: u32 = 10;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -225,6 +226,10 @@ pub struct ManifestFile {
     /// interface blob. Because the manifest is written only after a passing
     /// error gate, a clean file's blob holds warnings / info only.
     pub diagnostics: Vec<u8>,
+    /// Content-addressed cache key of this file's serialized [`CompilationUnit`].
+    /// Appended in v10 so the manifest is the sole mutable pointer table for
+    /// immutable per-file unit entries.
+    pub unit_key: [u8; 32],
 }
 
 /// Fixed per-project key for the [`ProjectManifest`].
@@ -263,19 +268,18 @@ pub fn manifest_key(
     CacheKey(h.finalize().into())
 }
 
-/// Key for the symbolic [`LinkableImage`](bex_vm_types::LinkableImage) that
-/// accompanies a `Program` blob (B-693 Stage 3).
+/// Content-addressed key for one serialized [`CompilationUnit`].
 ///
-/// Derived deterministically from the Program blob's own key, so the store side
-/// (which knows `self.key`) and the reuse side (which reads `program_key` from
-/// the previous manifest) agree without threading a second key through the
-/// manifest. Distinct from the `Program` key so the two payloads never collide.
-pub fn image_key(program_key: &[u8; 32]) -> CacheKey {
+/// The payload hash, rather than source inputs, is the identity: cross-file
+/// layout state can change a unit's bytes without changing that file's source.
+/// The manifest owns reuse policy and points to the exact value produced by the
+/// last successful compile.
+pub fn unit_key(payload: &[u8]) -> CacheKey {
     let mut h = Sha256::new();
     h.update(MAGIC);
     h.update(FORMAT_VERSION.to_le_bytes());
-    h.update(b"linkable-image");
-    h.update(program_key);
+    h.update(b"unit");
+    h.update(Sha256::digest(payload));
     CacheKey(h.finalize().into())
 }
 
@@ -440,15 +444,7 @@ impl BytecodeCache {
         let payload = check_entry(&data, key)?;
         let program = borsh::from_slice::<Program>(payload).ok()?;
         // Freshen mtime for trim (≥1h granularity keeps inode churn low).
-        if let Ok(meta) = fs::metadata(&path)
-            && let Ok(modified) = meta.modified()
-            && modified
-                .elapsed()
-                .map(|e| e.as_secs() > 3600)
-                .unwrap_or(true)
-        {
-            let _ = filetime_touch(&path);
-        }
+        freshen_entry(&path);
         Some(program)
     }
 
@@ -456,9 +452,45 @@ impl BytecodeCache {
     /// deserializing. For byte-level verification against a fresh compile,
     /// and for non-Program entries (the project manifest).
     pub fn load_raw(&self, key: &CacheKey) -> Option<Vec<u8>> {
-        let data = fs::read(self.entry_path(key)).ok()?;
+        let path = self.entry_path(key);
+        let data = fs::read(&path).ok()?;
         let payload = check_entry(&data, key)?;
+        freshen_entry(&path);
         Some(payload.to_vec())
+    }
+
+    /// Load one content-addressed unit through the local/remote read-through
+    /// path. Both the entry framing and the unit key's payload hash must agree;
+    /// any mismatch is a cache miss.
+    pub fn load_unit_shared(&self, key: &CacheKey) -> Option<CompilationUnit> {
+        let payload = self.load_raw_shared(key)?;
+        if unit_key(&payload) != *key {
+            let _ = fs::remove_file(self.entry_path(key));
+            return None;
+        }
+        match borsh::from_slice(&payload) {
+            Ok(unit) => Some(unit),
+            Err(_) => {
+                let _ = fs::remove_file(self.entry_path(key));
+                None
+            }
+        }
+    }
+
+    /// Store one immutable unit locally and publish it remotely, but only when
+    /// a valid local entry for the same content key is not already present.
+    /// Returns the key and whether this call wrote a new local entry.
+    pub fn store_unit_shared(&self, unit: &CompilationUnit) -> io::Result<(CacheKey, bool)> {
+        let payload = borsh::to_vec(unit)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        let key = unit_key(&payload);
+        if self.load_raw(&key).is_some_and(|stored| {
+            unit_key(&stored) == key && borsh::from_slice::<CompilationUnit>(&stored).is_ok()
+        }) {
+            return Ok((key, false));
+        }
+        self.store_raw_shared(&key, &payload)?;
+        Ok((key, true))
     }
 
     /// Store an arbitrary payload under `key` with the standard entry header
@@ -598,6 +630,18 @@ fn filetime_touch(path: &Path) -> io::Result<()> {
     f.set_modified(SystemTime::now())
 }
 
+fn freshen_entry(path: &Path) {
+    if let Ok(meta) = fs::metadata(path)
+        && let Ok(modified) = meta.modified()
+        && modified
+            .elapsed()
+            .map(|elapsed| elapsed.as_secs() > 3600)
+            .unwrap_or(true)
+    {
+        let _ = filetime_touch(path);
+    }
+}
+
 fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     let mut s = String::with_capacity(bytes.len() * 2);
@@ -714,6 +758,104 @@ mod tests {
     }
 
     #[test]
+    fn unit_entry_round_trip_and_dedup() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cache = BytecodeCache::open(dir.path().to_path_buf());
+        let unit = CompilationUnit {
+            source_file: "nested/a.baml".to_string(),
+            callable_throws_fragment: vec![1, 2, 3, 4],
+            ..CompilationUnit::default()
+        };
+
+        let (key, wrote) = cache.store_unit_shared(&unit).expect("store unit");
+        assert!(wrote, "first store writes the CAS entry");
+        let serialized = borsh::to_vec(&unit).expect("serialize unit");
+        assert_eq!(key, unit_key(&serialized));
+
+        let path = cache.entry_path(&key);
+        let old = SystemTime::now() - std::time::Duration::from_hours(2);
+        fs::File::options()
+            .append(true)
+            .open(&path)
+            .expect("open unit")
+            .set_modified(old)
+            .expect("age unit");
+        let loaded = cache.load_unit_shared(&key).expect("load unit");
+        assert_eq!(loaded.source_file, unit.source_file);
+        assert_eq!(
+            loaded.callable_throws_fragment,
+            unit.callable_throws_fragment
+        );
+        assert!(
+            fs::metadata(&path)
+                .expect("unit metadata")
+                .modified()
+                .expect("unit mtime")
+                > old,
+            "loading a live unit freshens it for trim"
+        );
+
+        let (same_key, wrote) = cache.store_unit_shared(&unit).expect("store again");
+        assert_eq!(same_key, key);
+        assert!(!wrote, "identical unit is not rewritten");
+    }
+
+    #[test]
+    fn pre_v10_manifest_entry_is_a_miss() {
+        #[derive(borsh::BorshSerialize)]
+        struct LegacyManifestFile {
+            rel_path: String,
+            content_hash: [u8; 32],
+            signature_hash: [u8; 32],
+            layout_hash: [u8; 32],
+            defined_names: Vec<String>,
+            referenced_names: Vec<String>,
+            sig_referenced_names: Vec<String>,
+            throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
+            diagnostics: Vec<u8>,
+        }
+        #[derive(borsh::BorshSerialize)]
+        struct LegacyManifest {
+            program_key: [u8; 32],
+            files: Vec<LegacyManifestFile>,
+        }
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cache = BytecodeCache::open(dir.path().to_path_buf());
+        let key = manifest_key(&[7u8; 32], 2, false, Path::new("/project"), None);
+        let payload = borsh::to_vec(&LegacyManifest {
+            program_key: [8u8; 32],
+            files: vec![LegacyManifestFile {
+                rel_path: "a.baml".to_string(),
+                content_hash: [0u8; 32],
+                signature_hash: [0u8; 32],
+                layout_hash: [0u8; 32],
+                defined_names: Vec::new(),
+                referenced_names: Vec::new(),
+                sig_referenced_names: Vec::new(),
+                throw_facts: Vec::new(),
+                diagnostics: Vec::new(),
+            }],
+        })
+        .expect("serialize v9 manifest");
+        let mut entry = Vec::with_capacity(HEADER_LEN + payload.len());
+        entry.extend_from_slice(&MAGIC);
+        entry.extend_from_slice(&(FORMAT_VERSION - 1).to_le_bytes());
+        entry.extend_from_slice(key.as_bytes());
+        entry.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+        entry.extend_from_slice(&<[u8; 32]>::from(Sha256::digest(&payload)));
+        entry.extend_from_slice(&payload);
+        let path = cache.entry_path(&key);
+        fs::create_dir_all(path.parent().expect("parent")).expect("create fanout");
+        fs::write(path, entry).expect("write legacy entry");
+
+        assert!(
+            cache.load_raw(&key).is_none(),
+            "v9 manifest entry must degrade to a cache miss"
+        );
+    }
+
+    #[test]
     fn stdlib_interface_key_is_distinct_and_input_sensitive() {
         let fp = [3u8; 32];
         let base = stdlib_interface_key(&fp, 2);
@@ -762,9 +904,9 @@ mod tests {
 ///
 /// Configured via `BAML_CACHE_REMOTE=<base-url>` (entries live at
 /// `<base-url>/<key-hex>`) and optional `BAML_CACHE_REMOTE_TOKEN` (sent as a
-/// bearer token). Only immutable entries — Program blobs and stdlib slices —
-/// are shared; the per-project manifest is a mutable local-latest pointer and
-/// deliberately stays local (it only accelerates the local edit loop).
+/// bearer token). Only immutable entries — Program blobs, stdlib slices, and
+/// content-addressed compilation units — are shared; the per-project manifest
+/// is a mutable local-latest pointer and deliberately stays local.
 ///
 /// The configured origin is a trust boundary because it supplies executable VM
 /// programs. Non-loopback remotes therefore require HTTPS. Failures are bounded
@@ -908,10 +1050,40 @@ impl BytecodeCache {
         Some(program)
     }
 
+    /// Raw-payload counterpart to [`Self::load_shared`] for immutable
+    /// non-`Program` entries such as content-addressed compilation units.
+    pub fn load_raw_shared(&self, key: &CacheKey) -> Option<Vec<u8>> {
+        if let Some(payload) = self.load_raw(key) {
+            return Some(payload);
+        }
+        let remote = self.remote.as_ref()?;
+        let entry = remote.get(key)?;
+        let payload = check_entry(&entry, key)?.to_vec();
+        let path = self.entry_path(key);
+        if let Some(parent) = path.parent()
+            && fs::create_dir_all(parent).is_ok()
+        {
+            let _ = write_atomic(&path, &entry);
+        }
+        Some(payload)
+    }
+
     /// Like [`Self::store`], but also publishes the entry to the remote
     /// backend (best-effort) so other machines can hit it.
     pub fn store_shared(&self, key: &CacheKey, program: &Program) -> io::Result<()> {
         self.store(key, program)?;
+        if let Some(remote) = &self.remote
+            && let Ok(entry) = fs::read(self.entry_path(key))
+        {
+            remote.put(key, entry);
+        }
+        Ok(())
+    }
+
+    /// Raw-payload counterpart to [`Self::store_shared`] for immutable
+    /// content-addressed entries.
+    pub fn store_raw_shared(&self, key: &CacheKey, payload: &[u8]) -> io::Result<()> {
+        self.store_raw(key, payload)?;
         if let Some(remote) = &self.remote
             && let Ok(entry) = fs::read(self.entry_path(key))
         {
@@ -1025,10 +1197,17 @@ mod remote_tests {
         let mut cache_a = BytecodeCache::open(dir_a.path().to_path_buf());
         cache_a.remote = Some(remote_for(&url));
         cache_a.store_shared(&key, &program).expect("store");
+        let unit = CompilationUnit {
+            source_file: "a.baml".to_string(),
+            callable_throws_fragment: vec![4, 3, 2, 1],
+            ..CompilationUnit::default()
+        };
+        let (unit_key, wrote) = cache_a.store_unit_shared(&unit).expect("store unit");
+        assert!(wrote);
         assert_eq!(
             store.lock().expect("lock").0.len(),
-            1,
-            "entry published to remote"
+            2,
+            "program and unit entries published to remote"
         );
 
         // Machine B: local miss, remote hit, local populated.
@@ -1040,6 +1219,14 @@ mod remote_tests {
         assert!(
             cache_b.load(&key).is_some(),
             "local cache populated from remote"
+        );
+        let loaded_unit = cache_b
+            .load_unit_shared(&unit_key)
+            .expect("unit served from remote");
+        assert_eq!(loaded_unit.source_file, "a.baml");
+        assert!(
+            cache_b.load_raw(&unit_key).is_some(),
+            "unit persisted locally after remote read-through"
         );
 
         // A corrupted remote entry is rejected by validation.

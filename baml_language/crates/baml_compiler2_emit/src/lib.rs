@@ -1034,7 +1034,7 @@ pub fn generate_project_bytecode_with_stdlib(
 /// # Errors
 ///
 /// Returns [`LoweringError::Internal`] if `prev_units` fail to link (a corrupt /
-/// incompatible previous image) and propagates any [`LoweringError`] from the
+/// incompatible previous units) and propagates any [`LoweringError`] from the
 /// dirty-file emit.
 pub fn generate_project_bytecode_with_reuse_units(
     db: &dyn baml_compiler2_mir::Db,
@@ -1155,7 +1155,7 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
 }
 
 /// Find clean files whose inferred-throws invariant no longer matches the
-/// previous image. Callers demote these files before serving diagnostics or
+/// previous units. Callers demote these files before serving diagnostics or
 /// splicing units. Previous metadata is read directly from the units, avoiding
 /// a full link solely for this comparison.
 pub fn reuse_throws_mismatches(
@@ -1222,8 +1222,8 @@ pub fn emit_units(
 /// Decompose an already-compiled `Program` into per-file symbolic
 /// [`CompilationUnit`]s — the inverse of [`link`](bex_vm_types::link::link).
 ///
-/// Used by the CLI to build the cacheable [`LinkableImage`](bex_vm_types::LinkableImage)
-/// after a compile so the next incremental compile can reuse clean files' units.
+/// Used by the CLI to persist content-addressed units after a compile so the
+/// next incremental compile can reuse clean files independently.
 /// `program` must be the output of a compile over `db` with `options` (a full
 /// compile, a stdlib splice, or a reuse relink — all byte-identical), so the
 /// decomposition's file-attribution invariants hold.
@@ -2540,7 +2540,7 @@ fn spliced_throws_match(
         )
         .to_string();
         let Some(previous_throws) = previous.get(fq.as_str()) else {
-            return Err(format!("previous image has no function `{fq}`"));
+            return Err(format!("previous units have no function `{fq}`"));
         };
         let current_throws = compute_throws_type(db, file, &func_data.name, cache);
         if **previous_throws != current_throws {

@@ -260,17 +260,3 @@ pub struct InitTail {
     /// This group's contribution to `Program::package_init_order`, in order.
     pub package_init_order: Vec<String>,
 }
-
-/// The cacheable / packageable artifact (design §2c): one borsh blob holding
-/// every source file's relocatable [`CompilationUnit`], in the deterministic
-/// file-discovery order the [`link`](crate::link) step expects.
-///
-/// Loading a project is `link(image.units) -> Program`. The cache stores this so
-/// an incremental compile can reuse the previous compile's clean units verbatim
-/// instead of re-lowering them.
-#[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
-pub struct LinkableImage {
-    /// Every unit of the project, in file-discovery order (builtins first, then
-    /// user files) — the order [`link`](crate::link) assumes.
-    pub units: Vec<CompilationUnit>,
-}

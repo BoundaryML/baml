@@ -799,7 +799,7 @@ impl RunArgs {
             if let Err(e) = ctx.store_artifacts_with_manifest(
                 &db,
                 &compiled.program,
-                compiled.image.as_ref(),
+                compiled.units.as_deref(),
                 fresh,
                 reuse_plan.as_ref(),
             ) {
