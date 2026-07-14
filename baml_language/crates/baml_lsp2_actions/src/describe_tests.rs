@@ -229,6 +229,35 @@ function Plan(req: Request) -> Result {
 }
 
 #[test]
+fn describe_function_prefers_enum_variant_over_ambiguous_item_name() {
+    let mut builder = ProjectTest::builder();
+    builder.source(
+        "ambiguous_dependencies.baml",
+        r#"
+class Ready {}
+
+enum Status {
+    Ready
+}
+
+function current_status() -> Status {
+    Status.Ready
+}
+"#,
+    );
+    let project = builder.build();
+    let desc = project.describe("current_status").remove(0);
+
+    assert_eq!(
+        desc.implementation_dependencies
+            .iter()
+            .map(|dependency| dependency.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Status.Ready"]
+    );
+}
+
+#[test]
 fn describe_function_with_enum_param() {
     let project = make_project();
     let descs = project.describe("UseColor");

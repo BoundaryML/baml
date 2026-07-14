@@ -101,6 +101,8 @@ function CreatePerson() -> Person {
     fn test_goto_def_enum_variant() {
         let test = CursorTest::new(
             r#"
+class Active {}
+
 enum Status {
     Active
     Inactive
