@@ -88,7 +88,7 @@ fi
 chmod 600 "$claude_home/.credentials.json"
 jq '{oauthAccount, hasCompletedOnboarding, userID}' "$HOME/.claude.json" > "$claude_home/.claude.json"
 
-guided_describe='This is a BAML project and the `baml` CLI is on PATH. Use `baml describe <SYMBOL> --view dependencies --output compact --max-lines 80` when the question asks what a known symbol depends on. Normally use no more than two describe calls before narrow source verification. Do not run `baml describe --help`, dump broad project-wide output, or follow every next hint. Completeness and correctness beat command count.'
+guided_describe='This is a BAML project and the `baml` CLI is on PATH. Choose the cheapest view for the question: default overview for what a symbol is or does, source for implementation or errors, usage for callers/tests, impact for downstream blast radius, dependencies for what the symbol itself relies on, and search when the exact symbol is unknown. Normally use no more than two describe calls before narrow source verification. Do not run `baml describe --help`, dump broad project-wide output, or follow every next hint. Completeness and correctness beat command count.'
 guided_grep='This is a BAML project. Use bounded lexical search and narrow source reads. Do not use `baml describe`. Avoid broad project-wide output. Completeness and correctness beat command count.'
 
 materialize() {
