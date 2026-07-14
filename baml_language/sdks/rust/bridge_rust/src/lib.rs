@@ -9,6 +9,8 @@
 //! error surface ([`error`]), and the call machinery ([`runtime`]).
 
 pub mod baml_value;
+mod capi;
+mod completion;
 pub mod decode;
 pub mod encode;
 pub mod error;

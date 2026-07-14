@@ -18,25 +18,24 @@ doc = false
 doctest = false
 
 [features]
-default = [ "bundle-http", "aws-crypto" ]
-bundle-http = [ "bridge_cffi/bundle-http" ]
-aws-crypto = [ "bundle-http", "bex_project/aws-crypto", "bridge_cffi/aws-crypto" ]
-ring-crypto = [ "bundle-http", "bex_project/ring-crypto", "bridge_cffi/ring-crypto" ]
+default = [ "static", "bundle-http", "aws-crypto" ]
+# Link the engine (`bridge_cffi`) into the host binary and resolve its C ABI
+# at link time. The published alternative — loading the prebuilt shared
+# library at runtime — lands as the `dylib` backend.
+static = [ "dep:bridge_cffi" ]
+bundle-http = [ "bridge_cffi?/bundle-http" ]
+aws-crypto = [ "bundle-http", "bridge_cffi?/aws-crypto" ]
+ring-crypto = [ "bundle-http", "bridge_cffi?/ring-crypto" ]
 
 [dependencies]
 baml_version = { workspace = true }
-bex_events = { workspace = true }
-bex_project = { workspace = true }
-bridge_cffi = { workspace = true }
+bridge_cffi = { workspace = true, optional = true }
 bridge_ctypes = { workspace = true }
-sys_native = { workspace = true }
-sys_types = { workspace = true }
 indexmap = { workspace = true }
-log = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
+tokio = { workspace = true, features = [ "rt" ] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread", "macros" ] }
