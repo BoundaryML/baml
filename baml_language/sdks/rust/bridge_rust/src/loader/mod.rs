@@ -26,8 +26,10 @@
 mod download;
 pub(crate) mod log;
 
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::{
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 const GITHUB_REPO: &str = "boundaryml/baml";
 const CACHE_DIR_ENV: &str = "BAML_CACHE_DIR";
@@ -388,8 +390,9 @@ fn default_system_paths(version: &str) -> Vec<PathBuf> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::io::{Read, Write};
+
+    use super::*;
 
     /// A unique, self-removing temp directory (no `tempfile` dep).
     struct TempDir(PathBuf);

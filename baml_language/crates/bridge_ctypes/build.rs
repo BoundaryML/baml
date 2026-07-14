@@ -35,6 +35,17 @@ fn main() -> std::io::Result<()> {
         .collect();
     prost_build::compile_protos(&proto_strs, &["types"])?;
 
+    // Vendor the same prost output into baml_bridge (the published Rust
+    // SDK runtime): it ships committed generated code so consumers need
+    // neither protoc nor this crate's engine-coupled codecs. The
+    // proto-sync CI job keeps the committed copy honest, like the
+    // Python/Go/Node outputs.
+    let rust_vendor_out = manifest_dir.join("../../sdks/rust/bridge_rust/src/wire");
+    std::fs::create_dir_all(&rust_vendor_out)?;
+    let mut vendor_config = prost_build::Config::new();
+    vendor_config.out_dir(&rust_vendor_out);
+    vendor_config.compile_protos(&proto_strs, &["types"])?;
+
     // Generate Python pb2 + pyi.
     let python_out = manifest_dir.join("../../sdks/python/src");
     let mut cmd = std::process::Command::new(&protoc);

@@ -248,8 +248,10 @@ mod tests {
 
     /// Minimal single-future `block_on` so the test needs no async runtime.
     fn minimal_block_on<F: Future>(future: F) -> F::Output {
-        use std::sync::mpsc;
-        use std::task::{Context, Wake};
+        use std::{
+            sync::mpsc,
+            task::{Context, Wake},
+        };
 
         struct ThreadWaker(mpsc::Sender<()>);
         impl Wake for ThreadWaker {

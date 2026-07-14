@@ -1,7 +1,11 @@
 [package]
 name = "baml_bridge"
 edition.workspace = true
-version.workspace = true
+# A literal version, NOT the workspace `0.0.0-beta`: this crate publishes to
+# crates.io, so its version must be the canonical BAML language version.
+# `scripts/baml-language-version` keeps this equal to the canary version and
+# stamps it to the release version at packaging time (`check` guards it).
+version = "0.15.0"
 authors.workspace = true
 license.workspace = true
 homepage.workspace = true
@@ -23,8 +27,6 @@ doctest = false
 # development and in production. Engine capabilities (HTTP stack, crypto)
 # are baked into the shared library when *it* is built.
 [dependencies]
-baml_version = { workspace = true }
-bridge_ctypes = { workspace = true }
 hex = { workspace = true }
 indexmap = { workspace = true }
 libloading = { workspace = true }
@@ -32,8 +34,6 @@ num-bigint = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-# rt-multi-thread is for `block_in_place`: a first-call engine download
-# must never stall a multi-threaded async executor thread.
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 ureq = { workspace = true }
 

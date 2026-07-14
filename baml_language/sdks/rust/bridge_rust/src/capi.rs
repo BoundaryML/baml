@@ -9,8 +9,10 @@
 
 use std::ffi::{c_char, c_void};
 
-use crate::SdkError;
-use crate::loader::{self, LoaderError, log};
+use crate::{
+    SdkError,
+    loader::{self, LoaderError, log},
+};
 
 /// The engine's result-delivery callback. `content` is borrowed only for
 /// the synchronous duration of the call — implementations must copy.
