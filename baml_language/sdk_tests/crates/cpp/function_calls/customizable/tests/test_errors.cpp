@@ -1,10 +1,9 @@
 // BamlError / BamlPanic delivery contract.
 // Port of function_calls/customizable/test_errors.py. Deviations from the
-// Python file, pending stdlib type emission (baml.* classes are not
-// generated yet): stdlib thrown values (JsonParseError, InvalidArgument,
-// UserPanic) are asserted via class_name() instead of typed decode, the
-// ParseJson cases use ThrowMyError, and the extra-kwarg InvalidArgument case
-// is a compile error in C++. Python-traceback splicing has no C++ analog.
+// Python file: ParseJson is not emitted (returns baml.json.json, which this
+// SDK does not map yet), so its JsonParseError cases use ThrowMyError; the
+// extra-kwarg InvalidArgument case is a compile error in C++.
+// Python-traceback splicing has no C++ analog.
 #include <chrono>
 #include <cstdio>
 #include <regex>
@@ -57,11 +56,16 @@ BAML_TEST(union_throws_preserves_class_name) {
 }
 
 BAML_TEST(user_panic_surfaces_as_baml_panic) {
+    // The panic payload is a typed baml.panics.UserPanic (routed by the
+    // namespace check, distinct from a host-synthesized SdkPanic).
     try {
         baml_sdk::throws_test::DoPanic("user-initiated boom");
         baml_test::fail("DoPanic did not throw");
     } catch (const baml::BamlPanic& e) {
         BAML_ASSERT_EQ(e.class_name(), std::string("baml.panics.UserPanic"));
+        BAML_ASSERT(e.is<baml_sdk::baml::panics::UserPanic>());
+        const auto value = e.get<baml_sdk::baml::panics::UserPanic>();
+        BAML_ASSERT(value.message.find("user-initiated boom") != std::string::npos);
     }
 }
 

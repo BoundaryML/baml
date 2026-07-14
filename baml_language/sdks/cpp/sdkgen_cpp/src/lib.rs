@@ -68,7 +68,7 @@ pub fn to_source_code_with_bytecode(
     let mut enums: Vec<EmittedEnum> = Vec::new();
     let mut emitted_types: BTreeSet<Name> = BTreeSet::new();
     for name in &pool_names {
-        if name.pkg.as_str() != "user" || name.is_stream() {
+        if name.is_stream() {
             continue;
         }
         if let Symbol::Enum(enum_def) = &pool[*name] {
@@ -83,11 +83,7 @@ pub fn to_source_code_with_bytecode(
     let mut pending: Vec<&Name> = pool_names
         .iter()
         .copied()
-        .filter(|name| {
-            name.pkg.as_str() == "user"
-                && !name.is_stream()
-                && matches!(&pool[*name], Symbol::Class(_))
-        })
+        .filter(|name| !name.is_stream() && matches!(&pool[*name], Symbol::Class(_)))
         .collect();
     loop {
         let mut progressed = false;
@@ -126,20 +122,36 @@ pub fn to_source_code_with_bytecode(
     // only a forward declaration). Classes that still fail depend on a
     // genuinely skipped type and are reported.
     if !pending.is_empty() {
-        let cycle_set: BTreeSet<Name> = pending.iter().map(|n| (*n).clone()).collect();
-        for name in &cycle_set {
-            emitted_types.insert(name.clone());
-        }
-        for name in pending {
-            let Symbol::Class(class_def) = &pool[name] else {
-                unreachable!()
-            };
-            match emit_class(pool, &names, name, class_def, &emitted_types, &cycle_set) {
-                Ok(Some(emitted)) => classes.push(emitted),
-                Ok(None) | Err(_) => {
-                    emitted_types.remove(name);
-                    skipped.push(format!("{name}: depends on a type this slice cannot emit"));
+        // A member that fails to emit invalidates the Box references other
+        // cycle members already resolved against it, so survivors re-emit
+        // from scratch until a round completes with no failures.
+        let mut cycle_set: BTreeSet<Name> = pending.iter().map(|n| (*n).clone()).collect();
+        loop {
+            for name in &cycle_set {
+                emitted_types.insert(name.clone());
+            }
+            let mut round = Vec::new();
+            let mut failed = Vec::new();
+            for name in &cycle_set {
+                let Symbol::Class(class_def) = &pool[name] else {
+                    unreachable!()
+                };
+                match emit_class(pool, &names, name, class_def, &emitted_types, &cycle_set) {
+                    Ok(Some(emitted)) => round.push(emitted),
+                    Ok(None) | Err(_) => failed.push(name.clone()),
                 }
+            }
+            if failed.is_empty() {
+                classes.extend(round);
+                break;
+            }
+            for name in failed {
+                emitted_types.remove(&name);
+                cycle_set.remove(&name);
+                skipped.push(format!("{name}: depends on a type this slice cannot emit"));
+            }
+            if cycle_set.is_empty() {
+                break;
             }
         }
     }
@@ -186,9 +198,6 @@ pub fn to_source_code_with_bytecode(
         let Symbol::Function(function) = &pool[*name] else {
             continue;
         };
-        if name.pkg.as_str() != "user" {
-            continue; // stdlib/vendor surfaces come with later slices
-        }
         if name.is_stream() || name.bare_name().contains('$') {
             skipped.push(format!("{name}: companion functions land in a later slice"));
             continue;
@@ -241,7 +250,7 @@ const OPTS_MEMBER: &str = "opts";
 fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
     let mut requests = BTreeSet::new();
     for (name, symbol) in pool {
-        if name.pkg.as_str() != "user" || name.is_stream() {
+        if name.is_stream() {
             continue;
         }
         match symbol {
@@ -298,13 +307,19 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
 }
 
 /// One request per namespace segment, each scoped by its parent path, so
-/// segment names allocate top-down.
+/// segment names allocate top-down. Segments come from the pkg-aware source
+/// path (`baml`/`vendor/<pkg>` prefixes included) and are anchored in the
+/// `user` package so identical C++ scopes dedupe across packages.
 fn request_namespace_segments(requests: &mut BTreeSet<NameRequest>, name: &Name) {
-    for depth in 0..name.namespace_path.len() {
+    let segments = naming::source_ns(name);
+    for depth in 0..segments.len() {
         let segment = Name::new(
-            name.pkg.clone(),
-            name.namespace_path[..depth].to_vec(),
-            name.namespace_path[depth].clone(),
+            baml_base::Name::from("user"),
+            segments[..depth]
+                .iter()
+                .map(|seg| baml_base::Name::from(&**seg))
+                .collect(),
+            baml_base::Name::from(&*segments[depth]),
         );
         requests.insert(NameRequest::new(
             BamlFqn::symbol(&segment),
@@ -363,11 +378,7 @@ fn setter_request(callable: &BamlFqn, param: &str) -> NameRequest {
 /// The allocated C++ namespace path for a symbol, as owned segments for the
 /// namespace open/close renderers and the free-function grouping key.
 fn allocated_namespace(names: &CppNames, name: &Name) -> Vec<String> {
-    let source: Vec<Box<str>> = name
-        .namespace_path
-        .iter()
-        .map(|seg| Box::from(seg.as_str()))
-        .collect();
+    let source: Vec<Box<str>> = naming::source_ns(name);
     names
         .ns_path(&source)
         .iter()
@@ -813,9 +824,6 @@ fn translate_ty(
         Ty::TypeAlias(name) => {
             // Aliases resolve transparently to their target type this slice
             // (named using-aliases need interleaved declaration ordering).
-            if name.pkg.as_str() != "user" {
-                return Translated::Unsupported(format!("non-user alias {name}"));
-            }
             let Some(Symbol::TypeAlias(alias)) = pool.get(name) else {
                 return Translated::Unsupported(format!("unresolved alias {name}"));
             };
@@ -834,9 +842,6 @@ fn translate_ty(
             );
         }
         Ty::Enum(name) => {
-            if name.pkg.as_str() != "user" {
-                return Translated::Unsupported(format!("non-user enum {name}"));
-            }
             return if emitted_types.contains(name) {
                 Translated::Cpp(
                     names
@@ -849,9 +854,6 @@ fn translate_ty(
             };
         }
         Ty::Class(name, args) => {
-            if name.pkg.as_str() != "user" {
-                return Translated::Unsupported(format!("non-user class {name}"));
-            }
             let mut translated_args = Vec::new();
             for arg in args {
                 match translate_ty(pool, names, arg, emitted_types, boxed, type_vars) {

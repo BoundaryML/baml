@@ -27,6 +27,24 @@ use std::{
 
 use baml_codegen_types::Name;
 
+/// The source namespace path a symbol routes to, pkg-aware: `user` symbols
+/// live at the generated root, `baml` under `baml/`, any other package under
+/// `vendor/<pkg>/` (mirroring the Python generator's routing rules).
+pub(crate) fn source_ns(symbol: &Name) -> Vec<Box<str>> {
+    let mut out: Vec<Box<str>> = match symbol.pkg.as_str() {
+        "user" => Vec::new(),
+        "baml" => vec![Box::from("baml")],
+        vendor => vec![Box::from("vendor"), Box::from(vendor)],
+    };
+    out.extend(
+        symbol
+            .namespace_path
+            .iter()
+            .map(|seg| Box::from(seg.as_str())),
+    );
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Typed BAML identity
 // ---------------------------------------------------------------------------
@@ -67,13 +85,7 @@ impl BamlFqn {
     /// namespace for top-level symbols, the owning identity otherwise.
     fn scope(&self) -> NameScope {
         if self.members.is_empty() {
-            NameScope::Namespace(
-                self.symbol
-                    .namespace_path
-                    .iter()
-                    .map(|seg| Box::from(seg.as_str()))
-                    .collect(),
-            )
+            NameScope::Namespace(source_ns(&self.symbol))
         } else {
             let mut parent = self.clone();
             parent.members.pop();
@@ -612,13 +624,7 @@ impl CppNames {
     }
 
     fn insert(&mut self, request: &NameRequest, name: Box<str>) {
-        let source_ns: Vec<Box<str>> = request
-            .fqn
-            .symbol
-            .namespace_path
-            .iter()
-            .map(|seg| Box::from(seg.as_str()))
-            .collect();
+        let source_ns: Vec<Box<str>> = source_ns(&request.fqn.symbol);
         if request.kind == CppNameKind::Namespace {
             // Record the allocated path for this source path + segment.
             let mut source_path = source_ns.clone();
