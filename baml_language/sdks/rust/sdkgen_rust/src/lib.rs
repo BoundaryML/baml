@@ -232,10 +232,27 @@ pub fn to_source_code_with_bytecode(
                         tokens: emit::enum_::emit(name, enum_),
                     });
             }
-            Symbol::TypeAlias(_) => warnings.push(SkipWarning {
-                fqn: name.to_string(),
-                reason: "type aliases are not emitted yet".to_string(),
-            }),
+            Symbol::TypeAlias(alias) => {
+                if !analysis.is_emitted(name) {
+                    // Skip warning already recorded by the analysis.
+                    continue;
+                }
+                let ctx = translate_ty::TyCtx {
+                    analysis: &analysis,
+                    boxing_for: None,
+                };
+                match emit::type_alias::emit(name, alias, &ctx) {
+                    Ok(tokens) => leaves
+                        .entry(placement(&analysis))
+                        .or_default()
+                        .push(LeafItem {
+                            source_file_path: alias.origin.source_file_path.clone(),
+                            span_start: alias.origin.span_start,
+                            tokens,
+                        }),
+                    Err(warning) => warnings.push(warning),
+                }
+            }
         }
     }
 

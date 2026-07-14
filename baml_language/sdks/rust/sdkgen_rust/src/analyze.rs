@@ -50,12 +50,13 @@ impl Analysis {
 }
 
 /// Analyze the pool. Returns the analysis plus one warning per skipped
-/// class (functions warn separately at emission time).
+/// class or type alias (functions warn separately at emission time).
 pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     let mut warnings = Vec::new();
 
     // Deterministic iteration everywhere: sort by Name.
     let mut classes: Vec<(&Name, &baml_codegen_types::Class)> = Vec::new();
+    let mut aliases: Vec<(&Name, &baml_codegen_types::TypeAlias)> = Vec::new();
     let mut enums: HashSet<Name> = HashSet::new();
     for (name, symbol) in pool {
         match symbol {
@@ -70,10 +71,12 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                     enums.insert(name.clone());
                 }
             }
-            Symbol::Function(_) | Symbol::TypeAlias(_) => {}
+            Symbol::TypeAlias(alias) => aliases.push((name, alias)),
+            Symbol::Function(_) => {}
         }
     }
     classes.sort_by(|(a, _), (b, _)| a.cmp(b));
+    aliases.sort_by(|(a, _), (b, _)| a.cmp(b));
 
     // Per-class field requirements: either a list of nominal types the
     // fields reference, or the reason the class is structurally
@@ -116,8 +119,43 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         }
     }
 
-    // Fixpoint: a class referencing a skipped (or absent) nominal type is
-    // itself skipped. Enums never skip, so only class deps can fail.
+    // Type aliases join the same fixpoint. Non-recursive alias
+    // *references* are inlined by the pool builder, so the alias items
+    // themselves are the SDK-surface representation of the user's named
+    // types; only recursive aliases (unrepresentable as a plain Rust
+    // `type`) and structurally unsupported right-hand sides skip.
+    for (name, alias) in &aliases {
+        if name.name.as_str().contains('$') {
+            warnings.push(SkipWarning {
+                fqn: name.to_string(),
+                reason: "companion types ($stream, …) are not emitted yet".to_string(),
+            });
+            continue;
+        }
+        if alias.recursive {
+            warnings.push(SkipWarning {
+                fqn: name.to_string(),
+                reason: "recursive type aliases are not representable as a plain Rust `type` yet"
+                    .to_string(),
+            });
+            continue;
+        }
+        let mut alias_deps = Vec::new();
+        match field_deps(&alias.resolves_to, &mut alias_deps) {
+            Err(reason) => warnings.push(SkipWarning {
+                fqn: name.to_string(),
+                reason,
+            }),
+            Ok(()) => {
+                deps.insert(name, alias_deps);
+                alive.insert((*name).clone());
+            }
+        }
+    }
+
+    // Fixpoint: a class or alias referencing a skipped (or absent)
+    // nominal type is itself skipped. Enums never skip, so only
+    // class/alias deps can fail.
     loop {
         let mut removed = Vec::new();
         for (name, class_deps) in &deps {
@@ -150,15 +188,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     // reachable without crossing a heap-indirected container (`Vec`,
     // `Map`); those already break cycles, so only direct/optional
     // references participate.
-    let class_edges: BTreeMap<&Name, Vec<&Name>> = deps
+    let class_edges: BTreeMap<&Name, Vec<&Name>> = classes
         .iter()
-        .filter(|(name, _)| emitted.contains(**name))
-        .map(|(name, _)| {
-            let class = classes
-                .iter()
-                .find(|(n, _)| n == name)
-                .map(|(_, c)| *c)
-                .unwrap_or_else(|| unreachable!("deps only holds pool classes"));
+        .filter(|(name, _)| emitted.contains(*name))
+        .map(|(name, class)| {
             let mut targets = Vec::new();
             for prop in &class.properties {
                 non_heap_class_refs(&prop.ty, &emitted, &enums, &mut targets);
@@ -228,7 +261,13 @@ fn field_deps(ty: &Ty, deps: &mut Vec<Name>) -> Result<(), String> {
             deps.push(name.clone());
             Ok(())
         }
-        Ty::TypeAlias(_) => Err("unsupported type: type alias".to_string()),
+        // Opaque alias references (the pool builder inlines in-package
+        // non-recursive aliases, so these are recursive or cross-package
+        // ones): representable iff the alias item itself is emitted.
+        Ty::TypeAlias(name) => {
+            deps.push(name.clone());
+            Ok(())
+        }
         Ty::TypeVar(_) => Err("unsupported type: type variable (generics)".to_string()),
         Ty::Media(kind) => Err(format!("unsupported type: media ({kind})")),
         Ty::BuiltinUnknown => Err("unsupported type: unknown".to_string()),
@@ -259,6 +298,11 @@ fn non_heap_class_refs<'a>(
         }
         // Heap-indirected containers end the walk.
         Ty::List(_) | Ty::Map { .. } => {}
+        // Opaque alias references contribute no containment edges: an
+        // in-package non-recursive alias is inlined before it reaches
+        // codegen, and a cross-package alias cannot sit on a class cycle
+        // because package dependencies are acyclic.
+        Ty::TypeAlias(_) => {}
         _ => {}
     }
 }
@@ -373,7 +417,11 @@ fn compute_renames(
         for depth in 0..=path.len() {
             all_paths.insert(path[..depth].to_vec());
         }
-        if matches!(symbol, Symbol::Class(_) | Symbol::Enum(_)) && emitted.contains(name) {
+        if matches!(
+            symbol,
+            Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_)
+        ) && emitted.contains(name)
+        {
             types_in
                 .entry(path.clone())
                 .or_default()
