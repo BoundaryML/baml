@@ -798,13 +798,13 @@ fn enclosing_impl_generics_for_func(
     item_tree: &baml_compiler2_hir::item_tree::ItemTree,
     func_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
 ) -> Option<(Vec<Name>, Vec<Option<baml_compiler2_ast::TypeExpr>>)> {
-    item_tree.free_impls.iter().find_map(|impl_id| {
-        let block = item_tree.impls.get(impl_id)?;
-        block
-            .methods
-            .contains(&func_id)
-            .then(|| free_impl_generics(block))
-    })
+    match item_tree.method_owners.get(&func_id)? {
+        baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(impl_id) => {
+            Some(free_impl_generics(&item_tree.impls[impl_id]))
+        }
+        baml_compiler2_hir::item_tree::MethodOwner::Class(_)
+        | baml_compiler2_hir::item_tree::MethodOwner::Interface(_) => None,
+    }
 }
 
 fn generic_env_for_function_data<'db>(
@@ -1674,10 +1674,12 @@ pub fn infer_scope_types<'db>(
                 let body = baml_compiler2_ppir::function_body(db, func_loc);
                 let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
 
-                let enclosing_impl = item_tree.free_impls.iter().find_map(|impl_id| {
-                    let block = item_tree.impls.get(impl_id)?;
-                    block.methods.contains(local_id).then_some(block)
-                });
+                let enclosing_impl = match item_tree.method_owners.get(local_id) {
+                    Some(baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(impl_id)) => {
+                        item_tree.impls.get(impl_id)
+                    }
+                    _ => None,
+                };
 
                 let mut env = GenericEnv::from_params(sig.user_generic_params.clone());
                 env.params

@@ -20,6 +20,7 @@ mod type_aliases;
 
 use std::ops::Index;
 
+use baml_base::Name;
 use baml_compiler2_ast as ast;
 pub use classes::*;
 pub use clients::*;
@@ -88,6 +89,27 @@ pub struct ItemTree {
     /// `Interface::default_methods` / a free impl's `ImplBlock::methods`;
     /// absent for top-level functions. See [`MethodOwner`].
     pub method_owners: FxHashMap<LocalItemId<FunctionMarker>, MethodOwner>,
+}
+
+impl ItemTree {
+    /// Generic parameters of the type declaration enclosing `method` — the
+    /// class's for a class method (BEP-044: a generic interface's default
+    /// method likewise sees the interface's), empty for top-level functions.
+    ///
+    /// Also empty for a *free-impl* method: an out-of-body block's generics
+    /// live on the `ImplBlock` and are threaded by the impl-specific paths,
+    /// not treated as enclosing-type parameters.
+    ///
+    /// The single successor of the `classes.values().find(|c|
+    /// c.methods.contains(…))` scans that used to be copied (divergently)
+    /// across HIR, PPIR and TIR.
+    pub fn enclosing_type_generic_params(&self, method: LocalItemId<FunctionMarker>) -> &[Name] {
+        match self.method_owners.get(&method) {
+            Some(MethodOwner::Class(id)) => &self[*id].generic_params,
+            Some(MethodOwner::Interface(id)) => &self[*id].generic_params,
+            Some(MethodOwner::FreeImpl(_)) | None => &[],
+        }
+    }
 }
 
 // ── Index impls ───────────────────────────────────────────────────────────────

@@ -3474,6 +3474,8 @@ fn compute_function_metadata_from_item_tree(
     parameter_defaults: &baml_compiler2_hir::signature::FunctionParameterDefaults,
     cache: &ResolvedAliases,
 ) -> FunctionSignatureMetadata {
+    use baml_compiler2_hir::item_tree::MethodOwner;
+
     let param_names: Vec<String> = func_data
         .params
         .iter()
@@ -3498,26 +3500,24 @@ fn compute_function_metadata_from_item_tree(
     // both its `for_target` (for `Self` substitution) and its declared
     // generics/bounds are recoverable — replacing the removed
     // `item_tree.implements_for`, which exposed those as flat fields.
-    let enclosing_free_impl = item_tree.free_impls.iter().find_map(|impl_id| {
-        let block = item_tree.impls.get(impl_id)?;
-        block
-            .methods
-            .contains(&func_id)
-            .then_some((*impl_id, block))
-    });
+    let owner = item_tree.method_owners.get(&func_id);
+    let enclosing_free_impl = match owner {
+        Some(MethodOwner::FreeImpl(impl_id)) => Some((*impl_id, &item_tree.impls[impl_id])),
+        _ => None,
+    };
     let enclosing_impl_for_target =
         enclosing_free_impl.and_then(|(_, block)| match &block.subject {
             baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } => Some(for_target),
             baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => None,
         });
-    let enclosing_class = item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&func_id));
-    let enclosing_interface = item_tree
-        .interfaces
-        .values()
-        .find(|iface_data| iface_data.default_methods.contains(&func_id));
+    let enclosing_class = match owner {
+        Some(MethodOwner::Class(class_id)) => Some(&item_tree[*class_id]),
+        _ => None,
+    };
+    let enclosing_interface = match owner {
+        Some(MethodOwner::Interface(iface_id)) => Some(&item_tree[*iface_id]),
+        _ => None,
+    };
     let self_replacement = enclosing_impl_for_target
         .cloned()
         .or_else(|| {

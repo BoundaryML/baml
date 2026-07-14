@@ -694,27 +694,6 @@ pub fn function_signature<'db>(
     })
 }
 
-fn enclosing_class_generic_params(
-    item_tree: &ItemTree,
-    function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
-) -> Vec<Name> {
-    if let Some(class_data) = item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function_id))
-    {
-        return class_data.generic_params.clone();
-    }
-    // BEP-044: a generic interface's default method sees the interface's type
-    // params (`interface Container<T> { function f(self) -> T { ... } }`).
-    item_tree
-        .interfaces
-        .values()
-        .find(|iface_data| iface_data.default_methods.contains(&function_id))
-        .map(|iface_data| iface_data.generic_params.clone())
-        .unwrap_or_default()
-}
-
 /// Canonical elaborated callable signature — uses PPIR's item tree.
 pub fn elaborated_function_signature<'db>(
     db: &'db dyn Db,
@@ -742,7 +721,9 @@ pub fn elaborated_function_signature<'db>(
 
     let return_type = func_data.return_type.clone();
     let throws = func_data.throws.clone();
-    let reserved_effect_param_names = enclosing_class_generic_params(&item_tree, function.id(db));
+    let reserved_effect_param_names = item_tree
+        .enclosing_type_generic_params(function.id(db))
+        .to_vec();
 
     Arc::new(
         baml_compiler2_hir::signature::elaborate_function_signature_parts(

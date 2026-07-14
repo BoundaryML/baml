@@ -37,7 +37,9 @@ fn lowered_declared_callable_throws<'db>(
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
+    let mut generic_params = item_tree
+        .enclosing_type_generic_params(function.id(db))
+        .to_vec();
     generic_params.extend(sig.user_generic_params.iter().cloned());
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
@@ -71,7 +73,9 @@ fn signature_cycle_initial_callable_throws<'db>(
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
-    let mut generic_params = enclosing_class_generic_params(&item_tree, function.id(db));
+    let mut generic_params = item_tree
+        .enclosing_type_generic_params(function.id(db))
+        .to_vec();
     generic_params.extend(sig.user_generic_params.iter().cloned());
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
@@ -95,29 +99,18 @@ fn signature_cycle_initial_callable_throws<'db>(
     join_throw_facts(&facts)
 }
 
-fn enclosing_class_generic_params(
-    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
-    function_id: baml_compiler2_hir::ids::LocalItemId<baml_compiler2_hir::ids::FunctionMarker>,
-) -> Vec<Name> {
-    item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function_id))
-        .map(|class_data| class_data.generic_params.clone())
-        .unwrap_or_default()
-}
-
 fn callable_short_name<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Name {
     let file = function.file(db);
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    if let Some(class_data) = item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function.id(db)))
+    // Only a class owner qualifies the name — interface default methods and
+    // free-impl methods keep their bare name, preserving the throw-set key
+    // format the scan produced.
+    if let Some(baml_compiler2_hir::item_tree::MethodOwner::Class(class_id)) =
+        item_tree.method_owners.get(&function.id(db))
     {
-        Name::new(format!("{}.{}", class_data.name, func_data.name))
+        Name::new(format!("{}.{}", item_tree[*class_id].name, func_data.name))
     } else {
         func_data.name.clone()
     }

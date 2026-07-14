@@ -438,18 +438,6 @@ pub fn elaborate_function_signature_parts(
     }
 }
 
-fn enclosing_class_generic_params(
-    item_tree: &crate::item_tree::ItemTree,
-    function_id: crate::ids::LocalItemId<crate::ids::FunctionMarker>,
-) -> Vec<Name> {
-    item_tree
-        .classes
-        .values()
-        .find(|class_data| class_data.methods.contains(&function_id))
-        .map(|class_data| class_data.generic_params.clone())
-        .unwrap_or_default()
-}
-
 fn elaborated_function_signature_with_source_map<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -475,7 +463,9 @@ fn elaborated_function_signature_with_source_map<'db>(
 
     let return_type = func_data.return_type.clone();
     let throws = func_data.throws.clone();
-    let reserved_effect_param_names = enclosing_class_generic_params(&item_tree, function.id(db));
+    let reserved_effect_param_names = item_tree
+        .enclosing_type_generic_params(function.id(db))
+        .to_vec();
     let signature = Arc::new(elaborate_function_signature_parts(
         func_data.name.clone(),
         func_data.generic_params.clone(),

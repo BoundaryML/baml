@@ -1106,30 +1106,25 @@ pub fn function_in_scope_generic_param_bounds<'db>(
     function_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> TypeVarBoundsMap {
     let file = function_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    // PPIR's tree is the canonical one (it includes synthesized companions);
+    // reading HIR's here while the owner index reads PPIR's would mix the two.
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let function_id = function_loc.id(db);
     let mut bounds = TypeVarBoundsMap::default();
-    for (class_id, class) in &item_tree.classes {
-        if class.methods.contains(&function_id) {
+    match baml_compiler2_ppir::item_data::method_owner(db, function_loc) {
+        Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
             bounds.extend(
-                class_generic_param_bounds(
-                    db,
-                    baml_compiler2_hir::loc::ClassLoc::new(db, file, *class_id),
-                )
-                .iter()
-                .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
+                class_generic_param_bounds(db, class_loc)
+                    .iter()
+                    .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
             );
         }
-    }
-    for (interface_id, interface) in &item_tree.interfaces {
-        if interface.default_methods.contains(&function_id) {
+        Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) => {
+            let interface = &item_tree[iface_loc.id(db)];
             bounds.extend(
-                interface_generic_param_bounds(
-                    db,
-                    baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *interface_id),
-                )
-                .iter()
-                .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
+                interface_generic_param_bounds(db, iface_loc)
+                    .iter()
+                    .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
             );
             // Inside an interface's own default method `Self` is a rigid type
             // variable bounded by the interface itself (as a constraint, no
@@ -1141,9 +1136,7 @@ pub fn function_in_scope_generic_param_bounds<'db>(
             // slot at template lowering.
             let iface_qtn = qualify_def(
                 db,
-                baml_compiler2_hir::contributions::Definition::Interface(
-                    baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *interface_id),
-                ),
+                baml_compiler2_hir::contributions::Definition::Interface(iface_loc),
                 &interface.name,
             );
             let iface_args = interface
@@ -1156,24 +1149,18 @@ pub fn function_in_scope_generic_param_bounds<'db>(
                 vec![baml_type::Interface::new(iface_qtn, iface_args, Vec::new())],
             );
         }
-    }
-    // A method of an out-of-body `implements` block sees the block's generics (`implements<T
-    // extends Source> Renderable for Wrapped<T>`) — so a `T.member` / `Self.member` projection
-    // in its signature or body resolves through `T`'s declared bound. (In-body impl methods sit
-    // in the class, already covered above.)
-    for impl_id in &item_tree.free_impls {
-        if let Some(block) = item_tree.impls.get(impl_id)
-            && block.methods.contains(&function_id)
-        {
+        // A method of an out-of-body `implements` block sees the block's generics
+        // (`implements<T extends Source> Renderable for Wrapped<T>`) — so a
+        // `T.member` / `Self.member` projection in its signature or body resolves
+        // through `T`'s declared bound. (In-body impl methods are class-owned.)
+        Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => {
             bounds.extend(
-                impl_generic_param_bounds(
-                    db,
-                    baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id),
-                )
-                .iter()
-                .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
+                impl_generic_param_bounds(db, impl_loc)
+                    .iter()
+                    .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
             );
         }
+        None => {}
     }
     if let Some(function) = item_tree.functions.get(&function_id) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);

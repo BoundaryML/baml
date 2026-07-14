@@ -2009,12 +2009,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         // must be visible or `C` would resolve to `unknown`.
         let file = func_loc.file(db);
         let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let enclosing_class_params: Vec<Name> = item_tree
-            .classes
-            .values()
-            .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
-            .map(|class_data| class_data.generic_params.clone())
-            .unwrap_or_default();
+        let enclosing_class_params: Vec<Name> =
+            match baml_compiler2_ppir::item_data::method_owner(db, func_loc) {
+                Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
+                    item_tree[class_loc.id(db)].generic_params.clone()
+                }
+                _ => Vec::new(),
+            };
         // Only user-declared generic params are *supplied at the call site*;
         // synthetic effect params are always inferred. For static-method-on-
         // generic-class calls, the class params are also supplied (`Class<...>.m`)
@@ -2511,37 +2512,28 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
         let func_id = func_loc.id(db);
-        // The enclosing out-of-body impl's declared generic-param names, from the unified `impls`
-        // store via the `free_impls` index (replacing the removed `implements_for`).
-        if let Some(impl_params) = item_tree.free_impls.iter().find_map(|impl_id| {
-            let block = item_tree.impls.get(impl_id)?;
-            if !block.methods.contains(&func_id) {
-                return None;
-            }
-            let baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } = &block.subject
-            else {
-                return None;
-            };
-            Some(generics.iter().map(|g| g.name.clone()).collect::<Vec<_>>())
-        }) {
-            return (impl_params, item_tree[func_id].generic_params.clone());
-        }
-
         let fn_params = item_tree[func_id].generic_params.clone();
-        if let Some(iface_data) = item_tree
-            .interfaces
-            .values()
-            .find(|iface_data| iface_data.default_methods.contains(&func_id))
-        {
-            return (iface_data.generic_params.clone(), fn_params);
-        }
-
-        let owner_params = item_tree
-            .classes
-            .values()
-            .find(|class_data| class_data.methods.contains(&func_id))
-            .map(|class_data| class_data.generic_params.clone())
-            .unwrap_or_default();
+        // The owner's declared generic-param names: an out-of-body impl's block
+        // generics, an interface's params for a default method, or the class's.
+        let owner_params = match baml_compiler2_ppir::item_data::method_owner(db, func_loc) {
+            Some(baml_compiler2_ppir::item_data::MethodOwner::FreeImpl(impl_loc)) => {
+                match &item_tree.impls[&impl_loc.id(db)].subject {
+                    baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } => {
+                        generics.iter().map(|g| g.name.clone()).collect()
+                    }
+                    baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => unreachable!(
+                        "MethodOwner::FreeImpl always names an ImplSubject::Free block"
+                    ),
+                }
+            }
+            Some(baml_compiler2_ppir::item_data::MethodOwner::Interface(iface_loc)) => {
+                item_tree[iface_loc.id(db)].generic_params.clone()
+            }
+            Some(baml_compiler2_ppir::item_data::MethodOwner::Class(class_loc)) => {
+                item_tree[class_loc.id(db)].generic_params.clone()
+            }
+            None => Vec::new(),
+        };
         (owner_params, fn_params)
     }
 
