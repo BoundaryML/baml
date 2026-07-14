@@ -86,7 +86,7 @@ pub fn resolved_aliases_for_package(
 fn interface_tir_type_args_match_preserving_typevars(
     impl_iface_args: &[Tir2Ty],
     iface_type_args: &[Tir2Ty],
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &baml_type::ResolvedAliases,
 ) -> bool {
     impl_iface_args.len() == iface_type_args.len()
         && impl_iface_args
@@ -108,7 +108,7 @@ fn interface_tir_type_args_match_preserving_typevars(
 fn tir_type_satisfies_dispatch_request(
     actual: &Tir2Ty,
     requested: &Tir2Ty,
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &baml_type::ResolvedAliases,
 ) -> bool {
     if baml_compiler2_tir::normalize::is_same_normalized_type(actual, requested, aliases) {
         return true;
@@ -228,7 +228,7 @@ fn bind_interface_class_type_arg(
     name: &Name,
     actual: &Tir2Ty,
     bindings: &mut FxHashMap<Name, Tir2Ty>,
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &baml_type::ResolvedAliases,
 ) -> bool {
     match bindings.get(name) {
         Some(existing) => {
@@ -245,7 +245,7 @@ fn infer_interface_class_bindings(
     formal: &Tir2Ty,
     actual: &Tir2Ty,
     class_params: &[Name],
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &baml_type::ResolvedAliases,
     bindings: &mut FxHashMap<Name, Tir2Ty>,
     // Associated-type bindings tolerate an unpinnable typevar union
     // (`Error = E | E2` vs a normalized request) by leaving the params
@@ -476,7 +476,7 @@ fn interface_class_guard_for_args(
     requested_iface_args: &[Tir2Ty],
     requested_iface_assoc: &[(Name, Tir2Ty)],
     class_params: &[Name],
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &baml_type::ResolvedAliases,
 ) -> Option<InterfaceClassGuard> {
     // An *uninstantiated* request (no type args) matches any implementor
     // instantiation — e.g. `self: Container` inside a generic interface's
@@ -592,7 +592,7 @@ fn type_satisfies_bound(
     db: &dyn crate::Db,
     actual: &Tir2Ty,
     bound: &Tir2Ty,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &baml_type::ResolvedAliases,
     default_pkg: &baml_base::Name,
     depth: u32,
 ) -> bool {
@@ -655,7 +655,7 @@ fn package_class_qtns(db: &dyn crate::Db, pkg_name: &Name) -> Vec<QualifiedTypeN
 fn with_global_ctx<R>(
     db: &dyn baml_compiler2_tir::Db,
     pkg_id: baml_compiler2_hir::package::PackageId<'_>,
-    aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    aliases: &baml_type::ResolvedAliases,
     bounds: &FxHashMap<Name, Tir2Ty>,
     f: impl FnOnce(&baml_compiler2_tir::type_context::GlobalTypeContext<'_, '_>) -> R,
 ) -> R {
@@ -1525,7 +1525,7 @@ use baml_compiler2_tir::{
     inference::infer_scope_types,
     resolve::{ResolvedName, resolve_name_at_in_scope},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
@@ -1648,6 +1648,12 @@ struct PackageLoweringData {
     enum_variants: EnumVariantIndices,
     interface_implementors: ImplementorsByInterface,
     resolved_aliases: ResolvedAliases,
+    /// Every method name any in-scope interface (own package + dependency
+    /// closure) declares, required or default. Fast pre-filter for
+    /// [`LoweringContext::dispatch_target_for_concrete`]: a member name absent
+    /// here can never dispatch through an interface impl, so the (hot) impl
+    /// enumeration is skipped for the overwhelmingly common plain-method case.
+    interface_method_names: FxHashSet<Name>,
 }
 
 /// # Safety
@@ -1672,6 +1678,73 @@ unsafe impl salsa::Update for PackageLoweringData {
             true
         }
     }
+}
+
+/// Project-wide class → runtime type-tag assignment.
+///
+/// Wrapper struct so the map can be the output of a Salsa-tracked query
+/// (needs a manual [`salsa::Update`] impl, mirroring `PackageLoweringData`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct ClassTypeTags(IndexMap<TypeName, i64>);
+
+// Safety: `ClassTypeTags` holds only plain (non-`'db`) data. Manual `Update`
+// impl uses `PartialEq` for Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for ClassTypeTags {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// Build `class_type_tags` by iterating `compiler2_all_files` in the same order as the
+/// emitter (`generate_project_bytecode` in `baml_compiler2_emit`). This guarantees that
+/// the integer type tags stored in Switch arms exactly match the `class.type_tag` values
+/// assigned to runtime Class objects.
+///
+/// Salsa-tracked: the map is a pure function of the project, but it was
+/// rebuilt (walking every file's item tree) inside every `LoweringContext`
+/// construction — once per function lowered, ~13% of cold CPU on the test
+/// corpus. See `crates/baml_compiler2_profile/README.md`.
+#[salsa::tracked(returns(ref))]
+fn class_type_tags_for_project(
+    db: &dyn crate::Db,
+    project: baml_workspace::Project,
+) -> ClassTypeTags {
+    let _ = project; // key: recompute when the project's file set changes
+    let all_files = compiler2_all_files(db);
+    let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
+    let mut class_type_tag_counter = 0i64;
+
+    for file in &all_files {
+        let item_tree = file_item_tree(db, *file);
+        let pkg_info = file_package(db, *file);
+
+        for class_data in item_tree.classes.values() {
+            let class_qtn = QualifiedTypeName::new(
+                pkg_info.package.clone(),
+                pkg_info.namespace_path.clone(),
+                class_data.name.clone(),
+            );
+            let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
+            class_type_tag_counter += 1;
+            // Use entry to avoid overwriting if the same class appears via multiple paths
+            // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
+            class_type_tags.entry(class_qtn).or_insert(type_tag);
+        }
+    }
+
+    ClassTypeTags(class_type_tags)
 }
 
 /// Build the package-invariant [`PackageLoweringData`] once per package,
@@ -1722,12 +1795,39 @@ fn package_lowering_data<'db>(
         );
     }
 
+    let mut interface_method_names = FxHashSet::default();
+    let mut all_pkgs = vec![pkg_id];
+    all_pkgs.extend(baml_compiler2_hir::package::package_dependency_closure(
+        db, pkg_id,
+    ));
+    for pkg in all_pkgs {
+        let items = package_items(db, pkg);
+        for ns in items.namespaces.values() {
+            for def in ns.types.values() {
+                let Definition::Interface(iface_loc) = def else {
+                    continue;
+                };
+                let itree = file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = itree.interfaces.get(&iface_loc.id(db)) else {
+                    continue;
+                };
+                for sig in &iface_data.required_methods {
+                    interface_method_names.insert(sig.name.clone());
+                }
+                for &fn_id in &iface_data.default_methods {
+                    interface_method_names.insert(itree[fn_id].name.clone());
+                }
+            }
+        }
+    }
+
     PackageLoweringData {
         class_fields,
         class_field_types,
         enum_variants,
         interface_implementors,
         resolved_aliases,
+        interface_method_names,
     }
 }
 
@@ -1839,8 +1939,9 @@ struct LoweringContext<'db> {
     class_field_types: &'db ClassFieldTypes,
     enum_variants: &'db EnumVariantIndices,
     /// Pre-computed type tags for class types, used by `SwitchKind::TypeTag`
-    /// for union-type switch optimization (ported from MIR 1).
-    class_type_tags: IndexMap<TypeName, i64>,
+    /// for union-type switch optimization (ported from MIR 1). Borrowed from
+    /// the project-keyed `class_type_tags_for_project` query.
+    class_type_tags: &'db IndexMap<TypeName, i64>,
     /// BEP-044: for every interface, the list of classes that implement it
     /// (directly or transitively through interface `requires`). Lets the field-access
     /// and method-call lowering paths emit a type-tag switch over the
@@ -1854,6 +1955,10 @@ struct LoweringContext<'db> {
     // Borrowed from `package_lowering_data` (shared across every function in
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
+
+    /// All method names declared by in-scope interfaces — see
+    /// [`PackageLoweringData::interface_method_names`].
+    interface_method_names: &'db FxHashSet<Name>,
 
     watched_locals_stack: Vec<Local>,
 
@@ -2194,7 +2299,7 @@ impl<'db> LoweringContext<'db> {
 
     /// Populate `class_fields` and `enum_variants` from a single package's items.
     ///
-    /// Note: `class_type_tags` is built separately via `build_class_type_tags` to ensure
+    /// Note: `class_type_tags` is built separately via `class_type_tags_for_project` to ensure
     /// the same file-iteration order as the emitter (`generate_project_bytecode`).
     fn populate_from_package(
         db: &'db dyn crate::Db,
@@ -2453,7 +2558,7 @@ impl<'db> LoweringContext<'db> {
                                 db,
                                 &actual,
                                 &bound_ty,
-                                &resolved_aliases.aliases,
+                                resolved_aliases,
                                 &pkg_info.package,
                                 BLANKET_BOUND_DEPTH,
                             ) {
@@ -2473,41 +2578,6 @@ impl<'db> LoweringContext<'db> {
                 }
             }
         }
-    }
-
-    /// Build `class_type_tags` by iterating `compiler2_all_files` in the same order as the
-    /// emitter (`generate_project_bytecode` in `baml_compiler2_emit`). This guarantees that
-    /// the integer type tags stored in Switch arms exactly match the `class.type_tag` values
-    /// assigned to runtime Class objects.
-    fn build_class_type_tags(db: &'db dyn crate::Db) -> IndexMap<TypeName, i64> {
-        let all_files = compiler2_all_files(db);
-        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
-        let mut class_type_tag_counter = 0i64;
-
-        for file in &all_files {
-            let item_tree = file_item_tree(db, *file);
-            let pkg_info = file_package(db, *file);
-
-            // Build module_path: [package] ++ namespace_path
-            let mut module_path: Vec<Name> = vec![pkg_info.package.clone()];
-            module_path.extend(pkg_info.namespace_path.iter().cloned());
-
-            for class_data in item_tree.classes.values() {
-                let class_qtn = QualifiedTypeName::new(
-                    pkg_info.package.clone(),
-                    pkg_info.namespace_path.clone(),
-                    class_data.name.clone(),
-                );
-                let tn = class_qtn.clone();
-                let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
-                class_type_tag_counter += 1;
-                // Use entry to avoid overwriting if the same class appears via multiple paths
-                // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
-                class_type_tags.entry(tn).or_insert(type_tag);
-            }
-        }
-
-        class_type_tags
     }
 
     fn new(
@@ -2688,7 +2758,7 @@ impl<'db> LoweringContext<'db> {
 
         // Build class_type_tags using the same file-iteration order as the emitter,
         // so that switch arms get the same integer tags as runtime class.type_tag fields.
-        let class_type_tags = Self::build_class_type_tags(db);
+        let class_type_tags = &class_type_tags_for_project(db, db.project()).0;
 
         // --- Determine arity from function signature ---
         let sig = baml_compiler2_ppir::function_signature(db, func_loc);
@@ -2748,6 +2818,7 @@ impl<'db> LoweringContext<'db> {
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
+            interface_method_names: &pkg_data.interface_method_names,
             watched_locals_stack: Vec::new(),
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
@@ -2805,7 +2876,7 @@ impl<'db> LoweringContext<'db> {
 
         // Build class_type_tags using the same file-iteration order as the emitter,
         // so that switch arms get the same integer tags as runtime class.type_tag fields.
-        let class_type_tags = Self::build_class_type_tags(db);
+        let class_type_tags = &class_type_tags_for_project(db, db.project()).0;
 
         LoweringContext {
             db,
@@ -2834,6 +2905,7 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             interface_implementors: &pkg_data.interface_implementors,
             resolved_aliases: &pkg_data.resolved_aliases,
+            interface_method_names: &pkg_data.interface_method_names,
             watched_locals_stack: Vec::new(),
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
@@ -3574,14 +3646,14 @@ impl<'db> LoweringContext<'db> {
         let gctx = baml_compiler2_tir::type_context::GlobalTypeContext {
             db: self.db,
             res_ctx,
-            aliases: &self.resolved_aliases.aliases,
+            aliases: self.resolved_aliases,
             bounds: &bounds,
         };
         baml_compiler2_tir::interfaces::impls_for_type(
             self.db,
             pkg_id,
             recv,
-            &self.resolved_aliases.aliases,
+            self.resolved_aliases,
             |a, b| baml_type::normalize::is_subtype(a, b, &gctx),
         )
     }
@@ -3612,6 +3684,13 @@ impl<'db> LoweringContext<'db> {
                 | Tir2Ty::Map { .. }
                 | Tir2Ty::Future(..)
         ) {
+            return None;
+        }
+        // Fast pre-filter: a name no in-scope interface declares can never
+        // dispatch through an impl. Skips the per-call impl enumeration
+        // (`l1_impls_for_recv` probes every impl block's pattern against the
+        // receiver) for plain method calls and field accesses.
+        if !self.interface_method_names.contains(method) {
             return None;
         }
         for resolved in self.l1_impls_for_recv(recv_ty) {
@@ -10707,7 +10786,7 @@ impl<'db> LoweringContext<'db> {
         with_global_ctx(
             self.db,
             self.package_id(),
-            &self.resolved_aliases.aliases,
+            self.resolved_aliases,
             &self.generic_param_bounds,
             |ctx| baml_type::normalize::normalize(ty, ctx),
         )
@@ -10729,7 +10808,7 @@ impl<'db> LoweringContext<'db> {
         with_global_ctx(
             self.db,
             self.package_id(),
-            &self.resolved_aliases.aliases,
+            self.resolved_aliases,
             &self.generic_param_bounds,
             |ctx| {
                 ctx.associated_type_bound(iface, member.clone())
@@ -10951,7 +11030,7 @@ impl<'db> LoweringContext<'db> {
                             requested_args,
                             requested_assoc,
                             &class_data.generic_params,
-                            &self.resolved_aliases.aliases,
+                            self.resolved_aliases,
                         ) else {
                             continue;
                         };
@@ -11030,7 +11109,7 @@ impl<'db> LoweringContext<'db> {
                         requested_args,
                         requested_assoc,
                         &class_data.generic_params,
-                        &self.resolved_aliases.aliases,
+                        self.resolved_aliases,
                     ) else {
                         continue;
                     };
@@ -14624,7 +14703,7 @@ mod tests {
 
     #[test]
     fn interface_tir_type_args_match_preserves_type_var_identity() {
-        let aliases = HashMap::new();
+        let aliases = baml_type::ResolvedAliases::default();
 
         assert!(interface_tir_type_args_match_preserving_typevars(
             &[type_var("L"), type_var("R")],
@@ -14640,7 +14719,7 @@ mod tests {
 
     #[test]
     fn interface_class_guard_checks_assoc_when_request_omits_generic_args() {
-        let aliases = HashMap::new();
+        let aliases = baml_type::ResolvedAliases::default();
         let impl_args = vec![primitive(&PrimitiveType::String)];
         let requested_args = Vec::new();
         let requested_assoc = vec![(Name::new("Value"), primitive(&PrimitiveType::Int))];

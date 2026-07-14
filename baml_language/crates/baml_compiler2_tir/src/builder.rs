@@ -13,7 +13,7 @@
 //! NOT recurse into it — lambda bodies are separate scopes with their own
 //! `infer_scope_types` Salsa query.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_ast::{
@@ -135,6 +135,91 @@ fn function_generic_param_bounds_exprs(
 ) -> Vec<Option<TypeExpr>> {
     let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
     item_tree[func_loc.id(db)].generic_param_bounds.clone()
+}
+
+/// Per-callee generic-parameter facts consumed at every call site:
+/// the enclosing class's generic params (empty for free functions), the
+/// callee's user-declared params, their lowered interface bounds, and the
+/// callee's name for diagnostics.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct CalleeGenerics {
+    pub(crate) class_params: Vec<Name>,
+    pub(crate) user_params: Vec<Name>,
+    pub(crate) user_bounds: Vec<Option<Ty>>,
+    pub(crate) name: Name,
+}
+
+// Safety: `CalleeGenerics` holds only plain (non-`'db`) data. Manual `Update`
+// impl uses `PartialEq` for Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for CalleeGenerics {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// The declared generic params and lowered bounds of a callable, memoized per
+/// function. Every call site used to redo this from scratch — an item-tree
+/// scan for the enclosing class plus a re-lowering of the bound type
+/// expressions — which showed up as ~10% of cold compile time.
+#[salsa::tracked(returns(ref))]
+pub(crate) fn callee_generics_for_func<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> CalleeGenerics {
+    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+    // The enclosing class's generic params (`[]` for a free function). These
+    // are always in scope when lowering the method's *bounds* — a bound may
+    // reference a class generic (`<U extends Eq<C>>` on a method of
+    // `class Box<C>`) regardless of how the class args are supplied — so they
+    // must be visible or `C` would resolve to `unknown`.
+    let file = func_loc.file(db);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let class_params: Vec<Name> = item_tree
+        .classes
+        .values()
+        .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
+        .map(|class_data| class_data.generic_params.clone())
+        .unwrap_or_default();
+
+    // Lower the user generic params' interface bounds in the callee's own
+    // package/namespace, with the class params in scope (see above). The
+    // bounds were already validated at the declaration site, so discard
+    // re-lowering diagnostics here.
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let mut bound_scope = class_params.clone();
+    bound_scope.extend(sig.user_generic_params.iter().cloned());
+    let mut diags = Vec::new();
+    let user_bounds = lower_generic_param_bounds(
+        db,
+        &function_generic_param_bounds_exprs(db, func_loc),
+        pkg_items,
+        &pkg_info.namespace_path,
+        &bound_scope,
+        None,
+        &mut diags,
+    );
+
+    CalleeGenerics {
+        class_params,
+        user_params: sig.user_generic_params.clone(),
+        user_bounds,
+        name: sig.name.clone(),
+    }
 }
 
 pub(crate) fn lower_generic_param_bounds(
@@ -544,7 +629,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         GlobalTypeContext {
             db: self.context.db(),
             res_ctx: self.res_ctx,
-            aliases: &self.aliases,
+            aliases: self.aliases,
             bounds: &self.generic_param_bounds,
         }
     }
@@ -662,9 +747,14 @@ pub struct TypeInferenceBuilder<'db> {
     scope: ScopeId<'db>,
     /// Declared return type for the function (used to check return statements).
     declared_return_ty: Option<Ty>,
-    /// Resolved type alias map: alias qualified name → expanded Ty.
-    /// Used by the normalizer for structural subtype checking.
-    aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+    /// Resolved type alias environment: alias map + precomputed
+    /// recursive-alias set. Held by reference to the Salsa-cached
+    /// `package_resolved_aliases` value (not rebuilt per scope) so
+    /// `is_same_normalized_type` and `is_subtype_of` reuse the
+    /// precomputed `recursive` set instead of re-DFS'ing the alias
+    /// graph on every call. See `crates/baml_compiler2_profile/README.md`
+    /// for the audit that surfaced the redundant work this fixes.
+    aliases: &'db baml_type::ResolvedAliases,
     /// Namespace path for the file being analyzed (e.g. `["env"]` for `baml/env.baml`).
     ns_context: Vec<Name>,
     /// BEP-044: when this body is the override of an interface method
@@ -773,6 +863,15 @@ pub struct TypeInferenceBuilder<'db> {
     /// to the owning Function/Let scope) lets that standalone inference seed
     /// them — see `infer_scope_types`'s `ScopeKind::Lambda` arm.
     pub template_body_params: FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
+    /// Accumulates each nested lambda's full inline-inference tables, keyed by
+    /// the lambda's `FileScopeId`. Captured at the end of `infer_lambda_body`
+    /// before parent state is restored. Like `nested_lambda_types`, NOT
+    /// saved/restored by `infer_lambda_body`, so entries for arbitrarily
+    /// nested lambdas bubble up to the owning Function/Let scope, where the
+    /// standalone `ScopeKind::Lambda` query projects them out instead of
+    /// re-inferring the body.
+    pub nested_lambda_inference:
+        FxHashMap<FileScopeId, crate::inference::NestedLambdaInference<'db>>,
     /// Diagnostic-only concrete escaping throws for lambda expressions in the
     /// current scope. Used to explain callback forwarding without affecting
     /// call instantiation or throws checking semantics.
@@ -966,7 +1065,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         res_ctx: &'db PackageResolutionContext<'db>,
         package_id: PackageId<'db>,
         scope: ScopeId<'db>,
-        aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+        aliases: &'db baml_type::ResolvedAliases,
     ) -> Self {
         let db = context.db();
         let package_items = &res_ctx.own_items;
@@ -1010,6 +1109,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             function_coercions: FxHashMap::default(),
             default_parameter_inference: crate::inference::DefaultParameterInference::empty(),
             nested_lambda_types: FxHashMap::default(),
+            nested_lambda_inference: FxHashMap::default(),
             template_body_params: FxHashMap::default(),
             lambda_effective_throws: FxHashMap::default(),
             is_auto_derived_body: false,
@@ -1130,6 +1230,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<FileScopeId, Ty>,
         FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
         crate::inference::DefaultParameterInference<'db>,
+        FxHashMap<FileScopeId, crate::inference::NestedLambdaInference<'db>>,
     ) {
         let diagnostics = self.context.finish();
         (
@@ -1149,6 +1250,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.nested_lambda_types,
             self.template_body_params,
             self.default_parameter_inference,
+            self.nested_lambda_inference,
         )
     }
 
@@ -1318,7 +1420,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn expand_alias_chains(&self, ty: Ty) -> Ty {
-        crate::inference::expand_alias_chains(ty, &self.aliases)
+        crate::inference::expand_alias_chains(ty, &self.aliases.aliases)
     }
 
     /// Pattern-matrix-internal normalization of a scrutinee type.
@@ -1833,7 +1935,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn container_arg_subtype_without_nominal(&self, actual: &Ty, expected: &Ty) -> bool {
-        crate::normalize::is_subtype_of(actual, expected, &self.aliases)
+        crate::normalize::is_subtype_of(actual, expected, self.aliases)
     }
 
     fn function_coercion_for(
@@ -2004,20 +2106,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             _ => return None,
         };
         let db = self.context.db();
-        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
-        // The enclosing class's generic params (`[]` for a free function). These
-        // are always in scope when lowering the method's *bounds* — a bound may
-        // reference a class generic (`<U extends Eq<C>>` on a method of
-        // `class Box<C>`) regardless of how the class args are supplied — so they
-        // must be visible or `C` would resolve to `unknown`.
-        let file = func_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let enclosing_class_params: Vec<Name> = item_tree
-            .classes
-            .values()
-            .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
-            .map(|class_data| class_data.generic_params.clone())
-            .unwrap_or_default();
+        let data = callee_generics_for_func(db, func_loc);
         // Only user-declared generic params are *supplied at the call site*;
         // synthetic effect params are always inferred. For static-method-on-
         // generic-class calls, the class params are also supplied (`Class<...>.m`)
@@ -2026,41 +2115,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         // params (their own bounds, where any, are enforced at receiver
         // specialization).
         let class_params: &[Name] = if treat_as_static_method {
-            &enclosing_class_params
+            &data.class_params
         } else {
             &[]
         };
 
-        // Lower the user generic params' interface bounds in the callee's own
-        // package/namespace, with the class params in scope (see above). The
-        // bounds were already validated at the declaration site, so discard
-        // re-lowering diagnostics here.
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let mut bound_scope = enclosing_class_params.clone();
-        bound_scope.extend(sig.user_generic_params.iter().cloned());
-        let mut diags = Vec::new();
-        let user_bounds = lower_generic_param_bounds(
-            db,
-            &function_generic_param_bounds_exprs(db, func_loc),
-            pkg_items,
-            &pkg_info.namespace_path,
-            &bound_scope,
-            None,
-            &mut diags,
-        );
-
         let mut declared_params: Vec<Name> = class_params.to_vec();
-        declared_params.extend(sig.user_generic_params.iter().cloned());
+        declared_params.extend(data.user_params.iter().cloned());
         let mut declared_bounds: Vec<Option<Ty>> = vec![None; class_params.len()];
-        declared_bounds.extend(user_bounds);
+        declared_bounds.extend(data.user_bounds.iter().cloned());
         // A user bound that references an enclosing class param (`<U extends
         // Eq<C>>` on a method of `class Box<C>`) is lowered with `C` as a type
         // variable here; on a bound-method call the receiver's value for `C` is
         // seeded into the call-site bindings (see `owner_type_arg_binding_seed`) so
         // the bound resolves to e.g. `Eq<int>` before it is checked.
-        Some((declared_params, declared_bounds, sig.name.clone()))
+        Some((declared_params, declared_bounds, data.name.clone()))
     }
 
     /// Resolve explicit type arguments written at a call site (e.g. `foo<int, string>(x)`).
@@ -5447,15 +5516,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         // Infer the lambda body using save/restore approach
-        let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
-            .infer_lambda_body(
-                func_def,
-                &param_tys,
-                return_annotation.as_ref(),
-                &throws_ty,
-                throws_span,
-                warn_extraneous_throws,
-            );
+        let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
+            func_def,
+            &param_tys,
+            return_annotation.as_ref(),
+            &throws_ty,
+            throws_span,
+            warn_extraneous_throws,
+        );
         let surface_ret_ty = return_annotation.unwrap_or(ret_ty);
 
         let surface_throws = if infer_throws_from_body {
@@ -5909,7 +5977,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self.package_id,
                         &inferred,
                         expected,
-                        &self.aliases,
+                        self.aliases,
                         |a, b| self.is_subtype(a, b),
                     )
                 } else {
@@ -6403,15 +6471,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
 
                 // Infer/check the lambda body using save/restore approach
-                let (ret_ty, _lambda_expressions, lambda_fsi, lambda_effective_throws) = self
-                    .infer_lambda_body(
-                        func_def,
-                        &param_tys,
-                        Some(effective_ret),
-                        &throws_ty,
-                        throws_span,
-                        warn_extraneous_throws,
-                    );
+                let (ret_ty, lambda_fsi, lambda_effective_throws) = self.infer_lambda_body(
+                    func_def,
+                    &param_tys,
+                    Some(effective_ret),
+                    &throws_ty,
+                    throws_span,
+                    warn_extraneous_throws,
+                );
                 let surface_ret_ty = return_annotation.unwrap_or_else(|| {
                     if matches!(
                         expected_ret.as_ref(),
@@ -8674,7 +8741,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         match ty {
             Ty::Class(qtn, _, _) => qtn.is_panic_type().then(|| ty.clone()),
             Ty::TypeAlias(qtn, _) => {
-                if let Some(expanded) = self.aliases.get(qtn) {
+                if let Some(expanded) = self.aliases.aliases.get(qtn) {
                     self.ty_panic_subset(expanded)
                 } else if qtn.is_panic_type() {
                     Some(ty.clone())
@@ -14175,12 +14242,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// Saves the current locals, `declared_return_ty`, `generic_params`, and
     /// `expressions` (to avoid `ExprId` collisions between
-    /// the lambda's arena and the parent's arena). After inference, restores all
-    /// saved state and returns the lambda's expression types separately.
+    /// the lambda's arena and the parent's arena). After inference, restores
+    /// all saved state; the lambda's own tables are moved into
+    /// `nested_lambda_inference` keyed by the lambda's `FileScopeId`.
     ///
-    /// Returns `(inferred_return_ty, lambda_expressions)` where
-    /// `lambda_expressions` contains the expression types for the lambda body
-    /// only (keyed by the lambda's own `ExprId`s, which start at 0).
+    /// Returns `(inferred_return_ty, lambda_file_scope_id, effective_throws)`.
     pub fn infer_lambda_body(
         &mut self,
         func_def: &baml_compiler2_ast::FunctionDef,
@@ -14189,7 +14255,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         chosen_throws: &Ty,
         throws_report_span: TextRange,
         warn_extraneous_throws: bool,
-    ) -> (Ty, FxHashMap<ExprId, Ty>, Option<FileScopeId>, Ty) {
+    ) -> (Ty, Option<FileScopeId>, Ty) {
         use baml_compiler2_ast::FunctionBodyDef;
 
         // Get the lambda's ExprBody
@@ -14198,7 +14264,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Unknown {
                     attr: TyAttr::default(),
                 },
-                FxHashMap::default(),
                 None,
                 Ty::Never {
                     attr: TyAttr::default(),
@@ -14211,7 +14276,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Void {
                     attr: TyAttr::default(),
                 },
-                FxHashMap::default(),
                 None,
                 Ty::Never {
                     attr: TyAttr::default(),
@@ -14297,7 +14361,17 @@ impl<'db> TypeInferenceBuilder<'db> {
             let index = baml_compiler2_ppir::file_semantic_index(db, file);
             // Captures are seeded only if the lambda scope is located (it
             // always should be, but be defensive).
-            let found_fsi = index.lambda_scope_for(func_def.span);
+            //
+            // Synthetic lambdas (desugared `test` / `testset` bodies) carry a
+            // default `FunctionDef::span`, but their `Expr::Lambda` node — and
+            // thus the HIR Lambda scope — spans the original block. That range
+            // equals the lowered body's root-expression span, so fall back to
+            // it when the def span misses.
+            let found_fsi = index.lambda_scope_for(func_def.span).or_else(|| {
+                lambda_body
+                    .root_expr
+                    .and_then(|root| index.lambda_scope_for(lambda_source_map.expr_span(root)))
+            });
             if let Some(fsi) = found_fsi {
                 let captures_to_seed: Vec<(Name, baml_compiler2_hir::semantic_index::BindingId)> =
                     index.scope_bindings[fsi.index() as usize]
@@ -14375,21 +14449,76 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Collect the lambda's expression types and restore parent state
         let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
-        self.pattern_types = saved_bindings;
+        // Capture this lambda's complete inference tables (keyed by its own
+        // body arena's IDs) so the standalone `ScopeKind::Lambda` query can
+        // project them out instead of re-inferring the body from scratch.
+        // Each table is *moved* out while the saved parent state is swapped
+        // back in — the lambda's tables have exactly one consumer, so no
+        // clones. `nested_lambda_inference` itself is NOT restored, so entries
+        // for nested lambdas (recorded by inner `infer_lambda_body` calls)
+        // bubble up to the owning Function/Let scope.
+        if let Some(fsi) = lambda_file_scope_id {
+            let lambda_param_types: Vec<(Name, Ty)> = func_def
+                .params
+                .iter()
+                .zip(param_tys.iter())
+                .map(|(param, param_ty)| (param.name.clone(), param_ty.ty.clone()))
+                .collect();
+            self.nested_lambda_inference.insert(
+                fsi,
+                crate::inference::NestedLambdaInference {
+                    expressions: lambda_expressions,
+                    pattern_types: std::mem::replace(&mut self.pattern_types, saved_bindings),
+                    resolutions: std::mem::replace(&mut self.resolutions, saved_resolutions),
+                    catch_residual_throws: std::mem::replace(
+                        &mut self.catch_residual_throws,
+                        saved_catch_residual_throws,
+                    ),
+                    exhaustive_matches: std::mem::replace(
+                        &mut self.exhaustive_matches,
+                        saved_exhaustive_matches,
+                    ),
+                    path_root_types: std::mem::replace(
+                        &mut self.path_root_types,
+                        saved_path_root_types,
+                    ),
+                    path_segment_types: std::mem::replace(
+                        &mut self.path_segment_types,
+                        saved_path_segment_types,
+                    ),
+                    path_member_resolutions: std::mem::replace(
+                        &mut self.path_member_resolutions,
+                        saved_path_member_resolutions,
+                    ),
+                    param_types: lambda_param_types,
+                    call_plans: std::mem::replace(&mut self.call_plans, saved_call_plans),
+                    call_type_instantiations: std::mem::replace(
+                        &mut self.call_type_instantiations,
+                        saved_call_type_instantiations,
+                    ),
+                    function_coercions: std::mem::replace(
+                        &mut self.function_coercions,
+                        saved_function_coercions,
+                    ),
+                },
+            );
+        } else {
+            self.pattern_types = saved_bindings;
+            self.resolutions = saved_resolutions;
+            self.catch_residual_throws = saved_catch_residual_throws;
+            self.exhaustive_matches = saved_exhaustive_matches;
+            self.path_root_types = saved_path_root_types;
+            self.path_segment_types = saved_path_segment_types;
+            self.path_member_resolutions = saved_path_member_resolutions;
+            self.call_plans = saved_call_plans;
+            self.call_type_instantiations = saved_call_type_instantiations;
+            self.function_coercions = saved_function_coercions;
+        }
         self.pattern_natural_cache = saved_pattern_natural_cache;
-        self.resolutions = saved_resolutions;
-        self.exhaustive_matches = saved_exhaustive_matches;
-        self.catch_residual_throws = saved_catch_residual_throws;
-        self.path_root_types = saved_path_root_types;
-        self.path_segment_types = saved_path_segment_types;
-        self.path_member_resolutions = saved_path_member_resolutions;
         self.interface_method_generic_params = saved_interface_method_generic_params;
         self.owner_type_arg_binding_seed = saved_owner_type_arg_binding_seed;
         self.self_pinned_rigid_var = saved_self_pinned_rigid_var;
         self.lambda_effective_throws = saved_lambda_effective_throws;
-        self.call_plans = saved_call_plans;
-        self.call_type_instantiations = saved_call_type_instantiations;
-        self.function_coercions = saved_function_coercions;
         self.locals = saved_locals;
         self.scoped_local_declarations = saved_scoped_local_declarations;
         self.scoped_local_assignments = saved_scoped_local_assignments;
@@ -14403,12 +14532,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             .freeze_diagnostic_spans_from(lambda_diag_start, lambda_source_map);
         self.body_source_map = saved_body_source_map;
 
-        (
-            ret_ty,
-            lambda_expressions,
-            lambda_file_scope_id,
-            lambda_effective_throws,
-        )
+        (ret_ty, lambda_file_scope_id, lambda_effective_throws)
     }
 }
 

@@ -1065,10 +1065,6 @@ impl NormalTy {
         ctx: &C,
         assumptions: &mut HashSet<(NormalTy, NormalTy)>,
     ) -> bool {
-        let pair = (self.clone(), sup.clone());
-        if assumptions.contains(&pair) {
-            return true;
-        }
         if self == sup {
             return true;
         }
@@ -1091,8 +1087,48 @@ impl NormalTy {
             return true;
         }
 
+        // Co-inductive assumption tracking exists solely to terminate cycles,
+        // and a cycle can only regress through the arms that *expand* a type:
+        // μ-unfolding (substitution can regenerate the same pair) and
+        // variable/projection bound lookup (a bound can mention the variable).
+        // Every structural arm descends into strictly smaller subterms of
+        // finite trees. Restricting the pair bookkeeping to the expanding
+        // arms preserves termination — any infinite path must pass through an
+        // expanding arm infinitely often, and the pairs seen there are drawn
+        // from the finite subterm closure of the (regular) operands — while
+        // sparing the deep `NormalTy` clone + full-tree hash on the millions
+        // of purely structural steps, which profiling showed dominated
+        // subtype-checking cost.
+        let expanding = matches!(
+            self,
+            NormalTy::Mu { .. } | NormalTy::TypeVar(_) | NormalTy::AssociatedTypeProjection { .. }
+        ) || matches!(sup, NormalTy::Mu { .. });
+        if !expanding {
+            return self.is_subtype_of_inner(sup, ctx, assumptions);
+        }
+        // Avoid cloning just to probe: pairs on the path are few (bounded by
+        // the expanding-arm recursion depth), so a linear scan beats
+        // hash-of-whole-tree.
+        if assumptions.iter().any(|(a, b)| a == self && b == sup) {
+            return true;
+        }
+        let pair = (self.clone(), sup.clone());
         assumptions.insert(pair.clone());
-        let result = match (self, sup) {
+        let result = self.is_subtype_of_inner(sup, ctx, assumptions);
+        assumptions.remove(&pair);
+        result
+    }
+
+    /// The structural rules of [`Self::is_subtype_of`]. Callers must go
+    /// through `is_subtype_of`, which owns the fast paths and the
+    /// co-inductive assumption bookkeeping.
+    fn is_subtype_of_inner<C: TypeContext>(
+        &self,
+        sup: &NormalTy,
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> bool {
+        match (self, sup) {
             // μ-unfolding (equirecursive).
             (NormalTy::Mu { var, body }, _) => {
                 body.substitute(var, self)
@@ -1255,9 +1291,7 @@ impl NormalTy {
             }
 
             _ => false,
-        };
-        assumptions.remove(&pair);
-        result
+        }
     }
 
     // ── conversion out: NormalTy → Ty ──────────────────────────────────────

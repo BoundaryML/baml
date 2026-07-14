@@ -54,9 +54,8 @@ pub fn collect_block_attrs(
     let mut result = FxHashMap::default();
     for file in project.files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
-        let cst = baml_compiler_parser::syntax_tree(db, *file);
-        let (items, _, _) = ast::lower_file(&cst);
-        for item in &items {
+        let items = &baml_compiler2_hir::file_ast(db, *file).items;
+        for item in items {
             let (name, item_attrs) = match item {
                 ast::Item::Class(c) => (&c.name, &c.attributes),
                 ast::Item::Enum(e) => (&e.name, &e.attributes),
@@ -85,9 +84,8 @@ pub fn collect_alias_bodies(
     let mut result = FxHashMap::default();
     for file in project.files(db) {
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
-        let cst = baml_compiler_parser::syntax_tree(db, *file);
-        let (items, _, _) = ast::lower_file(&cst);
-        for item in &items {
+        let items = &baml_compiler2_hir::file_ast(db, *file).items;
+        for item in items {
             if let ast::Item::TypeAlias(a) = item {
                 let ty = a.type_expr.as_ref().map(PpirTy::from_type_expr).unwrap_or(
                     PpirTy::CannotBeStreamed {
@@ -191,8 +189,7 @@ fn make_raw_attr_no_args(name: &str) -> ast::RawAttribute {
 /// Compute synthetic `*$stream` AST items for a single file in one pass.
 #[salsa::tracked]
 pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems<'_> {
-    let cst = baml_compiler_parser::syntax_tree(db, file);
-    let (items, _, _) = ast::lower_file(&cst);
+    let items = &baml_compiler2_hir::file_ast(db, file).items;
 
     // Get HIR classification for the file's package (original types only)
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
@@ -215,7 +212,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
     let mut seen_class_names = FxHashSet::default();
     let mut seen_alias_names = FxHashSet::default();
 
-    for item in &items {
+    for item in items {
         match item {
             ast::Item::Class(c) => {
                 if c.name.ends_with("$stream") {
@@ -578,13 +575,26 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 // -- Canonical queries (original + *$stream) ----------------------------------
 
 /// Canonical semantic index: original AST items + PPIR synthetic *$stream items.
+///
+/// When a file has no synthetic items, the post-expansion index is byte-for-byte
+/// the pre-expansion one, so this delegates to HIR's already-computed index
+/// instead of rebuilding scopes/bindings/contributions a second time.
+pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> &FileSemanticIndex<'_> {
+    let expansion = ppir_expansion_items(db, file);
+    if expansion.items(db).is_empty() {
+        return baml_compiler2_hir::file_semantic_index(db, file);
+    }
+    file_semantic_index_expanded(db, file)
+}
+
+/// The merged (original + *$stream) index for files that actually have
+/// synthetic items. Callers must go through [`file_semantic_index`].
 #[salsa::tracked(returns(ref), no_eq)]
-pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
+fn file_semantic_index_expanded(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
-    let path = file.path(db);
-    let (mut items, lowering_diags, env_var_refs) =
-        ast::lower_file_with_path(&tree, Some(path.as_path()));
+    let ast_result = baml_compiler2_hir::file_ast(db, file);
+    let mut items = ast_result.items.clone();
 
     // Merge synthetic *$stream items
     let expansion = ppir_expansion_items(db, file);
@@ -592,8 +602,8 @@ pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'
 
     // Re-run HIR builder on merged items
     baml_compiler2_hir::SemanticIndexBuilder::new(db, file)
-        .with_lowering_diagnostics(lowering_diags)
-        .with_env_var_refs(env_var_refs)
+        .with_lowering_diagnostics(ast_result.diagnostics.clone())
+        .with_env_var_refs(ast_result.env_var_refs.clone())
         .build(&items, file_range)
 }
 
@@ -616,6 +626,11 @@ pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
 ///
 /// TIR should call this instead of `baml_compiler2_hir::body::function_body`
 /// so that PPIR-synthesized functions (like `$parse_stream`) are found.
+///
+/// Salsa-tracked (mirroring HIR's `function_body`): MIR lowering fetches the
+/// callee's body at every direct-call site, and the untracked version cloned
+/// the entire `ExprBody` arena out of the item tree each time.
+#[salsa::tracked]
 pub fn function_body<'db>(
     db: &'db dyn Db,
     function: baml_compiler2_hir::loc::FunctionLoc<'db>,

@@ -258,7 +258,6 @@ function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int
   !! 6917..6923: type mismatch: expected int, got string
 }
 lambda user.lambda_class_destructure_field_pattern_type_mismatch_span {
-  !! 6928..6929: type mismatch: expected int, got string
 }
 function user.class_destructure_formatter_trivia_preserved() -> int throws never {
   { : int

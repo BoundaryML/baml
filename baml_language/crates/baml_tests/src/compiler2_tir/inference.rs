@@ -542,7 +542,7 @@ implements ToJson for Dog {
     use baml_type::normalize::TypeContext;
     let pkg_id = PackageId::new(&db, Name::new("user"));
     let res_ctx = package_resolution_context(&db, pkg_id);
-    let aliases = std::collections::HashMap::new();
+    let aliases = baml_type::ResolvedAliases::default();
     let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
     let ctx = GlobalTypeContext {
         db: &db,
@@ -608,7 +608,7 @@ fn builtin_equals_compare_visible_from_user_package() {
     // The membership query walks the interface's package (`baml`) via the orphan
     // rule, so the builtin primitive impls are visible from the user package.
     let res_ctx = package_resolution_context(&db, user_pkg);
-    let aliases = std::collections::HashMap::new();
+    let aliases = baml_type::ResolvedAliases::default();
     let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
     let ctx = GlobalTypeContext {
         db: &db,

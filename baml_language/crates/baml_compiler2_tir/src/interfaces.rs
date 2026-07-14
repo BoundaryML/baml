@@ -12,6 +12,7 @@ mod impl_rules;
 
 use baml_base::{Literal, Name};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+use baml_type::ResolvedAliases;
 pub use coherence::*;
 pub use impl_rules::*;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -523,7 +524,7 @@ fn lower_interface_type_associated_bindings(
 pub fn match_ty_patterns(
     pairs: &[(&Ty, &Ty)],
     generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &ResolvedAliases,
 ) -> Option<TypeBindings> {
     let mut bindings = TypeBindings::default();
     for (pattern, concrete) in pairs {
@@ -539,7 +540,7 @@ pub fn match_ty_pattern_into(
     pattern: &Ty,
     concrete: &Ty,
     generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &ResolvedAliases,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     if let Ty::TypeVar(name, _) = pattern
@@ -661,7 +662,7 @@ fn match_union_members(
     pattern_members: &[Ty],
     concrete_members: &[Ty],
     generic_params: &[Name],
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &ResolvedAliases,
     bindings: &mut TypeBindings,
 ) -> Option<()> {
     let Some((pattern_head, pattern_tail)) = pattern_members.split_first() else {
@@ -709,7 +710,7 @@ fn bind_type_var(
     name: &Name,
     concrete: &Ty,
     bindings: &mut TypeBindings,
-    aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
+    aliases: &ResolvedAliases,
 ) -> Option<()> {
     match bindings.get(name) {
         Some(existing) if normalize::is_same_normalized_type(existing, concrete, aliases) => {
@@ -1162,20 +1163,10 @@ mod tests {
         let params = vec![Name::new("T")];
 
         assert!(
-            match_ty_patterns(
-                &[(&pattern, &good)],
-                &params,
-                &std::collections::HashMap::default()
-            )
-            .is_some()
+            match_ty_patterns(&[(&pattern, &good)], &params, &ResolvedAliases::default()).is_some()
         );
         assert!(
-            match_ty_patterns(
-                &[(&pattern, &bad)],
-                &params,
-                &std::collections::HashMap::default()
-            )
-            .is_none()
+            match_ty_patterns(&[(&pattern, &bad)], &params, &ResolvedAliases::default()).is_none()
         );
     }
 
@@ -1186,7 +1177,7 @@ mod tests {
         let side = Ty::Enum(qtn(&[], "Side"), TyAttr::default());
         let side_left = Ty::EnumVariant(qtn(&[], "Side"), Name::new("Left"), TyAttr::default());
         let other = Ty::EnumVariant(qtn(&[], "Coin"), Name::new("Heads"), TyAttr::default());
-        let aliases = std::collections::HashMap::default();
+        let aliases = ResolvedAliases::default();
 
         assert!(
             match_ty_patterns(&[(&side, &side_left)], &[], &aliases).is_some(),
@@ -1210,12 +1201,9 @@ mod tests {
         );
         let params = vec![Name::new("T")];
 
-        let bindings = match_ty_patterns(
-            &[(&pattern, &actual)],
-            &params,
-            &std::collections::HashMap::default(),
-        )
-        .expect("nested list arg should bind T");
+        let bindings =
+            match_ty_patterns(&[(&pattern, &actual)], &params, &ResolvedAliases::default())
+                .expect("nested list arg should bind T");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
     }
 
@@ -1244,7 +1232,7 @@ mod tests {
             match_ty_patterns(
                 &[(&pattern, &same_short_name)],
                 &[],
-                &std::collections::HashMap::default()
+                &ResolvedAliases::default()
             )
             .is_none(),
             "same short name in different namespaces must not match"
@@ -1257,12 +1245,9 @@ mod tests {
         let actual = Ty::Union(vec![string(), int()], TyAttr::default());
         let params = vec![Name::new("T")];
 
-        let bindings = match_ty_patterns(
-            &[(&pattern, &actual)],
-            &params,
-            &std::collections::HashMap::default(),
-        )
-        .expect("union members should be matched by type, not position");
+        let bindings =
+            match_ty_patterns(&[(&pattern, &actual)], &params, &ResolvedAliases::default())
+                .expect("union members should be matched by type, not position");
         assert_eq!(bindings.get(&Name::new("T")), Some(&int()));
     }
 }

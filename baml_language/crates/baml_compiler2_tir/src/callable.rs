@@ -390,15 +390,17 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
                 };
             };
             let inference = infer_scope_types(db, scope_id);
-            let res_ctx = package_resolution_context(db, pkg_id);
-            let aliases = crate::inference::package_alias_map(db, res_ctx);
+            let aliases = crate::inference::package_resolved_aliases(db, pkg_id);
             let facts = crate::throws_analysis::collect_escaping_throws(
                 &CallableThrowsAnalysis {
                     db,
                     pkg_id,
                     ns_context: &pkg_info.namespace_path,
                     inference,
-                    aliases: &aliases,
+                    // `throws_analysis` only expands alias chains — it never
+                    // calls the structural normalizer — so it needs just the
+                    // raw alias map, not the full `ResolvedAliases` bundle.
+                    aliases: &aliases.aliases,
                 },
                 body,
             );

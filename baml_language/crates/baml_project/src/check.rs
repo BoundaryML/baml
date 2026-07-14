@@ -59,8 +59,21 @@ pub fn collect_diagnostics(
 /// stable snapshot output.
 pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
+    // Diagnostics are only collected for *user* files. The builtin stdlib
+    // (`compiler2_extra_files`) ships with the compiler: eagerly type-checking
+    // every builtin scope on every `baml check` costs a fixed ~15% of cold
+    // compile time and can never produce a diagnostic the user can act on.
+    // Builtin scopes the user's code actually touches are still inferred
+    // lazily through the normal query path.
+    let builtin_files: std::collections::HashSet<SourceFile> =
+        baml_compiler2_hir::Db::compiler2_extra_files(db)
+            .map(|extra| extra.files(db).iter().copied().collect())
+            .unwrap_or_default();
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     for file in &source_files {
+        if builtin_files.contains(file) {
+            continue;
+        }
         diagnostics.extend(lsp2_check_file(db, *file));
     }
 

@@ -745,6 +745,7 @@ dependencies = [
  "indicatif",
  "insta",
  "libsui",
+ "mimalloc",
  "object 0.36.3",
  "regex",
  "reqwest",
@@ -833,6 +834,7 @@ dependencies = [
  "baml_compiler2_ppir",
  "baml_compiler2_tir",
  "baml_type",
+ "baml_workspace",
  "indexmap",
  "num-bigint",
  "rustc-hash 2.1.2",
@@ -853,6 +855,22 @@ dependencies = [
  "salsa",
  "smol_str 0.3.6",
  "text-size",
+]
+
+[[package]]
+name = "baml_compiler2_profile"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "baml_compiler2_tir",
+ "baml_compiler_diagnostics",
+ "baml_project",
+ "baml_workspace",
+ "clap",
+ "mimalloc",
+ "salsa",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -988,6 +1006,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_type",
  "baml_workspace",
  "bitflags 2.11.1",
  "indexmap",
@@ -4237,6 +4256,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4486,6 +4514,15 @@ dependencies = [
  "log",
  "objc",
  "paste",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d4139bb28d14ad1facf21d5eb8825051b326e172d216b39f6d31df53cc97862"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]

@@ -4,21 +4,58 @@
 //! aliases are resolved. Recursive aliases are represented using Mu types with
 //! equirecursive (co-inductive) subtyping.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use baml_base::Name;
+use baml_type::ResolvedAliases;
 
 use crate::ty::{FunctionParamMode, LiteralValue, MediaKind, QualifiedTypeName, Ty};
+
+// TEMPORARY: perf-audit counters. These count how many times the public
+// entry points and internal helpers fire during a compile. Values are
+// read by `baml_compiler2_profile` at the end of a run to quantify
+// redundant work. Remove after the audit lands.
+pub static PROF_IS_SAME_NORMALIZED_TYPE_CALLS: AtomicU64 = AtomicU64::new(0);
+pub static PROF_IS_SUBTYPE_OF_CALLS: AtomicU64 = AtomicU64::new(0);
+pub static PROF_FIND_RECURSIVE_ALIASES_CALLS: AtomicU64 = AtomicU64::new(0);
+pub static PROF_HAS_CYCLE_CALLS: AtomicU64 = AtomicU64::new(0);
+pub static PROF_NORMALIZE_CALLS: AtomicU64 = AtomicU64::new(0);
+
+/// Reset all counters. Called by `baml_compiler2_profile` between runs.
+pub fn perf_audit_reset() {
+    PROF_IS_SAME_NORMALIZED_TYPE_CALLS.store(0, Ordering::Relaxed);
+    PROF_IS_SUBTYPE_OF_CALLS.store(0, Ordering::Relaxed);
+    PROF_FIND_RECURSIVE_ALIASES_CALLS.store(0, Ordering::Relaxed);
+    PROF_HAS_CYCLE_CALLS.store(0, Ordering::Relaxed);
+    PROF_NORMALIZE_CALLS.store(0, Ordering::Relaxed);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Check if `sub` is a subtype of `sup`, resolving type aliases.
-pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeName, Ty>) -> bool {
-    let recursive = find_recursive_aliases(aliases);
-    let sub_norm = normalize(sub, aliases, &recursive);
-    let sup_norm = normalize(sup, aliases, &recursive);
+///
+/// Takes `&ResolvedAliases` (not a bare alias map) so the precomputed
+/// `recursive` set is reused. Before this change the entry point
+/// re-DFS'd the alias graph on every invocation via
+/// `find_recursive_aliases` — with ~1M calls per compile that was the
+/// single biggest lever on cold-compile time. See
+/// `crates/baml_compiler2_profile/README.md` for the audit that surfaced
+/// this.
+pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &ResolvedAliases) -> bool {
+    PROF_IS_SUBTYPE_OF_CALLS.fetch_add(1, Ordering::Relaxed);
+    // Reflexivity fast path: structurally identical types normalize
+    // identically, so they are always mutual subtypes. Skips the two
+    // allocation-heavy `normalize` walks for the common `T <: T` case.
+    if sub == sup {
+        return true;
+    }
+    let sub_norm = normalize(sub, &aliases.aliases, &aliases.recursive);
+    let sup_norm = normalize(sup, &aliases.aliases, &aliases.recursive);
     sub_norm.is_subtype_of(&sup_norm, &mut HashSet::new())
 }
 
@@ -28,20 +65,74 @@ pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeN
 /// This is not an assignability/subtyping check. Use it for invariant positions
 /// where two type spellings may differ but still denote the same type, such as
 /// interface field implementations.
-pub fn is_same_normalized_type(
-    lhs: &Ty,
-    rhs: &Ty,
-    aliases: &HashMap<QualifiedTypeName, Ty>,
-) -> bool {
-    let recursive = find_recursive_aliases(aliases);
-    normalize(lhs, aliases, &recursive).canonicalize()
-        == normalize(rhs, aliases, &recursive).canonicalize()
+///
+/// Takes `&ResolvedAliases` (not a bare alias map) so the precomputed
+/// `recursive` set is reused. See [`is_subtype_of`].
+pub fn is_same_normalized_type(lhs: &Ty, rhs: &Ty, aliases: &ResolvedAliases) -> bool {
+    PROF_IS_SAME_NORMALIZED_TYPE_CALLS.fetch_add(1, Ordering::Relaxed);
+    // Reflexivity fast path: structurally identical types trivially
+    // normalize to the same canonical form.
+    if lhs == rhs {
+        return true;
+    }
+    // Cheap definite-mismatch filter. MIR impl dispatch probes every
+    // candidate impl's pattern against the receiver through this function,
+    // so the overwhelmingly common case is a miss between two types with
+    // different nominal heads — decidable without the two allocation-heavy
+    // normalization walks.
+    if heads_definitely_differ(lhs, rhs) {
+        return false;
+    }
+    normalize(lhs, &aliases.aliases, &aliases.recursive).canonicalize()
+        == normalize(rhs, &aliases.aliases, &aliases.recursive).canonicalize()
+}
+
+/// True only when `lhs` and `rhs` provably normalize to different canonical
+/// forms, judged from their outermost constructor alone.
+///
+/// Soundness rests on `normalize_impl` being head-stable for every variant
+/// this decides on: a `Class` normalizes to a `Class` with the same qualified
+/// name (only its args are rewritten), primitives map to fixed leaves, and so
+/// on. Variants whose normal form can change shape entirely — `TypeAlias`
+/// (expands), `Union` (canonicalization can collapse it to a single member) —
+/// return `false` (undecided), as does any same-kind pair whose equality
+/// depends on inner structure.
+fn heads_definitely_differ(lhs: &Ty, rhs: &Ty) -> bool {
+    // Unstable heads: normalization may rewrite these into any other shape.
+    fn unstable(t: &Ty) -> bool {
+        matches!(
+            t,
+            Ty::TypeAlias(..)
+                | Ty::Union(..)
+                | Ty::AssociatedTypeProjection { .. }
+                | Ty::Media(baml_type::MediaKind::Generic, _)
+                | Ty::Infer { .. }
+        )
+    }
+    if unstable(lhs) || unstable(rhs) {
+        return false;
+    }
+    match (lhs, rhs) {
+        // Nominal heads: different names can never normalize equal.
+        (Ty::Class(q1, ..), Ty::Class(q2, ..))
+        | (Ty::Interface(q1, ..), Ty::Interface(q2, ..))
+        | (Ty::Enum(q1, _), Ty::Enum(q2, _)) => q1 != q2,
+        (Ty::EnumVariant(q1, v1, _), Ty::EnumVariant(q2, v2, _)) => q1 != q2 || v1 != v2,
+        (Ty::Literal(l1, _, _), Ty::Literal(l2, _, _)) => l1 != l2,
+        (Ty::Media(k1, _), Ty::Media(k2, _)) => k1 != k2,
+        (Ty::TypeVar(n1, _), Ty::TypeVar(n2, _)) => n1 != n2,
+        // Same shape, differing only in inner structure: undecided here.
+        _ if std::mem::discriminant(lhs) == std::mem::discriminant(rhs) => false,
+        // Different stable head constructors never normalize equal.
+        _ => true,
+    }
 }
 
 /// Find all recursive type aliases via DFS.
 pub fn find_recursive_aliases(
     aliases: &HashMap<QualifiedTypeName, Ty>,
 ) -> HashSet<QualifiedTypeName> {
+    PROF_FIND_RECURSIVE_ALIASES_CALLS.fetch_add(1, Ordering::Relaxed);
     let mut recursive = HashSet::new();
     for name in aliases.keys() {
         let mut visited = HashSet::new();
@@ -527,6 +618,7 @@ fn normalize(
     aliases: &HashMap<QualifiedTypeName, Ty>,
     recursive: &HashSet<QualifiedTypeName>,
 ) -> StructuralTy {
+    PROF_NORMALIZE_CALLS.fetch_add(1, Ordering::Relaxed);
     let mut expanding = HashSet::new();
     normalize_impl(ty, aliases, recursive, &mut expanding)
 }
@@ -696,6 +788,7 @@ fn has_cycle(
     visited: &mut HashSet<QualifiedTypeName>,
     stack: &mut HashSet<QualifiedTypeName>,
 ) -> bool {
+    PROF_HAS_CYCLE_CALLS.fetch_add(1, Ordering::Relaxed);
     if stack.contains(name) {
         return true;
     }
@@ -1275,6 +1368,18 @@ mod tests {
         Ty::TypeAlias(qn(name), TyAttr::default())
     }
 
+    /// Test-only: build a [`ResolvedAliases`] from a bare alias map,
+    /// computing the recursive set. Production code holds a
+    /// [`ResolvedAliases`] end-to-end (see `package_alias_map`); this
+    /// helper only exists so we don't have to rewrite every unit test.
+    fn ra(m: HashMap<QualifiedTypeName, Ty>) -> ResolvedAliases {
+        let recursive = find_recursive_aliases(&m);
+        ResolvedAliases {
+            aliases: m,
+            recursive,
+        }
+    }
+
     fn required_param(ty: Ty) -> FunctionParamTy {
         FunctionParamTy::required(None, ty)
     }
@@ -1285,7 +1390,7 @@ mod tests {
 
     #[test]
     fn same_normalized_type_accepts_union_reordering() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let int = Ty::Int {
             attr: TyAttr::default(),
         };
@@ -1300,7 +1405,7 @@ mod tests {
 
     #[test]
     fn same_normalized_type_rejects_narrower_union_member() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let int = Ty::Int {
             attr: TyAttr::default(),
         };
@@ -1341,6 +1446,7 @@ mod tests {
             TyAttr::default(),
         );
 
+        let aliases = ra(aliases);
         assert!(is_same_normalized_type(
             &type_alias("IntOrString"),
             &direct,
@@ -1350,7 +1456,7 @@ mod tests {
 
     #[test]
     fn same_normalized_type_ignores_required_function_param_names() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let int = Ty::Int {
             attr: TyAttr::default(),
         };
@@ -1379,7 +1485,7 @@ mod tests {
 
     #[test]
     fn same_normalized_type_sorts_optional_function_params() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let int = Ty::Int {
             attr: TyAttr::default(),
         };
@@ -1424,6 +1530,7 @@ mod tests {
                 attr: TyAttr::default(),
             },
         );
+        let aliases = ra(aliases);
 
         assert!(is_subtype_of(
             &type_alias("MyInt"),
@@ -1451,6 +1558,7 @@ mod tests {
             },
         );
         aliases.insert(qn("AnotherInt"), type_alias("MyInt"));
+        let aliases = ra(aliases);
 
         assert!(is_subtype_of(
             &type_alias("AnotherInt"),
@@ -1483,6 +1591,7 @@ mod tests {
                 TyAttr::default(),
             ),
         );
+        let aliases = ra(aliases);
 
         assert!(is_subtype_of(
             &Ty::Int {
@@ -1543,7 +1652,7 @@ mod tests {
 
     #[test]
     fn test_never_is_bottom() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
 
         assert!(is_subtype_of(
             &Ty::Never {
@@ -1586,7 +1695,7 @@ mod tests {
         // `Int <: Float` was removed entirely (lossy: i64 values past 2^53
         // are not exactly representable as f64). The widening, if needed,
         // must be explicit.
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         assert!(!is_subtype_of(
             &Ty::Int {
                 attr: TyAttr::default()
@@ -1613,7 +1722,7 @@ mod tests {
         // structural (i64 and heap BigInt are different representations).
         // Widening happens only at the `bigint × int` operators and the FFI
         // boundary, never as an implicit move/subtype coercion.
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         assert!(!is_subtype_of(
             &Ty::Int {
                 attr: TyAttr::default()
@@ -1627,7 +1736,7 @@ mod tests {
 
     #[test]
     fn test_literal_widens() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // Fresh and Regular should both be subtypes of their base primitive
         assert!(is_subtype_of(
             &Ty::Literal(LiteralValue::Int(42), Freshness::Fresh, TyAttr::default()),
@@ -1687,7 +1796,7 @@ mod tests {
 
     #[test]
     fn test_enum_variant_subtype_of_enum() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         assert!(is_subtype_of(
             &Ty::EnumVariant(qn("Color"), Name::new("Red"), TyAttr::default()),
             &Ty::Enum(qn("Color"), TyAttr::default()),
@@ -1706,7 +1815,7 @@ mod tests {
         // value has no boundary at which to widen its result, so the covariance
         // uses coercion-free relations (`EnumVariant <: Enum`). The coercive
         // `int → bigint` pair is rejected in both directions.
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
 
         let returns_literal_string = Ty::Function {
             params: vec![required_param(Ty::Int {
@@ -1800,7 +1909,7 @@ mod tests {
         // checked coercion-free. A function accepting the wider `Enum` stands
         // in for one accepting an `EnumVariant`. The coercive `int`/`bigint`
         // pair is rejected in both directions.
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
 
         let accepts_string = Ty::Function {
             params: vec![required_param(Ty::String {
@@ -1898,7 +2007,7 @@ mod tests {
 
     #[test]
     fn test_function_covariant_throws() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let f1 = Ty::Function {
             params: vec![required_param(Ty::Int {
                 attr: TyAttr::default(),
@@ -1933,7 +2042,7 @@ mod tests {
 
     #[test]
     fn test_function_optional_param_dropping_subtyping() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let with_two_optionals = Ty::Function {
             params: vec![
                 required_param(Ty::String {
@@ -1995,7 +2104,7 @@ mod tests {
 
     #[test]
     fn test_function_optional_param_order_is_insignificant() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let f1 = Ty::Function {
             params: vec![
                 required_param(Ty::String {
@@ -2055,7 +2164,7 @@ mod tests {
 
     #[test]
     fn test_function_optional_and_required_params_are_incomparable() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let optional = Ty::Function {
             params: vec![optional_param(
                 "value",
@@ -2093,7 +2202,7 @@ mod tests {
 
     #[test]
     fn test_optional_subtyping() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // int <: int?
         assert!(is_subtype_of(
             &Ty::Int {
@@ -2130,7 +2239,7 @@ mod tests {
 
     #[test]
     fn test_evolving_list_subtype_of_list() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // EvolvingList(int) <: List(int)
         assert!(is_subtype_of(
             &Ty::EvolvingList(
@@ -2167,7 +2276,7 @@ mod tests {
 
     #[test]
     fn test_evolving_list_is_invariant() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // `List`/`EvolvingList` are invariant. So `EvolvingList(int)` is NOT a
         // subtype of `List(bigint)` — `int` is not a subtype of `bigint`
         // anywhere, including inside containers.
@@ -2225,7 +2334,7 @@ mod tests {
 
     #[test]
     fn test_evolving_list_never_is_bottom() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // EvolvingList(Never) <: List(int) — empty evolving is assignable anywhere
         assert!(is_subtype_of(
             &Ty::EvolvingList(
@@ -2246,7 +2355,7 @@ mod tests {
 
     #[test]
     fn test_evolving_map_subtype_of_map() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // EvolvingMap(string, int) <: Map(string, int)
         assert!(is_subtype_of(
             &Ty::EvolvingMap(
@@ -2273,7 +2382,7 @@ mod tests {
 
     #[test]
     fn test_map_key_covariance_never() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // map<never, never> <: map<string, unknown> — empty map assignable anywhere
         assert!(is_subtype_of(
             &Ty::Map {
@@ -2322,7 +2431,7 @@ mod tests {
 
     #[test]
     fn test_map_key_covariance_literal() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // map<"name", "World"> <: map<string, unknown>
         assert!(is_subtype_of(
             &Ty::Map {
@@ -2379,7 +2488,7 @@ mod tests {
 
     #[test]
     fn test_map_invariant_no_int_to_float_value_widening() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // `Map` is invariant — the value-type recursion is coercion-free.
         // `int <: float` was removed entirely (as a lossy/unsound rule),
         // so `map<string, int>` is **not** a subtype of `map<string, float>`.
@@ -2408,7 +2517,7 @@ mod tests {
 
     #[test]
     fn test_map_invariant_no_int_to_bigint_value_widening() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // `Map` is invariant, and `int` is not a subtype of `bigint` anywhere
         // (no implicit numeric widening), so `map<string, int>` is not a
         // subtype of `map<string, bigint>`.
@@ -2437,7 +2546,7 @@ mod tests {
 
     #[test]
     fn test_map_key_not_supertype() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         // map<string, int> NOT <: map<"name", int> — widening key is not subtyping
         assert!(!is_subtype_of(
             &Ty::Map {
@@ -2608,7 +2717,7 @@ mod tests {
 
     #[test]
     fn test_union_of_int_literals_subtype_of_int() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let sub = Ty::Union(
             vec![
                 Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
@@ -2625,7 +2734,7 @@ mod tests {
 
     #[test]
     fn test_list_of_literal_union_subtype_of_list_int() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let sub = Ty::List(
             Box::new(Ty::Union(
                 vec![
@@ -2651,7 +2760,7 @@ mod tests {
         // past 2^53), so a union containing an int literal cannot widen to
         // `Float` even via the structural Union-vs-T rule (which requires
         // every member to be a subtype).
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let sub = Ty::Union(
             vec![
                 Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
@@ -2671,7 +2780,7 @@ mod tests {
 
     #[test]
     fn test_typevar_subtype_of_union_containing_same_typevar() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
         let union = Ty::Union(
             vec![
@@ -2688,7 +2797,7 @@ mod tests {
 
     #[test]
     fn test_typevar_not_subtype_of_union_without_same_typevar() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
         let union = Ty::Union(
             vec![
@@ -2707,7 +2816,7 @@ mod tests {
 
     #[test]
     fn test_typevar_subtype_of_optional_same_typevar() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
         let opt_t = Ty::optional(t.clone());
         // T <: T? should hold
@@ -2716,7 +2825,7 @@ mod tests {
 
     #[test]
     fn test_typevar_not_subtype_of_concrete() {
-        let aliases = HashMap::new();
+        let aliases = ResolvedAliases::default();
         let t = Ty::TypeVar(Name::new("T"), TyAttr::default());
         // T <: Int should NOT hold
         assert!(!is_subtype_of(

@@ -78,6 +78,9 @@ allowed_crates = [
     # validation helpers and caller-facing context.
     "baml",
     "baml_release",
+    # Standalone dev/profiling binary (never a library dependency);
+    # sits at the application boundary like the CLIs above.
+    "baml_compiler2_profile",
 ]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."

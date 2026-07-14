@@ -16,9 +16,8 @@
 //! never disagree, and type-expression lowering — which has no builder —
 //! constructs one directly.
 
-use std::collections::HashMap;
-
 use baml_base::Name;
+use baml_type::ResolvedAliases;
 
 use crate::{
     package_interface::PackageResolutionContext,
@@ -36,7 +35,11 @@ use crate::{
 pub struct GlobalTypeContext<'a, 'db> {
     pub db: &'db dyn crate::Db,
     pub res_ctx: &'db PackageResolutionContext<'db>,
-    pub aliases: &'a HashMap<QualifiedTypeName, Ty>,
+    /// Alias environment with the precomputed recursive-alias set. The
+    /// `is_same_normalized_type` / `is_subtype_of` entry points use
+    /// `aliases.recursive` directly instead of re-DFS'ing the alias
+    /// graph on every call — the redundant work this hoisting fixes.
+    pub aliases: &'a ResolvedAliases,
     /// A scope's type-variable bounds as interface-constraint conjunctions
     /// (`T: A & B`). The single representation both the builder and
     /// type-expression lowering hold.

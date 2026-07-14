@@ -208,7 +208,10 @@ pub fn render_diagnostic(
     config: &RenderConfig,
 ) -> String {
     match config.format {
-        DiagnosticFormat::Ariadne => render_ariadne(diagnostic, sources, file_paths, config.color),
+        DiagnosticFormat::Ariadne => {
+            let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
+            render_ariadne(diagnostic, sources, &mut cache, config.color)
+        }
         DiagnosticFormat::Concise => render_concise(diagnostic, sources, file_paths),
     }
 }
@@ -223,9 +226,20 @@ pub fn render_diagnostics(
     file_paths: &HashMap<FileId, PathBuf>,
     config: &RenderConfig,
 ) -> String {
+    // Build the ariadne source cache ONCE for the whole batch. Constructing
+    // it per diagnostic (each `Source::from` computes a line index for every
+    // file in the project) measured ~35% of `baml check` wall time on a
+    // warning-heavy project.
+    let mut ariadne_cache = matches!(config.format, DiagnosticFormat::Ariadne)
+        .then(|| SourceCache::new(sources.clone(), file_paths.clone()));
     diagnostics
         .iter()
-        .map(|d| render_diagnostic(d, sources, file_paths, config))
+        .map(|d| match (&config.format, &mut ariadne_cache) {
+            (DiagnosticFormat::Ariadne, Some(cache)) => {
+                render_ariadne(d, sources, cache, config.color)
+            }
+            _ => render_concise(d, sources, file_paths),
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -259,10 +273,13 @@ fn translate_span(span: Span, sources: &HashMap<FileId, String>) -> Span {
 }
 
 /// Render a diagnostic using Ariadne (pretty CLI output).
+///
+/// Takes a pre-built [`SourceCache`] so batch rendering shares one line-index
+/// computation across all diagnostics.
 fn render_ariadne(
     diagnostic: &Diagnostic,
     sources: &HashMap<FileId, String>,
-    file_paths: &HashMap<FileId, PathBuf>,
+    cache: &mut SourceCache,
     color: bool,
 ) -> String {
     // BAML CLI uses lowercase `error:` / `warning:` everywhere (matching
@@ -321,7 +338,7 @@ fn render_ariadne(
         .finish();
 
     // Render to string using SourceCache for proper filename display.
-    let rendered = render_report_to_string(&report, sources, file_paths);
+    let rendered = render_report_to_string(&report, cache);
 
     // See the rant above the `report_kind` match — ariadne paints the
     // `Custom` keyword unconditionally, so `with_color(false)` doesn't
@@ -427,17 +444,10 @@ fn render_concise(
 }
 
 /// Render an ariadne Report to a String using `SourceCache` for proper filename display.
-fn render_report_to_string(
-    report: &Report<'_, Span>,
-    sources: &HashMap<FileId, String>,
-    file_paths: &HashMap<FileId, PathBuf>,
-) -> String {
+fn render_report_to_string(report: &Report<'_, Span>, cache: &mut SourceCache) -> String {
     let mut output = Vec::new();
 
-    // Use SourceCache for proper filename display
-    let mut cache = SourceCache::new(sources.clone(), file_paths.clone());
-
-    report.write(&mut cache, &mut output).unwrap_or_else(|_| {
+    report.write(cache, &mut output).unwrap_or_else(|_| {
         output.clear();
         output.extend_from_slice(b"<error rendering diagnostic>");
     });
