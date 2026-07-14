@@ -18,7 +18,6 @@ pub mod contributions;
 pub mod diagnostic;
 pub mod file_package;
 pub mod ids;
-pub mod item_data;
 pub mod item_tree;
 pub mod loc;
 pub mod namespace;

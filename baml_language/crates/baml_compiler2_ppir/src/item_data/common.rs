@@ -5,9 +5,8 @@
 //! here rather than in `classes`/`functions`.
 
 use baml_base::Name;
+use baml_compiler2_hir::{item_tree::Attribute, type_ref::TypeRefId};
 use text_size::TextRange;
-
-use crate::{item_tree::Attribute, type_ref::TypeRefId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionParamData {

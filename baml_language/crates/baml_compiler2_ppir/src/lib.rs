@@ -9,6 +9,7 @@
 //! **No union simplification in PPIR.** Deferred to TIR.
 
 pub mod expand;
+pub mod item_data;
 pub mod ty;
 
 use std::sync::Arc;
@@ -17,7 +18,7 @@ use baml_base::{Name, SourceFile, attr::TyAttrValue};
 use baml_compiler2_ast as ast;
 use baml_compiler2_hir::{
     contributions::FileSymbolContributions,
-    item_tree::ItemTree,
+    item_tree::{ItemTree, ItemTreeSourceMap},
     namespace::{NameConflict, NamespaceId, NamespaceItems},
     package::{PackageId, PackageItems, PackageItemsExtra},
     scope::ScopeId,
@@ -610,6 +611,12 @@ pub fn file_symbol_contributions(
 pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
+}
+
+/// Canonical item-tree source map (original + *$stream types).
+pub fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
+    let index = file_semantic_index(db, file);
+    Arc::clone(&index.item_tree_source_map)
 }
 
 /// Canonical function body — uses PPIR's item tree (includes synthetic companions).

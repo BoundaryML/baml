@@ -11,8 +11,7 @@
 //! this query's value unless it actually reorders declarations.
 
 use baml_base::SourceFile;
-
-use crate::loc::{
+use baml_compiler2_hir::loc::{
     ClassLoc, ClientLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
     TemplateStringLoc, TestLoc, TypeAliasLoc,
 };

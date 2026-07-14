@@ -1,12 +1,12 @@
 use baml_base::Name;
-use text_size::TextRange;
-
-use crate::{
-    item_data::common::{FieldData, FunctionParamData},
+use baml_compiler2_hir::{
     item_tree::Attribute,
     loc::{FunctionLoc, InterfaceLoc},
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
 };
+use text_size::TextRange;
+
+use crate::item_data::common::{FieldData, FunctionParamData};
 
 /// Span-free semantic data for an `interface` declaration.
 #[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]

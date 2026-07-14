@@ -1,13 +1,13 @@
 use baml_base::Name;
 use baml_compiler2_ast as ast;
-use text_size::TextRange;
-
-use crate::{
-    item_data::common::{
-        AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData,
-    },
+use baml_compiler2_hir::{
     loc::FunctionLoc,
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
+};
+use text_size::TextRange;
+
+use crate::item_data::common::{
+    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FunctionParamData,
 };
 
 /// Span-free semantic data for a function's *signature*.

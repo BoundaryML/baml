@@ -1,13 +1,13 @@
 //! Item ↔ scope queries.
 //!
 //! The builder opens an item's scope in the same step that allocates the item, so
-//! the link is recorded directly ([`Scope::owner`](crate::scope::Scope::owner)).
+//! the link is recorded directly ([`Scope::owner`](baml_compiler2_hir::scope::Scope::owner)).
 //! Before that, consumers recovered it by scanning for a scope whose `range`
 //! equalled the item's `span` — which made item spans load-bearing *semantic
 //! identity* rather than diagnostic metadata, and blocked moving them into the
 //! source map. These queries replace that scan.
 
-use crate::{
+use baml_compiler2_hir::{
     loc::{
         ClassLoc, ClientLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
         TemplateStringLoc, TestLoc, TypeAliasLoc,

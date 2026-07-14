@@ -362,7 +362,7 @@ fn type_alias_loc<'db>(
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::TypeAliasLoc<'db> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let (id, _) = item_tree
         .type_aliases
         .iter()
@@ -383,8 +383,8 @@ fn whitespace_edit_preserves_item_data_but_moves_spans() {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
         (
-            baml_compiler2_hir::item_data::type_alias_data(db, loc).clone(),
-            baml_compiler2_hir::item_data::type_alias_source_map(db, loc).clone(),
+            baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone(),
+            baml_compiler2_ppir::item_data::type_alias_source_map(db, loc).clone(),
         )
     };
 
@@ -396,8 +396,8 @@ fn whitespace_edit_preserves_item_data_but_moves_spans() {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
         (
-            baml_compiler2_hir::item_data::type_alias_data(db, loc).clone(),
-            baml_compiler2_hir::item_data::type_alias_source_map(db, loc).clone(),
+            baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone(),
+            baml_compiler2_ppir::item_data::type_alias_source_map(db, loc).clone(),
         )
     };
 
@@ -422,7 +422,7 @@ fn semantic_edit_changes_item_data() {
     let data_before = {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
-        baml_compiler2_hir::item_data::type_alias_data(db, loc).clone()
+        baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone()
     };
 
     file.set_text(test_db.db_mut())
@@ -431,7 +431,7 @@ fn semantic_edit_changes_item_data() {
     let data_after = {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
-        baml_compiler2_hir::item_data::type_alias_data(db, loc).clone()
+        baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone()
     };
 
     assert_ne!(data_before, data_after);
@@ -442,7 +442,7 @@ fn class_loc<'db>(
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::ClassLoc<'db> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let (id, _) = item_tree
         .classes
         .iter()
@@ -456,7 +456,7 @@ fn function_loc<'db>(
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::FunctionLoc<'db> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let (id, _) = item_tree
         .functions
         .iter()
@@ -474,8 +474,8 @@ type ClassFingerprint = (
     baml_base::Name,
     Vec<Option<baml_compiler2_hir::type_ref::TypeRefId>>,
     baml_compiler2_hir::type_ref::TypeRefStore,
-    Vec<baml_compiler2_hir::item_data::FieldData>,
-    Vec<baml_compiler2_hir::item_data::ImplementsData>,
+    Vec<baml_compiler2_ppir::item_data::FieldData>,
+    Vec<baml_compiler2_ppir::item_data::ImplementsData>,
     Vec<baml_compiler2_hir::item_tree::Attribute>,
 );
 
@@ -484,7 +484,7 @@ fn class_fingerprint(
     file: SourceFile,
     name: &str,
 ) -> ClassFingerprint {
-    let data = baml_compiler2_hir::item_data::class_data(db, class_loc(db, file, name));
+    let data = baml_compiler2_ppir::item_data::class_data(db, class_loc(db, file, name));
     (
         data.name.clone(),
         data.generic_param_bounds.clone(),
@@ -565,7 +565,7 @@ fn editing_a_function_body_preserves_its_signature_data() {
 
     let before = {
         let db = test_db.db();
-        baml_compiler2_hir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
+        baml_compiler2_ppir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
     };
 
     file.set_text(test_db.db_mut())
@@ -573,7 +573,7 @@ fn editing_a_function_body_preserves_its_signature_data() {
 
     let after = {
         let db = test_db.db();
-        baml_compiler2_hir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
+        baml_compiler2_ppir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
     };
 
     assert_eq!(
@@ -596,18 +596,36 @@ fn editing_a_function_body_preserves_its_signature_data() {
 fn function_scope_index_agrees_with_the_span_join_it_replaces() {
     let mut test_db = IncrementalTestDb::new();
 
+    // Includes a declarative LLM function: those synthesize companion functions,
+    // and `scope_at_offset`'s own docs note companions "share the same span as
+    // their parent" — so the span-join was ambiguous exactly there. If the index
+    // and the scan disagree for any of these, migrating the call sites is a
+    // behavior change and needs to be handled deliberately.
     let file = test_db.db_mut().add_file(
         "test.baml",
         "function Add(x: int, y: int) -> int {\n  x + y\n}\n\n\
          function Sub(x: int, y: int) -> int {\n  x - y\n}\n\n\
-         class Holder {\n  n int\n\n  function get(self) -> int {\n    self.n\n  }\n}\n",
+         class Holder {\n  n int\n\n  function get(self) -> int {\n    self.n\n  }\n}\n\n\
+         function Greet(name: string) -> string {\n  \
+         client GPT4\n  prompt #\"Hello {{name}}\"#\n}\n",
     );
 
     let db = test_db.db();
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
-    assert!(!item_tree.functions.is_empty());
+    // Guard against a vacuous test: the declarative `Greet` must actually have
+    // synthesized companions, or the ambiguous case is not being exercised.
+    let companions = item_tree
+        .functions
+        .values()
+        .filter(|f| !matches!(f.origin, baml_compiler2_ast::FunctionOrigin::UserDefined))
+        .count();
+    assert!(
+        companions > 0,
+        "fixture should synthesize companions; got {} functions, none synthetic",
+        item_tree.functions.len()
+    );
 
     for (id, func) in item_tree.functions.iter() {
         let loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *id);
@@ -625,7 +643,7 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
             })
             .map(|scope| scope.file_scope_id(db));
 
-        let indexed = baml_compiler2_hir::item_data::function_scope(db, loc)
+        let indexed = baml_compiler2_ppir::item_data::function_scope(db, loc)
             .map(|scope| scope.file_scope_id(db));
 
         assert_eq!(
@@ -651,7 +669,7 @@ fn function_scope_survives_a_whitespace_edit() {
     let before = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Add");
-        baml_compiler2_hir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
+        baml_compiler2_ppir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
     };
 
     file.set_text(test_db.db_mut())
@@ -660,7 +678,7 @@ fn function_scope_survives_a_whitespace_edit() {
     let after = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Add");
-        baml_compiler2_hir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
+        baml_compiler2_ppir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
     };
 
     assert!(before.is_some());
@@ -681,10 +699,10 @@ fn scope_owner_round_trips() {
 
     let db = test_db.db();
     let loc = function_loc(db, file, "Add");
-    let scope = baml_compiler2_hir::item_data::function_scope(db, loc).expect("scope");
+    let scope = baml_compiler2_ppir::item_data::function_scope(db, loc).expect("scope");
 
     assert_eq!(
-        baml_compiler2_hir::item_data::scope_owner(db, scope),
-        Some(baml_compiler2_hir::item_data::ScopeOwner::Function(loc)),
+        baml_compiler2_ppir::item_data::scope_owner(db, scope),
+        Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(loc)),
     );
 }

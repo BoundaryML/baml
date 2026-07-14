@@ -1,6 +1,5 @@
 use baml_base::Name;
-
-use crate::loc::ClientLoc;
+use baml_compiler2_hir::loc::ClientLoc;
 
 /// Semantic data for a `client` declaration.
 ///

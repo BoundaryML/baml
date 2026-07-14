@@ -1,7 +1,6 @@
 use baml_base::Name;
+use baml_compiler2_hir::{item_tree::Attribute, loc::EnumLoc};
 use text_size::TextRange;
-
-use crate::{item_tree::Attribute, loc::EnumLoc};
 
 /// Span-free semantic data for an `enum` declaration.
 ///

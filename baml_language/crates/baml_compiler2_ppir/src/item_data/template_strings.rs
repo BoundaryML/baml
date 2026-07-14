@@ -1,11 +1,11 @@
 use baml_base::Name;
-use text_size::TextRange;
-
-use crate::{
-    item_data::common::FunctionParamData,
+use baml_compiler2_hir::{
     loc::TemplateStringLoc,
     type_ref::{TypeRefBuilder, TypeRefSourceMap, TypeRefStore},
 };
+use text_size::TextRange;
+
+use crate::item_data::common::FunctionParamData;
 
 /// Span-free semantic data for a `template_string` declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,13 +1,13 @@
 use baml_base::Name;
-use text_size::TextRange;
-
-use crate::{
-    item_data::common::{
-        AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, InterfaceFieldLinkData,
-        InterfaceFieldLinkSourceMap,
-    },
+use baml_compiler2_hir::{
     loc::{ClassLoc, FunctionLoc, ImplLoc},
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
+};
+use text_size::TextRange;
+
+use crate::item_data::common::{
+    AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, InterfaceFieldLinkData,
+    InterfaceFieldLinkSourceMap,
 };
 
 /// What an `implements` block applies to.
@@ -89,7 +89,7 @@ fn lower<'db>(
     db: &'db dyn crate::Db,
     block: ImplLoc<'db>,
 ) -> (ImplBlockData<'db>, ImplBlockSourceMap) {
-    use crate::item_tree::ImplSubject;
+    use baml_compiler2_hir::item_tree::ImplSubject;
 
     let file = block.file(db);
     let item_tree = crate::file_item_tree(db, file);

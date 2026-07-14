@@ -1,8 +1,7 @@
 use baml_base::Name;
 use baml_compiler2_ast as ast;
+use baml_compiler2_hir::loc::LetLoc;
 use text_size::TextRange;
-
-use crate::loc::LetLoc;
 
 /// Span-free semantic data for a top-level `let` binding.
 ///

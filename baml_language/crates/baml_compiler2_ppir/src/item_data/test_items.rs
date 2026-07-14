@@ -1,6 +1,5 @@
 use baml_base::Name;
-
-use crate::{item_tree::TestArgValue, loc::TestLoc};
+use baml_compiler2_hir::{item_tree::TestArgValue, loc::TestLoc};
 
 /// Semantic data for a `test` declaration.
 ///

@@ -13,7 +13,7 @@
 //! would hand out *stale* spans forever after a whitespace-only edit. Hence
 //! every item is split in two:
 //!
-//! - `*_data` — semantic, span-free, uses [`TypeRef`](crate::type_ref::TypeRef).
+//! - `*_data` — semantic, span-free, uses [`TypeRef`](baml_compiler2_hir::type_ref::TypeRef).
 //!   This is what type checking reads.
 //! - `*_source_map` — spans only. This is what diagnostics and the IDE read.
 //!
