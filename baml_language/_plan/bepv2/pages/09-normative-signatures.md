@@ -230,7 +230,7 @@ class TranscriptImport {
 ## Tool capabilities — [lang] [stdlib]
 
 ```baml
-interface ToolCallingProvider requires GenerationProvider {
+interface ToolCallingProvider requires Provider {
   function begin<T>(self, task: Task<T>) -> Transcript
     throws baml.errors.ToolError | baml.errors.UnknownError
   function step<T>(self, transcript: Transcript, tools: Tool[]) -> T | ToolCalls
@@ -254,6 +254,12 @@ class ToolCall { id: string, name: string, args: json }
 class ToolResult { id: string, output: json, is_error: bool }
 class ToolCalls { calls: ToolCall[] }
 ```
+
+`ToolCallingProvider` does not imply a native vendor tool API. Native adapters
+send `Tool[]` through provider request fields. Prompt-backed adapters render
+`${ctx.output_format}` for `T | ToolCalls`, append the active tools' concrete
+JSON Schemas, and SAP-parse the chosen branch. This rendering happens after
+the per-step tool roster is resolved.
 
 ## Agent driver contracts — [stdlib]
 

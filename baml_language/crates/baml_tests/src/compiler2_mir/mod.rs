@@ -55,6 +55,33 @@ fn binary_add() {
 }
 
 #[test]
+fn interface_membership_stays_a_runtime_interface_query() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+        interface Marker {}
+        class Widget { implements Marker {} }
+        implements Marker for int {}
+
+        function is_marker(value: unknown) -> bool {
+            value is Marker
+        }
+        "#,
+    );
+    let mir = render_mir(&db, file);
+
+    assert!(
+        mir.contains("is_type(copy _1, Marker)"),
+        "interface membership must remain an interface IsType query:\n{mir}"
+    );
+    assert!(
+        !mir.contains("is_type(copy _1, Widget)"),
+        "MIR must not enumerate known class implementors:\n{mir}"
+    );
+}
+
+#[test]
 fn if_else() {
     let mut db = make_db();
     let file = db.add_file(

@@ -583,13 +583,13 @@ impl BexEngine {
     /// parameter `RuntimeTy` for the top-level value so a `BexExternalValue::HostValue`
     /// can be bound to its function signature as an [`Object::HostClosure`].
     ///
-    /// `expected_ty` is honoured only at the top level — nested array
-    /// elements / map values / instance fields fall back to the untyped path
-    /// (`None`). Adding type-driven element handling here would require
-    /// re-traversing the declared `RuntimeTy` in lockstep with the value; we don't
-    /// yet support host callables in collection positions, so the
-    /// type-context is dropped on entry into containers and any nested
-    /// `HostValue` is rejected with `EngineError::CannotConvert`.
+    /// `expected_ty` is also threaded through a uniquely identified list/map
+    /// member (including nullable containers) and through instance fields.
+    /// Besides enabling nested typed values, this preserves the declared
+    /// container metadata when an external producer cannot encode it precisely
+    /// (for example SAP's recursive `json` alias). Ambiguous unions containing
+    /// multiple list/map members retain the external metadata because there is
+    /// no sound declared member to select.
     pub(crate) fn convert_external_to_vm_value_with_ty<T: RootHaver + TlabHolder>(
         &self,
         holder: &mut impl HeapPermit<T>,
@@ -662,9 +662,11 @@ impl BexEngine {
                 element_type,
                 items,
             } => {
+                let expected_element = expected_ty.and_then(unique_expected_list_element);
+                let element_type = expected_element.cloned().unwrap_or(element_type);
                 let values = items
                     .into_iter()
-                    .map(|v| self.convert_external_to_vm_value(holder, v))
+                    .map(|v| self.convert_external_to_vm_value_with_ty(holder, v, expected_element))
                     .collect::<Result<Vec<_>, _>>()?;
                 Value::object(
                     holder
@@ -678,10 +680,15 @@ impl BexEngine {
                 value_type,
                 entries,
             } => {
+                let expected_map = expected_ty.and_then(unique_expected_map_types);
+                let (key_type, value_type) = expected_map
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .unwrap_or((key_type, value_type));
+                let expected_value = expected_map.map(|(_, value)| value);
                 let values = entries
                     .into_iter()
                     .map(|(k, v)| {
-                        self.convert_external_to_vm_value(holder, v)
+                        self.convert_external_to_vm_value_with_ty(holder, v, expected_value)
                             .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
                     })
                     .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
@@ -1594,6 +1601,49 @@ pub(crate) fn peel_function_ty(ty: &RuntimeTy) -> Option<&RuntimeTy> {
                         return None;
                     }
                     found = Some(f);
+                }
+            }
+            found
+        }
+        _ => None,
+    }
+}
+
+/// Return the element type when `ty` contains exactly one list-shaped member.
+/// This peels nullable unions (`T[] | null`) while refusing ambiguous unions
+/// such as `int[] | string[]`, whose runtime value must retain its own metadata.
+fn unique_expected_list_element(ty: &RuntimeTy) -> Option<&RuntimeTy> {
+    match ty {
+        RuntimeTy::List(element, _) => Some(element),
+        RuntimeTy::Union(members, _) => {
+            let mut found = None;
+            for member in members {
+                if let Some(element) = unique_expected_list_element(member) {
+                    if found.is_some() {
+                        return None;
+                    }
+                    found = Some(element);
+                }
+            }
+            found
+        }
+        _ => None,
+    }
+}
+
+/// Return the key/value types when `ty` contains exactly one map-shaped member.
+/// See [`unique_expected_list_element`] for the ambiguity rule.
+fn unique_expected_map_types(ty: &RuntimeTy) -> Option<(&RuntimeTy, &RuntimeTy)> {
+    match ty {
+        RuntimeTy::Map { key, value, .. } => Some((key, value)),
+        RuntimeTy::Union(members, _) => {
+            let mut found = None;
+            for member in members {
+                if let Some(map_types) = unique_expected_map_types(member) {
+                    if found.is_some() {
+                        return None;
+                    }
+                    found = Some(map_types);
                 }
             }
             found
@@ -2678,6 +2728,62 @@ pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue 
                 .map(|(k, v)| (k.clone(), test_arg_to_external(v)))
                 .collect(),
         },
+    }
+}
+
+#[cfg(test)]
+mod expected_container_type_tests {
+    use baml_type::RuntimeTy;
+
+    use super::{unique_expected_list_element, unique_expected_map_types};
+
+    #[test]
+    fn direct_and_nullable_lists_select_the_element_type() {
+        let direct = RuntimeTy::list(RuntimeTy::string());
+        assert_eq!(
+            unique_expected_list_element(&direct),
+            Some(&RuntimeTy::string())
+        );
+
+        let nullable = RuntimeTy::optional(RuntimeTy::list(RuntimeTy::int()));
+        assert_eq!(
+            unique_expected_list_element(&nullable),
+            Some(&RuntimeTy::int())
+        );
+    }
+
+    #[test]
+    fn multiple_list_members_are_ambiguous() {
+        let ty = RuntimeTy::union(vec![
+            RuntimeTy::list(RuntimeTy::int()),
+            RuntimeTy::list(RuntimeTy::string()),
+        ]);
+        assert!(unique_expected_list_element(&ty).is_none());
+    }
+
+    #[test]
+    fn direct_and_nullable_maps_select_key_and_value_types() {
+        let direct = RuntimeTy::map(RuntimeTy::string(), RuntimeTy::int());
+        let (key, value) = unique_expected_map_types(&direct).expect("direct map");
+        assert_eq!(key, &RuntimeTy::string());
+        assert_eq!(value, &RuntimeTy::int());
+
+        let nullable = RuntimeTy::optional(RuntimeTy::map(
+            RuntimeTy::string(),
+            RuntimeTy::list(RuntimeTy::bool()),
+        ));
+        let (key, value) = unique_expected_map_types(&nullable).expect("nullable map");
+        assert_eq!(key, &RuntimeTy::string());
+        assert_eq!(value, &RuntimeTy::list(RuntimeTy::bool()));
+    }
+
+    #[test]
+    fn multiple_map_members_are_ambiguous() {
+        let ty = RuntimeTy::union(vec![
+            RuntimeTy::map(RuntimeTy::string(), RuntimeTy::int()),
+            RuntimeTy::map(RuntimeTy::string(), RuntimeTy::string()),
+        ]);
+        assert!(unique_expected_map_types(&ty).is_none());
     }
 }
 

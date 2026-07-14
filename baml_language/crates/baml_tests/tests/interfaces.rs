@@ -5338,6 +5338,261 @@ fn cross_file_required_parent_is_satisfied_by_out_of_body_impl() {
     assert_no_compile_errors_multi(files);
 }
 
+#[tokio::test]
+async fn in_body_and_cross_file_impls_share_runtime_registry() {
+    let program = baml_tests::engine::compile_multi_file(&[
+        (
+            "interfaces.baml",
+            r#"
+                interface Provider {
+                    function name(self) -> string throws never
+                }
+                interface ToolCallingProvider requires Provider {
+                    function tool_name(self) -> string throws never
+                }
+            "#,
+        ),
+        (
+            "providers/in_body.baml",
+            r#"
+                class InBodyProvider {
+                    implements Provider {
+                        function name(self) -> string { return "in-body" }
+                    }
+                    implements ToolCallingProvider {
+                        function tool_name(self) -> string { return "in-body" }
+                    }
+                }
+            "#,
+        ),
+        (
+            "providers/example/provider.baml",
+            r#"
+                class ExampleProvider {}
+                implements Provider for ExampleProvider {
+                    function name(self) -> string { return "example" }
+                }
+            "#,
+        ),
+        (
+            "providers/example/tools.baml",
+            r#"
+                implements ToolCallingProvider for ExampleProvider {
+                    function tool_name(self) -> string { return "search" }
+                }
+            "#,
+        ),
+        (
+            "main.baml",
+            r#"
+                function narrow(provider: Provider) -> string {
+                    match (provider) {
+                        let tools: ToolCallingProvider => tools.tool_name(),
+                        _ => "NO MATCH",
+                    }
+                }
+                function main() -> string {
+                    let in_body: Provider = InBodyProvider {}
+                    let cross_file: Provider = ExampleProvider {}
+                    return narrow(in_body) + "|" + narrow(cross_file)
+                }
+            "#,
+        ),
+    ]);
+    let output = baml_tests::engine::run_compiled(
+        program,
+        "main",
+        baml_tests::engine::IndexMap::new(),
+        false,
+    )
+    .await;
+
+    assert_eq!(
+        output.result.unwrap(),
+        BexExternalValue::String("in-body|search".into())
+    );
+}
+
+#[tokio::test]
+async fn interface_match_uses_runtime_registry_for_mixed_class_and_primitive_impls() {
+    // Interface membership is an open, directed query. Once a class implements
+    // `Marker`, a class-only compiler index must not shadow the equally valid
+    // primitive impl and make the `int` arm fail.
+    let output = baml_test!(
+        r#"
+interface Marker {}
+
+class Widget {
+    implements Marker {}
+}
+
+implements Marker for int {}
+
+function matches_marker(value: unknown) -> bool {
+    value is Marker
+}
+
+function main() -> int {
+    (if (matches_marker(7)) { 1 } else { 0 })
+        + (if (matches_marker(Widget {})) { 2 } else { 0 })
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(3));
+}
+
+#[tokio::test]
+async fn interface_match_uses_runtime_registry_for_container_blanket_impls() {
+    // Implementor *types* are not enumerable: this one impl denotes infinitely
+    // many realized list types. Runtime matching must prove the concrete
+    // `int[]` membership directly from the canonical impl rule.
+    let output = baml_test!(
+        r#"
+interface Sequence<T> {}
+
+implements<T> Sequence<T> for T[] {}
+
+class IntSequence {
+    implements Sequence<int> {}
+}
+
+function is_int_sequence(value: unknown) -> bool {
+    value is Sequence<int>
+}
+
+function main() -> int {
+    (if (is_int_sequence([1, 2])) { 1 } else { 0 })
+        + (if (is_int_sequence(["no"])) { 2 } else { 0 })
+        + (if (is_int_sequence(IntSequence {})) { 4 } else { 0 })
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(5));
+}
+
+#[tokio::test]
+async fn interface_match_uses_runtime_registry_for_bounded_blanket_impls() {
+    // A blanket impl over `T` is selected by proving the bound for the actual
+    // runtime type. Both a primitive and a class satisfy that bound here.
+    let output = baml_test!(
+        r#"
+interface Base {}
+interface Derived {}
+
+implements Base for int {}
+implements<T extends Base> Derived for T {}
+
+class Widget {
+    implements Base {}
+}
+
+class Other {}
+
+function is_derived(value: unknown) -> bool {
+    value is Derived
+}
+
+function main() -> int {
+    (if (is_derived(7)) { 1 } else { 0 })
+        + (if (is_derived(Widget {})) { 2 } else { 0 })
+        + (if (is_derived(Other {})) { 4 } else { 0 })
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(3));
+}
+
+#[tokio::test]
+async fn runtime_interface_membership_respects_associated_type_pins() {
+    let output = baml_test!(
+        r#"
+interface Source {
+    type Item
+}
+
+implements Source for int {
+    type Item = string
+}
+
+class IntSource {
+    implements Source {
+        type Item = int
+    }
+}
+
+function is_string_source(value: unknown) -> bool {
+    value is Source<Item = string>
+}
+
+function main() -> int {
+    (if (is_string_source(7)) { 1 } else { 0 })
+        + (if (is_string_source(IntSource {})) { 2 } else { 0 })
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
+#[tokio::test]
+async fn stdlib_interface_match_keeps_builtin_primitive_impl_when_user_class_also_implements() {
+    // Exact cross-package shape from the soundness report: the stdlib owns the
+    // primitive impl, while user code adds a class impl. Adding `Score` must not
+    // turn the open `Comparable` predicate into a user-class-only enumeration.
+    let output = baml_test!(
+        r#"
+class Score {
+    points: int
+    implements baml.Comparable {
+        type CompareError = never
+        function compare(self, other: Self) -> int throws never {
+            self.points - other.points
+        }
+    }
+}
+
+function is_comparable(value: unknown) -> bool {
+    value is baml.Comparable<CompareError = never>
+}
+
+function main() -> int {
+    (if (is_comparable(7)) { 1 } else { 0 })
+        + (if (is_comparable(Score { points: 7 })) { 2 } else { 0 })
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(3));
+}
+
+#[tokio::test]
+async fn catch_interface_uses_runtime_registry_for_non_class_implementor() {
+    // Catch lowering shares pattern-test machinery with `is`/`match`, but keep
+    // a dedicated regression because exception dispatch has historically had
+    // separate control-flow plumbing.
+    let output = baml_test!(
+        baml: r#"
+interface Marker {}
+
+class Widget {
+    implements Marker {}
+}
+
+implements Marker for int {}
+
+function boom() -> never throws unknown {
+    throw 7
+}
+
+function main() -> int {
+    boom() catch (error) {
+        let marker: Marker => 1,
+        _ => 0,
+    }
+}
+"#
+    );
+    assert_eq!(output.result.unwrap(), BexExternalValue::Int(1));
+}
+
 #[test]
 fn in_body_inherent_method_does_not_implicitly_satisfy_interface() {
     // `Thing.label` is an inherent method (outside the `implements Label` block),

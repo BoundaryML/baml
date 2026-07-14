@@ -186,3 +186,27 @@ Anthropic adapters, serialize them through those providers' native APIs, and
 pair the deterministic scenario with live conformance tests. The application
 and provider tool lists must remain separate even if a vendor serializes them
 into one wire-level array.
+
+### D-011: Prompt/SAP tool capability is lifted at runtime
+
+**Normative design:** a concrete provider that supports prompt/SAP tool turns
+implements `ToolCallingProvider` explicitly, potentially through a reusable
+out-of-body implementation. `run_agent` retains `Task<T, P>` and statically
+requires that capability.
+
+**Reference-code spelling:** today's executable `Task<T>` erases its provider
+type. `run_agent` first selects an existing `ToolCallingProvider`; otherwise it
+wraps a `GenerationProvider` in `PromptToolProvider` at runtime. The wrapper
+re-renders the task recipe with `ctx.output_format` for `T | ToolCalls` and the
+active tools' JSON Schemas on every step.
+
+**Why:** the temp package cannot express `Task<T, P>` or the associated
+capability-preserving generic adapter yet. The runtime lift exercises the
+intended requests, union parsing, dispatch, and transcript behavior without
+weakening the normative static API.
+
+**Follow-up:** preserve `P` in `Task<T, P>`, provide a standard reusable
+prompt-tool implementation that concrete providers can adopt out of body, and
+make the safe driver reject providers that declare neither native nor
+prompt-backed `ToolCallingProvider`. Keep the unsafe runtime-negotiated driver
+as the explicit erased escape hatch.

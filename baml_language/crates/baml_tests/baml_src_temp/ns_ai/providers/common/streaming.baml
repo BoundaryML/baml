@@ -9,6 +9,13 @@ function primitive_stream<TPartial, T>(
   let request = primitive.build_request_stream(specialized, task.output_type()) catch (e) {
     _ => throw baml.errors.UnknownError { data: e, message: [provider_name + " stream request failed"] },
   };
+  log.info(baml.json.stringify({
+    "event": "llm.stream.request",
+    "provider": provider_name,
+    "method": request.method,
+    "url": request.url,
+    "body": request.body,
+  }));
   let sse = baml.http.fetch_sse(request) catch (e) {
     _ => throw baml.errors.UnknownError { data: e, message: [provider_name + " stream open failed"] },
   };
@@ -22,4 +29,3 @@ function primitive_stream<TPartial, T>(
     _cache: baml.llm.__new_stream_cache<TPartial, T>(),
   }
 }
-

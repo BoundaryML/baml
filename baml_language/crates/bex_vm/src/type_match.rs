@@ -30,8 +30,9 @@
 //! subtyping is arity-sensitive — are never hand-walked, so a holey function arm
 //! fails closed while a hole-free one is left to the canonical algebra.
 //!
-//! Dormant until MIR/emit routes structural type tests through
-//! `ConstValue::Type` — the sole caller today is a unit-tested `IsType` arm.
+//! MIR/emit routes structural and interface type tests through
+//! `ConstValue::Type`; interface membership therefore reaches the canonical
+//! runtime impl-rule registry instead of a compiler-enumerated class set.
 
 use baml_type::{RuntimeTy, Ty, TyTemplate, normalize};
 use bex_vm_types::Value;

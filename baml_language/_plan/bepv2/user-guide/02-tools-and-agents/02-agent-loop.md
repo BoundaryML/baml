@@ -35,6 +35,31 @@ while true:
 `ToolCallingProvider` owns provider turns and its exact transcript.
 `run_agent` owns dispatch order, hooks, budgets, switching, and termination.
 
+## Native tools are optional
+
+The same loop works whether the provider has a vendor tool API or uses BAML's
+prompt/SAP fallback:
+
+```text
+native adapter
+  active_tools -> request.tools -> native tool-call blocks
+
+prompt-backed adapter
+  active_tools -> ${ctx.output_format} for T | ToolCalls
+               + each tool's JSON Schema
+               -> SAP parses T or ToolCalls
+```
+
+Keep `${ctx.output_format}` in the LLM function prompt. A prompt-backed
+`ToolCallingProvider` extends it automatically after the driver resolves the
+tools for that step; the function author does not hand-write the `ToolCalls`
+schema. Native adapters leave it as the final `T` schema and put tools in the
+provider request fields instead.
+
+Only application tools with a driver dispatch path can use this fallback.
+Provider-owned web-search, code-execution, or similar tools require an adapter
+that can actually invoke the vendor feature and retain its result blocks.
+
 ## Direct-call convenience
 
 An `Agent` provider may package this loop as its `DriveProvider` behavior:
@@ -55,4 +80,3 @@ Use `run_agent` when the application must distinguish them.
 
 - [ToolCallingProvider versus Agent](../../pages/05-tools-and-agents.md#toolcallingprovider-versus-agent)
 - Scenario 10 agentic loop
-

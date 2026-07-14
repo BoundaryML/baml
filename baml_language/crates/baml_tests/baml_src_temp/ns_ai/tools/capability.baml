@@ -1,4 +1,4 @@
-interface ToolCallingProvider requires GenerationProvider {
+interface ToolCallingProvider requires Provider {
   function begin<T>(self, task: Task<T>) -> Transcript
     throws baml.errors.ToolError | baml.errors.UnknownError
   function step<T>(self, transcript: Transcript, tools: Tool[]) -> T | ToolCalls
@@ -18,4 +18,3 @@ interface TranscriptImportProvider requires ToolCallingProvider {
   function import_conversation(self, conversation: Conversation) -> TranscriptImport
     throws baml.errors.UnknownError
 }
-

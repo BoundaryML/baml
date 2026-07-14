@@ -570,6 +570,14 @@ fn render_to_string(
     }
 }
 
+/// Allocation-free structural rendering for diagnostics that already execute
+/// inside a native call and therefore cannot yield to user `ToString`
+/// overrides. `ErrorContext` uses this for fields of the thrown value so test
+/// failures retain useful data instead of printing only the error class name.
+pub(super) fn render_value_structural(vm: &BexVm, value: Value, nested: bool) -> String {
+    render_to_string(vm, value, nested, &[], &[], &mut 0)
+}
+
 fn deep_copy_value_recursive(
     vm: &mut BexVm,
     value: Value,

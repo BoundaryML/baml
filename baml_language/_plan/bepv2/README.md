@@ -1,7 +1,7 @@
 > **Status:** DRAFT — design review. The executable reference package compiles;
 > syntax/runtime gaps are tracked in [v2_deviations.md](./v2_deviations.md).
 
-# BEP-064: Tasks, Drivers, and Providers
+# BEP-064: AI Functions and Agents
 
 ## Abstract
 

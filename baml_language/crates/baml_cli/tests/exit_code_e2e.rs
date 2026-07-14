@@ -549,6 +549,57 @@ test "assert-equal-failure" {
     );
 }
 
+/// A thrown BAML value must retain its language-level traceback when the
+/// testing stdlib catches it and returns the flattened report to the CLI.
+#[test]
+fn test_test_failure_prints_baml_traceback() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+function inner() -> void {
+  throw baml.errors.Io { message: "network exploded" }
+}
+
+function outer() -> void {
+  inner()
+}
+
+test "shows-traceback" {
+  outer()
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "Expected test failure exit code, got: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Traceback (most recent call last):"),
+        "Expected BAML traceback header, got:\n{stderr}",
+    );
+    assert!(
+        stderr.contains("in user.outer") && stderr.contains("in user.inner"),
+        "Expected BAML function frames, got:\n{stderr}",
+    );
+    assert!(
+        stderr.contains("baml.errors.Io {message: \"network exploded\"}"),
+        "Expected readable thrown value, got:\n{stderr}",
+    );
+    assert!(!stderr.contains("Span {"), "stderr: {stderr}");
+    assert!(!stderr.contains("FileId("), "stderr: {stderr}");
+}
+
 /// `assert.approx_equal` lets float assertions pass with a tolerance so normal
 /// floating-point rounding artifacts do not fail tests.
 ///

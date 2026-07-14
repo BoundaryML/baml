@@ -175,7 +175,7 @@ Rules:
 The provider step protocol consumes the shared transcript interface:
 
 ```baml
-interface ToolCallingProvider requires GenerationProvider {
+interface ToolCallingProvider requires Provider {
   function begin<T>(self, task: Task<T>) -> Transcript
   function step<T>(self, transcript: Transcript, tools: Tool[]) -> T | ToolCalls
   function submit(
@@ -186,9 +186,48 @@ interface ToolCallingProvider requires GenerationProvider {
 }
 ```
 
+`ToolCallingProvider` does not require `GenerationProvider`. Its `step<T>`
+already defines the model-turn operation needed by an agent loop, and a
+provider may honestly support a tool loop without exposing a separate one-shot
+generation API. Concrete OpenAI and Anthropic adapters normally implement both
+capabilities; drivers depend only on the one they actually call.
+
 An implementation must reject a transcript it does not own unless it also
 implements and explicitly invokes `TranscriptImportProvider`. This avoids
 accidental cross-provider mixing.
+
+### Native tools and prompt/SAP tools
+
+`ToolCallingProvider` describes behavior, not a required vendor wire format.
+An adapter may implement a step in either of two ways:
+
+- **Native:** send the active tool schemas through the provider's tool-calling
+  request fields and decode its native tool-call response blocks.
+- **Prompt/SAP:** render the step's `${ctx.output_format}` for
+  `T | ToolCalls`, append the concrete JSON Schema for every active tool, ask
+  the model to choose the final branch or the tool-call branch, and SAP-parse
+  the result.
+
+The prompt/SAP form must extend `ctx.output_format`; it must not require every
+LLM function author to repeat a second hand-written tool protocol. This keeps
+the LLM function's prompt recipe authoritative about where output instructions
+appear. The extension is computed for every step from the resolved active
+roster, after task tools, call-time options, registry changes, and hooks have
+been applied. Adding or removing tools therefore changes the very next model
+request.
+
+Native tool transport is preferred when an adapter supports it. A provider
+that lacks native tool fields may still honestly implement
+`ToolCallingProvider` with the prompt/SAP strategy. Its transcript must retain
+the model's tool-call value and every submitted result so the following prompt
+is complete.
+
+Application `Tool` values are dispatchable by the agent driver and may use
+either strategy. Provider-owned tools are different: a web-search or
+code-execution tool executed by the vendor can only be exposed when the
+provider adapter also knows how it is executed and how its results re-enter
+the transcript. A driver must not turn an opaque `ProviderTool` into a
+model-visible prompt tool with no result path.
 
 ## `ToolCallingProvider` versus `Agent`
 

@@ -8,6 +8,15 @@ test "guide 08.01: a harness owns its session while returning typed output" {
   assert.equal(run.token.runtime, "baml")
 }
 
+test "guide 08.01: the harness task carries the evidence needed by the model" {
+  let task = InvestigateRepository_task(sample_ticket(), fake_model_harness());
+  let prompt = baml.llm.prompt_to_text(task.prompt);
+  assert.contains(prompt, "Ticket: T-100")
+  assert.contains(prompt, "Subject: Charged twice")
+  assert.contains(prompt, "Body: I see two charges for order O-42.")
+  assert.contains(prompt, "Customer tier: pro")
+}
+
 testset "integ-test-guide-08-model-harness" {
   test "guide 08.01 live OpenAI: real model behind the harness contract" {
     let harness = root.ai.ModelHarness {
@@ -41,4 +50,3 @@ testset "integ-test-guide-08-model-harness" {
     assert.is_true(run.value.summary.length() > 0)
   }
 }
-

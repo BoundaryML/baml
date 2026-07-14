@@ -118,12 +118,7 @@ function run_tool_calls(
 function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetReached | Handoff
     throws baml.errors.ToolError | baml.errors.UnknownError | baml.errors.Unsupported {
   let selected: Provider = task.provider;
-  let provider = match (selected) {
-    let capability: ToolCallingProvider => capability,
-    _ => throw baml.errors.Unsupported {
-      message: "provider cannot run a tool loop: " + task.provider_name(),
-    },
-  };
+  let provider = tool_calling_provider(selected);
   let transcript = provider.begin<T>(task);
   let steps = 0;
   while (true) {

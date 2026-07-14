@@ -102,6 +102,13 @@ implements ToolCallingProvider for OpenAi {
     let text = response.text() catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["openai tools body failed"] },
     };
+    log.info(baml.json.stringify({
+      "event": "llm.tools.response",
+      "provider": "openai",
+      "model": self.model,
+      "status_code": response.status_code,
+      "body": text,
+    }));
     let wire: OpenAiToolResponse = baml.sap.parse<OpenAiToolResponse>(text) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["openai tools parse failed"] },
     };

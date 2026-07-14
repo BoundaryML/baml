@@ -281,9 +281,9 @@ function testset_child(registry: TestRegistry, ts: TestSetRegistration) -> TestS
   TestSetChild {
     name: ts.name,
     run: () -> ChildReport {
-      root.run_testset(root.testset_children(registry.expand_testset_registry(ts)), ts.runner) catch_all (e) {
-        baml.panics.Panic => root.expansion_error_report(ts.name),
-        _ => root.expansion_error_report(ts.name),
+      root.run_testset(root.testset_children(registry.expand_testset_registry(ts)), ts.runner) catch_all (e, ctx) {
+        baml.panics.Panic => root.expansion_error_report(ts.name, ctx.to_string()),
+        _ => root.expansion_error_report(ts.name, ctx.to_string()),
       }
     },
   }
@@ -293,9 +293,9 @@ function testset_child_selected(registry: TestRegistry, ts: TestSetRegistration,
   TestSetChild {
     name: ts.name,
     run: () -> ChildReport {
-      root.run_testset(root.testset_children_selected(registry.expand_testset_registry(ts), names), ts.runner) catch_all (e) {
-        baml.panics.Panic => root.expansion_error_report(ts.name),
-        _ => root.expansion_error_report(ts.name),
+      root.run_testset(root.testset_children_selected(registry.expand_testset_registry(ts), names), ts.runner) catch_all (e, ctx) {
+        baml.panics.Panic => root.expansion_error_report(ts.name, ctx.to_string()),
+        _ => root.expansion_error_report(ts.name, ctx.to_string()),
       }
     },
   }
@@ -401,19 +401,27 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
       {
         body()
         RunReport { outcome: "pass", duration_ms: 0, message: null }
-      } catch_all (e) {
-        let p: baml.panics.UserPanic => {
-          RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+      } catch_all (e, ctx) {
+        let p: baml.panics.UserPanic => RunReport {
+          outcome: "fail",
+          duration_ms: 0,
+          message: ctx.to_string(),
         },
-        let p: baml.panics.AssertionFailed => {
-          RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+        let p: baml.panics.AssertionFailed => RunReport {
+          outcome: "fail",
+          duration_ms: 0,
+          message: ctx.to_string(),
         },
-        baml.panics.Panic => {
-          RunReport { outcome: "fail", duration_ms: 0, message: null }
+        baml.panics.Panic => RunReport {
+          outcome: "fail",
+          duration_ms: 0,
+          message: ctx.to_string(),
         },
-        _ => {
-          RunReport { outcome: "fail", duration_ms: 0, message: null }
-        }
+        _ => RunReport {
+          outcome: "fail",
+          duration_ms: 0,
+          message: ctx.to_string(),
+        },
       }
     }
     let timer: baml.future.Future<RunReport, null> = spawn {
@@ -424,8 +432,8 @@ function run_test(body: TestBody, runner: TestRunner?) -> TestReport {
         message: "test timed out after " + timeout_ms.to_string() + "ms (override with BAML_TEST_TIMEOUT_MS)",
       }
     }
-    let result = (await baml.future.race([work, timer])) catch_all (e) {
-      _ => RunReport { outcome: "fail", duration_ms: 0, message: "test task failed unexpectedly" }
+    let result = (await baml.future.race([work, timer])) catch_all (e, ctx) {
+      _ => RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
     }
     TestReport {
       outcome: result.outcome,
@@ -456,8 +464,8 @@ function run_testset(children: TestSetChild[], runner: TestSetRunner?) -> TestSe
 // ---------------------------------------------------------------------------
 
 // The report for a testset that errored (e.g. its generator threw or panicked
-// during expansion): one error with no per-leaf detail.
-function expansion_error_report(name: string) -> TestSetReport {
+// during expansion): one error carrying the original BAML traceback.
+function expansion_error_report(name: string, message: string) -> TestSetReport {
   TestSetReport {
     outcome: "error",
     passed: 0,
@@ -470,7 +478,14 @@ function expansion_error_report(name: string) -> TestSetReport {
     // failure specifically. (collect_subtree_names, which is purely an expansion
     // step, keeps the more precise "failed to expand".)
     failed_names: [name + "/(testset error)"],
-    results: [],
+    results: [TestReport {
+      outcome: "error",
+      runs: [RunReport {
+        outcome: "error",
+        duration_ms: 0,
+        message: message,
+      }],
+    }],
   }
 }
 

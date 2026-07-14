@@ -1530,38 +1530,11 @@ use rustc_hash::FxHashMap;
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
 type EnumVariantIndices = IndexMap<QualifiedTypeName, IndexMap<String, usize>>;
+// Temporary field-dispatch candidate index. Interface membership must never
+// consult this finite class-only map; it is an open runtime impl-rule query.
+// Delete this index once interface fields use a runtime virtual-field read.
 type ImplementorsByInterface = IndexMap<TypeName, Vec<TypeName>>;
 type InterfaceTypeView = (TypeName, Vec<Tir2Ty>, Vec<(Name, Tir2Ty)>);
-fn lower_interface_target_args<'db>(
-    db: &'db dyn crate::Db,
-    target: &baml_compiler2_ast::TypeExpr,
-    pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
-    namespace_path: &[Name],
-    generic_params: &[Name],
-    bounds: &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap,
-    diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>,
-) -> Vec<Tir2Ty> {
-    match &target.kind {
-        baml_compiler2_ast::TypeExprKind::Path { generic_args, .. } => generic_args
-            .iter()
-            .map(|arg| {
-                baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                    arg,
-                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                        db,
-                        package_items: pkg_items,
-                        ns_context: namespace_path,
-                        generic_params,
-                        bounds,
-                        self_ty: None,
-                    },
-                    diags,
-                )
-            })
-            .collect(),
-        _ => Vec::new(),
-    }
-}
 
 fn class_type_name_from_qtn(db: &dyn crate::Db, class_qtn: &QualifiedTypeName) -> Option<TypeName> {
     let class_pkg_id = baml_compiler2_hir::package::PackageId::new(db, class_qtn.package().clone());
@@ -1605,6 +1578,7 @@ fn register_class_for_interface_closure<'db>(
     db: &'db dyn crate::Db,
     root_iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'db>,
     root_iface_args: &[Tir2Ty],
+    root_iface_assoc: &[(Name, Tir2Ty)],
     class_tn: &TypeName,
     interface_implementors: &mut ImplementorsByInterface,
 ) {
@@ -1613,7 +1587,7 @@ fn register_class_for_interface_closure<'db>(
             db,
             root_iface_loc,
             root_iface_args,
-            &[],
+            root_iface_assoc,
             true,
         )
     {
@@ -2279,34 +2253,6 @@ impl<'db> LoweringContext<'db> {
                         }
                         out.class_fields.insert(tn.clone(), fields);
                         out.class_field_types.insert(tn.clone(), field_types);
-
-                        // BEP-044: register this class as an implementor of
-                        // every interface its `implements` block targets,
-                        // transitively through interface `requires`.
-                        for impl_target in &class_data.implements {
-                            let Some(iface_loc) =
-                                baml_compiler2_tir::interfaces::resolve_path_to_interface(
-                                    db,
-                                    &impl_target.target,
-                                    pkg_items,
-                                    &pkg_ns,
-                                )
-                            else {
-                                continue;
-                            };
-                            for iface_loc in baml_compiler2_tir::interfaces::interface_closure_locs(
-                                db, iface_loc,
-                            ) {
-                                let Some(iface_tn) = interface_type_name_from_loc(db, iface_loc)
-                                else {
-                                    continue;
-                                };
-                                let entry = out.interface_implementors.entry(iface_tn).or_default();
-                                if !entry.contains(&tn) {
-                                    entry.push(tn.clone());
-                                }
-                            }
-                        }
                     }
                     Definition::Enum(enum_loc) => {
                         let efile = enum_loc.file(db);
@@ -2329,148 +2275,72 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        for file in compiler2_all_files(db) {
-            let pkg_info = file_package(db, file);
-            if pkg_info.package != *pkg_name {
+        // Interface membership is semantic data, not class syntax. TIR normalizes
+        // both `class C { implements I {} }` and `implement I for C {}` into the
+        // same `ImplData` shape, so MIR must consume that canonical registry rather
+        // than independently walking `class_data.implements` and `free_impls`.
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
+        for impl_loc in baml_compiler2_tir::interfaces::package_impl_locs(db, pkg_id) {
+            let Ok(impl_data) = baml_compiler2_tir::interfaces::impl_data(db, impl_loc).as_ref()
+            else {
                 continue;
-            }
-            let item_tree = file_item_tree(db, file);
-            for impl_id in &item_tree.free_impls {
-                let Some(imp) = item_tree.impls.get(impl_id) else {
-                    continue;
-                };
-                let baml_compiler2_hir::item_tree::ImplSubject::Free {
-                    for_target,
-                    generics,
-                } = &imp.subject
-                else {
-                    continue;
-                };
-                let imp_generic_params: Vec<Name> =
-                    generics.iter().map(|g| g.name.clone()).collect();
-                let imp_generic_param_bounds: Vec<Option<baml_compiler2_ast::TypeExpr>> =
-                    generics.iter().map(|g| g.bounds.first().cloned()).collect();
-                let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, *impl_id);
-                let impl_bounds =
-                    baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(db, impl_loc);
-                let Some(root_iface_loc) =
-                    baml_compiler2_tir::interfaces::resolve_path_to_interface(
-                        db,
-                        &imp.interface_target,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                    )
-                else {
-                    continue;
-                };
+            };
 
-                let mut diags = Vec::new();
-                let target_ty_tir = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                    for_target,
-                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                        db,
-                        package_items: pkg_items,
-                        ns_context: &pkg_info.namespace_path,
-                        generic_params: &imp_generic_params,
-                        bounds: impl_bounds,
-                        self_ty: None,
-                    },
-                    &mut diags,
-                );
-                let is_generic_rule = !imp_generic_params.is_empty();
-
-                if is_generic_rule {
-                    if let baml_compiler2_tir::ty::Ty::Class(ref class_qtn, ref class_args, _) =
-                        target_ty_tir
-                    {
-                        if class_args
+            match &impl_data.for_ty_pattern {
+                baml_compiler2_tir::ty::Ty::Class(class_qtn, class_args, _)
+                    if class_args.is_empty()
+                        || class_args
                             .iter()
-                            .any(|a| matches!(a, baml_compiler2_tir::ty::Ty::TypeVar(..)))
-                        {
-                            let root_iface_args_tir = lower_interface_target_args(
-                                db,
-                                &imp.interface_target,
-                                pkg_items,
-                                &pkg_info.namespace_path,
-                                &imp_generic_params,
-                                impl_bounds,
-                                &mut diags,
-                            );
-                            if let Some(class_tn) = class_type_name_from_qtn(db, class_qtn) {
-                                register_class_for_interface_closure(
-                                    db,
-                                    root_iface_loc,
-                                    &root_iface_args_tir,
-                                    &class_tn,
-                                    out.interface_implementors,
-                                );
-                            }
-                            continue;
-                        }
-                    }
-                    if let baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) = &target_ty_tir {
-                        let Some(bound_ty) = imp_generic_params
-                            .iter()
-                            .position(|param| param == type_var)
-                            .and_then(|idx| imp_generic_param_bounds.get(idx))
-                            .and_then(|bound| bound.as_ref())
-                            .map(|bound| {
-                                baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                                    bound,
-                                    &baml_compiler2_tir::lower_type_expr::ScopeCtx {
-                                        db,
-                                        package_items: pkg_items,
-                                        ns_context: &pkg_info.namespace_path,
-                                        generic_params: &imp_generic_params,
-                                        bounds: impl_bounds,
-                                        self_ty: None,
-                                    },
-                                    &mut diags,
-                                )
-                            })
-                        else {
-                            continue;
-                        };
-                        if !matches!(bound_ty, baml_compiler2_tir::ty::Ty::Interface(..)) {
-                            continue;
-                        }
-                        let root_iface_args_tir = lower_interface_target_args(
+                            .any(baml_compiler2_tir::generics::contains_typevar) =>
+                {
+                    if let Some(class_tn) = class_type_name_from_qtn(db, class_qtn) {
+                        register_class_for_interface_closure(
                             db,
-                            &imp.interface_target,
-                            pkg_items,
-                            &pkg_info.namespace_path,
-                            &imp_generic_params,
-                            impl_bounds,
-                            &mut diags,
+                            impl_data.interface,
+                            &impl_data.interface_args,
+                            &impl_data.associated_types,
+                            &class_tn,
+                            out.interface_implementors,
                         );
-                        for class_qtn in package_class_qtns(db, &pkg_info.package) {
-                            let actual = baml_compiler2_tir::ty::Ty::Class(
-                                class_qtn.clone(),
-                                Vec::new(),
-                                baml_compiler2_tir::ty::TyAttr::default(),
-                            );
-                            if !type_satisfies_bound(
-                                db,
-                                &actual,
-                                &bound_ty,
-                                &resolved_aliases.aliases,
-                                &pkg_info.package,
-                                BLANKET_BOUND_DEPTH,
-                            ) {
-                                continue;
-                            }
-                            let class_tn = class_qtn.clone();
-                            register_class_for_interface_closure(
-                                db,
-                                root_iface_loc,
-                                &root_iface_args_tir,
-                                &class_tn,
-                                out.interface_implementors,
-                            );
-                        }
-                        continue;
                     }
                 }
+                baml_compiler2_tir::ty::Ty::TypeVar(type_var, _) => {
+                    let Some((_, bounds)) = impl_data
+                        .generic_params
+                        .iter()
+                        .find(|(name, _)| name == type_var)
+                    else {
+                        continue;
+                    };
+                    for class_qtn in package_class_qtns(db, pkg_name) {
+                        let actual = baml_compiler2_tir::ty::Ty::Class(
+                            class_qtn.clone(),
+                            Vec::new(),
+                            baml_compiler2_tir::ty::TyAttr::default(),
+                        );
+                        if !bounds.iter().all(|bound| {
+                            type_satisfies_bound(
+                                db,
+                                &actual,
+                                &bound.to_ty(),
+                                &resolved_aliases.aliases,
+                                pkg_name,
+                                BLANKET_BOUND_DEPTH,
+                            )
+                        }) {
+                            continue;
+                        }
+                        register_class_for_interface_closure(
+                            db,
+                            impl_data.interface,
+                            &impl_data.interface_args,
+                            &impl_data.associated_types,
+                            &class_qtn,
+                            out.interface_implementors,
+                        );
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -10898,77 +10768,6 @@ impl<'db> LoweringContext<'db> {
             .is_some_and(|data| data.fields.iter().any(|f| &f.name == field))
     }
 
-    /// Class-tag dispatch guards for every implementor that satisfies the
-    /// *specific instantiation* `iface_tn<iface_type_args>`. Implementors of a
-    /// different instantiation (e.g. `StrSlot: Slot<string>` when the request is
-    /// `Slot<int>`) are excluded, because `interface_class_guard_for_args`
-    /// returns `None` for a non-matching argument list. Used by the runtime
-    /// `is`-type test so a generic-interface pattern respects its type argument.
-    fn interface_implementor_class_guards(
-        &self,
-        iface_tn: &TypeName,
-        iface_type_args: &[Tir2Ty],
-        iface_assoc: &[(Name, Tir2Ty)],
-    ) -> Vec<(TypeName, InterfaceClassGuard)> {
-        let Some(impls) = self.interface_implementors.get(iface_tn).cloned() else {
-            return Vec::new();
-        };
-        let Some(requested_views) =
-            self.interface_closure_type_name_views(iface_tn, iface_type_args, iface_assoc)
-        else {
-            return Vec::new();
-        };
-        let mut out: Vec<(TypeName, InterfaceClassGuard)> = Vec::new();
-        for impl_tn in &impls {
-            let Some(class_loc) = self.resolve_class_loc_by_type_name(impl_tn) else {
-                continue;
-            };
-            let item_tree = file_item_tree(self.db, class_loc.file(self.db));
-            let class_data = &item_tree[class_loc.id(self.db)];
-            for impl_block in &class_data.implements {
-                let Some((target_tn, target_args, target_assoc)) = self
-                    .resolve_implements_target_view(
-                        &impl_block.target,
-                        &impl_block.associated_type_bindings,
-                        class_loc,
-                    )
-                else {
-                    continue;
-                };
-                let Some(target_views) =
-                    self.interface_closure_type_name_views(&target_tn, &target_args, &target_assoc)
-                else {
-                    continue;
-                };
-                for (target_view_tn, target_view_args, target_view_assoc) in target_views {
-                    for (requested_tn, requested_args, requested_assoc) in &requested_views {
-                        if target_view_tn != *requested_tn {
-                            continue;
-                        }
-                        let Some(guard) = interface_class_guard_for_args(
-                            &target_view_args,
-                            &target_view_assoc,
-                            requested_args,
-                            requested_assoc,
-                            &class_data.generic_params,
-                            &self.resolved_aliases.aliases,
-                        ) else {
-                            continue;
-                        };
-                        // Push every matching guard — a generic class can satisfy
-                        // the requested instantiation through more than one
-                        // type-arg projection (`Pair<L, R>` implementing
-                        // `Slot<L>` and `Slot<R>`), and dropping all but the first
-                        // would make some runtime values fail the `is` test.
-                        // Redundant identical branches are harmless (both succeed).
-                        out.push((impl_tn.clone(), guard));
-                    }
-                }
-            }
-        }
-        out
-    }
-
     fn resolve_implementor_interface_field_candidates(
         &self,
         impl_tn: &TypeName,
@@ -12683,30 +12482,10 @@ impl LoweringContext<'_> {
         success: BlockId,
         failure: BlockId,
     ) {
-        // BEP-044/BEP-057: testing a value against an *interface* type means
-        // "is its runtime class an implementor". Interface types used to lower
-        // to `RuntimeTy::Class`; they now lower to `RuntimeTy::Interface` so reflection can
-        // retain associated bindings. Accept both runtime shapes here.
-        if let RuntimeTy::Class(tn, _, _) | RuntimeTy::Interface(tn, _, _, _) = &ty
-            && let Some(impls) = self.interface_implementors.get(tn).cloned()
-        {
-            if impls.is_empty() {
-                // No class implements the interface — the test can never hold.
-                self.builder.goto(failure);
-                return;
-            }
-            let members: Vec<RuntimeTy> = impls
-                .into_iter()
-                .map(|cn| RuntimeTy::Class(cn, Vec::new(), TyAttr::default()))
-                .collect();
-            self.emit_is_type_branch(
-                scrutinee,
-                RuntimeTy::Union(members, TyAttr::default()),
-                success,
-                failure,
-            );
-            return;
-        }
+        // Interface membership is an open, directed runtime query through the
+        // canonical impl-rule registry. Never rewrite an interface predicate to
+        // a finite set of known classes: primitives, containers, blanket impls,
+        // and downstream packages are all valid implementors.
         if let RuntimeTy::Union(members, _) = ty {
             // For union A | B | C: check A → success, else check B → success,
             // else check C → success, else failure.
@@ -12901,35 +12680,16 @@ impl LoweringContext<'_> {
                 visited.remove(&key);
             }
             // An associated or generic interface pattern (`Slot<int>`,
-            // `Source<Item=int>`) must respect its full interface view: test
-            // only the implementors of *that* view, not every implementor of
-            // the bare interface.
-            Tir2Ty::Interface(iface_qtn, type_args, associated_bindings, _)
+            // `Source<Item=int>`) keeps its complete view in the runtime
+            // template. The VM proves membership directly from the canonical
+            // impl-rule registry; no implementor-type enumeration is sound.
+            Tir2Ty::Interface(_, type_args, associated_bindings, _)
                 if !type_args.is_empty() || !associated_bindings.is_empty() =>
             {
-                let iface_tn = iface_qtn.clone();
-                let guards = self.interface_implementor_class_guards(
-                    &iface_tn,
-                    type_args,
-                    associated_bindings,
-                );
-                if guards.is_empty() {
-                    self.builder.goto(failure);
-                    return;
-                }
-                let mut next_check = self.builder.current_block();
-                for (idx, (impl_tn, guard)) in guards.iter().enumerate() {
-                    let bb_next = if idx + 1 == guards.len() {
-                        failure
-                    } else {
-                        self.builder.create_block()
-                    };
-                    self.builder.set_current_block(next_check);
-                    self.emit_interface_class_guard_branch(
-                        scrutinee, impl_tn, guard, success, bb_next,
-                    );
-                    next_check = bb_next;
-                }
+                let generic_params = self.enclosing_generic_params();
+                let template =
+                    tir2_to_dispatch_guard_template(ty, self.resolved_aliases, &generic_params);
+                self.emit_is_type_template_branch(scrutinee, template, success, failure);
             }
             // Singleton-valued types pin a specific runtime value, so emit
             // equality checks rather than type-tag tests. `is_type` on a

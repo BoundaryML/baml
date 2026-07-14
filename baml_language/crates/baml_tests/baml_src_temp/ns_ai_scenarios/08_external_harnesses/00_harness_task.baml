@@ -14,7 +14,10 @@ function InvestigateRepository_task(
     (ctx: baml.llm.Context) -> baml.llm.PromptAst {
       baml.llm.assemble_prompt_ast(
         ["", "\n", ""],
-        [`Investigate ticket ${ticket.id} and propose a resolution.`, ctx.output_format],
+        [
+          `Investigate this support ticket and propose a resolution.\nTicket: ${ticket.id}\nSubject: ${ticket.subject}\nBody: ${ticket.body}\nCustomer tier: ${ticket.customer_tier}`,
+          ctx.output_format,
+        ],
       )
     },
   )

@@ -337,6 +337,83 @@ mod tests {
         }
     }
 
+    /// TIR consumes in-body and out-of-body syntax through the same canonical
+    /// `ImplData` registry. The only semantic-record difference is provenance
+    /// (plus the deliberately different concrete class head in this fixture).
+    #[test]
+    fn impl_data_normalizes_both_syntax_forms_to_the_same_shape() {
+        use baml_compiler2_tir::interfaces::InterfaceImplOrigin;
+        use baml_type::Ty;
+
+        let mut db = make_db();
+        db.add_file(
+            "impls.baml",
+            r#"
+            interface View<T> {
+                type Item
+                function render(self) -> string throws never
+            }
+
+            class InBody<T> {
+                implements View<T> {
+                    type Item = T
+                    function render(self) -> string { "in" }
+                }
+            }
+
+            class OutOfBody<T> {}
+            implements<T> View<T> for OutOfBody<T> {
+                type Item = T
+                function render(self) -> string { "out" }
+            }
+            "#,
+        );
+
+        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let impl_locs = baml_compiler2_tir::interfaces::package_impl_locs(&db, pkg_id);
+        assert_eq!(
+            impl_locs.len(),
+            2,
+            "each source impl must occur exactly once"
+        );
+
+        let impls: Vec<_> = impl_locs
+            .into_iter()
+            .map(|loc| {
+                baml_compiler2_tir::interfaces::impl_data(&db, loc)
+                    .as_ref()
+                    .expect("impl resolves")
+                    .clone()
+            })
+            .collect();
+        let in_body = impls
+            .iter()
+            .find(|data| matches!(data.origin, InterfaceImplOrigin::InBodyClass { .. }))
+            .expect("in-body impl");
+        let out_of_body = impls
+            .iter()
+            .find(|data| matches!(data.origin, InterfaceImplOrigin::OutOfBody))
+            .expect("out-of-body impl");
+
+        for data in [in_body, out_of_body] {
+            assert_eq!(data.interface_args, vec![Ty::type_var("T")]);
+            assert_eq!(data.generic_params.len(), 1);
+            assert_eq!(data.generic_params[0].0, Name::new("T"));
+            assert_eq!(
+                data.associated_types,
+                vec![(Name::new("Item"), Ty::type_var("T"))]
+            );
+            assert_eq!(data.methods.len(), 1);
+            assert!(data.field_links.is_empty());
+            assert!(data.diagnostics.is_empty());
+            assert!(
+                matches!(&data.for_ty_pattern, Ty::Class(_, args, _) if args == &vec![Ty::type_var("T")]),
+                "both forms normalize to a generic concrete-class for-pattern: {:?}",
+                data.for_ty_pattern
+            );
+        }
+    }
+
     /// The canonical `get_implements_block` resolver enforces a blanket impl's
     /// generic bounds and restricts a bare blanket `for T` to concrete
     /// receivers: a receiver that fails the bound resolves to no impl, and an
@@ -410,7 +487,7 @@ mod tests {
                 pkg_id,
                 &class_ty("Widget"),
                 &loud,
-                &aliases,
+                &aliases.aliases,
             )
             .is_some(),
             "Widget satisfies `T extends Printable`, so the blanket Loud impl applies"
@@ -424,7 +501,7 @@ mod tests {
                 pkg_id,
                 &class_ty("Plain"),
                 &loud,
-                &aliases,
+                &aliases.aliases,
             )
             .is_none(),
             "Plain does not implement Printable, so the bounded blanket Loud impl is rejected"
@@ -446,7 +523,7 @@ mod tests {
                 pkg_id,
                 &printable_existential,
                 &loud,
-                &aliases,
+                &aliases.aliases,
             )
             .is_none(),
             "a bare blanket `for T` must not bind an interface-existential receiver"

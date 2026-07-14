@@ -1,0 +1,388 @@
+---
+source: crates/baml_tests/tests/baml_src.rs
+---
+function generic_union_returns.$init_test_ns_generic_union_returns_generic_union_returns(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "generic union explicit return through an erased interface"
+    make_closure .<lambda($init_test_ns_generic_union_returns_generic_union_returns, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "generic union tail return through an erased interface"
+    make_closure .<lambda($init_test_ns_generic_union_returns_generic_union_returns, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "generic union generic branch through an erased interface"
+    make_closure .<lambda($init_test_ns_generic_union_returns_generic_union_returns, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "generic union concrete branch after SAP parsed json array"
+    make_closure .<lambda($init_test_ns_generic_union_returns_generic_union_returns, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "SAP preserves declared types for nullable containers"
+    make_closure .<lambda($init_test_ns_generic_union_returns_generic_union_returns, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function generic_union_returns.GenericUnionProviderImpl.GenericUnionProvider.explicit_step(self: generic_union_returns.GenericUnionProviderImpl, calls: string[] | null, fallback: T) -> T | generic_union_returns.PendingCalls {
+    load_var calls
+    is_type _[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var fallback
+    jump L2
+
+  L1:
+    load_var calls
+    init_instance user.generic_union_returns.PendingCalls .calls
+
+  L2:
+    return
+}
+
+function generic_union_returns.GenericUnionProviderImpl.GenericUnionProvider.tail_step(self: generic_union_returns.GenericUnionProviderImpl, calls: string[] | null, fallback: T) -> T | generic_union_returns.PendingCalls {
+    load_var calls
+    is_type _[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var fallback
+    jump L2
+
+  L1:
+    load_var calls
+    init_instance user.generic_union_returns.PendingCalls .calls
+
+  L2:
+    return
+}
+
+function generic_union_returns.generic_union_explicit_return_through_interface() -> bool {
+    load_type generic_union_returns.FinalValue
+    alloc_instance user.generic_union_returns.GenericUnionProviderImpl
+    load_const "search"
+    load_type string
+    alloc_array 1
+    load_const "done"
+    init_instance user.generic_union_returns.FinalValue .value
+    load_type generic_union_returns.GenericUnionProvider
+    load_const "explicit_step"
+    virtual_call nargs=3 ntypeargs=1
+    store_var result
+    load_var result
+    is_type generic_union_returns.PendingCalls
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var result
+    load_field .value
+    load_const "never"
+    cmp_op ==
+    jump L2
+
+  L1:
+    load_var result
+    load_field .calls
+    load_const "search"
+    load_type string
+    alloc_array 1
+    call baml.ops.equals_equals
+
+  L2:
+    return
+}
+
+function generic_union_returns.generic_union_generic_branch_through_interface() -> bool {
+    load_type generic_union_returns.FinalValue
+    alloc_instance user.generic_union_returns.GenericUnionProviderImpl
+    load_const null
+    load_const "done"
+    init_instance user.generic_union_returns.FinalValue .value
+    load_type generic_union_returns.GenericUnionProvider
+    load_const "tail_step"
+    virtual_call nargs=3 ntypeargs=1
+    store_var result
+    load_var result
+    is_type generic_union_returns.PendingCalls
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var result
+    load_field .value
+    load_const "done"
+    cmp_op ==
+    jump L2
+
+  L1:
+    load_var result
+    load_field .calls
+    container_len
+    store_var _7
+    load_var _7
+    load_const 99
+    cmp_int_op ==
+
+  L2:
+    return
+}
+
+function generic_union_returns.generic_union_sap_parsed_json_array_branch() -> bool {
+    load_type generic_union_returns.FinalValue
+    load_const "done"
+    init_instance user.generic_union_returns.FinalValue .value
+    call user.generic_union_returns.sap_parsed_json_array_branch
+    store_var result
+    load_var result
+    is_type generic_union_returns.PendingCalls
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var result
+    load_field .value
+    load_const "never"
+    cmp_op ==
+    jump L2
+
+  L1:
+    load_var result
+    load_field .calls
+    load_const "search"
+    load_type string
+    alloc_array 1
+    call baml.ops.equals_equals
+
+  L2:
+    return
+}
+
+function generic_union_returns.generic_union_tail_return_through_interface() -> bool {
+    load_type generic_union_returns.FinalValue
+    alloc_instance user.generic_union_returns.GenericUnionProviderImpl
+    load_const "search"
+    load_type string
+    alloc_array 1
+    load_const "done"
+    init_instance user.generic_union_returns.FinalValue .value
+    load_type generic_union_returns.GenericUnionProvider
+    load_const "tail_step"
+    virtual_call nargs=3 ntypeargs=1
+    store_var result
+    load_var result
+    is_type generic_union_returns.PendingCalls
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var result
+    load_field .value
+    load_const "never"
+    cmp_op ==
+    jump L2
+
+  L1:
+    load_var result
+    load_field .calls
+    load_const "search"
+    load_type string
+    alloc_array 1
+    call baml.ops.equals_equals
+
+  L2:
+    return
+}
+
+function generic_union_returns.sap_nullable_container_types_are_preserved() -> bool {
+    load_type generic_union_returns.ParsedNullableContainers
+    load_const "{\n      \"empty_json\": [],\n      \"metadata\": {\"attempt\": 1},\n      \"children\": [{\"name\": \"first\"}]\n    }"
+    call baml.sap.parse
+    store_var parsed
+    load_var parsed
+    load_field .empty_json
+    store_var_load_var _4
+    is_type baml.json.json[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L14
+    load_const false
+    store_var empty_ok
+    jump L2
+
+  L1:
+    load_var _4
+    container_len
+    store_var _7
+    load_var _7
+    load_const 0
+    cmp_int_op ==
+    store_var empty_ok
+
+  L2:
+    load_var parsed
+    load_field .metadata
+    store_var_load_var _10
+    is_type map<string, baml.json.json>
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var _10
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L14
+    load_const false
+    store_var map_ok
+    jump L5
+
+  L4:
+    load_type int
+    load_var _10
+    load_const ".attempt"
+    load_const 0
+    call baml.json.path_or
+    load_const 1
+    cmp_int_op ==
+    store_var map_ok
+
+  L5:
+    load_var parsed
+    load_field .children
+    store_var_load_var _18
+    is_type _[]
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_const false
+    store_var children_ok
+    jump L11
+
+  L7:
+    load_var _18
+    store_var values
+    load_type generic_union_returns.ParsedChild
+    load_var values
+    load_const 0
+    call baml.Array.at
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_type generic_union_returns.ParsedChild
+    load_var values
+    load_const 0
+    call baml.Array.at
+    load_field .0
+    jump L10
+
+  L9:
+    load_const null
+
+  L10:
+    load_const "first"
+    call baml.ops.equals_equals
+    store_var children_ok
+
+  L11:
+    load_var empty_ok
+    jump_if_false L12
+    pop 1
+    load_var map_ok
+
+  L12:
+    jump_if_false L13
+    pop 1
+    load_var children_ok
+
+  L13:
+    return
+
+  L14:
+    unreachable
+}
+
+function generic_union_returns.sap_parsed_json_array_branch(fallback: T) -> T | generic_union_returns.PendingCalls {
+    load_type generic_union_returns.ParsedToolMessage
+    load_const "{\"tool_calls\":[{\"function\":{\"name\":\"search\"}}]}"
+    call baml.sap.parse
+    load_field .tool_calls
+    store_var_load_var _4
+    is_type baml.json.json[]
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
+    load_var fallback
+    jump L5
+
+  L1:
+    load_type string
+    alloc_array 0
+    store_var names
+    load_var _4
+    load_type baml.iter.Iterable<Item = baml.json.json, Error = never>
+    load_const "iter"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _9
+
+  L2:
+    load_var _9
+    load_type baml.iter.Iterator<Item = baml.json.json, Error = never>
+    load_const "next"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _10
+    load_var _10
+    is_type baml.iter.Done
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_type string
+    load_var _10
+    load_const ".function.name"
+    load_const ""
+    call baml.json.path_or
+    store_var _15
+    load_var2 3 6
+    call baml.Array.push
+    pop 1
+    jump L2
+
+  L4:
+    load_var names
+    init_instance user.generic_union_returns.PendingCalls .calls
+
+  L5:
+    return
+
+  L6:
+    unreachable
+}
