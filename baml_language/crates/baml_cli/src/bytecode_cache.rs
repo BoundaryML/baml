@@ -302,12 +302,11 @@ impl CacheContext {
 /// (idempotent); on a cold database it materializes the interface once.
 fn extract_stdlib_interface(db: &ProjectDatabase) -> std::collections::BTreeMap<String, Vec<u8>> {
     use baml_db::{
-        Name,
-        baml_compiler2_hir::package::PackageId,
-        baml_compiler2_tir::package_interface::{STDLIB_PACKAGE_NAMES, package_interface},
+        Name, baml_compiler2_hir::package::PackageId,
+        baml_compiler2_tir::package_interface::package_interface,
     };
     let mut out = std::collections::BTreeMap::new();
-    for name in STDLIB_PACKAGE_NAMES {
+    for name in baml_builtins2::stdlib_package_names() {
         let pkg_id = PackageId::new(db, Name::new(name));
         let iface = package_interface(db, pkg_id);
         match borsh::to_vec(iface) {
@@ -2822,7 +2821,7 @@ mod tests {
             "stdlib interface blobs must be byte-identical across fresh databases"
         );
         // Sanity: every stdlib package is present and non-trivially populated.
-        for name in baml_db::baml_compiler2_tir::package_interface::STDLIB_PACKAGE_NAMES {
+        for name in baml_builtins2::stdlib_package_names() {
             let bytes = blob1.get(name).unwrap_or_else(|| panic!("{name} present"));
             assert!(!bytes.is_empty(), "{name} interface is non-empty");
         }
@@ -2903,7 +2902,7 @@ mod tests {
             Name,
             baml_compiler2_hir::package::PackageId,
             baml_compiler2_tir::package_interface::{
-                STDLIB_PACKAGE_NAMES, derive_package_interface_reference, package_interface,
+                derive_package_interface_reference, package_interface,
             },
         };
 
@@ -2940,7 +2939,7 @@ mod tests {
         // `package_interface` *is* the fragment fold. Compare its borsh bytes to
         // the pre-refactor reference derivation for every package — the two must
         // be byte-identical.
-        let mut package_names: Vec<String> = STDLIB_PACKAGE_NAMES
+        let mut package_names: Vec<String> = baml_builtins2::stdlib_package_names()
             .iter()
             .map(ToString::to_string)
             .collect();
@@ -2971,10 +2970,7 @@ mod tests {
     #[test]
     #[ignore = "timing harness; run explicitly in --release"]
     fn stdlib_interface_derivation_cost() {
-        use baml_db::{
-            Name, baml_compiler2_hir::package::PackageId,
-            baml_compiler2_tir::package_interface::STDLIB_PACKAGE_NAMES,
-        };
+        use baml_db::{Name, baml_compiler2_hir::package::PackageId};
 
         // Parse-only: time `package_items` for the six stdlib packages on a
         // fresh db (parse + symbol table). This work happens in a real compile
@@ -2982,7 +2978,7 @@ mod tests {
         // residual), so it is the shared floor, not part of the realized win.
         let parse_db = build_db(&[("a.baml", "function f() -> int {\n  1\n}\n")]);
         let tp = std::time::Instant::now();
-        for name in STDLIB_PACKAGE_NAMES {
+        for name in baml_builtins2::stdlib_package_names() {
             let pkg_id = PackageId::new(&parse_db, Name::new(name));
             let _ = baml_db::baml_compiler2_ppir::package_items(&parse_db, pkg_id);
         }

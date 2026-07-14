@@ -27,25 +27,17 @@ use crate::{
     ty::{FunctionParamMode, FunctionParamTy, QualifiedTypeName, Ty, TyAttr},
 };
 
-/// The six standard-library package names, in the fixed set from
-/// `package_dependencies`. Each is a compiler-build constant (no user file can
-/// contribute to a stdlib package), so each package's `PackageInterface` is a
-/// pure function of stdlib source + compiler code — the soundness foundation
-/// for caching it under the compiler fingerprint and seeding it back (B-694).
-pub const STDLIB_PACKAGE_NAMES: [&str; 6] =
-    ["baml", "boundary", "testing", "assert", "log", "reflect"];
-
 /// Count of *honest* (non-seeded) `package_interface` derivations for stdlib
 /// packages, since process start. A warm compile that seeds the cached stdlib
-/// interface should leave this at zero; a cold compile bumps it up to six (once
-/// per stdlib package). Exposed for the `BAML_CACHE_DEBUG` warm-run counter and
-/// the seeding tests — not part of any compile result.
+/// interface should leave this at zero; a cold compile bumps it up once per
+/// stdlib package. Exposed for the `BAML_CACHE_DEBUG` warm-run counter and the
+/// seeding tests — not part of any compile result.
 static STDLIB_HONEST_DERIVATIONS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
 /// Number of stdlib `package_interface`s derived honestly (from source, not
 /// from a seed) since process start. Zero on a warm run whose stdlib interface
-/// seed served every stdlib package; up to six on a cold run.
+/// seed served every stdlib package; one per stdlib package on a cold run.
 pub fn stdlib_honest_derivations() -> usize {
     STDLIB_HONEST_DERIVATIONS.load(std::sync::atomic::Ordering::Relaxed)
 }
@@ -673,8 +665,14 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
     }
 
     // Honest derivation. Count stdlib-package derivations so a warm run can
-    // assert zero (the seed served every stdlib package).
-    if STDLIB_PACKAGE_NAMES.contains(&pkg_name.as_str()) {
+    // assert zero (the seed served every stdlib package). The authoritative set
+    // of stdlib packages is the embedded builtin manifest — a package is stdlib
+    // iff it contributes a `<builtin>/…` file — so this stays in lockstep with
+    // the files that actually ship (no hand-maintained list to drift).
+    if baml_builtins2::stdlib_package_names()
+        .iter()
+        .any(|n| *n == pkg_name.as_str())
+    {
         STDLIB_HONEST_DERIVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
