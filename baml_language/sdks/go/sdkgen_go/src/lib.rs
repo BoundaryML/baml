@@ -149,8 +149,13 @@ fn render_functions(
     let error_local = GeneratorIdent::ErrorLocal;
     let result_local = GeneratorIdent::ResultLocal;
     let zero_local = GeneratorIdent::ZeroLocal;
+    let string_type = GeneratorIdent::StringType;
+    let error_type = GeneratorIdent::ErrorType;
     let mut out = String::from(BANNER);
     let _ = writeln!(out, "package {}\n", current_package.as_str());
+    if functions.is_empty() {
+        return out;
+    }
     let _ = writeln!(out, "import (\n\t{:?}", context_package.as_str());
     if functions.iter().any(|routed| {
         let function = routed.function;
@@ -193,11 +198,15 @@ fn render_functions(
         params.extend(args);
 
         if matches!(function.return_type, Ty::Unit) {
-            let _ = writeln!(out, "\nfunc {go_name}({}) error {{", params.join(", "));
+            let _ = writeln!(
+                out,
+                "\nfunc {go_name}({}) {error_type} {{",
+                params.join(", ")
+            );
         } else {
             let _ = writeln!(
                 out,
-                "\nfunc {go_name}({}) ({}, error) {{",
+                "\nfunc {go_name}({}) ({}, {error_type}) {{",
                 params.join(", "),
                 go_type(&function.return_type)
             );
@@ -226,7 +235,7 @@ fn render_functions(
         }
         let _ = write!(
             out,
-            "{:?}, map[string]{runtime_package}.Input{{",
+            "{:?}, map[{string_type}]{runtime_package}.Input{{",
             routed.go_name.wire().to_string()
         );
         if !routed.arguments.is_empty() {
@@ -289,13 +298,13 @@ fn render_bootstrap(bytecode: &[u8]) -> String {
 
 fn go_type(ty: &Ty) -> String {
     match primitive_kind(ty).expect("function was filtered to primitive types") {
-        PrimitiveKind::String => "string".to_string(),
-        PrimitiveKind::Int => "int64".to_string(),
+        PrimitiveKind::String => GeneratorIdent::StringType.to_string(),
+        PrimitiveKind::Int => GeneratorIdent::Int64Type.to_string(),
         PrimitiveKind::Bigint => format!("*{}.Int", GeneratorIdent::BigPackage),
-        PrimitiveKind::Float => "float64".to_string(),
-        PrimitiveKind::Bool => "bool".to_string(),
+        PrimitiveKind::Float => GeneratorIdent::Float64Type.to_string(),
+        PrimitiveKind::Bool => GeneratorIdent::BoolType.to_string(),
         PrimitiveKind::Null => format!("{}.Null", GeneratorIdent::RuntimePackage),
-        PrimitiveKind::Uint8Array => "[]byte".to_string(),
+        PrimitiveKind::Uint8Array => format!("[]{}", GeneratorIdent::ByteType),
     }
 }
 
@@ -479,6 +488,36 @@ mod tests {
             1
         );
         assert!(!functions.contains("func EchoValue(ctx"));
+    }
+
+    #[test]
+    fn only_unsupported_functions_emit_an_import_free_package() {
+        let name = Name::new(BaseName::new("user"), vec![], BaseName::new("identity"));
+        let function = Function {
+            name: BaseName::new("identity"),
+            generic_params: vec![BaseName::new("T")],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: Ty::TypeVar(BaseName::new("T")),
+                default: None,
+            }],
+            return_type: Ty::TypeVar(BaseName::new("T")),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        let pool = SymbolPool::from([(name, Symbol::Function(function))]);
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert_eq!(functions, &format!("{BANNER}package baml_sdk\n\n"));
     }
 
     #[test]

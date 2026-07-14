@@ -16,15 +16,30 @@ pub(crate) enum GeneratorIdent {
     ErrorLocal,
     ResultLocal,
     ZeroLocal,
+    StringType,
+    Int64Type,
+    Float64Type,
+    BoolType,
+    ByteType,
+    ErrorType,
 }
 
 impl GeneratorIdent {
-    pub(crate) const FUNCTION_SCOPE: [Self; 5] = [
+    pub(crate) const FUNCTION_SCOPE: &'static [Self] = &[
+        Self::ContextPackage,
+        Self::BigPackage,
         Self::BootstrapPackage,
+        Self::RuntimePackage,
         Self::ContextParameter,
         Self::ErrorLocal,
         Self::ResultLocal,
         Self::ZeroLocal,
+        Self::StringType,
+        Self::Int64Type,
+        Self::Float64Type,
+        Self::BoolType,
+        Self::ByteType,
+        Self::ErrorType,
     ];
 
     pub(crate) const fn as_str(self) -> &'static str {
@@ -37,6 +52,12 @@ impl GeneratorIdent {
             Self::ErrorLocal => "err",
             Self::ResultLocal => "result",
             Self::ZeroLocal => "zero",
+            Self::StringType => "string",
+            Self::Int64Type => "int64",
+            Self::Float64Type => "float64",
+            Self::BoolType => "bool",
+            Self::ByteType => "byte",
+            Self::ErrorType => "error",
         }
     }
 }

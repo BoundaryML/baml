@@ -643,6 +643,87 @@ mod tests {
     }
 
     #[test]
+    fn parameters_escape_every_go_keyword() {
+        let owner = symbol(&[], "call");
+        let keywords = [
+            "break",
+            "default",
+            "func",
+            "interface",
+            "select",
+            "case",
+            "defer",
+            "go",
+            "map",
+            "struct",
+            "chan",
+            "else",
+            "goto",
+            "package",
+            "switch",
+            "const",
+            "fallthrough",
+            "if",
+            "range",
+            "type",
+            "continue",
+            "for",
+            "import",
+            "return",
+            "var",
+        ];
+        let fqns = keywords
+            .iter()
+            .map(|keyword| owner.member(&BaseName::new(*keyword)))
+            .collect::<Vec<_>>();
+        let names = GoNames::new(
+            &generated_package(),
+            fqns.iter()
+                .cloned()
+                .map(|fqn| request(fqn, GoNameKind::Parameter, GoVisibility::Exported))
+                .collect(),
+        );
+
+        for (keyword, fqn) in keywords.into_iter().zip(fqns) {
+            assert_eq!(
+                names
+                    .project(&fqn, GoNameKind::Parameter, GoVisibility::Exported)
+                    .identifier(&generated_package())
+                    .to_string(),
+                format!("{keyword}_")
+            );
+        }
+    }
+
+    #[test]
+    fn parameters_never_equal_a_generator_owned_identifier() {
+        let owner = symbol(&[], "call");
+        let fqns = GeneratorIdent::FUNCTION_SCOPE
+            .iter()
+            .map(|identifier| owner.member(&BaseName::new(identifier.as_str())))
+            .collect::<Vec<_>>();
+        let names = GoNames::new(
+            &generated_package(),
+            fqns.iter()
+                .cloned()
+                .map(|fqn| request(fqn, GoNameKind::Parameter, GoVisibility::Exported))
+                .collect(),
+        );
+
+        for (identifier, fqn) in GeneratorIdent::FUNCTION_SCOPE.iter().zip(fqns) {
+            let projected = names.project(&fqn, GoNameKind::Parameter, GoVisibility::Exported);
+            assert_ne!(
+                projected.identifier(&generated_package()).to_string(),
+                identifier.as_str()
+            );
+            assert_eq!(
+                projected.wire(),
+                &BamlWireName::Key(BaseName::new(identifier.as_str()))
+            );
+        }
+    }
+
+    #[test]
     fn collisions_are_typed_and_deterministic_within_a_scope() {
         let function = symbol(&[], "foo_bar");
         let class = symbol(&[], "fooBar");

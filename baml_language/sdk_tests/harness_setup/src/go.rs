@@ -1,9 +1,9 @@
 //! Go SDK test target build-side setup.
 //!
-//! The Go target stages the runtime `function_calls` fixture and the
-//! compile-first `type_shapes` fixture. Unsupported symbols are omitted by the
-//! emitter, while compile-time assertions in the customizable Go source pin
-//! the exact signatures of every primitive surface supported by this stage.
+//! The Go target stages the runtime `function_calls` fixture, the compile-first
+//! `type_shapes` fixture, and an `unsupported_only` package proving deferred
+//! symbols leave valid Go behind. Compile-time assertions pin the exact
+//! signatures of every primitive surface supported by this stage.
 
 use std::{env, fs, path::PathBuf};
 
@@ -14,7 +14,7 @@ use crate::{
     load_fixture, watch_dir,
 };
 
-const FIXTURES: &[&str] = &["function_calls", "type_shapes"];
+const FIXTURES: &[&str] = &["function_calls", "type_shapes", "unsupported_only"];
 
 pub fn run_all() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());

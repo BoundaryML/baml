@@ -1,0 +1,18 @@
+// Every callable in this fixture is deliberately outside the current Go
+// primitive-function slice. The generated package must still compile without
+// dangling imports or partial declarations.
+class Payload {
+  value string
+}
+
+function round_trip_payload(payload: Payload) -> Payload {
+  payload
+}
+
+function optional_default(value: string = "fallback") -> string {
+  value
+}
+
+function generic_identity<T>(value: T) -> T {
+  value
+}

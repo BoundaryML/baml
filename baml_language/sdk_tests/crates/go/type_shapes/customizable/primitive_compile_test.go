@@ -42,5 +42,7 @@ var (
 
 	_ func(context.Context, string) (string, error)              = baml_sdk.GoCodegenLeftEcho
 	_ func(context.Context, string) (string, error)              = baml_sdk.GoCodegenRightEcho
-	_ func(context.Context, string, int64, bool, string, string) (string, error) = baml_sdk.GoCodegenNestedReservedArgs
+	_ func(context.Context, string, int64, bool, string, string, string, string, string, string, string) (string, error) = baml_sdk.GoCodegenNestedReservedArgs
+	_ func(context.Context, *big.Int) (*big.Int, error) = baml_sdk.GoCodegenPrimitiveEdgesRoundTripLiteralBigint
+	_ func(context.Context, *big.Int, int64, float64, []byte, string, string) (*big.Int, error) = baml_sdk.GoCodegenPrimitiveEdgesReservedTypeNames
 )
