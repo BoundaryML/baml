@@ -852,3 +852,49 @@ function free_standing(x: int) -> int throws never {
     assert!(cases.2 >= 1, "expected a free-impl method");
     assert!(cases.3 >= 1, "expected a top-level function");
 }
+
+/// The elaborated signature is the canonical callable view TIR consumes; its
+/// tracked, span-free form must survive whitespace *and* body edits untouched,
+/// and must still perform the elaboration (callback params with omitted throws
+/// get synthetic effect parameters).
+#[test]
+fn elaborated_function_data_cuts_off_and_still_elaborates() {
+    let mut test_db = IncrementalTestDb::new();
+
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        "function Apply(x: int, f: (int) -> int) -> int throws never {\n  f(x)\n}\n",
+    );
+
+    let before = {
+        let db = test_db.db();
+        let loc = function_loc(db, file, "Apply");
+        baml_compiler2_ppir::item_data::elaborated_function_data(db, loc).clone()
+    };
+
+    // The callback param `f` omits its throws — elaboration must have opened a
+    // synthetic effect parameter for it.
+    assert_eq!(
+        before.synthetic_effect_params.len(),
+        1,
+        "callback with omitted throws should mint one effect param"
+    );
+    assert_eq!(before.params.len(), 2);
+
+    // Whitespace + body edit together: signature semantics unchanged.
+    file.set_text(test_db.db_mut()).to(
+        "// moved\nfunction Apply(x: int, f: (int) -> int) -> int throws never {\n  f(x) + 0\n}\n"
+            .to_string(),
+    );
+
+    let after = {
+        let db = test_db.db();
+        let loc = function_loc(db, file, "Apply");
+        baml_compiler2_ppir::item_data::elaborated_function_data(db, loc).clone()
+    };
+
+    assert_eq!(
+        before, after,
+        "whitespace/body edits must not change the elaborated signature"
+    );
+}

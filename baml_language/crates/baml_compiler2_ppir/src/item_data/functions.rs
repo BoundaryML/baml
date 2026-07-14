@@ -67,6 +67,100 @@ pub fn function_source_map<'db>(
     lower(db, function).1
 }
 
+/// Span-free semantic data for a function's *elaborated* signature — the
+/// canonical callable view TIR consumes.
+///
+/// Elaboration (performed by the shared `hir::signature` machinery, which this
+/// wraps) keeps the user-written top-level throws contract optional but makes
+/// every nested function-type throws surface explicit:
+/// - immediate callback parameter roots with omitted throws are opened to a
+///   fresh synthetic effect parameter
+/// - immediate function-valued return roots derive their omitted throws from
+///   any immediate callback parameters they expose
+/// - every other omitted nested function-type throws becomes `never`
+///
+/// This is the **tracked** successor of `ppir::elaborated_function_signature`
+/// (an untracked fn returning spanned `TypeExpr`s — zero memoization, and
+/// unsafe to memoize as-is because Salsa would retain its stale spans).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElaboratedFunctionData {
+    pub name: Name,
+    pub user_generic_params: Vec<Name>,
+    /// Fresh `__effect_param_N` names minted for callback params with omitted
+    /// throws, in parameter order.
+    pub synthetic_effect_params: Vec<Name>,
+    /// The arena for the *elaborated* types below — distinct from
+    /// [`FunctionData::type_refs`], which holds the raw signature.
+    pub type_refs: TypeRefStore,
+    pub params: Vec<FunctionParamData>,
+    pub return_type: Option<TypeRefId>,
+    pub throws: Option<TypeRefId>,
+}
+
+/// Spans for an [`ElaboratedFunctionData`]. Synthetic nodes (effect params,
+/// filled `never`s) carry empty ranges — anchor to the owning item instead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElaboratedFunctionSourceMap {
+    pub type_refs: TypeRefSourceMap,
+}
+
+/// Elaborated signature for one function. Span-free — see the module docs.
+#[salsa::tracked(returns(ref))]
+pub fn elaborated_function_data<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> ElaboratedFunctionData {
+    lower_elaborated(db, function).0
+}
+
+/// Spans for one elaborated signature. Kept separate from
+/// [`elaborated_function_data`] so that a whitespace-only edit invalidates this
+/// but not the semantic data.
+#[salsa::tracked(returns(ref))]
+pub fn elaborated_function_source_map<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> ElaboratedFunctionSourceMap {
+    lower_elaborated(db, function).1
+}
+
+/// Runs the existing (TypeExpr-based, shared-with-HIR) elaboration, then lowers
+/// its output into a span-free arena. Only the representation changes here; the
+/// elaboration semantics live in one place.
+fn lower_elaborated<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> (ElaboratedFunctionData, ElaboratedFunctionSourceMap) {
+    let sig = crate::elaborated_function_signature(db, function);
+
+    let mut type_refs = TypeRefBuilder::new();
+    let params = sig
+        .params
+        .iter()
+        .map(|param| FunctionParamData {
+            name: param.name.clone(),
+            type_ref: Some(type_refs.lower(&param.ty)),
+            has_default: param.has_default,
+        })
+        .collect();
+    let return_type = sig.return_type.as_ref().map(|te| type_refs.lower(te));
+    let throws = sig.throws.as_ref().map(|te| type_refs.lower(te));
+    let (store, spans) = type_refs.finish();
+
+    (
+        ElaboratedFunctionData {
+            name: sig.name.clone(),
+            user_generic_params: sig.user_generic_params.clone(),
+            synthetic_effect_params: sig.synthetic_effect_params.clone(),
+            type_refs: store,
+            params,
+            return_type,
+            throws,
+        },
+        ElaboratedFunctionSourceMap { type_refs: spans },
+    )
+}
+
 /// The item a method belongs to, as a `Loc`.
 ///
 /// Mirrors `item_tree::MethodOwner` (see its docs for the ownership rules —

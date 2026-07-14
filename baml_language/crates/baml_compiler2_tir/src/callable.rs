@@ -32,7 +32,7 @@ fn lowered_declared_callable_throws<'db>(
 ) -> Option<Ty> {
     let file = function.file(db);
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
@@ -43,9 +43,10 @@ fn lowered_declared_callable_throws<'db>(
     generic_params.extend(sig.user_generic_params.iter().cloned());
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
-    sig.throws.as_ref().map(|declared_throws| {
+    sig.throws.map(|declared_throws| {
         let mut diags = Vec::new();
-        crate::lower_type_expr::lower_type_expr(
+        crate::lower_type_expr::lower_type_ref(
+            &sig.type_refs,
             declared_throws,
             &crate::lower_type_expr::ScopeCtx {
                 db,
@@ -68,7 +69,7 @@ fn signature_cycle_initial_callable_throws<'db>(
 ) -> Ty {
     let file = function.file(db);
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let sig = baml_compiler2_ppir::elaborated_function_signature(db, function);
+    let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, function);
     let pkg_info = file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
@@ -89,8 +90,16 @@ fn signature_cycle_initial_callable_throws<'db>(
     };
     let mut facts = BTreeSet::new();
     for param in &sig.params {
+        let Some(param_ty) = param.type_ref else {
+            continue;
+        };
         let mut diags = Vec::new();
-        let lowered = crate::lower_type_expr::lower_type_expr(&param.ty, &param_scope, &mut diags);
+        let lowered = crate::lower_type_expr::lower_type_ref(
+            &sig.type_refs,
+            param_ty,
+            &param_scope,
+            &mut diags,
+        );
         if let Ty::Function { throws, .. } = lowered {
             facts.extend(crate::throw_inference::flatten_ty_to_facts(&throws));
         }
