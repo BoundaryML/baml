@@ -79,30 +79,39 @@ pub fn to_source_code_with_bytecode(
         }
     }
 
-    // Pass 2: class fields, to a fixed point so field dependencies resolve
-    // in emission (= declaration) order. `$stream` companions emit like any
-    // class; the naming layer routes them under stream_types::.
+    // Pass 2: class fields (and recursive-alias wrapper structs), to a
+    // fixed point so field dependencies resolve in emission (= declaration)
+    // order. `$stream` companions emit like any class; the naming layer
+    // routes them under stream_types::.
+    let emit_type = |name: &Name,
+                     emitted_types: &BTreeSet<Name>,
+                     boxed: &BTreeSet<Name>|
+     -> Result<Option<EmittedClass>, String> {
+        match &pool[name] {
+            Symbol::Class(class_def) => {
+                emit_class(pool, &names, name, class_def, emitted_types, boxed)
+            }
+            Symbol::TypeAlias(alias) => {
+                emit_alias_wrapper(pool, &names, name, alias, emitted_types, boxed)
+            }
+            Symbol::Enum(_) | Symbol::Function(_) => unreachable!(),
+        }
+    };
     let mut classes: Vec<EmittedClass> = Vec::new();
     let mut pending: Vec<&Name> = pool_names
         .iter()
         .copied()
-        .filter(|name| matches!(&pool[*name], Symbol::Class(_)))
+        .filter(|name| match &pool[*name] {
+            Symbol::Class(_) => true,
+            Symbol::TypeAlias(alias) => alias.recursive,
+            Symbol::Enum(_) | Symbol::Function(_) => false,
+        })
         .collect();
     loop {
         let mut progressed = false;
         let mut still_pending = Vec::new();
         for name in pending {
-            let Symbol::Class(class_def) = &pool[name] else {
-                unreachable!()
-            };
-            match emit_class(
-                pool,
-                &names,
-                name,
-                class_def,
-                &emitted_types,
-                &BTreeSet::new(),
-            ) {
+            match emit_type(name, &emitted_types, &BTreeSet::new()) {
                 Ok(Some(emitted)) => {
                     classes.push(emitted);
                     emitted_types.insert(name.clone());
@@ -136,10 +145,7 @@ pub fn to_source_code_with_bytecode(
             let mut round = Vec::new();
             let mut failed = Vec::new();
             for name in &cycle_set {
-                let Symbol::Class(class_def) = &pool[name] else {
-                    unreachable!()
-                };
-                match emit_class(pool, &names, name, class_def, &emitted_types, &cycle_set) {
+                match emit_type(name, &emitted_types, &cycle_set) {
                     Ok(Some(emitted)) => round.push(emitted),
                     Ok(None) | Err(_) => failed.push(name.clone()),
                 }
@@ -162,6 +168,9 @@ pub fn to_source_code_with_bytecode(
     // Pass 3: methods, against the final emitted type set (declarations may
     // reference any emitted class thanks to the forward-declaration block).
     for class in &mut classes {
+        if class.alias_wrapper {
+            continue;
+        }
         let Symbol::Class(class_def) = &pool[&class.pool_name] else {
             unreachable!()
         };
@@ -294,9 +303,16 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 requests.insert(function_request(name));
                 request_callable_members(&mut requests, &fqn, function);
             }
-            // Aliases resolve transparently this slice: no declaration, so
-            // no name.
-            Symbol::TypeAlias(_) => {}
+            // Non-recursive aliases resolve transparently (no declaration,
+            // so no name); recursive aliases emit a named wrapper struct
+            // that breaks the type recursion.
+            Symbol::TypeAlias(alias) => {
+                if alias.recursive {
+                    request_namespace_segments(&mut requests, name, true);
+                    requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
+                    requests.insert(alias_value_field_request(name));
+                }
+            }
         }
     }
     requests
@@ -398,6 +414,13 @@ fn tagged_handle_field_request(class: &Name) -> NameRequest {
         CppNameKind::Field,
         "_handle",
     )
+}
+
+/// The synthesized `value` field request of a recursive-alias wrapper
+/// struct. Shared between collection and emission so the lookup key cannot
+/// drift.
+fn alias_value_field_request(alias: &Name) -> NameRequest {
+    NameRequest::synthesized(BamlFqn::member(alias, "value"), CppNameKind::Field, "value")
 }
 
 /// The request for a callable's synthesized opts struct. Shared between
@@ -527,6 +550,10 @@ struct EmittedClass {
     fields: Vec<EmittedField>,
     static_methods: Vec<EmittedFn>,
     instance_methods: Vec<EmittedFn>,
+    /// A recursive-alias wrapper struct: one `value` field holding the
+    /// alias's resolved type, structural codec (aliases have no wire
+    /// identity), no methods.
+    alias_wrapper: bool,
 }
 
 impl EmittedClass {
@@ -624,6 +651,7 @@ fn emit_class(
             fields,
             static_methods: Vec::new(),
             instance_methods: Vec::new(),
+            alias_wrapper: false,
         }));
     }
     for prop in &class_def.properties {
@@ -685,6 +713,46 @@ fn emit_class(
         fields,
         static_methods: Vec::new(),
         instance_methods: Vec::new(),
+        alias_wrapper: false,
+    }))
+}
+
+/// A recursive type alias as a named wrapper struct: `type RecList = int |
+/// RecList[]` becomes `struct RecList { variant<int64_t,
+/// vector<Box<RecList>>> value; }`. Self-references (and any in-cycle
+/// references) are boxed by the same cycle machinery classes use; the
+/// codec is structural (encode/decode the resolved type, wrapping and
+/// unwrapping `value`) because aliases carry no wire identity.
+fn emit_alias_wrapper(
+    pool: &SymbolPool,
+    names: &CppNames,
+    name: &Name,
+    alias: &baml_codegen_types::TypeAlias,
+    emitted_types: &BTreeSet<Name>,
+    boxed: &BTreeSet<Name>,
+) -> Result<Option<EmittedClass>, String> {
+    let inner = match translate_ty(pool, names, &alias.resolves_to, emitted_types, boxed, &[]) {
+        Translated::Cpp(ty) => ty,
+        Translated::NotYet => return Ok(None),
+        Translated::Unsupported(reason) => {
+            return Err(format!("aliased type: {reason}"));
+        }
+    };
+    Ok(Some(EmittedClass {
+        pool_name: name.clone(),
+        ns: allocated_namespace(names, name, true),
+        name: names
+            .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
+            .clone(),
+        doc: None,
+        generic_params: Vec::new(),
+        fields: vec![EmittedField {
+            name: names.get(&alias_value_field_request(name)).clone(),
+            ty: inner,
+        }],
+        static_methods: Vec::new(),
+        instance_methods: Vec::new(),
+        alias_wrapper: true,
     }))
 }
 
@@ -978,15 +1046,26 @@ fn translate_ty(
             }
         }
         Ty::TypeAlias(name) => {
-            // Aliases resolve transparently to their target type this slice
-            // (named using-aliases need interleaved declaration ordering).
+            // Non-recursive aliases resolve transparently to their target
+            // type; recursive aliases reference their wrapper struct like a
+            // class (boxed inside their own cycle, since the box needs only
+            // the forward declaration).
             let Some(Symbol::TypeAlias(alias)) = pool.get(name) else {
                 return Translated::Unsupported(format!("unresolved alias {name}"));
             };
             if alias.recursive {
-                return Translated::Unsupported(
-                    "recursive type alias (wrapper struct lands in a later slice)".to_string(),
-                );
+                let base = if boxed.contains(name) || emitted_types.contains(name) {
+                    names
+                        .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
+                        .identifier()
+                        .to_string()
+                } else {
+                    return Translated::NotYet;
+                };
+                if boxed.contains(name) {
+                    return Translated::Cpp(format!("::baml::Box<{base}>"));
+                }
+                return Translated::Cpp(base);
             }
             return translate_ty(
                 pool,
@@ -1613,6 +1692,26 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             "template <>\n".to_string()
         };
         let q = c.qualified_self_type();
+
+        if c.alias_wrapper {
+            // Structural codec: aliases have no wire identity, so the
+            // wrapper encodes/decodes its resolved type directly, wrapping
+            // and unwrapping `value`. No ty<> specialization (an alias is
+            // not a nominal type the engine can bind a TypeVar to).
+            let inner = &c.fields[0].ty;
+            let field = c.fields[0].name.identifier();
+            let _ = write!(buf, "\n{spec_prefix}");
+            let _ = writeln!(
+                buf,
+                "struct codec<{q}> {{\n    \
+                 static void encode(detail::wire::Writer& value_msg, const {q}& v) {{\n        \
+                 codec<{inner}>::encode(value_msg, v.{field});\n    }}\n    \
+                 static {q} decode(const detail::OutboundValue& v) {{\n        \
+                 return {q}{{codec<{inner}>::decode(v)}};\n    }}\n}};"
+            );
+            continue;
+        }
+
         let fqn = c.name.wire();
 
         // ty<Class>: BamlTy.class_ty = 2 { name = 1, type_args = 2 }.

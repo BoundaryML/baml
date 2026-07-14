@@ -1,9 +1,8 @@
 // BamlError / BamlPanic delivery contract.
 // Port of function_calls/customizable/test_errors.py. Deviations from the
-// Python file: ParseJson is not emitted (returns baml.json.json, which this
-// SDK does not map yet), so its JsonParseError cases use ThrowMyError; the
-// extra-kwarg InvalidArgument case is a compile error in C++.
-// Python-traceback splicing has no C++ analog.
+// Python file: the extra-kwarg InvalidArgument case is a compile error in
+// C++, and Python-traceback splicing has no C++ analog (the wire trace is
+// asserted directly instead).
 #include <chrono>
 #include <cstdio>
 #include <regex>
@@ -19,6 +18,21 @@
 
 using baml_sdk::raises_test::ParseError;
 using baml_sdk::throws_test::MyError;
+
+static const char kBadJson[] = "{not valid json";
+
+BAML_TEST(stdlib_error_surfaces_as_baml_error) {
+    // baml.json.parse on bad input -> BamlError whose payload decodes to a
+    // typed baml.json.JsonParseError. Proves stdlib error classes surface
+    // structured, independent of any throws clause.
+    try {
+        baml_sdk::throws_test::ParseJson(kBadJson);
+        baml_test::fail("ParseJson did not throw");
+    } catch (const baml::BamlError& e) {
+        BAML_ASSERT(e.is<baml_sdk::baml::json::JsonParseError>());
+        (void)e.get<baml_sdk::baml::json::JsonParseError>();
+    }
+}
 
 BAML_TEST(user_throw_surfaces_declared_instance) {
     // A user throw of a declared error -> BamlError carrying the declared
@@ -82,9 +96,10 @@ BAML_TEST(cancellation_surfaces_as_baml_cancelled) {
 }
 
 BAML_TEST(str_is_non_empty) {
+    // what() is non-empty -- guards the telemetry path, which records it.
     try {
-        baml_sdk::throws_test::ThrowMyError();
-        baml_test::fail("ThrowMyError did not throw");
+        baml_sdk::throws_test::ParseJson(kBadJson);
+        baml_test::fail("ParseJson did not throw");
     } catch (const baml::BamlError& e) {
         BAML_ASSERT(std::string(e.what()).size() > 0);
     }
