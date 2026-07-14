@@ -9,6 +9,13 @@
 //! slices; symbols they gate on are skipped and reported in a trailing
 //! header comment (no silent caps).
 //!
+//! Every emitted identifier comes from the typed naming system in the
+//! `naming` module: a request-collection pass walks the pool up front,
+//! `naming::CppNames::allocate` resolves projections, collisions, and
+//! generator-ident reservations once, and the emit passes carry
+//! `naming::CppName` values whose canonical C++ spelling and BAML wire
+//! identity stay paired.
+//!
 //! Output layout (spec D1):
 //!   `include/baml_sdk.hpp`   - the typed surface
 //!   `src/bindings.cpp`       - non-template definitions over `::baml::detail`
@@ -22,6 +29,8 @@
 //! `create_baml_runtime`; it switches to embedded bytecode once
 //! `initialize_runtime_from_bytecode` is exported over the C ABI.
 
+mod naming;
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Write as _,
@@ -30,6 +39,8 @@ use std::{
 
 use baml_codegen_types::{Class, Enum, Function, Name, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
+
+use crate::naming::{BamlFqn, CppName, CppNameKind, CppNames, GeneratorIdent, NameRequest};
 
 /// A user BAML source file as it should appear in the emitter's
 /// inlined-baml output. `rel_path` is relative to the `baml_src/` root.
@@ -44,18 +55,23 @@ pub fn to_source_code(
 ) -> HashMap<PathBuf, String> {
     let mut skipped: Vec<String> = Vec::new();
 
-    let mut names: Vec<_> = pool.keys().collect();
-    names.sort();
+    // Every identifier the output can contain is requested and allocated
+    // before any emission: collisions and reservations resolve over the
+    // full request set, so no pass can destabilize another pass's names.
+    let names = CppNames::allocate(&collect_requests(pool));
+
+    let mut pool_names: Vec<_> = pool.keys().collect();
+    pool_names.sort();
 
     // Pass 1: enums (no dependencies).
     let mut enums: Vec<EmittedEnum> = Vec::new();
     let mut emitted_types: BTreeSet<Name> = BTreeSet::new();
-    for name in &names {
+    for name in &pool_names {
         if name.pkg.as_str() != "user" || name.is_stream() {
             continue;
         }
         if let Symbol::Enum(enum_def) = &pool[*name] {
-            enums.push(emit_enum(name, enum_def));
+            enums.push(emit_enum(&names, name, enum_def));
             emitted_types.insert((*name).clone());
         }
     }
@@ -63,7 +79,7 @@ pub fn to_source_code(
     // Pass 2: class fields, to a fixed point so field dependencies resolve
     // in emission (= declaration) order.
     let mut classes: Vec<EmittedClass> = Vec::new();
-    let mut pending: Vec<&Name> = names
+    let mut pending: Vec<&Name> = pool_names
         .iter()
         .copied()
         .filter(|name| {
@@ -79,7 +95,14 @@ pub fn to_source_code(
             let Symbol::Class(class_def) = &pool[name] else {
                 unreachable!()
             };
-            match emit_class(pool, name, class_def, &emitted_types, &BTreeSet::new()) {
+            match emit_class(
+                pool,
+                &names,
+                name,
+                class_def,
+                &emitted_types,
+                &BTreeSet::new(),
+            ) {
                 Ok(Some(emitted)) => {
                     classes.push(emitted);
                     emitted_types.insert(name.clone());
@@ -110,7 +133,7 @@ pub fn to_source_code(
             let Symbol::Class(class_def) = &pool[name] else {
                 unreachable!()
             };
-            match emit_class(pool, name, class_def, &emitted_types, &cycle_set) {
+            match emit_class(pool, &names, name, class_def, &emitted_types, &cycle_set) {
                 Ok(Some(emitted)) => classes.push(emitted),
                 Ok(None) | Err(_) => {
                     emitted_types.remove(name);
@@ -131,9 +154,12 @@ pub fn to_source_code(
             (&class_def.instance_methods, false),
         ] {
             for method in methods {
+                let fqn = BamlFqn::member(&class.pool_name, method.name.as_str());
                 match emit_callable(
                     pool,
-                    &method_fqn(&class.pool_name, method),
+                    &names,
+                    &fqn,
+                    CppNameKind::Method,
                     method,
                     &emitted_types,
                     &class.generic_params,
@@ -155,7 +181,7 @@ pub fn to_source_code(
 
     // Pass 4: free functions over the emitted type set.
     let mut fns_by_namespace: BTreeMap<Vec<String>, Vec<EmittedFn>> = BTreeMap::new();
-    for name in &names {
+    for name in &pool_names {
         let Symbol::Function(function) = &pool[*name] else {
             continue;
         };
@@ -166,9 +192,17 @@ pub fn to_source_code(
             skipped.push(format!("{name}: companion functions land in a later slice"));
             continue;
         }
-        match emit_callable(pool, &name.to_string(), function, &emitted_types, &[]) {
+        match emit_callable(
+            pool,
+            &names,
+            &BamlFqn::symbol(name),
+            CppNameKind::Function,
+            function,
+            &emitted_types,
+            &[],
+        ) {
             Ok(emitted) => {
-                let ns = cpp_namespace_of(name);
+                let ns = allocated_namespace(&names, name);
                 fns_by_namespace.entry(ns).or_default().push(emitted);
             }
             Err(reason) => skipped.push(format!("{name}: {reason}")),
@@ -191,45 +225,159 @@ pub fn to_source_code(
     out
 }
 
-fn method_fqn(class_name: &Name, method: &Function) -> String {
-    format!("{class_name}.{}", method.name)
-}
+// ---------------------------------------------------------------------------
+// Name requests
+// ---------------------------------------------------------------------------
 
-fn cpp_namespace_of(name: &Name) -> Vec<String> {
-    name.namespace_path
-        .iter()
-        .map(|seg| sanitize(seg.as_str()))
-        .collect()
-}
+/// Member name of the synthesized per-callable opts struct within its
+/// callable's identity.
+const OPTS_MEMBER: &str = "opts";
 
-fn qualified_cpp_name(name: &Name) -> String {
-    let mut out = String::from("::baml_sdk");
-    for seg in &name.namespace_path {
-        out.push_str("::");
-        out.push_str(&sanitize(seg.as_str()));
-    }
-    out.push_str("::");
-    out.push_str(&sanitize(name.bare_name()));
-    out
-}
-
-/// `optional_args_probe` -> `OptionalArgsProbe`. Used only for synthesized
-/// symbols (opts structs), which have no BAML source name to preserve.
-fn pascal_case(name: &str) -> String {
-    let mut out = String::new();
-    for part in name.split('_') {
-        let mut chars = part.chars();
-        if let Some(first) = chars.next() {
-            out.extend(first.to_uppercase());
-            out.push_str(chars.as_str());
+/// One typed request per identifier any emit pass may need. Mirrors the
+/// pool-level skip filters (`pkg`, `$stream`, `$` companions); symbols that
+/// only emission can rule out (unsupported field types, broken cycles) still
+/// get allocations, which are simply never rendered.
+fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
+    let mut requests = BTreeSet::new();
+    for (name, symbol) in pool {
+        if name.pkg.as_str() != "user" || name.is_stream() {
+            continue;
+        }
+        match symbol {
+            Symbol::Enum(enum_def) => {
+                request_namespace_segments(&mut requests, name);
+                requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum));
+                for variant in &enum_def.variants {
+                    requests.insert(NameRequest::new(
+                        BamlFqn::member(name, variant.name.as_str()),
+                        CppNameKind::EnumVariant,
+                    ));
+                }
+            }
+            Symbol::Class(class_def) => {
+                request_namespace_segments(&mut requests, name);
+                requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
+                for param in &class_def.generic_params {
+                    requests.insert(NameRequest::new(
+                        BamlFqn::member(name, param.as_str()),
+                        CppNameKind::TypeVar,
+                    ));
+                }
+                for prop in &class_def.properties {
+                    requests.insert(NameRequest::new(
+                        BamlFqn::member(name, prop.name.as_str()),
+                        CppNameKind::Field,
+                    ));
+                }
+                for method in class_def
+                    .static_methods
+                    .iter()
+                    .chain(&class_def.instance_methods)
+                {
+                    let method_fqn = BamlFqn::member(name, method.name.as_str());
+                    requests.insert(NameRequest::new(method_fqn.clone(), CppNameKind::Method));
+                    request_callable_members(&mut requests, &method_fqn, method);
+                }
+            }
+            Symbol::Function(function) => {
+                if name.bare_name().contains('$') {
+                    continue; // companion functions land in a later slice
+                }
+                request_namespace_segments(&mut requests, name);
+                let fqn = BamlFqn::symbol(name);
+                requests.insert(NameRequest::new(fqn.clone(), CppNameKind::Function));
+                request_callable_members(&mut requests, &fqn, function);
+            }
+            // Aliases resolve transparently this slice: no declaration, so
+            // no name.
+            Symbol::TypeAlias(_) => {}
         }
     }
-    out
+    requests
+}
+
+/// One request per namespace segment, each scoped by its parent path, so
+/// segment names allocate top-down.
+fn request_namespace_segments(requests: &mut BTreeSet<NameRequest>, name: &Name) {
+    for depth in 0..name.namespace_path.len() {
+        let segment = Name::new(
+            name.pkg.clone(),
+            name.namespace_path[..depth].to_vec(),
+            name.namespace_path[depth].clone(),
+        );
+        requests.insert(NameRequest::new(
+            BamlFqn::symbol(&segment),
+            CppNameKind::Namespace,
+        ));
+    }
+}
+
+/// `TypeVar`s, parameters, and (when optional parameters exist) the
+/// synthesized opts struct + setters of one callable.
+fn request_callable_members(
+    requests: &mut BTreeSet<NameRequest>,
+    fqn: &BamlFqn,
+    function: &Function,
+) {
+    for param in &function.generic_params {
+        requests.insert(NameRequest::new(
+            fqn.child(param.as_str()),
+            CppNameKind::TypeVar,
+        ));
+    }
+    for arg in &function.arguments {
+        requests.insert(NameRequest::new(
+            fqn.child(arg.name.as_str()),
+            CppNameKind::Parameter,
+        ));
+    }
+    if function.arguments.iter().any(|arg| arg.default.is_some()) {
+        requests.insert(opts_request(fqn, function));
+        for arg in function.arguments.iter().filter(|a| a.default.is_some()) {
+            requests.insert(setter_request(fqn, arg.name.as_str()));
+        }
+    }
+}
+
+/// The request for a callable's synthesized opts struct. Shared between
+/// collection and emission so the lookup key cannot drift.
+fn opts_request(callable: &BamlFqn, function: &Function) -> NameRequest {
+    NameRequest::synthesized(
+        callable.child(OPTS_MEMBER),
+        CppNameKind::OptsStruct,
+        &format!("{}Opts", naming::pascal_case(function.name.as_str())),
+    )
+}
+
+/// The request for one opts-struct setter. Shared between collection and
+/// emission so the lookup key cannot drift.
+fn setter_request(callable: &BamlFqn, param: &str) -> NameRequest {
+    NameRequest::synthesized(
+        callable.child(OPTS_MEMBER).child(param),
+        CppNameKind::Setter,
+        &format!("set_{param}"),
+    )
+}
+
+/// The allocated C++ namespace path for a symbol, as owned segments for the
+/// namespace open/close renderers and the free-function grouping key.
+fn allocated_namespace(names: &CppNames, name: &Name) -> Vec<String> {
+    let source: Vec<Box<str>> = name
+        .namespace_path
+        .iter()
+        .map(|seg| Box::from(seg.as_str()))
+        .collect();
+    names
+        .ns_path(&source)
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect()
 }
 
 /// Doc rollup shared by classes and enums: summary, then an
 /// `Attributes:`/`Members:` section listing every member when at least one
 /// member carries a doc (documented as `name: doc`, undocumented bare).
+/// Member names are BAML source names — docs describe the BAML surface.
 fn compose_doc(
     summary: Option<&String>,
     section: &str,
@@ -262,20 +410,20 @@ fn compose_doc(
 
 struct EmittedEnum {
     ns: Vec<String>,
-    cpp_name: String,
-    qualified: String,
-    fqn: String,
+    name: CppName,
     doc: Option<String>,
-    /// (C++ enumerator, BAML variant value on the wire)
-    variants: Vec<(String, String)>,
+    /// (allocated enumerator, BAML variant *value* on the wire). The wire
+    /// value comes from the pool's `EnumVariant.value`, not from the variant
+    /// name the enumerator was allocated from.
+    variants: Vec<(CppName, String)>,
 }
 
-fn emit_enum(name: &Name, enum_def: &Enum) -> EmittedEnum {
+fn emit_enum(names: &CppNames, name: &Name, enum_def: &Enum) -> EmittedEnum {
     EmittedEnum {
-        ns: cpp_namespace_of(name),
-        cpp_name: sanitize(name.bare_name()),
-        qualified: qualified_cpp_name(name),
-        fqn: name.to_string(),
+        ns: allocated_namespace(names, name),
+        name: names
+            .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum))
+            .clone(),
         doc: compose_doc(
             enum_def.docstring.as_ref(),
             "Members:",
@@ -288,7 +436,17 @@ fn emit_enum(name: &Name, enum_def: &Enum) -> EmittedEnum {
         variants: enum_def
             .variants
             .iter()
-            .map(|v| (sanitize(v.name.as_str()), v.value.clone()))
+            .map(|v| {
+                (
+                    names
+                        .get(&NameRequest::new(
+                            BamlFqn::member(name, v.name.as_str()),
+                            CppNameKind::EnumVariant,
+                        ))
+                        .clone(),
+                    v.value.clone(),
+                )
+            })
             .collect(),
     }
 }
@@ -297,17 +455,19 @@ fn emit_enum(name: &Name, enum_def: &Enum) -> EmittedEnum {
 // Classes
 // ---------------------------------------------------------------------------
 
+struct EmittedField {
+    name: CppName,
+    ty: String,
+}
+
 struct EmittedClass {
     pool_name: Name,
     ns: Vec<String>,
-    cpp_name: String,
-    qualified: String,
-    fqn: String,
+    name: CppName,
     doc: Option<String>,
     /// Template parameters; empty for non-generic classes.
-    generic_params: Vec<String>,
-    /// (C++ field name, C++ type, wire field name)
-    fields: Vec<(String, String, String)>,
+    generic_params: Vec<CppName>,
+    fields: Vec<EmittedField>,
     static_methods: Vec<EmittedFn>,
     instance_methods: Vec<EmittedFn>,
 }
@@ -320,18 +480,26 @@ impl EmittedClass {
     /// `X` or `X<T, U>` — the class's own name as spelled inside its scope.
     fn self_type(&self) -> String {
         if self.is_template() {
-            format!("{}<{}>", self.cpp_name, self.generic_params.join(", "))
+            format!(
+                "{}<{}>",
+                self.name.declared(),
+                type_param_list(&self.generic_params)
+            )
         } else {
-            self.cpp_name.clone()
+            self.name.declared().to_string()
         }
     }
 
     /// `::baml_sdk::ns::X<T, U>` — fully qualified parameterized spelling.
     fn qualified_self_type(&self) -> String {
         if self.is_template() {
-            format!("{}<{}>", self.qualified, self.generic_params.join(", "))
+            format!(
+                "{}<{}>",
+                self.name.identifier(),
+                type_param_list(&self.generic_params)
+            )
         } else {
-            self.qualified.clone()
+            self.name.identifier().to_string()
         }
     }
 
@@ -340,34 +508,59 @@ impl EmittedClass {
     }
 }
 
-fn template_prefix(params: &[String]) -> String {
+fn template_prefix(params: &[CppName]) -> String {
     if params.is_empty() {
         String::new()
     } else {
-        let typenames: Vec<String> = params.iter().map(|p| format!("typename {p}")).collect();
+        let typenames: Vec<String> = params
+            .iter()
+            .map(|p| format!("typename {}", p.declared()))
+            .collect();
         format!("template <{}>\n", typenames.join(", "))
     }
+}
+
+/// `T, U` — template arguments at a use site.
+fn type_param_list(params: &[CppName]) -> String {
+    let spelled: Vec<String> = params.iter().map(|p| p.identifier().to_string()).collect();
+    spelled.join(", ")
 }
 
 /// Ok(None) = not emittable *yet* (a field references a class not emitted so
 /// far); the fixed-point loop retries. Err = never emittable in this slice.
 fn emit_class(
     pool: &SymbolPool,
+    names: &CppNames,
     name: &Name,
     class_def: &Class,
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
 ) -> Result<Option<EmittedClass>, String> {
-    let generic_params: Vec<String> = class_def
+    let generic_params: Vec<CppName> = class_def
         .generic_params
         .iter()
-        .map(|p| sanitize(p.as_str()))
+        .map(|p| {
+            names
+                .get(&NameRequest::new(
+                    BamlFqn::member(name, p.as_str()),
+                    CppNameKind::TypeVar,
+                ))
+                .clone()
+        })
         .collect();
     let mut fields = Vec::new();
     for prop in &class_def.properties {
-        match translate_ty(pool, &prop.ty, emitted_types, boxed, &generic_params) {
+        match translate_ty(pool, names, &prop.ty, emitted_types, boxed, &generic_params) {
             Translated::Cpp(ty) => {
-                fields.push((sanitize(prop.name.as_str()), ty, prop.name.to_string()));
+                fields.push(EmittedField {
+                    name: names
+                        .get(&NameRequest::new(
+                            BamlFqn::member(name, prop.name.as_str()),
+                            CppNameKind::Field,
+                        ))
+                        .clone(),
+                    ty,
+                });
             }
             Translated::NotYet => return Ok(None),
             Translated::Unsupported(reason) => {
@@ -377,10 +570,10 @@ fn emit_class(
     }
     Ok(Some(EmittedClass {
         pool_name: name.clone(),
-        ns: cpp_namespace_of(name),
-        cpp_name: sanitize(name.bare_name()),
-        qualified: qualified_cpp_name(name),
-        fqn: name.to_string(),
+        ns: allocated_namespace(names, name),
+        name: names
+            .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
+            .clone(),
         doc: compose_doc(
             class_def.docstring.as_ref(),
             "Attributes:",
@@ -401,23 +594,37 @@ fn emit_class(
 // Callables (free functions and methods share this shape)
 // ---------------------------------------------------------------------------
 
+struct EmittedParam {
+    name: CppName,
+    ty: String,
+}
+
+/// An optional parameter, rendered as an `Arg<type>` field on the opts
+/// struct together with its synthesized setter.
+struct EmittedOptParam {
+    name: CppName,
+    /// Normalized C++ type (the `Arg<...>` wrapper is added at render time).
+    ty: String,
+    setter: CppName,
+}
+
 struct EmittedFn {
-    cpp_name: String,
-    fqn: String,
+    name: CppName,
+    /// The BAML FQN the runtime call dispatches on: the wire symbol, plus
+    /// `.member` (the method's source name) for methods. Never derived from
+    /// C++ spellings.
+    call_fqn: String,
     ret: String,
-    /// Required parameters: (C++ name, C++ type, wire name).
-    params: Vec<(String, String, String)>,
-    /// Optional parameters: (C++ name, normalized C++ type, wire name).
-    /// Rendered as Arg<type> fields on the opts struct.
-    opt_params: Vec<(String, String, String)>,
-    /// Opts struct bare name, when `opt_params` is non-empty.
-    opts_name: Option<String>,
+    params: Vec<EmittedParam>,
+    opt_params: Vec<EmittedOptParam>,
+    /// Opts struct name, when `opt_params` is non-empty.
+    opts_name: Option<CppName>,
     /// The callable's own template parameters (function generics).
-    type_params: Vec<String>,
+    type_params: Vec<CppName>,
     /// The enclosing class's template parameters (empty for free functions
     /// and methods of non-generic classes). Bound before `type_params` in
     /// the call's `type_args` (De Bruijn order).
-    class_type_params: Vec<String>,
+    class_type_params: Vec<CppName>,
     doc: Option<String>,
     raises: Vec<String>,
 }
@@ -432,23 +639,40 @@ impl EmittedFn {
 
 fn emit_callable(
     pool: &SymbolPool,
-    fqn: &str,
+    names: &CppNames,
+    fqn: &BamlFqn,
+    kind: CppNameKind,
     function: &Function,
     emitted_types: &BTreeSet<Name>,
-    class_type_params: &[String],
+    class_type_params: &[CppName],
 ) -> Result<EmittedFn, String> {
-    let type_params: Vec<String> = function
+    let name = names.get(&NameRequest::new(fqn.clone(), kind)).clone();
+    let type_params: Vec<CppName> = function
         .generic_params
         .iter()
-        .map(|p| sanitize(p.as_str()))
+        .map(|p| {
+            names
+                .get(&NameRequest::new(
+                    fqn.child(p.as_str()),
+                    CppNameKind::TypeVar,
+                ))
+                .clone()
+        })
         .collect();
-    let mut in_scope: Vec<String> = class_type_params.to_vec();
+    let mut in_scope: Vec<CppName> = class_type_params.to_vec();
     in_scope.extend(type_params.iter().cloned());
 
     let mut params = Vec::new();
     let mut opt_params = Vec::new();
     for arg in &function.arguments {
-        let ty = match translate_ty(pool, &arg.ty, emitted_types, &BTreeSet::new(), &in_scope) {
+        let ty = match translate_ty(
+            pool,
+            names,
+            &arg.ty,
+            emitted_types,
+            &BTreeSet::new(),
+            &in_scope,
+        ) {
             Translated::Cpp(ty) => ty,
             Translated::NotYet | Translated::Unsupported(_) => {
                 return Err(format!(
@@ -457,15 +681,28 @@ fn emit_callable(
                 ));
             }
         };
-        let entry = (sanitize(arg.name.as_str()), ty, arg.name.to_string());
+        let param_name = names
+            .get(&NameRequest::new(
+                fqn.child(arg.name.as_str()),
+                CppNameKind::Parameter,
+            ))
+            .clone();
         if arg.default.is_some() {
-            opt_params.push(entry);
+            opt_params.push(EmittedOptParam {
+                name: param_name,
+                ty,
+                setter: names.get(&setter_request(fqn, arg.name.as_str())).clone(),
+            });
         } else {
-            params.push(entry);
+            params.push(EmittedParam {
+                name: param_name,
+                ty,
+            });
         }
     }
     let ret = match translate_return_ty(
         pool,
+        names,
         &function.return_type,
         emitted_types,
         &BTreeSet::new(),
@@ -486,12 +723,21 @@ fn emit_callable(
     let opts_name = if opt_params.is_empty() {
         None
     } else {
-        Some(format!("{}Opts", pascal_case(function.name.as_str())))
+        Some(names.get(&opts_request(fqn, function)).clone())
+    };
+
+    // The runtime dispatches on the BAML FQN: for methods that is the class's
+    // wire symbol plus the method's source member token, never a C++ name.
+    let call_fqn = if name.kind() == CppNameKind::Method {
+        let member = fqn.members.last().expect("method identity has a member");
+        format!("{}.{member}", name.wire())
+    } else {
+        name.wire().to_string()
     };
 
     Ok(EmittedFn {
-        cpp_name: sanitize(function.name.as_str()),
-        fqn: fqn.to_string(),
+        name,
+        call_fqn,
         ret,
         params,
         opt_params,
@@ -528,10 +774,11 @@ enum Translated {
 /// silently dropped).
 fn translate_ty(
     pool: &SymbolPool,
+    names: &CppNames,
     ty: &Ty,
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
-    type_vars: &[String],
+    type_vars: &[CppName],
 ) -> Translated {
     let translated = match ty {
         Ty::Int => "int64_t".to_string(),
@@ -553,11 +800,13 @@ fn translate_ty(
             }
         }
         Ty::TypeVar(name) => {
-            let sanitized = sanitize(name.as_str());
-            if type_vars.contains(&sanitized) {
-                sanitized
-            } else {
-                return Translated::Unsupported(format!("out-of-scope TypeVar {name}"));
+            // In-scope `TypeVar`s are matched by their BAML wire name; the
+            // C++ template parameter may have been renamed.
+            match type_vars.iter().find(|tv| tv.wire().is_key(name.as_str())) {
+                Some(tv) => tv.identifier().to_string(),
+                None => {
+                    return Translated::Unsupported(format!("out-of-scope TypeVar {name}"));
+                }
             }
         }
         Ty::TypeAlias(name) => {
@@ -574,14 +823,26 @@ fn translate_ty(
                     "recursive type alias (wrapper struct lands in a later slice)".to_string(),
                 );
             }
-            return translate_ty(pool, &alias.resolves_to, emitted_types, boxed, type_vars);
+            return translate_ty(
+                pool,
+                names,
+                &alias.resolves_to,
+                emitted_types,
+                boxed,
+                type_vars,
+            );
         }
         Ty::Enum(name) => {
             if name.pkg.as_str() != "user" {
                 return Translated::Unsupported(format!("non-user enum {name}"));
             }
             return if emitted_types.contains(name) {
-                Translated::Cpp(qualified_cpp_name(name))
+                Translated::Cpp(
+                    names
+                        .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Enum))
+                        .identifier()
+                        .to_string(),
+                )
             } else {
                 Translated::NotYet
             };
@@ -592,7 +853,7 @@ fn translate_ty(
             }
             let mut translated_args = Vec::new();
             for arg in args {
-                match translate_ty(pool, arg, emitted_types, boxed, type_vars) {
+                match translate_ty(pool, names, arg, emitted_types, boxed, type_vars) {
                     Translated::Cpp(t) => translated_args.push(t),
                     other => return other,
                 }
@@ -600,7 +861,10 @@ fn translate_ty(
             // Cycle members box their in-cycle class references: a Box only
             // needs the forward declaration, so no ordering constraint.
             let base = if boxed.contains(name) || emitted_types.contains(name) {
-                qualified_cpp_name(name)
+                names
+                    .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
+                    .identifier()
+                    .to_string()
             } else {
                 return Translated::NotYet;
             };
@@ -614,15 +878,17 @@ fn translate_ty(
             }
             return Translated::Cpp(spelled);
         }
-        Ty::List(inner) => match translate_ty(pool, inner, emitted_types, boxed, type_vars) {
-            Translated::Cpp(inner) => format!("std::vector<{inner}>"),
-            other => return other,
-        },
+        Ty::List(inner) => {
+            match translate_ty(pool, names, inner, emitted_types, boxed, type_vars) {
+                Translated::Cpp(inner) => format!("std::vector<{inner}>"),
+                other => return other,
+            }
+        }
         Ty::Map { key, value } => {
             if !matches!(key.as_ref(), Ty::String) {
                 return Translated::Unsupported("non-string map key".to_string());
             }
-            match translate_ty(pool, value, emitted_types, boxed, type_vars) {
+            match translate_ty(pool, names, value, emitted_types, boxed, type_vars) {
                 Translated::Cpp(value) => format!("std::map<std::string, {value}>"),
                 other => return other,
             }
@@ -636,7 +902,7 @@ fn translate_ty(
             let had_null = non_null.len() != items.len();
             let mut alternatives: Vec<String> = Vec::new();
             for item in non_null {
-                match translate_ty(pool, item, emitted_types, boxed, type_vars) {
+                match translate_ty(pool, names, item, emitted_types, boxed, type_vars) {
                     Translated::Cpp(alt) => {
                         if !alternatives.contains(&alt) {
                             alternatives.push(alt);
@@ -673,90 +939,16 @@ fn translate_ty(
 
 fn translate_return_ty(
     pool: &SymbolPool,
+    names: &CppNames,
     ty: &Ty,
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
-    type_vars: &[String],
+    type_vars: &[CppName],
 ) -> Translated {
     if matches!(ty, Ty::Unit) {
         return Translated::Cpp("void".to_string());
     }
-    translate_ty(pool, ty, emitted_types, boxed, type_vars)
-}
-
-fn sanitize(name: &str) -> String {
-    const CPP_KEYWORDS: &[&str] = &[
-        "alignas",
-        "alignof",
-        "asm",
-        "auto",
-        "bool",
-        "break",
-        "case",
-        "catch",
-        "char",
-        "class",
-        "concept",
-        "const",
-        "constexpr",
-        "continue",
-        "default",
-        "delete",
-        "do",
-        "double",
-        "else",
-        "enum",
-        "explicit",
-        "export",
-        "extern",
-        "false",
-        "float",
-        "for",
-        "friend",
-        "goto",
-        "if",
-        "inline",
-        "int",
-        "long",
-        "mutable",
-        "namespace",
-        "new",
-        "noexcept",
-        "nullptr",
-        "operator",
-        "private",
-        "protected",
-        "public",
-        "register",
-        "requires",
-        "return",
-        "short",
-        "signed",
-        "sizeof",
-        "static",
-        "struct",
-        "switch",
-        "template",
-        "this",
-        "throw",
-        "true",
-        "try",
-        "typedef",
-        "typeid",
-        "typename",
-        "union",
-        "unsigned",
-        "using",
-        "virtual",
-        "void",
-        "volatile",
-        "while",
-    ];
-    if CPP_KEYWORDS.contains(&name) {
-        format!("{name}_")
-    } else {
-        name.to_string()
-    }
+    translate_ty(pool, names, ty, emitted_types, boxed, type_vars)
 }
 
 // ---------------------------------------------------------------------------
@@ -814,7 +1006,7 @@ fn signature(f: &EmittedFn, async_variant: bool, pos: &RenderPos) -> String {
     let mut params: Vec<String> = f
         .params
         .iter()
-        .map(|(name, ty, _)| format!("{} {}", by_value_or_cref(ty), name))
+        .map(|p| format!("{} {}", by_value_or_cref(&p.ty), p.name.declared()))
         .collect();
     if let Some(opts_name) = &f.opts_name {
         let default = match pos {
@@ -823,11 +1015,14 @@ fn signature(f: &EmittedFn, async_variant: bool, pos: &RenderPos) -> String {
         };
         let qualified_opts = match pos {
             RenderPos::StaticDef { class } | RenderPos::InstanceDef { class } => {
-                format!("{}::{opts_name}", class.self_type())
+                format!("{}::{}", class.self_type(), opts_name.declared())
             }
-            _ => opts_name.clone(),
+            _ => opts_name.declared().to_string(),
         };
-        params.push(format!("{qualified_opts} opts{default}"));
+        params.push(format!(
+            "{qualified_opts} {opts}{default}",
+            opts = GeneratorIdent::OptsParam.token()
+        ));
     }
     let (ret, suffix) = if async_variant {
         (format!("::baml::Future<{}>", f.ret), "_async")
@@ -853,7 +1048,7 @@ fn signature(f: &EmittedFn, async_variant: bool, pos: &RenderPos) -> String {
     format!(
         "{tpl}{prefix}{ret} {owner}{name}{suffix}({params}){constness}",
         tpl = template_prefix(&f.type_params),
-        name = f.cpp_name,
+        name = f.name.declared(),
         params = params.join(", ")
     )
 }
@@ -862,16 +1057,20 @@ fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
     let Some(opts_name) = &f.opts_name else {
         return;
     };
+    let opts_name = opts_name.declared();
     let _ = writeln!(buf, "{indent}struct {opts_name} {{");
-    for (name, ty, _) in &f.opt_params {
-        let arg_ty = format!("::baml::Arg<{ty}>");
+    for p in &f.opt_params {
+        let name = p.name.declared();
+        let arg_ty = format!("::baml::Arg<{}>", p.ty);
         let _ = writeln!(buf, "{indent}    {arg_ty} {name};");
         let _ = writeln!(
             buf,
-            "{indent}    {opts_name}& set_{name}({arg_ty} v) {{\n\
-             {indent}        {name} = std::move(v);\n\
+            "{indent}    {opts_name}& {setter}({arg_ty} {value}) {{\n\
+             {indent}        {name} = std::move({value});\n\
              {indent}        return *this;\n\
-             {indent}    }}"
+             {indent}    }}",
+            setter = p.setter.declared(),
+            value = naming::GeneratorIdent::SetterValueParam.token()
         );
     }
     let _ = writeln!(buf, "{indent}}};");
@@ -888,35 +1087,52 @@ fn render_body(
     async_variant: bool,
     self_type: Option<&str>,
 ) {
-    let _ = writeln!(buf, "{indent}::baml_sdk::detail::ensure_runtime();");
-    let _ = writeln!(buf, "{indent}::baml::detail::ArgsEncoder baml_args_;");
+    let args = GeneratorIdent::ArgsLocal.token();
+    let w = GeneratorIdent::WriterParam.token();
+    let m = GeneratorIdent::TyWriterParam.token();
+    let opts = GeneratorIdent::OptsParam.token();
+    let _ = writeln!(
+        buf,
+        "{indent}::baml_sdk::{detail}::{ensure}();",
+        detail = GeneratorIdent::DetailNamespace.token(),
+        ensure = GeneratorIdent::EnsureRuntime.token()
+    );
+    let _ = writeln!(buf, "{indent}::baml::detail::ArgsEncoder {args};");
     for param in f.class_type_params.iter().chain(&f.type_params) {
         let _ = writeln!(
             buf,
-            "{indent}baml_args_.add_type_arg(\"{param}\", [](::baml::detail::wire::Writer& baml_m_) {{ \
-             ::baml::ty<{param}>::encode(baml_m_); }});"
+            "{indent}{args}.add_type_arg(\"{wire}\", [](::baml::detail::wire::Writer& {m}) {{ \
+             ::baml::ty<{cpp}>::encode({m}); }});",
+            wire = param.wire(),
+            cpp = param.identifier()
         );
     }
     if let Some(self_type) = self_type {
         let _ = writeln!(
             buf,
-            "{indent}baml_args_.add_arg(\"self\", [&](::baml::detail::wire::Writer& baml_w_) {{ \
-             ::baml::codec<{self_type}>::encode(baml_w_, *this); }});"
+            "{indent}{args}.add_arg(\"self\", [&](::baml::detail::wire::Writer& {w}) {{ \
+             ::baml::codec<{self_type}>::encode({w}, *this); }});"
         );
     }
-    for (cpp_name, ty, wire_name) in &f.params {
+    for p in &f.params {
         let _ = writeln!(
             buf,
-            "{indent}baml_args_.add_arg(\"{wire_name}\", [&](::baml::detail::wire::Writer& baml_w_) {{ \
-             ::baml::codec<{ty}>::encode(baml_w_, {cpp_name}); }});"
+            "{indent}{args}.add_arg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
+             ::baml::codec<{ty}>::encode({w}, {value}); }});",
+            wire = p.name.wire(),
+            ty = p.ty,
+            value = p.name.identifier()
         );
     }
-    for (cpp_name, ty, wire_name) in &f.opt_params {
+    for p in &f.opt_params {
+        let field = p.name.identifier();
         let _ = writeln!(
             buf,
-            "{indent}if (opts.{cpp_name}.is_set()) {{\n{indent}    \
-             baml_args_.add_arg(\"{wire_name}\", [&](::baml::detail::wire::Writer& baml_w_) {{ \
-             ::baml::codec<{ty}>::encode(baml_w_, opts.{cpp_name}.value()); }});\n{indent}}}"
+            "{indent}if ({opts}.{field}.is_set()) {{\n{indent}    \
+             {args}.add_arg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
+             ::baml::codec<{ty}>::encode({w}, {opts}.{field}.value()); }});\n{indent}}}",
+            wire = p.name.wire(),
+            ty = p.ty
         );
     }
     let call = if async_variant {
@@ -926,9 +1142,9 @@ fn render_body(
     };
     let _ = writeln!(
         buf,
-        "{indent}return ::baml::detail::{call}<{ret}>(\"{fqn}\", std::move(baml_args_));",
+        "{indent}return ::baml::detail::{call}<{ret}>(\"{fqn}\", std::move({args}));",
         ret = f.ret,
-        fqn = f.fqn,
+        fqn = f.call_fqn,
     );
 }
 
@@ -951,13 +1167,16 @@ fn render_header(
          #include <variant>\n\
          #include <vector>\n\n\
          #include <baml/baml.hpp>\n\n\
-         namespace baml_sdk {\n\n\
-         namespace detail {\n\
-         // Lazily initializes the process-global runtime from the embedded\n\
-         // BAML sources (see src/_inlinedbaml.cpp). Every binding calls this.\n\
-         void ensure_runtime();\n\
-         }  // namespace detail\n",
+         namespace baml_sdk {\n\n",
     );
+    let detail = GeneratorIdent::DetailNamespace.token();
+    let _ = writeln!(buf, "namespace {detail} {{");
+    buf.push_str(
+        "// Lazily initializes the process-global runtime from the embedded\n\
+         // BAML sources (see src/_inlinedbaml.cpp). Every binding calls this.\n",
+    );
+    let _ = writeln!(buf, "void {}();", GeneratorIdent::EnsureRuntime.token());
+    let _ = writeln!(buf, "}}  // namespace {detail}");
 
     // Forward declarations: method signatures may reference classes defined
     // later (C++ allows incomplete types in declarations).
@@ -966,7 +1185,7 @@ fn render_header(
         for c in classes {
             open_namespaces(&mut buf, &c.ns);
             let _ = write!(buf, "{}", c.template_prefix());
-            let _ = writeln!(buf, "struct {};", c.cpp_name);
+            let _ = writeln!(buf, "struct {};", c.name.declared());
             close_namespaces(&mut buf, &c.ns);
         }
     }
@@ -975,9 +1194,9 @@ fn render_header(
         buf.push('\n');
         open_namespaces(&mut buf, &e.ns);
         push_doc(&mut buf, "", e.doc.as_ref(), &[]);
-        let _ = writeln!(buf, "enum class {} {{", e.cpp_name);
+        let _ = writeln!(buf, "enum class {} {{", e.name.declared());
         for (variant, _) in &e.variants {
-            let _ = writeln!(buf, "    {variant},");
+            let _ = writeln!(buf, "    {},", variant.declared());
         }
         buf.push_str("};\n");
         close_namespaces(&mut buf, &e.ns);
@@ -989,9 +1208,9 @@ fn render_header(
         open_namespaces(&mut buf, &c.ns);
         push_doc(&mut buf, "", c.doc.as_ref(), &[]);
         let _ = write!(buf, "{}", c.template_prefix());
-        let _ = writeln!(buf, "struct {} {{", c.cpp_name);
-        for (name, ty, _) in &c.fields {
-            let _ = writeln!(buf, "    {ty} {name};");
+        let _ = writeln!(buf, "struct {} {{", c.name.declared());
+        for field in &c.fields {
+            let _ = writeln!(buf, "    {} {};", field.ty, field.name.declared());
         }
         for f in c.static_methods.iter().chain(&c.instance_methods) {
             render_opts_struct(&mut buf, "    ", f);
@@ -1033,7 +1252,10 @@ fn render_header(
         let eq_terms: Vec<String> = c
             .fields
             .iter()
-            .map(|(name, _, _)| format!("a.{name} == b.{name}"))
+            .map(|field| {
+                let n = field.name.identifier();
+                format!("a.{n} == b.{n}")
+            })
             .collect();
         let eq_expr = if eq_terms.is_empty() {
             "true".to_string()
@@ -1045,7 +1267,7 @@ fn render_header(
             "    friend bool operator==(const {n}& a, const {n}& b) {{\n        \
              return {eq_expr};\n    }}\n    \
              friend bool operator!=(const {n}& a, const {n}& b) {{ return !(a == b); }}",
-            n = c.cpp_name
+            n = c.name.declared()
         );
         buf.push_str("};\n");
         close_namespaces(&mut buf, &c.ns);
@@ -1092,6 +1314,8 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
     buf.push_str("\nnamespace baml {\n");
 
     for e in enums {
+        let q = e.name.identifier();
+        let fqn = e.name.wire();
         let _ = writeln!(
             buf,
             "\ntemplate <>\nstruct ty<{q}> {{\n    \
@@ -1099,8 +1323,6 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
              detail::wire::Writer enum_ty;\n        \
              enum_ty.string_field(1, \"{fqn}\");\n        \
              m.message_field(3, enum_ty);\n    }}\n}};",
-            q = e.qualified,
-            fqn = e.fqn,
         );
         let _ = writeln!(
             buf,
@@ -1114,36 +1336,29 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
              if (v.kind != detail::OutboundValue::Kind::Enum) {{\n            \
              detail::kind_mismatch(\"enum {fqn}\", v);\n        }}\n        \
              return from_wire(v.string_v);\n    }}",
-            q = e.qualified,
-            fqn = e.fqn,
         );
         buf.push_str("    static const char* to_wire(");
-        let _ = write!(buf, "{} v) {{\n        switch (v) {{\n", e.qualified);
+        let _ = write!(buf, "{q} v) {{\n        switch (v) {{\n");
         for (variant, value) in &e.variants {
             let _ = writeln!(
                 buf,
                 "            case {q}::{variant}: return \"{value}\";",
-                q = e.qualified
+                variant = variant.declared()
             );
         }
         buf.push_str("        }\n        throw BamlError(\"invalid enum value\");\n    }\n");
-        let _ = writeln!(
-            buf,
-            "    static {q} from_wire(const std::string& value) {{",
-            q = e.qualified
-        );
+        let _ = writeln!(buf, "    static {q} from_wire(const std::string& value) {{");
         for (variant, value) in &e.variants {
             let _ = writeln!(
                 buf,
                 "        if (value == \"{value}\") return {q}::{variant};",
-                q = e.qualified
+                variant = variant.declared()
             );
         }
         let _ = writeln!(
             buf,
             "        throw BamlError(\"unknown variant '\" + value + \"' for enum {fqn}\");\n    \
              }}\n}};",
-            fqn = e.fqn
         );
     }
 
@@ -1154,6 +1369,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             "template <>\n".to_string()
         };
         let q = c.qualified_self_type();
+        let fqn = c.name.wire();
 
         // ty<Class>: BamlTy.class_ty = 2 { name = 1, type_args = 2 }.
         let _ = write!(buf, "\n{spec_prefix}");
@@ -1163,14 +1379,14 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
              static void encode(detail::wire::Writer& m) {{\n        \
              detail::wire::Writer class_ty;\n        \
              class_ty.string_field(1, \"{fqn}\");",
-            fqn = c.fqn,
         );
         for param in &c.generic_params {
             let _ = writeln!(
                 buf,
                 "        {{\n            detail::wire::Writer arg;\n            \
                  ty<{param}>::encode(arg);\n            \
-                 class_ty.message_field(2, arg);\n        }}"
+                 class_ty.message_field(2, arg);\n        }}",
+                param = param.identifier()
             );
         }
         buf.push_str("        m.message_field(2, class_ty);\n    }\n};\n");
@@ -1183,29 +1399,32 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             "    static void encode(detail::wire::Writer& value_msg, const {q}& v) {{\n        \
              detail::wire::Writer cls;"
         );
-        for (name, ty, wire_name) in &c.fields {
+        for field in &c.fields {
             let _ = writeln!(
                 buf,
                 "        {{\n            detail::wire::Writer entry;\n            \
-                 entry.string_field(1, \"{wire_name}\");\n            \
+                 entry.string_field(1, \"{wire}\");\n            \
                  detail::wire::Writer val;\n            \
                  codec<{ty}>::encode(val, v.{name});\n            \
                  entry.message_field(6, val);\n            \
-                 cls.message_field(2, entry);\n        }}"
+                 cls.message_field(2, entry);\n        }}",
+                wire = field.name.wire(),
+                ty = field.ty,
+                name = field.name.identifier()
             );
         }
         let _ = writeln!(
             buf,
             "        detail::wire::Writer class_ty;\n        \
              class_ty.string_field(1, \"{fqn}\");",
-            fqn = c.fqn
         );
         for param in &c.generic_params {
             let _ = writeln!(
                 buf,
                 "        {{\n            detail::wire::Writer arg;\n            \
                  ty<{param}>::encode(arg);\n            \
-                 class_ty.message_field(2, arg);\n        }}"
+                 class_ty.message_field(2, arg);\n        }}",
+                param = param.identifier()
             );
         }
         buf.push_str(
@@ -1222,20 +1441,27 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
              if (v.kind != detail::OutboundValue::Kind::Class ||\n            \
              (!v.name.empty() && v.name != \"{fqn}\")) {{\n            \
              detail::kind_mismatch(\"class {fqn}\", v);\n        }}",
-            fqn = c.fqn
         );
-        for (name, ty, _) in &c.fields {
-            let _ = writeln!(buf, "        std::optional<{ty}> field_{name};");
+        for field in &c.fields {
+            let _ = writeln!(
+                buf,
+                "        std::optional<{ty}> field_{name};",
+                ty = field.ty,
+                name = field.name.declared()
+            );
         }
         buf.push_str("        for (const auto& field : v.fields) {\n");
         let mut first = true;
-        for (name, ty, wire_name) in &c.fields {
+        for field in &c.fields {
             let kw = if first { "if" } else { "} else if" };
             first = false;
             let _ = writeln!(
                 buf,
-                "            {kw} (field.first == \"{wire_name}\") {{\n                \
-                 field_{name} = codec<{ty}>::decode(field.second);"
+                "            {kw} (field.first == \"{wire}\") {{\n                \
+                 field_{name} = codec<{ty}>::decode(field.second);",
+                wire = field.name.wire(),
+                ty = field.ty,
+                name = field.name.declared()
             );
         }
         if !c.fields.is_empty() {
@@ -1247,20 +1473,20 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             buf,
             "                throw BamlError(\"unexpected field '\" + field.first + \"' on {fqn}\");\n            \
              }}\n        }}",
-            fqn = c.fqn
         );
-        for (name, _, wire_name) in &c.fields {
+        for field in &c.fields {
             let _ = writeln!(
                 buf,
                 "        if (!field_{name}.has_value()) {{\n            \
-                 throw BamlError(\"missing field '{wire_name}' on {fqn}\");\n        }}",
-                fqn = c.fqn
+                 throw BamlError(\"missing field '{wire}' on {fqn}\");\n        }}",
+                name = field.name.declared(),
+                wire = field.name.wire()
             );
         }
         let ctor_args: Vec<String> = c
             .fields
             .iter()
-            .map(|(name, _, _)| format!("std::move(*field_{name})"))
+            .map(|field| format!("std::move(*field_{})", field.name.declared()))
             .collect();
         let _ = writeln!(
             buf,
@@ -1317,6 +1543,7 @@ fn render_bindings(
         close_namespaces(&mut buf, &c.ns);
     }
 
+    let opts = GeneratorIdent::OptsParam.token();
     for (ns, fns) in fns_by_namespace {
         let non_template: Vec<&EmittedFn> = fns.iter().filter(|f| !f.is_template()).collect();
         if non_template.is_empty() {
@@ -1328,7 +1555,7 @@ fn render_bindings(
             for async_variant in [false, true] {
                 let sig = signature(f, async_variant, &RenderPos::Free);
                 // Free-function definitions must not repeat the default arg.
-                let sig = sig.replace(" opts = {}", " opts");
+                let sig = sig.replace(&format!(" {opts} = {{}}"), &format!(" {opts}"));
                 let _ = writeln!(buf, "\n{sig} {{");
                 render_body(&mut buf, "    ", f, async_variant, None);
                 buf.push_str("}\n");
@@ -1350,12 +1577,15 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile]) -> String {
          #include <mutex>\n\
          #include <string>\n\n\
          #include <baml/baml.hpp>\n\n\
-         namespace baml_sdk {\n\
-         namespace detail {\n\n\
-         void ensure_runtime() {\n\
-             static std::once_flag once;\n\
-             std::call_once(once, [] {\n\
-                 const std::map<std::string, std::string> files = {\n",
+         namespace baml_sdk {\n",
+    );
+    let detail = GeneratorIdent::DetailNamespace.token();
+    let _ = writeln!(buf, "namespace {detail} {{");
+    let _ = writeln!(buf, "\nvoid {}() {{", GeneratorIdent::EnsureRuntime.token());
+    buf.push_str(
+        "static std::once_flag once;\n\
+         std::call_once(once, [] {\n\
+         const std::map<std::string, std::string> files = {\n",
     );
     for (rel_path, content) in user_baml_files {
         let path = rel_path.to_string_lossy().replace('\\', "/");
@@ -1366,11 +1596,11 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile]) -> String {
     }
     buf.push_str(
         "        };\n\
-                 ::baml::initialize_runtime(\".\", files);\n\
-             });\n\
-         }\n\n\
-         }  // namespace detail\n\
-         }  // namespace baml_sdk\n",
+         ::baml::initialize_runtime(\".\", files);\n\
+         });\n\
+         }\n\n",
     );
+    let _ = writeln!(buf, "}}  // namespace {detail}");
+    buf.push_str("}  // namespace baml_sdk\n");
     buf
 }
