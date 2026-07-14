@@ -47,6 +47,8 @@ impl BamlFqn {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum GoNameKind {
     Function,
+    FunctionOptionType,
+    FunctionOptionSetter,
     Class,
     Enum,
     TypeAlias,
@@ -186,9 +188,12 @@ impl NameRequest {
 
     fn scope(&self) -> NameScope {
         match self.kind {
-            GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
-                NameScope::Package(self.fqn.symbol.pkg.clone())
-            }
+            GoNameKind::Function
+            | GoNameKind::FunctionOptionType
+            | GoNameKind::FunctionOptionSetter
+            | GoNameKind::Class
+            | GoNameKind::Enum
+            | GoNameKind::TypeAlias => NameScope::Package(self.fqn.symbol.pkg.clone()),
             GoNameKind::Parameter => NameScope::Function(
                 self.fqn
                     .parent()
@@ -283,6 +288,17 @@ impl GoNames {
             requests.push(NameRequest::new(fqn.clone(), kind, GoVisibility::Exported));
 
             if let Symbol::Function(function) = symbol {
+                if function
+                    .arguments
+                    .iter()
+                    .any(|argument| argument.default.is_some())
+                {
+                    requests.push(NameRequest::new(
+                        fqn.clone(),
+                        GoNameKind::FunctionOptionType,
+                        GoVisibility::Exported,
+                    ));
+                }
                 requests.extend(function.arguments.iter().map(|argument| {
                     NameRequest::new(
                         fqn.member(&argument.name),
@@ -290,6 +306,19 @@ impl GoNames {
                         GoVisibility::Exported,
                     )
                 }));
+                requests.extend(
+                    function
+                        .arguments
+                        .iter()
+                        .filter(|argument| argument.default.is_some())
+                        .map(|argument| {
+                            NameRequest::new(
+                                fqn.member(&argument.name),
+                                GoNameKind::FunctionOptionSetter,
+                                GoVisibility::Exported,
+                            )
+                        }),
+                );
             }
             if let Symbol::Class(class) = symbol {
                 requests.extend(class.properties.iter().map(|property| {
@@ -386,6 +415,21 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
             }
             push_upper_component(&mut value, &request.fqn.symbol.name);
         }
+        GoNameKind::FunctionOptionType => {
+            for segment in &request.fqn.symbol.namespace_path {
+                push_upper_component(&mut value, segment);
+            }
+            push_upper_component(&mut value, &request.fqn.symbol.name);
+            value.push_str("Option");
+        }
+        GoNameKind::FunctionOptionSetter => {
+            value.push_str("With");
+            for segment in &request.fqn.symbol.namespace_path {
+                push_upper_component(&mut value, segment);
+            }
+            push_upper_component(&mut value, &request.fqn.symbol.name);
+            push_upper_component(&mut value, request.fqn.leaf());
+        }
         GoNameKind::Parameter | GoNameKind::Field => {
             push_upper_component(&mut value, request.fqn.leaf());
         }
@@ -411,10 +455,14 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
 
 fn wire_name(request: &NameRequest) -> BamlWireName {
     match request.kind {
-        GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
-            BamlWireName::Symbol(request.fqn.symbol.clone())
+        GoNameKind::Function
+        | GoNameKind::FunctionOptionType
+        | GoNameKind::Class
+        | GoNameKind::Enum
+        | GoNameKind::TypeAlias => BamlWireName::Symbol(request.fqn.symbol.clone()),
+        GoNameKind::FunctionOptionSetter | GoNameKind::Parameter | GoNameKind::Field => {
+            BamlWireName::Key(request.fqn.leaf().clone())
         }
-        GoNameKind::Parameter | GoNameKind::Field => BamlWireName::Key(request.fqn.leaf().clone()),
     }
 }
 
@@ -461,6 +509,8 @@ fn short_hash(request: &NameRequest) -> String {
         GoNameKind::TypeAlias => 3,
         GoNameKind::Parameter => 4,
         GoNameKind::Field => 5,
+        GoNameKind::FunctionOptionType => 6,
+        GoNameKind::FunctionOptionSetter => 7,
     });
     hash.byte(match request.visibility {
         GoVisibility::Exported => 0,
@@ -628,6 +678,46 @@ mod tests {
             "baml_sdk.LookupInvoice"
         );
         assert_eq!(projected.wire().to_string(), "user.lookup_invoice");
+    }
+
+    #[test]
+    fn function_options_are_typed_package_declarations_with_wire_identity() {
+        let function = symbol(&["billing"], "lookup_invoice");
+        let limit = function.member(&BaseName::new("max_rows"));
+        let names = GoNames::new(
+            &generated_package(),
+            vec![
+                request(
+                    function.clone(),
+                    GoNameKind::FunctionOptionType,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    limit.clone(),
+                    GoNameKind::FunctionOptionSetter,
+                    GoVisibility::Exported,
+                ),
+            ],
+        );
+
+        let option_type = names.project(
+            &function,
+            GoNameKind::FunctionOptionType,
+            GoVisibility::Exported,
+        );
+        assert_eq!(identifier(option_type), "BillingLookupInvoiceOption");
+        assert_eq!(
+            option_type.wire(),
+            &BamlWireName::Symbol(function.symbol.clone())
+        );
+
+        let setter = names.project(
+            &limit,
+            GoNameKind::FunctionOptionSetter,
+            GoVisibility::Exported,
+        );
+        assert_eq!(identifier(setter), "WithBillingLookupInvoiceMaxRows");
+        assert_eq!(setter.wire(), &BamlWireName::Key(BaseName::new("max_rows")));
     }
 
     #[test]

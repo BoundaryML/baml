@@ -2,12 +2,13 @@
 //!
 //! The current vertical slice covers primitive free functions, class-typed
 //! functions over primitives, classes, lists, string-keyed maps, and nullable
-//! wrappers at any position; and non-generic class declarations composed from
-//! the same shapes. Nullable and container class edges support finite recursive
-//! values, while impossible required-only direct class cycles remain omitted.
-//! A BAML package becomes one Go package. BAML namespaces stay within that Go
-//! package and qualify exported identifiers, preserving legal cyclic references
-//! between namespaces.
+//! wrappers at any position; defaulted function arguments via typed functional
+//! options; and non-generic class declarations composed from the same shapes.
+//! Nullable and container class edges support finite recursive values, while
+//! impossible required-only direct class cycles remain omitted. A BAML package
+//! becomes one Go package. BAML namespaces stay within that Go package and
+//! qualify exported identifiers, preserving legal cyclic references between
+//! namespaces.
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -119,6 +120,15 @@ fn generated_functions<'a>(
                 go_name: names
                     .project(&fqn, GoNameKind::Function, GoVisibility::Exported)
                     .clone(),
+                option_type: function
+                    .arguments
+                    .iter()
+                    .any(|argument| argument.default.is_some())
+                    .then(|| {
+                        names
+                            .project(&fqn, GoNameKind::FunctionOptionType, GoVisibility::Exported)
+                            .clone()
+                    }),
                 arguments: function
                     .arguments
                     .iter()
@@ -131,6 +141,15 @@ fn generated_functions<'a>(
                                 GoVisibility::Exported,
                             )
                             .clone(),
+                        option_setter: argument.default.as_ref().map(|_| {
+                            names
+                                .project(
+                                    &fqn.member(&argument.name),
+                                    GoNameKind::FunctionOptionSetter,
+                                    GoVisibility::Exported,
+                                )
+                                .clone()
+                        }),
                     })
                     .collect(),
             }
@@ -141,12 +160,14 @@ fn generated_functions<'a>(
 struct GeneratedFunction<'a> {
     function: &'a Function,
     go_name: GoName,
+    option_type: Option<GoName>,
     arguments: Vec<GeneratedArgument<'a>>,
 }
 
 struct GeneratedArgument<'a> {
     argument: &'a FunctionArgument,
     go_name: GoName,
+    option_setter: Option<GoName>,
 }
 
 struct GeneratedClass<'a> {
@@ -466,7 +487,7 @@ fn supported_function(function: &Function, wireable_classes: &BTreeSet<Name>) ->
         && function
             .arguments
             .iter()
-            .all(|arg| arg.default.is_none() && supported_wire_type(&arg.ty, wireable_classes))
+            .all(|arg| supported_wire_type(&arg.ty, wireable_classes))
         && (supported_wire_type(&function.return_type, wireable_classes)
             || matches!(function.return_type, Ty::Unit))
 }
@@ -526,6 +547,9 @@ fn render_functions(
     let error_local = GeneratorIdent::ErrorLocal;
     let result_local = GeneratorIdent::ResultLocal;
     let zero_local = GeneratorIdent::ZeroLocal;
+    let arguments_local = GeneratorIdent::ArgumentsLocal;
+    let options_parameter = GeneratorIdent::OptionsParameter;
+    let option_local = GeneratorIdent::OptionLocal;
     let string_type = GeneratorIdent::StringType;
     let error_type = GeneratorIdent::ErrorType;
     let mut out = String::from(BANNER);
@@ -577,11 +601,13 @@ fn render_functions(
     render_class_codecs(&mut out, codecs, current_package, pool, names, packages);
 
     for routed in functions {
+        render_function_options(&mut out, routed, current_package, names, codecs);
         let function = routed.function;
         let go_name = routed.go_name.identifier(current_package);
         let args = routed
             .arguments
             .iter()
+            .filter(|argument| argument.argument.default.is_none())
             .map(|argument| {
                 format!(
                     "{} {}",
@@ -592,6 +618,12 @@ fn render_functions(
             .collect::<Vec<_>>();
         let mut params = vec![format!("{context_parameter} {context_package}.Context")];
         params.extend(args);
+        if let Some(option_type) = &routed.option_type {
+            params.push(format!(
+                "{options_parameter} ...{}",
+                option_type.identifier(current_package)
+            ));
+        }
 
         if matches!(function.return_type, Ty::Unit) {
             let _ = writeln!(
@@ -613,10 +645,6 @@ fn render_functions(
         );
         if matches!(function.return_type, Ty::Unit) {
             let _ = writeln!(out, "\t\treturn {error_local}\n\t}}");
-            let _ = write!(
-                out,
-                "\t_, {error_local} := {runtime_package}.Call({context_parameter}, "
-            );
         } else {
             let _ = writeln!(
                 out,
@@ -624,19 +652,22 @@ fn render_functions(
                 function_go_type(&function.return_type, current_package, names)
             );
             let _ = writeln!(out, "\t\treturn {zero_local}, {error_local}\n\t}}");
+        }
+
+        let required_arguments = routed
+            .arguments
+            .iter()
+            .filter(|argument| argument.argument.default.is_none())
+            .collect::<Vec<_>>();
+        if routed.option_type.is_some() {
             let _ = write!(
                 out,
-                "\t{result_local}, {error_local} := {runtime_package}.Call({context_parameter}, "
+                "\t{arguments_local} := map[{string_type}]{runtime_package}.Input{{"
             );
-        }
-        let _ = write!(
-            out,
-            "{:?}, map[{string_type}]{runtime_package}.Input{{",
-            routed.go_name.wire().to_string()
-        );
-        if !routed.arguments.is_empty() {
-            out.push('\n');
-            for argument in &routed.arguments {
+            if !required_arguments.is_empty() {
+                out.push('\n');
+            }
+            for argument in &required_arguments {
                 let argument_identifier = argument.go_name.identifier(current_package).to_string();
                 let _ = writeln!(
                     out,
@@ -645,9 +676,51 @@ fn render_functions(
                     input_expression(&argument.argument.ty, &argument_identifier, codecs)
                 );
             }
-            out.push('\t');
+            if !required_arguments.is_empty() {
+                out.push('\t');
+            }
+            out.push_str("}\n");
+            let _ = writeln!(
+                out,
+                "\tfor _, {option_local} := range {options_parameter} {{"
+            );
+            let _ = writeln!(out, "\t\tif {option_local} != nil {{");
+            let _ = writeln!(out, "\t\t\t{option_local}({arguments_local})");
+            out.push_str("\t\t}\n\t}\n");
         }
-        out.push_str("})\n");
+
+        if matches!(function.return_type, Ty::Unit) {
+            let _ = write!(
+                out,
+                "\t_, {error_local} := {runtime_package}.Call({context_parameter}, "
+            );
+        } else {
+            let _ = write!(
+                out,
+                "\t{result_local}, {error_local} := {runtime_package}.Call({context_parameter}, "
+            );
+        }
+        let _ = write!(out, "{:?}, ", routed.go_name.wire().to_string());
+        if routed.option_type.is_some() {
+            let _ = writeln!(out, "{arguments_local})");
+        } else {
+            let _ = write!(out, "map[{string_type}]{runtime_package}.Input{{");
+            if !required_arguments.is_empty() {
+                out.push('\n');
+                for argument in &required_arguments {
+                    let argument_identifier =
+                        argument.go_name.identifier(current_package).to_string();
+                    let _ = writeln!(
+                        out,
+                        "\t\t{:?}: {},",
+                        argument.go_name.wire().to_string(),
+                        input_expression(&argument.argument.ty, &argument_identifier, codecs)
+                    );
+                }
+                out.push('\t');
+            }
+            out.push_str("})\n");
+        }
         if matches!(function.return_type, Ty::Unit) {
             let _ = writeln!(out, "\treturn {error_local}");
         } else {
@@ -668,6 +741,60 @@ fn render_functions(
     }
 
     out
+}
+
+fn render_function_options(
+    out: &mut String,
+    function: &GeneratedFunction<'_>,
+    current_package: &GoPackageName,
+    names: &GoNames,
+    codecs: &ClassCodecs,
+) {
+    let Some(option_type) = &function.option_type else {
+        return;
+    };
+    let runtime_package = GeneratorIdent::RuntimePackage;
+    let string_type = GeneratorIdent::StringType;
+    let arguments_local = GeneratorIdent::ArgumentsLocal;
+    let value_parameter = GeneratorIdent::OptionValueParameter;
+    let option_type = option_type.identifier(current_package);
+    let _ = writeln!(
+        out,
+        "\ntype {option_type} func(map[{string_type}]{runtime_package}.Input)"
+    );
+
+    for argument in function
+        .arguments
+        .iter()
+        .filter(|argument| argument.argument.default.is_some())
+    {
+        let setter = argument
+            .option_setter
+            .as_ref()
+            .expect("defaulted argument must have an option setter");
+        let setter = setter.identifier(current_package);
+        let _ = writeln!(
+            out,
+            "\nfunc {setter}({value_parameter} {}) {option_type} {{",
+            function_go_type(&argument.argument.ty, current_package, names)
+        );
+        let _ = writeln!(
+            out,
+            "\treturn func({arguments_local} map[{string_type}]{runtime_package}.Input) {{"
+        );
+        let _ = writeln!(
+            out,
+            "\t\t{arguments_local}[{:?}] = {}",
+            argument
+                .option_setter
+                .as_ref()
+                .expect("defaulted argument must have an option setter")
+                .wire()
+                .to_string(),
+            input_expression(&argument.argument.ty, &value_parameter.to_string(), codecs)
+        );
+        out.push_str("\t}\n}\n");
+    }
 }
 
 fn add_wire_type_imports(
@@ -1249,7 +1376,10 @@ fn output_method(ty: &Ty) -> &'static str {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{Class, ClassProperty, FunctionArgument, Name, Origin};
+    use baml_codegen_types::{
+        Class, ClassProperty, DefaultLiteral, FunctionArgument, FunctionArgumentDefault, Name,
+        Origin,
+    };
 
     use super::*;
 
@@ -1335,6 +1465,63 @@ mod tests {
             files[&PathBuf::from("internal/bootstrap/bootstrap.go")]
                 .contains("var bytecode = []byte{\n\t1, 2, 3,")
         );
+    }
+
+    #[test]
+    fn defaulted_arguments_generate_collision_safe_functional_options() {
+        let name = Name::new(BaseName::new("user"), vec![], BaseName::new("probe"));
+        let function = Function {
+            name: BaseName::new("probe"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![
+                FunctionArgument {
+                    name: BaseName::new("options"),
+                    docstring: None,
+                    ty: Ty::String,
+                    default: None,
+                },
+                FunctionArgument {
+                    name: BaseName::new("opt1"),
+                    docstring: None,
+                    ty: Ty::Union(vec![Ty::Int, Ty::Null]),
+                    default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
+                        Literal::Int(5),
+                    ))),
+                },
+                FunctionArgument {
+                    name: BaseName::new("opt2"),
+                    docstring: None,
+                    ty: Ty::String,
+                    default: Some(FunctionArgumentDefault::Expression {
+                        source: Some("make_default()".to_string()),
+                    }),
+                },
+            ],
+            return_type: Ty::Int,
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        let pool = SymbolPool::from([(name, Symbol::Function(function))]);
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert!(functions.contains("type ProbeOption func(map[string]baml_go.Input)"));
+        assert!(functions.contains("func WithProbeOpt1(value *int64) ProbeOption"));
+        assert!(functions.contains("func WithProbeOpt2(value string) ProbeOption"));
+        assert!(functions.contains(
+            "func Probe(ctx context.Context, options_ string, options ...ProbeOption) (int64, error)"
+        ));
+        assert!(functions.contains("arguments := map[string]baml_go.Input{\n\t\t\"options\": baml_go.String(options_),\n\t}"));
+        assert!(functions.contains("for _, option := range options"));
+        assert!(!functions.contains("\t\t\"opt1\":"));
+        assert!(!functions.contains("\t\t\"opt2\":"));
     }
 
     #[test]

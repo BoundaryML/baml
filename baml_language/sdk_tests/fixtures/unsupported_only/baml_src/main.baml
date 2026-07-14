@@ -9,7 +9,7 @@ function round_trip_payload(payload: Payload) -> Payload {
   payload
 }
 
-function optional_default(value: string = "fallback") -> string {
+function optional_default(value: (string | int)[] = []) -> (string | int)[] {
   value
 }
 
