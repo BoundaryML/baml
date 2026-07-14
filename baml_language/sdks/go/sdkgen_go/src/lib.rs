@@ -1,12 +1,12 @@
 //! Greenfield Go SDK emitter.
 //!
 //! The current vertical slice covers primitive, non-generic free functions.
-//! User namespaces become Go subpackages, while a shared bytecode bootstrap
-//! and fully qualified wire names keep every generated package connected to
-//! the same runtime program.
+//! A BAML package becomes one Go package. BAML namespaces stay within that Go
+//! package and qualify exported identifiers, which preserves legal cyclic
+//! references between namespaces when user-defined types are emitted.
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::Write as _,
     path::PathBuf,
 };
@@ -46,36 +46,30 @@ pub fn to_source_code_with_bytecode(
         .filter(|(_, function)| supported_function(function))
         .collect::<Vec<_>>();
 
-    // Allocate against every user symbol/function, including symbols omitted
-    // by this feature slice. Enabling classes or optional functions later must
-    // not silently rename an already-generated package or callable.
-    let namespace_routes = NamespaceRoutes::new(&all_user_names);
-    let callable_names = allocate_callable_names(&all_functions);
-    let mut routed = BTreeMap::<Vec<String>, Vec<RoutedFunction<'_>>>::new();
-
-    for (name, function) in functions {
-        let route = namespace_routes.route(&name.namespace_path);
-        routed.entry(route).or_default().push(RoutedFunction {
+    // Allocate one package-wide Go namespace against every user symbol,
+    // including functions and types omitted by this feature slice. Enabling
+    // optional functions, classes, or enums later must not silently rename an
+    // already-generated declaration.
+    let symbol_names = allocate_symbol_names(&all_user_names);
+    let functions = functions
+        .into_iter()
+        .map(|(name, function)| RoutedFunction {
             name,
             function,
-            go_name: callable_names[&name.to_string()].clone(),
-        });
-    }
+            go_name: symbol_names[&name.to_string()].clone(),
+        })
+        .collect::<Vec<_>>();
 
-    let mut files = HashMap::new();
-    for (route, functions) in routed {
-        let package_name = route.last().map_or("baml_sdk", String::as_str);
-        let path = route.iter().collect::<PathBuf>().join("functions.go");
-        files.insert(
-            path,
-            render_functions(&functions, package_name, sdk_import_path),
-        );
-    }
-    files.insert(
-        PathBuf::from("internal/bootstrap/bootstrap.go"),
-        render_bootstrap(baml_bytecode),
-    );
-    files
+    HashMap::from([
+        (
+            PathBuf::from("functions.go"),
+            render_functions(&functions, sdk_import_path),
+        ),
+        (
+            PathBuf::from("internal/bootstrap/bootstrap.go"),
+            render_bootstrap(baml_bytecode),
+        ),
+    ])
 }
 
 struct RoutedFunction<'a> {
@@ -84,109 +78,39 @@ struct RoutedFunction<'a> {
     go_name: String,
 }
 
-/// Allocate each raw BAML namespace segment relative to its raw parent. The
-/// ordinary route stays readable, while normalization collisions get a stable
-/// hash suffix and therefore never share an output directory.
-struct NamespaceRoutes {
-    segments: HashMap<(Vec<String>, String), String>,
-}
-
-impl NamespaceRoutes {
-    fn new(names: &[&baml_codegen_types::Name]) -> Self {
-        let mut children = BTreeMap::<Vec<String>, BTreeMap<String, BTreeSet<String>>>::new();
-        for name in names {
-            let raw = name
-                .namespace_path
-                .iter()
-                .map(|segment| segment.as_str().to_string())
-                .collect::<Vec<_>>();
-            for depth in 0..raw.len() {
-                children
-                    .entry(raw[..depth].to_vec())
-                    .or_default()
-                    .entry(go_package_segment(&raw[depth]))
-                    .or_default()
-                    .insert(raw[depth].clone());
-            }
-        }
-
-        let mut segments = HashMap::new();
-        for (parent, normalized_groups) in children {
-            let mut used = HashSet::new();
-            for (normalized, raw_children) in normalized_groups {
-                let collides = raw_children.len() > 1;
-                for raw_child in raw_children {
-                    let identity = parent
-                        .iter()
-                        .chain(std::iter::once(&raw_child))
-                        .cloned()
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    let candidate = if collides {
-                        format!("{normalized}_{}", short_hash(&identity))
-                    } else {
-                        normalized.clone()
-                    };
-                    let allocated = allocate_unique(candidate, &identity, &mut used);
-                    segments.insert((parent.clone(), raw_child), allocated);
-                }
-            }
-        }
-        Self { segments }
-    }
-
-    fn route(&self, namespace_path: &[baml_base::Name]) -> Vec<String> {
-        let mut raw_parent = Vec::new();
-        let mut route = Vec::new();
-        for segment in namespace_path {
-            let raw = segment.as_str().to_string();
-            route.push(self.segments[&(raw_parent.clone(), raw.clone())].clone());
-            raw_parent.push(raw);
-        }
-        route
-    }
-}
-
-fn allocate_callable_names(
-    functions: &[(&baml_codegen_types::Name, &Function)],
-) -> HashMap<String, String> {
-    let mut groups =
-        BTreeMap::<Vec<String>, BTreeMap<String, Vec<&baml_codegen_types::Name>>>::new();
-    for (name, _) in functions {
-        groups
-            .entry(
-                name.namespace_path
-                    .iter()
-                    .map(|segment| segment.as_str().to_string())
-                    .collect(),
-            )
-            .or_default()
-            .entry(go_exported(name.name.as_str()))
-            .or_default()
-            .push(name);
+fn allocate_symbol_names(names: &[&baml_codegen_types::Name]) -> HashMap<String, String> {
+    let mut groups = BTreeMap::<String, Vec<&baml_codegen_types::Name>>::new();
+    for name in names {
+        groups.entry(go_symbol_base(name)).or_default().push(name);
     }
 
     let mut allocated = HashMap::new();
-    for base_groups in groups.values_mut() {
-        let mut used = HashSet::new();
-        for (base, names) in base_groups {
-            names.sort_by_key(ToString::to_string);
-            let collides = names.len() > 1;
-            for name in names {
-                let identity = name.to_string();
-                let candidate = if collides {
-                    format!("{base}_{}", short_hash(&identity))
-                } else {
-                    base.clone()
-                };
-                allocated.insert(
-                    identity.clone(),
-                    allocate_unique(candidate, &identity, &mut used),
-                );
-            }
+    let mut used = HashSet::new();
+    for (base, names) in &mut groups {
+        names.sort_by_key(ToString::to_string);
+        let collides = names.len() > 1;
+        for name in names {
+            let identity = name.to_string();
+            let candidate = if collides {
+                format!("{base}_{}", short_hash(&identity))
+            } else {
+                base.clone()
+            };
+            allocated.insert(
+                identity.clone(),
+                allocate_unique(candidate, &identity, &mut used),
+            );
         }
     }
     allocated
+}
+
+fn go_symbol_base(name: &baml_codegen_types::Name) -> String {
+    name.namespace_path
+        .iter()
+        .map(|segment| go_exported(segment.as_str()))
+        .chain(std::iter::once(go_exported(name.name.as_str())))
+        .collect()
 }
 
 fn allocate_unique(candidate: String, identity: &str, used: &mut HashSet<String>) -> String {
@@ -259,13 +183,9 @@ fn primitive_kind(ty: &Ty) -> Option<PrimitiveKind> {
     }
 }
 
-fn render_functions(
-    functions: &[RoutedFunction<'_>],
-    package_name: &str,
-    sdk_import_path: &str,
-) -> String {
+fn render_functions(functions: &[RoutedFunction<'_>], sdk_import_path: &str) -> String {
     let mut out = String::from(BANNER);
-    let _ = writeln!(out, "package {package_name}\n");
+    out.push_str("package baml_sdk\n\n");
     out.push_str("import (\n\t\"context\"\n");
     if functions.iter().any(|routed| {
         let function = routed.function;
@@ -446,58 +366,6 @@ fn argument_local_names(function: &Function) -> Vec<String> {
         .collect()
 }
 
-fn go_package_segment(value: &str) -> String {
-    let mut identifier = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '_' {
-                ch.to_ascii_lowercase()
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    if identifier.is_empty() {
-        identifier.push_str("namespace");
-    } else if identifier.starts_with(|ch: char| ch.is_ascii_digit()) {
-        identifier.insert_str(0, "ns_");
-    }
-    if matches!(
-        identifier.as_str(),
-        "break"
-            | "default"
-            | "func"
-            | "interface"
-            | "select"
-            | "case"
-            | "defer"
-            | "go"
-            | "map"
-            | "struct"
-            | "chan"
-            | "else"
-            | "goto"
-            | "package"
-            | "switch"
-            | "const"
-            | "fallthrough"
-            | "if"
-            | "range"
-            | "type"
-            | "continue"
-            | "for"
-            | "import"
-            | "return"
-            | "var"
-            | "internal"
-            | "vendor"
-            | "testdata"
-    ) {
-        identifier.push('_');
-    }
-    identifier
-}
-
 fn go_type(ty: &Ty) -> &'static str {
     match primitive_kind(ty).expect("function was filtered to primitive types") {
         PrimitiveKind::String => "string",
@@ -587,7 +455,7 @@ mod tests {
     }
 
     #[test]
-    fn routes_namespace_to_package_and_keeps_callable_name_local() {
+    fn keeps_namespace_in_one_package_and_qualifies_callable_name() {
         let name = Name::new(
             BaseName::new("user"),
             vec![BaseName::new("billing"), BaseName::new("v2")],
@@ -610,9 +478,11 @@ mod tests {
             NamingConvention::Language,
             "example.com/project/baml_sdk",
         );
-        let functions = &files[&PathBuf::from("billing/v2/functions.go")];
-        assert!(functions.contains("package v2"));
-        assert!(functions.contains("func LookupInvoice(ctx context.Context) (string, error)"));
+        let functions = &files[&PathBuf::from("functions.go")];
+        assert!(functions.contains("package baml_sdk"));
+        assert!(
+            functions.contains("func BillingV2LookupInvoice(ctx context.Context) (string, error)")
+        );
         assert!(functions.contains("\"user.billing.v2.lookup_invoice\""));
     }
 
@@ -691,11 +561,7 @@ mod tests {
     }
 
     #[test]
-    fn sanitizes_package_segments_and_reserved_argument_locals() {
-        assert_eq!(go_package_segment("type"), "type_");
-        assert_eq!(go_package_segment("internal"), "internal_");
-        assert_eq!(go_package_segment("9lives"), "ns_9lives");
-
+    fn sanitizes_reserved_argument_locals() {
         let function = Function {
             name: BaseName::new("reserved_args"),
             generic_params: vec![],
@@ -721,7 +587,7 @@ mod tests {
     }
 
     #[test]
-    fn disambiguates_namespace_segments_that_normalize_to_the_same_package() {
+    fn disambiguates_namespace_qualified_names_across_one_package() {
         let make_function = || Function {
             name: BaseName::new("echo"),
             generic_params: vec![],
@@ -752,16 +618,12 @@ mod tests {
             NamingConvention::Language,
             "example.com/project/baml_sdk",
         );
-        let routed = files
-            .keys()
-            .filter(|path| path.ends_with("functions.go"))
+        let functions = files[&PathBuf::from("functions.go")]
+            .lines()
+            .filter(|line| line.starts_with("func BillingEcho_"))
             .collect::<Vec<_>>();
-        assert_eq!(routed.len(), 2);
-        assert!(routed.iter().all(|path| {
-            path.to_string_lossy().starts_with("billing_")
-                && path.to_string_lossy().ends_with("/functions.go")
-        }));
-        assert_ne!(routed[0], routed[1]);
+        assert_eq!(functions.len(), 2);
+        assert_ne!(functions[0], functions[1]);
     }
 
     #[test]

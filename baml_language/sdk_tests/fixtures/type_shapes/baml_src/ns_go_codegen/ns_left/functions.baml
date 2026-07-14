@@ -1,5 +1,5 @@
-// The Go SDK routes this function to baml_sdk/go_codegen/left. Its sibling
-// deliberately uses the same bare name to prove namespaces do not collide.
+// This function and its sibling deliberately share a bare name. The Go SDK
+// keeps both in one package and qualifies them with their BAML namespaces.
 function echo(value: string) -> string {
   value
 }
