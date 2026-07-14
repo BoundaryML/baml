@@ -1,6 +1,6 @@
 version = 1
-recorded_at = "2026-07-14T00:00:00Z"
-git_sha = "b331ea6268f5c3790bd6fd5f5270edc5f869f27a"
+recorded_at = "2026-07-14T09:58:35Z"
+git_sha = "4146a2afc4d11a7fd274b1ade60efe868a6ac829"
 
 [artifacts.baml-cli]
 file_bytes = 22264560

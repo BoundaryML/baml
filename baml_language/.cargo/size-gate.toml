@@ -36,43 +36,31 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 17.14 MB file (incremental compilation: bex_cache +
-# per-file reuse/relink + invalidation, ~+3.5% vs the prior 16.56 MB baseline).
+# macOS arm64: baseline 16.09 MB file (generics: TyArg/TyClass proto types +
+# engine/compiler/sdkgen generics support, +499 KB / +3.2% vs the prior
+# 15.59 MB baseline).
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 17_649_783
-# Linux x86_64: baseline 22.26 MB file (incremental compilation, ~+3.4% vs the
-# prior 21.53 MB baseline).
+max_file_bytes = 17_480_864
+# Linux x86_64: baseline 21.51 MB file.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 22_932_497
-# Windows x86_64: baseline 18.73 MB file (incremental compilation, ~+3.4% vs the
-# prior 18.11 MB baseline).
+max_file_bytes = 22_747_163
+# Windows x86_64: baseline 18.11 MB file.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 19_288_192
+max_file_bytes = 19_098_870
 
 [artifacts.packed-program]
 kind = "pack"
 policy.max_delta_pct = 3.0
 
-# Rebaselined at b331ea626 for the branch's binary + envelope growth. The
-# packed artifact is the `baml-pack-host` binary (~96%) plus a borsh flat
-# `Program` envelope (~4%, the stdlib the packed binary must ship). Both grew
-# across the 76 commits since the prior baseline — incremental-compilation
-# work, the #3983 interface TIR rework, and canary merges — the same growth
-# that justified bumping the baml-cli/wasm ceilings in 658b65132 (Jul 8);
-# packed-program was +1.7-1.9% then (under budget) and is now +4.1%. This is
-# real code + stdlib growth, not strippable cache-only payload: `baml pack`
-# ships a flat `Program` (no `CompilationUnit`s / `interface_fragment`), and
-# the incremental-cache code (bex_cache) is not linked into pack-host.
-# Recorded the CI-measured sizes as the new baselines; ceilings ~3% above.
-# macOS arm64: baseline 12.62 MB file.
+# macOS arm64: baseline 12.01 MB file.
 [artifacts.packed-program.platform.aarch64-apple-darwin]
-max_file_bytes = 13_002_211
-# Linux x86_64: baseline 16.26 MB file.
+max_file_bytes = 12_593_524
+# Linux x86_64: baseline 15.62 MB file.
 [artifacts.packed-program.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 16_746_597
-# Windows x86_64: baseline 13.52 MB file.
+max_file_bytes = 16_305_593
+# Windows x86_64: baseline 13.00 MB file.
 [artifacts.packed-program.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 13_925_106
+max_file_bytes = 13_505_727
 
 [artifacts.packed-program.pack]
 cli_package = "baml_cli"
@@ -94,7 +82,6 @@ no_default_features = true
 wasm = true
 policy.max_delta_pct = 3.0
 
-# Single platform; baseline 4.20 MB gzip (incremental compilation, ~+3.4% vs the
-# prior 4.06 MB baseline).
+# Single platform; baseline 4.06 MB gzip.
 [artifacts.bridge_wasm.platform.wasm32-unknown-unknown]
-max_gzip_bytes = 4_323_819
+max_gzip_bytes = 4_262_473
