@@ -255,21 +255,6 @@ pub enum VmInternalError {
     #[error("missing native function: {name}")]
     MissingNativeFunction { name: String },
 
-    /// We expected a function to return `bex_vm::vm::VmExecState::Complete`,
-    /// but it returned a different (yielding) variant. (Plain prose: the
-    /// referenced type lives in `bex_vm`, which depends on this crate; an
-    /// intra-doc link would create a cycle.)
-    #[error(
-        "Expected a function to return completed, but it instead yielded at some incomplete state."
-    )]
-    ExpectedCompletion,
-
-    #[error("Invalid watch filter")]
-    InvalidFilter,
-
-    #[error("Invalid manual notify")]
-    InvalidManualNotify,
-
     #[error("unexpected constant kind: expected a TyTemplate constant at this index")]
     UnexpectedConstantKind,
 

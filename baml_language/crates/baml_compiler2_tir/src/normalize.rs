@@ -678,11 +678,11 @@ fn normalize_impl(
         // no destructure syntax). The dedicated Ty::Future variant still
         // carries the value/error types for the MIR lowering of `await`.
         Ty::Future(..) => StructuralTy::Unknown,
-        // `Resource`/`PromptAst`/`WatchAccessor` are never produced by TIR; the
+        // `Resource`/`PromptAst` are never produced by TIR; the
         // arms exist only so the match stays exhaustive over the shared
         // `baml_type::Ty`. Treat them as opaque (`Unknown`) like other
         // non-destructurable types.
-        Ty::Resource { .. } | Ty::PromptAst { .. } | Ty::WatchAccessor(..) => StructuralTy::Unknown,
+        Ty::Resource { .. } | Ty::PromptAst { .. } => StructuralTy::Unknown,
     }
 }
 

@@ -47,7 +47,6 @@ pub enum SyntaxKind {
     KW_DEFER,
 
     // Other keywords
-    KW_WATCH,
     KW_INSTANCEOF,
     KW_IS,
     KW_DYNAMIC,
@@ -385,7 +384,6 @@ pub enum SyntaxKind {
     WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
-    WATCH_LET,
     BREAK_STMT,
     CONTINUE_STMT,
     RETURN_STMT,
@@ -566,7 +564,6 @@ impl SyntaxKind {
                 | Self::KW_SPAWN
                 | Self::KW_AWAIT
                 | Self::KW_DEFER
-                | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC
                 | Self::KW_WITH

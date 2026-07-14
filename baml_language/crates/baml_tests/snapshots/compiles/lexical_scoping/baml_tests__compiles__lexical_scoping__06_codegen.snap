@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18436
 ---
 function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
 }
@@ -132,23 +131,6 @@ function user.shadow_param(x: int) -> int {
     load_var x
     load_const 1
     add_int
-    return
-}
-
-function user.watch_block_cleanup() -> int {
-    load_const 1
-    store_var x
-    load_const "x"
-    load_const null
-    watch x
-    load_const 2
-    store_var x
-    load_const "x"
-    load_const null
-    watch x
-    unwatch x
-    load_var x
-    unwatch x
     return
 }
 

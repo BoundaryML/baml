@@ -163,9 +163,7 @@ fn collect_alias_refs(ty: &RuntimeTy) -> Vec<TypeName> {
 fn collect_alias_refs_inner(ty: &RuntimeTy, out: &mut Vec<TypeName>) {
     match ty {
         RuntimeTy::TypeAlias(name, _) => out.push(name.clone()),
-        RuntimeTy::List(inner, _) | RuntimeTy::WatchAccessor(inner, _) => {
-            collect_alias_refs_inner(inner, out)
-        }
+        RuntimeTy::List(inner, _) => collect_alias_refs_inner(inner, out),
         RuntimeTy::Future(value, error, _) => {
             collect_alias_refs_inner(value, out);
             collect_alias_refs_inner(error, out);

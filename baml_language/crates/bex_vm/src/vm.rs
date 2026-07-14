@@ -19,25 +19,6 @@ use std::{collections::HashMap, sync::Arc};
 use baml_type::Name;
 use smallvec::SmallVec;
 
-/// Branch hint: tells the compiler this condition is almost never true.
-/// Used on the cold side of `if unlikely(cond) { ... }` in the dispatch
-/// loop's hot path — measurably faster than letting the compiler guess
-/// for checks like "any watch installed?" that fire on every variable
-/// store but are virtually always false outside of a debug session.
-#[allow(clippy::inline_always)]
-#[inline(always)]
-#[cold]
-fn cold() {}
-
-#[allow(clippy::inline_always)]
-#[inline(always)]
-fn unlikely(b: bool) -> bool {
-    if b {
-        cold();
-    }
-    b
-}
-
 fn guard_template_matches(
     template: &baml_type::TyTemplate,
     frame_type_args: &[baml_type::RuntimeTy],
@@ -116,10 +97,6 @@ fn guard_template_matches(
             matches!(actual, RuntimeTy::Future(actual_value, actual_error, _)
                 if guard_template_matches(value, frame_type_args, actual_value)
                 && guard_template_matches(error, frame_type_args, actual_error))
-        }
-        TyTemplate::WatchAccessor(inner, _) => {
-            matches!(actual, RuntimeTy::WatchAccessor(actual_inner, _)
-                if guard_template_matches(inner, frame_type_args, actual_inner))
         }
         // A symbolic projection whose witness type was not resolved at compile
         // time — never a match: a runtime value's concrete type carries no
@@ -206,9 +183,8 @@ use indexmap::IndexMap;
 use crate::{
     errors::{StackFrame, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::{EvalStack, EvalStackTrait},
-    package_baml::{BamlPackageBaml, NativeCallResult, NativeFunction},
+    package_baml::{NativeCallResult, NativeFunction},
     types::ObjectTrait,
-    watch::{self, NodeId, RootState, Watch, WatchFilter},
 };
 
 /// Max call stack size.
@@ -373,56 +349,29 @@ impl Frame {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::AtomicBool;
-    use std::{collections::HashMap, sync::Arc};
 
     use baml_type::{Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
         EarlyYieldCheck, FunctionCaptureProps, FunctionKind, GlobalPool, HeapPtr, Object,
         ObjectIndex, RootHaver, Value, ValueKind, VmGlobals,
-        bytecode::{Bytecode, FieldCopy, FieldCopySet},
-        types::{Class, ClassField, Function, FunctionOrigin, Instance, type_tags},
+        bytecode::Bytecode,
+        types::{Function, FunctionOrigin, type_tags},
     };
 
-    use super::{BexVm, Frame, VmCaptureMask, VmExecState, WatchNotification, value_type_tag};
+    use super::{BexVm, Frame, VmCaptureMask, VmExecState, value_type_tag};
     use crate::{
         indexable::EvalStack,
         package_baml::{NativeCallResult, NativeFunction},
-        watch::{NodeId, RootState, Watch, WatchFilter},
     };
 
     fn int_ty() -> RuntimeTy {
         RuntimeTy::Int {
             attr: TyAttr::default(),
         }
-    }
-
-    fn test_field(name: &str) -> ClassField {
-        ClassField {
-            name: name.to_string(),
-            field_type: int_ty(),
-            field_template: TyTemplate::from(baml_type::RealizedTy::int()),
-            description: None,
-            alias: None,
-            skip: false,
-        }
-    }
-
-    fn test_class(field_count: usize) -> Object {
-        Object::Class(Box::new(Class {
-            name: TypeName::local(Name::new("TestClass")),
-            fields: (0..field_count)
-                .map(|idx| test_field(&format!("field{idx}")))
-                .collect(),
-            description: None,
-            alias: None,
-            type_tag: 100,
-            ty_attr: TyAttr::default(),
-            has_cleanup: false,
-            generic_param_count: 0,
-        }))
     }
 
     fn early_yield_for_test() -> EarlyYieldCheck {
@@ -449,9 +398,6 @@ mod tests {
             globals: VmGlobals::Owned(GlobalPool::new()),
             error_class_ptrs: Arc::from(Vec::new()),
             panic_class_ptrs: Arc::from(Vec::new()),
-            watch: Watch::new(),
-            watched_vars: HashMap::new(),
-            interrupt_frame: None,
             prof_ring: None,
             prof_suppressed: false,
             prof_thread_id: 0,
@@ -530,92 +476,6 @@ mod tests {
             Value::int(type_tags::INT).kind(),
             ValueKind::Int(tag) if value_type_tag(value) == tag
         ));
-    }
-
-    #[test]
-    fn init_spread_preserves_pre_spread_watch_baseline() {
-        let mut vm = test_vm(vec![test_class(2)]);
-        let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
-        let source_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Vec::new(),
-            vec![Value::int(10), Value::int(2)],
-        )));
-        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Vec::new(),
-            vec![Value::int(1), Value::int(2)],
-        )));
-        let root = NodeId::HeapObject(dest_ptr);
-        vm.watch.register_root(
-            root,
-            RootState {
-                value: Value::object(dest_ptr),
-                last_assigned: None,
-                last_notified: None,
-                channel: "test".to_string(),
-                filter: WatchFilter::Default,
-            },
-        );
-
-        let result = vm
-            .init_spread(
-                Value::object(dest_ptr),
-                Value::object(source_ptr),
-                &FieldCopySet {
-                    fields: vec![
-                        FieldCopy { source: 0, dest: 0 },
-                        FieldCopy { source: 1, dest: 1 },
-                    ],
-                },
-            )
-            .expect("spread should succeed");
-
-        let Some(VmExecState::Notify(WatchNotification::Variables(notifications))) = result else {
-            panic!("expected watched spread notification");
-        };
-        assert_eq!(notifications, vec![root]);
-
-        let Object::Instance(dest) = vm.get_object(dest_ptr) else {
-            panic!("destination should remain an instance");
-        };
-        assert_eq!(
-            dest.field_values().collect::<Vec<_>>(),
-            vec![Value::int(10), Value::int(2)]
-        );
-    }
-
-    #[test]
-    fn init_spread_without_watch_does_not_populate_watch_graph() {
-        let mut vm = test_vm(vec![test_class(1)]);
-        let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
-        let old_value = vm.tlab.alloc_string("old".to_string());
-        let new_value = vm.tlab.alloc_string("new".to_string());
-        let source_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Vec::new(),
-            vec![Value::object(new_value)],
-        )));
-        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Vec::new(),
-            vec![Value::object(old_value)],
-        )));
-
-        let result = vm
-            .init_spread(
-                Value::object(dest_ptr),
-                Value::object(source_ptr),
-                &FieldCopySet {
-                    fields: vec![FieldCopy { source: 0, dest: 0 }],
-                },
-            )
-            .expect("spread should succeed");
-
-        assert!(result.is_none());
-        let mut watch_roots = Vec::new();
-        vm.watch.collect_roots(&mut watch_roots);
-        assert!(watch_roots.is_empty());
     }
 
     #[test]
@@ -972,14 +832,6 @@ pub struct BexVm {
     /// `PanicClass` discriminant. Shared (`Arc`) across spawned VMs.
     panic_class_ptrs: Arc<[HeapPtr]>,
 
-    /// Emit dependency graph.
-    pub watch: Watch,
-
-    /// Tracks which local variables are watched (have @watch).
-    pub(crate) watched_vars: HashMap<StackIndex, (String, String)>,
-
-    pub interrupt_frame: Option<usize>,
-
     /// D5a snapshot: the profiling ring this engine claimed on the current
     /// OS thread, refreshed by the engine at the top of every exec resume
     /// (`run_thread_event_loop`) and **never valid across an `.await`**.
@@ -1162,9 +1014,6 @@ pub enum VmExecState {
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
 
-    /// Notify about watched variables.
-    Notify(WatchNotification),
-
     /// The VM is yielding a custom event to be emitted.
     ///
     /// The engine handles this by converting both values to `BexExternalValue`
@@ -1180,12 +1029,6 @@ pub enum VmExecState {
 
     /// We are still executing, but we should yield to allow other threads or the GC to run.
     EarlyYield,
-}
-
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug, PartialEq)]
-pub enum WatchNotification {
-    Variables(Vec<watch::NodeId>),
 }
 
 /// Intermediate representation of a compiled BAML program.
@@ -1519,9 +1362,6 @@ impl BexVm {
             globals,
             error_class_ptrs,
             panic_class_ptrs,
-            watch: Watch::new(),
-            watched_vars: HashMap::new(),
-            interrupt_frame: None,
             prof_ring: None,
             prof_suppressed: false,
             prof_thread_id: 0,
@@ -2656,8 +2496,6 @@ impl BexVm {
         // stack and call stack should be empty.
         self.stack.clear();
         self.frames.clear();
-        self.watched_vars.clear();
-        self.watch = Watch::new();
         self.pending_call_captures.clear();
         self.seen_throw_values.clear();
         self.thrown_value_causes.clear();
@@ -3100,102 +2938,6 @@ impl BexVm {
         None
     }
 
-    /// Stops the execution of the current bytecode in favor of the given
-    /// function
-    ///
-    /// When the new control flow ends (given functions pops from the stack)
-    /// then the previosly running bytecode resumes execution.
-    fn interrupt(&mut self, function_ptr: HeapPtr, args: &[Value]) -> Result<VmExecState, VmError> {
-        let obj = self.get_object(function_ptr);
-        if !matches!(obj, Object::Function(_)) {
-            return Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::Function(FunctionType::Any)),
-                got: Type::Object(ObjectType::of(obj)),
-            }
-            .into());
-        }
-
-        // Persist the caller's live PC before pushing the interrupt frame.
-        // Once this frame is no longer innermost, unwinding/stack-trace lookups
-        // read its `faulting_pc` (no longer updated per-op under lazy `cur_pc`),
-        // so it must capture the instruction we interrupted. Mirrors
-        // `execute_call_from_locals_offset`.
-        if let Some(Frame::Bytecode(bf)) = self.frames.last_mut() {
-            bf.faulting_pc = self.cur_pc;
-        }
-
-        // Index of the frame that starts the interrupt code.
-        self.interrupt_frame = Some(self.frames.len());
-
-        let locals_offset = self.stack.len();
-
-        // Params.
-        self.stack.extend(args.iter().copied());
-
-        // Push the new frame. Interrupt frames participate in profiling like
-        // any call: their pop goes through the Return arm, which emits
-        // EndFunction — entry/exit must stay balanced.
-        let interrupt_function_id = self
-            .get_object(function_ptr)
-            .as_callable()
-            .map_or(0, |f| f.function_id);
-        let call_site_source =
-            self.call_site_source_for_frame(self.frames.len().saturating_sub(1), self.cur_pc);
-        let (call_id, parent_call_id) =
-            self.prof_enter_call(interrupt_function_id, call_site_source);
-        self.frames.push(Frame::Bytecode(BytecodeFrame {
-            function: function_ptr,
-            instruction_ptr: 0,
-            locals_offset: StackIndex::from_raw(locals_offset),
-            type_args: vec![],
-            faulting_pc: 0,
-            call_id,
-            parent_call_id,
-            capture_mask: VmCaptureMask::disabled(),
-        }));
-        self.allocate_real_locals_for_frame(function_ptr)?;
-
-        // Execute the interrupt code and return the result.
-        //
-        // Interrupt-internal calls mint call ids and, with profiling on,
-        // write balanced CallFunction/EndFunction records to the ring (§7
-        // decision 6, settled: filter calls stay in the .bamlprof stream —
-        // they are code that runs, attached under the interrupted call;
-        // program-only views hide them renderer-side). An exception CAUGHT
-        // inside the interrupt body unwinds normally; one that escapes the
-        // boundary fails loudly at the unwind site (see
-        // try_unwind_exception's crossed-boundary contract).
-        //
-        // The dispatch loop can yield states this synchronous mini-runner
-        // has no consumer for; they are handled here instead of surfacing as
-        // `ExpectedCompletion` errors in the caller:
-        // - `EarlyYield`: honoring it would suspend mid-interrupt with no way
-        //   to resume from `process_notifications`, so parking is delayed
-        //   until the interrupt completes. Note this delays the *engine-wide*
-        //   GC stop-the-world for the duration of the filter body (every
-        //   other thread parks and waits) — acceptable only because filter
-        //   bodies are expected to be tiny; revisit if filters grow.
-        // Everything else (`Complete`, `Await`, `SysOp`, ...) is returned to
-        // the caller unchanged.
-        //
-        // Swallowing is gated on the interrupt frame still being alive: an
-        // exception that escapes the interrupt body does NOT stop at the
-        // boundary — the unwinder clears `interrupt_frame` and keeps
-        // unwinding into the interrupted program's frames, which the engine
-        // HAS been told about. From that point every notification (most
-        // importantly `Unwound`) belongs to the outer program and must not
-        // be discarded: propagate it to the caller, which surfaces a loud
-        // `ExpectedCompletion` error rather than silently desyncing the
-        // engine's span bookkeeping or consuming the program's own
-        // completion as the filter verdict.
-        loop {
-            match self.exec()? {
-                VmExecState::EarlyYield if self.interrupt_frame.is_some() => {}
-                state => return Ok(state),
-            }
-        }
-    }
-
     fn allocate_real_locals_for_frame(
         &mut self,
         function_ptr: HeapPtr,
@@ -3271,94 +3013,8 @@ impl BexVm {
 
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    fn store_local_value(
-        &mut self,
-        local_var_index: StackIndex,
-        value: Value,
-    ) -> Result<Option<VmExecState>, VmError> {
-        // Fast path: no locals are watched, so a local store is just a stack
-        // write. The watch bookkeeping lives in a cold, never-inlined handler
-        // (`store_local_value_watched`) so this hot path stays inlined into
-        // `exec` and costs one predicted branch + one store. `Value` is `Copy`,
-        // so the overwrite needs no `mem::replace`/drop.
-        if unlikely(!self.watched_vars.is_empty()) {
-            return self.store_local_value_watched(local_var_index, value);
-        }
+    fn store_local_value(&mut self, local_var_index: StackIndex, value: Value) {
         self.stack.set_at(local_var_index, value);
-        Ok(None)
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn store_local_value_watched(
-        &mut self,
-        local_var_index: StackIndex,
-        value: Value,
-    ) -> Result<Option<VmExecState>, VmError> {
-        // Old value being replaced.
-        let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
-
-        // If this local is watched, update the watch graph.
-        //
-        // A watched local is a root in the watch graph. When
-        // reassigned (e.g. `v = new_val`), three things happen:
-        //
-        // 1. `update_watched_node` handles edge topology: unlinks
-        //    the old binding (so mutations to the old object no
-        //    longer trigger notifications), links the new one, and
-        //    deep-copies the previous root state into
-        //    `last_assigned` so the notification filter can diff
-        //    old vs new.
-        //
-        // 2. `state.value` is updated to the new value. This is
-        //    specific to local stores — for field/array/map stores
-        //    the root's top-level binding hasn't changed, but here
-        //    the root itself is being rebound.
-        //
-        // 3. `process_notifications` walks all roots reaching this
-        //    node (just itself, since it IS a root) and applies
-        //    the watch filter to decide whether to notify.
-        if self.watched_vars.contains_key(&local_var_index) {
-            let watched_node = NodeId::LocalVar(local_var_index);
-
-            self.update_watched_node(watched_node, watch::Path::Binding, old_value, value);
-
-            if let Some(state) = self.watch.root_state_mut(watched_node) {
-                state.value = value;
-            }
-
-            let notifications = self.process_notifications(watched_node)?;
-
-            if !notifications.is_empty() {
-                return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                    notifications,
-                ))));
-            }
-        }
-
-        Ok(None)
-    }
-
-    /// Combine the two `store_local_value` yields from a fused `StoreVar2` when
-    /// at least one watched local notified. `store_local_value` only ever yields
-    /// `Notify(Variables(..))`, so when both locals notify their node lists are
-    /// concatenated into one yield — no watch event is dropped. Cold: reached
-    /// only on the watched-local path, never in normal execution.
-    #[cold]
-    #[inline(never)]
-    fn merge_store_yields(y1: Option<VmExecState>, y2: Option<VmExecState>) -> VmExecState {
-        match (y1, y2) {
-            (
-                Some(VmExecState::Notify(WatchNotification::Variables(mut n1))),
-                Some(VmExecState::Notify(WatchNotification::Variables(n2))),
-            ) => {
-                n1.extend(n2);
-                VmExecState::Notify(WatchNotification::Variables(n1))
-            }
-            // Exactly one notified (or a defensive non-`Variables` variant).
-            (Some(state), _) | (_, Some(state)) => state,
-            (None, None) => unreachable!("merge_store_yields called with both None"),
-        }
     }
 
     pub fn error_to_exception_value(&mut self, error: VmBamlError) -> Value {
@@ -3742,20 +3398,14 @@ impl BexVm {
     /// Walk the call stack outward from the current frame looking for an
     /// exception handler.
     ///
-    /// On `Ok(crossed)` a handler was found and the VM is positioned at it;
-    /// `crossed` reports whether the unwind crossed the interrupt boundary —
-    /// an escaping watch-filter exception caught by the *interrupted
-    /// program's* own handler must still fail the filter loudly (the in-loop
-    /// call sites turn `crossed` into an error) instead of letting
-    /// `interrupt()`'s mini-runner keep executing the outer program and
-    /// consume its completion as the filter verdict.
+    /// On `Ok(())` a handler was found and the VM is positioned at it.
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
         function: &mut &'static Function,
         exception_value: Value,
         is_rethrow: bool,
-    ) -> Result<bool, VmError> {
+    ) -> Result<(), VmError> {
         // Capture the stack trace before unwinding destroys frame information.
         let trace: Vec<StackFrame> = self.capture_stack_trace();
 
@@ -3796,9 +3446,6 @@ impl BexVm {
         // here; per-frame truthful whether or not a handler catches it.
         let unwind_status = self.prof_unwind_status(exception_value);
 
-        // Whether this unwind popped past the live interrupt frame.
-        let mut crossed_interrupt_boundary = false;
-
         // The innermost (first) bytecode frame's faulting PC is the live
         // `cur_pc`; outer frames use the call-site PC they recorded at call time.
         let mut innermost_bc = true;
@@ -3823,17 +3470,6 @@ impl BexVm {
                     return Err(VmError::Thrown(exception_value));
                 }
                 self.frames.pop();
-                // Clean up interrupt bookkeeping
-                if let Some(interrupt_depth) = self.interrupt_frame
-                    && interrupt_depth >= self.frames.len()
-                {
-                    self.interrupt_frame = None;
-                    // Crossing the interrupt boundary must surface to the
-                    // caller: the in-loop call sites turn it into a loud
-                    // error, so the escape fails instead of the program's
-                    // own completion being consumed as the filter verdict.
-                    crossed_interrupt_boundary = true;
-                }
                 continue; // try next outer frame
             }
 
@@ -3949,7 +3585,7 @@ impl BexVm {
                 // Update caller's frame_idx / function references.
                 *frame_idx = depth;
                 *function = frame_function;
-                return Ok(crossed_interrupt_boundary);
+                return Ok(());
             }
 
             // No handler in this frame -- pop it and try the caller.
@@ -3973,7 +3609,6 @@ impl BexVm {
             let popped = self.frames.pop().expect("frame stack is not empty");
             match popped {
                 Frame::Bytecode(bf) => {
-                    self.unregister_frame_watches(bf.locals_offset);
                     self.stack.drain(bf.locals_offset..);
                     // Unwound frames close with the unwind status (Errored /
                     // Cancelled / Exited by thrown class); native frames emit
@@ -3982,16 +3617,6 @@ impl BexVm {
                     self.prof_exit_call(bf.call_id, bf.parent_call_id, unwind_status);
                 }
                 Frame::Native(_) => {} // native frames own no stack region
-            }
-
-            // Clean up interrupt bookkeeping for popped frames.
-            if let Some(interrupt_depth) = self.interrupt_frame
-                && interrupt_depth >= self.frames.len()
-            {
-                self.interrupt_frame = None;
-                // See the native-frame arm above: an interrupt-boundary
-                // crossing fails the filter loudly.
-                crossed_interrupt_boundary = true;
             }
         }
     }
@@ -5017,102 +4642,12 @@ impl BexVm {
         }
     }
 
-    // Runs filters and returns remaining notifications for the watched node.
-    fn process_notifications(
-        &mut self,
-        watched_node: NodeId,
-    ) -> Result<Vec<watch::NodeId>, VmError> {
-        // Make a copy of all the roots that reach the watched node.
-        let mut notifications = self.watch.copy_roots_reaching(watched_node);
-
-        // Some notifications might be removed with filters,  we'll return this.
-        let mut filtered_notifications = vec![];
-
-        // Sort them by variables first. At the moment this is not really used
-        // because we only have variables, at this point it's unlikely we will
-        // implement notifications on objects (references), so we might be able
-        // to get rid of this.
-        notifications.sort_by(|a, b| match (a, b) {
-            (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
-            (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
-            (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
-            (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
-        });
-
-        for notification in notifications {
-            // The call to copy_roots_reaching() should always return valid
-            // roots, so this should really be unreachable.
-            let Some(state) = self.watch.root_state(notification) else {
-                continue;
-            };
-
-            match state.filter {
-                // Manual notify means skip this notification. If paused also skip
-                WatchFilter::Manual | WatchFilter::Paused => continue,
-
-                // Default filter is a basic diff. If the value has actually
-                // changed, then notify.
-                WatchFilter::Default => {
-                    let Some(last_assigned) = state.last_assigned else {
-                        filtered_notifications.push(notification);
-                        continue;
-                    };
-
-                    if !crate::package_baml::PackageBamlImpl::deep_equals(
-                        self,
-                        &last_assigned,
-                        &state.value,
-                    ) {
-                        filtered_notifications.push(notification);
-                    }
-                }
-
-                // Run user function to decide if we should notify.
-                WatchFilter::Function(filter_func) => {
-                    match self.interrupt(filter_func, &[state.value])? {
-                        VmExecState::Complete(v) => match v.as_bool() {
-                            Some(true) => filtered_notifications.push(notification),
-                            Some(false) => {}
-                            None => {
-                                return Err(VmInternalError::TypeError {
-                                    expected: Type::Bool,
-                                    got: self.type_of(&v),
-                                }
-                                .into());
-                            }
-                        },
-                        _ => {
-                            // The filter body yielded a state this
-                            // synchronous mini-runner cannot service
-                            // (SysOp/Await/Spawn/Event). A sys-op yield has
-                            // already written its CallFunction and armed
-                            // `pending_sysop_call_id`; its only close site
-                            // (the engine's SysOp arm) is unreachable from
-                            // here, so close the pair before failing loudly.
-                            if let Some(call_id) = self.pending_sysop_call_id.take() {
-                                let parent = self.current_call_id;
-                                self.prof_exit_call(
-                                    call_id,
-                                    parent,
-                                    bex_events::prof::record::FunctionEndStatus::Errored,
-                                );
-                            }
-                            return Err(VmInternalError::ExpectedCompletion.into());
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(filtered_notifications)
-    }
-
     fn init_spread(
         &mut self,
         dest_value: Value,
         source_value: Value,
         field_copy_set: &bytecode::FieldCopySet,
-    ) -> Result<Option<VmExecState>, VmError> {
+    ) -> Result<(), VmError> {
         let dest_ptr = self.as_object_ptr(dest_value, ObjectType::Instance)?;
         let source_ptr = self.as_object_ptr(source_value, ObjectType::Instance)?;
 
@@ -5135,15 +4670,15 @@ impl BexVm {
             let mut copied_fields = Vec::with_capacity(field_copy_set.fields.len());
             let mut invalid_field_access = None;
             for copy in &field_copy_set.fields {
-                let Some(old_value) = dest.try_load_field(copy.dest) else {
+                if dest.try_load_field(copy.dest).is_none() {
                     invalid_field_access = Some((copy.dest, dest.field_len()));
                     break;
-                };
+                }
                 let Some(new_value) = source.try_load_field(copy.source) else {
                     invalid_field_access = Some((copy.source, source.field_len()));
                     break;
                 };
-                copied_fields.push((copy.dest, old_value, new_value));
+                copied_fields.push((copy.dest, new_value));
             }
             if let Some((index, field_count)) = invalid_field_access {
                 return Err(self.invalid_field_access_error(index, field_count));
@@ -5152,22 +4687,7 @@ impl BexVm {
             copied_fields
         };
 
-        let watched_node = NodeId::HeapObject(dest_ptr);
-        let roots = self.watch.copy_roots_reaching(watched_node);
-        let mut old_roots_copies = Vec::with_capacity(roots.len());
-        for &root in &roots {
-            if let Some(val) = self.watch.root_state(root).map(|s| s.value) {
-                old_roots_copies.push(crate::package_baml::PackageBamlImpl::deep_copy(self, &val));
-            }
-        }
-
-        for (dest_field, old_value, new_value) in copied_fields {
-            self.update_watched_node_dependencies(
-                watched_node,
-                watch::Path::InstanceField(dest_field),
-                old_value,
-                new_value,
-            );
+        for (dest_field, new_value) in copied_fields {
             let store_error = {
                 let Object::Instance(dest) = self.get_object(dest_ptr) else {
                     unreachable!("destination instance already type-checked above");
@@ -5184,20 +4704,7 @@ impl BexVm {
             dest.store_field(dest_field, new_value);
         }
 
-        for (&root, old_value) in roots.iter().zip(old_roots_copies) {
-            if let Some(state) = self.watch.root_state_mut(root) {
-                state.last_assigned = Some(old_value);
-            }
-        }
-
-        let notifications = self.process_notifications(watched_node)?;
-        if !notifications.is_empty() {
-            return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                notifications,
-            ))));
-        }
-
-        Ok(None)
+        Ok(())
     }
 
     fn alloc_initialized_instance(
@@ -5269,115 +4776,6 @@ impl BexVm {
         Ok(Value::object(self.tlab.alloc(Object::Instance(
             Instance::new(class_ptr, class_type_args, fields),
         ))))
-    }
-
-    /// When a watched node changes, we need to update the graph topology
-    /// and copy the previous values of the affected roots.
-    fn update_watched_node(
-        &mut self,
-        watched_node: NodeId,
-        path: watch::Path,
-        old_value: Value,
-        new_value: Value,
-    ) {
-        let Some(snapshot) = self.snapshot_watched_node(watched_node) else {
-            return;
-        };
-        self.finish_watched_node_update(watched_node, path, old_value, new_value, snapshot);
-    }
-
-    /// Copies the roots affected by `watched_node` before a mutation occurs.
-    ///
-    /// Array and map element stores must release their object lock before
-    /// walking/deep-copying the graph, so they take this snapshot before the
-    /// atomic locked mutation and finish the topology update afterward.
-    fn snapshot_watched_node(&mut self, watched_node: NodeId) -> Option<(Vec<NodeId>, Vec<Value>)> {
-        if !self.watch.is_watched(watched_node) {
-            return None;
-        }
-
-        // Deep-copy previous root values so the notification filter can diff
-        // old vs new. Two-pass because `baml_deep_copy` needs `&mut self`,
-        // which conflicts with borrowing `self.watch` for root_state.
-        let roots = self.watch.copy_roots_reaching(watched_node);
-        let mut old_roots_copies = Vec::with_capacity(roots.len());
-
-        for &root in &roots {
-            if let Some(val) = self.watch.root_state(root).map(|s| s.value) {
-                let deep_copy = crate::package_baml::PackageBamlImpl::deep_copy(self, &val);
-                old_roots_copies.push(deep_copy);
-            }
-        }
-
-        Some((roots, old_roots_copies))
-    }
-
-    fn finish_watched_node_update(
-        &mut self,
-        watched_node: NodeId,
-        path: watch::Path,
-        old_value: Value,
-        new_value: Value,
-        (roots, old_roots_copies): (Vec<NodeId>, Vec<Value>),
-    ) {
-        self.update_watched_node_dependencies(watched_node, path, old_value, new_value);
-
-        for (&root, old_value) in roots.iter().zip(old_roots_copies) {
-            if let Some(state) = self.watch.root_state_mut(root) {
-                state.last_assigned = Some(old_value);
-            }
-        }
-    }
-
-    fn update_watched_node_dependencies(
-        &mut self,
-        watched_node: NodeId,
-        path: watch::Path,
-        old_value: Value,
-        new_value: Value,
-    ) {
-        if !self.watch.is_watched(watched_node) {
-            return;
-        }
-
-        if let Some(old) = old_value.as_object_ptr() {
-            self.watch
-                .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
-        }
-
-        if let Some(new) = new_value.as_object_ptr() {
-            watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
-        }
-    }
-
-    /// Removes Watch roots owned by the bytecode frame whose locals begin at
-    /// `locals_offset`.
-    ///
-    /// MIR normally emits `Unwatch` before a watched local leaves scope. This
-    /// is the VM's lifetime backstop for non-local exits (for example, a native
-    /// panic unwinding the frame before its explicit `Unwatch` executes).
-    fn unregister_frame_watches(&mut self, locals_offset: StackIndex) {
-        if self.watched_vars.is_empty() {
-            return;
-        }
-
-        let locals_offset = locals_offset.raw();
-        let frame_watches: Vec<StackIndex> = self
-            .watched_vars
-            .keys()
-            .copied()
-            .filter(|index| index.raw() >= locals_offset)
-            .collect();
-
-        if frame_watches.is_empty() {
-            return;
-        }
-
-        for &local_var_index in &frame_watches {
-            self.watched_vars.remove(&local_var_index);
-        }
-        self.watch
-            .unregister_roots(frame_watches.into_iter().map(NodeId::LocalVar));
     }
 
     /// Load the function object for the given frame.
@@ -5468,13 +4866,10 @@ impl BexVm {
     /// unwinder walk frames and match handlers — the same path a `throw`
     /// opcode or an internal bytecode throw site takes.
     ///
-    /// On `Ok(n)` a handler was found: `self.frames` is now at the catching
+    /// On `Ok(())` a handler was found: `self.frames` is now at the catching
     /// frame, the exception value is stored in the handler's binding slot, the
     /// instruction pointer is at the handler's PC, and the next [`Self::exec`]
-    /// resumes the catch body. `n` is the number of *notified* frames (see
-    /// `try_unwind_exception`) popped on the way — when `n > 0` the
-    /// caller must close those frames' spans itself (the VM cannot yield here;
-    /// pair with [`Self::frame_count`] to truncate to the surviving depth).
+    /// resumes the catch body.
     /// On `Err(VmError::ThrownUnhandled { .. })` (or, for a degenerate
     /// Native-only frame stack, `Err(VmError::Thrown(..))`) no handler
     /// matched; the caller should route the result through whatever path it
@@ -5485,10 +4880,7 @@ impl BexVm {
     /// pick the topmost Bytecode frame's `Function` for that role, walking
     /// past any Native frames at the top (which the unwinder would pop
     /// unconditionally).
-    pub fn try_handle_external_exception(
-        &mut self,
-        exception_value: Value,
-    ) -> Result<bool, VmError> {
+    pub fn try_handle_external_exception(&mut self, exception_value: Value) -> Result<(), VmError> {
         if self.frames.is_empty() {
             let trace = self.capture_stack_trace();
             return Err(VmError::ThrownUnhandled {
@@ -5817,18 +5209,12 @@ impl BexVm {
                     }
                     NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
                         VmError::Thrown(exception_value) => {
-                            let crossed = self.try_unwind_exception(
+                            self.try_unwind_exception(
                                 &mut frame_idx,
                                 &mut function,
                                 exception_value,
                                 false,
                             )?;
-                            if crossed {
-                                // The exception escaped the watch filter:
-                                // fail the interrupt loudly (see
-                                // try_unwind_exception).
-                                return Err(VmInternalError::ExpectedCompletion.into());
-                            }
                             break;
                         }
                         other => return Err(other),
@@ -5878,18 +5264,12 @@ impl BexVm {
                         let ecflo_result = match ecflo_outcome {
                             Ok(result) => result,
                             Err(VmError::Thrown(exception_value)) => {
-                                let crossed = self.try_unwind_exception(
+                                self.try_unwind_exception(
                                     &mut frame_idx,
                                     &mut function,
                                     exception_value,
                                     false,
                                 )?;
-                                if crossed {
-                                    // The exception escaped the watch
-                                    // filter: fail the interrupt loudly
-                                    // (see try_unwind_exception).
-                                    return Err(VmInternalError::ExpectedCompletion.into());
-                                }
                                 break;
                             }
                             Err(other) => return Err(other),
@@ -5955,18 +5335,12 @@ impl BexVm {
                     }
                     Err(VmError::Thrown(exception_value)) => {
                         // Throw saves pc inside its handler before unwinding.
-                        let crossed = self.try_unwind_exception(
+                        self.try_unwind_exception(
                             &mut frame_idx,
                             &mut function,
                             exception_value,
                             false,
                         )?;
-                        if crossed {
-                            // The exception escaped the watch filter: fail
-                            // the interrupt loudly (see
-                            // try_unwind_exception).
-                            return Err(VmInternalError::ExpectedCompletion.into());
-                        }
                         break; // re-extract code/function after unwind
                     }
                     Err(
@@ -6159,9 +5533,7 @@ impl BexVm {
                     };
                     let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
                     let value = self.stack.ensure_pop();
-                    if let Some(state) = self.store_local_value(local_var_index, value)? {
-                        return Ok(Some(state));
-                    }
+                    self.store_local_value(local_var_index, value);
                 }
 
                 // ── Operand-movement superinstructions (CPython-style) ────────
@@ -6181,14 +5553,7 @@ impl BexVm {
                     self.stack.push(vb);
                 }
                 // StoreVar2(a, b) == `StoreVar(a); StoreVar(b)`: pop TOS into
-                // local[a], then pop into local[b]. Both stores always complete
-                // before returning — a single fused op can't yield mid-way and
-                // resume into the second store (the saved PC is already past the
-                // whole instruction), so each `store_local_value` must run. When
-                // both are watched locals and both notify, the two node lists are
-                // merged into one yield rather than dropping the second, so no
-                // watch event is lost (equivalent to two sequential StoreVar
-                // notifications, coalesced into a single batch).
+                // local[a], then pop into local[b].
                 OpCode::StoreVar2 => {
                     let a = { read_u32_unchecked(code, pc) as usize };
                     let b = { read_u32_unchecked(code, pc) as usize };
@@ -6202,15 +5567,8 @@ impl BexVm {
                     let sb = Self::local_slot_stack_index(off, b);
                     let va = self.stack.ensure_pop();
                     let vb = self.stack.ensure_pop();
-                    let y1 = self.store_local_value(sa, va)?;
-                    let y2 = self.store_local_value(sb, vb)?;
-                    // Hot path: no watched locals, both stores returned `None` —
-                    // fall through. The merge (only reached when a watched local
-                    // notifies) is outlined into a cold helper so this arm stays
-                    // a single predicted branch.
-                    if unlikely(y1.is_some() || y2.is_some()) {
-                        return Ok(Some(Self::merge_store_yields(y1, y2)));
-                    }
+                    self.store_local_value(sa, va);
+                    self.store_local_value(sb, vb);
                 }
 
                 OpCode::StoreVarLoadVar => {
@@ -6221,9 +5579,7 @@ impl BexVm {
                     let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
                     let value_slot = self.stack.ensure_slot_from_top(0);
                     let value = self.stack[value_slot];
-                    if let Some(state) = self.store_local_value(local_var_index, value)? {
-                        return Ok(Some(state));
-                    }
+                    self.store_local_value(local_var_index, value);
                 }
 
                 // ── LoadGlobal / StoreGlobal ──────────────────────────────────
@@ -6276,35 +5632,13 @@ impl BexVm {
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
 
-                    let old_value = {
+                    let store_error = {
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             return Err(VmInternalError::TypeError {
                                 expected: ObjectType::Instance.into(),
                                 got: ObjectType::of(self.get_object(obj_ptr)).into(),
                             }
                             .into());
-                        };
-                        instance
-                            .try_load_field(idx)
-                            .ok_or_else(|| instance.field_len())
-                    };
-                    let old_value = match old_value {
-                        Ok(old_value) => old_value,
-                        Err(length) => {
-                            return Err(self.invalid_field_access_error(idx, length));
-                        }
-                    };
-
-                    let watched_node = NodeId::HeapObject(obj_ptr);
-                    self.update_watched_node(
-                        watched_node,
-                        watch::Path::InstanceField(idx),
-                        old_value,
-                        new_value,
-                    );
-                    let store_error = {
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            unreachable!("already type-checked above");
                         };
                         (idx >= instance.field_len()).then_some(instance.field_len())
                     };
@@ -6316,13 +5650,6 @@ impl BexVm {
                         unreachable!("already type-checked above");
                     };
                     instance.store_field(idx, new_value);
-
-                    let notifications = self.process_notifications(watched_node)?;
-                    if !notifications.is_empty() {
-                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                            notifications,
-                        ))));
-                    }
                 }
 
                 OpCode::InitField => {
@@ -6356,13 +5683,11 @@ impl BexVm {
                     let source_value = self.stack.ensure_pop();
                     let dest_slot = self.stack.ensure_slot_from_top(0);
                     let dest_value = self.stack[dest_slot];
-                    if let Some(state) = self.init_spread(
+                    self.init_spread(
                         dest_value,
                         source_value,
                         &function.bytecode.field_copy_sets[idx],
-                    )? {
-                        return Ok(Some(state));
-                    }
+                    )?;
                 }
 
                 // ── Pop / Copy ────────────────────────────────────────────────
@@ -6663,89 +5988,6 @@ impl BexVm {
                         .tlab
                         .alloc(Object::UnscheduledFuture(Box::new(pending_future)));
                     return Ok(Some(VmExecState::Spawn(object_index)));
-                }
-
-                // ── Watch / Unwatch / Notify ──────────────────────────────────
-                OpCode::Watch => {
-                    let index = { read_u32_unchecked(code, pc) as usize };
-                    let popped = self.stack.ensure_pop();
-                    let filter = if popped.is_null() {
-                        WatchFilter::Default
-                    } else if let Some(object_index) = popped.as_object_ptr() {
-                        match self.get_object(object_index) {
-                            Object::Function(_) => WatchFilter::Function(object_index),
-                            Object::String(mode) if mode == "manual" => WatchFilter::Manual,
-                            Object::String(mode) if mode == "never" => WatchFilter::Paused,
-                            _ => return Err(VmInternalError::InvalidFilter.into()),
-                        }
-                    } else {
-                        return Err(VmInternalError::InvalidFilter.into());
-                    };
-                    let channel_value = self.stack.ensure_pop();
-                    let channel = self.as_string(&channel_value)?.to_string();
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
-                    let value = self.stack[local_var_index];
-                    let var_node = NodeId::LocalVar(local_var_index);
-                    self.watch.register_root(
-                        var_node,
-                        RootState {
-                            channel,
-                            value,
-                            filter,
-                            last_notified: None,
-                            last_assigned: None,
-                        },
-                    );
-                    let watched_var_name = &function.local_names[index];
-                    self.watched_vars.insert(
-                        local_var_index,
-                        (watched_var_name.clone(), function.name.clone()),
-                    );
-                    if let Some(object_index) = value.as_object_ptr() {
-                        watch::track_watch_dependencies(
-                            &mut self.watch,
-                            var_node,
-                            watch::Path::Binding,
-                            object_index,
-                        );
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                OpCode::Unwatch => {
-                    let index = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
-                    if self.watched_vars.remove(&local_var_index).is_some() {
-                        let var_node = NodeId::LocalVar(local_var_index);
-                        self.watch.unregister_root(var_node);
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                OpCode::Notify => {
-                    let index = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
-                    let var_node = NodeId::LocalVar(local_var_index);
-                    let notifications = self.watch.copy_roots_reaching(var_node);
-                    if notifications.len() != 1 && notifications.first() != Some(&var_node) {
-                        return Err(VmInternalError::InvalidManualNotify.into());
-                    }
-                    return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                        notifications,
-                    ))));
                 }
 
                 // ── Call ──────────────────────────────────────────────────────
@@ -7121,7 +6363,6 @@ impl BexVm {
                         capture_mask,
                         result,
                     );
-                    self.unregister_frame_watches(locals_offset);
                     self.stack.drain(locals_offset..);
                     self.stack.push(result);
                     self.frames.pop();
@@ -7134,10 +6375,6 @@ impl BexVm {
                     // and re-extracts code/pc/function for the parent frame.
                     if !self.frames.is_empty() {
                         *frame_idx = self.frames.len() - 1;
-                    }
-                    if Some(self.frames.len()) == self.interrupt_frame {
-                        self.interrupt_frame = None;
-                        return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
                     }
                     if self.frames.is_empty() {
                         return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
@@ -7274,13 +6511,7 @@ impl BexVm {
                     if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                         bf.instruction_ptr = *pc;
                     }
-                    let crossed =
-                        self.try_unwind_exception(frame_idx, function, value, is_rethrow)?;
-                    if crossed {
-                        // The exception escaped the watch filter: fail the
-                        // interrupt loudly (see try_unwind_exception).
-                        return Err(VmInternalError::ExpectedCompletion.into());
-                    }
+                    self.try_unwind_exception(frame_idx, function, value, is_rethrow)?;
                     // A handler was found; sync the local `pc` to its entry.
                     // When the handler is in the SAME frame, the dispatch loop
                     // would otherwise `continue` with the stale post-throw `pc`
@@ -7514,13 +6745,7 @@ impl BexVm {
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.instruction_ptr = *pc;
                         }
-                        let crossed =
-                            self.try_unwind_exception(frame_idx, function, value, true)?;
-                        if crossed {
-                            // See OpCode::Throw: an escaping watch-filter
-                            // exception fails the interrupt loudly.
-                            return Err(VmInternalError::ExpectedCompletion.into());
-                        }
+                        self.try_unwind_exception(frame_idx, function, value, true)?;
                         // Sync the local `pc` to the handler entry (see
                         // OpCode::Throw): a same-frame rethrow — an inner
                         // wildcard catch rethrowing a panic to an outer catch in
@@ -8092,21 +7317,15 @@ impl BexVm {
                     };
                     let new_value_u8: Option<u8> =
                         new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
-                    let watched_node = NodeId::HeapObject(array_object_index);
-                    let watch_snapshot = self.snapshot_watched_node(watched_node);
-                    // Acquire the array's write lock for bounds-check + old
-                    // read + new write atomically. The Watch snapshot above is
-                    // taken before the mutation without holding this lock.
-                    let store_result: Result<(Value, usize), (i64, usize)> = {
+                    let store_result: Result<(), (i64, usize)> = {
                         match self.get_object(array_object_index) {
                             Object::Array(arr) => {
                                 let mut guard = arr.lock_mut();
                                 let len = guard.len();
                                 match crate::array_index::resolve_index(i, len) {
                                     Some(idx) => {
-                                        let old = guard[idx];
                                         guard[idx] = new_value;
-                                        Ok((old, idx))
+                                        Ok(())
                                     }
                                     None => Err((i, len)),
                                 }
@@ -8123,9 +7342,8 @@ impl BexVm {
                                 let len = guard.len();
                                 match crate::array_index::resolve_index(i, len) {
                                     Some(idx) => {
-                                        let old = Value::int(i64::from(guard[idx]));
                                         guard[idx] = byte_v;
-                                        Ok((old, idx))
+                                        Ok(())
                                     }
                                     None => Err((i, len)),
                                 }
@@ -8139,8 +7357,8 @@ impl BexVm {
                             }
                         }
                     };
-                    let (old_value, index) = match store_result {
-                        Ok(v) => v,
+                    match store_result {
+                        Ok(()) => {}
                         Err((idx, len)) => {
                             return Err(VmError::Thrown(self.panic_to_exception_value(
                                 VmPanic::IndexOutOfBounds {
@@ -8149,23 +7367,8 @@ impl BexVm {
                                 },
                             )));
                         }
-                    };
-                    if let Some(snapshot) = watch_snapshot {
-                        self.finish_watched_node_update(
-                            watched_node,
-                            watch::Path::ArrayIndex(index),
-                            old_value,
-                            new_value,
-                            snapshot,
-                        );
                     }
                     self.heap.write_barrier(array_object_index, new_value);
-                    let notifications = self.process_notifications(watched_node)?;
-                    if !notifications.is_empty() {
-                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                            notifications,
-                        ))));
-                    }
                 }
 
                 OpCode::StoreMapElement => {
@@ -8175,24 +7378,18 @@ impl BexVm {
                     let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?.clone();
                     let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                    let watched_node = NodeId::HeapObject(map_index);
-                    let watch_snapshot = self.snapshot_watched_node(watched_node);
-                    // Keep capture-old + insert-new atomic. The Watch snapshot
-                    // above is taken before the mutation without holding this
-                    // lock.
-                    let store_result: Result<Value, ObjectType> = {
+                    let store_result: Result<(), ObjectType> = {
                         match self.get_object(map_index) {
                             Object::Map(map) => {
                                 let mut guard = map.lock_mut();
-                                let old = guard.get(&key).copied().unwrap_or(Value::NULL);
-                                guard.insert(key.clone(), new_value);
-                                Ok(old)
+                                guard.insert(key, new_value);
+                                Ok(())
                             }
                             other => Err(ObjectType::of(other)),
                         }
                     };
-                    let old_value = match store_result {
-                        Ok(v) => v,
+                    match store_result {
+                        Ok(()) => {}
                         Err(got) => {
                             return Err(VmInternalError::TypeError {
                                 expected: ObjectType::Map.into(),
@@ -8200,23 +7397,8 @@ impl BexVm {
                             }
                             .into());
                         }
-                    };
-                    if let Some(snapshot) = watch_snapshot {
-                        self.finish_watched_node_update(
-                            watched_node,
-                            watch::Path::MapKey(key.to_string()),
-                            old_value,
-                            new_value,
-                            snapshot,
-                        );
                     }
                     self.heap.write_barrier(map_index, new_value);
-                    let notifications = self.process_notifications(watched_node)?;
-                    if !notifications.is_empty() {
-                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                            notifications,
-                        ))));
-                    }
                 }
 
                 // ── Expanded arithmetic ───────────────────────────────────────
@@ -8592,9 +7774,6 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // Stack values
         roots.extend(self.stack.iter().filter_map(Value::as_object_ptr));
 
-        // Watch state (last_assigned/last_notified values that aren't on the stack)
-        self.watch.collect_roots(roots);
-
         roots.extend(
             self.pending_call_captures
                 .iter()
@@ -8634,9 +7813,6 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 }
             }
         }
-
-        // Watch state (last_assigned/last_notified values that aren't on the stack)
-        self.watch.forward_roots(roots);
 
         for event in &mut self.pending_call_captures {
             if let Some(ptr) = event.value.as_object_ptr()

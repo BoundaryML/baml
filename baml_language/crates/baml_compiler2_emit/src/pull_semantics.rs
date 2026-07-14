@@ -121,13 +121,6 @@ pub(crate) trait StackEffectSink: PullSink {
     /// Store a value into a captured variable (via the closure's captures array).
     /// Emits `StoreCapture(idx)` in the bytecode emitter.
     fn store_capture_value(&mut self, idx: usize) -> Result<(), Self::Error>;
-
-    fn push_watch_channel(
-        &mut self,
-        local: Local,
-        channel_name: Option<&str>,
-    ) -> Result<(), Self::Error>;
-    fn watch_local(&mut self, local: Local) -> Result<(), Self::Error>;
 }
 
 /// How a local assignment statement should be emitted/evaluated.
@@ -219,18 +212,6 @@ pub(crate) fn walk_drop_statement<S: StackEffectSink>(
 ) -> Result<(), S::Error> {
     walk_place_pull(sink, place)?;
     sink.pop_values(1)
-}
-
-/// Shared evaluation for `WatchOptions`.
-pub(crate) fn walk_watch_options_statement<S: StackEffectSink>(
-    sink: &mut S,
-    local: Local,
-    channel_name: Option<&str>,
-    filter: &Operand,
-) -> Result<(), S::Error> {
-    sink.push_watch_channel(local, channel_name)?;
-    walk_operand_pull(sink, filter)?;
-    sink.watch_local(local)
 }
 
 /// Shared pull order for direct calls: each arg only.
