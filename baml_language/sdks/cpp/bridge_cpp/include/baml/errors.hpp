@@ -2,6 +2,7 @@
 #define BAML_ERRORS_HPP
 
 #include <cstdint>
+#include <exception>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -58,6 +59,41 @@ public:
 class BamlCancelled : public BamlPanic {
 public:
     using BamlPanic::BamlPanic;
+};
+
+namespace detail {
+namespace wire {
+class Writer;
+}  // namespace wire
+}  // namespace detail
+
+template <typename T>
+struct codec;
+
+// Thrown from inside a host callable to surface a typed BAML error to the
+// BAML caller: `throw baml::HostThrow<ValidationError>{value}` crosses the
+// boundary as a real `ValidationError` class value, so a BAML
+// `catch (e: ValidationError)` matches it structurally (the analog of
+// Python's `raise BamlError(ValidationError(...))`). Any other host
+// exception crosses as an opaque `baml.errors.HostCallable` instead.
+class HostThrowBase : public std::exception {
+public:
+    const char* what() const noexcept override {
+        return "BAML host-callable typed throw";
+    }
+    // Writes the thrown value as an InboundValue message body.
+    virtual void encode_value(detail::wire::Writer& value_msg) const = 0;
+};
+
+template <typename T>
+class HostThrow : public HostThrowBase {
+public:
+    explicit HostThrow(T value) : value(std::move(value)) {}
+    void encode_value(detail::wire::Writer& value_msg) const override {
+        codec<T>::encode(value_msg, value);
+    }
+
+    T value;
 };
 
 }  // namespace baml

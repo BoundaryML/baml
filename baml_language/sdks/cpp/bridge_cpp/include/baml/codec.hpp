@@ -18,6 +18,7 @@
 #include <baml_cffi.h>
 
 #include <baml/box.hpp>
+#include <baml/detail/host_value.hpp>
 #include <baml/detail/proto.hpp>
 #include <baml/detail/wire.hpp>
 #include <baml/errors.hpp>
@@ -283,6 +284,24 @@ inline std::string join_trace(const std::vector<std::string>& trace) {
 [[noreturn]] inline void throw_from_result(OutboundResult&& result) {
     const std::string class_name =
         result.value.kind == OutboundValue::Kind::Class ? result.value.name : std::string();
+
+    // A baml.errors.HostCallable wrapping a native host exception carries a
+    // _handle into this process's registry: rethrow the original exception
+    // object instead of a flattened BamlError (Python-identity parity).
+    if (result.arm == OutboundResult::Arm::Error &&
+        class_name == "baml.errors.HostCallable") {
+        for (const auto& field : result.value.fields) {
+            if (field.first == "_handle" &&
+                field.second.kind == OutboundValue::Kind::Handle &&
+                field.second.handle_type == kHandleHostValueOpaque) {
+                if (std::exception_ptr original =
+                        HostValueRegistry::instance().find_exception(field.second.handle_key)) {
+                    std::rethrow_exception(original);
+                }
+            }
+        }
+    }
+
     std::string message = error_message_of(result.value);
     std::string trace = join_trace(result.trace);
 

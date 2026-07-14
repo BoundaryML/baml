@@ -2,10 +2,13 @@
 // real cdylib - version, runtime init, end-to-end typed calls through the
 // codec (sync, async, containers, error envelope), call registry fan-out,
 // Arg semantics, and buffer moves.
+#include <array>
 #include <cassert>
 #include <chrono>
 #include <cstdio>
+#include <functional>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -23,7 +26,8 @@ static void test_initialize_runtime() {
         {"main.baml",
          "function ReturnOne() -> int {\n  1\n}\n"
          "function Identity(s: string) -> string {\n  s\n}\n"
-         "function Twice(xs: int[]) -> int[] {\n  xs.map((x) -> { x * 2 })\n}\n"},
+         "function Twice(xs: int[]) -> int[] {\n  xs.map((x) -> { x * 2 })\n}\n"
+         "function CallTwice(f: (int) -> int, x: int) -> int {\n  f(f(x))\n}\n"},
     };
     baml::initialize_runtime(".", files);
     std::printf("runtime initialized\n");
@@ -85,6 +89,47 @@ static void test_call_function_end_to_end() {
         assert(threw);
     }
     std::printf("call function end to end ok\n");
+}
+
+static void test_host_callable_round_trip() {
+    // BAML invokes the host std::function twice; each round trip crosses
+    // the dispatch trampoline, a detached dispatch thread, and
+    // complete_host_call.
+    {
+        std::function<int64_t(int64_t)> triple = [](int64_t x) { return x * 3; };
+        baml::detail::ArgsEncoder args;
+        args.add_arg("f", [&](baml::detail::wire::Writer& w) {
+            baml::detail::encode_callable(w, triple, std::array<std::string, 1>{{""}});
+        });
+        args.add_arg("x", [](baml::detail::wire::Writer& w) {
+            baml::codec<int64_t>::encode(w, 2);
+        });
+        const int64_t got = baml::detail::call_sync<int64_t>("CallTwice", std::move(args));
+        assert(got == 18);
+    }
+    {
+        // A native host exception surfaces back as the original exception
+        // object (registry rehydration), not a flattened BamlError.
+        std::function<int64_t(int64_t)> boom = [](int64_t) -> int64_t {
+            throw std::out_of_range("host boom");
+        };
+        baml::detail::ArgsEncoder args;
+        args.add_arg("f", [&](baml::detail::wire::Writer& w) {
+            baml::detail::encode_callable(w, boom, std::array<std::string, 1>{{""}});
+        });
+        args.add_arg("x", [](baml::detail::wire::Writer& w) {
+            baml::codec<int64_t>::encode(w, 2);
+        });
+        bool threw = false;
+        try {
+            baml::detail::call_sync<int64_t>("CallTwice", std::move(args));
+        } catch (const std::out_of_range& e) {
+            threw = true;
+            assert(std::string(e.what()) == "host boom");
+        }
+        assert(threw);
+    }
+    std::printf("host callable round trip ok\n");
 }
 
 static void test_call_registry_round_trip() {
@@ -169,6 +214,7 @@ int main() {
     test_initialize_runtime();
     test_bytecode_init_rejects_garbage();
     test_call_function_end_to_end();
+    test_host_callable_round_trip();
     test_call_registry_round_trip();
     test_arg_two_state();
     test_owned_buffer_move();
