@@ -8187,18 +8187,20 @@ impl<'db> TypeInferenceBuilder<'db> {
     pub fn check_throws_contract(
         &mut self,
         body: &ExprBody,
-        declared_throws: Option<&TypeExpr>,
+        type_refs: &baml_compiler2_hir::type_ref::TypeRefStore,
+        declared_throws: Option<baml_compiler2_hir::type_ref::TypeRefId>,
         throws_span: Option<TextRange>,
         fallback_span: TextRange,
         warn_extraneous: bool,
     ) {
-        let Some(declared_expr) = declared_throws else {
+        let Some(declared_id) = declared_throws else {
             return;
         };
 
         let mut diags = Vec::new();
-        let declared_ty = crate::lower_type_expr::lower_type_expr(
-            declared_expr,
+        let declared_ty = crate::lower_type_expr::lower_type_ref(
+            type_refs,
+            declared_id,
             &crate::lower_type_expr::ScopeCtx {
                 db: self.context.db(),
                 package_items: self.package_items,

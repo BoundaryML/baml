@@ -1672,7 +1672,7 @@ pub fn infer_scope_types<'db>(
                 let local_id = &func_loc.id(db);
                 let func_data = &item_tree[func_loc.id(db)];
                 let body = baml_compiler2_ppir::function_body(db, func_loc);
-                let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+                let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
 
                 let enclosing_impl = match item_tree.method_owners.get(local_id) {
                     Some(baml_compiler2_hir::item_tree::MethodOwner::FreeImpl(impl_id)) => {
@@ -2009,12 +2009,12 @@ pub fn infer_scope_types<'db>(
                         bounds: &body_bounds,
                         self_ty: self_ty.clone(),
                     };
-                    let lower_with_self = |te: &baml_compiler2_ast::TypeExpr,
+                    let lower_with_self = |id: baml_compiler2_hir::type_ref::TypeRefId,
                                            diags: &mut Vec<
                         crate::infer_context::TirTypeError,
                     >| {
                         crate::generics::substitute_ty(
-                            &crate::lower_type_expr::lower_type_expr(te, &ctx, diags),
+                            &crate::lower_type_expr::lower_type_ref(&sig.type_refs, id, &ctx, diags),
                             &type_bindings,
                         )
                     };
@@ -2022,11 +2022,10 @@ pub fn infer_scope_types<'db>(
                     // Get declared return type
                     let return_ty = sig
                         .return_type
-                        .as_ref()
-                        .map(|te| {
+                        .map(|id| {
                             let span = sig_sm.return_type_span.unwrap_or(func_data.span);
                             let mut diags = Vec::new();
-                            let ty = lower_with_self(te, &mut diags);
+                            let ty = lower_with_self(id, &mut diags);
                             for diag in diags {
                                 builder.report_at_span(diag, span);
                             }
@@ -2052,8 +2051,8 @@ pub fn infer_scope_types<'db>(
                         let mut param_ty_validated = false;
                         let param_ty = if param.name.as_str() == "self"
                             && matches!(
-                                param.ty.kind,
-                                baml_compiler2_ast::TypeExprKind::Unknown { .. }
+                                sig.type_refs[param.type_ref].kind,
+                                baml_compiler2_hir::type_ref::TypeRefKind::Unknown
                             ) {
                             // `self`'s type is the method's `Self` receiver, resolved once
                             // above (rigid `Self` var for an interface's own default method,
@@ -2064,7 +2063,7 @@ pub fn infer_scope_types<'db>(
                         } else {
                             param_ty_validated = true;
                             let mut param_diags = Vec::new();
-                            let ty = lower_with_self(&param.ty, &mut param_diags);
+                            let ty = lower_with_self(param.type_ref, &mut param_diags);
                             for diag in param_diags {
                                 builder.report_at_span(diag, param_type_span);
                             }
@@ -2105,7 +2104,8 @@ pub fn infer_scope_types<'db>(
                     if !is_auto_derive {
                         builder.check_throws_contract(
                             expr_body,
-                            sig.throws.as_ref(),
+                            &sig.type_refs,
+                            sig.throws,
                             sig_sm.throws_type_span,
                             func_data.span,
                             true,
