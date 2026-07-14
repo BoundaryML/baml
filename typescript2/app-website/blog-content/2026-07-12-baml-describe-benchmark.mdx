@@ -1,6 +1,6 @@
 ---
 title: "We benchmarked BAML describe against grep."
-description: What 75 agent runs taught us about compiler-aware code navigation, agent steering, and the cases where grep still wins.
+description: What 117 agent runs taught us about compiler-aware code navigation, agent steering, and the cases where grep still wins.
 slug: baml-describe-benchmark
 date: Jul 12, 2026
 tags: ['research', 'engineering']
@@ -121,6 +121,26 @@ REPS=1 VARIANTS=natural,guided-hybrid-slim \
 ```
 
 The sanitized command-and-answer transcripts are included with the [`baml describe` PR](https://github.com/BoundaryML/baml/pull/3989). The raw trace folders are intentionally excluded because the isolated Claude home contains authentication material.
+
+## A broader intent benchmark
+
+The dependency benchmark deliberately focused on one new view. We followed it with a broader Claude-only matrix to see whether agents could choose among `overview`, `source`, `usage`, `impact`, `dependencies`, and semantic search without the question naming `baml describe` at all.
+
+The eight questions ranged from simple requests like “What does `parse_trophy` do?” to thrown-error analysis, test coverage, type-change impact, and a cross-file parser change. We compared natural navigation, a bounded grep control, and a guided BAML condition whose `CLAUDE.md` explained how to route each intent.
+
+| condition | wall time | calls | cost | context processed |
+|---|---:|---:|---:|---:|
+| natural navigation | **23s** | 3 | $0.203 | 84.7k |
+| bounded grep control | 25.5s | 4 | $0.155 | 95.9k |
+| guided `describe` | 25s | **2** | **$0.117** | **71.0k** |
+
+Guided BAML used 33% fewer tool calls than natural navigation, cost 43% less, and processed 16% less context. Natural navigation was still two seconds faster at the median.
+
+Correctness stayed level at seven complete core answers and one partial answer in every condition, but the misses differed. Natural navigation and grep missed part of the typed thrown-error set for `agent.tool_edit_file`. Guided BAML found that set, but missed a lexical prompt contract when reasoning about changing `TrophyReport.task_completed` from a string to an enum.
+
+The per-question results matter more than the median. Guided BAML was especially efficient for direct source, error-contract, and test-coverage questions. Natural navigation won some straightforward usage and broad cross-file questions. One parser-error question also caused the guided agent to repeat source lookups instead of expanding helpers efficiently.
+
+This matrix used one run per question and condition, so we treat it as directional evidence, not a stable population estimate. Its main value is showing that the agent can choose useful views from ordinary questions—and exposing the workflows where the instructions or CLI still need work.
 
 ## Agents did not adopt the tool on their own
 
