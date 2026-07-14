@@ -92,10 +92,17 @@ export function BepNav({
   const visibleIds = new Set(visibleSections.map((s) => s.id));
   const orderedSections: Array<Section & { depth: number }> = [];
   for (const section of visibleSections) {
-    if (section.parentSlug && visibleIds.has(section.parentSlug)) continue;
+    // Self-referential pages (parentSlug === own id) render at top level
+    if (
+      section.parentSlug &&
+      section.parentSlug !== section.id &&
+      visibleIds.has(section.parentSlug)
+    ) {
+      continue;
+    }
     orderedSections.push({ ...section, depth: 0 });
     for (const child of visibleSections) {
-      if (child.parentSlug === section.id) {
+      if (child.id !== section.id && child.parentSlug === section.id) {
         orderedSections.push({ ...child, depth: 1 });
       }
     }
