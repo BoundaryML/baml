@@ -1013,6 +1013,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
+ "salsa",
  "syn 2.0.117",
  "text-size",
  "walkdir",
@@ -1049,6 +1050,7 @@ dependencies = [
  "sys_native",
  "sys_ops",
  "sys_types",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
  "tower-http",
@@ -1339,6 +1341,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sys_native",
  "sys_ops",
  "sys_types",
  "text-size",
@@ -1346,6 +1349,7 @@ dependencies = [
  "tokio",
  "tracing",
  "vfs",
+ "walkdir",
  "wasm-bindgen-futures",
 ]
 
@@ -2980,7 +2984,7 @@ dependencies = [
 
 [[package]]
 name = "forked_google_cloud_auth"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "base64",

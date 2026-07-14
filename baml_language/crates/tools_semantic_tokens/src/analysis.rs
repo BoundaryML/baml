@@ -87,7 +87,7 @@ pub(crate) fn compute_tokens(source: &str) -> Vec<Token> {
     db.set_project_root(Path::new("."));
     let file = db.add_or_update_file(Path::new("scratch.baml"), source);
 
-    let mut tokens = semantic_tokens(&db, file);
+    let mut tokens = semantic_tokens(&db, file).clone();
     tokens.sort_by_key(|t| t.range.start());
 
     tokens

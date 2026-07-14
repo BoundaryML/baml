@@ -53,15 +53,6 @@ function for_loop_restores_outer() -> int {
     x
 }
 
-function watch_block_cleanup() -> int {
-    watch let x = 1;
-    {
-        watch let x = 2;
-        x;
-    };
-    x
-}
-
 function nested_outer_restored() -> int {
     let x = 1;
     {

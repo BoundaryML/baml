@@ -44,9 +44,10 @@ impl Default for DefaultConfig {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct UpdateConfig {
-    /// Whether normal commands may refresh the freshness caches (channel
-    /// manifest and latest skill commit) over the network once per TTL
-    /// window. Defaults to on; set `[update] auto_check = false` to opt out.
+    /// Whether normal commands may refresh the channel-manifest freshness
+    /// cache over the network once per TTL window. Defaults to on; set
+    /// `[update] auto_check = false` to opt out. The same setting governs the
+    /// toolchain binary's agent-skill freshness check.
     auto_check: Option<bool>,
 }
 
@@ -380,9 +381,11 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
     }
     verify_toolchain_version_file(&version)?;
 
-    // Warnings from the existing caches print immediately (no network).
+    // Warnings from the existing caches print immediately (no network). The
+    // agent-skill warning is NOT printed here: it lives in the toolchain
+    // binary (which ships nightly, unlike the wrapper), so printing it here
+    // too would double it up.
     let channel_warned = warn_if_channel_outdated(&selector, &version);
-    let skill_warned = warn_if_skill_outdated();
     // A cache refresh (due at most once per TTL window) runs in the
     // background while the command itself runs, instead of stalling it.
     let refresh = start_lazy_refresh(&selector);
@@ -415,17 +418,6 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
     refresh.wait();
     if !channel_warned {
         warn_if_channel_outdated(&selector, &version);
-    }
-    let latest = baml_release::skills::read_cached_latest_skill_commit(
-        &baml_release::skills::latest_skill_commit_cache_path(),
-    );
-    let state = baml_release::skills::read_skills_state(&state_path());
-    let skill_message =
-        skill_warning_message(project_has_baml_skills(), state.as_ref(), latest.as_deref());
-    if let Some(message) = skill_message {
-        if skill_warned != Some(message) {
-            eprintln!("{}: {message}", warning_prefix());
-        }
     }
     Ok(status.code().unwrap_or(1))
 }
@@ -586,10 +578,11 @@ fn warning_prefix() -> impl std::fmt::Display {
         .apply_to("warning")
 }
 
-/// An in-flight background refresh of the freshness caches (channel manifest
-/// and/or latest skill commit). Started before the main command runs and
-/// joined after it finishes, so the network latency hides behind the
-/// command's own runtime instead of stalling it up front.
+/// An in-flight background refresh of the channel-manifest freshness cache.
+/// Started before the main command runs and joined after it finishes, so the
+/// network latency hides behind the command's own runtime instead of stalling
+/// it up front. (The agent-skill freshness cache is refreshed by the
+/// toolchain binary, which runs its own equivalent of this.)
 struct LazyRefresh {
     done: std::sync::mpsc::Receiver<()>,
     deadline: std::time::Instant,
@@ -623,8 +616,7 @@ fn start_lazy_refresh(selector: &ResolvedSelector) -> Option<LazyRefresh> {
             &manifest_cache_dir(&baml_release::manifest_base_url())
                 .join(format!("{}.json", selector.selector)),
         );
-    let skill_due = should_attempt_refresh(&baml_release::skills::latest_skill_commit_cache_path());
-    if !manifest_due && !skill_due {
+    if !manifest_due {
         return None;
     }
 
@@ -632,22 +624,12 @@ fn start_lazy_refresh(selector: &ResolvedSelector) -> Option<LazyRefresh> {
     let channel = selector.selector.clone();
     let (sender, done) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        if manifest_due {
-            let _ = fetch_manifest_with_timeout(
-                &channel,
-                None,
-                FetchPolicy::ForceRemote,
-                AUTO_CHECK_TIMEOUT,
-            );
-        }
-        if skill_due {
-            // The skill refresh gets whatever budget the manifest refresh
-            // left over.
-            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-            if !remaining.is_zero() {
-                let _ = refresh_latest_skill_commit(remaining);
-            }
-        }
+        let _ = fetch_manifest_with_timeout(
+            &channel,
+            None,
+            FetchPolicy::ForceRemote,
+            AUTO_CHECK_TIMEOUT,
+        );
         let _ = sender.send(());
     });
     Some(LazyRefresh { done, deadline })
@@ -683,78 +665,6 @@ fn file_older_than(path: &Path, ttl: Duration) -> bool {
         .ok()
         .and_then(|modified| SystemTime::now().duration_since(modified).ok())
         .is_none_or(|age| age > ttl)
-}
-
-/// Passive check of the agent-skill situation, printed on every pass-through
-/// invocation; never touches the network (see [`skill_warning_message`]).
-/// Returns the message it printed (if any) so a post-refresh re-check can
-/// avoid printing the same warning twice in one invocation.
-fn warn_if_skill_outdated() -> Option<&'static str> {
-    let latest = baml_release::skills::read_cached_latest_skill_commit(
-        &baml_release::skills::latest_skill_commit_cache_path(),
-    );
-    let state = baml_release::skills::read_skills_state(&state_path());
-    let message =
-        skill_warning_message(project_has_baml_skills(), state.as_ref(), latest.as_deref())?;
-    eprintln!("{}: {message}", warning_prefix());
-    Some(message)
-}
-
-/// Decide which skill warning (if any) applies:
-///
-/// - No `baml-*` skills in the project at all: prompt to install. This fires
-///   on every command regardless of caches, so users discover skills exist.
-/// - Skills present but the `[skills]` provenance is missing or behind the
-///   cached latest skill repo commit: prompt to upgrade. Requires the cache
-///   (written by the auto-check or explicit commands); without it we can't
-///   know what's current, so we stay silent rather than guess.
-fn skill_warning_message(
-    project_has_skills: bool,
-    state: Option<&baml_release::skills::SkillsState>,
-    cached_latest: Option<&str>,
-) -> Option<&'static str> {
-    if !project_has_skills {
-        return Some("No baml skill is installed, set it up with baml agent install.");
-    }
-    let latest = cached_latest?;
-    match state {
-        Some(state) if state.installed_commit == latest => None,
-        _ => Some("Your baml skill is outdated, use baml agent install to upgrade it."),
-    }
-}
-
-/// Walk from the current directory up to $HOME looking for installed
-/// `baml-*` agent skills (`.agents/skills/` or `.claude/skills/`).
-fn project_has_baml_skills() -> bool {
-    let Ok(mut dir) = env::current_dir() else {
-        return false;
-    };
-    let home = env::var_os("HOME").map(PathBuf::from);
-    loop {
-        let agents = dir.join(".agents").join("skills");
-        let claude = dir.join(".claude").join("skills");
-        if dir_contains_baml_skill(&agents) || dir_contains_baml_skill(&claude) {
-            return true;
-        }
-        if home.as_ref().is_some_and(|home| dir == *home) || !dir.pop() {
-            return false;
-        }
-    }
-}
-
-/// A skill counts only when it's a `baml-*` directory actually containing a
-/// `SKILL.md`; a leftover empty directory or stray file must not suppress the
-/// missing-skill prompt.
-fn dir_contains_baml_skill(skills_dir: &Path) -> bool {
-    fs::read_dir(skills_dir)
-        .ok()
-        .into_iter()
-        .flatten()
-        .filter_map(std::result::Result::ok)
-        .any(|entry| {
-            entry.file_name().to_string_lossy().starts_with("baml-")
-                && entry.path().join("SKILL.md").is_file()
-        })
 }
 
 /// Passive freshness check for channel selectors, run on every pass-through
@@ -968,7 +878,6 @@ fn use_toolchain(selector: &str, override_url: Option<&str>) -> Result<()> {
     config.default.selector = selector.to_string();
     write_config(&config)?;
     println!("selected BAML toolchain {selector}");
-    check_skill_freshness_after_toolchain_change();
     Ok(())
 }
 
@@ -994,60 +903,7 @@ fn update_toolchain(override_url: Option<&str>) -> Result<()> {
             config.default.selector
         )
     })?;
-    check_skill_freshness_after_toolchain_change();
     Ok(())
-}
-
-/// Fetch the latest skill repo commit, persist it to the freshness cache, and
-/// return it.
-fn refresh_latest_skill_commit(timeout: Duration) -> Result<String> {
-    let sha = baml_release::skills::fetch_latest_skill_commit(timeout)?;
-    let _ = baml_release::skills::write_cached_latest_skill_commit(
-        &baml_release::skills::latest_skill_commit_cache_path(),
-        &sha,
-    );
-    Ok(sha)
-}
-
-fn short_sha(sha: &str) -> &str {
-    &sha[..sha.len().min(12)]
-}
-
-/// Print the agent-skill section of `baml toolchain status`. Skill problems
-/// never fail the status command; network failures degrade to a note.
-fn print_skill_status() {
-    let installed = baml_release::skills::read_skills_state(&state_path());
-    match &installed {
-        Some(state) => println!(
-            "skill installed: {} ({})",
-            short_sha(&state.installed_commit),
-            state.installed_at
-        ),
-        None => println!("skill installed: (none recorded locally)"),
-    }
-    match refresh_latest_skill_commit(HTTP_TIMEOUT) {
-        Ok(latest) => {
-            println!("skill latest: {}", short_sha(&latest));
-            match installed {
-                Some(state) if state.installed_commit == latest => {
-                    println!("skill status: up to date");
-                }
-                _ => {
-                    println!("skill status: outdated");
-                    println!("Run: baml agent install");
-                }
-            }
-        }
-        Err(_) => println!("skill latest: (failed to check)"),
-    }
-}
-
-/// After a toolchain change, also refresh the skill freshness cache and nudge
-/// if the installed skill is behind. Best-effort: silent on network failure.
-fn check_skill_freshness_after_toolchain_change() {
-    if refresh_latest_skill_commit(AUTO_CHECK_TIMEOUT).is_ok() {
-        let _ = warn_if_skill_outdated();
-    }
 }
 
 fn status_toolchain(override_url: Option<&str>) -> Result<()> {
@@ -1089,8 +945,6 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
                 println!("Run: baml toolchain use {}", selector.selector);
             }
         }
-        println!();
-        print_skill_status();
         return Ok(());
     }
 
@@ -1110,8 +964,6 @@ fn status_toolchain(override_url: Option<&str>) -> Result<()> {
     println!("status: exact versions do not advance automatically");
     println!("Run: baml toolchain use canary");
     println!("Or:  baml toolchain use nightly");
-    println!();
-    print_skill_status();
     Ok(())
 }
 
@@ -1455,54 +1307,5 @@ mod tests {
         assert!(!config.update.auto_check_enabled());
         let config: Config = toml::from_str("[update]\nauto_check = true\n").unwrap();
         assert!(config.update.auto_check_enabled());
-    }
-
-    #[test]
-    fn short_sha_truncates_long_and_keeps_short() {
-        assert_eq!(short_sha("0123456789abcdef0123"), "0123456789ab");
-        assert_eq!(short_sha("abc"), "abc");
-    }
-
-    fn skills_state(commit: &str) -> baml_release::skills::SkillsState {
-        baml_release::skills::SkillsState {
-            installed_commit: commit.to_string(),
-            installed_at: "x".to_string(),
-        }
-    }
-
-    #[test]
-    fn missing_project_skills_prompt_install_regardless_of_caches() {
-        let expected = Some("No baml skill is installed, set it up with baml agent install.");
-        assert_eq!(skill_warning_message(false, None, None), expected);
-        assert_eq!(skill_warning_message(false, None, Some("bbb")), expected);
-        // Even matching global provenance doesn't matter: this project has no skills.
-        assert_eq!(
-            skill_warning_message(false, Some(&skills_state("bbb")), Some("bbb")),
-            expected
-        );
-    }
-
-    #[test]
-    fn skills_behind_or_untracked_prompt_upgrade() {
-        let expected = Some("Your baml skill is outdated, use baml agent install to upgrade it.");
-        assert_eq!(
-            skill_warning_message(true, Some(&skills_state("aaa")), Some("bbb")),
-            expected
-        );
-        assert_eq!(skill_warning_message(true, None, Some("bbb")), expected);
-    }
-
-    #[test]
-    fn current_skills_or_unknown_latest_stay_silent() {
-        assert_eq!(
-            skill_warning_message(true, Some(&skills_state("bbb")), Some("bbb")),
-            None
-        );
-        // No cache yet: can't know what's current, so no warning.
-        assert_eq!(skill_warning_message(true, None, None), None);
-        assert_eq!(
-            skill_warning_message(true, Some(&skills_state("aaa")), None),
-            None
-        );
     }
 }

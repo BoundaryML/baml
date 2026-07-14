@@ -276,6 +276,7 @@ export const create = mutation({
           slug: v.string(),
           title: v.string(),
           content: v.string(),
+          parentSlug: v.optional(v.string()),
         })
       )
     ),
@@ -316,6 +317,7 @@ export const create = mutation({
       title: string;
       content: string;
       order: number;
+      parentSlug?: string;
     }> = [];
 
     if (args.pages && args.pages.length > 0) {
@@ -327,6 +329,7 @@ export const create = mutation({
           title: page.title,
           content: page.content,
           order: i,
+          parentSlug: page.parentSlug,
           createdAt: now,
           updatedAt: now,
         });
@@ -335,6 +338,7 @@ export const create = mutation({
           title: page.title,
           content: page.content,
           order: i,
+          parentSlug: page.parentSlug,
         });
       }
     }
@@ -373,6 +377,7 @@ export const update = mutation({
           title: v.string(),
           content: v.string(),
           order: v.number(),
+          parentSlug: v.optional(v.string()),
         })
       )
     ),
@@ -421,6 +426,7 @@ export const update = mutation({
             title: page.title,
             content: page.content,
             order: page.order,
+            parentSlug: page.parentSlug,
             updatedAt: now,
           });
         } else {
@@ -431,6 +437,7 @@ export const update = mutation({
             title: page.title,
             content: page.content,
             order: page.order,
+            parentSlug: page.parentSlug,
             createdAt: now,
             updatedAt: now,
           });
@@ -449,6 +456,7 @@ export const update = mutation({
       title: p.title,
       content: p.content,
       order: p.order,
+      parentSlug: p.parentSlug,
     }));
 
     // Get the latest version for this BEP
@@ -554,6 +562,7 @@ export const createPage = mutation({
     slug: v.string(),
     title: v.string(),
     content: v.string(),
+    parentSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -575,6 +584,7 @@ export const createPage = mutation({
       title: args.title,
       content: args.content,
       order: maxOrder + 1,
+      parentSlug: args.parentSlug,
       createdAt: now,
       updatedAt: now,
     });
@@ -592,6 +602,7 @@ export const updatePage = mutation({
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     slug: v.optional(v.string()),
+    parentSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const page = await ctx.db.get(args.pageId);
@@ -603,6 +614,7 @@ export const updatePage = mutation({
     if (args.title !== undefined) updates.title = args.title;
     if (args.content !== undefined) updates.content = args.content;
     if (args.slug !== undefined) updates.slug = args.slug;
+    if (args.parentSlug !== undefined) updates.parentSlug = args.parentSlug;
 
     await ctx.db.patch(args.pageId, updates);
 
@@ -653,13 +665,18 @@ export const reorderPages = mutation({
 export const importVersion = mutation({
   args: {
     bepId: v.id("beps"),
-    content: v.string(), // Clean main content (README)
-    pages: v.array(
-      v.object({
-        slug: v.string(),
-        title: v.string(),
-        content: v.string(),
-      })
+    title: v.optional(v.string()), // New BEP title (kept unchanged when omitted)
+    content: v.optional(v.string()), // Clean main content (kept unchanged when omitted)
+    // Omitted = keep existing pages unchanged. An empty array deletes all pages.
+    pages: v.optional(
+      v.array(
+        v.object({
+          slug: v.string(),
+          title: v.string(),
+          content: v.string(),
+          parentSlug: v.optional(v.string()),
+        })
+      )
     ),
     editNote: v.optional(v.string()),
     userId: v.id("users"),
@@ -684,9 +701,12 @@ export const importVersion = mutation({
     const newVersionNumber = (latestVersion?.version ?? 0) + 1;
     const now = Date.now();
 
-    // 3. Update BEP's main content
+    // 3. Update BEP's main content (omitted fields keep their current values)
+    const newTitle = args.title?.trim() || bep.title;
+    const newContent = args.content ?? bep.content ?? "";
     await ctx.db.patch(args.bepId, {
-      content: args.content,
+      title: newTitle,
+      content: newContent,
       updatedAt: now,
     });
 
@@ -710,10 +730,22 @@ export const importVersion = mutation({
       title: string;
       content: string;
       order: number;
+      parentSlug?: string;
     }> = [];
 
+    // When pages is omitted entirely, keep the existing pages untouched and
+    // snapshot them as-is. An explicit array (even empty) replaces the set.
+    const importedPages =
+      args.pages ??
+      existingPages.map((p) => ({
+        slug: p.slug,
+        title: p.title,
+        content: p.content,
+        parentSlug: p.parentSlug,
+      }));
+
     // Create a set of imported page slugs for efficient lookup
-    const importedSlugs = new Set(args.pages.map((p) => p.slug));
+    const importedSlugs = new Set(importedPages.map((p) => p.slug));
 
     // Delete existing pages that are not in the import bundle
     // This ensures the new version fully replaces the old content
@@ -725,7 +757,7 @@ export const importVersion = mutation({
       }
     }
 
-    for (const importedPage of args.pages) {
+    for (const importedPage of importedPages) {
       const existingPage = existingPagesBySlug.get(importedPage.slug);
 
       if (existingPage) {
@@ -733,6 +765,7 @@ export const importVersion = mutation({
         await ctx.db.patch(existingPage._id, {
           title: importedPage.title,
           content: importedPage.content,
+          parentSlug: importedPage.parentSlug,
           updatedAt: now,
         });
         processedPages.push({
@@ -740,6 +773,7 @@ export const importVersion = mutation({
           title: importedPage.title,
           content: importedPage.content,
           order: existingPage.order,
+          parentSlug: importedPage.parentSlug,
         });
       } else {
         // Create new page with incremental order
@@ -750,6 +784,7 @@ export const importVersion = mutation({
           title: importedPage.title,
           content: importedPage.content,
           order: maxOrder,
+          parentSlug: importedPage.parentSlug,
           createdAt: now,
           updatedAt: now,
         });
@@ -758,6 +793,7 @@ export const importVersion = mutation({
           title: importedPage.title,
           content: importedPage.content,
           order: maxOrder,
+          parentSlug: importedPage.parentSlug,
         });
       }
     }
@@ -765,10 +801,10 @@ export const importVersion = mutation({
     // Sort by order for the snapshot
     processedPages.sort((a, b) => a.order - b.order);
 
-    const pagesCreated = args.pages.filter(
+    const pagesCreated = importedPages.filter(
       (p) => !existingPagesBySlug.has(p.slug)
     ).length;
-    const pagesUpdated = args.pages.filter((p) =>
+    const pagesUpdated = importedPages.filter((p) =>
       existingPagesBySlug.has(p.slug)
     ).length;
 
@@ -777,8 +813,8 @@ export const importVersion = mutation({
       const versionId = await ctx.db.insert("bepVersions", {
         bepId: args.bepId,
         version: newVersionNumber,
-        title: bep.title, // Keep the existing title
-        content: args.content,
+        title: newTitle,
+        content: newContent,
         pagesSnapshot: processedPages.length > 0 ? processedPages : undefined,
         editedBy: args.userId,
         editNote: args.editNote ?? "Imported from markdown",
@@ -817,8 +853,8 @@ export const importVersion = mutation({
 
     const versionId = latestVersion._id;
     await ctx.db.patch(latestVersion._id, {
-      title: bep.title,
-      content: args.content,
+      title: newTitle,
+      content: newContent,
       pagesSnapshot: processedPages.length > 0 ? processedPages : undefined,
       editedBy: args.userId,
       editNote: args.editNote ?? latestVersion.editNote,

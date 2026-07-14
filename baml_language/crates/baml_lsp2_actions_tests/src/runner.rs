@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::Path};
 
 use baml_compiler_diagnostics::{RenderConfig, render_diagnostic};
 use baml_lsp2_actions::{
-    annotations::{AnnotationKind, InlineAnnotation, annotations},
+    annotations::{AnnotationKind, InlineAnnotation, file_annotations},
     check::check_file,
     completions::completions_at,
     tokens::{SemanticToken, semantic_tokens},
@@ -165,9 +165,9 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     let actual_inlay_hints = if parsed.expected_inlay_hints.is_some() {
         let mut all_hints: Vec<(String, InlineAnnotation)> = Vec::new();
         for (filename, source_file) in &file_map {
-            let hints = annotations(&db, *source_file);
+            let hints = file_annotations(&db, *source_file);
             for hint in hints {
-                all_hints.push((filename.clone(), hint));
+                all_hints.push((filename.clone(), hint.clone()));
             }
         }
 
@@ -184,7 +184,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         for (filename, source_file) in &file_map {
             let tokens = semantic_tokens(&db, *source_file);
             for token in tokens {
-                all_tokens.push((filename.clone(), token));
+                all_tokens.push((filename.clone(), token.clone()));
             }
         }
 

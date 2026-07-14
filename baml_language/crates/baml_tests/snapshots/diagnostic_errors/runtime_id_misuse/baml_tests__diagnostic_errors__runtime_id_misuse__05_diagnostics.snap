@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 52684
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] error: `$id` cannot be the target of a compound assignment; use `$id = ...` with an override from `baml.id.new()`

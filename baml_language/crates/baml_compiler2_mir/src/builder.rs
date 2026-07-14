@@ -93,7 +93,6 @@ impl MirBuilder {
         name: Option<Name>,
         ty: RuntimeTy,
         span: Option<Span>,
-        is_watched: bool,
     ) -> Local {
         let id = Local(self.locals.len());
         self.locals.push(LocalDecl {
@@ -101,7 +100,6 @@ impl MirBuilder {
             ty,
             span,
             scope_span: None,
-            is_watched,
             is_captured: false,
         });
         id
@@ -109,7 +107,7 @@ impl MirBuilder {
 
     /// Allocate a temporary (unnamed local).
     pub(crate) fn temp(&mut self, ty: RuntimeTy) -> Local {
-        self.declare_local(None, ty, None, false)
+        self.declare_local(None, ty, None)
     }
 
     /// Get the number of locals declared so far.
@@ -221,21 +219,6 @@ impl MirBuilder {
     /// Emit a nop statement.
     pub(crate) fn nop(&mut self) {
         self.push_statement(StatementKind::Nop, None);
-    }
-
-    /// Emit an unwatch statement for a watched local going out of scope.
-    pub(crate) fn unwatch(&mut self, local: Local) {
-        self.push_statement(StatementKind::Unwatch(local), None);
-    }
-
-    /// Emit a `watch_options` statement to update the filter for a watched local.
-    pub(crate) fn watch_options(&mut self, local: Local, filter: Operand) {
-        self.push_statement(StatementKind::WatchOptions { local, filter }, None);
-    }
-
-    /// Emit a `watch_notify` statement to manually trigger notification for a watched local.
-    pub(crate) fn watch_notify(&mut self, local: Local) {
-        self.push_statement(StatementKind::WatchNotify(local), None);
     }
 
     /// Set debug scope span for a local variable.

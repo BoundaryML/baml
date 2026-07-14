@@ -19,13 +19,21 @@ use common::BuiltPaths;
 // ============================================================================
 
 /// Run a baml-cli command and return the output (stdout, stderr, exit code).
+///
+/// `BAML_HOME` is pointed at an empty directory inside the project (with the
+/// freshness auto-check disabled) so the passive skill check never reads the
+/// developer's real `~/.baml` state or touches the network.
 fn run_baml_cli(built: &BuiltPaths, dir: &Path, args: &[&str]) -> Output {
+    let home = dir.join(".baml-home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
     let mut cmd = Command::new(&built.baml_cli);
     for arg in args {
         cmd.arg(arg);
     }
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
+    cmd.env("BAML_HOME", &home);
     cmd.output().expect("spawn baml-cli")
 }
 
@@ -281,6 +289,11 @@ fn run_valid_project_outputs_only_program_output() {
     let tmp = tempfile::tempdir().unwrap();
 
     create_project(tmp.path(), "function answer() -> int {\n    42\n}\n");
+    // Installed skills keep the passive skill check quiet, so stderr stays
+    // exactly the program's own output.
+    let skill_dir = tmp.path().join(".agents/skills/baml-core");
+    std::fs::create_dir_all(&skill_dir).unwrap();
+    std::fs::write(skill_dir.join("SKILL.md"), "---\nname: baml-core\n---\n").unwrap();
 
     let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
 

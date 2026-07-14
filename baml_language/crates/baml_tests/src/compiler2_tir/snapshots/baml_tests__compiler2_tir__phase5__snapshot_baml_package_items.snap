@@ -212,6 +212,7 @@ namespace baml.llm:
   class Context { methods: [output_format_with] }
   class ContextClient { methods: [] }
   class ExecutionContext { methods: [] }
+  class GoogleAiOptions { methods: [] }
   class MediaUrlHandler { methods: [] }
   class OrchestrationStep { methods: [] }
   class OutputFormat { methods: [] }

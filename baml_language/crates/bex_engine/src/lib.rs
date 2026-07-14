@@ -698,6 +698,15 @@ pub struct BexEngine {
     /// construction (the config is read-once per process). Gates every
     /// profiling emission and the per-resume ring refresh.
     prof_enabled: bool,
+
+    /// Whether this engine's profiling lifecycle has been activated
+    /// (metadata registered with the profiling consumer). Engines built via
+    /// [`BexEngine::new`] activate at construction. Candidate engines built
+    /// via [`BexEngine::new_with_deferred_profiling`] stay inactive until a
+    /// winning conditional commit calls [`BexEngine::activate_profiling`];
+    /// a superseded candidate therefore drops without registering metadata
+    /// or emitting an `engine_closed` tombstone.
+    prof_activated: AtomicBool,
 }
 
 impl Drop for BexEngine {
@@ -707,8 +716,12 @@ impl Drop for BexEngine {
     /// closes its `.bamlprof`, and frees its metadata. Without this,
     /// long-lived engine-churning hosts (LSP recompiles) accumulate open
     /// files and heartbeat work for dead engines.
+    ///
+    /// An engine whose profiling lifecycle was never activated (a discarded
+    /// candidate) drops quietly: it registered no metadata, so it must not
+    /// emit a close notification or leave a closed-engine tombstone.
     fn drop(&mut self) {
-        if self.prof_enabled {
+        if self.prof_enabled && self.prof_activated.load(Ordering::Acquire) {
             bex_events::prof::engine_closed(self.engine_id.0);
         }
     }
@@ -1275,6 +1288,25 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        let engine = Self::new_with_deferred_profiling(bytecode_program, sys_ops, argv)?;
+        engine.activate_profiling();
+        Ok(engine)
+    }
+
+    /// Like [`BexEngine::new`], but keeps the profiling lifecycle inactive.
+    ///
+    /// Used for *candidate* engines that may be discarded before ever
+    /// becoming the installed engine (LSP conditional commit): construction —
+    /// including `$init` — runs normally, but no profiling metadata is
+    /// registered and dropping the candidate emits no `engine_closed`
+    /// notification. The winning commit calls
+    /// [`BexEngine::activate_profiling`] immediately before making the
+    /// engine reachable.
+    pub fn new_with_deferred_profiling(
+        bytecode_program: bex_vm_types::Program,
+        sys_ops: std::sync::Arc<sys_ops::SysOps>,
+        argv: Vec<String>,
+    ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
@@ -1331,15 +1363,9 @@ impl BexEngine {
                 obj
             })
             .collect();
-        if prof_enabled {
-            // The .bamlprof header consumes the M0 metadata table (its ids
-            // match the ids stamped on each Function above — same walk
-            // order, same 1-based sequence).
-            bex_events::prof::register_engine_metadata(
-                engine_id.0,
-                prof_engine_metadata(&program_metadata),
-            );
-        }
+        // Profiling metadata registration is deferred to
+        // `activate_profiling()` so discarded candidate engines never leave
+        // consumer-side state (`BexEngine::new` activates immediately).
 
         // Pre-compute class and enum indices before moving objects to heap.
         // This is used for allocating instances/variants from sys-op results.
@@ -1451,8 +1477,7 @@ impl BexEngine {
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
-                // bytecode (no async ops), but we loop to handle any intermediate
-                // notifications gracefully.
+                // bytecode, but events and GC safepoints may still yield.
                 loop {
                     match vm.exec() {
                         Ok(VmExecState::Complete(_)) => {
@@ -1465,10 +1490,6 @@ impl BexEngine {
                                 }
                             };
                             break;
-                        }
-                        Ok(VmExecState::Notify(_)) => {
-                            // Ignore watch notifications during init.
-                            continue;
                         }
                         Ok(VmExecState::Event { .. }) => {
                             // Handle events during $init: push null and continue.
@@ -1580,7 +1601,31 @@ impl BexEngine {
             error_class_ptrs,
             panic_class_ptrs,
             prof_enabled,
+            prof_activated: AtomicBool::new(false),
         })
+    }
+
+    /// Activate this engine's profiling lifecycle: register the `.bamlprof`
+    /// header metadata with the profiling consumer. Idempotent; a no-op when
+    /// the `BAML_PROFILE` master switch is off.
+    ///
+    /// The .bamlprof header consumes the M0 metadata table (its ids match
+    /// the ids stamped on each Function during construction — same walk
+    /// order, same 1-based sequence).
+    pub fn activate_profiling(&self) {
+        if !self.prof_enabled {
+            return;
+        }
+        if self
+            .prof_activated
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            bex_events::prof::register_engine_metadata(
+                self.engine_id.0,
+                prof_engine_metadata(&self.program_metadata),
+            );
+        }
     }
 
     #[must_use]
@@ -3750,10 +3795,8 @@ impl BexEngine {
         let unwind_result = thread.vm.try_handle_external_exception(vm_value);
         self.drain_vm_call_captures(thread, call_capture);
         match unwind_result {
-            // A handler caught the injected exception. `crossed` cannot be
-            // true here: this entry point runs from the engine's sysop arm,
-            // never inside a watch-filter mini-runner.
-            Ok(_crossed) => Ok(None),
+            // A handler caught the injected exception.
+            Ok(()) => Ok(None),
             Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => Ok(Some(
                 self.route_unhandled_vm_throw(
                     thread,
@@ -5155,10 +5198,6 @@ impl BexEngine {
                     // arguments but does not push a return value, so push null
                     // before the VM resumes at the next instruction.
                     thread.vm.stack.push(Value::NULL);
-                }
-
-                VmExecState::Notify(_notification) => {
-                    // Ignore watch notifications for now
                 }
 
                 VmExecState::EarlyYield => {

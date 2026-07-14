@@ -141,9 +141,6 @@ impl TyTemplate {
                 Box::new(error.substitute(type_args)),
                 attr.clone(),
             ),
-            Self::WatchAccessor(inner, attr) => {
-                RuntimeTy::WatchAccessor(Box::new(inner.substitute(type_args)), attr.clone())
-            }
             // The projection stays symbolic — only its base/interface positions
             // realize. Resolving it to the witness type needs impl knowledge the
             // substitution environment doesn't carry.
@@ -190,7 +187,7 @@ impl TyTemplate {
         match self {
             Self::Wildcard => true,
             Self::TypeArgRef(_) | Self::TypeArgRefOrWildcard(_) => false,
-            Self::List(inner, _) | Self::WatchAccessor(inner, _) => inner.contains_wildcard(),
+            Self::List(inner, _) => inner.contains_wildcard(),
             Self::Map { key, value, .. } => key.contains_wildcard() || value.contains_wildcard(),
             Self::Future(value, error, _) => value.contains_wildcard() || error.contains_wildcard(),
             Self::Union(parts, _) => parts.iter().any(Self::contains_wildcard),
@@ -338,9 +335,6 @@ impl TyTemplate {
                 Box::new(error.to_display_ty()),
                 attr.clone(),
             ),
-            Self::WatchAccessor(inner, attr) => {
-                Ty::WatchAccessor(Box::new(inner.to_display_ty()), attr.clone())
-            }
             Self::AssociatedTypeProjection {
                 base,
                 interface,

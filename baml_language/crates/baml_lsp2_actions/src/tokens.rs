@@ -198,7 +198,7 @@ impl ModifierSet {
 // ── SemanticToken ─────────────────────────────────────────────────────────────
 
 /// A classified token ready for LSP encoding.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct SemanticToken {
     pub range: TextRange,
     pub token_type: SemanticTokenType,
@@ -321,12 +321,13 @@ fn emit_node(node: &SyntaxNode, token_type: SemanticTokenType, out: &mut Vec<Sem
 /// Always returns tokens in document order (required by the LSP
 /// `textDocument/semanticTokens/full` contract).
 ///
-/// A Salsa query: the result is memoized per file and recomputed only when an
-/// input it reads changes (`syntax_tree`, `file_semantic_index`,
-/// `infer_scope_types`, `function_body`, source maps). It therefore cannot go
-/// stale, and a repeated request for an unchanged file is served from cache
-/// without re-walking the CST.
-#[salsa::tracked(returns(clone))]
+/// Salsa tracked query: the CST walk re-classifies every token
+/// against type inference, which measured 40–150ms on real projects — too
+/// slow to recompute per request while the file is unchanged. Memoization
+/// keys off the file revision; edits to *other* files reuse this file's
+/// result if its inference inputs are unaffected. `returns(ref)` hands
+/// borrowing callers the memoized vec without an O(tokens) clone per request.
+#[salsa::tracked(returns(ref))]
 pub fn semantic_tokens(db: &dyn Db, file: SourceFile) -> Vec<SemanticToken> {
     let root = baml_compiler_parser::syntax_tree(db, file);
     // Full document: classify every token, so build the merged whole-file index

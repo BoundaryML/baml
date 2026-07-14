@@ -59,6 +59,10 @@ function withQueryParam(path: string, key: string, value: string): string {
   return `${pathname}${nextQuery ? `?${nextQuery}` : ""}${hash ? `#${hash}` : ""}`;
 }
 
+// Sidebar scroll offsets per BEP, so the nav keeps its place when the shell
+// remounts (e.g. loading skeleton → content). Module-level on purpose.
+const navScrollPositions = new Map<number, number>();
+
 function highlightElement(target: Element) {
   target.scrollIntoView({ behavior: "smooth", block: "center" });
   target.classList.add("ring-2", "ring-primary", "ring-offset-2");
@@ -440,6 +444,17 @@ const [copied, setCopied] = useState(false);
     navigateToSection(section);
   };
 
+  // Restore the sidebar's scroll offset when its container (re)mounts, so
+  // navigating doesn't visibly reset a long page list back to the top.
+  const restoreNavScroll = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (!el) return;
+      const saved = navScrollPositions.get(bepNumber);
+      if (saved) el.scrollTop = saved;
+    },
+    [bepNumber]
+  );
+
   const handleNavigateToComment = (
     commentId: Id<"comments">,
     pageId?: Id<"bepPages"> | null,
@@ -716,6 +731,7 @@ const [copied, setCopied] = useState(false);
           id: p.slug,
           title: p.title,
           hasContent: !!p.content,
+          parentSlug: p.parentSlug,
         })),
       ]
     : [
@@ -729,6 +745,7 @@ const [copied, setCopied] = useState(false);
           id: p.slug,
           title: p.title,
           hasContent: !!p.content,
+          parentSlug: p.parentSlug,
         })),
         ...newPages.map((p) => ({
           id: p.slug,
@@ -917,7 +934,14 @@ const [copied, setCopied] = useState(false);
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <aside className="lg:col-span-1">
-            <div className="sticky top-8">
+            {/* max-h + overflow so a long page list stays reachable while stuck */}
+            <div
+              ref={restoreNavScroll}
+              onScroll={(e) =>
+                navScrollPositions.set(bepNumber, e.currentTarget.scrollTop)
+              }
+              className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain pr-1"
+            >
               <BepNav
                 sections={allSections}
                 activeSection={activeSection}

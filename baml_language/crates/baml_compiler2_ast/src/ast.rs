@@ -1050,7 +1050,6 @@ pub enum Stmt {
         /// `Stmt::Let` — see [`Pattern::Bind`].
         pattern: PatId,
         initializer: Option<ExprId>,
-        is_watched: bool,
         origin: LetOrigin,
         /// `let PATTERN = init else { … };` — refutable binding with a
         /// diverging else clause. `Some` activates let-else semantics:

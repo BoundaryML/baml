@@ -423,9 +423,7 @@ fn var_under_union(name: &Name, ty: &Ty) -> bool {
                 args.iter().any(|a| occurs(name, a, in_union))
                     || assoc.iter().any(|(_, t)| occurs(name, t, in_union))
             }
-            Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
-                occurs(name, inner, in_union)
-            }
+            Ty::List(inner, _) | Ty::EvolvingList(inner, _) => occurs(name, inner, in_union),
             Ty::Map {
                 key: k, value: v, ..
             }
@@ -948,7 +946,6 @@ fn unify_into_at(
             | Ty::Resource { .. }
             | Ty::PromptAst { .. }
             | Ty::Void { .. }
-            | Ty::WatchAccessor(..)
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
             | Ty::BuiltinUnknown { .. }
@@ -1366,9 +1363,7 @@ fn occurs_in(n: &Name, t: &Ty, vars: &[Name], bindings: &TypeBindings) -> bool {
             args.iter().any(|a| occurs_in(n, a, vars, bindings))
                 || assoc.iter().any(|(_, ty)| occurs_in(n, ty, vars, bindings))
         }
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
-            occurs_in(n, inner, vars, bindings)
-        }
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => occurs_in(n, inner, vars, bindings),
         Ty::Map {
             key: k, value: v, ..
         }

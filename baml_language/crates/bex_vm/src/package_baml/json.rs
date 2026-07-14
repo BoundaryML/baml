@@ -891,12 +891,6 @@ fn ty_value_to_serde(
             path,
             "future",
         )),
-        RuntimeTy::WatchAccessor(_, _) => Err(raise_serialize(
-            vm,
-            "cannot serialize watch accessors",
-            path,
-            "watch_accessor",
-        )),
         RuntimeTy::BuiltinUnknown { .. } => Err(raise_serialize(
             vm,
             "cannot serialize unknown type",
@@ -1282,7 +1276,6 @@ fn ty_serde_to_value(
 
         RuntimeTy::Function { .. }
         | RuntimeTy::Future(_, _, _)
-        | RuntimeTy::WatchAccessor(_, _)
         | RuntimeTy::BuiltinUnknown { .. }
         | RuntimeTy::Void { .. } => {
             // These variants do not provide a concrete JSON schema to validate

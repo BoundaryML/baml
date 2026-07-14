@@ -9,7 +9,6 @@ instances:
         branch: canary
 
 title: Boundary Documentation
-js: ./custom.js
 ai-chat:
   system-prompt: |
     You will be answering questions about BAML (Basically, a Made-up Language) -- an AI framework to write LLM prompts as functions. Here is some background:
