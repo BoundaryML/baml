@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Compile-and-run driver for one C++ sdk-test fixture. Written into
 # <fixture>/generated/ by sdk_test_harness_setup::cpp; test sources come from
-# the customizable/ overlay (tests/*.cpp), the typed SDK from
+# the customizable/ overlay (tests/*.cc), the typed SDK from
 # baml_sdk/ (emitted by sdkgen_cpp), and the bridge from the repo's
 # bridge_cpp headers + the dev-profile bridge_cffi cdylib built by
 # crates/cpp/setup.sh.
@@ -18,19 +18,19 @@ INCLUDES=(
 )
 LIBDIR="$WORKSPACE_ROOT/target/debug"
 
-if ! compgen -G "tests/*.cpp" > /dev/null; then
+if ! compgen -G "tests/*.cc" > /dev/null; then
     # No ported tests yet: still syntax-check the generated SDK itself.
-    if compgen -G "baml_sdk/src/*.cpp" > /dev/null; then
-        c++ -std=c++17 -Wall -Wextra -fsyntax-only "${INCLUDES[@]}" baml_sdk/src/*.cpp
-        echo "no tests/*.cpp in this fixture yet; generated SDK syntax-checked"
+    if compgen -G "baml_sdk/src/*.cc" > /dev/null; then
+        c++ -std=c++17 -Wall -Wextra -fsyntax-only "${INCLUDES[@]}" baml_sdk/src/*.cc
+        echo "no tests/*.cc in this fixture yet; generated SDK syntax-checked"
     else
-        echo "no tests/*.cpp and no generated SDK sources; nothing to compile"
+        echo "no tests/*.cc and no generated SDK sources; nothing to compile"
     fi
     exit 0
 fi
-SOURCES=(tests/*.cpp)
-if compgen -G "baml_sdk/src/*.cpp" > /dev/null; then
-    SOURCES+=(baml_sdk/src/*.cpp)
+SOURCES=(tests/*.cc)
+if compgen -G "baml_sdk/src/*.cc" > /dev/null; then
+    SOURCES+=(baml_sdk/src/*.cc)
 fi
 
 # The compile and run checks execute concurrently under nextest; each mode

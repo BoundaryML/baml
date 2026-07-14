@@ -6,7 +6,7 @@
 #   baml-cpp-<version>-<target>/
 #     lib/libbridge_cffi.{so,dylib} | bridge_cffi.dll + bridge_cffi.dll.lib
 #     include/baml_cffi.h
-#     include/baml/*.hpp            (header-only bridge_cpp, when present)
+#     include/baml/*.h              (header-only bridge_cpp, when present)
 #     VERSION
 #     LICENSE
 #

@@ -368,7 +368,7 @@ impl GeneratorIdent {
             GeneratorIdent::TyWriterParam => "m",
             GeneratorIdent::SetterValueParam => "v",
             GeneratorIdent::OptsParam => "opts",
-            GeneratorIdent::EnsureRuntime => "ensure_runtime",
+            GeneratorIdent::EnsureRuntime => "EnsureRuntime",
             GeneratorIdent::DetailNamespace => "detail",
         }
     }

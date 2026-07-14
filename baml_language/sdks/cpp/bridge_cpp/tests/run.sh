@@ -19,7 +19,7 @@ trap 'rm -rf "$out"' EXIT
 
 c++ -std=c++17 -Wall -Wextra -Werror \
     -I"$bridge_cpp_dir/include" -Icrates/bridge_cffi/include \
-    "$bridge_cpp_dir/tests/runtime_smoke.cpp" -o "$out/runtime_smoke" \
+    "$bridge_cpp_dir/tests/runtime_smoke.cc" -o "$out/runtime_smoke" \
     -L"$libdir" -lbridge_cffi -Wl,-rpath,"$PWD/$libdir"
 
 "$out/runtime_smoke"

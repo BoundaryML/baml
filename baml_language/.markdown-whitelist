@@ -1,38 +1,39 @@
-# Whitelist of allowed .md files in baml_language/ (besides README.md)
-# Paths are relative to baml_language/
-# Supports glob patterns (*, **)
-# Only long-term informational .md files should be listed here
 
-# Test documentation
-crates/baml_tests/BENCHMARKS.md
-crates/baml_tests/benches/incremental/*/description.md
 
-# LSP documentation
-crates/baml_lsp_server/CONTRIBUTING.md
 
-# Test instructions
-TEST_INSTRUCTIONS.md
-sdk_tests/DEVELOPMENT.md
 
-# Type simplification test cases
-crates/baml_type/tests/simplify_sap_tests.md
+
+
+
 
 # Architecture
-ARCHITECTURE_MINI.md
-ARCHITECTURE.md
-
-# Type System Documentation
-TYPE_SYSTEM.md
-
-# Speedtest workload definitions
-tools/speedtest/workloads/**/*.md
-
 # BEX event identity & program metadata: cross-team contract docs for the
+# LSP documentation
+# Only long-term informational .md files should be listed here
+# Paths are relative to baml_language/
 # paulo/bex-event-identity-metadata work (design ticket, review, response,
 # post-implementation notes) — REVIEW.md §7.8 asks for these to ship with
+# Speedtest workload definitions
+# Supports glob patterns (*, **)
+# Test documentation
+# Test instructions
 # the branch so the consumer-side work can reference them.
-TASK/TICKET.md
-TASK/REVIEW.md
-TASK/REVIEW-RESPONSE.md
+# Type simplification test cases
+# Type System Documentation
+# Whitelist of allowed .md files in baml_language/ (besides README.md)
+ARCHITECTURE_MINI.md
+ARCHITECTURE.md
+crates/baml_lsp_server/CONTRIBUTING.md
+crates/baml_tests/benches/incremental/*/description.md
+crates/baml_tests/BENCHMARKS.md
+crates/baml_type/tests/simplify_sap_tests.md
+sdk_tests/DEVELOPMENT.md
+sdks/cpp/STYLE.md
 TASK/POST-IMPLEMENTATION-NOTES.md
 TASK/RECONCILIATION.md
+TASK/REVIEW-RESPONSE.md
+TASK/REVIEW.md
+TASK/TICKET.md
+TEST_INSTRUCTIONS.md
+tools/speedtest/workloads/**/*.md
+TYPE_SYSTEM.md

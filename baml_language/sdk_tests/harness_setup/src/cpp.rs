@@ -5,7 +5,7 @@
 //! `crates/cpp/<fixture>/generated/baml_sdk/` (via `sdkgen_cpp`; panics land
 //! in build diagnostics), symlinks
 //! `crates/cpp/<fixture>/customizable/*` overlays into the generated tree
-//! (test sources live in `customizable/tests/*.cpp`), writes the per-fixture
+//! (test sources live in `customizable/tests/*.cc`), writes the per-fixture
 //! `test.sh` compile-and-run driver, and emits `OUT_DIR/cpp_tests.rs` — the
 //! scaffold `sdk_test_harness_runner::cpp::test_suite!()` `include!`s.
 //!

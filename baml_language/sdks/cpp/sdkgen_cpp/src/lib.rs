@@ -1,6 +1,6 @@
 //! C++ SDK emitter. Slices 1-4 of the bridge-cpp codegen spec: the
 //! single-header layout, namespace routing, free functions, classes + enums
-//! with generated `codec<T>` and `ty<T>` specializations, static + instance
+//! with generated `Codec<T>` and `Ty<T>` specializations, static + instance
 //! methods, optional arguments via per-function opts structs (spec D4),
 //! recursion via `baml::Box` cycle-breaking, and generics as real templates
 //! (spec D3: generic classes are class templates, generic callables are
@@ -17,9 +17,9 @@
 //! identity stay paired.
 //!
 //! Output layout (spec D1):
-//!   `include/baml_sdk.hpp`   - the typed surface
-//!   `src/bindings.cpp`       - non-template definitions over `::baml::detail`
-//!   `src/_inlinedbaml.cpp`   - embedded BAML sources + lazy runtime init
+//!   `include/baml_sdk.h`   - the typed surface
+//!   `src/bindings.cc`      - non-template definitions over `::baml::detail`
+//!   `src/_inlinedbaml.cc`  - embedded BAML sources + lazy runtime init
 //!
 //! Template callables (generic functions, and every method of a generic
 //! class) define inline in the header; non-template callables keep the
@@ -27,7 +27,7 @@
 //!
 //! Runtime init embeds the user's `.baml` sources and initializes through
 //! `create_baml_runtime`; it switches to embedded bytecode once
-//! `initialize_runtime_from_bytecode` is exported over the C ABI.
+//! `InitializeRuntimeFromBytecode` is exported over the C ABI.
 
 mod naming;
 
@@ -229,15 +229,15 @@ pub fn to_source_code_with_bytecode(
 
     let mut out = HashMap::new();
     out.insert(
-        PathBuf::from("include/baml_sdk.hpp"),
+        PathBuf::from("include/baml_sdk.h"),
         render_header(&enums, &classes, &fns_by_namespace, &skipped),
     );
     out.insert(
-        PathBuf::from("src/bindings.cpp"),
+        PathBuf::from("src/bindings.cc"),
         render_bindings(&classes, &fns_by_namespace),
     );
     out.insert(
-        PathBuf::from("src/_inlinedbaml.cpp"),
+        PathBuf::from("src/_inlinedbaml.cc"),
         render_inlinedbaml(user_baml_files, baml_bytecode),
     );
     out
@@ -765,7 +765,7 @@ struct EmittedParam {
     ty: String,
     /// For callable-typed parameters: the callable's declared BAML param
     /// names in declared order ("" for unnamed required params). Switches
-    /// the binding to `encode_callable` (host-callable registration) and
+    /// the binding to `EncodeCallable` (host-callable registration) and
     /// keys supplied optional args on dispatch.
     callable_names: Option<Vec<String>>,
 }
@@ -1352,13 +1352,13 @@ fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
     for p in &f.opt_params {
         let name = p.name.declared();
         let arg_ty = format!("::baml::Arg<{}>", p.ty);
-        let _ = writeln!(buf, "{indent}    {arg_ty} {name};");
+        let _ = writeln!(buf, "{indent}  {arg_ty} {name};");
         let _ = writeln!(
             buf,
-            "{indent}    {opts_name}& {setter}({arg_ty} {value}) {{\n\
-             {indent}        {name} = std::move({value});\n\
-             {indent}        return *this;\n\
-             {indent}    }}",
+            "{indent}  {opts_name}& {setter}({arg_ty} {value}) {{\n\
+             {indent}    {name} = std::move({value});\n\
+             {indent}    return *this;\n\
+             {indent}  }}",
             setter = p.setter.declared(),
             value = naming::GeneratorIdent::SetterValueParam.token()
         );
@@ -1381,8 +1381,8 @@ fn render_body(
     let w = GeneratorIdent::WriterParam.token();
     let m = GeneratorIdent::TyWriterParam.token();
     let opts = GeneratorIdent::OptsParam.token();
-    // Inside a template body, a codec<ConcreteClass> reference is
-    // non-dependent and would be checked at definition -- before the codec
+    // Inside a template body, a Codec<ConcreteClass> reference is
+    // non-dependent and would be checked at definition -- before the Codec
     // specializations, which render after the classes. dependent_t defers
     // the lookup to instantiation time.
     let codec_ty = |ty: &str| -> String {
@@ -1404,8 +1404,8 @@ fn render_body(
     for param in f.class_type_params.iter().chain(&f.type_params) {
         let _ = writeln!(
             buf,
-            "{indent}{args}.add_type_arg(\"{wire}\", [](::baml::detail::wire::Writer& {m}) {{ \
-             ::baml::ty<{cpp}>::encode({m}); }});",
+            "{indent}{args}.AddTypeArg(\"{wire}\", [](::baml::detail::wire::Writer& {m}) {{ \
+             ::baml::Ty<{cpp}>::Encode({m}); }});",
             wire = param.wire(),
             cpp = param.identifier()
         );
@@ -1413,8 +1413,8 @@ fn render_body(
     if let Some(self_type) = self_type {
         let _ = writeln!(
             buf,
-            "{indent}{args}.add_arg(\"self\", [&](::baml::detail::wire::Writer& {w}) {{ \
-             ::baml::codec<{ty}>::encode({w}, *this); }});",
+            "{indent}{args}.AddArg(\"self\", [&](::baml::detail::wire::Writer& {w}) {{ \
+             ::baml::Codec<{ty}>::Encode({w}, *this); }});",
             ty = codec_ty(self_type)
         );
     }
@@ -1427,8 +1427,8 @@ fn render_body(
                 .join(", ");
             let _ = writeln!(
                 buf,
-                "{indent}{args}.add_arg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
-                 ::baml::detail::encode_callable({w}, {value}, \
+                "{indent}{args}.AddArg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
+                 ::baml::detail::EncodeCallable({w}, {value}, \
                  std::array<std::string, {len}>{{{{{names_array}}}}}); }});",
                 wire = p.name.wire(),
                 value = p.name.identifier(),
@@ -1437,8 +1437,8 @@ fn render_body(
         } else {
             let _ = writeln!(
                 buf,
-                "{indent}{args}.add_arg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
-                 ::baml::codec<{ty}>::encode({w}, {value}); }});",
+                "{indent}{args}.AddArg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
+                 ::baml::Codec<{ty}>::Encode({w}, {value}); }});",
                 wire = p.name.wire(),
                 ty = codec_ty(&p.ty),
                 value = p.name.identifier()
@@ -1449,17 +1449,17 @@ fn render_body(
         let field = p.name.identifier();
         let _ = writeln!(
             buf,
-            "{indent}if ({opts}.{field}.is_set()) {{\n{indent}    \
-             {args}.add_arg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
-             ::baml::codec<{ty}>::encode({w}, {opts}.{field}.value()); }});\n{indent}}}",
+            "{indent}if ({opts}.{field}.is_set()) {{\n{indent}  \
+             {args}.AddArg(\"{wire}\", [&](::baml::detail::wire::Writer& {w}) {{ \
+             ::baml::Codec<{ty}>::Encode({w}, {opts}.{field}.value()); }});\n{indent}}}",
             wire = p.name.wire(),
             ty = codec_ty(&p.ty)
         );
     }
     let call = if async_variant {
-        "start_call"
+        "StartCall"
     } else {
-        "call_sync"
+        "CallSync"
     };
     let _ = writeln!(
         buf,
@@ -1478,8 +1478,8 @@ fn render_header(
     let mut buf = String::new();
     buf.push_str(
         "// Generated by sdkgen_cpp - do not edit.\n\
-         #ifndef BAML_SDK_HPP\n\
-         #define BAML_SDK_HPP\n\n\
+         #ifndef BAML_SDK_H_\n\
+         #define BAML_SDK_H_\n\n\
          #include <array>\n\
          #include <cstdint>\n\
          #include <functional>\n\
@@ -1489,14 +1489,14 @@ fn render_header(
          #include <utility>\n\
          #include <variant>\n\
          #include <vector>\n\n\
-         #include <baml/baml.hpp>\n\n\
+         #include <baml/baml.h>\n\n\
          namespace baml_sdk {\n\n",
     );
     let detail = GeneratorIdent::DetailNamespace.token();
     let _ = writeln!(buf, "namespace {detail} {{");
     buf.push_str(
         "// Lazily initializes the process-global runtime from the embedded\n\
-         // BAML sources (see src/_inlinedbaml.cpp). Every binding calls this.\n",
+         // BAML sources (see src/_inlinedbaml.cc). Every binding calls this.\n",
     );
     let _ = writeln!(buf, "void {}();", GeneratorIdent::EnsureRuntime.token());
     let _ = writeln!(buf, "}}  // namespace {detail}");
@@ -1519,7 +1519,7 @@ fn render_header(
         push_doc(&mut buf, "", e.doc.as_ref(), &[]);
         let _ = writeln!(buf, "enum class {} {{", e.name.declared());
         for (variant, _) in &e.variants {
-            let _ = writeln!(buf, "    {},", variant.declared());
+            let _ = writeln!(buf, "  {},", variant.declared());
         }
         buf.push_str("};\n");
         close_namespaces(&mut buf, &e.ns);
@@ -1533,17 +1533,17 @@ fn render_header(
         let _ = write!(buf, "{}", c.template_prefix());
         let _ = writeln!(buf, "struct {} {{", c.name.declared());
         for field in &c.fields {
-            let _ = writeln!(buf, "    {} {};", field.ty, field.name.declared());
+            let _ = writeln!(buf, "  {} {};", field.ty, field.name.declared());
         }
         for f in c.static_methods.iter().chain(&c.instance_methods) {
-            render_opts_struct(&mut buf, "    ", f);
+            render_opts_struct(&mut buf, "  ", f);
         }
         // Template classes define their methods inline (the bodies need the
         // class's template params); non-template classes split decl/def
         // unless the method itself is generic.
         for (methods, is_instance) in [(&c.static_methods, false), (&c.instance_methods, true)] {
             for f in methods {
-                push_doc(&mut buf, "    ", f.doc.as_ref(), &f.raises);
+                push_doc(&mut buf, "  ", f.doc.as_ref(), &f.raises);
                 if c.is_template() || f.is_template() {
                     let inline_pos = if is_instance {
                         RenderPos::InstanceInline
@@ -1551,15 +1551,14 @@ fn render_header(
                         RenderPos::StaticInline
                     };
                     for async_variant in [false, true] {
-                        let _ =
-                            writeln!(buf, "    {} {{", signature(f, async_variant, &inline_pos));
+                        let _ = writeln!(buf, "  {} {{", signature(f, async_variant, &inline_pos));
                         let self_type = if is_instance {
                             Some(c.self_type())
                         } else {
                             None
                         };
-                        render_body(&mut buf, "        ", f, async_variant, self_type.as_deref());
-                        buf.push_str("    }\n");
+                        render_body(&mut buf, "    ", f, async_variant, self_type.as_deref());
+                        buf.push_str("  }\n");
                     }
                 } else {
                     let decl_pos = if is_instance {
@@ -1567,8 +1566,8 @@ fn render_header(
                     } else {
                         RenderPos::StaticDecl
                     };
-                    let _ = writeln!(buf, "    {};", signature(f, false, &decl_pos));
-                    let _ = writeln!(buf, "    {};", signature(f, true, &decl_pos));
+                    let _ = writeln!(buf, "  {};", signature(f, false, &decl_pos));
+                    let _ = writeln!(buf, "  {};", signature(f, true, &decl_pos));
                 }
             }
         }
@@ -1587,8 +1586,8 @@ fn render_header(
         };
         let _ = writeln!(
             buf,
-            "    friend bool operator==(const {n}& a, const {n}& b) {{\n        \
-             return {eq_expr};\n    }}\n    \
+            "  friend bool operator==(const {n}& a, const {n}& b) {{\n    \
+             return {eq_expr};\n  }}\n  \
              friend bool operator!=(const {n}& a, const {n}& b) {{ return !(a == b); }}",
             n = c.name.declared()
         );
@@ -1605,7 +1604,7 @@ fn render_header(
             if f.is_template() {
                 for async_variant in [false, true] {
                     let _ = writeln!(buf, "{} {{", signature(f, async_variant, &RenderPos::Free));
-                    render_body(&mut buf, "    ", f, async_variant, None);
+                    render_body(&mut buf, "  ", f, async_variant, None);
                     buf.push_str("}\n");
                 }
             } else {
@@ -1626,11 +1625,11 @@ fn render_header(
             let _ = writeln!(buf, "//   {line}");
         }
     }
-    buf.push_str("\n#endif  // BAML_SDK_HPP\n");
+    buf.push_str("\n#endif  // BAML_SDK_H_\n");
     buf
 }
 
-/// codec<T> and ty<T> specializations for the generated enums and classes.
+/// Codec<T> and Ty<T> specializations for the generated enums and classes.
 /// Emitted in the header (inline) so generic bindings can instantiate them
 /// from any translation unit. Generic classes get partial specializations.
 fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClass]) {
@@ -1641,46 +1640,46 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
         let fqn = e.name.wire();
         let _ = writeln!(
             buf,
-            "\ntemplate <>\nstruct ty<{q}> {{\n    \
-             static void encode(detail::wire::Writer& m) {{\n        \
-             detail::wire::Writer enum_ty;\n        \
-             enum_ty.string_field(1, \"{fqn}\");\n        \
-             m.message_field(3, enum_ty);\n    }}\n}};",
+            "\ntemplate <>\nstruct Ty<{q}> {{\n  \
+             static void Encode(detail::wire::Writer& m) {{\n    \
+             detail::wire::Writer enum_ty;\n    \
+             enum_ty.StringField(1, \"{fqn}\");\n    \
+             m.MessageField(3, enum_ty);\n  }}\n}};",
         );
         let _ = writeln!(
             buf,
-            "\ntemplate <>\nstruct codec<{q}> {{\n    \
-             static void encode(detail::wire::Writer& value_msg, {q} v) {{\n        \
-             detail::wire::Writer e;\n        \
-             e.string_field(1, \"{fqn}\");\n        \
-             e.string_field(2, to_wire(v));\n        \
-             value_msg.message_field(9, e);\n    }}\n    \
-             static {q} decode(const detail::OutboundValue& v) {{\n        \
-             if (v.kind != detail::OutboundValue::Kind::Enum) {{\n            \
-             detail::kind_mismatch(\"enum {fqn}\", v);\n        }}\n        \
-             return from_wire(v.string_v);\n    }}",
+            "\ntemplate <>\nstruct Codec<{q}> {{\n  \
+             static void Encode(detail::wire::Writer& value_msg, {q} v) {{\n    \
+             detail::wire::Writer e;\n    \
+             e.StringField(1, \"{fqn}\");\n    \
+             e.StringField(2, ToWire(v));\n    \
+             value_msg.MessageField(9, e);\n  }}\n  \
+             static {q} Decode(const detail::OutboundValue& v) {{\n    \
+             if (v.kind != detail::OutboundValue::Kind::Enum) {{\n      \
+             detail::KindMismatch(\"enum {fqn}\", v);\n    }}\n    \
+             return FromWire(v.string_v);\n  }}",
         );
-        buf.push_str("    static const char* to_wire(");
-        let _ = write!(buf, "{q} v) {{\n        switch (v) {{\n");
+        buf.push_str("  static const char* ToWire(");
+        let _ = write!(buf, "{q} v) {{\n    switch (v) {{\n");
         for (variant, value) in &e.variants {
             let _ = writeln!(
                 buf,
-                "            case {q}::{variant}: return \"{value}\";",
+                "      case {q}::{variant}: return \"{value}\";",
                 variant = variant.declared()
             );
         }
-        buf.push_str("        }\n        throw BamlError(\"invalid enum value\");\n    }\n");
-        let _ = writeln!(buf, "    static {q} from_wire(const std::string& value) {{");
+        buf.push_str("    }\n    throw BamlError(\"invalid enum value\");\n  }\n");
+        let _ = writeln!(buf, "  static {q} FromWire(const std::string& value) {{");
         for (variant, value) in &e.variants {
             let _ = writeln!(
                 buf,
-                "        if (value == \"{value}\") return {q}::{variant};",
+                "    if (value == \"{value}\") return {q}::{variant};",
                 variant = variant.declared()
             );
         }
         let _ = writeln!(
             buf,
-            "        throw BamlError(\"unknown variant '\" + value + \"' for enum {fqn}\");\n    \
+            "    throw BamlError(\"unknown variant '\" + value + \"' for enum {fqn}\");\n  \
              }}\n}};",
         );
     }
@@ -1696,43 +1695,43 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
         if c.alias_wrapper {
             // Structural codec: aliases have no wire identity, so the
             // wrapper encodes/decodes its resolved type directly, wrapping
-            // and unwrapping `value`. No ty<> specialization (an alias is
+            // and unwrapping `value`. No Ty<> specialization (an alias is
             // not a nominal type the engine can bind a TypeVar to).
             let inner = &c.fields[0].ty;
             let field = c.fields[0].name.identifier();
             let _ = write!(buf, "\n{spec_prefix}");
             let _ = writeln!(
                 buf,
-                "struct codec<{q}> {{\n    \
-                 static void encode(detail::wire::Writer& value_msg, const {q}& v) {{\n        \
-                 codec<{inner}>::encode(value_msg, v.{field});\n    }}\n    \
-                 static {q} decode(const detail::OutboundValue& v) {{\n        \
-                 return {q}{{codec<{inner}>::decode(v)}};\n    }}\n}};"
+                "struct Codec<{q}> {{\n  \
+                 static void Encode(detail::wire::Writer& value_msg, const {q}& v) {{\n    \
+                 Codec<{inner}>::Encode(value_msg, v.{field});\n  }}\n  \
+                 static {q} Decode(const detail::OutboundValue& v) {{\n    \
+                 return {q}{{Codec<{inner}>::Decode(v)}};\n  }}\n}};"
             );
             continue;
         }
 
         let fqn = c.name.wire();
 
-        // ty<Class>: BamlTy.class_ty = 2 { name = 1, type_args = 2 }.
+        // Ty<Class>: BamlTy.class_ty = 2 { name = 1, type_args = 2 }.
         let _ = write!(buf, "\n{spec_prefix}");
         let _ = writeln!(
             buf,
-            "struct ty<{q}> {{\n    \
-             static void encode(detail::wire::Writer& m) {{\n        \
-             detail::wire::Writer class_ty;\n        \
-             class_ty.string_field(1, \"{fqn}\");",
+            "struct Ty<{q}> {{\n  \
+             static void Encode(detail::wire::Writer& m) {{\n    \
+             detail::wire::Writer class_ty;\n    \
+             class_ty.StringField(1, \"{fqn}\");",
         );
         for param in &c.generic_params {
             let _ = writeln!(
                 buf,
-                "        {{\n            detail::wire::Writer arg;\n            \
-                 ty<{param}>::encode(arg);\n            \
-                 class_ty.message_field(2, arg);\n        }}",
+                "    {{\n      detail::wire::Writer arg;\n      \
+                 Ty<{param}>::Encode(arg);\n      \
+                 class_ty.MessageField(2, arg);\n    }}",
                 param = param.identifier()
             );
         }
-        buf.push_str("        m.message_field(2, class_ty);\n    }\n};\n");
+        buf.push_str("    m.MessageField(2, class_ty);\n  }\n};\n");
 
         if is_tagged_heap_handle_class(&c.pool_name) {
             // Bare tagged-heap-handle wire form (Python parity: BamlStream
@@ -1744,38 +1743,38 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             let _ = write!(buf, "\n{spec_prefix}");
             let _ = writeln!(
                 buf,
-                "struct codec<{q}> {{\n    \
-                 static void encode(detail::wire::Writer& value_msg, const {q}& v) {{\n        \
-                 detail::wire::Writer handle;\n        \
-                 handle.uint64_field(1, v.{handle_field}.clone_key_for_wire());\n        \
-                 handle.int64_field(2, {tag});\n        \
-                 value_msg.message_field(10, handle);\n    }}\n    \
-                 static {q} decode(const detail::OutboundValue& v) {{\n        \
-                 if (v.kind != detail::OutboundValue::Kind::Handle ||\n            \
-                 v.handle_type != {tag}) {{\n            \
-                 detail::kind_mismatch(\"stream handle {fqn}\", v);\n        }}\n        \
-                 return {q}{{::baml::Handle(v.handle_key, v.handle_type)}};\n    }}\n}};"
+                "struct Codec<{q}> {{\n  \
+                 static void Encode(detail::wire::Writer& value_msg, const {q}& v) {{\n    \
+                 detail::wire::Writer handle;\n    \
+                 handle.Uint64Field(1, v.{handle_field}.CloneKeyForWire());\n    \
+                 handle.Int64Field(2, {tag});\n    \
+                 value_msg.MessageField(10, handle);\n  }}\n  \
+                 static {q} Decode(const detail::OutboundValue& v) {{\n    \
+                 if (v.kind != detail::OutboundValue::Kind::Handle ||\n      \
+                 v.handle_type != {tag}) {{\n      \
+                 detail::KindMismatch(\"stream handle {fqn}\", v);\n    }}\n    \
+                 return {q}{{::baml::Handle(v.handle_key, v.handle_type)}};\n  }}\n}};"
             );
             continue;
         }
 
         let _ = write!(buf, "\n{spec_prefix}");
-        let _ = writeln!(buf, "struct codec<{q}> {{");
-        // encode: InboundValue.class_value = 8 { fields = 2, class_ty = 3 }
+        let _ = writeln!(buf, "struct Codec<{q}> {{");
+        // Encode: InboundValue.class_value = 8 { fields = 2, class_ty = 3 }
         let _ = writeln!(
             buf,
-            "    static void encode(detail::wire::Writer& value_msg, const {q}& v) {{\n        \
+            "  static void Encode(detail::wire::Writer& value_msg, const {q}& v) {{\n    \
              detail::wire::Writer cls;"
         );
         for field in &c.fields {
             let _ = writeln!(
                 buf,
-                "        {{\n            detail::wire::Writer entry;\n            \
-                 entry.string_field(1, \"{wire}\");\n            \
-                 detail::wire::Writer val;\n            \
-                 codec<{ty}>::encode(val, v.{name});\n            \
-                 entry.message_field(6, val);\n            \
-                 cls.message_field(2, entry);\n        }}",
+                "    {{\n      detail::wire::Writer entry;\n      \
+                 entry.StringField(1, \"{wire}\");\n      \
+                 detail::wire::Writer val;\n      \
+                 Codec<{ty}>::Encode(val, v.{name});\n      \
+                 entry.MessageField(6, val);\n      \
+                 cls.MessageField(2, entry);\n    }}",
                 wire = field.name.wire(),
                 ty = field.ty,
                 name = field.name.identifier()
@@ -1783,70 +1782,70 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
         }
         let _ = writeln!(
             buf,
-            "        detail::wire::Writer class_ty;\n        \
-             class_ty.string_field(1, \"{fqn}\");",
+            "    detail::wire::Writer class_ty;\n    \
+             class_ty.StringField(1, \"{fqn}\");",
         );
         for param in &c.generic_params {
             let _ = writeln!(
                 buf,
-                "        {{\n            detail::wire::Writer arg;\n            \
-                 ty<{param}>::encode(arg);\n            \
-                 class_ty.message_field(2, arg);\n        }}",
+                "    {{\n      detail::wire::Writer arg;\n      \
+                 Ty<{param}>::Encode(arg);\n      \
+                 class_ty.MessageField(2, arg);\n    }}",
                 param = param.identifier()
             );
         }
         buf.push_str(
-            "        cls.message_field(3, class_ty);\n        \
-             value_msg.message_field(8, cls);\n    }\n",
+            "    cls.MessageField(3, class_ty);\n    \
+             value_msg.MessageField(8, cls);\n  }\n",
         );
-        // decode: strict field mapping (extra field or missing field = error,
+        // Decode: strict field mapping (extra field or missing field = error,
         // pydantic extra="forbid" parity), FQN-checked for precise
         // variant-of-class dispatch. Fields land in optional locals so
         // non-default-constructible field types (baml::Box) work.
         let _ = writeln!(
             buf,
-            "    static {q} decode(const detail::OutboundValue& v) {{\n        \
-             if (v.kind != detail::OutboundValue::Kind::Class ||\n            \
-             (!v.name.empty() && v.name != \"{fqn}\")) {{\n            \
-             detail::kind_mismatch(\"class {fqn}\", v);\n        }}",
+            "  static {q} Decode(const detail::OutboundValue& v) {{\n    \
+             if (v.kind != detail::OutboundValue::Kind::Class ||\n      \
+             (!v.name.empty() && v.name != \"{fqn}\")) {{\n      \
+             detail::KindMismatch(\"class {fqn}\", v);\n    }}",
         );
         for field in &c.fields {
             let _ = writeln!(
                 buf,
-                "        std::optional<{ty}> field_{name};",
+                "    std::optional<{ty}> field_{name};",
                 ty = field.ty,
                 name = field.name.declared()
             );
         }
-        buf.push_str("        for (const auto& field : v.fields) {\n");
+        buf.push_str("    for (const auto& field : v.fields) {\n");
         let mut first = true;
         for field in &c.fields {
             let kw = if first { "if" } else { "} else if" };
             first = false;
             let _ = writeln!(
                 buf,
-                "            {kw} (field.first == \"{wire}\") {{\n                \
-                 field_{name} = codec<{ty}>::decode(field.second);",
+                "      {kw} (field.first == \"{wire}\") {{\n        \
+                 field_{name} = Codec<{ty}>::Decode(field.second);",
                 wire = field.name.wire(),
                 ty = field.ty,
                 name = field.name.declared()
             );
         }
         if !c.fields.is_empty() {
-            buf.push_str("            } else {\n");
+            buf.push_str("      } else {\n");
         } else {
-            buf.push_str("            {\n");
+            buf.push_str("      {\n");
         }
         let _ = writeln!(
             buf,
-            "                throw BamlError(\"unexpected field '\" + field.first + \"' on {fqn}\");\n            \
-             }}\n        }}",
+            "        throw BamlError(\"unexpected field '\" + field.first + \"' on {fqn}\");\n      \
+             }}\n    }}",
         );
         for field in &c.fields {
             let _ = writeln!(
                 buf,
-                "        if (!field_{name}.has_value()) {{\n            \
-                 throw BamlError(\"missing field '{wire}' on {fqn}\");\n        }}",
+                "    if (!field_{name}.has_value()) {{\n      \
+                 throw BamlError(\"missing field '{wire}' on {fqn}\");\n    }}",
                 name = field.name.declared(),
                 wire = field.name.wire()
             );
@@ -1858,7 +1857,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
             .collect();
         let _ = writeln!(
             buf,
-            "        return {q}{{{args}}};\n    }}\n}};",
+            "    return {q}{{{args}}};\n  }}\n}};",
             args = ctor_args.join(", ")
         );
     }
@@ -1873,7 +1872,7 @@ fn render_bindings(
     let mut buf = String::new();
     buf.push_str(
         "// Generated by sdkgen_cpp - do not edit.\n\
-         #include <baml_sdk.hpp>\n\n\
+         #include <baml_sdk.h>\n\n\
          #include <utility>\n\n\
          namespace baml_sdk {\n",
     );
@@ -1896,7 +1895,7 @@ fn render_bindings(
             for async_variant in [false, true] {
                 let pos = RenderPos::StaticDef { class: c };
                 let _ = writeln!(buf, "\n{} {{", signature(f, async_variant, &pos));
-                render_body(&mut buf, "    ", f, async_variant, None);
+                render_body(&mut buf, "  ", f, async_variant, None);
                 buf.push_str("}\n");
             }
         }
@@ -1904,7 +1903,7 @@ fn render_bindings(
             for async_variant in [false, true] {
                 let pos = RenderPos::InstanceDef { class: c };
                 let _ = writeln!(buf, "\n{} {{", signature(f, async_variant, &pos));
-                render_body(&mut buf, "    ", f, async_variant, Some(&c.self_type()));
+                render_body(&mut buf, "  ", f, async_variant, Some(&c.self_type()));
                 buf.push_str("}\n");
             }
         }
@@ -1925,7 +1924,7 @@ fn render_bindings(
                 // Free-function definitions must not repeat the default arg.
                 let sig = sig.replace(&format!(" {opts} = {{}}"), &format!(" {opts}"));
                 let _ = writeln!(buf, "\n{sig} {{");
-                render_body(&mut buf, "    ", f, async_variant, None);
+                render_body(&mut buf, "  ", f, async_variant, None);
                 buf.push_str("}\n");
             }
         }
@@ -1944,7 +1943,7 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) ->
          // runtime initialization.\n\
          #include <cstdint>\n\
          #include <mutex>\n\n\
-         #include <baml/baml.hpp>\n\n\
+         #include <baml/baml.h>\n\n\
          namespace baml_sdk {\n",
     );
     let detail = GeneratorIdent::DetailNamespace.token();
@@ -1956,17 +1955,17 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) ->
     buf.push_str("\nnamespace {\nconst uint8_t kBamlBytecode[] = {");
     for (i, byte) in baml_bytecode.iter().enumerate() {
         if i % 20 == 0 {
-            buf.push_str("\n    ");
+            buf.push_str("\n  ");
         }
         let _ = write!(buf, "{byte},");
     }
     buf.push_str("\n};\n}  // namespace\n");
     let _ = writeln!(buf, "\nvoid {}() {{", GeneratorIdent::EnsureRuntime.token());
     buf.push_str(
-        "    static std::once_flag once;\n\
-             std::call_once(once, [] {\n\
-                 ::baml::initialize_runtime_from_bytecode(kBamlBytecode, sizeof(kBamlBytecode));\n\
-             });\n\
+        "  static std::once_flag once;\n  \
+         std::call_once(once, [] {\n    \
+         ::baml::InitializeRuntimeFromBytecode(kBamlBytecode, sizeof(kBamlBytecode));\n  \
+         });\n\
          }\n\n",
     );
     let _ = writeln!(buf, "}}  // namespace {detail}");

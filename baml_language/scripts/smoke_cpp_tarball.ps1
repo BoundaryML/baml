@@ -42,11 +42,12 @@ int main() {
     return 0;
 }
 '@
-    Set-Content -Path (Join-Path $work "main.cpp") -Value $main
+    Set-Content -Path (Join-Path $work "main.cc") -Value $main
 
     Push-Location $work
     try {
-        cl /nologo /std:c++17 /EHsc main.cpp /Fesmoke.exe `
+        # /TP: cl does not recognize .cc as a C++ source extension on its own.
+        cl /nologo /std:c++17 /EHsc /TP main.cc /Fesmoke.exe `
             /I "$root\include" /link "$root\lib\bridge_cffi.dll.lib"
         if ($LASTEXITCODE -ne 0) { throw "MSVC compile/link failed" }
         Copy-Item "$root\lib\bridge_cffi.dll" .
