@@ -9,7 +9,17 @@
 //!   compile, then hard-fail if the fresh bytecode differs from a cached
 //!   entry under the same key (catches emit nondeterminism and missing
 //!   cache-key inputs). Also runs the stdlib-interface and per-file
-//!   diagnostics oracles.
+//!   diagnostics oracles. Too expensive to leave always-on.
+//! - `BAML_CACHE_SAMPLED_VERIFY` — sampled field verification, the always-on
+//!   complement to full verify (rustc's "1-in-N compiles verifies one
+//!   artifact" hardening). On a warm incremental compile that *serves* cached
+//!   artifacts, ~1 run in 32 picks one served clean file and checks its served
+//!   diagnostics blob and `callable_throws` fragment against an honest,
+//!   un-seeded re-derivation — after the compile result is already produced, so
+//!   the added latency is one file's honest work. A mismatch is a hard error
+//!   (silent staleness must be LOUD). `=0` disables; `=1` forces every warm
+//!   compile (tests); default is 1/32. See [`sampled_pick_from_key`] for the
+//!   key-derived, RNG-free sampling decision.
 //! - `BAML_NO_DIAGNOSTICS_CACHE=1` — check every file instead of serving clean
 //!   files from the per-file diagnostics cache (reuse / throws-seed unaffected),
 //!   to isolate that feature's win.
@@ -1863,6 +1873,145 @@ impl CacheContext {
         Ok(())
     }
 
+    /// The `BAML_CACHE_SAMPLED_VERIFY` knob: `Some(false)` disables sampling,
+    /// `Some(true)` forces it on every warm compile (tests want determinism),
+    /// `None` leaves the default 1/32 gate. Any other value is treated as unset.
+    fn sampled_verify_force() -> Option<bool> {
+        match std::env::var_os("BAML_CACHE_SAMPLED_VERIFY") {
+            Some(v) if v == "0" => Some(false),
+            Some(v) if v == "1" => Some(true),
+            _ => None,
+        }
+    }
+
+    /// Pick the one served clean file this compile should sample-verify, keyed
+    /// off the program cache key (see [`sampled_pick_from_key`]). `None` when
+    /// verify mode is active (it already does the full compare), this compile
+    /// isn't sampled, or the plan serves no clean file.
+    fn sampled_verify_pick(&self, plan: &ReusePlan) -> Option<String> {
+        if Self::verify_enabled() {
+            return None;
+        }
+        let mut clean: Vec<&str> = plan.clean_files.iter().map(String::as_str).collect();
+        clean.sort_unstable();
+        sampled_pick_from_key(self.key.as_bytes(), &clean, Self::sampled_verify_force())
+            .map(str::to_string)
+    }
+
+    /// Sampled field verification driver (the always-on tripwire). If this warm
+    /// compile is sampled, build an honest database — deferred to `FnOnce` so an
+    /// unsampled compile pays nothing — and verify one served clean file's
+    /// artifacts against it. Meant to be called *after* the compile result is
+    /// produced, so user-visible latency grows by at most one file's honest work.
+    ///
+    /// `build_honest_db` MUST produce a FRESH database from the same sources
+    /// with NO per-file reuse seeds installed (throw facts, `callable_throws`,
+    /// diagnostics). The compile database is seeded with exactly those, so
+    /// re-deriving on it would compare a served seed against itself and prove
+    /// nothing — the honest oracle only has teeth on a database that derives the
+    /// user artifacts itself, exactly as full verify gets by short-circuiting
+    /// `plan_reuse`. (The stdlib build-constant *is* seeded below, for speed;
+    /// that is orthogonal to user-file staleness — see the seeding comment.)
+    pub(crate) fn maybe_sampled_verify(
+        &self,
+        plan: Option<&ReusePlan>,
+        build_honest_db: impl FnOnce() -> ProjectDatabase,
+    ) -> anyhow::Result<()> {
+        let Some(plan) = plan else {
+            // Cold compile or a whole-image cache hit: nothing was served
+            // artifact-by-artifact, so there is nothing to sample. (A pure hit
+            // serves the program blob; sampling it would require a full honest
+            // compile — unacceptable — so hits stay unsampled by design.)
+            return Ok(());
+        };
+        let Some(rel) = self.sampled_verify_pick(plan) else {
+            return Ok(());
+        };
+        cache_debug(format_args!("sampled field verify: checking `{rel}`"));
+        let mut honest_db = build_honest_db();
+        // Seed only the stdlib typed interface — a compiler-build constant keyed
+        // by fingerprint, guarded by its own `verify_stdlib_interface` oracle and
+        // unable to go stale across a warm edit. Without it, an honest per-file
+        // check on a fresh database re-derives every stdlib package cold (the
+        // dominant cost, ~hundreds of ms), swamping the one file's inference we
+        // actually want to time. Seeding it keeps the user-file oracle fully
+        // honest (the served vs honest USER artifact is still compared against
+        // the same correct stdlib) while bounding latency to one file's work.
+        // The user-file artifacts under test (throw facts, `callable_throws`,
+        // diagnostics) are deliberately NOT seeded — that is the whole point.
+        if let Some(blob) = self.load_stdlib_interface() {
+            honest_db.set_seeded_stdlib_interface(blob);
+        }
+        self.verify_sampled_artifact(&honest_db, plan, &rel)
+    }
+
+    /// Compare one served clean file's diagnostics blob and `callable_throws`
+    /// fragment against an honest re-derivation on `honest_db` (which must be
+    /// un-seeded — see [`Self::maybe_sampled_verify`]). A mismatch is a hard
+    /// error: the incremental cache served a stale artifact, so the user's warm
+    /// build silently diverged from an honest compile. The message points at
+    /// `BAML_CACHE_VERIFY=1` (the full byte-compare) and names the file and
+    /// artifact kind, mirroring rustc's ICE-on-fingerprint-mismatch.
+    pub(crate) fn verify_sampled_artifact(
+        &self,
+        honest_db: &ProjectDatabase,
+        plan: &ReusePlan,
+        rel: &str,
+    ) -> anyhow::Result<()> {
+        let Some(root) = honest_db.get_project().map(|p| p.root(honest_db).clone()) else {
+            return Ok(());
+        };
+        let full = root.join(rel);
+        let Some(sf) = honest_db.get_file(&full) else {
+            return Ok(()); // file vanished between planning and verify — unserved
+        };
+
+        // (1) Served diagnostics blob vs a fresh per-file check. A blob that
+        // fails to rehydrate would have degraded to a re-check (never served
+        // stale), so it is not a mismatch — skip it, as the full oracle does.
+        if let Some(blob) = plan.clean_diagnostics.get(rel)
+            && let Some(served) =
+                crate::diagnostics_cache::rehydrate_file_blob(honest_db, &root, blob)
+        {
+            let fresh = honest_db.check_file(sf);
+            if !diagnostic_sets_equal(&served, &fresh) {
+                anyhow::bail!(
+                    "BAML_CACHE_SAMPLED_VERIFY: the incremental cache served STALE diagnostics \
+                     for `{rel}` ({} served vs {} from an honest check). This is a \
+                     cache-soundness bug — a warm build would report different errors than a \
+                     clean one. Re-run with BAML_CACHE_VERIFY=1 for the full compare and please \
+                     report this (file `{rel}`, artifact: diagnostics).",
+                    served.len(),
+                    fresh.len(),
+                );
+            }
+        }
+
+        // (2) Served `callable_throws` fragment vs an honest derivation. An
+        // empty fragment seeds nothing, so there is no served artifact to check.
+        if let Some(unit) = plan.prev_units.iter().find(|u| u.source_file == rel)
+            && !unit.callable_throws_fragment.is_empty()
+        {
+            let honest =
+                baml_db::baml_compiler2_tir::package_interface::file_callable_throws_fragment(
+                    honest_db, sf,
+                );
+            let honest_bytes = borsh::to_vec(honest)?;
+            if honest_bytes != unit.callable_throws_fragment {
+                anyhow::bail!(
+                    "BAML_CACHE_SAMPLED_VERIFY: the incremental cache served a STALE \
+                     callable-throws seed for `{rel}` ({} served vs {} honest bytes). This is a \
+                     cache-soundness bug — a warm build would infer different throws than a clean \
+                     one. Re-run with BAML_CACHE_VERIFY=1 for the full compare and please report \
+                     this (file `{rel}`, artifact: callable-throws fragment).",
+                    unit.callable_throws_fragment.len(),
+                    honest_bytes.len(),
+                );
+            }
+        }
+        Ok(())
+    }
+
     /// Test hook: overwrite one file's cached diagnostics with an empty blob,
     /// simulating a stale cache that dropped a diagnostic. Used by the verify
     /// oracle's negative test.
@@ -1968,6 +2117,39 @@ fn diagnostic_sets_equal(
     a_sorted.sort_by_key(|d| key(d));
     b_sorted.sort_by_key(|d| key(d));
     a_sorted.iter().zip(&b_sorted).all(|(x, y)| x == y)
+}
+
+/// The RNG-free sampled-verify decision, derived entirely from the program
+/// cache key (`compute_key`'s sha256 over every compile input). Returns the
+/// chosen clean file — `None` when this compile is not sampled or nothing is
+/// served.
+///
+/// No clock and no `rand`: the key already varies with the sources, so
+/// deriving the choice from it makes sampling **deterministic** for a given
+/// project state (same edit → same decision → reproducible, debuggable — a
+/// field mismatch report can be replayed exactly) yet naturally spread across
+/// different states (each distinct edit re-rolls both the gate and the index).
+///
+/// - Whether to sample: `key[0] & 31 == 0` — one value in 32, so ~1/32 of warm
+///   compiles pay the check. `force = Some(true/false)` overrides the gate for
+///   the `BAML_CACHE_SAMPLED_VERIFY=1/0` knobs.
+/// - Which file: bytes 1..5 of the key (independent of the gate byte) index the
+///   **sorted** clean set, so the pick is stable regardless of set iteration
+///   order.
+fn sampled_pick_from_key<'a>(
+    key: &[u8; 32],
+    clean_sorted: &[&'a str],
+    force: Option<bool>,
+) -> Option<&'a str> {
+    let sample = match force {
+        Some(forced) => forced,
+        None => key[0] & 31 == 0,
+    };
+    if !sample || clean_sorted.is_empty() {
+        return None;
+    }
+    let idx = u32::from_le_bytes([key[1], key[2], key[3], key[4]]) as usize % clean_sorted.len();
+    Some(clean_sorted[idx])
 }
 
 #[cfg(test)]
@@ -3565,5 +3747,179 @@ mod tests {
             err.to_string().contains("testset discovery differs"),
             "the bail message must name the testset divergence: {err}"
         );
+    }
+
+    // ── Sampled field verification (rustc-style 1-in-32) ─────────────────────
+
+    #[test]
+    fn sampled_pick_from_key_is_deterministic_gated_and_forceable() {
+        let clean = ["a.baml", "b.baml", "c.baml", "d.baml"];
+        // byte0 low 5 bits == 0 → sampled at the default gate; bytes 1..5 == 2
+        // (little-endian) → index 2 of the 4-file sorted set.
+        let mut sampled_key = [0u8; 32];
+        sampled_key[1] = 2;
+        // byte0 low bits non-zero → NOT sampled at the default gate.
+        let mut unsampled_key = [0u8; 32];
+        unsampled_key[0] = 1;
+
+        assert_eq!(
+            sampled_pick_from_key(&sampled_key, &clean, None),
+            Some("c.baml"),
+            "a gated key samples; bytes 1..5 select the sorted index"
+        );
+        assert_eq!(
+            sampled_pick_from_key(&unsampled_key, &clean, None),
+            None,
+            "a non-gated key must NOT sample at the default 1/32 gate"
+        );
+        // Pure function of the key: identical inputs → identical pick.
+        assert_eq!(
+            sampled_pick_from_key(&sampled_key, &clean, None),
+            sampled_pick_from_key(&sampled_key, &clean, None),
+            "the sampling decision must be deterministic for a given key"
+        );
+        // Force overrides the gate both ways (the =1 / =0 knobs).
+        assert_eq!(
+            sampled_pick_from_key(&unsampled_key, &clean, Some(true)),
+            Some("a.baml"),
+            "force=Some(true) samples even a non-gated key"
+        );
+        assert_eq!(
+            sampled_pick_from_key(&sampled_key, &clean, Some(false)),
+            None,
+            "force=Some(false) disables even a gated key"
+        );
+        // A different key re-rolls the index → sampling varies across states.
+        let mut other = sampled_key;
+        other[1] = 3;
+        assert_ne!(
+            sampled_pick_from_key(&sampled_key, &clean, Some(true)),
+            sampled_pick_from_key(&other, &clean, Some(true)),
+            "a different key must be able to select a different file"
+        );
+        // Nothing served → nothing to sample.
+        assert_eq!(sampled_pick_from_key(&sampled_key, &[], Some(true)), None);
+    }
+
+    /// Compile+store a project, reopen it byte-identically, and return the
+    /// reopened context, its all-clean reuse plan, and a FRESH un-seeded honest
+    /// database — the three inputs `verify_sampled_artifact` compares. `None`
+    /// when the on-disk cache is disabled by env.
+    fn sampled_setup(
+        files: &[(&str, &str)],
+    ) -> Option<(PathBuf, CacheContext, ReusePlan, ProjectDatabase)> {
+        if cache_disabled() {
+            return None;
+        }
+        let root = unique_root();
+        let _ = std::fs::remove_dir_all(&root);
+        let r = resolved(&root, files);
+        let db1 = crate::project_load::build_db_from_sources(&r, |_| {});
+        let ctx1 = CacheContext::open(&r, false).expect("cache opens");
+        let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("v1 compile");
+        let fresh1 = ctx1
+            .collect_diagnostics_incremental(&db1, None)
+            .fresh_by_file;
+        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
+            .expect("manifest stored");
+
+        let db2 = crate::project_load::build_db_from_sources(&r, |_| {});
+        let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
+        let plan = ctx2.plan_reuse(&db2).expect("all-clean reuse plan");
+        // The oracle DB must be fresh and un-seeded (no `prepare_reuse_plan`),
+        // else the honest re-derivation would return the served seed verbatim.
+        let honest = crate::project_load::build_db_from_sources(&r, |_| {});
+        Some((root, ctx2, plan, honest))
+    }
+
+    #[test]
+    fn verify_sampled_artifact_passes_on_faithful_cache() {
+        let files = [
+            ("a.baml", "function a() -> int {\n  1\n}\n"),
+            ("b.baml", "function b() -> int {\n  2\n}\n"),
+        ];
+        let Some((root, ctx, plan, honest)) = sampled_setup(&files) else {
+            return;
+        };
+        // A byte-identical reopen serves every file faithfully — both the
+        // diagnostics blob and the throws fragment must verify clean.
+        for rel in ["a.baml", "b.baml"] {
+            ctx.verify_sampled_artifact(&honest, &plan, rel)
+                .unwrap_or_else(|e| panic!("faithful cache must pass for {rel}: {e}"));
+        }
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn verify_sampled_artifact_bails_on_stale_diagnostics() {
+        let files = [
+            ("a.baml", "function a() -> int {\n  1\n}\n"),
+            ("b.baml", "function b() -> int {\n  2\n}\n"),
+        ];
+        let Some((root, ctx, mut plan, honest)) = sampled_setup(&files) else {
+            return;
+        };
+        // Replace a.baml's served (empty) diagnostics blob with one fabricating
+        // an error the honest check never produces: served != honest → bail.
+        plan.clean_diagnostics.insert(
+            "a.baml".to_string(),
+            crate::diagnostics_cache::one_fake_diagnostic_blob("a.baml"),
+        );
+        let err = ctx
+            .verify_sampled_artifact(&honest, &plan, "a.baml")
+            .expect_err("a stale served diagnostics blob must hard-error");
+        let msg = err.to_string();
+        assert!(msg.contains("a.baml"), "must name the file; got: {msg}");
+        assert!(
+            msg.contains("diagnostics") && msg.contains("BAML_CACHE_VERIFY=1"),
+            "must name the artifact kind and point at full verify; got: {msg}"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn verify_sampled_artifact_bails_on_stale_fragment() {
+        let files = [
+            ("a.baml", "function a() -> int {\n  1\n}\n"),
+            ("b.baml", "function b() -> int {\n  2\n}\n"),
+        ];
+        let Some((root, ctx, mut plan, honest)) = sampled_setup(&files) else {
+            return;
+        };
+        // Corrupt a.baml's served callable-throws fragment; honest bytes differ.
+        let unit = plan
+            .prev_units
+            .iter_mut()
+            .find(|u| u.source_file == "a.baml")
+            .expect("a.baml unit present in the reuse plan");
+        assert!(
+            !unit.callable_throws_fragment.is_empty(),
+            "a plain function must carry a non-empty fragment for this test to bite"
+        );
+        unit.callable_throws_fragment = vec![0xde, 0xad, 0xbe, 0xef];
+        let err = ctx
+            .verify_sampled_artifact(&honest, &plan, "a.baml")
+            .expect_err("a stale served fragment must hard-error");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("a.baml") && msg.contains("callable-throws"),
+            "must name the file and artifact kind; got: {msg}"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn maybe_sampled_verify_skips_the_hit_path_without_building_a_db() {
+        // A whole-image cache hit passes `plan = None`: nothing is served
+        // artifact-by-artifact, so the honest DB must never be built (sampling a
+        // hit would need a full honest compile — the design forbids it).
+        let Some((root, ctx, _plan, _honest)) =
+            sampled_setup(&[("a.baml", "function a() -> int {\n  1\n}\n")])
+        else {
+            return;
+        };
+        ctx.maybe_sampled_verify(None, || panic!("hit path must not build an honest DB"))
+            .expect("a None plan is a no-op");
+        let _ = std::fs::remove_dir_all(root);
     }
 }

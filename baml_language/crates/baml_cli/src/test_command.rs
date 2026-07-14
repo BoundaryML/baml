@@ -230,6 +230,13 @@ impl TestArgs {
                 if !stdlib_interface_hit {
                     ctx.store_stdlib_interface(&db);
                 }
+                // Sampled field verification (rustc-style 1-in-32): after the
+                // compile result exists, ~1 warm run in 32 re-derives one served
+                // clean file on a fresh, un-seeded database and hard-errors on
+                // any drift. Bounded latency, loud on silent staleness.
+                ctx.maybe_sampled_verify(reuse_plan.as_ref(), || {
+                    build_db_from_sources(&resolved, |_| {})
+                })?;
             }
             // Warm-run evidence: with the stdlib interface seeded this is 0 (the
             // seed served every stdlib package); a cold run reports up to 6.

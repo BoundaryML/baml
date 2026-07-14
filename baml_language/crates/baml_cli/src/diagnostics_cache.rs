@@ -195,6 +195,32 @@ pub(crate) fn empty_blob() -> Vec<u8> {
     borsh::to_vec(&CachedFileBlob::Some(Vec::<CachedDiagnostic>::new())).unwrap_or_default()
 }
 
+/// Test helper: a valid blob fabricating one error at bytes 0..1 of `rel_path`.
+/// It rehydrates cleanly (the span is in range for any non-empty file), so
+/// comparing it against an honest check of an error-free file yields a genuine
+/// non-empty-vs-empty mismatch — used to prove the sampled-verify tripwire
+/// fires on a stale diagnostics blob.
+#[cfg(test)]
+pub(crate) fn one_fake_diagnostic_blob(rel_path: &str) -> Vec<u8> {
+    let cached = vec![CachedDiagnostic {
+        id: DiagnosticId::TypeMismatch,
+        severity: Severity::Error,
+        phase: DiagnosticPhase::Type,
+        message: "sampled-verify poison".to_string(),
+        annotations: vec![CachedAnnotation {
+            span: CachedSpan {
+                rel_path: rel_path.to_string(),
+                start: 0,
+                end: 1,
+            },
+            message: None,
+            is_primary: true,
+        }],
+        related_info: Vec::new(),
+    }];
+    borsh::to_vec(&CachedFileBlob::Some(cached)).unwrap_or_default()
+}
+
 /// Rehydrate an opaque manifest blob into live diagnostics. `None` — a poison
 /// marker, an undecodable blob, or an unmappable / out-of-range span — means
 /// "re-check this file"; the cache never serves a partial or stale set.

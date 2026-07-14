@@ -812,6 +812,14 @@ impl RunArgs {
             if !stdlib_interface_hit {
                 ctx.store_stdlib_interface(&db);
             }
+            // Sampled field verification (rustc-style 1-in-32): now that the
+            // compile result exists, ~1 warm run in 32 re-derives one served
+            // clean file on a fresh, un-seeded database and hard-errors on any
+            // drift. Bounded latency (one file's honest work), loud on the
+            // silent-staleness bug class the full BAML_CACHE_VERIFY guards.
+            ctx.maybe_sampled_verify(reuse_plan.as_ref(), || {
+                crate::project_load::build_db_from_sources(&resolved, |_| {})
+            })?;
         }
         // Warm-incremental evidence: with the diagnostics cache serving clean
         // files, this counts only the dirty files' scopes; a cold compile walks

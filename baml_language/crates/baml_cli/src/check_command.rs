@@ -52,6 +52,14 @@ impl CheckArgs {
         );
         if let Some(cache) = &cache {
             cache.verify_diagnostics(&db)?;
+            // Sampled field verification (rustc-style 1-in-32): `baml check`
+            // serves clean files' cached diagnostics and seeds their throws, so
+            // it is a warm serving path like run/test. After the served result
+            // exists, ~1 run in 32 re-derives one served clean file on a fresh,
+            // un-seeded database and hard-errors on any drift.
+            cache.maybe_sampled_verify(reuse_plan.as_ref(), || {
+                build_db_from_sources(&resolved, |_| {})
+            })?;
         }
         if !diagnostics.is_empty() {
             let rendered = render_project_diagnostics(&db, &diagnostics);
