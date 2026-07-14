@@ -6,6 +6,8 @@
 
 #include <baml/arg.hpp>
 #include <baml/buffer.hpp>
+#include <baml/codec.hpp>
+#include <baml/detail/call.hpp>
 #include <baml/detail/registry.hpp>
 #include <baml/errors.hpp>
 #include <baml/future.hpp>

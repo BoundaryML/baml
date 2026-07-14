@@ -1,6 +1,7 @@
 // Bridge-core smoke test: exercises the header-only runtime layer against the
-// real cdylib (version, runtime init, call registry fan-out, Arg tri-state).
-// Function calls through the codec are covered separately once the codec lands.
+// real cdylib - version, runtime init, end-to-end typed calls through the
+// codec (sync, async, containers, error envelope), call registry fan-out,
+// Arg semantics, and buffer moves.
 #include <cassert>
 #include <chrono>
 #include <cstdio>
@@ -19,10 +20,57 @@ static void test_version() {
 
 static void test_initialize_runtime() {
     const std::map<std::string, std::string> files = {
-        {"main.baml", "function ReturnOne() -> int {\n  1\n}\n"},
+        {"main.baml",
+         "function ReturnOne() -> int {\n  1\n}\n"
+         "function Identity(s: string) -> string {\n  s\n}\n"
+         "function Twice(xs: int[]) -> int[] {\n  xs.map((x) -> { x * 2 })\n}\n"},
     };
     baml::initialize_runtime(".", files);
     std::printf("runtime initialized\n");
+}
+
+static void test_call_function_end_to_end() {
+    {
+        baml::detail::ArgsEncoder args;
+        const int64_t got = baml::detail::call_sync<int64_t>("ReturnOne", std::move(args));
+        assert(got == 1);
+    }
+    {
+        baml::detail::ArgsEncoder args;
+        args.add_arg("s", [](baml::detail::wire::Writer& w) {
+            baml::codec<std::string>::encode(w, "hello");
+        });
+        const std::string got =
+            baml::detail::call_sync<std::string>("Identity", std::move(args));
+        assert(got == "hello");
+    }
+    {
+        baml::detail::ArgsEncoder args;
+        args.add_arg("xs", [](baml::detail::wire::Writer& w) {
+            baml::codec<std::vector<int64_t>>::encode(w, {1, 2, 3});
+        });
+        const std::vector<int64_t> got =
+            baml::detail::call_sync<std::vector<int64_t>>("Twice", std::move(args));
+        assert((got == std::vector<int64_t>{2, 4, 6}));
+    }
+    {
+        // Async path through Future.
+        baml::detail::ArgsEncoder args;
+        auto fut = baml::detail::start_call<int64_t>("ReturnOne", std::move(args));
+        assert(fut.get() == 1);
+    }
+    {
+        // Pre-call failure (unknown function) arrives as a BamlError envelope.
+        bool threw = false;
+        try {
+            baml::detail::ArgsEncoder args;
+            baml::detail::call_sync<int64_t>("NoSuchFunction", std::move(args));
+        } catch (const baml::BamlError&) {
+            threw = true;
+        }
+        assert(threw);
+    }
+    std::printf("call function end to end ok\n");
 }
 
 static void test_call_registry_round_trip() {
@@ -105,6 +153,7 @@ static void test_owned_buffer_move() {
 int main() {
     test_version();
     test_initialize_runtime();
+    test_call_function_end_to_end();
     test_call_registry_round_trip();
     test_arg_two_state();
     test_owned_buffer_move();
