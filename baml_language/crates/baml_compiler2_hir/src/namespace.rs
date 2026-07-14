@@ -8,6 +8,8 @@
 //! `NamespaceItems::conflicts` but do not prevent resolution — downstream
 //! layers always see a resolved symbol (the first one).
 
+use std::collections::BTreeSet;
+
 use baml_base::{Name, SourceFile, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use rustc_hash::FxHashMap;
@@ -191,9 +193,42 @@ pub fn namespace_items<'db>(
     let mut values: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
     let mut conflicts: Vec<NameConflict<'db>> = Vec::new();
 
+    // BAML declarations share one source-level namespace even though lookup
+    // keeps separate type and value maps. Diagnose a class/enum/alias and a
+    // function/client with the same spelling before downstream codegen has a
+    // chance to flatten both into one target-language declaration namespace.
+    let cross_namespace_names = type_defs
+        .keys()
+        .filter(|name| value_defs.contains_key(*name))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    for name in &cross_namespace_names {
+        let mut contributions = type_defs[name]
+            .iter()
+            .chain(value_defs[name].iter())
+            .copied()
+            .collect::<Vec<_>>();
+        contributions.sort_by_key(|contribution| {
+            (
+                contribution.definition.file(db).path(db),
+                contribution.name_span.start(),
+            )
+        });
+        conflicts.push(NameConflict {
+            name: name.clone(),
+            entries: contributions
+                .into_iter()
+                .map(|contribution| ConflictEntry {
+                    definition: contribution.definition,
+                    name_span: contribution.name_span,
+                })
+                .collect(),
+        });
+    }
+
     for (name, contribs) in type_defs {
         types.insert(name.clone(), contribs[0].definition);
-        if contribs.len() > 1 {
+        if contribs.len() > 1 && !cross_namespace_names.contains(&name) {
             conflicts.push(NameConflict {
                 name,
                 entries: contribs
@@ -208,7 +243,7 @@ pub fn namespace_items<'db>(
     }
     for (name, contribs) in value_defs {
         values.insert(name.clone(), contribs[0].definition);
-        if contribs.len() > 1 {
+        if contribs.len() > 1 && !cross_namespace_names.contains(&name) {
             // Tests are function-scoped (identity is functionName/testName),
             // so same-named tests for different functions are not conflicts.
             let all_tests = contribs

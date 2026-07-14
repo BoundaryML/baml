@@ -596,6 +596,39 @@ mod tests {
         ));
     }
 
+    /// Type and value declarations also share the BAML source namespace even
+    /// though resolution keeps separate lookup maps internally.
+    #[test]
+    fn class_and_function_same_name_produce_conflict() {
+        let mut db = make_db();
+        let _file = db.add_file(
+            "mixed.baml",
+            "class Foo { x int }\nfunction Foo() -> int { 1 }",
+        );
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+
+        let conflict = ns
+            .conflicts()
+            .iter()
+            .find(|conflict| conflict.name == Name::new("Foo"))
+            .expect("class/function name collision should be diagnosed");
+        assert_eq!(conflict.entries.len(), 2);
+        assert!(
+            conflict
+                .entries
+                .iter()
+                .any(|entry| entry.definition.kind_name() == "class")
+        );
+        assert!(
+            conflict
+                .entries
+                .iter()
+                .any(|entry| entry.definition.kind_name() == "function")
+        );
+    }
+
     /// No conflict when names are unique across files.
     #[test]
     fn no_conflict_for_unique_names() {

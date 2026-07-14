@@ -3,6 +3,7 @@ package baml_go
 import (
 	"fmt"
 	"math/big"
+	"strconv"
 
 	"github.com/boundaryml/baml/sdks/go/baml_go/internal/cffi"
 )
@@ -75,11 +76,24 @@ func (value Value) Float64() (float64, error) {
 	if value.value == nil {
 		return 0, fmt.Errorf("BAML value is uninitialized")
 	}
-	item, ok := value.value.Value.(*cffi.BamlOutboundValue_FloatValue)
-	if !ok {
-		return 0, fmt.Errorf("expected BAML float, got %T", value.value.Value)
+	switch item := value.value.Value.(type) {
+	case *cffi.BamlOutboundValue_FloatValue:
+		return item.FloatValue, nil
+	case *cffi.BamlOutboundValue_LiteralValue:
+		if item.LiteralValue == nil {
+			break
+		}
+		literal, ok := item.LiteralValue.Literal.(*cffi.BamlLiteralValue_FloatValue)
+		if !ok {
+			break
+		}
+		decoded, err := strconv.ParseFloat(literal.FloatValue, 64)
+		if err != nil {
+			return 0, fmt.Errorf("BAML returned invalid float literal %q: %w", literal.FloatValue, err)
+		}
+		return decoded, nil
 	}
-	return item.FloatValue, nil
+	return 0, fmt.Errorf("expected BAML float, got %T", value.value.Value)
 }
 
 func (value Value) Bool() (bool, error) {

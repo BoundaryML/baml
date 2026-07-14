@@ -750,6 +750,7 @@ dependencies = [
  "object 0.36.3",
  "regex",
  "reqwest",
+ "sdkgen_go",
  "sdkgen_python_pydantic2",
  "sdkgen_typescript_node",
  "serde",

@@ -2065,7 +2065,7 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(
-            functions.contains("func EchoText(ctx context.Context, value string) (string, error)")
+            functions.contains("func EchoText(ctx_ context.Context, value string) (string, error)")
         );
         assert!(functions.contains("\"user.echo_text\""));
         assert!(functions.contains("baml_go.String(value)"));
@@ -2121,13 +2121,13 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains("type ProbeOption func(map[string]baml_go.Input)"));
-        assert!(functions.contains("func WithProbeOpt1(value *int64) ProbeOption"));
-        assert!(functions.contains("func WithProbeOpt2(value string) ProbeOption"));
+        assert!(functions.contains("func WithProbeOpt1(value_ *int64) ProbeOption"));
+        assert!(functions.contains("func WithProbeOpt2(value_ string) ProbeOption"));
         assert!(functions.contains(
-            "func Probe(ctx context.Context, options_ string, options ...ProbeOption) (int64, error)"
+            "func Probe(ctx_ context.Context, options string, options_ ...ProbeOption) (int64, error)"
         ));
-        assert!(functions.contains("arguments := map[string]baml_go.Input{\n\t\t\"options\": baml_go.String(options_),\n\t}"));
-        assert!(functions.contains("for _, option := range options"));
+        assert!(functions.contains("arguments_ := map[string]baml_go.Input{\n\t\t\"options\": baml_go.String(options),\n\t}"));
+        assert!(functions.contains("for _, option_ := range options_"));
         assert!(!functions.contains("\t\t\"opt1\":"));
         assert!(!functions.contains("\t\t\"opt2\":"));
     }
@@ -2222,13 +2222,13 @@ mod tests {
 
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "baml_go.Enum(\"user.review_queue.response_state\", string(value), \"pending_review\", \"accepted\")"
+            "baml_go.Enum(\"user.review_queue.response_state\", string(value_), \"pending_review\", \"accepted\")"
         ));
         assert!(functions.contains(
-            "value.Enum(\"user.review_queue.response_state\", \"pending_review\", \"accepted\")"
+            "value_.Enum(\"user.review_queue.response_state\", \"pending_review\", \"accepted\")"
         ));
-        assert!(functions.contains("\"state\": _bamlEncodeEnum0(value.State)"));
-        assert!(functions.contains("baml_go.Optional(value.Optional, _bamlEncodeEnum0)"));
+        assert!(functions.contains("\"state\": _bamlEncodeEnum0(value_.State)"));
+        assert!(functions.contains("baml_go.Optional(value_.Optional, _bamlEncodeEnum0)"));
         assert!(functions.contains("baml_go.ListEncoder(_bamlEncodeEnum0)"));
     }
 
@@ -2304,11 +2304,11 @@ mod tests {
 
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "func AliasesRoundTripText(ctx context.Context, value AliasesTextChain) (AliasesTextChain, error)"
+            "func AliasesRoundTripText(ctx_ context.Context, value AliasesTextChain) (AliasesTextChain, error)"
         ));
         assert!(functions.contains("baml_go.String(value)"));
         assert!(functions.contains(
-            "func AliasesRoundTripOptionalBigNumber(ctx context.Context, value AliasesBigNumber) (AliasesBigNumber, error)"
+            "func AliasesRoundTripOptionalBigNumber(ctx_ context.Context, value AliasesBigNumber) (AliasesBigNumber, error)"
         ));
         assert!(!functions.contains("**big.Int"));
         assert!(!functions.contains("AliasesRoundTripRecursive"));
@@ -2357,13 +2357,15 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "func PeopleRoundTripPerson(ctx context.Context, ctx_ PeoplePersonRecord) (PeoplePersonRecord, error)"
+            "func PeopleRoundTripPerson(ctx_ context.Context, ctx PeoplePersonRecord) (PeoplePersonRecord, error)"
         ));
         assert!(functions.contains("baml_go.Class(\"user.people.person_record\""));
-        assert!(functions.contains("\"class_value\": baml_go.String(value.ClassValue)"));
-        assert!(functions.contains("value.Class(\"user.people.person_record\")"));
-        assert!(functions.contains("classValue.String(\"class_value\")"));
-        assert!(functions.contains("decoded.ClassValue, err = classValue.String(\"class_value\")"));
+        assert!(functions.contains("\"class_value\": baml_go.String(value_.ClassValue)"));
+        assert!(functions.contains("value_.Class(\"user.people.person_record\")"));
+        assert!(functions.contains("classValue_.String(\"class_value\")"));
+        assert!(
+            functions.contains("decoded_.ClassValue, err_ = classValue_.String(\"class_value\")")
+        );
     }
 
     #[test]
@@ -2467,7 +2469,7 @@ mod tests {
             "example.com/project/baml_sdk",
         );
         let functions = &files[&PathBuf::from("functions.go")];
-        assert!(functions.contains("baml_go.Optional(value.Optional, baml_go.String)"));
+        assert!(functions.contains("baml_go.Optional(value_.Optional, baml_go.String)"));
         assert!(functions.contains("baml_go.DecodeOptionalField("));
         assert!(files[&PathBuf::from("types.go")].contains("type Outer struct"));
     }
@@ -2491,13 +2493,13 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains(
-            "func RoundTripOptionalItems(ctx context.Context, items *[]*string) (*[]*string, error)"
+            "func RoundTripOptionalItems(ctx_ context.Context, items *[]*string) (*[]*string, error)"
         ));
         assert!(functions.contains(
             "baml_go.Optional(items, baml_go.ListEncoder(baml_go.OptionalEncoder(baml_go.String)))"
         ));
         assert!(functions.contains(
-            "baml_go.DecodeOptional(result, baml_go.ListDecoder(baml_go.OptionalDecoder(baml_go.Value.String)))"
+            "baml_go.DecodeOptional(result_, baml_go.ListDecoder(baml_go.OptionalDecoder(baml_go.Value.String)))"
         ));
         assert!(!functions.contains("**string"));
     }
@@ -2524,9 +2526,9 @@ mod tests {
             "example.com/project/baml_sdk",
         );
         let functions = &files[&PathBuf::from("functions.go")];
-        assert!(functions.contains("\"inner\": _bamlEncodeClass0(value.Inner)"));
+        assert!(functions.contains("\"inner\": _bamlEncodeClass0(value_.Inner)"));
         assert!(
-            functions.contains("baml_go.DecodeField(classValue, \"inner\", _bamlDecodeClass0)")
+            functions.contains("baml_go.DecodeField(classValue_, \"inner\", _bamlDecodeClass0)")
         );
     }
 
@@ -2586,7 +2588,7 @@ mod tests {
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains("package baml_sdk"));
         assert!(
-            functions.contains("func BillingV2LookupInvoice(ctx context.Context) (string, error)")
+            functions.contains("func BillingV2LookupInvoice(ctx_ context.Context) (string, error)")
         );
         assert!(functions.contains("\"user.billing.v2.lookup_invoice\""));
     }
@@ -2728,7 +2730,7 @@ mod tests {
             "example.com/project/baml_sdk",
         );
         assert!(files[&PathBuf::from("functions.go")].contains(
-            "func ReservedArgs(ctx context.Context, ctx_ string, result_ string, err_ string)"
+            "func ReservedArgs(ctx_ context.Context, ctx string, result string, err string)"
         ));
     }
 
@@ -2845,9 +2847,9 @@ mod tests {
         );
         let functions = &files[&PathBuf::from("functions.go")];
         assert!(functions.contains("\n\t\"math/big\"\n"));
-        assert!(functions.contains("func NoOp(ctx context.Context) error"));
+        assert!(functions.contains("func NoOp(ctx_ context.Context) error"));
         assert!(functions.contains(
-            "func RoundTripBigint(ctx context.Context, value *big.Int) (*big.Int, error)"
+            "func RoundTripBigint(ctx_ context.Context, value *big.Int) (*big.Int, error)"
         ));
     }
 }

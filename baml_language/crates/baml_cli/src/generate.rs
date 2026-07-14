@@ -39,6 +39,9 @@ struct GeneratorDef {
     /// Required `naming_convention` from the generator section. No default
     /// is permitted — generators must spell out the policy explicitly.
     naming_convention: NamingConvention,
+    /// Required for Go so generated packages can import the SDK root and one
+    /// another. Other generators leave this unset.
+    sdk_import_path: Option<String>,
 }
 
 impl GenerateArgs {
@@ -171,6 +174,15 @@ impl GenerateArgs {
                     &baml_bytecode,
                     generator.naming_convention,
                 ),
+                OutputType::Go => sdkgen_go::to_source_code_with_bytecode(
+                    &pool,
+                    &baml_bytecode,
+                    generator.naming_convention,
+                    generator
+                        .sdk_import_path
+                        .as_deref()
+                        .expect("validated Go generator must have sdk_import_path"),
+                ),
             };
 
             std::fs::create_dir_all(&output_dir).with_context(|| {
@@ -257,7 +269,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node""#,
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "go""#,
             table_range,
             &mut diags,
         );
@@ -269,6 +281,16 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             table_range,
             &mut diags,
         );
+        let sdk_import_path = if matches!(output_type, Some(OutputType::Go)) {
+            parse_required_go_import_path(
+                name,
+                generator.sdk_import_path.as_ref(),
+                table_range,
+                &mut diags,
+            )
+        } else {
+            None
+        };
 
         // `output_dir` is resolved relative to the project root and defaults
         // to "..", with `baml_sdk` appended (matching the historic
@@ -281,16 +303,99 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
         let (Some(output_type), Some(naming_convention)) = (output_type, naming_convention) else {
             continue;
         };
+        if output_type == OutputType::Go {
+            if naming_convention != NamingConvention::Language {
+                let range = generator
+                    .naming_convention
+                    .as_ref()
+                    .map(|value| to_text_range(value.span()))
+                    .unwrap_or(table_range);
+                diags.push(
+                    Diagnostic::error(
+                        DiagnosticId::InvalidGeneratorPropertyValue,
+                        format!(
+                            "Go generator `{name}` requires `naming_convention = \"language\"`"
+                        ),
+                    )
+                    .with_primary(
+                        Span {
+                            file_id: manifest_file_id(),
+                            range,
+                        },
+                        "Go identifiers use the canonical language projection",
+                    )
+                    .with_phase(DiagnosticPhase::Validation),
+                );
+                continue;
+            }
+            if sdk_import_path.is_none() {
+                continue;
+            }
+        }
 
         generators.push(GeneratorDef {
             name: name.clone(),
             output_type,
             output_dir,
             naming_convention,
+            sdk_import_path,
         });
     }
 
     (generators, diags)
+}
+
+fn parse_required_go_import_path(
+    generator_name: &str,
+    value: Option<&Spanned<String>>,
+    table_range: TextRange,
+    diags: &mut Vec<Diagnostic>,
+) -> Option<String> {
+    let Some(value) = value else {
+        diags.push(
+            Diagnostic::error(
+                DiagnosticId::MissingGeneratorProperty,
+                format!(
+                    "Go generator `{generator_name}` is missing required property \
+                     `sdk_import_path` (for example `example.com/project/baml_sdk`)"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id: manifest_file_id(),
+                    range: table_range,
+                },
+                "missing Go SDK import path",
+            )
+            .with_phase(DiagnosticPhase::Validation),
+        );
+        return None;
+    };
+
+    let import_path = value.get_ref();
+    let valid = !import_path.is_empty()
+        && !import_path.chars().any(char::is_whitespace)
+        && !import_path.starts_with('/')
+        && !import_path.ends_with('/');
+    if valid {
+        return Some(import_path.clone());
+    }
+
+    diags.push(
+        Diagnostic::error(
+            DiagnosticId::InvalidGeneratorPropertyValue,
+            format!("invalid `sdk_import_path` `{import_path}` on Go generator `{generator_name}`"),
+        )
+        .with_primary(
+            Span {
+                file_id: manifest_file_id(),
+                range: to_text_range(value.span()),
+            },
+            "expected a non-empty Go import path without whitespace or surrounding slashes",
+        )
+        .with_phase(DiagnosticPhase::Validation),
+    );
+    None
 }
 
 /// Parse a required `[generator.<name>]` property as `T` via strum. Pushes a

@@ -11,7 +11,7 @@ use std::{
 
 use baml_codegen_types::{Name, Symbol, SymbolPool};
 
-use crate::{packages::GoPackages, rendering::GeneratorIdent};
+use crate::{packages::GoPackages, rendering::is_protected_go_identifier};
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct BamlFqn {
@@ -223,15 +223,9 @@ impl NameScope {
         mut candidate: GoIdent,
         generated_package_aliases: &BTreeSet<String>,
     ) -> GoIdent {
-        let reserved = match self {
-            Self::Function(_) => GeneratorIdent::FUNCTION_SCOPE,
-            Self::Package(_) | Self::Class(_) => &[],
-        };
-        while reserved
-            .iter()
-            .any(|identifier| identifier.as_str() == candidate.name.as_ref())
-            || matches!(self, Self::Function(_))
-                && generated_package_aliases.contains(candidate.name.as_ref())
+        while matches!(self, Self::Function(_))
+            && (is_protected_go_identifier(candidate.name.as_ref())
+                || generated_package_aliases.contains(candidate.name.as_ref()))
         {
             candidate = candidate.with_trailing_underscore();
         }
@@ -613,6 +607,7 @@ mod tests {
     use baml_codegen_types::Name;
 
     use super::*;
+    use crate::rendering::GeneratorIdent;
 
     fn symbol(namespace: &[&str], name: &str) -> BamlFqn {
         BamlFqn::symbol(&Name::new(
@@ -789,6 +784,8 @@ mod tests {
         let left_value = left.member(&BaseName::new("user_id"));
         let right_value = right.member(&BaseName::new("user_id"));
         let ctx = left.member(&BaseName::new("ctx"));
+        let err_local = left.member(&BaseName::new("err_"));
+        let nil = left.member(&BaseName::new("nil"));
         let bootstrap = left.member(&BaseName::new("bootstrap"));
         let type_ = left.member(&BaseName::new("type"));
         let requests = vec![
@@ -803,6 +800,12 @@ mod tests {
                 GoVisibility::Exported,
             ),
             request(ctx.clone(), GoNameKind::Parameter, GoVisibility::Exported),
+            request(
+                err_local.clone(),
+                GoNameKind::Parameter,
+                GoVisibility::Exported,
+            ),
+            request(nil.clone(), GoNameKind::Parameter, GoVisibility::Exported),
             request(
                 bootstrap.clone(),
                 GoNameKind::Parameter,
@@ -837,7 +840,21 @@ mod tests {
                 .project(&ctx, GoNameKind::Parameter, GoVisibility::Exported,)
                 .identifier(&generated_package())
                 .to_string(),
-            "ctx_"
+            "ctx"
+        );
+        assert_eq!(
+            names
+                .project(&err_local, GoNameKind::Parameter, GoVisibility::Exported,)
+                .identifier(&generated_package())
+                .to_string(),
+            "err"
+        );
+        assert_eq!(
+            names
+                .project(&nil, GoNameKind::Parameter, GoVisibility::Exported,)
+                .identifier(&generated_package())
+                .to_string(),
+            "nil_"
         );
         assert_eq!(
             names
@@ -911,7 +928,7 @@ mod tests {
     #[test]
     fn parameters_never_equal_a_generator_owned_identifier() {
         let owner = symbol(&[], "call");
-        let fqns = GeneratorIdent::FUNCTION_SCOPE
+        let fqns = GeneratorIdent::ALL
             .iter()
             .map(|identifier| owner.member(&BaseName::new(identifier.as_str())))
             .collect::<Vec<_>>();
@@ -923,7 +940,7 @@ mod tests {
                 .collect(),
         );
 
-        for (identifier, fqn) in GeneratorIdent::FUNCTION_SCOPE.iter().zip(fqns) {
+        for (identifier, fqn) in GeneratorIdent::ALL.iter().zip(fqns) {
             let projected = names.project(&fqn, GoNameKind::Parameter, GoVisibility::Exported);
             assert_ne!(
                 projected.identifier(&generated_package()).to_string(),

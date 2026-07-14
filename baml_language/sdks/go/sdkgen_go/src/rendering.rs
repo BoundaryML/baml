@@ -93,26 +93,10 @@ impl fmt::Display for EnumCodecIdent {
 }
 
 impl GeneratorIdent {
-    pub(crate) const IMPORT_ALIASES: &'static [Self] = &[
-        Self::ContextPackage,
-        Self::BigPackage,
-        Self::BootstrapPackage,
-        Self::RuntimePackage,
-    ];
-
-    /// Predeclared identifiers emitted as types or conversions. Go permits an
-    /// import to shadow these names, so generated package aliases must avoid
-    /// them even though they are not language keywords.
-    pub(crate) const PREDECLARED_TYPES: &'static [Self] = &[
-        Self::StringType,
-        Self::Int64Type,
-        Self::Float64Type,
-        Self::BoolType,
-        Self::ByteType,
-        Self::ErrorType,
-    ];
-
-    pub(crate) const FUNCTION_SCOPE: &'static [Self] = &[
+    /// Every identifier owned by the generator. Package aliases and projected
+    /// BAML locals both consult this same set, so a new renderer-owned name
+    /// cannot silently introduce a shadowing bug in one of those scopes.
+    pub(crate) const ALL: &'static [Self] = &[
         Self::ContextPackage,
         Self::BigPackage,
         Self::BootstrapPackage,
@@ -124,6 +108,10 @@ impl GeneratorIdent {
         Self::ArgumentsLocal,
         Self::OptionsParameter,
         Self::OptionLocal,
+        Self::OptionValueParameter,
+        Self::ClassValueLocal,
+        Self::DecodedLocal,
+        Self::CodecValueParameter,
         Self::StringType,
         Self::Int64Type,
         Self::Float64Type,
@@ -138,17 +126,17 @@ impl GeneratorIdent {
             Self::BigPackage => "big",
             Self::BootstrapPackage => "bootstrap",
             Self::RuntimePackage => "baml_go",
-            Self::ContextParameter => "ctx",
-            Self::ErrorLocal => "err",
-            Self::ResultLocal => "result",
-            Self::ZeroLocal => "zero",
-            Self::ArgumentsLocal => "arguments",
-            Self::OptionsParameter => "options",
-            Self::OptionLocal => "option",
-            Self::OptionValueParameter => "value",
-            Self::ClassValueLocal => "classValue",
-            Self::DecodedLocal => "decoded",
-            Self::CodecValueParameter => "value",
+            Self::ContextParameter => "ctx_",
+            Self::ErrorLocal => "err_",
+            Self::ResultLocal => "result_",
+            Self::ZeroLocal => "zero_",
+            Self::ArgumentsLocal => "arguments_",
+            Self::OptionsParameter => "options_",
+            Self::OptionLocal => "option_",
+            Self::OptionValueParameter => "value_",
+            Self::ClassValueLocal => "classValue_",
+            Self::DecodedLocal => "decoded_",
+            Self::CodecValueParameter => "value_",
             Self::StringType => "string",
             Self::Int64Type => "int64",
             Self::Float64Type => "float64",
@@ -157,6 +145,15 @@ impl GeneratorIdent {
             Self::ErrorType => "error",
         }
     }
+}
+
+/// Non-keyword spellings that generated Go identifiers must not claim.
+/// `nil` is predeclared, while `init` and `main` have package-level meaning.
+pub(crate) fn is_protected_go_identifier(value: &str) -> bool {
+    GeneratorIdent::ALL
+        .iter()
+        .any(|identifier| identifier.as_str() == value)
+        || matches!(value, "nil" | "init" | "main")
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

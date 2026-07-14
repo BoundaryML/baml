@@ -1,7 +1,27 @@
-// Literal bigint and float types exercise the two primitive-literal branches
-// that are not represented by class-field fixtures in the shared corpus.
+// Literal bigint exercises the primitive-literal branch not represented by
+// class-field fixtures in the shared corpus. BAML currently rejects float
+// literal types at parse time.
 function round_trip_literal_bigint(value: 42n) -> 42n {
   value
+}
+
+// Generator-owned locals end in `_`, and package aliases consult the same
+// protected-name table. These ordinary BAML parameters must therefore remain
+// usable without shadowing any emitted identifier; `nil` is escaped because
+// it is a Go predeclared identifier.
+function protected_local_names(
+  nil: string,
+  ctx: string,
+  err: string,
+  result: string,
+  zero: string,
+  options: string,
+  arguments: string,
+  value: string,
+  decoded: string,
+  bootstrap: string,
+) -> string {
+  nil
 }
 
 // These identifiers are legal BAML names but collide with Go import aliases

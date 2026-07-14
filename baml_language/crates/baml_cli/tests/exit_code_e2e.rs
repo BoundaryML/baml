@@ -64,6 +64,20 @@ fn create_project_with_generator(dir: &Path, source: &str) {
     .unwrap();
 }
 
+fn create_project_with_go_generator(dir: &Path, source: &str) {
+    create_project(dir, source);
+    std::fs::write(
+        dir.join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.go_client]\n\
+         output_type = \"go\"\n\
+         output_dir = \".\"\n\
+         naming_convention = \"language\"\n\
+         sdk_import_path = \"example.com/test-project/baml_sdk\"\n",
+    )
+    .unwrap();
+}
+
 // ============================================================================
 // Tests for `baml check` exit codes
 // ============================================================================
@@ -251,6 +265,36 @@ fn generate_valid_project_returns_zero_exit_code() {
         stderr.contains("Compiling 1 file(s)"),
         "`baml generate` should keep compile progress, got: {stderr}",
     );
+}
+
+#[test]
+fn generate_go_writes_sdk_through_cli() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project_with_go_generator(
+        tmp.path(),
+        "function echo(value: string) -> string { value }\n",
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    assert!(
+        output.status.success(),
+        "Go generation failed: {:?}\nstdout: {}\nstderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    let functions = std::fs::read_to_string(tmp.path().join("baml_sdk/functions.go"))
+        .expect("Go functions.go should be generated");
+    assert!(
+        functions.contains("func Echo("),
+        "generated Go:\n{functions}"
+    );
+    let bootstrap =
+        std::fs::read_to_string(tmp.path().join("baml_sdk/internal/bootstrap/bootstrap.go"))
+            .expect("Go bootstrap should be generated");
+    assert!(bootstrap.contains("func Ensure() error"));
 }
 
 // ============================================================================

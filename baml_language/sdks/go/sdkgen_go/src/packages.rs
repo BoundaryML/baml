@@ -8,7 +8,7 @@ use std::{
 use baml_base::Name;
 use baml_codegen_types::SymbolPool;
 
-use crate::{names::GoPackageName, rendering::GeneratorIdent};
+use crate::{names::GoPackageName, rendering::is_protected_go_identifier};
 
 #[derive(Clone, Debug)]
 pub(crate) struct GoPackage {
@@ -51,12 +51,9 @@ impl GoPackages {
             .collect::<BTreeSet<_>>();
         baml_names.insert(Name::new("user"));
 
-        let reserved = GeneratorIdent::IMPORT_ALIASES
-            .iter()
-            .chain(GeneratorIdent::PREDECLARED_TYPES)
-            .map(|identifier| identifier.as_str().to_string())
-            .chain(["baml_sdk".to_string()])
-            .collect::<BTreeSet<_>>();
+        // `project_package_name` has already escaped every shared protected
+        // identifier. Only the fixed user-package name remains unavailable.
+        let reserved = BTreeSet::from(["baml_sdk".to_string()]);
         let mut groups = BTreeMap::<String, Vec<Name>>::new();
         for baml_name in baml_names {
             if baml_name.as_str() != "user" {
@@ -79,12 +76,18 @@ impl GoPackages {
         for (base, baml_names) in groups {
             let collides = baml_names.len() > 1 || reserved.contains(&base);
             for baml_name in baml_names {
-                let candidate = if collides {
+                let base_candidate = if collides {
                     format!("{base}_{}", short_hash(baml_name.as_str()))
                 } else {
                     base.clone()
                 };
-                assert!(used.insert(candidate.clone()), "Go package name collision");
+                let mut candidate = base_candidate.clone();
+                for suffix in 2.. {
+                    if used.insert(candidate.clone()) {
+                        break;
+                    }
+                    candidate = format!("{base_candidate}_{suffix}");
+                }
                 let go_name = GoPackageName::new(&candidate);
                 let relative_dir = if baml_name.as_str() == "baml" {
                     PathBuf::from(&candidate)
@@ -136,7 +139,10 @@ fn project_package_name(name: &Name) -> String {
     } else if result.starts_with('_') {
         result.insert_str(0, "baml");
     }
-    while crate::names::is_go_keyword(&result) || is_special_go_directory(&result) {
+    while crate::names::is_go_keyword(&result)
+        || is_protected_go_identifier(&result)
+        || is_special_go_directory(&result)
+    {
         result.push('_');
     }
     result
@@ -210,11 +216,17 @@ mod tests {
 
     #[test]
     fn package_names_avoid_import_aliases_and_normalization_collisions() {
+        let second_order_collision = format!("foo_bar_{}", short_hash("foo-bar"));
         let pool = SymbolPool::from([
             class("context"),
             class("string"),
+            class("err_"),
+            class("nil"),
+            class("init"),
+            class("main"),
             class("foo-bar"),
             class("foo_bar"),
+            class(&second_order_collision),
             class("internal"),
             class("_hidden"),
         ]);
@@ -228,9 +240,19 @@ mod tests {
             packages.get(&Name::new("string")).go_name().as_str(),
             "string"
         );
+        for protected in ["err_", "nil", "init", "main"] {
+            assert_ne!(
+                packages.get(&Name::new(protected)).go_name().as_str(),
+                protected
+            );
+        }
         assert_ne!(
             packages.get(&Name::new("foo-bar")).go_name(),
             packages.get(&Name::new("foo_bar")).go_name()
+        );
+        assert_ne!(
+            packages.get(&Name::new("foo-bar")).go_name(),
+            packages.get(&Name::new(&second_order_collision)).go_name()
         );
         assert_eq!(
             packages.get(&Name::new("internal")).go_name().as_str(),

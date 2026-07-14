@@ -48,6 +48,7 @@ var (
 	_ func(context.Context, string) (string, error)                                                                                           = baml_sdk.GoCodegenRightEcho
 	_ func(context.Context, string, int64, bool, string, string, string, string, string, string, string) (string, error)                      = baml_sdk.GoCodegenNestedReservedArgs
 	_ func(context.Context, *big.Int) (*big.Int, error)                                                                                       = baml_sdk.GoCodegenPrimitiveEdgesRoundTripLiteralBigint
+	_ func(context.Context, string, string, string, string, string, string, string, string, string, string) (string, error)                   = baml_sdk.GoCodegenPrimitiveEdgesProtectedLocalNames
 	_ func(context.Context, *big.Int, int64, float64, []byte, string, string) (*big.Int, error)                                               = baml_sdk.GoCodegenPrimitiveEdgesReservedTypeNames
 	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives) (baml_sdk.GoCodegenPrimitiveEdgesWirePrimitives, error)           = baml_sdk.GoCodegenPrimitiveEdgesRoundTripWirePrimitives
 	_ func(context.Context, int64) (baml_sdk.ClassRefsOuter, error)                                                                           = baml_sdk.ClassRefsMakeOuter
