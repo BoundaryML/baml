@@ -4,7 +4,10 @@
 //! consumes typed FQNs, declaration kinds, and visibility, and produces an
 //! opaque [`GoName`]. Raw strings are exposed only when source text is emitted.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    fmt,
+};
 
 use baml_codegen_types::{Name, Symbol, SymbolPool};
 
@@ -53,12 +56,27 @@ pub(crate) enum GoVisibility {
     Exported,
 }
 
-/// A validated Go identifier. Its textual representation is intentionally
-/// available only through an explicit render-boundary method.
+/// The exact BAML identity used by the FFI boundary.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub(crate) struct GoName(Box<str>);
+pub(crate) enum BamlWireName {
+    Symbol(Name),
+    Key(baml_base::Name),
+}
 
-impl GoName {
+impl fmt::Display for BamlWireName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Symbol(name) => write!(f, "{name}"),
+            Self::Key(name) => write!(f, "{name}"),
+        }
+    }
+}
+
+/// A validated Go identifier used internally by collision allocation.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+struct GoIdent(Box<str>);
+
+impl GoIdent {
     fn new(value: String) -> Self {
         assert!(
             is_go_identifier(&value),
@@ -74,9 +92,23 @@ impl GoName {
     fn with_suffix(&self, suffix: &str) -> Self {
         Self::new(format!("{}_{suffix}", self.0))
     }
+}
 
+/// A projected name carries both the canonical Go identifier and the exact
+/// wire identity it represents. Neither side is reconstructed from the other.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct GoName {
+    canonical: GoIdent,
+    wire: BamlWireName,
+}
+
+impl GoName {
     pub(crate) fn as_str(&self) -> &str {
-        &self.0
+        &self.canonical.0
+    }
+
+    pub(crate) fn wire(&self) -> &BamlWireName {
+        &self.wire
     }
 }
 
@@ -167,7 +199,7 @@ impl GoNames {
     }
 
     fn new(requests: Vec<NameRequest>) -> Self {
-        let mut groups = BTreeMap::<NameScope, BTreeMap<GoName, Vec<NameRequest>>>::new();
+        let mut groups = BTreeMap::<NameScope, BTreeMap<GoIdent, Vec<NameRequest>>>::new();
         for request in requests {
             let scope = request.scope();
             let base = project_base(&request);
@@ -191,8 +223,14 @@ impl GoNames {
                     } else {
                         base.clone()
                     };
-                    let allocated = allocate_unique(candidate, request, &mut used);
-                    allocations.insert(request.clone(), allocated);
+                    let canonical = allocate_unique(candidate, request, &mut used);
+                    allocations.insert(
+                        request.clone(),
+                        GoName {
+                            canonical,
+                            wire: wire_name(request),
+                        },
+                    );
                 }
             }
         }
@@ -200,7 +238,7 @@ impl GoNames {
     }
 }
 
-fn project_base(request: &NameRequest) -> GoName {
+fn project_base(request: &NameRequest) -> GoIdent {
     let mut value = String::new();
     match request.kind {
         GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
@@ -227,7 +265,16 @@ fn project_base(request: &NameRequest) -> GoName {
     while is_go_keyword(&value) || is_generator_local(request.kind, &value) {
         value.push('_');
     }
-    GoName::new(value)
+    GoIdent::new(value)
+}
+
+fn wire_name(request: &NameRequest) -> BamlWireName {
+    match request.kind {
+        GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
+            BamlWireName::Symbol(request.fqn.symbol.clone())
+        }
+        GoNameKind::Parameter => BamlWireName::Key(request.fqn.leaf().clone()),
+    }
 }
 
 fn push_upper_component(output: &mut String, component: &baml_base::Name) {
@@ -258,7 +305,11 @@ fn is_generator_local(kind: GoNameKind, value: &str) -> bool {
     matches!(kind, GoNameKind::Parameter) && matches!(value, "ctx" | "err" | "result" | "zero")
 }
 
-fn allocate_unique(candidate: GoName, request: &NameRequest, used: &mut HashSet<GoName>) -> GoName {
+fn allocate_unique(
+    candidate: GoIdent,
+    request: &NameRequest,
+    used: &mut HashSet<GoIdent>,
+) -> GoIdent {
     if used.insert(candidate.clone()) {
         return candidate;
     }
@@ -423,7 +474,9 @@ mod tests {
         );
 
         for (fqn, kind, visibility, expected) in cases {
-            assert_eq!(names.project(&fqn, kind, visibility).as_str(), expected);
+            let projected = names.project(&fqn, kind, visibility);
+            assert_eq!(projected.as_str(), expected);
+            assert_eq!(projected.wire(), &BamlWireName::Symbol(fqn.symbol.clone()));
         }
     }
 
@@ -456,6 +509,12 @@ mod tests {
                 .project(&left_value, GoNameKind::Parameter, GoVisibility::Exported,)
                 .as_str(),
             "userId"
+        );
+        assert_eq!(
+            names
+                .project(&left_value, GoNameKind::Parameter, GoVisibility::Exported,)
+                .wire(),
+            &BamlWireName::Key(BaseName::new("user_id"))
         );
         assert_eq!(
             names
@@ -497,7 +556,7 @@ mod tests {
         let class_name = forward.project(&class, GoNameKind::Class, GoVisibility::Exported);
         assert!(function_name.as_str().starts_with("FooBar_"));
         assert!(class_name.as_str().starts_with("FooBar_"));
-        assert_ne!(function_name, class_name);
+        assert_ne!(function_name.as_str(), class_name.as_str());
         assert_eq!(
             function_name,
             reverse.project(&function, GoNameKind::Function, GoVisibility::Exported,)

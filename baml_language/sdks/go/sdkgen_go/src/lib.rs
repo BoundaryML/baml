@@ -48,7 +48,6 @@ pub fn to_source_code_with_bytecode(
         .map(|(name, function)| {
             let fqn = BamlFqn::symbol(name);
             GeneratedFunction {
-                name,
                 function,
                 go_name: names
                     .project(&fqn, GoNameKind::Function, GoVisibility::Exported)
@@ -83,7 +82,6 @@ pub fn to_source_code_with_bytecode(
 }
 
 struct GeneratedFunction<'a> {
-    name: &'a baml_codegen_types::Name,
     function: &'a Function,
     go_name: GoName,
     argument_names: Vec<GoName>,
@@ -154,7 +152,6 @@ fn render_functions(functions: &[GeneratedFunction<'_>], sdk_import_path: &str) 
     out.push_str("\t\"github.com/boundaryml/baml/sdks/go/baml_go\"\n)\n");
 
     for routed in functions {
-        let name = routed.name;
         let function = routed.function;
         let go_name = routed.go_name.as_str();
         let locals = &routed.argument_names;
@@ -186,14 +183,18 @@ fn render_functions(functions: &[GeneratedFunction<'_>], sdk_import_path: &str) 
             out.push_str("\t\treturn zero, err\n\t}\n");
             out.push_str("\tresult, err := baml_go.Call(ctx, ");
         }
-        let _ = write!(out, "{:?}, map[string]baml_go.Input{{", name.to_string());
+        let _ = write!(
+            out,
+            "{:?}, map[string]baml_go.Input{{",
+            routed.go_name.wire().to_string()
+        );
         if !function.arguments.is_empty() {
             out.push('\n');
             for (arg, local) in function.arguments.iter().zip(locals) {
                 let _ = writeln!(
                     out,
                     "\t\t{:?}: baml_go.{}({}),",
-                    arg.name.as_str(),
+                    local.wire().to_string(),
                     input_constructor(&arg.ty),
                     local.as_str()
                 );
