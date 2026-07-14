@@ -74,7 +74,7 @@ pub fn to_source_code(
             let Symbol::Class(class_def) = &pool[name] else {
                 unreachable!()
             };
-            match emit_class(name, class_def, &emitted_types) {
+            match emit_class(pool, name, class_def, &emitted_types) {
                 Ok(Some(emitted)) => {
                     classes.push(emitted);
                     emitted_types.insert(name.clone());
@@ -107,6 +107,7 @@ pub fn to_source_code(
         };
         for method in &class_def.static_methods {
             match emit_callable(
+                pool,
                 &method_fqn(&class.pool_name, method),
                 method,
                 &emitted_types,
@@ -119,6 +120,7 @@ pub fn to_source_code(
         }
         for method in &class_def.instance_methods {
             match emit_callable(
+                pool,
                 &method_fqn(&class.pool_name, method),
                 method,
                 &emitted_types,
@@ -144,19 +146,12 @@ pub fn to_source_code(
             skipped.push(format!("{name}: companion functions land in a later slice"));
             continue;
         }
-        match emit_callable(&name.to_string(), function, &emitted_types) {
+        match emit_callable(pool, &name.to_string(), function, &emitted_types) {
             Ok(emitted) => {
                 let ns = cpp_namespace_of(name);
                 fns_by_namespace.entry(ns).or_default().push(emitted);
             }
             Err(reason) => skipped.push(format!("{name}: {reason}")),
-        }
-    }
-    for name in &names {
-        if let Symbol::TypeAlias(_) = &pool[*name] {
-            if name.pkg.as_str() == "user" {
-                skipped.push(format!("{name}: type aliases land in a later slice"));
-            }
         }
     }
 
@@ -261,6 +256,7 @@ struct EmittedClass {
 /// Ok(None) = not emittable *yet* (a field references a class not emitted so
 /// far); the fixed-point loop retries. Err = never emittable in this slice.
 fn emit_class(
+    pool: &SymbolPool,
     name: &Name,
     class_def: &Class,
     emitted_types: &BTreeSet<Name>,
@@ -270,7 +266,7 @@ fn emit_class(
     }
     let mut fields = Vec::new();
     for prop in &class_def.properties {
-        match translate_ty(&prop.ty, emitted_types) {
+        match translate_ty(pool, &prop.ty, emitted_types) {
             Translated::Cpp(ty) => {
                 fields.push((sanitize(prop.name.as_str()), ty, prop.name.to_string()));
             }
@@ -313,6 +309,7 @@ struct EmittedFn {
 }
 
 fn emit_callable(
+    pool: &SymbolPool,
     fqn: &str,
     function: &Function,
     emitted_types: &BTreeSet<Name>,
@@ -323,7 +320,7 @@ fn emit_callable(
     let mut params = Vec::new();
     let mut opt_params = Vec::new();
     for arg in &function.arguments {
-        let ty = match translate_ty(&arg.ty, emitted_types) {
+        let ty = match translate_ty(pool, &arg.ty, emitted_types) {
             Translated::Cpp(ty) => ty,
             Translated::NotYet | Translated::Unsupported(_) => {
                 return Err(format!(
@@ -339,7 +336,7 @@ fn emit_callable(
             params.push(entry);
         }
     }
-    let ret = match translate_return_ty(&function.return_type, emitted_types) {
+    let ret = match translate_return_ty(pool, &function.return_type, emitted_types) {
         Translated::Cpp(ty) => ty,
         Translated::NotYet | Translated::Unsupported(_) => {
             return Err(format!("unsupported return type {}", function.return_type));
@@ -391,7 +388,7 @@ enum Translated {
 /// Slice-1..3 type table: primitives, containers, null-normalized optionals,
 /// variants, and emitted classes/enums. Everything else is unsupported here
 /// and the surrounding symbol is skipped (reported, not silently dropped).
-fn translate_ty(ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
+fn translate_ty(pool: &SymbolPool, ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
     let translated = match ty {
         Ty::Int => "int64_t".to_string(),
         Ty::Float => "double".to_string(),
@@ -410,6 +407,22 @@ fn translate_ty(ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
                 baml_base::Literal::String(_) => "std::string".to_string(),
                 baml_base::Literal::Bool(_) => "bool".to_string(),
             }
+        }
+        Ty::TypeAlias(name) => {
+            // Aliases resolve transparently to their target type this slice
+            // (named using-aliases need interleaved declaration ordering).
+            if name.pkg.as_str() != "user" {
+                return Translated::Unsupported(format!("non-user alias {name}"));
+            }
+            let Some(Symbol::TypeAlias(alias)) = pool.get(name) else {
+                return Translated::Unsupported(format!("unresolved alias {name}"));
+            };
+            if alias.recursive {
+                return Translated::Unsupported(
+                    "recursive type alias (wrapper struct lands in a later slice)".to_string(),
+                );
+            }
+            return translate_ty(pool, &alias.resolves_to, emitted_types);
         }
         Ty::Enum(name) => {
             if name.pkg.as_str() != "user" {
@@ -434,7 +447,7 @@ fn translate_ty(ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
                 Translated::NotYet
             };
         }
-        Ty::List(inner) => match translate_ty(inner, emitted_types) {
+        Ty::List(inner) => match translate_ty(pool, inner, emitted_types) {
             Translated::Cpp(inner) => format!("std::vector<{inner}>"),
             other => return other,
         },
@@ -442,7 +455,7 @@ fn translate_ty(ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
             if !matches!(key.as_ref(), Ty::String) {
                 return Translated::Unsupported("non-string map key".to_string());
             }
-            match translate_ty(value, emitted_types) {
+            match translate_ty(pool, value, emitted_types) {
                 Translated::Cpp(value) => format!("std::map<std::string, {value}>"),
                 other => return other,
             }
@@ -456,7 +469,7 @@ fn translate_ty(ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
             let had_null = non_null.len() != items.len();
             let mut alternatives: Vec<String> = Vec::new();
             for item in non_null {
-                match translate_ty(item, emitted_types) {
+                match translate_ty(pool, item, emitted_types) {
                     Translated::Cpp(alt) => {
                         if !alternatives.contains(&alt) {
                             alternatives.push(alt);
@@ -481,11 +494,11 @@ fn translate_ty(ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
     Translated::Cpp(translated)
 }
 
-fn translate_return_ty(ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
+fn translate_return_ty(pool: &SymbolPool, ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
     if matches!(ty, Ty::Unit) {
         return Translated::Cpp("void".to_string());
     }
-    translate_ty(ty, emitted_types)
+    translate_ty(pool, ty, emitted_types)
 }
 
 fn sanitize(name: &str) -> String {
