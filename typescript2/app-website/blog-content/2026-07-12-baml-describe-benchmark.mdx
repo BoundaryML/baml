@@ -82,6 +82,46 @@ That small repository is also where describe still does not win on efficiency. I
 
 This is what we're solving next.
 
+## The dependency-direction benchmark
+
+We later added the opposite of impact analysis:
+
+```bash
+baml describe <SYMBOL> --view dependencies
+```
+
+`--view impact` shows what could be affected by changing a symbol. `--view dependencies` shows what the symbol itself relies on: its input & output types, direct type relationships, fields, functions, methods, enum variants & builtins.
+
+We ran a Claude-only follow-up on three codebases: a plain function, a qualified namespaced function & a qualified class method. Each condition ran twice, for 18 sessions total.
+
+| condition | wall time | calls | cost | context processed |
+|---|---:|---:|---:|---:|
+| natural navigation | 52.5s | 6.5 | $0.281 | 163.0k |
+| bounded grep control | 66s | 7.5 | $0.253 | 209.6k |
+| guided `describe` | **37s** | **3.5** | **$0.152** | **95.3k** |
+
+The new view was 30% faster than natural navigation, used 46% fewer tool calls, cost 46% less & processed 42% less context. It won the median efficiency metrics in all three examples.
+
+The extra runs also did exactly what a benchmark should do: they found a bug. In the parser case, `TokKind.Assign` was initially reported as an unrelated class named `Assign`. We changed member resolution to prefer the qualified enum variant, added regression tests & reran the affected six sessions before keeping the result.
+
+The dependency lists were complete after that fix. The agents still sometimes added behavioral explanations that went beyond what the source proved, across every condition, so this is an efficiency result rather than a claim that generated prose is automatically perfect.
+
+The [standalone runner script](https://github.com/ashley-ha/baml/blob/describe-agent-improvements/docs/benchmarks/baml-describe-dependencies/run-claude-benchmark.sh) runs the same isolated Claude conditions against any local BAML project:
+
+```bash
+./docs/benchmarks/baml-describe-dependencies/run-claude-benchmark.sh \
+  ../baml-demos/bamlcode \
+  "For agent.tool_edit_file, identify its contract and implementation dependencies. Include file:line citations."
+
+# Cheaper smoke test: natural versus describe, one run each.
+REPS=1 VARIANTS=natural,guided-hybrid-slim \
+  ./docs/benchmarks/baml-describe-dependencies/run-claude-benchmark.sh \
+  ../baml-demos/bamlcode \
+  "For agent.tool_edit_file, identify its contract and implementation dependencies. Include file:line citations."
+```
+
+The sanitized command-and-answer transcripts are included with the [`baml describe` PR](https://github.com/BoundaryML/baml/pull/3989). The raw trace folders are intentionally excluded because the isolated Claude home contains authentication material.
+
 ## Agents did not adopt the tool on their own
 
 One finding had nothing to do with speed.
