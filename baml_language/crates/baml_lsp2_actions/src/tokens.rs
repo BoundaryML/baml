@@ -321,7 +321,7 @@ fn emit_node(node: &SyntaxNode, token_type: SemanticTokenType, out: &mut Vec<Sem
 /// Always returns tokens in document order (required by the LSP
 /// `textDocument/semanticTokens/full` contract).
 ///
-/// Salsa tracked query (design B1): the CST walk re-classifies every token
+/// Salsa tracked query: the CST walk re-classifies every token
 /// against type inference, which measured 40–150ms on real projects — too
 /// slow to recompute per request while the file is unchanged. Memoization
 /// keys off the file revision; edits to *other* files reuse this file's

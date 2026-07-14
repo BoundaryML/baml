@@ -64,7 +64,7 @@ use playground_ws::WsOutMessage;
 use tokio::net::TcpListener;
 
 // ---------------------------------------------------------------------------
-// Bounded outbound frames (B2: no transport hides an unbounded writer queue)
+// Bounded outbound frames: no transport hides an unbounded writer queue
 // ---------------------------------------------------------------------------
 
 const OUTBOUND_QUEUE_BYTES: usize = 64 * 1024 * 1024;
@@ -206,7 +206,7 @@ fn write_frame(output: &mut impl Write, frame: &OutboundFrame) -> std::io::Resul
 }
 
 // ---------------------------------------------------------------------------
-// Bounded stdio framing (B2 transport adapter: parse/frame only)
+// Bounded stdio framing: the transport adapter only parses and frames
 // ---------------------------------------------------------------------------
 
 /// Per-message body cap. Larger than every ingress class budget, so any frame
@@ -504,7 +504,7 @@ fn run_server_inner(
     let baml_vfs = bex_project::BamlVFS::new(vfs);
 
     // Stdio sender (LSP client sender): bounded frames charged against one
-    // process outbound budget (B2 — no unbounded writer queue).
+    // process outbound budget; there is no unbounded writer queue.
     let (writer_tx, writer_rx) = crossbeam_channel::bounded::<OutboundFrame>(512);
     let writer_tx = Arc::new(writer_tx);
     let writer_budget = OutboundBudget::new();
@@ -791,7 +791,7 @@ fn run_server_inner(
             match lsp_runtime.submit(stdio_session, msg.clone()) {
                 lsp_runtime::SubmitResult::Accepted | lsp_runtime::SubmitResult::Dropped => break,
                 lsp_runtime::SubmitResult::Backpressure => {
-                    // Reads are rejected under overload (D3); only mutation/
+                    // Reads are rejected under overload; only mutation/
                     // lifecycle reserve pressure stalls the reader briefly.
                     std::thread::sleep(Duration::from_millis(2));
                 }
@@ -814,7 +814,7 @@ fn run_server_inner(
     lsp_runtime.close_session(stdio_session);
 
     if abnormal_exit {
-        // B2 lifecycle: `exit` before a completed shutdown is an abnormal
+        // Lifecycle rule: `exit` before a completed shutdown is an abnormal
         // termination (nonzero for stdio).
         anyhow::bail!("LSP client sent exit before completing shutdown");
     }

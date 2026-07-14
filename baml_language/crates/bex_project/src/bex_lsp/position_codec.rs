@@ -1,9 +1,9 @@
-//! Negotiated LSP position boundary (design C1).
+//! Negotiated LSP position boundary.
 //!
 //! One codec owns all conversions between compiler byte offsets and LSP
 //! positions. Compiler APIs stay byte-based; every LSP handler converts at
-//! this boundary with the encoding negotiated during `initialize` (UTF-8
-//! when the client offers it, otherwise UTF-16 — Decision D4).
+//! this boundary with the encoding negotiated during `initialize`: UTF-8
+//! when the client offers it, otherwise UTF-16.
 //!
 //! The codec recognizes LF, CRLF, and bare CR line terminators. Incoming
 //! overlong character positions clamp to their line's content end;
@@ -17,7 +17,7 @@ use text_size::{TextRange, TextSize};
 ///
 /// Ordered least- to greatest-priority for the derived `Ord`: UTF-16 is the
 /// mandatory baseline, UTF-8 is BAML's preferred fast path. UTF-32 is not
-/// negotiated (Decision D4) and exists only to convert if a future decision
+/// negotiated and exists only to convert if a future protocol decision
 /// adds it.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum PositionEncoding {
@@ -33,7 +33,7 @@ pub(crate) enum PositionEncoding {
 
 impl PositionEncoding {
     /// Select the encoding for this session: UTF-8 when the client offers
-    /// it, otherwise UTF-16 (Decision D4; UTF-32 is never selected).
+    /// it, otherwise UTF-16. UTF-32 is never selected.
     pub(crate) fn negotiate(
         client_offered: Option<&[lsp_types::PositionEncodingKind]>,
     ) -> PositionEncoding {
@@ -461,7 +461,7 @@ mod tests {
             PositionEncoding::UTF16
         );
         assert_eq!(PositionEncoding::negotiate(None), PositionEncoding::UTF16);
-        // UTF-32 alone is never selected (D4).
+        // UTF-32 alone is never selected.
         let utf32_only = vec![lsp_types::PositionEncodingKind::UTF32];
         assert_eq!(
             PositionEncoding::negotiate(Some(&utf32_only)),

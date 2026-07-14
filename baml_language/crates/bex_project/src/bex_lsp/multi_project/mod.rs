@@ -1,25 +1,24 @@
 //! Multi-project LSP server core.
 //!
-//! Implements the refresh → diagnostics → rebuild pipeline from
-//! `docs/design/lsp-latency-and-mutex-fix.md`:
+//! Implements the refresh → diagnostics → rebuild pipeline:
 //!
-//! - **Refresh (I1):** every editor/watcher/playground event becomes one
+//! - **Refresh:** every editor/watcher/playground event becomes one
 //!   [`crate::project::SourceBatch`] applied atomically with document
 //!   versions; the source revision advances with every applied batch.
-//! - **Diagnostics (0B/I6):** each project owns a latest-revision dirty
+//! - **Diagnostics:** each project owns a latest-revision dirty
 //!   fence. Publication converts an owned revision-tagged candidate; `Busy`
 //!   retains the last publication and schedules a trailing retry; stale
 //!   candidates are discarded; poison surfaces as an internal failure and
 //!   stops retrying.
-//! - **Engine rebuild (0A/B3):** the debounce epoch is a pre-work ticket
+//! - **Engine rebuild:** the debounce epoch is a pre-work ticket
 //!   only. The rebuild itself is single-flight per project and installs
 //!   through [`crate::project::BexProject::commit_engine_if_current`] — a
 //!   superseded candidate changes nothing.
-//! - **Test collection/expansion (0A.7/0A.8):** collection runs under an
+//! - **Test collection/expansion:** collection runs under an
 //!   atomically captured ticket and installs through an ABA fence keyed by
 //!   engine generation + collection epoch; expansions serialize on the
 //!   installed registry's mutation gate. Stale results emit nothing.
-//! - **Typed errors (I7):** `send_response` is the one place request errors
+//! - **Typed errors:** `send_response` is the one place request errors
 //!   become wire codes; `-32001` is never emitted.
 
 mod commands;
@@ -54,7 +53,7 @@ use crate::{
     },
 };
 
-/// Debounce window for the diagnostics/project-update tail (B3).
+/// Debounce window for the diagnostics/project-update tail.
 #[cfg(not(target_arch = "wasm32"))]
 const DIAGNOSTICS_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(150);
 
@@ -62,19 +61,19 @@ const DIAGNOSTICS_DEBOUNCE: std::time::Duration = std::time::Duration::from_mill
 #[cfg(not(target_arch = "wasm32"))]
 const ENGINE_REBUILD_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
 
-/// Backoff before retrying a `Busy` diagnostics read (0B).
+/// Backoff before retrying a `Busy` diagnostics read.
 #[cfg(not(target_arch = "wasm32"))]
 const DIAGNOSTICS_BUSY_RETRY: std::time::Duration = std::time::Duration::from_millis(40);
 
 /// Text + version of one open editor document. Version and text travel
-/// together so publications carry the exact checked document version (I1).
+/// together so publications carry the exact checked document version.
 struct OverlayDocument {
     text: String,
     /// `Some` for editor-owned documents; `None` for playground edits.
     version: Option<i32>,
 }
 
-/// Latest-revision diagnostics publication fence (0B).
+/// Latest-revision diagnostics publication fence.
 ///
 /// ```text
 /// source mutation           → mark latest revision dirty; schedule attempt
@@ -84,7 +83,7 @@ struct OverlayDocument {
 /// Poisoned                  → publish nothing; surface internal failure
 /// ```
 ///
-/// Staleness is decided against the authoritative source revision (I1), not
+/// Staleness is decided against the authoritative source revision, not
 /// only the dirty mark: an unsolicited candidate (e.g. a superseded
 /// rebuild's) and a candidate racing `mark_dirty` are both discarded once a
 /// newer revision exists, so they can never regress newer markers.
@@ -131,7 +130,7 @@ impl DiagnosticsFence {
 
     /// Record a successful publication's file coverage. Returns the files
     /// covered by the previous publication but absent now — each needs one
-    /// empty publish so stale editor markers clear (0B).
+    /// empty publish so stale editor markers clear.
     fn record_publication(
         &mut self,
         current: HashSet<std::path::PathBuf>,
@@ -152,7 +151,7 @@ struct LiveProject {
     diagnostics_epoch: std::sync::atomic::AtomicU64,
     #[cfg(not(target_arch = "wasm32"))]
     rebuild_epoch: std::sync::atomic::AtomicU64,
-    /// Single-flight gate for engine rebuilds (0A.5): concurrent debounced
+    /// Single-flight gate for engine rebuilds: concurrent debounced
     /// tails queue here instead of racing two `spawn_blocking` builds.
     #[cfg(not(target_arch = "wasm32"))]
     rebuild_gate: tokio::sync::Mutex<()>,
@@ -189,7 +188,7 @@ struct BexMulitProject {
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
 
-    /// The position encoding negotiated during `initialize` (C1): UTF-8 when
+    /// The position encoding negotiated during `initialize`: UTF-8 when
     /// the client offers it, otherwise UTF-16. Set exactly once; reading
     /// before negotiation never freezes a default.
     negotiated_encoding: std::sync::Arc<OnceLock<PositionEncoding>>,
@@ -223,7 +222,7 @@ struct BexMulitProject {
 pub trait LspClientSenderTrait {
     fn send_notification(&self, msg: lsp_server::Notification) -> Result<(), LspError>;
     fn send_response_impl(&self, msg: lsp_server::Response) -> Result<(), LspError>;
-    /// The one request error-code mapping boundary (I7). Every error is
+    /// The one request error-code mapping boundary. Every error is
     /// serialized through [`LspError::to_response_error`]; `-32001` is dead.
     fn send_response(
         &self,
@@ -240,7 +239,7 @@ pub trait LspClientSenderTrait {
     fn make_request(&self, msg: lsp_server::Request) -> Result<(), LspError>;
 }
 
-/// Map a bounded database read failure to its typed LSP error (Phase 0C):
+/// Map a bounded database read failure to its typed LSP error:
 /// timeout with a revision change is `ContentModified`, a same-revision
 /// timeout is `RequestFailed`, poison is `InternalError`.
 pub(super) fn db_read_error_to_lsp(e: DbReadError) -> LspError {
@@ -263,11 +262,11 @@ pub(super) fn db_read_error_to_lsp(e: DbReadError) -> LspError {
 
 /// Bounded request-lane read of a project's source gate.
 ///
-/// Safe point (B2): right after the gate is acquired — the request may have
-/// waited up to the bounded deadline — the ambient dispatch cancellation is
-/// checked, so a request whose cancellation already owns the response stops
-/// here instead of paying for the database read. The token is observed, not
-/// unwound (abort-profile invariant).
+/// Cancellation safe point: right after the gate is acquired — the request
+/// may have waited up to the bounded deadline — the ambient dispatch
+/// cancellation is checked, so a request whose cancellation already owns the
+/// response stops here instead of paying for the database read. The token is
+/// observed, not unwound (abort-profile invariant).
 pub(super) fn read_for_request(project: &BexProject) -> Result<SourceGuard<'_>, LspError> {
     let guard = project
         .read_source_for_request()
@@ -317,12 +316,12 @@ impl BexMulitProject {
         }
     }
 
-    /// Connection-scoped dispatcher (I7): shares the process-owned project
+    /// Connection-scoped dispatcher: shares the process-owned project
     /// registry (and everything hanging off it) but owns a fresh
-    /// position-encoding negotiation (C1), fresh initialize workspace
+    /// position-encoding negotiation, fresh initialize workspace
     /// roots, and a fresh semantic-token delta cache (encoding-dependent),
     /// and writes only through the connection's revocable `sender`.
-    /// After browser takeover (D2) revokes that sender, a retained clone of
+    /// After browser takeover revokes that sender, a retained clone of
     /// this session fails `send_*` with `ClientClosed` instead of leaking
     /// into the replacement session.
     fn connection_scoped_lsp_session(
@@ -339,7 +338,7 @@ impl BexMulitProject {
     }
 
     /// Encoding for request handlers: requests before `initialize` completes
-    /// are a protocol error and must not freeze a default (C1).
+    /// are a protocol error and must not freeze a default.
     fn encoding_for_request(&self) -> Result<PositionEncoding, LspError> {
         self.negotiated_encoding.get().copied().ok_or_else(|| {
             LspError::ServerNotInitialized(
@@ -729,7 +728,7 @@ impl BexMulitProject {
 
     /// Apply one editor/watcher/playground event as a source batch, then
     /// schedule the diagnostics and engine tails. `didChange` cost is the
-    /// batch apply plus timer resets (B3); all computation is debounced.
+    /// batch apply plus timer resets; all computation is debounced.
     fn refresh_project(&self, project_root: &vfs::VfsPath, refresh_mode: ProjectRefreshMode) {
         use crate::bex_lsp::notification::BexLspNotification;
         let mode_label = match &refresh_mode {
@@ -787,7 +786,7 @@ impl BexMulitProject {
     }
 
     /// Build the atomic source batch for a refresh mode: texts plus the
-    /// open-document version ops that must commit with them (I1).
+    /// open-document version ops that must commit with them.
     fn build_source_batch(
         &self,
         project_root: &vfs::VfsPath,
@@ -861,7 +860,7 @@ impl BexMulitProject {
         }
     }
 
-    // ── Diagnostics tail (0B) ────────────────────────────────────────────
+    // ── Diagnostics tail ─────────────────────────────────────────────────
 
     /// Debounced diagnostics/project-update tail. The epoch only suppresses
     /// superseded timers; staleness of results is decided by the fence.
@@ -889,8 +888,8 @@ impl BexMulitProject {
             .unwrap_or(Ok(None));
             this.handle_diagnostics_outcome(&project_root, &project, outcome);
 
-            // The playground project snapshot rides the same debounced tail
-            // (B3 step 6): one owned payload per quiet period, not one per
+            // The playground project snapshot rides the same debounced tail:
+            // emit one owned payload per quiet period, not one per
             // keystroke.
             this.send_update_project(&project_root, &project);
         });
@@ -907,7 +906,7 @@ impl BexMulitProject {
         match outcome {
             Err(_) => {
                 // Poison is an internal failure, never an empty publication
-                // (I6). The project is terminally broken; do not retry.
+                // The project is terminally broken; do not retry.
                 log::error!(
                     "diagnostics: project {} is broken; keeping last publication",
                     project_root.as_str()
@@ -922,7 +921,7 @@ impl BexMulitProject {
         }
     }
 
-    /// Busy: keep the last publication and re-arm one trailing retry (0B).
+    /// Busy: keep the last publication and re-arm one trailing retry.
     /// The retry is fence-tagged, so it publishes only if still relevant.
     #[cfg(not(target_arch = "wasm32"))]
     fn schedule_diagnostics_busy_retry(
@@ -959,7 +958,7 @@ impl BexMulitProject {
         });
     }
 
-    /// Conditionally publish an owned candidate through the fence (0B):
+    /// Conditionally publish an owned candidate through the fence:
     /// stale candidates are discarded; publication compare-and-clears the
     /// dirty revision, so a newer mutation that raced in stays scheduled.
     fn publish_candidate(
@@ -1009,13 +1008,13 @@ impl BexMulitProject {
         }
     }
 
-    // ── Engine tail (0A) ─────────────────────────────────────────────────
+    // ── Engine tail ──────────────────────────────────────────────────────
 
     /// Debounced engine rebuild: bytecode generation, `BexEngine::new` (which
     /// executes `$init`), and test collection are the heavy tail of a refresh.
     /// The debounce epoch is a pre-work ticket; the rebuild gate makes builds
     /// single-flight; installation is authorized only by the
-    /// revision-conditional commit inside `rebuild_once` (I3).
+    /// revision-conditional commit inside `rebuild_once`.
     #[cfg(not(target_arch = "wasm32"))]
     fn schedule_engine_rebuild(
         &self,
@@ -1051,7 +1050,7 @@ impl BexMulitProject {
 
     /// Publish a rebuild's diagnostics through the fence and, on a winning
     /// commit, announce the ready runtime state and collect tests. Superseded
-    /// candidates change nothing (I3).
+    /// candidates change nothing.
     fn apply_rebuild_report(
         &self,
         project_root: &vfs::VfsPath,
@@ -1219,7 +1218,7 @@ impl BexMulitProject {
         );
     }
 
-    // ── Test collection / runs (0A.7, 0A.8, I5) ──────────────────────────
+    // ── Test collection / runs ───────────────────────────────────────────
 
     fn request_collect_tests_impl(&self, project_root_str: &str) {
         let Some(project) = self.find_project(project_root_str) else {
@@ -1231,7 +1230,7 @@ impl BexMulitProject {
     /// Start one test-collection attempt against the installed engine. The
     /// ticket captures engine, generation, cancel token, and collection
     /// epoch atomically; installation and every emission are fenced by that
-    /// identity, so stale collections emit nothing (0A.7).
+    /// identity, so stale collections emit nothing.
     fn collect_tests_for_project(
         &self,
         project_root_str: &str,
@@ -1387,9 +1386,9 @@ impl BexMulitProject {
             }
         })?;
 
-        // One coherent lease (I5): validates the generation against the
-        // installed engine, requires current source (D7), and captures the
-        // engine + registry handle atomically.
+        // One coherent lease validates the generation against the installed
+        // engine, requires current source, and captures the engine + registry
+        // handle atomically.
         let lease = project.project.lease_registry(generation).map_err(|e| {
             bex_engine::EngineError::FunctionNotFound {
                 name: registry_lease_error_message(e).to_string(),
@@ -1424,7 +1423,7 @@ impl BexMulitProject {
             return;
         };
         // Stale expansion requests emit nothing: the newer collection owns
-        // the tree (D8 cancels stale tree maintenance).
+        // the tree. Source changes cancel stale tree maintenance.
         let lease = match project.project.lease_registry(generation) {
             Ok(lease) => lease,
             Err(e) => {
@@ -1443,7 +1442,7 @@ impl BexMulitProject {
         let name = testset_name.to_string();
 
         self.spawner.spawn(async move {
-            // One mutation owner per installed registry (0A.8): expansions
+            // One mutation owner per installed registry: expansions
             // mutate the registry heap object in place, so they serialize.
             #[cfg(not(target_arch = "wasm32"))]
             let _mutation_owner = lease.expansion_gate.lock().await;
@@ -1536,7 +1535,7 @@ impl BexMulitProject {
                 .await
             {
                 Ok(serialized) => {
-                    // Stale expansion success emits nothing (0A.7 fence).
+                    // Stale expansion success emits nothing.
                     if !live.project.registry_lease_is_current(&lease) {
                         return;
                     }
@@ -2228,8 +2227,9 @@ mod tests {
     /// Candidates older than the authoritative revision are discarded even
     /// when nothing is dirty: a superseded rebuild's diagnostics (computed
     /// before a newer edit) and a candidate racing `mark_dirty` must never
-    /// regress markers a newer revision already owns (design 0B: "complete
-    /// v7 diagnostics after v8 arrives and observe no v7 publication").
+    /// regress markers a newer revision already owns. In particular, a
+    /// revision-7 candidate that completes after revision 8 arrives must not
+    /// publish revision-7 diagnostics.
     #[test]
     fn diagnostics_fence_discards_stale_unsolicited_candidates() {
         let mut fence = DiagnosticsFence::default();
@@ -2301,8 +2301,8 @@ mod tests {
         assert_eq!(names, vec!["/manifest_proj", "/proj"]);
     }
 
-    /// The B2 safe point: a request whose cancellation already claimed the
-    /// response stops right after acquiring the source gate with a typed
+    /// Cancellation safe point: a request whose cancellation already claimed
+    /// the response stops right after acquiring the source gate with a typed
     /// `RequestCanceled` instead of paying for the database read.
     #[test]
     fn read_for_request_cancels_at_the_source_gate_safe_point() {
@@ -2347,7 +2347,7 @@ mod tests {
     }
 
     /// A connection-scoped session shares the project registry but owns its
-    /// own encoding negotiation and workspace roots (I7/C1) and routes output
+    /// own encoding negotiation and workspace roots and routes output
     /// through its own sender.
     #[test]
     fn connection_scoped_session_is_fresh_but_shares_projects() {

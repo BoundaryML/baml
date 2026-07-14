@@ -493,7 +493,7 @@ struct WsState {
     /// pushes) destined for `/api/lsp`. Responses never travel here: they are
     /// routed per-session by the ingress runtime.
     lsp_out_tx: broadcast::Sender<crate::OutboundFrame>,
-    /// Process-owned ingress runtime shared with the stdio transport (B2).
+    /// Process-owned ingress runtime shared with the stdio transport.
     lsp_runtime: Arc<crate::lsp_runtime::LspRuntime>,
     /// What the browser currently has per file (for disk-watcher echo avoidance).
     doc_mirror: DocMirror,
@@ -1087,7 +1087,7 @@ fn frame_to_ws_text(frame: &crate::OutboundFrame) -> Option<AxumWsMsg> {
 }
 
 /// A browser session that cannot drain within this deadline is
-/// deterministically closed (B2: slow readers cannot grow an unbounded
+/// deterministically closed; slow readers cannot grow an unbounded
 /// writer queue).
 async fn send_lsp_ws_message(
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
@@ -1131,7 +1131,7 @@ async fn lsp_ws_session(socket: WebSocket, state: WsState) {
             }
         }
     });
-    // Browser takeover (D2) closes the superseded socket through this signal.
+    // Browser takeover closes the superseded socket through this signal.
     let (close_tx, mut close_rx) = tokio::sync::watch::channel(false);
     let close_endpoint: crate::lsp_runtime::Close = Arc::new(move || {
         let _ = close_tx.send(true);
@@ -1236,7 +1236,7 @@ async fn handle_lsp_client_text(
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
 ) {
     // Malformed JSON and invalid envelopes get the same null-ID protocol
-    // errors the stdio transport produces (I7: transport-identical traces).
+    // errors the stdio transport produces, keeping traces transport-identical.
     let value = match serde_json::from_str::<serde_json::Value>(text) {
         Ok(value) => value,
         Err(error) => {
@@ -1705,7 +1705,7 @@ async fn handle_function_run(
     };
 
     let broadcast_tx = state.broadcast_tx.clone();
-    // One coherent launch snapshot (design I5): engine + generation captured
+    // One coherent launch snapshot: engine + generation captured
     // in a single transaction, with the overlay control-flow graph pinned
     // for that generation so overlay spans stay resolvable after later
     // recompiles. Replaces the racy generation → graph → engine triple-read.
@@ -2010,8 +2010,8 @@ async fn handle_ws_in_message(
                             // retained), so a run pinned to a superseded
                             // engine is not reachable from here — the
                             // current-engine fallback cannot find its call
-                            // and the run keeps executing. Full D8 run
-                            // registration is deferred.
+                            // and the run keeps executing. Registration that
+                            // retains superseded run engines is deferred.
                             let engine = state
                                 .bex
                                 .engine_for_generation(&project_id, generation)

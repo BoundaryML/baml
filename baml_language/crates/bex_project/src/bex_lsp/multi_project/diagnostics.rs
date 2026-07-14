@@ -1,5 +1,5 @@
 //! Conversion of owned [`DiagnosticCandidate`]s into publishable LSP
-//! diagnostics (design I2/I6/0B).
+//! diagnostics.
 //!
 //! Diagnostics are computed into fully owned, revision-tagged candidates
 //! under the source gate ([`crate::project::collect_diagnostic_candidate`]);

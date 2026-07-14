@@ -1,6 +1,6 @@
 //! LSP notification handlers.
 //!
-//! Document lifecycle discipline (I1): the overlay map stores text *and*
+//! Document lifecycle discipline: the overlay map stores text *and*
 //! version together, and every refresh applies them as one atomic
 //! [`crate::project::SourceBatch`]. While a document is open the overlay is
 //! authoritative over disk; `didClose` re-applies disk content and drops the
@@ -21,7 +21,7 @@ impl BexLspNotification for BexMulitProject {
         &self,
         _params: lsp_notification_params!("$/cancelRequest"),
     ) -> Result<(), LspError> {
-        // Accepted as a no-op (design D6): the dispatch loop is synchronous,
+        // Accepted as a no-op: the dispatch loop is synchronous,
         // so by the time a cancel arrives its request is finished or next in
         // line. Accepting it (instead of erroring "not supported") keeps
         // clients from logging noise; bounded reads keep worst-case latency

@@ -757,7 +757,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({
     Record<string, ProjectUpdate>
   >({});
   // Projects whose last run/preview was refused with `projectNotReady`. The
-  // fail-closed server (D7) rejects runs while a rebuild is pending; the UI
+  // fail-closed server rejects runs while a rebuild is pending; the UI
   // renders that as the transient "Preparing current build…" state and clears
   // it when the next current ProjectUpdate arrives.
   const [notReadyProjects, setNotReadyProjects] = useState<NotReadyProjects>(

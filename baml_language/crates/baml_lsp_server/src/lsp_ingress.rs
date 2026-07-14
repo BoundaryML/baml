@@ -524,7 +524,7 @@ struct QueuedItem {
     /// An `initialized` notification admitted while `initialize` was still in
     /// flight (a pipelined client). Its acceptance is decided at dispatch:
     /// it is valid only once the initialize response has been ordered
-    /// (`InitializeResponded`), and is dropped in any other state (B2).
+    /// (`InitializeResponded`), and is dropped in any other state.
     initialized_gate: bool,
 }
 
@@ -942,7 +942,7 @@ impl IngressScheduler {
                 // a saturated sink — or a failed initialize — means the
                 // client cannot have seen the response, so the premature
                 // notification is dropped ("initialized in any other state
-                // is ignored", B2).
+                // is ignored").
                 let session = self
                     .sessions
                     .get_mut(&item.session_id)
@@ -2458,7 +2458,7 @@ mod tests {
     }
 
     #[test]
-    fn protocol_error_codes_match_i7_without_unknown_error_fallback() {
+    fn protocol_error_codes_never_use_unknown_error_fallback() {
         assert_eq!(ProtocolErrorKind::ParseError.json_rpc_code(), -32700);
         assert_eq!(ProtocolErrorKind::InvalidRequest.json_rpc_code(), -32600);
         assert_eq!(
