@@ -392,6 +392,37 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  # Language-neutral engine cdylib, shared by every dylib-loader SDK.
+  build-bridge-cffi:
+    name: Build bridge_cffi cdylib
+    needs: [plan]
+    uses: ./.github/workflows/build2-bridge-cffi.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
+  build-rust-sdk:
+    name: Build Rust SDK
+    needs: [plan]
+    uses: ./.github/workflows/build2-rust-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
+  verify-rust-sdk:
+    name: Verify Rust SDK
+    needs: [plan, build-bridge-cffi, build-rust-sdk]
+    uses: ./.github/workflows/verify-rust-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   all-builds:
     name: All builds gate
     runs-on: ubuntu-latest
@@ -402,6 +433,13 @@ jobs:
       - build-wrapper
       - build-python-sdk
       - build-nodejs-sdk
+      # The engine cdylib is required — it is the shared artifact every
+      # dylib-loader SDK depends on.
+      - build-bridge-cffi
+      # build-rust-sdk / verify-rust-sdk deliberately absent: the Rust SDK
+      # runs in the graph for dry-run validation but does not gate releases
+      # yet (nothing publishes it yet). Add them here once it is
+      # production-ready.
     steps:
       - run: echo "all release build jobs completed"
 

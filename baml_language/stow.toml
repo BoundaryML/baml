@@ -88,6 +88,9 @@ name = "baml"
 approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2", "type"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["tools_onionskin", "bex_project"]
+# The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
+# `bridge_python`/`bridge_nodejs`) while the published crate is `baml_bridge`.
+name_exceptions = { "bridge_rust" = "baml_bridge" }
 
 # baml-specific dependency rules
 [[namespaces.dependency_rules]]
