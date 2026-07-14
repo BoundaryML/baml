@@ -15,6 +15,7 @@ use crate::ty::{FunctionParamMode, LiteralValue, MediaKind, QualifiedTypeName, T
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Check if `sub` is a subtype of `sup`, resolving type aliases.
+#[deprecated = "Use canonical baml_type subtyping implementation"]
 pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeName, Ty>) -> bool {
     let recursive = find_recursive_aliases(aliases);
     let sub_norm = normalize(sub, aliases, &recursive);
@@ -28,6 +29,7 @@ pub(crate) fn is_subtype_of(sub: &Ty, sup: &Ty, aliases: &HashMap<QualifiedTypeN
 /// This is not an assignability/subtyping check. Use it for invariant positions
 /// where two type spellings may differ but still denote the same type, such as
 /// interface field implementations.
+#[deprecated = "Use canonical baml_type equivalence implementation"]
 pub fn is_same_normalized_type(
     lhs: &Ty,
     rhs: &Ty,
@@ -58,6 +60,7 @@ pub fn find_recursive_aliases(
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Normalized structural type. All aliases resolved, recursion explicit.
+#[deprecated = "Use canonical baml_type normalization logic"]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum StructuralTy {
     // Primitives
@@ -125,6 +128,7 @@ enum StructuralTy {
     Error,
 }
 
+#[deprecated = "Use canonical baml_type normalization logic"]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct StructuralFunctionParam {
     name: Option<Name>,
@@ -132,6 +136,7 @@ struct StructuralFunctionParam {
     mode: FunctionParamMode,
 }
 
+#[deprecated = "Use canonical baml_type normalization logic"]
 impl StructuralTy {
     fn canonicalize(self) -> Self {
         match self {
@@ -216,6 +221,7 @@ impl StructuralTy {
     /// subtype relation (`int` is not a subtype of `bigint` or `float`). The
     /// only numeric widenings are representation-preserving literal-to-base
     /// (`literal 1 <: int`, `1n <: bigint`).
+    #[deprecated = "Use canonical baml_type normalization logic"]
     fn is_subtype_of(
         &self,
         other: &StructuralTy,
@@ -389,6 +395,7 @@ impl StructuralTy {
 }
 
 impl StructuralFunctionParam {
+    #[deprecated = "Use canonical baml_type normalization logic"]
     fn canonicalize(self) -> Self {
         Self {
             name: match self.mode {
@@ -402,6 +409,7 @@ impl StructuralFunctionParam {
 }
 
 /// Subtype check for function parameter lists (contravariant).
+#[deprecated = "Use canonical baml_type normalization logic"]
 fn function_params_subtype(
     sub_params: &[StructuralFunctionParam],
     sup_params: &[StructuralFunctionParam],
@@ -447,6 +455,7 @@ fn function_params_subtype(
 }
 
 /// Substitute `TyVar` with replacement in type.
+#[deprecated = "Use canonical baml_type normalization logic"]
 fn substitute(
     ty: &StructuralTy,
     var: &QualifiedTypeName,
@@ -520,6 +529,7 @@ fn substitute(
 // NORMALIZATION (private)
 // ═══════════════════════════════════════════════════════════════════════════
 
+#[deprecated = "Use canonical baml_type normalization logic"]
 fn normalize(
     ty: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,
@@ -529,6 +539,7 @@ fn normalize(
     normalize_impl(ty, aliases, recursive, &mut expanding)
 }
 
+#[deprecated = "Use canonical baml_type normalization logic"]
 fn normalize_impl(
     ty: &Ty,
     aliases: &HashMap<QualifiedTypeName, Ty>,

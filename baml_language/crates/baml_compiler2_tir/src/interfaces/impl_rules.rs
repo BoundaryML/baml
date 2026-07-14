@@ -11,7 +11,7 @@ use crate::{
         normalized_arg_implements_bound, resolve_path_to_interface,
     },
     lower_type_expr::qualify_def,
-    normalize::is_same_normalized_type,
+    type_context::AliasEquivCtx,
 };
 
 /// Fully-resolved data for one `implements` block, keyed by its stable
@@ -1908,11 +1908,8 @@ fn match_impl_head<'db>(
             .iter()
             .all(|(name, requested_ty)| {
                 match data.associated_types.iter().find(|(n, _)| n == name) {
-                    Some((_, impl_ty)) => is_same_normalized_type(
-                        &substitute_ty(impl_ty, &bindings),
-                        requested_ty,
-                        aliases,
-                    ),
+                    Some((_, impl_ty)) => AliasEquivCtx(aliases)
+                        .equivalent(&substitute_ty(impl_ty, &bindings), requested_ty),
                     None => true,
                 }
             });

@@ -1803,19 +1803,19 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // The arms below bridge between the builtin `Class<Array, [T]>` /
         // `Class<Map, [K, V]>` wrapper types and their raw `List<T>` /
-        // `Map<K, V>` shapes, recursing structurally on the element types.
-        // `List`/`Map` are invariant, so an `int[]` argument does not satisfy
-        // an `(int | string)[]` slot.
+        // `Map<K, V>` shapes. `List`/`Map` are invariant (TYPE_SYSTEM.md, Subtyping
+        // Rules → Variance), so the element types must be *equivalent*, not merely
+        // subtypes — an `int[]` argument does not satisfy an `(int | string)[]` slot.
         match (&expanded_expected, &expanded_got) {
             (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.container_arg_subtype_without_nominal(actual_inner, &expected_args[0])
+                self.equivalent(actual_inner, &expected_args[0])
             }
             (Ty::Class(class_name, expected_args, _), Ty::EvolvingList(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.container_arg_subtype_without_nominal(actual_inner, &expected_args[0])
+                self.equivalent(actual_inner, &expected_args[0])
             }
             (
                 Ty::Class(class_name, expected_args, _),
@@ -1826,15 +1826,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 | Ty::EvolvingMap(actual_key, actual_val, _),
             ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
-                self.container_arg_subtype_without_nominal(actual_key, &expected_args[0])
-                    && self.container_arg_subtype_without_nominal(actual_val, &expected_args[1])
+                self.equivalent(actual_key, &expected_args[0])
+                    && self.equivalent(actual_val, &expected_args[1])
             }
             _ => false,
         }
-    }
-
-    fn container_arg_subtype_without_nominal(&self, actual: &Ty, expected: &Ty) -> bool {
-        crate::normalize::is_subtype_of(actual, expected, &self.aliases)
     }
 
     fn function_coercion_for(
