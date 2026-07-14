@@ -15,9 +15,9 @@ function user.parse_and_roundtrip_pretty(s: string) -> string throws never {
   }
 }
 function user.match_parsed(s: string) -> string throws never {
-  { : string | "int" | "float" | "bool" | "null"
+  { : string
     let j: baml.json.json = baml.json.parse(s) : baml.json.json -> bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null
-    match (j : bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null) : string | "int" | "float" | "bool" | "null"
+    match (j : bool | int | float | string | baml.json.json[] | map<string, baml.json.json> | null) : string
       arr: baml.json.json[] =>
         baml.json.stringify(arr) : string
       m: map<string, baml.json.json> =>

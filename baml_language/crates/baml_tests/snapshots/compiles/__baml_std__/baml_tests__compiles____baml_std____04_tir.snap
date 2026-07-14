@@ -1057,8 +1057,8 @@ class baml.http.SseStream {
   _handle: $rust_type
 }
 function baml.http._timeout_nanos(timeout: baml.time.Duration | null) -> bigint throws never {
-  { : 0n | bigint
-    match (timeout : baml.time.Duration | null) : 0n | bigint
+  { : bigint
+    match (timeout : baml.time.Duration | null) : bigint
       null =>
         0n : 0n
       t: root.time.Duration =>
@@ -1794,8 +1794,8 @@ function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client
   }
 }
 function baml.llm.prompt_template_for(function_name: string, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) -> string throws baml.errors.InvalidArgument {
-  { : string | ""
-    match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
+  { : string
+    match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string
       null =>
         get_jinja_template(function_name) : string
       _ =>
@@ -1839,8 +1839,8 @@ function baml.llm.parse<TStream, TFinal>(json: string) -> TFinal throws baml.err
 }
 function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> T throws never {
   { : T
-    let jinja_string = : string | "" -> string
-      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
+    let jinja_string = : string
+      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string
         null =>
           get_jinja_template(function_name) : string
         _ =>
@@ -1852,8 +1852,8 @@ function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: s
 }
 function baml.llm.stream_llm_function<TStream, TFinal>(client: baml.llm.Client, function_name: string, args: map<string, unknown>, prompt_closure: ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null = null) -> baml.llm.Stream<TStream, TFinal> throws never {
   { : baml.llm.Stream<TStream, TFinal>
-    let jinja_string = : string | "" -> string
-      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string | ""
+    let jinja_string = : string
+      match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : string
         null =>
           get_jinja_template(function_name) : string
         _ =>
@@ -2205,8 +2205,8 @@ function baml.llm.Client.execute_once_oneshot<T>(self: baml.llm.Client, context:
             }
           else
             { : never
-              let error_body = : string | "" -> string
-                catch (http_response.text() : string) : string | ""
+              let error_body = : string
+                catch (http_response.text() : string) : string
                   catch (e)
                     _ =>
                       { : ""
@@ -2575,8 +2575,8 @@ class baml.media.Image$stream {
 
 --- <builtin>/baml/ns_net/net.baml ---
 function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint throws never {
-  { : 0n | bigint
-    match (timeout : baml.time.Duration | null) : 0n | bigint
+  { : bigint
+    match (timeout : baml.time.Duration | null) : bigint
       null =>
         0n : 0n
       t: root.time.Duration =>
@@ -3534,8 +3534,8 @@ function baml.toml.table_from_json(j: baml.json.json) -> baml.toml.Table throws 
   }
 }
 function baml.toml.item_to_json(item: baml.toml.Item) -> baml.json.json throws baml.json.JsonSerializationError {
-  { : bool | int | float | string | baml.json.json | baml.json.json[]
-    match (item : baml.toml.Item) : bool | int | float | string | baml.json.json | baml.json.json[]
+  { : baml.json.json
+    match (item : baml.toml.Item) : baml.json.json
       bool | int | float | string =>
         item : bool | int | float | string
       Table =>

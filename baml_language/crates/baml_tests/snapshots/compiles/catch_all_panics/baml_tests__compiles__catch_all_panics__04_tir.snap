@@ -14,16 +14,16 @@ function user.MayFailIntOrString(x: int) -> string throws never {
   }
 }
 function user.CatchAllPanicsWildcard(x: int) -> string throws never {
-  { : string | "caught all"
-    catch (MayFailIntOrString(x) : string) : string | "caught all"
+  { : string
+    catch (MayFailIntOrString(x) : string) : string
       catch_all_panics (e)
         _ =>
           "caught all" : "caught all"
   }
 }
 function user.CatchAllPanicsTyped(x: int) -> string throws never {
-  { : string | "caught string" | "caught int"
-    catch (MayFailIntOrString(x) : string) : string | "caught string" | "caught int"
+  { : string
+    catch (MayFailIntOrString(x) : string) : string
       catch_all_panics (e)
         string =>
           "caught string" : "caught string"
@@ -32,8 +32,8 @@ function user.CatchAllPanicsTyped(x: int) -> string throws never {
   }
 }
 function user.CatchThenCatchAllPanics(x: int) -> string throws never {
-  { : string | "caught string" | "caught rest"
-    catch (MayFailIntOrString(x) : string) : string | "caught string" | "caught rest"
+  { : string
+    catch (MayFailIntOrString(x) : string) : string
       catch (e)
         string =>
           "caught string" : "caught string"

@@ -51,8 +51,8 @@ function user.test_multi_param() -> int throws never {
 lambda user.test_multi_param {
 }
 function user.test_in_match(x: int) -> int throws never {
-  { : int | 0
-    match (x : int) : int | 0
+  { : int
+    match (x : int) : int
       0 =>
         { : int
           let inc = : (y: int) -> int throws never

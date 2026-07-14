@@ -3602,16 +3602,16 @@ function patterns_new_runtime.test_for_nested_rest_irrefutable() -> int {
     alloc_array 2
     load_type never
     alloc_array 0
-    load_type int[] | never[]
+    load_type int[]
     alloc_array 3
-    load_type baml.iter.Iterable<Item = int[] | never[], Error = never>
+    load_type baml.iter.Iterable<Item = int[], Error = never>
     load_const "iter"
     virtual_call nargs=1 ntypeargs=0
     store_var _6
 
   L0:
     load_var _6
-    load_type baml.iter.Iterator<Item = int[] | never[], Error = never>
+    load_type baml.iter.Iterator<Item = int[], Error = never>
     load_const "next"
     virtual_call nargs=1 ntypeargs=0
     store_var _7

@@ -10,9 +10,9 @@ function user.DestructureQualifiedLet() -> int throws never {
   }
 }
 function user.DestructureQualifiedMatch() -> int throws never {
-  { : 0 | int
+  { : int
     let response = root.llm.openai.Response { text: "ok", score: 42 } : user.llm.openai.Response
-    match (response : user.llm.openai.Response) : 0 | int
+    match (response : user.llm.openai.Response) : int
       root.llm.openai.Response { score: 0 } =>
         0 : 0
       root.llm.openai.Response { score: matched } =>
@@ -27,9 +27,9 @@ function user.DestructureNamespaceQualifiedLet() -> int throws never {
   }
 }
 function user.DestructureNamespaceQualifiedMatch() -> int throws never {
-  { : 0 | int
+  { : int
     let response = llm.openai.Response { text: "ok", score: 46 } : user.llm.openai.Response
-    match (response : user.llm.openai.Response) : 0 | int
+    match (response : user.llm.openai.Response) : int
       llm.openai.Response { score: 0 } =>
         0 : 0
       llm.openai.Response { score: matched } =>

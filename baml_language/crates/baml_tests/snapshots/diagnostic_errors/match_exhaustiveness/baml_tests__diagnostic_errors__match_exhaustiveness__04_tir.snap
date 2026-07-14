@@ -43,8 +43,8 @@ function user.ExhaustiveWithUnderscore(x: int) -> int throws never {
   }
 }
 function user.ExhaustiveWithNamedCatchAll(x: int) -> int throws never {
-  { : 100 | int
-    match (x : int) : 100 | int
+  { : int
+    match (x : int) : int
       1 =>
         100 : 100
       other =>
@@ -62,8 +62,8 @@ function user.GuardedOnlyNonExhaustive(x: int) -> int throws never {
   !! 1738..1831: non-exhaustive match on `int`; missing: _
 }
 function user.GuardedWithFallback(x: int) -> int throws never {
-  { : int | 0
-    match (x : int) : int | 0
+  { : int
+    match (x : int) : int
       n: int if n > 0 =>
         n * 2 : int
       _ =>
@@ -81,8 +81,8 @@ function user.ExhaustiveTypeAlias(r: user.Result) -> string throws never {
   }
 }
 function user.ExhaustiveTypeAliasWithCatchAll(r: user.Result) -> string throws never {
-  { : string | "fallback"
-    match (r : user.Result) : string | "fallback"
+  { : string
+    match (r : user.Result) : string
       s: Success =>
         s.data : string
       _ =>
@@ -129,8 +129,8 @@ function user.OverlappingTypedPatterns(r: user.Result) -> string throws never {
   }
 }
 function user.OverlappingWithBindings(r: user.Result) -> string throws never {
-  { : string | "remaining"
-    match (r : user.Result) : string | "remaining"
+  { : string
+    match (r : user.Result) : string
       s: Success =>
         s.data : string
       x: Success | Failure =>
@@ -372,8 +372,8 @@ function user.IntLiteralUnionPattern(code: user.SuccessCode) -> string throws ne
 }
 type user.MaybeResult = user.Result | null
 function user.NestedTypeAlias(mr: user.MaybeResult) -> string throws never {
-  { : string | "nothing"
-    match (mr : user.MaybeResult) : string | "nothing"
+  { : string
+    match (mr : user.MaybeResult) : string
       s: Success =>
         s.data : string
       f: Failure =>
@@ -534,8 +534,8 @@ function user.NonExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string thr
 }
 type user.DoubleMaybe = user.MaybeResult | null
 function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string throws never {
-  { : string | "nothing"
-    match (dm : user.DoubleMaybe) : string | "nothing"
+  { : string
+    match (dm : user.DoubleMaybe) : string
       s: Success =>
         s.data : string
       f: Failure =>
@@ -635,8 +635,8 @@ function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status | null) -> 
 }
 type user.SuccessOr200 = user.Success | 200
 function user.ExhaustiveClassPlusLiteral(x: user.SuccessOr200) -> string throws never {
-  { : string | "http ok"
-    match (x : user.SuccessOr200) : string | "http ok"
+  { : string
+    match (x : user.SuccessOr200) : string
       s: Success =>
         s.data : string
       200 =>

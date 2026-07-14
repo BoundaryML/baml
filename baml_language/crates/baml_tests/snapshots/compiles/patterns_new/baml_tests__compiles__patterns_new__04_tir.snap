@@ -3,8 +3,8 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.or_with_repeated_typed_binding(v: int | string) -> int throws never {
-  { : int | 0
-    match (v : int | string) : int | 0
+  { : int
+    match (v : int | string) : int
       x: int | x: int =>
         x : int
       _ =>
@@ -19,8 +19,8 @@ function user.or_with_repeated_bare_binding(v: int) -> int throws never {
   }
 }
 function user.chain_narrow_then_wildcard(v: int | string | bool) -> int throws never {
-  { : int | 0
-    match (v : int | string | bool) : int | 0
+  { : int
+    match (v : int | string | bool) : int
       n: int =>
         n : int
       _ =>
@@ -44,8 +44,8 @@ function user.call_int_callback(cb: (int) -> int throws never) -> int throws nev
   }
 }
 function user.dispatch_callback(cb: ((int) -> int throws never) | ((string) -> string throws never)) -> int throws never {
-  { : int | 0
-    match (cb : ((int) -> int throws never) | ((string) -> string throws never)) : int | 0
+  { : int
+    match (cb : ((int) -> int throws never) | ((string) -> string throws never)) : int
       f: (int) -> int =>
         f(0) : int
       (string) -> string =>
@@ -80,8 +80,8 @@ function user.unwrap_typed<T>(cb: ((int) -> T throws never) | ((string) -> T thr
   }
 }
 function user.unwrap_curried(f: ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) -> int throws never {
-  { : int | 0
-    match (f : ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) : int | 0
+  { : int
+    match (f : ((int) -> ((int) -> ((int) -> int throws never) throws never) throws never) | ((string) -> ((string) -> string throws never) throws never)) : int
       triple: (int) -> ((int) -> ((int) -> int)) =>
         triple(1)(2)(3) : int
       pair: (string) -> ((string) -> string) =>
@@ -188,24 +188,24 @@ function user.risky_error(mode: int) -> int throws user.AppError | string {
   }
 }
 function user.catch_chain_union(mode: int) -> int throws never {
-  { : int | 1
-    catch (risky_error(mode) : int) : int | 1
+  { : int
+    catch (risky_error(mode) : int) : int
       catch (e)
         AppError | string =>
           1 : 1
   }
 }
 function user.catch_paren_or_chain(mode: int) -> int throws never {
-  { : int | 1
-    catch (risky_error(mode) : int) : int | 1
+  { : int
+    catch (risky_error(mode) : int) : int
       catch (e)
         AppError | string =>
           1 : 1
   }
 }
 function user.catch_widening_chain(mode: int) -> int throws never {
-  { : int | 1 | 2
-    catch (risky_error(mode) : int) : int | 1 | 2
+  { : int
+    catch (risky_error(mode) : int) : int
       catch (e)
         s: string =>
           1 : 1

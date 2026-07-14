@@ -100,8 +100,8 @@ function user.BacktickInterpBlockBody(items: int[]) -> string throws never {
   }
 }
 function user.bangs(n: int) -> string throws never {
-  { : "" | string
-    if (n <= 0 : bool) : "" | string
+  { : string
+    if (n <= 0 : bool) : string
       { : ""
         "" : ""
       }

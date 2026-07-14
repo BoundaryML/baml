@@ -50,8 +50,8 @@ function user.HeadersInComplexNesting() -> string throws never {
     let result = : string
       { : string
         // [2] Inside Block Expression
-        let inner = : string | "else value" -> string
-          if (true : true) : string | "else value"
+        let inner = : string
+          if (true : true) : string
             { : string
               // [3] Inside If True
               let deep = : "deep value" -> string
@@ -102,7 +102,7 @@ function user.HeadersAroundExpressions() -> string throws never {
     let x = 5 : 5 -> int
     // [2] After Let
     // [3] Before If
-    if (x > 0 : bool) : int | 0
+    if (x > 0 : bool) : int
       { : int
         // [4] Inside If
         x : int

@@ -557,8 +557,8 @@ function testing.glob_match(subject: string, pattern: string) -> bool throws nev
   }
 }
 function testing.filter_match(expr: string, subject: string) -> bool throws never {
-  { : true | bool
-    if (expr == "" : bool) : true | bool
+  { : bool
+    if (expr == "" : bool) : bool
       { : true
         true : true
       }

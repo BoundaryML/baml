@@ -75,8 +75,8 @@ function user.RecB(n: int) -> string throws never {
   }
 }
 function user.CatchRecursiveThrow(n: int) -> string throws never {
-  { : string | "handled"
-    catch (RecB(n) : string) : string | "handled"
+  { : string
+    catch (RecB(n) : string) : string
       catch (e)
         string =>
           "handled" : "handled"

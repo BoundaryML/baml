@@ -32,24 +32,24 @@ function user.AlsoMayFail(x: int) -> string throws never {
   }
 }
 function user.SingleCatchWildcard(x: int) -> string throws never {
-  { : string | "caught"
-    catch (MayFail(x) : string) : string | "caught"
+  { : string
+    catch (MayFail(x) : string) : string
       catch (e)
         _ =>
           "caught" : "caught"
   }
 }
 function user.SingleCatchTyped(x: int) -> string throws never {
-  { : string | "caught string"
-    catch (MayFail(x) : string) : string | "caught string"
+  { : string
+    catch (MayFail(x) : string) : string
       catch (e)
         string =>
           "caught string" : "caught string"
   }
 }
 function user.CatchWithFallback(x: int) -> string throws never {
-  { : string | "caught string" | "caught int fallback"
-    catch (MayFailIntOrString(x) : string) : string | "caught string" | "caught int fallback"
+  { : string
+    catch (MayFailIntOrString(x) : string) : string
       catch (e)
         string =>
           "caught string" : "caught string"
@@ -59,16 +59,16 @@ function user.CatchWithFallback(x: int) -> string throws never {
   }
 }
 function user.CatchWithTypedArm(x: int) -> string throws never {
-  { : string | "caught string"
-    catch (MayFail(x) : string) : string | "caught string"
+  { : string
+    catch (MayFail(x) : string) : string
       catch (e)
         string =>
           "caught string" : "caught string"
   }
 }
 function user.MultipleCatchArms(x: int) -> string throws never {
-  { : string | "caught string" | "caught int"
-    catch (MayFailIntOrString(x) : string) : string | "caught string" | "caught int"
+  { : string
+    catch (MayFailIntOrString(x) : string) : string
       catch (e)
         string =>
           "caught string" : "caught string"
@@ -78,8 +78,8 @@ function user.MultipleCatchArms(x: int) -> string throws never {
 }
 function user.NestedCatch(x: int) -> string throws never {
   { : string
-    let inner = : string | "inner caught" -> string
-      catch (MayFail(x) : string) : string | "inner caught"
+    let inner = : string
+      catch (MayFail(x) : string) : string
         catch (e)
           _ =>
             "inner caught" : "inner caught"
@@ -105,8 +105,8 @@ function user.ThrowStatement(x: int) -> string throws never {
   ?? 3168..3181: unreachable code: 1 statement(s) after diverging statement
 }
 function user.ChainedCatchClauses(x: int) -> string throws never {
-  { : string | "first handler" | "second handler"
-    catch (MayFailIntOrString(x) : string) : string | "first handler" | "second handler"
+  { : string
+    catch (MayFailIntOrString(x) : string) : string
       catch (e)
         string =>
           "first handler" : "first handler"

@@ -892,8 +892,8 @@ function user.ManyNestedExprs(items: int[]) -> int throws never {
         { : int
           b : int
         }
-    let d = : 1 | int -> int
-      match (c : int) : 1 | int
+    let d = : int
+      match (c : int) : int
         0 =>
           1 : 1
         _ =>
@@ -1385,8 +1385,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       { : void
         for j in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
           { : void
-            let computation = : int | 0 -> int
-              if (i * j > 500 && i + j < 100 : bool) : int | 0
+            let computation = : int
+              if (i * j > 500 && i + j < 100 : bool) : int
                 { : int
                   match (i % 3 : int) : int
                     0 =>
@@ -1612,7 +1612,7 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
     match (s : user.MatchStatus) : "this arm has many long enum variant names that together push past the limit easily"
       MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending =>
         "this arm has many..." : "this arm has many long enum variant names that together push past the limit easily"
-    match (x : int) : string | "short"
+    match (x : int) : string
       0 =>
         { : string
           let result = : "this is the true branch with a very long string" | "this is the false branch also very long" -> string
@@ -1667,7 +1667,7 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
             "zero-false" : "zero-false"
       _ =>
         "nonzero" : "nonzero"
-    match (x : int) : "zero-true-active" | "zero-true-inactive" | "zero-true-pending" | "zero-false" | string | "one-success-false" | "other"
+    match (x : int) : string
       0 =>
         match (b : bool) : "zero-true-active" | "zero-true-inactive" | "zero-true-pending" | "zero-false"
           true =>
@@ -1681,9 +1681,9 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
           false =>
             "zero-false" : "zero-false"
       1 =>
-        match (r : user.MatchResult) : string | "one-success-false"
+        match (r : user.MatchResult) : string
           s: MatchSuccess =>
-            match (b : bool) : string | "one-success-false"
+            match (b : bool) : string
               true =>
                 s.data : string
               false =>
