@@ -30,6 +30,10 @@ Those observations led directly to the implementation in this PR:
 Each cell used three repetitions per condition. The transcript files preserve
 the exact command sequence and final answer from every run.
 
+Table labels map to transcript run labels as follows: "natural grep/read" is
+`natural`, "bounded grep control" is `guided-grep`, and "bounded `describe`
+hybrid" is `guided-hybrid-slim`.
+
 ### Codex, main trophy-flow question
 
 | condition | median wall time | median calls | median input tokens | median output tokens |
@@ -75,17 +79,17 @@ grep": bounded semantic discovery plus batching can materially improve an
 agent's navigation loop when a question spans related symbols, while ordinary
 grep remains competitive on small or lexically obvious tasks.
 
-That is why this PR keeps normal source reads available and makes `--grep`,
-`--agent`, `--limit`, and `--max-lines` composable instead of forcing one workflow.
+That is why this PR keeps normal source reads available and makes `--search`,
+`--view`, `--output`, and `--max-lines` composable instead of forcing one workflow.
 
 ## Read the transcripts
 
 - [Codex: trophy-flow matched control](transcripts/codex-trophy-flow.md) — 9
-  runs: natural, bounded grep, and bounded `describe` hybrid.
+  runs: `natural`, `guided-grep`, and `guided-hybrid-slim`.
 - [Codex: cross-codebase `edit_file` transfer](transcripts/codex-edit-file-transfer.md)
-  — 9 runs across the same three conditions.
+  — 9 runs across `natural`, `guided-grep`, and `guided-hybrid-slim`.
 - [Claude: trophy-flow transfer](transcripts/claude-trophy-flow.md) — 6 runs:
-  natural and bounded `describe` hybrid.
+  `natural` and `guided-hybrid-slim`.
 
 These are readable transcript exports containing the question, measurements,
 commands, and final answers. Raw JSONL event logs and isolated agent home
