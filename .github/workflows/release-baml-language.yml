@@ -99,7 +99,7 @@ jobs:
           scripts/baml-language-version plan --channel "$channel" --out release-plan.json
           source_sha="$(git rev-parse HEAD)"
           version="$(jq -r .canonical_version release-plan.json)"
-          pypi_version="$(jq -r .pypi_version release-plan.json)"
+          pypi_version="$(jq -r .registry_versions.pypi release-plan.json)"
           git_tag="$(jq -r .git_tag release-plan.json)"
           {
             echo "channel=$channel"
