@@ -14,19 +14,17 @@
 //! These round-trip through the on-disk cache on every supported platform.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use baml_db::{
-    baml_compiler_diagnostics::{Diagnostic, render},
-    baml_compiler2_emit::CompileOptions,
-};
+use baml_db::{baml_compiler_diagnostics::Diagnostic, baml_compiler2_emit::CompileOptions};
 use baml_project::ProjectDatabase;
 
 use crate::{
     bytecode_cache::{CacheContext, compile_program, prepare_reuse_plan},
+    check_command::render_project_diagnostics,
     project_load,
 };
 
@@ -62,16 +60,7 @@ fn resolved(root: &Path, files: &[(&str, &str)]) -> project_load::ResolvedProjec
 /// Render a diagnostic set the way the CLI would, resolving every span's file
 /// (user files plus builtins, for cross-file spans) against this database.
 fn render_all(db: &ProjectDatabase, diags: &[Diagnostic]) -> String {
-    let mut sources = HashMap::new();
-    let mut paths = HashMap::new();
-    for sf in baml_db::baml_compiler2_hir::compiler2_all_files(db) {
-        let fid = sf.file_id(db);
-        sources
-            .entry(fid)
-            .or_insert_with(|| sf.text(db).to_string());
-        paths.entry(fid).or_insert_with(|| sf.path(db));
-    }
-    render::render_diagnostics(diags, &sources, &paths, &render::RenderConfig::cli_auto())
+    render_project_diagnostics(db, diags)
 }
 
 struct OracleResult {
@@ -80,10 +69,28 @@ struct OracleResult {
     dirty: HashSet<String>,
 }
 
+#[derive(Clone, Copy)]
+enum ServePath {
+    RunTest,
+    Check,
+}
+
 /// Compile+store `initial`, edit to `edited`, and return the rendered served
 /// (incremental) vs honest (fresh full) diagnostics plus the dirty file set.
 /// `None` when the on-disk cache is disabled.
 fn run_scenario(initial: &[(&str, &str)], edited: &[(&str, &str)]) -> Option<OracleResult> {
+    run_scenario_with(initial, edited, ServePath::RunTest)
+}
+
+fn run_check_scenario(initial: &[(&str, &str)], edited: &[(&str, &str)]) -> Option<OracleResult> {
+    run_scenario_with(initial, edited, ServePath::Check)
+}
+
+fn run_scenario_with(
+    initial: &[(&str, &str)],
+    edited: &[(&str, &str)],
+    serve_path: ServePath,
+) -> Option<OracleResult> {
     if cache_disabled() {
         return None;
     }
@@ -107,9 +114,13 @@ fn run_scenario(initial: &[(&str, &str)], edited: &[(&str, &str)]) -> Option<Ora
     let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
     let pending_plan = ctx2.plan_reuse(&db2);
     let plan = prepare_reuse_plan(&mut db2, pending_plan);
-    let served = ctx2
-        .collect_diagnostics_incremental(&db2, plan.as_ref())
-        .merged;
+    let served = match serve_path {
+        ServePath::RunTest => {
+            ctx2.collect_diagnostics_incremental(&db2, plan.as_ref())
+                .merged
+        }
+        ServePath::Check => ctx2.collect_diagnostics_for_check(&db2, plan.as_ref()),
+    };
     let served_render = render_all(&db2, &served);
 
     let dirty: HashSet<String> = plan
@@ -358,6 +369,75 @@ fn oracle_new_error_in_dirty_file() {
     );
 }
 
+// ── `baml check`: warning rendering and mixed diagnostic classes ────────────
+
+#[test]
+fn check_cold_and_warm_warning_output_is_byte_identical() {
+    let warn = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
+    let files = [("w.baml", warn), ("z.baml", UNRELATED)];
+    let Some(result) = run_check_scenario(&files, &files) else {
+        return;
+    };
+    assert_eq!(result.served, result.honest);
+    assert!(
+        result.served.contains("E0146"),
+        "the cached clean-file warning must still be rendered:\n{}",
+        result.served
+    );
+}
+
+#[test]
+fn check_merges_clean_warning_dirty_error_and_cross_file_conflict() {
+    let warn = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
+    let stable = "function duplicate() -> int {\n  1\n}\n";
+    let initial_dirty = "function distinct() -> int {\n  2\n}\n";
+    let edited_dirty = "function duplicate() -> int {\n  \"not an int\"\n}\n";
+    let initial = [
+        ("a.baml", stable),
+        ("d.baml", initial_dirty),
+        ("w.baml", warn),
+    ];
+    let edited = [
+        ("a.baml", stable),
+        ("d.baml", edited_dirty),
+        ("w.baml", warn),
+    ];
+    let Some(result) = run_check_scenario(&initial, &edited) else {
+        return;
+    };
+    assert_eq!(
+        result.served, result.honest,
+        "incremental check output must be byte-identical to an honest check"
+    );
+    assert!(result.served.contains("E0146"), "clean warning missing");
+    assert!(result.served.contains("E0001"), "dirty-file error missing");
+    assert!(
+        result.served.contains("duplicate function definition"),
+        "cross-file conflict missing:\n{}",
+        result.served
+    );
+}
+
+#[test]
+fn check_corrupt_clean_blob_degrades_to_honest_file_check() {
+    if cache_disabled() {
+        return;
+    }
+    let warn = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
+    with_stored_manifest(&[("w.baml", warn), ("z.baml", UNRELATED)], |ctx, db| {
+        ctx.corrupt_manifest_diagnostics_for_test("w.baml");
+        let pending_plan = ctx.plan_reuse(db);
+        let plan = prepare_reuse_plan(db, pending_plan);
+        let served = ctx.collect_diagnostics_for_check(db, plan.as_ref());
+        let honest = baml_project::collect_compiler2_diagnostics(db);
+        assert_eq!(
+            render_all(db, &served),
+            render_all(db, &honest),
+            "an undecodable clean-file blob must be recomputed honestly"
+        );
+    });
+}
+
 // ── Phase 2 follow-up: layout-scoped sentinel in mixed class+function files ──
 
 // A file that defines a class AND a free function; a layout-baker naming
@@ -425,7 +505,7 @@ fn oracle_mixed_file_field_reorder() {
 /// so no `BAML_CACHE_VERIFY` mutation is needed (parallel-test safe).
 fn with_stored_manifest(
     files: &[(&str, &str)],
-    check: impl FnOnce(&CacheContext, &ProjectDatabase),
+    check: impl FnOnce(&CacheContext, &mut ProjectDatabase),
 ) {
     let root = unique_root();
     let _ = std::fs::remove_dir_all(&root);
@@ -439,9 +519,9 @@ fn with_stored_manifest(
     ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
         .expect("manifest stored");
 
-    let db2 = project_load::build_db_from_sources(&r1, |_| {});
+    let mut db2 = project_load::build_db_from_sources(&r1, |_| {});
     let ctx2 = CacheContext::open(&r1, false).expect("cache reopens");
-    check(&ctx2, &db2);
+    check(&ctx2, &mut db2);
     let _ = std::fs::remove_dir_all(&root);
 }
 

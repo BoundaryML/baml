@@ -1,10 +1,15 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use baml_db::baml_compiler_diagnostics::{Severity, render};
+use anyhow::Result;
+use baml_db::baml_compiler_diagnostics::{Diagnostic, Severity, render};
+use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::{project_load::load_project_for_build, reporter::Reporter};
+use crate::{
+    bytecode_cache::{CacheContext, prepare_reuse_plan},
+    project_load::{build_db_from_sources, resolve_project_sources},
+    reporter::Reporter,
+};
 
 #[derive(Args, Debug)]
 pub struct CheckArgs {
@@ -16,26 +21,40 @@ pub struct CheckArgs {
 impl CheckArgs {
     pub fn run(&self) -> Result<crate::ExitCode> {
         let reporter = Reporter::new();
-        let (db, from, baml_files) =
-            load_project_for_build(self.from.as_deref(), &reporter, false)?;
-        if baml_files.is_empty() {
+        let resolved = resolve_project_sources(self.from.as_deref())?;
+        if resolved.files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
-                from.display()
+                resolved.root.display()
             ));
             return Ok(crate::ExitCode::Other);
         }
+        let file_count = resolved.files.len();
+        let mut db = build_db_from_sources(&resolved, |_| {});
+        let cache = CacheContext::open(&resolved, false);
 
-        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
-        let result = db.check();
-        if !result.diagnostics.is_empty() {
-            let rendered = render::render_diagnostics(
-                &result.diagnostics,
-                &result.sources,
-                &result.file_paths,
-                &render::RenderConfig::cli_auto(),
-            );
+        // Check is a read-only cache consumer. It can use the immutable stdlib
+        // interface and the last successful compile's reuse seeds, but cannot
+        // advance the manifest without emitting matching Program/unit entries.
+        if !CacheContext::verify_enabled()
+            && let Some(interface) = cache.as_ref().and_then(CacheContext::load_stdlib_interface)
+        {
+            db.set_seeded_stdlib_interface(interface);
+        }
+        let reuse_plan = cache.as_ref().and_then(|cache| cache.plan_reuse(&db));
+        let reuse_plan = prepare_reuse_plan(&mut db, reuse_plan);
+
+        reporter.spin("Checking", format!("{file_count} file(s)"));
+        let diagnostics = cache.as_ref().map_or_else(
+            || baml_project::collect_diagnostics(&db),
+            |cache| cache.collect_diagnostics_for_check(&db, reuse_plan.as_ref()),
+        );
+        if let Some(cache) = &cache {
+            cache.verify_diagnostics(&db)?;
+        }
+        if !diagnostics.is_empty() {
+            let rendered = render_project_diagnostics(&db, &diagnostics);
             reporter.suspend(|| {
                 #[allow(clippy::print_stderr)]
                 {
@@ -44,8 +63,7 @@ impl CheckArgs {
             });
         }
 
-        let error_count = result
-            .diagnostics
+        let error_count = diagnostics
             .iter()
             .filter(|diag| diag.severity == Severity::Error)
             .count();
@@ -54,17 +72,35 @@ impl CheckArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        // The bytecode build runs under the same "Checking" spinner — a
-        // separate "Compiling N file(s)" line would just repeat the count.
-        if let Err(err) = db
-            .get_bytecode()
-            .with_context(|| format!("failed to compile BAML project at {}", from.display()))
-        {
-            reporter.abandon();
-            return Err(err);
-        }
-
-        reporter.finish("Finished", format!("checked {} file(s)", baml_files.len()));
+        reporter.finish("Finished", format!("checked {file_count} file(s)"));
         Ok(crate::ExitCode::Success)
     }
+}
+
+pub(crate) fn render_project_diagnostics(
+    db: &ProjectDatabase,
+    diagnostics: &[Diagnostic],
+) -> String {
+    let mut sources = std::collections::HashMap::new();
+    let mut file_paths = std::collections::HashMap::new();
+    for source_file in db.get_source_files() {
+        let file_id = source_file.file_id(db);
+        sources.insert(file_id, source_file.text(db).to_string());
+        file_paths.insert(file_id, source_file.path(db));
+    }
+    for source_file in baml_db::baml_compiler2_hir::compiler2_all_files(db) {
+        let file_id = source_file.file_id(db);
+        sources
+            .entry(file_id)
+            .or_insert_with(|| source_file.text(db).to_string());
+        file_paths
+            .entry(file_id)
+            .or_insert_with(|| source_file.path(db));
+    }
+    render::render_diagnostics(
+        diagnostics,
+        &sources,
+        &file_paths,
+        &render::RenderConfig::cli_auto(),
+    )
 }
