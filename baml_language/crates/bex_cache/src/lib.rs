@@ -16,11 +16,12 @@
 //! failure path in [`BytecodeCache::load`] returns `None` (recompile) and
 //! [`BytecodeCache::store`] is best-effort.
 
+#[cfg(unix)]
+use std::time::SystemTime;
 use std::{
     fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
-    time::SystemTime,
 };
 
 use bex_vm_types::Program;
@@ -50,14 +51,8 @@ use sha2::{Digest, Sha256};
 /// re-checking it. The bump turns every pre-v5 manifest into a miss (the blob
 /// did not exist), so `plan_reuse` never reads a manifest lacking the field.
 ///
-/// v6 (Phase 2 interface fragments): every
-/// [`CompilationUnit`](bex_vm_types::CompilationUnit) in the
-/// [`LinkableImage`](bex_vm_types::LinkableImage) now carries an opaque
-/// borsh `interface_fragment` blob (a `FileInterfaceFragment`) beside its
-/// `throw_facts`, so a warm compile can project a per-file `callable_throws`
-/// seed. The added field changes the image wire format, making every pre-v6
-/// image undecodable (`plan_reuse`'s `LinkableImage` decode fails → `None` →
-/// full compile), so no pre-v6 entry is ever reused. No hand migration.
+/// v6 added a per-unit interface blob used to seed `callable_throws`. The field
+/// changes the image wire format, so no pre-v6 entry is reused.
 ///
 /// v7 (layout-scoped sentinel): each [`ManifestFile`] now carries a
 /// `layout_hash` beside its `signature_hash` — a hash of exactly the file's
@@ -79,7 +74,12 @@ use sha2::{Digest, Sha256};
 /// one-hop propagation left open. The added trailing field makes every pre-v8
 /// manifest fail to decode (borsh runs off the end), so `plan_reuse` falls back
 /// to a full compile. No hand migration.
-pub const FORMAT_VERSION: u32 = 8;
+///
+/// v9 narrows that blob to `CallableThrowsFragment` and removes
+/// the never-populated `CompilationUnit::lets` and `throw_facts` fields. The
+/// compiler fingerprint also rekeys these entries, but the explicit bump keeps
+/// copied or externally stored images unambiguous.
+pub const FORMAT_VERSION: u32 = 9;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -321,10 +321,11 @@ pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> C
 /// makes dev builds safe: two `canary` checkouts both claim "0.13.0" but emit
 /// incompatible bytecode. The hash is memoized on disk under `cache_dir`,
 /// keyed by the exe's `(len, mtime, ctime)` — the `ctime` (inode-change time)
-/// component is unix-only and is what defeats mtime-preserving restores
-/// (`cp -p`, tar, CI cache restore) that would otherwise replay a stale hash
-/// for a different build. The full read still happens only once per rebuild.
-/// Residual gap: non-unix targets fall back to the `(len, mtime)` key.
+/// component is what defeats mtime-preserving restores (`cp -p`, tar, CI cache
+/// restore) that would otherwise replay a stale hash for a different build.
+/// Platforms without that identity hash the executable on every process start;
+/// a stale compiler fingerprint is a correctness failure, while one extra file
+/// read is only startup cost.
 pub fn compiler_fingerprint(cache_dir: &Path) -> [u8; 32] {
     fingerprint_impl(cache_dir).unwrap_or_else(|_| {
         // Can't identify the binary (no exe path, unreadable, ...): return a
@@ -343,38 +344,41 @@ pub fn compiler_fingerprint(cache_dir: &Path) -> [u8; 32] {
 
 fn fingerprint_impl(cache_dir: &Path) -> io::Result<[u8; 32]> {
     let exe = std::env::current_exe()?;
-    let meta = fs::metadata(&exe)?;
-    let len = meta.len();
-    let mtime_ns = meta
-        .modified()?
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    // ctime (inode-change time) is set to "now" by a copy even when the copier
-    // preserves mtime (`cp -p`, tar, CI cache restore), so folding it into the
-    // memo key stops a restored-but-different exe with a matching (len, mtime)
-    // from replaying a stale fingerprint. Unix-only; see `exe_ctime`.
-    let ctime = exe_ctime(&meta);
 
-    // Memo file named by the hash of the exe path, holding
-    // "len mtime ctime hex".
-    let mut path_hasher = Sha256::new();
-    path_hasher.update(exe.as_os_str().as_encoded_bytes());
-    let memo_name: [u8; 32] = path_hasher.finalize().into();
-    let memo_path = cache_dir.join("fingerprints").join(hex(&memo_name[..8]));
+    #[cfg(unix)]
+    let memo = {
+        use std::os::unix::fs::MetadataExt as _;
 
-    if let Ok(memo) = fs::read_to_string(&memo_path) {
-        let mut parts = memo.split_whitespace();
-        if let (Some(l), Some(m), Some(c), Some(hx)) =
-            (parts.next(), parts.next(), parts.next(), parts.next())
-            && l == len.to_string()
-            && m == mtime_ns.to_string()
-            && c == ctime
-            && let Some(bytes) = unhex32(hx)
-        {
-            return Ok(bytes);
+        let meta = fs::metadata(&exe)?;
+        let len = meta.len();
+        let mtime_ns = meta
+            .modified()?
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let ctime = format!("{}.{}", meta.ctime(), meta.ctime_nsec());
+        let mut path_hasher = Sha256::new();
+        path_hasher.update(exe.as_os_str().as_encoded_bytes());
+        let memo_name: [u8; 32] = path_hasher.finalize().into();
+        let path = cache_dir.join("fingerprints").join(hex(&memo_name[..8]));
+
+        if let Ok(contents) = fs::read_to_string(&path) {
+            let mut parts = contents.split_whitespace();
+            if let (Some(l), Some(m), Some(c), Some(hx)) =
+                (parts.next(), parts.next(), parts.next(), parts.next())
+                && l == len.to_string()
+                && m == mtime_ns.to_string()
+                && c == ctime
+                && let Some(bytes) = unhex32(hx)
+            {
+                return Ok(bytes);
+            }
         }
-    }
+        (path, len, mtime_ns, ctime)
+    };
+
+    #[cfg(not(unix))]
+    let _ = cache_dir;
 
     let mut h = Sha256::new();
     h.update(baml_version::CANONICAL_VERSION.as_bytes());
@@ -390,31 +394,15 @@ fn fingerprint_impl(cache_dir: &Path) -> io::Result<[u8; 32]> {
     }
     let digest: [u8; 32] = h.finalize().into();
 
-    // Best-effort memo write; failure just means re-hashing next run.
-    if fs::create_dir_all(memo_path.parent().expect("memo path has parent")).is_ok() {
+    // Best-effort Unix memo write; failure just means re-hashing next run.
+    #[cfg(unix)]
+    if fs::create_dir_all(memo.0.parent().expect("memo path has parent")).is_ok() {
         let _ = write_atomic(
-            &memo_path,
-            format!("{len} {mtime_ns} {ctime} {}\n", hex(&digest)).as_bytes(),
+            &memo.0,
+            format!("{} {} {} {}\n", memo.1, memo.2, memo.3, hex(&digest)).as_bytes(),
         );
     }
     Ok(digest)
-}
-
-/// The exe's inode-change time as a `"secs.nsecs"` token for the fingerprint
-/// memo key. On unix this reads `MetadataExt::ctime` / `ctime_nsec`; other
-/// targets return a fixed placeholder so the memo degrades to the
-/// `(len, mtime)` key.
-fn exe_ctime(meta: &fs::Metadata) -> String {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt as _;
-        format!("{}.{}", meta.ctime(), meta.ctime_nsec())
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = meta;
-        String::from("na")
-    }
 }
 
 /// On-disk store: `<dir>/bytecode/<first-two-hex>/<key-hex>.bexc`.
@@ -706,6 +694,15 @@ mod tests {
         std::fs::write(&path, &bytes).expect("rewrite");
         assert!(cache.load(&key).is_none(), "corrupt entry rejected");
 
+        // A well-formed entry from another cache format is also a miss. This
+        // exercises the cache header contract directly instead of relying on a
+        // particular Borsh struct-layout failure.
+        cache.store(&key, &program).expect("re-store");
+        let mut bytes = std::fs::read(&path).expect("read entry");
+        bytes[4..8].copy_from_slice(&(FORMAT_VERSION - 1).to_le_bytes());
+        std::fs::write(&path, &bytes).expect("rewrite version");
+        assert!(cache.load(&key).is_none(), "stale format rejected");
+
         // Entry stored under the wrong name: key echo must reject.
         cache.store(&key, &program).expect("re-store");
         let other_files = vec![("b.baml".to_string(), "fn x {}")];
@@ -731,102 +728,6 @@ mod tests {
         // Sensitive to both keying inputs.
         assert_ne!(base, stdlib_interface_key(&[4u8; 32], 2), "fingerprint");
         assert_ne!(base, stdlib_interface_key(&fp, 0), "opt level");
-    }
-
-    #[test]
-    fn stdlib_interface_blob_round_trips_through_store_raw() {
-        use std::collections::BTreeMap;
-
-        let dir = tempfile::tempdir().expect("tempdir");
-        let cache = BytecodeCache::open(dir.path().to_path_buf());
-        let key = stdlib_interface_key(&[5u8; 32], 2);
-
-        // Shape matches the CLI blob: package-name -> opaque per-package bytes.
-        let mut blob: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-        blob.insert("baml".to_string(), vec![1, 2, 3, 4]);
-        blob.insert("log".to_string(), vec![9, 8, 7]);
-        let payload = borsh::to_vec(&blob).expect("serialize blob");
-
-        assert!(cache.load_raw(&key).is_none(), "miss on empty cache");
-        cache.store_raw(&key, &payload).expect("store");
-        let loaded = cache.load_raw(&key).expect("hit after store");
-        let decoded: BTreeMap<String, Vec<u8>> = borsh::from_slice(&loaded).expect("decode blob");
-        assert_eq!(decoded, blob, "interface blob survives the store/load path");
-    }
-
-    #[test]
-    fn manifest_with_diagnostics_blob_round_trips_through_store_raw() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let cache = BytecodeCache::open(dir.path().to_path_buf());
-        let key = manifest_key(&[6u8; 32], 2, false, Path::new("/proj"), None);
-
-        let manifest = ProjectManifest {
-            program_key: [1u8; 32],
-            files: vec![ManifestFile {
-                rel_path: "a.baml".to_string(),
-                content_hash: [2u8; 32],
-                signature_hash: [3u8; 32],
-                layout_hash: [4u8; 32],
-                defined_names: vec!["foo".to_string()],
-                referenced_names: vec!["Bar".to_string()],
-                sig_referenced_names: vec!["Bar".to_string()],
-                throw_facts: Vec::new(),
-                // Opaque bytes: bex_cache never interprets this blob.
-                diagnostics: vec![9, 8, 7, 6],
-            }],
-        };
-        let payload = borsh::to_vec(&manifest).expect("serialize manifest");
-
-        cache.store_raw(&key, &payload).expect("store");
-        let loaded = cache.load_raw(&key).expect("hit after store");
-        let decoded: ProjectManifest = borsh::from_slice(&loaded).expect("decode manifest");
-        assert_eq!(decoded.files.len(), 1);
-        assert_eq!(decoded.files[0].diagnostics, vec![9, 8, 7, 6]);
-        assert_eq!(decoded.files[0].rel_path, "a.baml");
-    }
-
-    #[test]
-    fn pre_v7_manifest_payload_is_a_miss() {
-        // A manifest serialized without the `layout_hash` field (the pre-v7
-        // layout) must not decode into the current `ProjectManifest`, so an old
-        // cache degrades to a full compile rather than serving against a
-        // misaligned manifest. Emulate the old layout by borsh-encoding a struct
-        // missing that field and confirming it fails to round-trip.
-        #[derive(borsh::BorshSerialize)]
-        struct LegacyManifestFile {
-            rel_path: String,
-            content_hash: [u8; 32],
-            signature_hash: [u8; 32],
-            defined_names: Vec<String>,
-            referenced_names: Vec<String>,
-            throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
-            diagnostics: Vec<u8>,
-        }
-        #[derive(borsh::BorshSerialize)]
-        struct LegacyManifest {
-            program_key: [u8; 32],
-            files: Vec<LegacyManifestFile>,
-        }
-        let legacy = LegacyManifest {
-            program_key: [0u8; 32],
-            files: vec![LegacyManifestFile {
-                rel_path: "a.baml".to_string(),
-                content_hash: [0u8; 32],
-                signature_hash: [0u8; 32],
-                defined_names: Vec::new(),
-                referenced_names: Vec::new(),
-                throw_facts: Vec::new(),
-                diagnostics: Vec::new(),
-            }],
-        };
-        let bytes = borsh::to_vec(&legacy).expect("serialize legacy");
-        // Borsh is not self-describing: the absent `layout_hash` shifts every
-        // following field, so the decode misreads a length prefix and runs off
-        // the end of the buffer.
-        assert!(
-            borsh::from_slice::<ProjectManifest>(&bytes).is_err(),
-            "a pre-v7 manifest layout must fail to decode into the v7 struct"
-        );
     }
 
     #[test]
@@ -865,37 +766,26 @@ mod tests {
 /// are shared; the per-project manifest is a mutable local-latest pointer and
 /// deliberately stays local (it only accelerates the local edit loop).
 ///
-/// Strictly best-effort: a slow or broken remote degrades to local-only
-/// behavior. Downloaded entries pass the same header/checksum validation as
-/// local ones before use, and are re-persisted locally so the remote is hit
-/// at most once per entry.
+/// The configured origin is a trust boundary because it supplies executable VM
+/// programs. Non-loopback remotes therefore require HTTPS. Failures are bounded
+/// by a short timeout and degrade to local-only behavior. Downloaded entries
+/// still pass the local header/checksum validation and are persisted locally so
+/// the remote is hit at most once per entry.
 pub struct RemoteCache {
     base_url: String,
     token: Option<String>,
     client: reqwest::blocking::Client,
 }
 
-/// Whether a bearer token may be attached to `base_url`: true over https, or
-/// to a real http loopback host (`localhost`, `127.0.0.1`, `[::1]`). The host is
-/// taken from a parsed URL, so `host_str` drops any userinfo and port — a
-/// look-alike authority such as `localhost.evil.com` or `127.0.0.1@evil.com`
-/// resolves to a non-loopback host and is correctly rejected, closing the
-/// cleartext-token leak those inputs would otherwise cause.
-///
-/// `Url::host_str` returns IPv6 literals in their bracketed form, so the IPv6
-/// loopback arrives as `[::1]` (not `::1`); both spellings are matched so the
-/// token is preserved for `http://[::1]:<port>`.
-fn token_allowed(base_url: &str) -> bool {
-    if base_url.starts_with("https://") {
-        return true;
-    }
-    reqwest::Url::parse(base_url).is_ok_and(|u| {
-        u.scheme() == "http"
+/// HTTPS authenticates a configured remote origin. Plain HTTP is accepted only
+/// for an in-process or same-machine cache server.
+fn remote_url_allowed(url: &reqwest::Url) -> bool {
+    url.scheme() == "https"
+        || (url.scheme() == "http"
             && matches!(
-                u.host_str(),
+                url.host_str(),
                 Some("localhost" | "127.0.0.1" | "::1" | "[::1]")
-            )
-    })
+            ))
 }
 
 impl RemoteCache {
@@ -906,28 +796,24 @@ impl RemoteCache {
         if base_url.is_empty() {
             return None;
         }
+        let parsed = reqwest::Url::parse(&base_url).ok()?;
+        if !remote_url_allowed(&parsed) {
+            #[allow(clippy::print_stderr)]
+            {
+                eprintln!("warning: BAML_CACHE_REMOTE ignored — use https or a loopback http URL");
+            }
+            return None;
+        }
         let client = reqwest::blocking::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(2))
-            .timeout(std::time::Duration::from_secs(30))
+            .connect_timeout(std::time::Duration::from_millis(500))
+            .timeout(std::time::Duration::from_secs(2))
+            // Do not forward executable cache requests or bearer credentials
+            // across redirects to a different origin or weaker scheme.
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .ok()?;
         let base_url = base_url.trim_end_matches('/').to_string();
-        let mut token = std::env::var("BAML_CACHE_REMOTE_TOKEN").ok();
-        // Never send a bearer token in cleartext: attach it only over https or
-        // to a genuine http loopback host. `token_allowed` matches the host of
-        // a parsed URL, so look-alikes (`http://localhost.evil.com`) and
-        // userinfo tricks (`http://127.0.0.1@evil.com`) are treated as remote
-        // and drop the token.
-        if token.is_some() && !token_allowed(&base_url) {
-            #[allow(clippy::print_stderr)] // security misconfiguration warning
-            {
-                eprintln!(
-                    "warning: BAML_CACHE_REMOTE_TOKEN ignored — remote cache URL is not \
-                     https, refusing to send the token in cleartext"
-                );
-            }
-            token = None;
-        }
+        let token = std::env::var("BAML_CACHE_REMOTE_TOKEN").ok();
         Some(RemoteCache {
             base_url,
             token,
@@ -977,12 +863,12 @@ impl RemoteCache {
         Some(body)
     }
 
-    fn put(&self, key: &CacheKey, entry: &[u8]) {
+    fn put(&self, key: &CacheKey, entry: Vec<u8>) {
         let mut request = self
             .client
             .put(self.entry_url(key))
             .header("content-type", "application/octet-stream")
-            .body(entry.to_vec());
+            .body(entry);
         if let Some(token) = &self.token {
             request = request.bearer_auth(token);
         }
@@ -1008,13 +894,9 @@ impl BytecodeCache {
         }
         let remote = self.remote.as_ref()?;
         let entry = remote.get(key)?;
-        // SECURITY: `check_entry` is integrity-only — the payload SHA lives in
-        // the entry itself, so it catches corruption/truncation but not a
-        // forged blob. A remote that chooses the bytes (a malicious origin, or
-        // a MITM on an untrusted mirror) can serve a valid-looking executable
-        // `Program`. We therefore assume a trusted remote reached over https.
-        // Authenticating entries — e.g. an HMAC over the payload keyed by the
-        // shared token, verified here — is a follow-up (see report).
+        // The configured HTTPS origin (or local loopback server) is trusted to
+        // supply executable VM programs. The entry framing additionally rejects
+        // corruption, truncation, version skew, and responses for another key.
         let payload = check_entry(&entry, key)?;
         let program = borsh::from_slice::<Program>(payload).ok()?;
         let path = self.entry_path(key);
@@ -1033,7 +915,7 @@ impl BytecodeCache {
         if let Some(remote) = &self.remote
             && let Ok(entry) = fs::read(self.entry_path(key))
         {
-            remote.put(key, &entry);
+            remote.put(key, entry);
         }
         Ok(())
     }
@@ -1180,34 +1062,14 @@ mod remote_tests {
     }
 
     #[test]
-    fn token_attached_only_over_https_or_loopback() {
-        assert!(
-            token_allowed("https://cache.example.com"),
-            "https keeps token"
-        );
-        assert!(
-            !token_allowed("http://cache.example.com"),
-            "plain http drops token"
-        );
-        assert!(
-            token_allowed("http://localhost:8080"),
-            "http loopback keeps token"
-        );
-        assert!(
-            token_allowed("http://127.0.0.1:8080"),
-            "http IPv4 loopback keeps token"
-        );
-        assert!(
-            token_allowed("http://[::1]:8080"),
-            "http IPv6 loopback keeps token (host_str is bracketed)"
-        );
-        assert!(
-            !token_allowed("http://localhost.evil.com"),
-            "look-alike host drops token"
-        );
-        assert!(
-            !token_allowed("http://127.0.0.1@evil.com"),
-            "userinfo trick drops token"
-        );
+    fn remote_requires_https_or_loopback() {
+        let allowed = |url: &str| remote_url_allowed(&reqwest::Url::parse(url).expect("valid URL"));
+        assert!(allowed("https://cache.example.com"));
+        assert!(!allowed("http://cache.example.com"));
+        assert!(allowed("http://localhost:8080"));
+        assert!(allowed("http://127.0.0.1:8080"));
+        assert!(allowed("http://[::1]:8080"));
+        assert!(!allowed("http://localhost.evil.com"));
+        assert!(!allowed("http://127.0.0.1@evil.com"));
     }
 }

@@ -722,27 +722,16 @@ impl RunArgs {
             && let Some(program) = ctx.load()
         {
             self.vlog(format_args!("Bytecode cache hit — skipping compile"));
-            let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
-                .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
-            return Ok((db, engine, needs_format_hint));
-        }
-
-        // Per-file reuse: decide from the manifest which files' compiled
-        // bytecode can be spliced from the previous program.
-        let reuse_plan = cache.as_ref().and_then(|ctx| ctx.plan_reuse(&db));
-        if let Some(plan) = &reuse_plan {
-            self.vlog(format_args!(
-                "Per-file reuse: {} clean, {} dirty",
-                plan.clean_files.len(),
-                plan.dirty_files.len()
-            ));
-            // Clean files' throw facts come from the manifest, so throw
-            // inference never re-walks their bodies.
-            db.set_seeded_throw_facts(plan.seeded_throw_facts.clone());
-            // Clean functions' `callable_throws` come from their cached interface
-            // fragments (Phase 2), so a dirty file's inference never pulls a clean
-            // callee's body. Injected before the first typecheck query.
-            db.set_seeded_callable_throws(plan.seeded_callable_throws.clone());
+            match BexEngine::new(
+                program,
+                Arc::new(sys_native::SysOps::native()),
+                argv.clone(),
+            ) {
+                Ok(engine) => return Ok((db, engine, needs_format_hint)),
+                Err(error) => crate::bytecode_cache::cache_debug(format_args!(
+                    "cached program rejected by VM; recompiling: {error:?}"
+                )),
+            }
         }
 
         // Seed the stdlib typed interface (B-694) before the first typecheck
@@ -756,6 +745,18 @@ impl RunArgs {
                 .and_then(|ctx| ctx.load_stdlib_interface())
                 .map(|by_package| db.set_seeded_stdlib_interface(by_package))
                 .is_some();
+
+        // Per-file reuse: decide from the manifest which files' compiled
+        // bytecode can be spliced from the previous program.
+        let reuse_plan = cache.as_ref().and_then(|ctx| ctx.plan_reuse(&db));
+        if let Some(plan) = &reuse_plan {
+            self.vlog(format_args!(
+                "Per-file reuse: {} clean, {} dirty",
+                plan.clean_files.len(),
+                plan.dirty_files.len()
+            ));
+        }
+        let reuse_plan = crate::bytecode_cache::prepare_reuse_plan(&mut db, reuse_plan);
 
         // `baml run` keeps the compile phase silent; the program's output is
         // the point. Compile/count progress belongs to `check` and `generate`.
@@ -778,7 +779,7 @@ impl RunArgs {
             None
         };
         self.vlog(format_args!("Compiling..."));
-        let program = crate::bytecode_cache::compile_program(
+        let compiled = crate::bytecode_cache::compile_program_artifacts(
             &db,
             &baml_compiler2_emit::CompileOptions {
                 emit_test_cases: false,
@@ -788,14 +789,20 @@ impl RunArgs {
         )
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
         if let Some(ctx) = &cache {
-            ctx.verify_against(&program)?;
+            ctx.verify_against(&compiled.program)?;
             ctx.verify_stdlib_interface(&db)?;
             ctx.verify_diagnostics(&db)?;
-            ctx.verify_interface_fragments(&db)?;
+            ctx.verify_callable_throws_fragments(&db)?;
             let fresh = fresh_diagnostics
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
-            if let Err(e) = ctx.store_with_manifest(&db, &program, fresh, reuse_plan.as_ref()) {
+            if let Err(e) = ctx.store_artifacts_with_manifest(
+                &db,
+                &compiled.program,
+                compiled.image.as_ref(),
+                fresh,
+                reuse_plan.as_ref(),
+            ) {
                 crate::bytecode_cache::cache_debug(format_args!(
                     "Bytecode cache write failed: {e}"
                 ));
@@ -819,6 +826,7 @@ impl RunArgs {
             "stdlib interface: {} honest derivation(s) this process",
             baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
         ));
+        let program = compiled.program;
         let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
             .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
         self.vlog(format_args!(

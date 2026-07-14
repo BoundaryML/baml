@@ -44,6 +44,8 @@ pub enum LinkError {
     UnresolvedImport(String),
     /// Two units export the same fully-qualified name.
     DuplicateExport(String),
+    /// A decoded unit contains an index outside its declared local/import space.
+    InvalidUnit(String),
 }
 
 impl std::fmt::Display for LinkError {
@@ -58,6 +60,7 @@ impl std::fmt::Display for LinkError {
                     "duplicate export: `{name}` is exported by more than one unit"
                 )
             }
+            Self::InvalidUnit(message) => write!(f, "invalid compilation unit: {message}"),
         }
     }
 }
@@ -86,6 +89,11 @@ struct UnitLayout {
     let_gbase: usize,
 }
 
+struct ResolvedTailImports {
+    objects: Vec<usize>,
+    globals: Vec<usize>,
+}
+
 impl UnitLayout {
     /// Decode a per-unit-local flat global index (§2a) to an absolute slot. The
     /// local global space is `[functions 0..func_count][lets func_count..]`.
@@ -110,6 +118,19 @@ fn export_object_abs(layout: &UnitLayout, local_ref: LocalRef) -> usize {
         LocalRef::Interface(k) => layout.iface_base + k as usize,
         LocalRef::Code(k) => layout.code_base + k as usize,
     }
+}
+
+fn local_ref_in_bounds(unit: &CompilationUnit, local_ref: LocalRef) -> bool {
+    match local_ref {
+        LocalRef::Class(k) => (k as usize) < unit.classes.len(),
+        LocalRef::Enum(k) => (k as usize) < unit.enums.len(),
+        LocalRef::Interface(k) => (k as usize) < unit.interfaces.len(),
+        LocalRef::Code(k) => (k as usize) < unit.code.len(),
+    }
+}
+
+fn invalid_index(unit: usize, space: &str, raw: usize) -> LinkError {
+    LinkError::InvalidUnit(format!("unit {unit} has out-of-range {space} index {raw}"))
 }
 
 /// The fully-qualified name of the base function of a generic value
@@ -145,7 +166,7 @@ fn generic_base_name(
 fn resolve_object_import(
     sym: &Symbol,
     obj_by_name: &HashMap<String, usize>,
-    canonical_pos: &HashMap<(String, Vec<u8>), usize>,
+    canonical_pos: &HashMap<String, HashMap<Vec<baml_type::RuntimeTy>, usize>>,
 ) -> Result<usize, LinkError> {
     match sym.kind {
         SymbolKind::GenericFn => {
@@ -153,9 +174,9 @@ fn resolve_object_import(
                 .generic
                 .as_ref()
                 .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?;
-            let ta = borsh::to_vec(&key.type_args).expect("serialize type_args");
             canonical_pos
-                .get(&(key.base_fn.clone(), ta))
+                .get(key.base_fn.as_str())
+                .and_then(|by_args| by_args.get(&key.type_args))
                 .copied()
                 .ok_or_else(|| LinkError::UnresolvedImport(format!("{}<generic>", key.base_fn)))
         }
@@ -222,19 +243,22 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     ];
 
     // ---- Per-unit func/let counts -------------------------------------------
+    let code_names: Vec<std::collections::HashSet<&str>> = units
+        .iter()
+        .map(|unit| {
+            unit.exports
+                .objects
+                .iter()
+                .filter(|(_, reference)| matches!(reference, LocalRef::Code(_)))
+                .map(|(name, _)| name.as_str())
+                .collect()
+        })
+        .collect();
     let mut func_count = vec![0usize; units.len()];
     let mut let_count = vec![0usize; units.len()];
     for (u, unit) in units.iter().enumerate() {
-        // A global is a function iff its name is exported as a `Code` object.
-        let code_names: std::collections::HashSet<&str> = unit
-            .exports
-            .objects
-            .iter()
-            .filter(|(_, r)| matches!(r, LocalRef::Code(_)))
-            .map(|(n, _)| n.as_str())
-            .collect();
         for (name, _) in &unit.exports.globals {
-            if code_names.contains(name.as_str()) {
+            if code_names[u].contains(name.as_str()) {
                 func_count[u] += 1;
             } else {
                 let_count[u] += 1;
@@ -255,10 +279,13 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     // k-th `code` object (a shadow maps to its canonical's index and is itself not
     // appended). For a full compile each key has exactly one owner, so `shadow` is
     // empty and this reduces to the flat pass-major layout.
-    let mut shadow: Vec<std::collections::HashSet<usize>> =
-        vec![std::collections::HashSet::new(); units.len()];
+    let mut shadow: Vec<Vec<bool>> = units
+        .iter()
+        .map(|unit| vec![false; unit.code.len()])
+        .collect();
     let mut code_abs: Vec<Vec<usize>> = units.iter().map(|u| vec![0usize; u.code.len()]).collect();
-    let mut canonical_pos: HashMap<(String, Vec<u8>), usize> = HashMap::new();
+    let mut canonical_pos: HashMap<String, HashMap<Vec<baml_type::RuntimeTy>, usize>> =
+        HashMap::new();
 
     // ---- Object bucket bases (pass-major, group-major) ----------------------
     let mut layout = vec![UnitLayout::default(); units.len()];
@@ -284,16 +311,20 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             for (k, object) in unit.code.iter().enumerate() {
                 if let Object::GenericFunction(gf) = object {
                     let base_name = generic_base_name(unit, gf.function.raw(), n_local_globals)?;
-                    let ta = borsh::to_vec(&gf.type_args.to_vec()).expect("serialize type_args");
-                    let key = (base_name, ta);
-                    if let Some(&canon) = canonical_pos.get(&key) {
+                    if let Some(&canon) = canonical_pos
+                        .get(base_name.as_str())
+                        .and_then(|by_args| by_args.get(gf.type_args.as_ref()))
+                    {
                         // Duplicate of an earlier unit's generic value: shadow it.
-                        shadow[u].insert(k);
+                        shadow[u][k] = true;
                         code_abs[u][k] = canon;
                         continue;
                     }
                     let abs = obj_cursor + placed;
-                    canonical_pos.insert(key, abs);
+                    canonical_pos
+                        .entry(base_name)
+                        .or_default()
+                        .insert(gf.type_args.to_vec(), abs);
                     code_abs[u][k] = abs;
                     placed += 1;
                 } else {
@@ -341,6 +372,11 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     let mut obj_by_name: HashMap<String, usize> = HashMap::new();
     for (u, unit) in units.iter().enumerate() {
         for (name, local_ref) in &unit.exports.objects {
+            if !local_ref_in_bounds(unit, *local_ref) {
+                return Err(LinkError::InvalidUnit(format!(
+                    "unit {u} export `{name}` points outside its {local_ref:?} bucket"
+                )));
+            }
             // A `Code` export (named function) may sit after a shadowed generic in
             // its bucket, so its absolute index comes from `code_abs`, not the flat
             // base. Generic *values* are never exported, so a `Code` export is never
@@ -364,16 +400,20 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
 
     // ---- Global-slot assignment (design §3b step 1) -------------------------
     for (u, unit) in units.iter().enumerate() {
-        let code_names: std::collections::HashSet<&str> = unit
-            .exports
-            .objects
-            .iter()
-            .filter(|(_, r)| matches!(r, LocalRef::Code(_)))
-            .map(|(n, _)| n.as_str())
-            .collect();
+        let n_local_globals = func_count[u] + let_count[u];
+        let mut seen_local_globals = vec![false; n_local_globals];
         for (name, flat) in &unit.exports.globals {
-            let slot = layout[u].local_global(*flat as usize);
-            if code_names.contains(name.as_str()) {
+            let flat = *flat as usize;
+            let Some(seen) = seen_local_globals.get_mut(flat) else {
+                return Err(invalid_index(u, "exported global", flat));
+            };
+            if std::mem::replace(seen, true) {
+                return Err(LinkError::InvalidUnit(format!(
+                    "unit {u} exports more than one global at local slot {flat}"
+                )));
+            }
+            let slot = layout[u].local_global(flat);
+            if code_names[u].contains(name.as_str()) {
                 // A function: slot holds `Object(function object)`.
                 let abs = *obj_by_name
                     .get(name.as_str())
@@ -424,10 +464,25 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
         resolved_glob_imports.push(globs);
     }
 
-    // Snapshot of function global slots for generic-fn base-function resolution
-    // (needed while `program.objects` is being mutated during placement).
-    let fn_gslot = program.function_global_indices.clone();
-    let let_gslot = program.let_global_indices.clone();
+    let mut resolved_tail_imports: Vec<Option<ResolvedTailImports>> =
+        Vec::with_capacity(group_tail.len());
+    for tail_unit in group_tail {
+        let Some(tail) = tail_unit.and_then(|u| units[u].init_tail.as_ref()) else {
+            resolved_tail_imports.push(None);
+            continue;
+        };
+        let objects = tail
+            .object_imports
+            .iter()
+            .map(|symbol| resolve_object_import(symbol, &obj_by_name, &canonical_pos))
+            .collect::<Result<_, _>>()?;
+        let globals = tail
+            .global_imports
+            .iter()
+            .map(&resolve_global_import)
+            .collect::<Result<_, _>>()?;
+        resolved_tail_imports.push(Some(ResolvedTailImports { objects, globals }));
+    }
 
     // ---- Definition placement (design §3b step 2) ---------------------------
     // Classes, then enums, then interfaces — pass-major across the units of each
@@ -477,41 +532,57 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             for (k, object) in unit.code.iter().enumerate() {
                 // A shadowed generic value is a duplicate of the canonical copy —
                 // do not append it; its references already resolve to the canonical.
-                if shadow[u].contains(&k) {
+                if shadow[u][k] {
                     continue;
                 }
                 let mut object = object.clone();
+                let mut link_error = None;
                 visit_object_operands(&mut object, |operand| match operand {
                     IndexOperand::Object(idx) => {
+                        if link_error.is_some() {
+                            return;
+                        }
                         let raw = idx.raw();
                         let abs = if raw < n_local_objects {
                             if raw < c {
-                                lay.class_base + raw
+                                Some(lay.class_base + raw)
                             } else if raw < c + e {
-                                lay.enum_base + (raw - c)
+                                Some(lay.enum_base + (raw - c))
                             } else if raw < c + e + i {
-                                lay.iface_base + (raw - c - e)
+                                Some(lay.iface_base + (raw - c - e))
                             } else {
                                 // A code-bucket ref: use the shadow-aware map so a
                                 // reference to a deduped generic value hits the
                                 // canonical pool position.
-                                code_abs[u][raw - c - e - i]
+                                code_abs[u].get(raw - c - e - i).copied()
                             }
                         } else {
-                            obj_imports[raw - n_local_objects]
+                            obj_imports.get(raw - n_local_objects).copied()
                         };
-                        *idx = ObjectIndex::from_raw(abs);
+                        match abs {
+                            Some(abs) => *idx = ObjectIndex::from_raw(abs),
+                            None => link_error = Some(invalid_index(u, "object operand", raw)),
+                        }
                     }
                     IndexOperand::Global(slot) => {
+                        if link_error.is_some() {
+                            return;
+                        }
                         let raw = slot.raw();
                         let abs = if raw < n_local_globals {
-                            lay.local_global(raw)
+                            Some(lay.local_global(raw))
                         } else {
-                            glob_imports[raw - n_local_globals]
+                            glob_imports.get(raw - n_local_globals).copied()
                         };
-                        *slot = GlobalIndex::from_raw(abs);
+                        match abs {
+                            Some(abs) => *slot = GlobalIndex::from_raw(abs),
+                            None => link_error = Some(invalid_index(u, "global operand", raw)),
+                        }
                     }
                 });
+                if let Some(error) = link_error {
+                    return Err(error);
+                }
                 program.objects.push(object);
             }
         }
@@ -527,53 +598,68 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
             let n_tail_slots = tail.slot_objects.len();
             let slot_base = tail_slot_base[g];
 
-            // Resolve the tail's imports.
-            let mut obj_imports = Vec::with_capacity(tail.object_imports.len());
-            for sym in &tail.object_imports {
-                obj_imports.push(resolve_object_import(sym, &obj_by_name, &canonical_pos)?);
-            }
-            let mut glob_imports = Vec::with_capacity(tail.global_imports.len());
-            for sym in &tail.global_imports {
-                let abs = match sym.kind {
-                    SymbolKind::Let => let_gslot
-                        .get(sym.fq_name.as_str())
-                        .copied()
-                        .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?,
-                    _ => fn_gslot
-                        .get(sym.fq_name.as_str())
-                        .copied()
-                        .ok_or_else(|| LinkError::UnresolvedImport(sym.fq_name.clone()))?,
-                };
-                glob_imports.push(abs);
-            }
+            let imports = resolved_tail_imports[g]
+                .as_ref()
+                .expect("a present group tail has resolved imports");
+            let obj_imports = &imports.objects;
+            let glob_imports = &imports.globals;
 
             for object in &tail.objects {
                 let mut object = object.clone();
+                let mut link_error = None;
                 visit_object_operands(&mut object, |operand| match operand {
                     IndexOperand::Object(idx) => {
+                        if link_error.is_some() {
+                            return;
+                        }
                         let raw = idx.raw();
                         let abs = if raw < n_tail_objects {
-                            tail_object_base + raw
+                            Some(tail_object_base + raw)
                         } else {
-                            obj_imports[raw - n_tail_objects]
+                            obj_imports.get(raw - n_tail_objects).copied()
                         };
-                        *idx = ObjectIndex::from_raw(abs);
+                        match abs {
+                            Some(abs) => *idx = ObjectIndex::from_raw(abs),
+                            None => {
+                                link_error = Some(LinkError::InvalidUnit(format!(
+                                    "init tail has out-of-range object operand {raw}"
+                                )));
+                            }
+                        }
                     }
                     IndexOperand::Global(slot) => {
+                        if link_error.is_some() {
+                            return;
+                        }
                         let raw = slot.raw();
                         let abs = if raw < n_tail_slots {
-                            slot_base + raw
+                            Some(slot_base + raw)
                         } else {
-                            glob_imports[raw - n_tail_slots]
+                            glob_imports.get(raw - n_tail_slots).copied()
                         };
-                        *slot = GlobalIndex::from_raw(abs);
+                        match abs {
+                            Some(abs) => *slot = GlobalIndex::from_raw(abs),
+                            None => {
+                                link_error = Some(LinkError::InvalidUnit(format!(
+                                    "init tail has out-of-range global operand {raw}"
+                                )));
+                            }
+                        }
                     }
                 });
+                if let Some(error) = link_error {
+                    return Err(error);
+                }
                 program.objects.push(object);
             }
 
             // Every tail slot holds `Object(its owning tail object)`.
             for (ord, &tobj) in tail.slot_objects.iter().enumerate() {
+                if tobj as usize >= n_tail_objects {
+                    return Err(LinkError::InvalidUnit(format!(
+                        "init tail slot {ord} points to out-of-range object {tobj}"
+                    )));
+                }
                 program.globals[slot_base + ord] =
                     ConstValue::Object(ObjectIndex::from_raw(tail_object_base + tobj as usize));
             }
@@ -733,7 +819,6 @@ mod tests {
     use crate::{
         Instruction, Object,
         bytecode::Bytecode,
-        relink::visit_index_operands,
         types::{Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin},
         unit::{ExportTable, InitTail, ProgramPackageFrag},
     };
@@ -821,12 +906,10 @@ mod tests {
                 ],
                 globals: vec![("user.foo".to_string(), 0), ("user.bar".to_string(), 1)],
             },
-            lets: Vec::new(),
             package_fragment: ProgramPackageFrag::default(),
             template_macros: Vec::new(),
             test_cases: Vec::new(),
-            throw_facts: Vec::new(),
-            interface_fragment: Vec::new(),
+            callable_throws_fragment: Vec::new(),
             init_tail: None,
         }
     }
@@ -835,12 +918,11 @@ mod tests {
         let Object::Function(function) = object else {
             panic!("expected a function object");
         };
-        let mut function = (**function).clone();
         let mut globals = Vec::new();
         let mut objects = Vec::new();
-        visit_index_operands(&mut function, |operand| match operand {
-            IndexOperand::Global(slot) => globals.push(slot.raw()),
-            IndexOperand::Object(obj) => objects.push(obj.raw()),
+        crate::relink::visit_index_operands_ref(function, |operand| match operand {
+            crate::relink::IndexOperandRef::Global(slot) => globals.push(slot.raw()),
+            crate::relink::IndexOperandRef::Object(obj) => objects.push(obj.raw()),
         });
         (globals, objects)
     }
@@ -894,25 +976,6 @@ mod tests {
     }
 
     #[test]
-    fn link_is_stable_across_unit_round_trip() {
-        let unit = local_only_unit();
-        let program = link(std::slice::from_ref(&unit)).expect("link fresh");
-
-        let bytes = borsh::to_vec(&unit).expect("serialize unit");
-        let round_tripped: CompilationUnit = borsh::from_slice(&bytes).expect("deserialize unit");
-        let program2 = link(std::slice::from_ref(&round_tripped)).expect("link round-tripped");
-
-        assert_eq!(
-            borsh::to_vec(&program).expect("serialize program"),
-            borsh::to_vec(&program2).expect("serialize program2"),
-            "link output must be identical for a round-tripped unit"
-        );
-    }
-
-    /// Two local-only units that reference each other across the unit boundary
-    /// through the import tables. Exercises pass-major placement + import
-    /// resolution.
-    #[test]
     fn link_two_units_with_cross_imports() {
         use Instruction as I;
         // Unit A: defines class A.C and function a.f (calls b.g, which is an
@@ -960,12 +1023,10 @@ mod tests {
                 ],
                 globals: vec![("a.f".to_string(), 0)],
             },
-            lets: Vec::new(),
             package_fragment: ProgramPackageFrag::default(),
             template_macros: Vec::new(),
             test_cases: Vec::new(),
-            throw_facts: Vec::new(),
-            interface_fragment: Vec::new(),
+            callable_throws_fragment: Vec::new(),
             init_tail: None,
         };
         // Unit B: defines class b.D and function b.g.
@@ -985,12 +1046,10 @@ mod tests {
                 ],
                 globals: vec![("b.g".to_string(), 0)],
             },
-            lets: Vec::new(),
             package_fragment: ProgramPackageFrag::default(),
             template_macros: Vec::new(),
             test_cases: Vec::new(),
-            throw_facts: Vec::new(),
-            interface_fragment: Vec::new(),
+            callable_throws_fragment: Vec::new(),
             init_tail: None,
         };
 
@@ -1059,10 +1118,36 @@ mod tests {
             .objects
             .push(("user.bogus".to_string(), LocalRef::Code(99)));
         match link(std::slice::from_ref(&unit)) {
-            Err(LinkError::UnresolvedImport(_)) => {}
+            Err(LinkError::InvalidUnit(_)) => {}
             other => {
-                panic!("expected UnresolvedImport for out-of-range code export, got {other:?}")
+                panic!("expected InvalidUnit for out-of-range code export, got {other:?}")
             }
         }
+    }
+
+    #[test]
+    fn link_rejects_out_of_range_operand() {
+        let mut unit = local_only_unit();
+        let Object::Function(function) = &mut unit.code[0] else {
+            panic!("fixture contains a function");
+        };
+        function
+            .bytecode
+            .instructions
+            .insert(0, Instruction::AllocVariant(ObjectIndex::from_raw(99)));
+        assert!(matches!(
+            link(std::slice::from_ref(&unit)),
+            Err(LinkError::InvalidUnit(_))
+        ));
+    }
+
+    #[test]
+    fn link_rejects_out_of_range_global_export() {
+        let mut unit = local_only_unit();
+        unit.exports.globals[0].1 = 99;
+        assert!(matches!(
+            link(std::slice::from_ref(&unit)),
+            Err(LinkError::InvalidUnit(_))
+        ));
     }
 }

@@ -15,11 +15,8 @@
 //! folds units into a runnable `Program` by resolving imports and rebasing
 //! local operands through the existing `relink` operand walkers.
 //!
-//! This module is Stage 1 of the plan: it defines the format and derives borsh.
-//! Nothing in the real compile path produces or consumes a unit yet.
-
 use baml_base::Name;
-use baml_type::{RuntimeTy, TyTemplate, throw_facts::FunctionThrowFacts};
+use baml_type::{RuntimeTy, TyTemplate};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
@@ -116,33 +113,11 @@ pub struct ExportTable {
     pub globals: Vec<(String, u32)>,
 }
 
-/// A top-level `let` binding carried symbolically for `$init` synthesis
-/// (design §2b / §9 R2). Stage 1 only round-trips this; the linker's `$init`
-/// pass (Stage 2) consumes it.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub struct LetDef {
-    /// Fully-qualified name of the `let` (owns a global slot in the linked
-    /// image; same key space as `Program::let_global_indices`).
-    pub fq_name: String,
-    /// Package whose `$init` initializes this binding.
-    pub package: Name,
-    /// Fully-qualified names of the same-run `let`s this initializer reads. The
-    /// linker topo-sorts on these edges to order the `$init` body (design §9 R2).
-    pub depends_on: Vec<String>,
-    /// The compiled initializer helper (an `Object::Function`) that computes
-    /// this binding's value. Its internal index operands use the per-unit
-    /// convention of §2a; the linker appends it during `$init` synthesis and
-    /// wires a `Call` + `StoreGlobal` against the assigned slot. Minimal for
-    /// Stage 1 — refined in Stage 2.
-    pub init_helper: Object,
-}
-
 /// The symbolic (name-referencing, not `ObjectIndex`) twin of a `ProgramPackage`
 /// fragment contributed by one unit. The linker merges every unit's fragment
 /// into the image's `packages` map, resolving each fully-qualified name to an
 /// absolute `ObjectIndex` (design §3b step 5). `Vec` preserves the deterministic
-/// emit order the `IndexMap`s in `ProgramPackage` require. Stage 1 only
-/// round-trips this; Stage 2 does the real merge.
+/// emit order the `IndexMap`s in `ProgramPackage` require.
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackageFrag {
     /// Local class name to fully-qualified class name (resolved to `ObjectIndex`
@@ -195,8 +170,8 @@ pub struct ProgramMethodImplFrag {
 /// `code`) so the linker can interleave them pass-major across units to
 /// reproduce today's flat pool order (design §9 R3 — appending a unit as one
 /// block would reorder the pool and break byte-identity). Every index operand
-/// inside these objects uses the per-unit convention of §2a; Stage 1 exercises
-/// only local-only units (empty import tables).
+/// inside these objects uses the per-unit convention of §2a, which the linker
+/// resolves into program indices.
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct CompilationUnit {
     /// Project-root-relative source path (equals `Function::source_file`). Never
@@ -225,26 +200,20 @@ pub struct CompilationUnit {
     pub exports: ExportTable,
 
     // --- side-table fragments the whole-program passes consume at link ---
-    /// Top-level `let`s with their initializer helpers + dependency edges, for
-    /// `$init` synthesis.
-    pub lets: Vec<LetDef>,
     /// This unit's symbolic contribution to its package's structure.
     pub package_fragment: ProgramPackageFrag,
     /// Pass-5 template-string `{% macro %}` fragments defined in this file.
     pub template_macros: Vec<String>,
     /// Pass-8 compiled test cases defined in this file.
     pub test_cases: Vec<TestCase>,
-    /// Per-function throw facts, carried for the seeded-throws dirty-set path.
-    /// Not folded into `Program` — consumed by the cache/manifest layer.
-    pub throw_facts: Vec<FunctionThrowFacts>,
-    /// `borsh(FileInterfaceFragment)` for this file (Phase 2). Opaque bytes
+    /// `borsh(CallableThrowsFragment)` for this file. Opaque bytes
     /// because `bex_vm_types` sits below `baml_compiler2_tir`, which owns the
     /// typed fragment — the same decoupling as the stdlib-interface blob. Empty
     /// for builtins (their interface rides in the stdlib blob) and for any file
     /// whose fragment failed to serialize. Populated by `decompose_units`;
     /// consumed by the cache layer to project a `callable_throws` seed. Not
     /// folded into `Program`, carries no absolute paths (design §9 R7).
-    pub interface_fragment: Vec<u8>,
+    pub callable_throws_fragment: Vec<u8>,
 
     /// The whole-*group* `$init` / `$init_test` tail (design §9 R2), carried on
     /// one unit of the group that produces it (empty on every other unit). The
@@ -296,221 +265,12 @@ pub struct InitTail {
 /// every source file's relocatable [`CompilationUnit`], in the deterministic
 /// file-discovery order the [`link`](crate::link) step expects.
 ///
-/// Loading a project is `link(image.units) -> Program`. Stage 3 stores this
-/// (via `bex_cache`'s `store_raw`/`load_raw` seam) so an incremental compile
-/// can reuse the previous compile's clean units verbatim instead of re-lowering
-/// them; Stage 5 splits it into per-unit content-addressed blobs.
+/// Loading a project is `link(image.units) -> Program`. The cache stores this so
+/// an incremental compile can reuse the previous compile's clean units verbatim
+/// instead of re-lowering them.
 #[derive(Clone, Debug, Default, BorshSerialize, BorshDeserialize)]
 pub struct LinkableImage {
     /// Every unit of the project, in file-discovery order (builtins first, then
     /// user files) — the order [`link`](crate::link) assumes.
     pub units: Vec<CompilationUnit>,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        GlobalIndex, Instruction, ObjectIndex,
-        bytecode::Bytecode,
-        types::{Class, Function, FunctionCaptureProps, FunctionKind, FunctionOrigin},
-    };
-
-    /// Build a minimal bytecode `Object::Function` with the given instructions.
-    fn func(name: &str, instructions: Vec<Instruction>) -> Object {
-        let bytecode = Bytecode {
-            instructions,
-            ..Bytecode::default()
-        };
-        Object::Function(Box::new(Function {
-            name: name.to_string(),
-            source_file: "user.baml".to_string(),
-            arity: 0,
-            real_local_count: 0,
-            bytecode,
-            kind: FunctionKind::Bytecode,
-            local_names: Vec::new(),
-            debug_locals: Vec::new(),
-            span: baml_base::Span::fake(),
-            return_type: baml_type::RuntimeTy::unknown(),
-            param_names: Vec::new(),
-            param_types: Vec::new(),
-            param_has_default: Vec::new(),
-            display_type_params: Vec::new(),
-            display_param_types: Vec::new(),
-            display_return_type: String::new(),
-            throws_type: None,
-            origin: FunctionOrigin::UserDefined,
-            body_meta: None,
-            capture: FunctionCaptureProps::disabled(),
-            function_id: 0,
-        }))
-    }
-
-    /// Build a minimal non-generic `Object::Class`.
-    fn class(name: &str, type_tag: i64) -> Object {
-        Object::Class(Box::new(Class {
-            name: baml_type::TypeName::local(baml_base::Name::new(name)),
-            fields: Vec::new(),
-            description: None,
-            alias: None,
-            type_tag,
-            ty_attr: baml_type::TyAttr::default(),
-            has_cleanup: false,
-            generic_param_count: 0,
-        }))
-    }
-
-    fn sample_unit() -> CompilationUnit {
-        use Instruction as I;
-        CompilationUnit {
-            source_file: "user.baml".to_string(),
-            package: baml_base::Name::new("user"),
-            classes: vec![class("MyClass", 100)],
-            enums: Vec::new(),
-            interfaces: Vec::new(),
-            code: vec![
-                func(
-                    "user.foo",
-                    vec![
-                        I::AllocInstance {
-                            class_obj: ObjectIndex::from_raw(0),
-                            ntypeargs: 0,
-                        },
-                        I::Call {
-                            callee: GlobalIndex::from_raw(1),
-                            ntypeargs: 0,
-                        },
-                        I::Return,
-                    ],
-                ),
-                func(
-                    "user.bar",
-                    vec![I::LoadGlobal(GlobalIndex::from_raw(0)), I::Return],
-                ),
-            ],
-            object_imports: Vec::new(),
-            global_imports: Vec::new(),
-            exports: ExportTable {
-                objects: vec![
-                    ("user.MyClass".to_string(), LocalRef::Class(0)),
-                    ("user.foo".to_string(), LocalRef::Code(0)),
-                    ("user.bar".to_string(), LocalRef::Code(1)),
-                ],
-                globals: vec![("user.foo".to_string(), 0), ("user.bar".to_string(), 1)],
-            },
-            lets: Vec::new(),
-            package_fragment: ProgramPackageFrag::default(),
-            template_macros: Vec::new(),
-            test_cases: Vec::new(),
-            throw_facts: Vec::new(),
-            interface_fragment: Vec::new(),
-            init_tail: None,
-        }
-    }
-
-    /// The Stage 1 per-unit gate: a unit round-trips through borsh unchanged.
-    ///
-    /// `Object` has no `PartialEq`, so structural equality is proved on the
-    /// borsh byte vector (the same oracle the design uses — §5).
-    #[test]
-    fn compilation_unit_borsh_round_trip() {
-        let unit = sample_unit();
-        let bytes = borsh::to_vec(&unit).expect("serialize unit");
-        let round_tripped: CompilationUnit = borsh::from_slice(&bytes).expect("deserialize unit");
-        let bytes_again = borsh::to_vec(&round_tripped).expect("re-serialize unit");
-        assert_eq!(bytes, bytes_again, "unit must round-trip through borsh");
-    }
-
-    /// The symbolic side tables round-trip independently of the object buckets.
-    #[test]
-    fn symbol_and_export_tables_round_trip() {
-        let symbol = Symbol {
-            kind: SymbolKind::GenericFn,
-            fq_name: "user.foo".to_string(),
-            generic: Some(GenericFnKey {
-                base_fn: "user.foo".to_string(),
-                type_args: vec![baml_type::RuntimeTy::unknown()],
-            }),
-        };
-        let bytes = borsh::to_vec(&symbol).expect("serialize symbol");
-        let round_tripped: Symbol = borsh::from_slice(&bytes).expect("deserialize symbol");
-        assert_eq!(symbol, round_tripped);
-
-        let exports = ExportTable {
-            objects: vec![("user.C".to_string(), LocalRef::Class(3))],
-            globals: vec![("user.f".to_string(), 7)],
-        };
-        let bytes = borsh::to_vec(&exports).expect("serialize exports");
-        let round_tripped: ExportTable = borsh::from_slice(&bytes).expect("deserialize exports");
-        assert_eq!(exports, round_tripped);
-    }
-
-    /// Phase 2b: the opaque `interface_fragment` blob survives a borsh round-trip
-    /// on the unit (the field `bex_vm_types` never interprets).
-    #[test]
-    fn compilation_unit_carries_interface_fragment_through_borsh() {
-        let mut unit = sample_unit();
-        unit.interface_fragment = vec![1, 2, 3, 4, 5];
-        let bytes = borsh::to_vec(&unit).expect("serialize unit");
-        let round_tripped: CompilationUnit = borsh::from_slice(&bytes).expect("deserialize unit");
-        assert_eq!(
-            round_tripped.interface_fragment, unit.interface_fragment,
-            "the opaque interface-fragment blob must survive a borsh round-trip",
-        );
-    }
-
-    /// Phase 2b version migration: a unit serialized in the pre-v6 layout (no
-    /// `interface_fragment` between `throw_facts` and `init_tail`) must fail to
-    /// decode into the current `CompilationUnit`. Borsh is positional, so the
-    /// decoder reads the old trailing `init_tail` bytes as the new
-    /// `interface_fragment` length and runs off the end — forcing `plan_reuse`
-    /// to full-compile rather than mis-project a seed. (The `FORMAT_VERSION` 5→6
-    /// bump also re-keys the image, an independent guard.)
-    #[test]
-    fn pre_v6_unit_payload_is_a_miss() {
-        #[derive(borsh::BorshSerialize)]
-        struct LegacyUnit {
-            source_file: String,
-            package: Name,
-            classes: Vec<Object>,
-            enums: Vec<Object>,
-            interfaces: Vec<Object>,
-            code: Vec<Object>,
-            object_imports: Vec<Symbol>,
-            global_imports: Vec<Symbol>,
-            exports: ExportTable,
-            lets: Vec<LetDef>,
-            package_fragment: ProgramPackageFrag,
-            template_macros: Vec<String>,
-            test_cases: Vec<TestCase>,
-            throw_facts: Vec<FunctionThrowFacts>,
-            init_tail: Option<InitTail>,
-        }
-        let legacy = LegacyUnit {
-            source_file: "a.baml".to_string(),
-            package: Name::new("user"),
-            classes: Vec::new(),
-            enums: Vec::new(),
-            interfaces: Vec::new(),
-            code: Vec::new(),
-            object_imports: Vec::new(),
-            global_imports: Vec::new(),
-            exports: ExportTable {
-                objects: Vec::new(),
-                globals: Vec::new(),
-            },
-            lets: Vec::new(),
-            package_fragment: ProgramPackageFrag::default(),
-            template_macros: Vec::new(),
-            test_cases: Vec::new(),
-            throw_facts: Vec::new(),
-            init_tail: None,
-        };
-        let bytes = borsh::to_vec(&legacy).expect("serialize legacy unit");
-        assert!(
-            borsh::from_slice::<CompilationUnit>(&bytes).is_err(),
-            "a pre-v6 unit layout must fail to decode into the v6 CompilationUnit",
-        );
-    }
 }

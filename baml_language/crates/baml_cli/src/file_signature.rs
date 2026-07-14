@@ -22,12 +22,8 @@ use baml_db::{SourceFile, baml_compiler_parser::syntax_tree, baml_compiler_synta
 use baml_project::ProjectDatabase;
 use sha2::{Digest, Sha256};
 
-/// Hash of `file`'s signature-relevant text (body regions excluded).
-pub(crate) fn file_signature_hash(db: &ProjectDatabase, file: SourceFile) -> [u8; 32] {
-    let tree = syntax_tree(db, file);
-    let text = file.text(db);
-
-    let mut body_ranges: Vec<(usize, usize)> = tree
+fn function_body_ranges(tree: &baml_db::baml_compiler_syntax::SyntaxNode) -> Vec<(usize, usize)> {
+    let mut ranges: Vec<(usize, usize)> = tree
         .descendants()
         .filter(|node| {
             matches!(
@@ -42,16 +38,26 @@ pub(crate) fn file_signature_hash(db: &ProjectDatabase, file: SourceFile) -> [u8
             (range.start().into(), range.end().into())
         })
         .collect();
-    body_ranges.sort_unstable();
+    ranges.sort_unstable();
 
-    // Merge nested/overlapping ranges (lambda bodies inside bodies).
-    let mut merged: Vec<(usize, usize)> = Vec::with_capacity(body_ranges.len());
-    for (start, end) in body_ranges {
+    let mut merged = Vec::with_capacity(ranges.len());
+    for (start, end) in ranges {
         match merged.last_mut() {
-            Some((_, last_end)) if start <= *last_end => *last_end = (*last_end).max(end),
+            Some((_, previous_end)) if start <= *previous_end => {
+                *previous_end = (*previous_end).max(end);
+            }
             _ => merged.push((start, end)),
         }
     }
+    merged
+}
+
+/// Hash of `file`'s signature-relevant text (body regions excluded).
+pub(crate) fn file_signature_hash(db: &ProjectDatabase, file: SourceFile) -> [u8; 32] {
+    let tree = syntax_tree(db, file);
+    let text = file.text(db);
+
+    let body_ranges = function_body_ranges(&tree);
 
     // Hash the gaps between bodies, length-framed so segment boundaries are
     // unambiguous. Body content AND length are both excluded — a body may
@@ -59,7 +65,7 @@ pub(crate) fn file_signature_hash(db: &ProjectDatabase, file: SourceFile) -> [u8
     let mut hasher = Sha256::new();
     let bytes = text.as_bytes();
     let mut cursor = 0usize;
-    for (start, end) in merged {
+    for (start, end) in body_ranges {
         let gap = &bytes[cursor..start];
         hasher.update((gap.len() as u64).to_le_bytes());
         hasher.update(gap);
@@ -125,41 +131,37 @@ pub(crate) fn file_layout_hash(db: &ProjectDatabase, file: SourceFile) -> [u8; 3
     // Function/method body ranges (same family as the signature hash), blanked
     // wherever they fall inside a declaration span (an `implements`-block or
     // interface default-method body): a body never moves a layout.
-    let mut body_ranges: Vec<(usize, usize)> = tree
-        .descendants()
-        .filter(|node| {
-            matches!(
-                node.kind(),
-                SyntaxKind::FUNCTION_BODY
-                    | SyntaxKind::LLM_FUNCTION_BODY
-                    | SyntaxKind::EXPR_FUNCTION_BODY
-            )
-        })
-        .map(|node| {
-            let range = node.text_range();
-            (range.start().into(), range.end().into())
-        })
-        .collect();
-    body_ranges.sort_unstable();
+    let body_ranges = function_body_ranges(&tree);
 
     // Hash each declaration span's text with any contained body sub-spans cut
     // out, length-framed so segment and declaration boundaries are unambiguous.
     // No declarations → an empty hasher → a fixed constant for every typeless
     // file.
     let mut hasher = Sha256::new();
+    let mut body_idx = 0usize;
     for (ds, de) in decl_ranges {
-        hasher.update(b"D");
-        hasher.update(((de - ds) as u64).to_le_bytes());
-        let mut cursor = ds;
-        for &(bs, be) in &body_ranges {
-            // Only bodies fully inside this declaration; they can't straddle a
-            // top-level declaration boundary.
-            if bs < ds || be > de {
-                continue;
+        while body_idx < body_ranges.len() && body_ranges[body_idx].1 <= ds {
+            body_idx += 1;
+        }
+        let first_body = body_idx;
+        let mut end_body = first_body;
+        let mut excluded_len = 0usize;
+        while let Some(&(bs, be)) = body_ranges.get(end_body) {
+            if bs >= de {
+                break;
             }
-            // Body ranges are currently disjoint siblings (lambdas are
-            // BLOCK_EXPR, no nested fn decls), so `bs < cursor` can't happen
-            // today; guard future-proofs this if that ever changes.
+            if bs >= ds && be <= de {
+                excluded_len += be - bs;
+            }
+            end_body += 1;
+        }
+
+        hasher.update(b"D");
+        hasher.update(((de - ds - excluded_len) as u64).to_le_bytes());
+        let mut cursor = ds;
+        for &(bs, be) in &body_ranges[first_body..end_body] {
+            // Ranges are merged, so this only guards a future parser construct
+            // whose body crosses a top-level declaration boundary.
             if bs < cursor {
                 continue;
             }
@@ -171,6 +173,7 @@ pub(crate) fn file_layout_hash(db: &ProjectDatabase, file: SourceFile) -> [u8; 3
         let tail = &bytes[cursor..de];
         hasher.update((tail.len() as u64).to_le_bytes());
         hasher.update(tail);
+        body_idx = end_body;
     }
     hasher.finalize().into()
 }
@@ -343,6 +346,16 @@ mod tests {
         assert_eq!(
             base, body_edited,
             "an implements-block method-body edit must not move the layout"
+        );
+
+        let different_length = layout_of(
+            "interface Speaker {\n  function speak(self) -> string\n}\n\
+             class Dog {\n  name string\n  implements Speaker {\n    \
+             function speak(self) -> string {\n      \"a much longer bark\"\n    }\n  }\n}\n",
+        );
+        assert_eq!(
+            base, different_length,
+            "method-body length must not move the layout"
         );
     }
 }

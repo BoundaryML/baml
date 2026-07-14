@@ -11,8 +11,7 @@
 //! two Phase-1 cases: a warning in a clean file must survive the incremental
 //! compile, and a new error in a dirty file must still gate.
 //!
-//! These round-trip through the on-disk cache, so (like the `plan_reuse`
-//! integration tests) they run only on Linux.
+//! These round-trip through the on-disk cache on every supported platform.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -27,7 +26,7 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 
 use crate::{
-    bytecode_cache::{CacheContext, compile_program},
+    bytecode_cache::{CacheContext, compile_program, prepare_reuse_plan},
     project_load,
 };
 
@@ -83,10 +82,9 @@ struct OracleResult {
 
 /// Compile+store `initial`, edit to `edited`, and return the rendered served
 /// (incremental) vs honest (fresh full) diagnostics plus the dirty file set.
-/// `None` when the on-disk cache is disabled or off-Linux (the mechanism is
-/// covered platform-independently by the `plan_reuse` unit tests).
+/// `None` when the on-disk cache is disabled.
 fn run_scenario(initial: &[(&str, &str)], edited: &[(&str, &str)]) -> Option<OracleResult> {
-    if cache_disabled() || !cfg!(target_os = "linux") {
+    if cache_disabled() {
         return None;
     }
     let root = unique_root();
@@ -107,10 +105,8 @@ fn run_scenario(initial: &[(&str, &str)], edited: &[(&str, &str)]) -> Option<Ora
     let r2 = resolved(&root, edited);
     let mut db2 = project_load::build_db_from_sources(&r2, |_| {});
     let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
-    let plan = ctx2.plan_reuse(&db2);
-    if let Some(p) = &plan {
-        db2.set_seeded_throw_facts(p.seeded_throw_facts.clone());
-    }
+    let pending_plan = ctx2.plan_reuse(&db2);
+    let plan = prepare_reuse_plan(&mut db2, pending_plan);
     let served = ctx2
         .collect_diagnostics_incremental(&db2, plan.as_ref())
         .merged;
@@ -144,7 +140,7 @@ fn run_scenario(initial: &[(&str, &str)], edited: &[(&str, &str)]) -> Option<Ora
 }
 
 /// Assert served == honest for a scenario; returns the dirty set for extra
-/// assertions. A skipped run (disabled cache / non-Linux) returns `None`.
+/// assertions. A skipped run (disabled cache) returns `None`.
 fn assert_served_equals_honest(
     initial: &[(&str, &str)],
     edited: &[(&str, &str)],
@@ -455,7 +451,7 @@ const VERIFY_WARN: &str = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n
 
 #[test]
 fn verify_diagnostics_passes_for_faithful_cache() {
-    if cache_disabled() || !cfg!(target_os = "linux") {
+    if cache_disabled() {
         return;
     }
     with_stored_manifest(
@@ -471,7 +467,7 @@ fn verify_diagnostics_passes_for_faithful_cache() {
 
 #[test]
 fn verify_diagnostics_bails_on_a_stale_cache() {
-    if cache_disabled() || !cfg!(target_os = "linux") {
+    if cache_disabled() {
         return;
     }
     // The stored file's SOURCE is a warning, but its content_hash still matches

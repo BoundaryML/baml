@@ -98,35 +98,30 @@ impl TestArgs {
             cache.as_ref().and_then(CacheContext::load)
         };
 
-        let (engine, legacy) = if let Some(program) = cached_program {
+        let cached_engine = cached_program.and_then(|program| {
             // Bytecode-cache hit: the Program carries everything the test run
             // needs — compiled test cases for the legacy runner, testset code
             // for the in-VM registry — so the database (typecheck, HIR
             // discovery, emit) is skipped entirely.
             let legacy = legacy_tests_from_program(&program);
-            let engine = Arc::new(
-                BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
-                    .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,
-            );
-            (engine, legacy)
+            match BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new()) {
+                Ok(engine) => Some((Arc::new(engine), legacy)),
+                Err(error) => {
+                    crate::bytecode_cache::cache_debug(format_args!(
+                        "cached program rejected by VM; recompiling: {error:?}"
+                    ));
+                    None
+                }
+            }
+        });
+
+        let (engine, legacy) = if let Some(hit) = cached_engine {
+            hit
         } else {
             let mut db = build_db_from_sources(&resolved, |_| {});
             let project = db
                 .get_project()
                 .ok_or_else(|| anyhow!("No project context"))?;
-
-            // Per-file reuse: decide from the manifest which files' compiled
-            // bytecode can be spliced from the previous program.
-            let reuse_plan = cache.as_ref().and_then(|ctx| ctx.plan_reuse(&db));
-            if let Some(plan) = &reuse_plan {
-                // Clean files' throw facts come from the manifest, so throw
-                // inference never re-walks their bodies.
-                db.set_seeded_throw_facts(plan.seeded_throw_facts.clone());
-                // Clean functions' `callable_throws` come from their cached
-                // interface fragments (Phase 2), so a dirty file's inference never
-                // pulls a clean callee's body. Before the first typecheck query.
-                db.set_seeded_callable_throws(plan.seeded_callable_throws.clone());
-            }
 
             // Seed the stdlib typed interface (B-694) before the first typecheck
             // query, so a fresh process skips re-deriving stdlib types. Gated off
@@ -137,6 +132,11 @@ impl TestArgs {
                     .and_then(|ctx| ctx.load_stdlib_interface())
                     .map(|by_package| db.set_seeded_stdlib_interface(by_package))
                     .is_some();
+
+            // Per-file reuse: decide from the manifest which files' compiled
+            // bytecode can be spliced from the previous program.
+            let reuse_plan = cache.as_ref().and_then(|ctx| ctx.plan_reuse(&db));
+            let reuse_plan = crate::bytecode_cache::prepare_reuse_plan(&mut db, reuse_plan);
 
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
@@ -186,7 +186,7 @@ impl TestArgs {
             let compile_options = baml_compiler2_emit::CompileOptions {
                 emit_test_cases: true,
             };
-            let bytecode = crate::bytecode_cache::compile_program(
+            let compiled = crate::bytecode_cache::compile_program_artifacts(
                 &db,
                 &compile_options,
                 cache.as_ref(),
@@ -194,15 +194,20 @@ impl TestArgs {
             )
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
             if let Some(ctx) = &cache {
-                ctx.verify_against(&bytecode)?;
+                ctx.verify_against(&compiled.program)?;
                 ctx.verify_stdlib_interface(&db)?;
                 ctx.verify_diagnostics(&db)?;
-                ctx.verify_interface_fragments(&db)?;
+                ctx.verify_callable_throws_fragments(&db)?;
                 let fresh = fresh_diagnostics
                     .as_ref()
                     .expect("a cache is present, so fresh diagnostics were computed");
-                if let Err(e) = ctx.store_with_manifest(&db, &bytecode, fresh, reuse_plan.as_ref())
-                {
+                if let Err(e) = ctx.store_artifacts_with_manifest(
+                    &db,
+                    &compiled.program,
+                    compiled.image.as_ref(),
+                    fresh,
+                    reuse_plan.as_ref(),
+                ) {
                     crate::bytecode_cache::cache_debug(format_args!("store failed: {e}"));
                 }
                 // Materialize the stdlib interface blob on a miss (idempotent on
@@ -224,6 +229,7 @@ impl TestArgs {
                 baml_db::baml_compiler2_tir::inference::scope_inferences()
             ));
 
+            let bytecode = compiled.program;
             let engine = Arc::new(
                 BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), Vec::new())
                     .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?,

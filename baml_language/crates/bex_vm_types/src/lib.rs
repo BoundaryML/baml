@@ -43,7 +43,7 @@ pub use types::{
     sys_op_for_path, type_tags,
 };
 pub use unit::{
-    CompilationUnit, ExportTable, GenericFnKey, InitTail, LetDef, LinkableImage, LocalRef,
+    CompilationUnit, ExportTable, GenericFnKey, InitTail, LinkableImage, LocalRef,
     ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag, Symbol, SymbolKind,
 };
 

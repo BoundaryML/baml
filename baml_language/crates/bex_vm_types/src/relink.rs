@@ -35,11 +35,20 @@ pub enum IndexOperand<'a> {
     Object(&'a mut ObjectIndex),
 }
 
-/// Visit every cross-function index operand in `function`'s bytecode.
-pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(IndexOperand<'_>)) {
-    use Instruction as I;
-    for instruction in &mut function.bytecode.instructions {
-        match instruction {
+/// A shared reference to one cross-function index operand.
+pub enum IndexOperandRef<'a> {
+    Global(&'a GlobalIndex),
+    Object(&'a ObjectIndex),
+}
+
+// Keep the exhaustive opcode classification in one place for the mutable
+// relinker and the read-only dependency collector.
+macro_rules! visit_instruction_index_operands {
+    ($instructions:expr, $visit:ident, $operand:ident) => {{
+        use Instruction as I;
+        let mut bakes_type_layout = false;
+        for instruction in $instructions {
+            match instruction {
             // ── global-slot operands ─────────────────────────────────────
             I::LoadGlobal(slot)
             | I::StoreGlobal(slot)
@@ -49,23 +58,36 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
             | I::Call { callee: slot, .. }
             | I::CallWithRuntimeId { callee: slot, .. }
             | I::MakeGenericFunction { function: slot, .. } => {
-                visit(IndexOperand::Global(slot));
+                $visit($operand::Global(slot));
             }
             // ── object-pool operands ─────────────────────────────────────
             I::AllocInstance { class_obj: obj, .. }
             | I::AllocVariant(obj)
             | I::MakeClosure { obj_idx: obj, .. } => {
-                visit(IndexOperand::Object(obj));
+                $visit($operand::Object(obj));
             }
+            // These operands bake field/discriminant/type/vtable layout without
+            // retaining the referenced type's identity. The read-only caller
+            // uses this bit to add its conservative layout dependency.
+            I::LoadField(..)
+            | I::StoreField(..)
+            | I::InitField(..)
+            | I::InitSpread(..)
+            | I::InitInstance(..)
+            | I::VirtualCall { .. }
+            | I::VirtualCallWithRuntimeId { .. }
+            | I::MakeVirtualBoundMethod { .. }
+            | I::JumpTable(..)
+            | I::Discriminant
+            | I::TypeTag
+            | I::IsType(..)
+            | I::LoadType(..)
+            | I::DenseTag(..) => bakes_type_layout = true,
             // ── no cross-function references ─────────────────────────────
             I::LoadConst(..)
             | I::LoadVar(..)
             | I::StoreVar(..)
             | I::StoreVarLoadVar(..)
-            | I::LoadField(..)
-            | I::StoreField(..)
-            | I::InitField(..)
-            | I::InitSpread(..)
             | I::Pop(..)
             | I::Copy(..)
             | I::Jump(..)
@@ -103,24 +125,14 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
             | I::LoadMapElement
             | I::StoreArrayElement
             | I::StoreMapElement
-            | I::InitInstance(..)
             | I::Spawn
             | I::Await
             | I::AwaitAny
             | I::CallIndirect
             | I::CallIndirectWithRuntimeId
-            | I::VirtualCall { .. }
-            | I::VirtualCallWithRuntimeId { .. }
-            | I::MakeVirtualBoundMethod { .. }
             | I::Throw
             | I::Rethrow
             | I::Return
-            | I::JumpTable(..)
-            | I::Discriminant
-            | I::TypeTag
-            | I::IsType(..)
-            | I::LoadType(..)
-            | I::DenseTag(..)
             | I::ThrowIfPanic
             | I::Unreachable
             | I::MakeGenericFunctionFromValue { .. }
@@ -133,8 +145,16 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
             | I::SendEvent
             | I::LoadVar2(..)
             | I::StoreVar2(..) => {}
+            }
         }
-    }
+        bakes_type_layout
+    }};
+}
+
+/// Visit every cross-function index operand in `function`'s bytecode.
+pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(IndexOperand<'_>)) {
+    let _ =
+        visit_instruction_index_operands!(&mut function.bytecode.instructions, visit, IndexOperand);
     for constant in &mut function.bytecode.constants {
         match constant {
             ConstValue::Object(obj) | ConstValue::ClassWithTypeArgs { class_obj: obj, .. } => {
@@ -146,6 +166,28 @@ pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(Index
     for plan in &mut function.bytecode.class_init_plans {
         visit(IndexOperand::Object(&mut plan.class_obj));
     }
+}
+
+/// Read every cross-function index operand without cloning the function.
+/// Returns whether an instruction also bakes unnamed type-layout information.
+pub fn visit_index_operands_ref(
+    function: &Function,
+    mut visit: impl FnMut(IndexOperandRef<'_>),
+) -> bool {
+    let bakes_type_layout =
+        visit_instruction_index_operands!(&function.bytecode.instructions, visit, IndexOperandRef);
+    for constant in &function.bytecode.constants {
+        match constant {
+            ConstValue::Object(obj) | ConstValue::ClassWithTypeArgs { class_obj: obj, .. } => {
+                visit(IndexOperandRef::Object(obj));
+            }
+            _ => {}
+        }
+    }
+    for plan in &function.bytecode.class_init_plans {
+        visit(IndexOperandRef::Object(&plan.class_obj));
+    }
+    bakes_type_layout
 }
 
 /// Visit every cross-function index operand in a pool `object`.

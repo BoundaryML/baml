@@ -28,10 +28,8 @@ const POSTHOG_HOST: &str = "https://us.i.posthog.com";
 const EVENT_NAME: &str = "cli_invocation";
 
 /// Max time we wait, after the command finishes, for the in-flight telemetry
-/// request to complete before letting the process exit. Kept small: this blocks
-/// the foreground on *every* CLI command, so a generous window taxes the common
-/// (fast) case just to occasionally salvage an event on a slow network.
-const GRACE: Duration = Duration::from_millis(50);
+/// request to complete before letting the process exit.
+const GRACE: Duration = Duration::from_secs(1);
 
 /// Per-request network timeout for the telemetry POST.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);

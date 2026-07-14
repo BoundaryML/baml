@@ -1010,18 +1010,14 @@ pub fn generate_project_bytecode_with_stdlib(
     generate_impl(db, options, opt, Some(base), false, None)
 }
 
-/// B-693 Stage 6: incremental compile that lowers **only the dirty files** into
-/// symbolic units, reuses clean files' units verbatim from the cached image, and
-/// links.
+/// Incremental compile that lowers function bodies only for dirty files, reuses
+/// clean files' symbolic units from the cached image, and links.
 ///
-/// This is direct per-file emit: clean files are neither lowered nor cloned. The
-/// user group is compiled in skip-clean mode so Pass 4 skips every
-/// clean file entirely (`take_lowered_files` afterward reports only the dirty
-/// paths); the resulting partial program is decomposed into fresh units, of which
-/// only the dirty files' units are kept. Each clean file's whole unit — classes,
-/// enums, interfaces, code, import/export tables, `lets`, throw facts — comes
-/// verbatim from `prev_units`; only the whole-program products are recomputed
-/// (package fragments freshly decomposed; the `$init`/`$init_test` tail
+/// Declaration/layout passes still walk the project because dirty bytecode must
+/// use the same whole-program indices as a full compile. Pass 4 skips every clean
+/// file (`take_lowered_files` reports only dirty paths); decomposition's temporary
+/// clean units are discarded in favor of `prev_units`. Whole-program products are
+/// recomputed (package fragments freshly decomposed; the `$init`/`$init_test` tail
 /// **freshly synthesized** from every file's `let`s / `test` blocks — design §9
 /// R2 — whose symbolic imports the linker re-resolves against the shifted
 /// layout).
@@ -1048,28 +1044,33 @@ pub fn generate_project_bytecode_with_reuse_units(
     prev_units: &[CompilationUnit],
     clean_files: &HashSet<String>,
 ) -> Result<Program, LoweringError> {
-    // Reconstruct the previous Program only to run the throws gate against its
-    // functions' `throws_type`. `link(prev_units)` is byte-identical to the
-    // previous full compile.
-    let prev_program = bex_vm_types::link::link(prev_units)
-        .map_err(|e| LoweringError::Internal(format!("relink previous units: {e}")))?;
+    generate_project_bytecode_with_reuse_artifacts(db, options, opt, base, prev_units, clean_files)
+        .map(|(program, _)| program)
+}
 
-    // The throws gate (design §4): a caller-clean file is only reused if its
-    // inferred transitive throws still match `prev`. `throws` is body-inferred
-    // and invisible to the signature hash, so a body edit elsewhere can change a
-    // clean file's transitive throws; such a file must be re-emitted, not reused.
-    let all_files = compiler2_all_files(db);
-    let alias_caches = build_alias_caches(db, &all_files);
-    let mut effective_clean: HashSet<String> = HashSet::new();
-    for file in &all_files {
-        let rel = relative_source_path(db, *file);
-        if clean_files.contains(&rel) {
-            let pkg = file_package(db, *file);
-            if spliced_throws_match(db, *file, &prev_program, &alias_caches[&pkg.package]) {
-                effective_clean.insert(rel);
-            }
-        }
-    }
+/// Reuse compile variant that also returns the already-assembled symbolic
+/// units. Cache-aware callers can persist these directly instead of decomposing
+/// the linked program a second time.
+pub fn generate_project_bytecode_with_reuse_artifacts(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
+    let mismatches = reuse_throws_mismatches(db, prev_units, clean_files);
+    let effective_clean;
+    let clean_files = if mismatches.is_empty() {
+        clean_files
+    } else {
+        effective_clean = clean_files
+            .iter()
+            .filter(|path| !mismatches.contains_key(path.as_str()))
+            .cloned()
+            .collect();
+        &effective_clean
+    };
 
     // Direct per-file emit: lower ONLY the dirty files (clean files are skipped in
     // Pass 4), producing a partial program whose dirty content decomposes into
@@ -1077,7 +1078,7 @@ pub fn generate_project_bytecode_with_reuse_units(
     // `$init_test` tail (design §9 R2): it is rebuilt from every file's `let`s /
     // `test` blocks (clean `let` initializers re-lowered off salsa-cached MIR),
     // so a dirty tail-producing file no longer aborts reuse.
-    let partial = generate_impl(db, options, opt, Some(base), false, Some(&effective_clean))?;
+    let partial = generate_impl(db, options, opt, Some(base), false, Some(clean_files))?;
 
     let mut fresh_units = decompose_program_into_units(db, options, &partial)?;
 
@@ -1086,7 +1087,7 @@ pub fn generate_project_bytecode_with_reuse_units(
     // (clean + dirty), not the previous compile's, so a changed dirty tail is
     // captured. Its object/global imports are names, so the linker re-resolves
     // them against this compile's shifted layout.
-    let fresh_tail = fresh_units.iter().find_map(|u| u.init_tail.clone());
+    let fresh_tail = fresh_units.iter_mut().find_map(|u| u.init_tail.take());
 
     // R1 tail edge (design §9): a dirty top-level `let` initializer can intern a
     // generic-function VALUE into the freshly-synthesized tail. The linker dedups
@@ -1094,9 +1095,9 @@ pub fn generate_project_bytecode_with_reuse_units(
     // a *clean* file's code-owned copy is not covered — it would place both and
     // break byte-identity. This is rare (a generic value as a top-level `let`);
     // detect it precisely and fall back to a full compile for that case only.
-    if !effective_clean.is_empty()
+    if !clean_files.is_empty()
         && let Some(tail) = &fresh_tail
-        && tail_generic_dupes_clean(tail, prev_units, &effective_clean)
+        && tail_generic_dupes_clean(tail, prev_units, clean_files)
     {
         return Err(LoweringError::ReuseUnsupported(
             "a dirty top-level `let` initializer interns a generic-function value \
@@ -1115,7 +1116,7 @@ pub fn generate_project_bytecode_with_reuse_units(
         .collect();
     let mut assembled: Vec<CompilationUnit> = Vec::with_capacity(fresh_units.len());
     for fresh in &mut fresh_units {
-        let mut unit = if effective_clean.contains(&fresh.source_file) {
+        let mut unit = if clean_files.contains(&fresh.source_file) {
             let prev = prev_by_source
                 .get(fresh.source_file.as_str())
                 .ok_or_else(|| {
@@ -1148,8 +1149,44 @@ pub fn generate_project_bytecode_with_reuse_units(
         carrier.init_tail = Some(tail);
     }
 
-    bex_vm_types::link::link(&assembled)
-        .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))
+    let program = bex_vm_types::link::link(&assembled)
+        .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
+    Ok((program, assembled))
+}
+
+/// Find clean files whose inferred-throws invariant no longer matches the
+/// previous image. Callers demote these files before serving diagnostics or
+/// splicing units. Previous metadata is read directly from the units, avoiding
+/// a full link solely for this comparison.
+pub fn reuse_throws_mismatches(
+    db: &dyn baml_compiler2_mir::Db,
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+) -> HashMap<String, String> {
+    let previous: HashMap<&str, &Option<baml_type::RuntimeTy>> = prev_units
+        .iter()
+        .flat_map(|unit| &unit.code)
+        .filter_map(|object| match object {
+            Object::Function(function) => Some((function.name.as_str(), &function.throws_type)),
+            _ => None,
+        })
+        .collect();
+    let all_files = compiler2_all_files(db);
+    let alias_caches = build_alias_caches(db, &all_files);
+    let mut mismatches = HashMap::new();
+
+    for file in all_files {
+        let rel = relative_source_path(db, file);
+        if !clean_files.contains(&rel) {
+            continue;
+        }
+        let pkg = file_package(db, file);
+        if let Err(detail) = spliced_throws_match(db, file, &previous, &alias_caches[&pkg.package])
+        {
+            mismatches.insert(rel, detail);
+        }
+    }
+    mismatches
 }
 
 /// B-693 Stage 2: emit every source file as a relocatable [`CompilationUnit`].
@@ -1475,6 +1512,7 @@ fn decompose_program_into_units(
             }
         }
     }
+    let mut local_let_count = vec![0u32; n_files];
     for (fi, file) in all_files.iter().enumerate() {
         let item_tree = file_item_tree(db, *file);
         let mut let_ord = 0u32;
@@ -1486,6 +1524,7 @@ fn decompose_program_into_units(
                 let_ord += 1;
             }
         }
+        local_let_count[fi] = let_ord;
     }
 
     // ---- Rewrite code operands to the symbolic convention + build imports ---
@@ -1497,8 +1536,7 @@ fn decompose_program_into_units(
         let i = unit.interfaces.len();
         // The unit's local global space is [functions 0..F_u][lets F_u..]; its
         // size is where import globals start (§2a).
-        let n_local_globals =
-            func_next[u] as usize + let_name_to_file.values().filter(|&&f| f == u).count();
+        let n_local_globals = (func_next[u] + local_let_count[u]) as usize;
         // Dedup maps for imports (fq name -> import index).
         let mut obj_import_idx: HashMap<String, usize> = HashMap::new();
         let mut glob_import_idx: HashMap<String, usize> = HashMap::new();
@@ -1713,9 +1751,10 @@ fn decompose_program_into_units(
         if units[fi].source_file.is_empty() || units[fi].source_file.starts_with("<builtin>/") {
             continue;
         }
-        let fragment = baml_compiler2_tir::package_interface::file_interface_fragment(db, *file);
+        let fragment =
+            baml_compiler2_tir::package_interface::file_callable_throws_fragment(db, *file);
         if let Ok(bytes) = borsh::to_vec(fragment) {
-            units[fi].interface_fragment = bytes;
+            units[fi].callable_throws_fragment = bytes;
         }
     }
 
@@ -2401,8 +2440,8 @@ impl EmitTables {
     /// Everything the user group needs to reference builtin items is
     /// recoverable from the artifact: name→slot maps are stored on the
     /// `Program`; class/enum/interface metadata (field order, variant order)
-    /// lives in the pool objects; the class type-tag counter equals the class
-    /// count (tags are assigned densely in pool order). Per-package
+    /// lives in the pool objects; class type tags are content hashes stored on
+    /// each class object. Per-package
     /// `impl_rules` and `recursive_type_aliases` are cleared — the trailing
     /// whole-program passes regenerate them from all files exactly as a full
     /// compile does (keeping them would double the rule vectors).
@@ -2481,9 +2520,9 @@ impl EmitTables {
 fn spliced_throws_match(
     db: &dyn baml_compiler2_mir::Db,
     file: baml_base::SourceFile,
-    prev: &Program,
+    previous: &HashMap<&str, &Option<baml_type::RuntimeTy>>,
     cache: &ResolvedAliases,
-) -> bool {
+) -> Result<(), String> {
     let item_tree = file_item_tree(db, file);
     for (local_id, func_data) in &item_tree.functions {
         // Mirror Pass 4's skip set: these never become callable objects.
@@ -2500,17 +2539,18 @@ fn spliced_throws_match(
             Definition::Function(FunctionLoc::new(db, file, *local_id)),
         )
         .to_string();
-        let Some(&obj_idx) = prev.function_indices.get(&fq) else {
-            return false;
+        let Some(previous_throws) = previous.get(fq.as_str()) else {
+            return Err(format!("previous image has no function `{fq}`"));
         };
-        let Some(Object::Function(prev_fn)) = prev.objects.get(obj_idx) else {
-            return false;
-        };
-        if prev_fn.throws_type != compute_throws_type(db, file, &func_data.name, cache) {
-            return false;
+        let current_throws = compute_throws_type(db, file, &func_data.name, cache);
+        if **previous_throws != current_throws {
+            return Err(format!(
+                "function `{fq}` changed from {:?} to {current_throws:?}",
+                **previous_throws
+            ));
         }
     }
-    true
+    Ok(())
 }
 
 /// Run emit passes 1–4.6 over one file group.

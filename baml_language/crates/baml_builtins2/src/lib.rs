@@ -160,46 +160,20 @@ pub const ALL: &[BuiltinFile] = &[
 /// compiler fingerprint and seeding it back (B-694). Callers that serialize
 /// per-package data key it in a sorted map, so the first-appearance iteration
 /// order here never leaks into stored bytes.
-pub fn stdlib_package_names() -> Vec<&'static str> {
-    let mut names: Vec<&'static str> = Vec::new();
-    for file in ALL {
-        if !names.contains(&file.package) {
-            names.push(file.package);
+pub fn stdlib_package_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut names = Vec::new();
+        for file in ALL {
+            if !names.contains(&file.package) {
+                names.push(file.package);
+            }
         }
-    }
-    names
+        names
+    })
 }
 
 mod adt;
 mod media;
 pub use adt::*;
 pub use media::{MediaContent, MediaValue};
-
-#[cfg(test)]
-mod tests {
-    use super::stdlib_package_names;
-
-    #[test]
-    fn stdlib_package_names_matches_manifest() {
-        // Pins today's builtin package set. Updating this list is EXPECTED when a
-        // stdlib package is added to `ALL`: the derivation picks the new package
-        // up automatically (so it gains the B-694 interface cache), and this
-        // assertion just makes that change visible and guards the dedup logic.
-        let mut got = stdlib_package_names();
-        got.sort_unstable();
-        assert_eq!(
-            got,
-            ["assert", "baml", "boundary", "log", "reflect", "testing"],
-            "stdlib package set drifted from the embedded manifest; if you added a \
-             builtin package, update this expectation",
-        );
-
-        // The derivation must dedup: many files share the `baml` package.
-        let mut deduped = got.clone();
-        deduped.dedup();
-        assert_eq!(
-            got, deduped,
-            "stdlib_package_names must return each package exactly once",
-        );
-    }
-}

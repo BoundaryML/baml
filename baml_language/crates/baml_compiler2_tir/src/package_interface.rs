@@ -96,21 +96,13 @@ pub struct ExportedFunction {
     pub builtin_kind: Option<BuiltinKind>,
 }
 
-/// The typed export surface a single file contributes to its package, plus the
-/// exact `callable_throws` of every callable it defines (the Phase 2 seed
-/// projection).
-///
-/// `'db`-free and Borsh-serializable so it can ride in the file's
-/// `CompilationUnit` as opaque bytes and be projected into a `callable_throws`
-/// seed on a warm compile. Every leaf (`Ty`, `ExportedType`, `ExportedFunction`,
-/// `Name`) is Borsh-ready; the `FxHashMap`/`BTreeMap` members serialize
-/// deterministically (Borsh sorts map entries by key).
+/// The typed export surface a single file contributes to its package.
 ///
 /// Structural entries are keyed by `Name` with keep-first semantics, exactly
 /// mirroring `namespace_items`' `contribs[0]` winner selection *within a file*,
 /// so folding these fragments (driven by the resolved `namespace_items`)
 /// reproduces the whole-package derivation byte-for-byte.
-#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FileInterfaceFragment {
     /// The file's namespace path (`file_package(file).namespace_path`).
     pub ns_path: Vec<Name>,
@@ -118,12 +110,15 @@ pub struct FileInterfaceFragment {
     pub types: FxHashMap<Name, ExportedType>,
     /// Free functions this file exports: name -> `ExportedFunction` (first wins).
     pub functions: FxHashMap<Name, ExportedFunction>,
-    /// Every callable the file defines (free fn, method, interface default, or
-    /// `implements`-for method — all flattened into `item_tree.functions`),
-    /// keyed by its item-tree `LocalItemId::as_u32`, mapped to its exact
-    /// `callable_throws`. Process-independent for byte-identical files; the only
-    /// part a `SeededCallableThrows` seed reads.
-    pub callable_throws_by_id: BTreeMap<u32, Ty>,
+}
+
+/// The only per-file interface data consumed across CLI process boundaries.
+/// Exported types and function signatures are derived through the normal Salsa
+/// package-interface queries; persisting them in each bytecode unit duplicated
+/// work without seeding those queries.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct CallableThrowsFragment {
+    pub by_id: BTreeMap<u32, Ty>,
 }
 
 /// Distinguishes own-package results from dependency results.
@@ -382,10 +377,7 @@ fn lower_class_method_signature<'db>(
 
 // ── Per-item lowering helpers ──────────────────────────────────────────────
 //
-// Extracted verbatim from the pre-Phase-2 inline `package_interface` derivation
-// so the per-file `file_interface_fragment` query and the equality-oracle
-// reference share exactly one lowering. Only the *iteration structure* around
-// them differs between the fragment fold and the reference.
+// Shared by the per-file fragments folded into `package_interface`.
 
 /// Lower a class definition into its `ExportedType::Class`.
 fn lower_class_export<'db>(
@@ -576,6 +568,26 @@ fn lower_function_export<'db>(
 // ── file_interface_fragment Salsa query ────────────────────────────────────
 
 #[salsa::tracked(returns(ref))]
+pub fn file_callable_throws_fragment(
+    db: &dyn crate::Db,
+    file: SourceFile,
+) -> CallableThrowsFragment {
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let by_id = item_tree
+        .functions
+        .keys()
+        .map(|local_id| {
+            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+            (
+                local_id.as_u32(),
+                crate::callable::callable_throws(db, func_loc).clone(),
+            )
+        })
+        .collect();
+    CallableThrowsFragment { by_id }
+}
+
+#[salsa::tracked(returns(ref))]
 pub fn file_interface_fragment(db: &dyn crate::Db, file: SourceFile) -> FileInterfaceFragment {
     let pkg_info = file_package::file_package(db, file);
     let ns_path = pkg_info.namespace_path.clone();
@@ -619,24 +631,10 @@ pub fn file_interface_fragment(db: &dyn crate::Db, file: SourceFile) -> FileInte
         }
     }
 
-    // Seed projection: exact `callable_throws` for every callable the file
-    // defines. `item_tree.functions` flattens free functions, class methods,
-    // interface default methods, and `implements`-for methods, so iterating its
-    // keys covers all of them. `LocalItemId::as_u32` is a content-derived,
-    // process-independent index — safe to serialize.
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let mut callable_throws_by_id: BTreeMap<u32, Ty> = BTreeMap::new();
-    for local_id in item_tree.functions.keys() {
-        let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
-        let throws = crate::callable::callable_throws(db, func_loc).clone();
-        callable_throws_by_id.insert(local_id.as_u32(), throws);
-    }
-
     FileInterfaceFragment {
         ns_path,
         types,
         functions,
-        callable_throws_by_id,
     }
 }
 
@@ -669,10 +667,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
     // of stdlib packages is the embedded builtin manifest — a package is stdlib
     // iff it contributes a `<builtin>/…` file — so this stays in lockstep with
     // the files that actually ship (no hand-maintained list to drift).
-    if baml_builtins2::stdlib_package_names()
-        .iter()
-        .any(|n| *n == pkg_name.as_str())
-    {
+    if baml_builtins2::stdlib_package_names().contains(&pkg_name.as_str()) {
         STDLIB_HONEST_DERIVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
@@ -683,9 +678,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
 ///
 /// Driven by the resolved `pkg_items.namespaces` so the deterministic
 /// `contribs[0]` winner selection is untouched — only the per-item *lowering*
-/// moved into `file_interface_fragment`. Byte-identical to
-/// `derive_package_interface_reference` by construction; the equality oracle
-/// pins it.
+/// moved into `file_interface_fragment`.
 fn fold_package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> PackageInterface {
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
@@ -714,53 +707,6 @@ fn fold_package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -
                     .or_default()
                     .insert(name.clone(), exported.clone());
             }
-        }
-    }
-
-    let throw_sets = function_throw_sets(db, pkg_id);
-    PackageInterface {
-        types,
-        functions,
-        throw_sets: throw_sets.clone(),
-    }
-}
-
-/// Equality-oracle reference: the pre-Phase-2 whole-package derivation, kept so
-/// tests can prove `fold_package_interface` reproduces it byte-for-byte. Shares
-/// the lowering helpers with the fold; only the iteration structure differs
-/// (branch on the resolved `def` kind here vs. a per-file fragment lookup).
-pub fn derive_package_interface_reference<'db>(
-    db: &'db dyn crate::Db,
-    pkg_id: PackageId<'db>,
-) -> PackageInterface {
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-
-    let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = FxHashMap::default();
-    let mut functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>> =
-        FxHashMap::default();
-
-    for (ns_path, ns_items) in &pkg_items.namespaces {
-        for (name, def) in &ns_items.types {
-            let exported = match def {
-                Definition::Class(class_loc) => lower_class_export(db, pkg_items, *class_loc, name),
-                Definition::Enum(enum_loc) => lower_enum_export(db, *enum_loc, name),
-                Definition::TypeAlias(ta_loc) => lower_alias_export(db, pkg_items, *ta_loc, name),
-                _ => continue,
-            };
-            types
-                .entry(ns_path.clone())
-                .or_default()
-                .insert(name.clone(), exported);
-        }
-        for (name, def) in &ns_items.values {
-            let Definition::Function(func_loc) = def else {
-                continue;
-            };
-            let exported = lower_function_export(db, pkg_items, *func_loc, name);
-            functions
-                .entry(ns_path.clone())
-                .or_default()
-                .insert(name.clone(), exported);
         }
     }
 
@@ -1164,264 +1110,5 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
         _ => Ty::Unknown {
             attr: TyAttr::default(),
         },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::{BTreeMap, BTreeSet};
-
-    use super::*;
-
-    /// Build a representative `PackageInterface` exercising every variant that
-    /// crosses the Borsh boundary (all `ExportedType` shapes, a function with a
-    /// declared+callable throws pair and a `builtin_kind`, a method with generic
-    /// params, and populated throw sets) so the round-trip test is a real
-    /// fidelity check, not a smoke test.
-    ///
-    /// `reverse_insertion` flips the order in which the multi-entry `FxHashMap`
-    /// is populated, so two calls yield logically-equal interfaces whose hash
-    /// maps may iterate differently — the input the order-independence test needs.
-    fn synthetic_interface(reverse_insertion: bool) -> PackageInterface {
-        let attr = TyAttr::default();
-        let pkg = Name::new("baml");
-        let ns = vec![Name::new("llm")];
-
-        let class_qtn = QualifiedTypeName::new(pkg.clone(), ns.clone(), Name::new("Client"));
-        let enum_qtn = QualifiedTypeName::new(pkg.clone(), ns.clone(), Name::new("Role"));
-        let alias_qtn = QualifiedTypeName::new(pkg, ns.clone(), Name::new("Id"));
-
-        let method = ExportedFunction {
-            name: Name::new("call"),
-            params: vec![
-                exported_function_param(
-                    Name::new("prompt"),
-                    Ty::String { attr: attr.clone() },
-                    false,
-                ),
-                exported_function_param(Name::new("retries"), Ty::Int { attr: attr.clone() }, true),
-            ],
-            return_type: Ty::TypeVar(Name::new("T"), attr.clone()),
-            declared_throws: Some(Ty::Class(class_qtn.clone(), vec![], attr.clone())),
-            callable_throws: Ty::Union(
-                vec![
-                    Ty::String { attr: attr.clone() },
-                    Ty::BuiltinUnknown { attr: attr.clone() },
-                ],
-                attr.clone(),
-            ),
-            generic_params: vec![Name::new("T")],
-            builtin_kind: Some(BuiltinKind::Io),
-        };
-
-        let class = ExportedType::Class {
-            qtn: class_qtn.clone(),
-            fields: vec![
-                (Name::new("model"), Ty::String { attr: attr.clone() }),
-                (Name::new("temperature"), Ty::Float { attr: attr.clone() }),
-            ],
-            methods: vec![method],
-            generic_params: vec![Name::new("T")],
-        };
-        let enum_ty = ExportedType::Enum {
-            qtn: enum_qtn,
-            variants: vec![Name::new("System"), Name::new("User")],
-        };
-        let alias = ExportedType::TypeAlias {
-            qtn: alias_qtn,
-            resolved: Ty::Int { attr: attr.clone() },
-        };
-
-        let mut ns_types = FxHashMap::default();
-        if reverse_insertion {
-            ns_types.insert(Name::new("Id"), alias);
-            ns_types.insert(Name::new("Role"), enum_ty);
-            ns_types.insert(Name::new("Client"), class);
-        } else {
-            ns_types.insert(Name::new("Client"), class);
-            ns_types.insert(Name::new("Role"), enum_ty);
-            ns_types.insert(Name::new("Id"), alias);
-        }
-        let mut types = FxHashMap::default();
-        types.insert(ns.clone(), ns_types);
-
-        let free_fn = ExportedFunction {
-            name: Name::new("info"),
-            params: vec![exported_function_param(
-                Name::new("msg"),
-                Ty::String { attr: attr.clone() },
-                false,
-            )],
-            return_type: Ty::Void { attr: attr.clone() },
-            declared_throws: None,
-            callable_throws: Ty::Never { attr: attr.clone() },
-            generic_params: vec![],
-            builtin_kind: None,
-        };
-        let mut ns_funcs = FxHashMap::default();
-        ns_funcs.insert(Name::new("info"), free_fn);
-        let mut functions = FxHashMap::default();
-        functions.insert(ns, ns_funcs);
-
-        let mut direct = BTreeMap::new();
-        direct.insert(
-            Name::new("llm.call"),
-            BTreeSet::from([Ty::Class(class_qtn, vec![], attr.clone())]),
-        );
-        let mut transitive = BTreeMap::new();
-        transitive.insert(
-            Name::new("llm.call"),
-            BTreeSet::from([
-                Ty::String { attr: attr.clone() },
-                Ty::BuiltinUnknown { attr },
-            ]),
-        );
-        let throw_sets = FunctionThrowSets { direct, transitive };
-
-        PackageInterface {
-            types,
-            functions,
-            throw_sets,
-        }
-    }
-
-    #[test]
-    fn borsh_round_trips() {
-        let iface = synthetic_interface(false);
-        let bytes = borsh::to_vec(&iface).expect("serialize");
-        let decoded: PackageInterface = borsh::from_slice(&bytes).expect("deserialize");
-        assert_eq!(
-            iface, decoded,
-            "PackageInterface must survive a Borsh round-trip"
-        );
-    }
-
-    #[test]
-    fn borsh_is_order_independent_for_maps() {
-        // Same logical interface, but its multi-entry `FxHashMap` is populated
-        // in opposite insertion orders, so the two maps may iterate differently.
-        // Borsh sorts map entries by key on serialization, so both must still
-        // produce identical bytes — the property that keeps the cached blob
-        // byte-stable across fresh databases regardless of iteration order.
-        let forward = synthetic_interface(false);
-        let reversed = synthetic_interface(true);
-        assert_eq!(
-            borsh::to_vec(&forward).expect("serialize forward"),
-            borsh::to_vec(&reversed).expect("serialize reversed"),
-        );
-    }
-
-    /// Build a representative `FileInterfaceFragment` exercising every field
-    /// (a class with a method, an enum, an alias, a free function, and a
-    /// populated `callable_throws_by_id`). `reverse_insertion` flips the map
-    /// population order so the order-independence test has divergent iteration.
-    fn synthetic_fragment(reverse_insertion: bool) -> FileInterfaceFragment {
-        let attr = TyAttr::default();
-        let pkg = Name::new("user");
-        let ns = vec![Name::new("llm")];
-
-        let class_qtn = QualifiedTypeName::new(pkg.clone(), ns.clone(), Name::new("Client"));
-        let enum_qtn = QualifiedTypeName::new(pkg.clone(), ns.clone(), Name::new("Role"));
-        let alias_qtn = QualifiedTypeName::new(pkg, ns, Name::new("Id"));
-
-        let method = ExportedFunction {
-            name: Name::new("call"),
-            params: vec![exported_function_param(
-                Name::new("prompt"),
-                Ty::String { attr: attr.clone() },
-                false,
-            )],
-            return_type: Ty::TypeVar(Name::new("T"), attr.clone()),
-            declared_throws: None,
-            callable_throws: Ty::Never { attr: attr.clone() },
-            generic_params: vec![Name::new("T")],
-            builtin_kind: Some(BuiltinKind::Io),
-        };
-        let class = ExportedType::Class {
-            qtn: class_qtn,
-            fields: vec![(Name::new("model"), Ty::String { attr: attr.clone() })],
-            methods: vec![method],
-            generic_params: vec![Name::new("T")],
-        };
-        let enum_ty = ExportedType::Enum {
-            qtn: enum_qtn,
-            variants: vec![Name::new("System"), Name::new("User")],
-        };
-        let alias = ExportedType::TypeAlias {
-            qtn: alias_qtn,
-            resolved: Ty::Int { attr: attr.clone() },
-        };
-
-        let mut types = FxHashMap::default();
-        if reverse_insertion {
-            types.insert(Name::new("Id"), alias);
-            types.insert(Name::new("Role"), enum_ty);
-            types.insert(Name::new("Client"), class);
-        } else {
-            types.insert(Name::new("Client"), class);
-            types.insert(Name::new("Role"), enum_ty);
-            types.insert(Name::new("Id"), alias);
-        }
-
-        let free_fn = ExportedFunction {
-            name: Name::new("info"),
-            params: vec![exported_function_param(
-                Name::new("msg"),
-                Ty::String { attr: attr.clone() },
-                false,
-            )],
-            return_type: Ty::Void { attr: attr.clone() },
-            declared_throws: None,
-            callable_throws: Ty::Never { attr: attr.clone() },
-            generic_params: vec![],
-            builtin_kind: None,
-        };
-        let mut functions = FxHashMap::default();
-        functions.insert(Name::new("info"), free_fn);
-
-        let mut callable_throws_by_id = BTreeMap::new();
-        callable_throws_by_id.insert(7u32, Ty::Never { attr: attr.clone() });
-        callable_throws_by_id.insert(
-            3u32,
-            Ty::Union(
-                vec![
-                    Ty::String { attr: attr.clone() },
-                    Ty::BuiltinUnknown { attr },
-                ],
-                TyAttr::default(),
-            ),
-        );
-
-        FileInterfaceFragment {
-            ns_path: vec![Name::new("llm")],
-            types,
-            functions,
-            callable_throws_by_id,
-        }
-    }
-
-    #[test]
-    fn fragment_borsh_round_trips() {
-        let frag = synthetic_fragment(false);
-        let bytes = borsh::to_vec(&frag).expect("serialize");
-        let decoded: FileInterfaceFragment = borsh::from_slice(&bytes).expect("deserialize");
-        assert_eq!(
-            frag, decoded,
-            "FileInterfaceFragment must survive a Borsh round-trip"
-        );
-    }
-
-    #[test]
-    fn fragment_borsh_is_order_independent_for_maps() {
-        // Two fresh databases may populate a fragment's `FxHashMap`s in different
-        // orders; Borsh sorts map entries by key, so the persisted blob must be
-        // byte-identical regardless — the determinism the content-addressed unit
-        // key relies on.
-        let forward = synthetic_fragment(false);
-        let reversed = synthetic_fragment(true);
-        assert_eq!(
-            borsh::to_vec(&forward).expect("serialize forward"),
-            borsh::to_vec(&reversed).expect("serialize reversed"),
-        );
     }
 }
