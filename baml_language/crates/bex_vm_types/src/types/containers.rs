@@ -187,13 +187,13 @@ impl<T> std::ops::DerefMut for LockedWriteGuard<'_, T> {
 
 #[derive(Clone, Debug)]
 pub struct Array {
-    pub element_ty: Box<baml_type::RuntimeTy>,
+    pub element_ty: Box<baml_type::RealizedTy>,
     pub data: ArrayContainer,
 }
 
 impl Array {
     /// Build an array of `element_ty` from its backing values.
-    pub fn new(element_ty: baml_type::RuntimeTy, data: Vec<Value>) -> Self {
+    pub fn new(element_ty: baml_type::RealizedTy, data: Vec<Value>) -> Self {
         Self {
             element_ty: Box::new(element_ty),
             data: ArrayContainer::new(data),
@@ -270,8 +270,8 @@ pub type Uint8ArrayWriteGuard<'a> = LockedWriteGuard<'a, Vec<u8>>;
 
 #[derive(Clone, Debug)]
 pub struct Map {
-    pub key_ty: Box<baml_type::RuntimeTy>,
-    pub value_ty: Box<baml_type::RuntimeTy>,
+    pub key_ty: Box<baml_type::RealizedTy>,
+    pub value_ty: Box<baml_type::RealizedTy>,
     pub data: MapContainer,
 }
 /// Heap-mutable map container. Pairs a boxed `IndexMap<BexStr, Value>` with
@@ -295,8 +295,8 @@ impl MapReadGuard<'_> {
 impl Map {
     /// Build a map of `key_ty`/`value_ty` from its backing entries.
     pub fn new(
-        key_ty: baml_type::RuntimeTy,
-        value_ty: baml_type::RuntimeTy,
+        key_ty: baml_type::RealizedTy,
+        value_ty: baml_type::RealizedTy,
         data: IndexMap<bex_str::BexStr, Value>,
     ) -> Self {
         Self {

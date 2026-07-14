@@ -317,6 +317,50 @@ impl FutureManagerGuard<'_> {
         Ok(())
     }
 
+    /// Settle `id` to `InternalError` from the spawn task's terminal
+    /// engine-error path, where the child thread (and its heap permit) are
+    /// already gone.
+    ///
+    /// Tolerant counterpart to [`Self::internal_error_future`]: that helper
+    /// runs on the still-live child thread, where a non-`Pending` future is an
+    /// invariant violation worth asserting. Here the thread died on an
+    /// arbitrary engine-error escape path, so the future may legitimately
+    /// already be settled (the error can strike after a successful settle) —
+    /// an already-settled or unknown future is left as-is and the error only
+    /// logged. Like `internal_error_future`, the `active_futures` entry is
+    /// retained so a later `Await` resumes against the same heap object and
+    /// surfaces the original [`EngineError`] instead of parking forever.
+    pub fn settle_spawn_engine_error(&mut self, id: FutureId, err: EngineError) {
+        let Some(entry) = self.holder().active_futures.get(&id) else {
+            tracing::error!(
+                ?id,
+                ?err,
+                "spawn thread terminated with an engine error but its future \
+                 is not active; error dropped"
+            );
+            return;
+        };
+        // SAFETY: caller holds the heap permit via `self.proof`.
+        let fut = match unsafe { entry.future_ref() } {
+            Ok(fut) => fut,
+            Err(handle_err) => {
+                tracing::error!(
+                    ?id,
+                    ?err,
+                    ?handle_err,
+                    "spawn thread terminated with an engine error but its \
+                     future handle is unreadable; error dropped"
+                );
+                return;
+            }
+        };
+        // A lost CAS means the future already reached a terminal state (a
+        // settle that preceded the error, or a concurrent `f.cancel()`);
+        // that state is the one the awaiter observes, and it is already a
+        // wake-up — no parked parent is left behind either way.
+        let _ = fut.settle_internal_error(Box::new(err));
+    }
+
     /// Remove and return the heap `Future` for `id` if it's still
     /// `Pending`. Returns `Ok(None)` if the future has already been
     /// settled out-of-band (e.g. via BAML's `f.cancel()` which transitions

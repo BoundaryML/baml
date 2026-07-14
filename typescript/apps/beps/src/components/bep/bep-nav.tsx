@@ -4,7 +4,7 @@ import { Plus, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { buildBepPath, MAIN_CONTENT_ID } from "@/lib/bep-routes";
-import type { MouseEvent } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 
 interface Section {
   id: string;
@@ -108,8 +108,31 @@ export function BepNav({
     }
   }
 
+  // Keep the active item visible inside the sidebar's own scroll container
+  // without touching window scroll (scrollIntoView would also scroll
+  // ancestors, which is exactly the jarring jump we're avoiding).
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!active) return;
+    // The scrollable ancestor is the sticky wrapper around this nav
+    const container = nav.parentElement;
+    if (!container || container.scrollHeight <= container.clientHeight) return;
+    const containerTop = container.getBoundingClientRect().top;
+    const activeRect = active.getBoundingClientRect();
+    const top = activeRect.top - containerTop + container.scrollTop;
+    const bottom = top + activeRect.height;
+    if (top < container.scrollTop) {
+      container.scrollTop = top - 8;
+    } else if (bottom > container.scrollTop + container.clientHeight) {
+      container.scrollTop = bottom - container.clientHeight + 8;
+    }
+  }, [activeSection]);
+
   return (
-    <nav className="space-y-1">
+    <nav ref={navRef} className="space-y-1">
       {orderedSections
         .map((section) => {
           const status = pageStatuses[section.id];
@@ -120,6 +143,7 @@ export function BepNav({
               key={section.id}
               href={sectionHref(section.id, bepNumber, versionNumber)}
               onClick={(e) => handleNavClick(e, section.id, onSectionClick)}
+              aria-current={activeSection === section.id ? "page" : undefined}
               className={cn(
                 "block w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
                 "hover:bg-accent hover:text-accent-foreground",

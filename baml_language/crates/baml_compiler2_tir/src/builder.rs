@@ -590,8 +590,9 @@ impl baml_type::normalize::TypeContext for TypeInferenceBuilder<'_> {
         base: &Ty,
         interface: &baml_type::Interface,
         member: &Name,
+        fuel: u32,
     ) -> baml_type::normalize::ProjectionStep {
-        self.as_global().project(base, interface, member)
+        self.as_global().project(base, interface, member, fuel)
     }
 }
 
@@ -8359,11 +8360,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 base, interface, ..
             } => {
                 Self::ty_contains_unknown_like(base, count_builtin)
-                    || interface.as_ref().is_some_and(|interface| {
-                        interface
-                            .tys()
-                            .any(|t| Self::ty_contains_unknown_like(t, count_builtin))
-                    })
+                    || interface
+                        .tys()
+                        .any(|t| Self::ty_contains_unknown_like(t, count_builtin))
             }
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
                 Self::ty_contains_unknown_like(elem, count_builtin)
@@ -10827,7 +10826,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::AssociatedTypeProjection {
-                interface: Some(projection_iface),
+                interface: projection_iface,
                 member: assoc,
                 ..
             } if member.as_str() != "from_json" => {

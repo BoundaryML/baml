@@ -812,35 +812,41 @@ pub fn tir2_to_template(
             // consumer to resolve. Never an error, never erased.
             .unwrap_or_else(|| TyTemplate::AssociatedTypeProjection {
                 base: Box::new(tir2_to_template(base, resolved, generic_params)),
-                interface: interface.as_ref().map(|iface| {
-                    Box::new(baml_type::TyTemplateInterface {
-                        name: iface.name.clone(),
-                        generics: iface
-                            .generics
-                            .iter()
-                            .map(|g| tir2_to_template(g, resolved, generic_params))
-                            .collect(),
-                        associated_types: iface
-                            .associated_types
-                            .iter()
-                            .map(|(name, ty)| {
-                                (name.clone(), tir2_to_template(ty, resolved, generic_params))
-                            })
-                            .collect(),
-                    })
+                interface: Box::new(baml_type::TyTemplateInterface {
+                    name: interface.name.clone(),
+                    generics: interface
+                        .generics
+                        .iter()
+                        .map(|g| tir2_to_template(g, resolved, generic_params))
+                        .collect(),
+                    associated_types: interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| {
+                            (name.clone(), tir2_to_template(ty, resolved, generic_params))
+                        })
+                        .collect(),
                 }),
                 member: member.clone(),
                 attr: TyAttr::default(),
             }),
         // FIXME(typevar-templates): `Self` is the one type variable that may
         // legitimately survive to a template (it is a real, if unresolved,
-        // reference to the concrete implementor type). It maps to `Wildcard` as
-        // a temporary bandaid — correct for a top-level `x is Self` (emits
-        // `false`), but it OVER-MATCHES in a nested position (`Foo<Self>`), where
-        // the guard treats `Wildcard` as "any". Give `Self` a real frame slot so
-        // it lowers to a `TypeArgRef` (interface default-method / class-body
-        // work) and delete this arm.
-        Tir2Ty::TypeVar(name, _) if name == "Self" => TyTemplate::Wildcard,
+        // reference to the concrete implementor type). It has no frame slot in
+        // the current calling model, so a materialization position demotes it
+        // to the realized top type `unknown` — the same honest reflection an
+        // unspecialized generic slot gets (the out-of-range `TypeArgRef` rule
+        // in `TyTemplate::substitute`), decided and documented here at compile
+        // time rather than smuggled through a `Wildcard` hole for the runtime
+        // to erase (a hole has no concrete form, so `substitute` rejects it as
+        // an internal error). Dispatch-guard positions never reach this arm:
+        // `tir2_to_dispatch_guard_template` intercepts every `TypeVar` before
+        // delegating here, and there `Self` stays a `Wildcard` hole (matching
+        // "any" — over-matching in nested positions like `Foo<Self>`). Give
+        // `Self` a real frame slot so it lowers to a `TypeArgRef` (interface
+        // default-method / class-body work), fix the guard over-match with the
+        // same slot, and delete this arm.
+        Tir2Ty::TypeVar(name, _) if name == "Self" => realized_leaf_template(&RuntimeTy::unknown()),
         Tir2Ty::TypeVar(name, _) => {
             let Some(n) = generic_params.iter().position(|p| p == name) else {
                 // A non-`Self` type variable with no frame position is a defect:
@@ -3263,9 +3269,9 @@ impl<'db> LoweringContext<'db> {
                 // associated-type bindings); erase compiler-only types within them
                 // too, matching the `Tir2Ty::Interface` arm above. (The field is an
                 // `Interface` after the interface-object refactor, not a `Ty`.)
-                interface: interface.map(|iface| {
-                    Box::new(iface.map_tys(|ty| Self::erase_compiler_only_ty(ty.clone())))
-                }),
+                interface: Box::new(
+                    interface.map_tys(|ty| Self::erase_compiler_only_ty(ty.clone())),
+                ),
                 member,
                 attr,
             },
@@ -6419,7 +6425,7 @@ impl<'db> LoweringContext<'db> {
         // generic param, then substitute `class_type_args` so a field
         // declared as `T` resolves to the concrete receiver-side binding.
         let template = tir2_to_template(&tir_ty, self.resolved_aliases, &class_data.generic_params);
-        template.substitute(class_type_args)
+        template.substitute_symbolic(class_type_args)
     }
 
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
@@ -9089,8 +9095,15 @@ impl LoweringContext<'_> {
         let templates = self.generic_apply_type_arg_templates(type_args);
         if templates.iter().all(TyTemplate::is_fully_concrete) {
             // Concrete args → pooled, interned compile-time constant
-            // (pointer-stable identity).
-            let concrete: Vec<RuntimeTy> = templates.iter().map(|t| t.substitute(&[])).collect();
+            // (pointer-stable identity). Each template is fully concrete, so it
+            // narrows directly to a `RealizedTy` — the value the runtime carries.
+            let concrete: Vec<RealizedTy> = templates
+                .iter()
+                .map(|t| {
+                    RealizedTy::try_from(t)
+                        .unwrap_or_else(|e| unreachable!("checked fully concrete: {e}"))
+                })
+                .collect();
             self.builder.assign(
                 dest,
                 Rvalue::Use(Operand::Constant(Constant::GenericFunction {
@@ -10643,7 +10656,7 @@ impl<'db> LoweringContext<'db> {
     fn resolve_projection_bound(&self, ty: &Tir2Ty) -> Option<Tir2Ty> {
         use baml_type::normalize::TypeContext;
         let Tir2Ty::AssociatedTypeProjection {
-            interface: Some(iface),
+            interface: iface,
             member,
             ..
         } = ty

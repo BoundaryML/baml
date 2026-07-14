@@ -111,7 +111,7 @@ enum StructuralTy {
     /// Symbolic associated type projection — opaque unless already resolved.
     AssociatedTypeProjection {
         base: Box<StructuralTy>,
-        interface: Option<Box<StructuralTy>>,
+        interface: Box<StructuralTy>,
         member: Name,
     },
     // Special
@@ -152,7 +152,7 @@ impl StructuralTy {
                 member,
             } => StructuralTy::AssociatedTypeProjection {
                 base: Box::new(base.canonicalize()),
-                interface: interface.map(|interface| Box::new(interface.canonicalize())),
+                interface: Box::new(interface.canonicalize()),
                 member,
             },
             StructuralTy::List(inner) => StructuralTy::List(Box::new(inner.canonicalize())),
@@ -505,9 +505,7 @@ fn substitute(
             member,
         } => StructuralTy::AssociatedTypeProjection {
             base: Box::new(substitute(base, var, replacement)),
-            interface: interface
-                .as_ref()
-                .map(|interface| Box::new(substitute(interface, var, replacement))),
+            interface: Box::new(substitute(interface, var, replacement)),
             member: member.clone(),
         },
         StructuralTy::Mu { var: v, body } if v != var => StructuralTy::Mu {
@@ -657,14 +655,12 @@ fn normalize_impl(
             ..
         } => StructuralTy::AssociatedTypeProjection {
             base: Box::new(normalize_impl(base, aliases, recursive, expanding)),
-            interface: interface.as_ref().map(|interface| {
-                Box::new(normalize_impl(
-                    &interface.to_ty(),
-                    aliases,
-                    recursive,
-                    expanding,
-                ))
-            }),
+            interface: Box::new(normalize_impl(
+                &interface.to_ty(),
+                aliases,
+                recursive,
+                expanding,
+            )),
             member: member.clone(),
         },
         // `$rust_type` — opaque Rust-managed state. Treated as Unknown
@@ -744,11 +740,9 @@ fn ty_has_cycle(
             base, interface, ..
         } => {
             ty_has_cycle(base, aliases, visited, stack)
-                || interface.as_ref().is_some_and(|interface| {
-                    interface
-                        .tys()
-                        .any(|t| ty_has_cycle(t, aliases, visited, stack))
-                })
+                || interface
+                    .tys()
+                    .any(|t| ty_has_cycle(t, aliases, visited, stack))
         }
         Ty::Function {
             params,
@@ -909,10 +903,8 @@ fn extract_type_alias_deps(
                 base, interface, ..
             } => {
                 visit(base, aliases, non_structural, structural, in_structural);
-                if let Some(interface) = interface {
-                    for ty in interface.tys() {
-                        visit(ty, aliases, non_structural, structural, in_structural);
-                    }
+                for ty in interface.tys() {
+                    visit(ty, aliases, non_structural, structural, in_structural);
                 }
             }
             Ty::Function {

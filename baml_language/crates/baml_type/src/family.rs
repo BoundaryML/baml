@@ -249,8 +249,12 @@ ty_family! {
         #[axis(projection)]
         AssociatedTypeProjection {
             base: Box<Ty>,
-            /// TODO: Should not be an `Option`; fix once the TIR is able to determine correctly.
-            interface: Option<Box<Interface>>,
+            /// The declaring interface of this projection — always known: the TIR
+            /// resolves `(base as I).member` to its interface `I` (or lowers to
+            /// `Ty::Error` when it cannot be determined), so a resolved projection
+            /// never lacks its qualifier. This is what lets a realized-base
+            /// projection reduce to the impl's binding at substitution time.
+            interface: Box<Interface>,
             member: Name,
             attr: TyAttr,
         } = 26,

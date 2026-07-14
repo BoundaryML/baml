@@ -7,7 +7,7 @@
 //! deeply excludes the `typevar`-axis variants (`TypeVar`,
 //! `AssociatedTypeProjection`) and rejects them by name.
 
-use crate::{RealizedTy, TyAttr};
+use crate::{Name, RealizedTy, TyAttr, TypeName};
 
 impl RealizedTy {
     // --- Primitive constructors (default TyAttr) ---
@@ -19,9 +19,30 @@ impl RealizedTy {
         }
     }
 
+    /// `bigint` with default attributes.
+    pub fn bigint() -> Self {
+        RealizedTy::Bigint {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `float` with default attributes.
+    pub fn float() -> Self {
+        RealizedTy::Float {
+            attr: TyAttr::default(),
+        }
+    }
+
     /// `string` with default attributes.
     pub fn string() -> Self {
         RealizedTy::String {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bool` with default attributes.
+    pub fn bool() -> Self {
+        RealizedTy::Bool {
             attr: TyAttr::default(),
         }
     }
@@ -33,10 +54,129 @@ impl RealizedTy {
         }
     }
 
+    /// `uint8array` with default attributes.
+    pub fn uint8array() -> Self {
+        RealizedTy::Uint8Array {
+            attr: TyAttr::default(),
+        }
+    }
+
     /// `unknown` (the top type) with default attributes.
     pub fn unknown() -> Self {
         RealizedTy::BuiltinUnknown {
             attr: TyAttr::default(),
+        }
+    }
+
+    // --- Compound constructors (default TyAttr) ---
+
+    /// `T[]` (list) with default attributes.
+    pub fn list(inner: RealizedTy) -> Self {
+        RealizedTy::List(Box::new(inner), TyAttr::default())
+    }
+
+    /// `map<K, V>` with default attributes.
+    pub fn map(key: RealizedTy, value: RealizedTy) -> Self {
+        RealizedTy::Map {
+            key: Box::new(key),
+            value: Box::new(value),
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `A | B | ...` (union) with default attributes.
+    pub fn union(members: impl IntoIterator<Item = RealizedTy>) -> Self {
+        RealizedTy::Union(members.into_iter().collect(), TyAttr::default())
+    }
+
+    /// `T?` (optional) — sugar for `T | null`, flattened and idempotent.
+    /// Mirrors [`crate::RuntimeTy::optional`].
+    pub fn optional(inner: RealizedTy) -> Self {
+        match inner {
+            RealizedTy::Union(mut members, attr) => {
+                if !members.iter().any(RealizedTy::is_null) {
+                    members.push(RealizedTy::null());
+                }
+                RealizedTy::Union(members, attr)
+            }
+            n @ RealizedTy::Null { .. } => n,
+            other => RealizedTy::Union(vec![other, RealizedTy::null()], TyAttr::default()),
+        }
+    }
+
+    /// `Class(name)` with default attributes (local module path), no type args.
+    pub fn class(name: &str) -> Self {
+        RealizedTy::Class(TypeName::local(name.into()), Vec::new(), TyAttr::default())
+    }
+
+    /// `Class(name, args)` — a parametric class instantiation.
+    pub fn class_with_args(name: TypeName, args: Vec<RealizedTy>) -> Self {
+        RealizedTy::Class(name, args, TyAttr::default())
+    }
+
+    /// `Class(name)` under the implicit `user` package, no type args.
+    pub fn user_class(name: &str) -> Self {
+        RealizedTy::Class(
+            TypeName::local(Name::new(name)),
+            Vec::new(),
+            TyAttr::default(),
+        )
+    }
+
+    /// `Class(name, args)` under the implicit `user` package.
+    pub fn user_class_with_args(name: &str, args: Vec<RealizedTy>) -> Self {
+        RealizedTy::Class(TypeName::local(Name::new(name)), args, TyAttr::default())
+    }
+
+    /// Opaque resource handle type (file, socket, HTTP response body).
+    pub fn resource() -> Self {
+        RealizedTy::Resource {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// Opaque structured prompt tree type for LLM calls.
+    pub fn prompt_ast() -> Self {
+        RealizedTy::PromptAst {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// Meta-type — a runtime value that wraps a [`RealizedTy`].
+    pub fn type_type() -> Self {
+        RealizedTy::Type {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// True if this is exactly the `null` type.
+    pub fn is_null(&self) -> bool {
+        matches!(self, RealizedTy::Null { .. })
+    }
+
+    /// True if this is a union that includes `null` — i.e. an optional type.
+    /// Mirrors [`crate::RuntimeTy::is_nullable_union`].
+    pub fn is_nullable_union(&self) -> bool {
+        matches!(self, RealizedTy::Union(members, _) if members.iter().any(RealizedTy::is_null))
+    }
+
+    /// Remove `null` from a nullable union, collapsing the result. Mirrors
+    /// [`crate::RuntimeTy::strip_null`].
+    pub fn strip_null(&self) -> RealizedTy {
+        match self {
+            RealizedTy::Union(members, attr) => {
+                let non_null: Vec<RealizedTy> =
+                    members.iter().filter(|m| !m.is_null()).cloned().collect();
+                match non_null.len() {
+                    0 => self.clone(),
+                    1 => non_null
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| unreachable!("len checked")),
+                    _ => RealizedTy::Union(non_null, attr.clone()),
+                }
+            }
+            _ => self.clone(),
         }
     }
 }
@@ -135,11 +275,11 @@ mod tests {
         // it has no realized form — the conversion rejects it at the top level.
         let ty = Ty::AssociatedTypeProjection {
             base: Box::new(Ty::TypeVar(Name::new("T"), def())),
-            interface: Some(Box::new(Interface {
+            interface: Box::new(Interface {
                 name: qtn("Iterator"),
                 generics: vec![],
                 associated_types: vec![],
-            })),
+            }),
             member: Name::new("Item"),
             attr: def(),
         };
