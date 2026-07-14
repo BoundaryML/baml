@@ -285,6 +285,16 @@ pub enum VmInternalError {
     /// compiler/VM inconsistency, not a user-reachable condition.
     #[error("virtual call could not resolve interface method `{method}`")]
     UnresolvedVirtualCall { method: String },
+
+    /// A `LoadType` (or other materialization) could not fully realize a
+    /// `TyTemplate` against the frame's realized type arguments — a frame
+    /// reference out of range, a `Wildcard` hole reaching a materialization
+    /// position, or an associated-type projection that did not reduce. Runtime
+    /// type arguments are realized, so the compiler guarantees such templates
+    /// realize; a failure here is a compiler/VM inconsistency, surfaced loudly
+    /// rather than erased to `unknown`.
+    #[error("could not realize type template: {message}")]
+    TypeSubstitution { message: String },
 }
 
 /// Any kind of virtual machine error.

@@ -92,6 +92,10 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
         base: &Ty,
         interface: &baml_type::Interface,
         member: &Name,
+        // Single-step reducer: each arm returns one `Reduced`/`Opaque` result, and
+        // the caller (`NormalTy::from_ty`) decrements its own fuel across the chain,
+        // so there is no self-recursion here to bound.
+        _fuel: u32,
     ) -> baml_type::normalize::ProjectionStep {
         use baml_type::normalize::ProjectionStep;
         // The qualifier already pins the member — that pin *is* the projection.

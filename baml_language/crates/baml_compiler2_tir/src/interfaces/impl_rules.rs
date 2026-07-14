@@ -1615,9 +1615,7 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
             base, interface, ..
         } => {
             collect_ty_packages(base, out);
-            if let Some(iface) = interface {
-                collect_interface_packages(iface, out);
-            }
+            collect_interface_packages(interface, out);
         }
         // No qualified name: primitives, literals, type variables, and sentinels.
         Ty::Int { .. }

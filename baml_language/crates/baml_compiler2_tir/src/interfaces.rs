@@ -95,14 +95,8 @@ pub(crate) fn normalized_arg_implements_bound(
         Ty::Unknown { .. } | Ty::Error { .. } => return true,
         Ty::TypeVar(name, _) => ctx.type_var_bound(name),
         Ty::AssociatedTypeProjection {
-            interface: Some(iface),
-            member,
-            ..
-        } => ctx.associated_type_bound(iface, member.clone()),
-        // Never determined — errored upstream; don't cascade.
-        Ty::AssociatedTypeProjection {
-            interface: None, ..
-        } => return true,
+            interface, member, ..
+        } => ctx.associated_type_bound(interface, member.clone()),
         // A concrete argument implements the bound directly through its impls.
         _ => return ctx.implements_interface(arg, bound),
     };
