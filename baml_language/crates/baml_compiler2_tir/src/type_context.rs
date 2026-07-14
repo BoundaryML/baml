@@ -173,7 +173,8 @@ impl baml_type::normalize::TypeContext for GlobalTypeContext<'_, '_> {
     }
 }
 
-/// A [`TypeContext`] for structural type **equivalence** that expands aliases but
+/// A [`TypeContext`](baml_type::normalize::TypeContext) for structural type
+/// **equivalence** that expands aliases but
 /// leaves every *nominal* fact opaque: no enum-completeness collapse, no interface
 /// membership or `requires`, no type-variable bounds, no associated-type bounds,
 /// and no projection reduction.

@@ -547,6 +547,95 @@ fn function_subtyping_is_contravariant_in_params_covariant_in_return() {
 }
 
 #[test]
+fn function_throws_is_covariant() {
+    // Error type is covariant (TYPE_SYSTEM.md, Subtyping Rules → Variance): a
+    // function that throws `never` is a subtype of one that throws `int`, but not
+    // the reverse.
+    let ctx = Ctx::default();
+    let mk = |throws: Ty| Ty::Function {
+        params: vec![],
+        ret: Box::new(Ty::string()),
+        throws: Box::new(throws),
+        attr: TyAttr::default(),
+    };
+    let never = Ty::Never {
+        attr: TyAttr::default(),
+    };
+    assert!(is_subtype(&mk(never.clone()), &mk(Ty::int()), &ctx));
+    assert!(!is_subtype(&mk(Ty::int()), &mk(never), &ctx));
+}
+
+#[test]
+fn function_required_param_names_are_insignificant() {
+    // Required params are positional; their names are not part of the type
+    // (TYPE_SYSTEM.md, Subtyping Rules), so two functions differing only in a
+    // required param's name are equivalent (a named vs unnamed one too).
+    let ctx = Ctx::default();
+    let mk = |name: Option<&str>| Ty::Function {
+        params: vec![FunctionParamTy::required(name.map(Name::new), Ty::int())],
+        ret: Box::new(Ty::string()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    };
+    assert!(equivalent(&mk(Some("a")), &mk(Some("b")), &ctx));
+    assert!(equivalent(&mk(Some("a")), &mk(None), &ctx));
+}
+
+#[test]
+fn function_optional_params_follow_the_superset_rule() {
+    // Optional params (BEP-033) are matched by name, and the *subtype* declares a
+    // superset of them — a subset function type accepts more optional args
+    // (TYPE_SYSTEM.md, Subtyping Rules). Their order is insignificant.
+    let ctx = Ctx::default();
+    let func = |params: Vec<FunctionParamTy>| Ty::Function {
+        params,
+        ret: Box::new(Ty::string()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    };
+    let req = FunctionParamTy::required(None, Ty::string());
+    let opt_max = FunctionParamTy::optional(Some(Name::new("max")), Ty::int());
+    let opt_filter = FunctionParamTy::optional(Some(Name::new("filter")), Ty::string());
+
+    let two = func(vec![req.clone(), opt_max.clone(), opt_filter.clone()]);
+    let one = func(vec![req.clone(), opt_filter.clone()]);
+
+    // More optionals <: fewer optionals; the reverse fails (missing `max`).
+    assert!(is_subtype(&two, &one, &ctx));
+    assert!(!is_subtype(&one, &two, &ctx));
+
+    // Optional order does not matter: reordered forms are mutual subtypes.
+    let two_reordered = func(vec![req, opt_filter, opt_max]);
+    assert!(is_subtype(&two, &two_reordered, &ctx));
+    assert!(is_subtype(&two_reordered, &two, &ctx));
+}
+
+#[test]
+fn function_optional_and_required_params_are_incomparable() {
+    // A single-required-param function and a single-optional-param function are
+    // unrelated: the required-arity check (equal counts) already fails both ways.
+    let ctx = Ctx::default();
+    let mk = |optional: bool| Ty::Function {
+        params: vec![if optional {
+            FunctionParamTy::optional(Some(Name::new("value")), Ty::int())
+        } else {
+            FunctionParamTy::required(Some(Name::new("value")), Ty::int())
+        }],
+        ret: Box::new(Ty::string()),
+        throws: Box::new(Ty::Never {
+            attr: TyAttr::default(),
+        }),
+        attr: TyAttr::default(),
+    };
+    assert!(!is_subtype(&mk(true), &mk(false), &ctx));
+    assert!(!is_subtype(&mk(false), &mk(true), &ctx));
+}
+
+#[test]
 fn interface_membership_through_unions() {
     let mut ctx = Ctx::default();
     ctx.impls.push((qtn("Dog"), qtn("Animal")));
