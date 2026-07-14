@@ -117,6 +117,42 @@ struct codec<std::monostate> {
     }
 };
 
+// Union values arrive as their inner value (union metadata is dropped on the
+// wire, Python parity), so decode tries each alternative in declared BAML
+// order; generated class codecs check the wire FQN, making class
+// alternatives dispatch precisely. Encode writes the active alternative's
+// inner value (no union wrapper inbound).
+template <typename... Ts>
+struct codec<std::variant<Ts...>> {
+    static void encode(detail::wire::Writer& value_msg, const std::variant<Ts...>& v) {
+        std::visit(
+            [&value_msg](const auto& alt) {
+                codec<std::decay_t<decltype(alt)>>::encode(value_msg, alt);
+            },
+            v);
+    }
+    static std::variant<Ts...> decode(const detail::OutboundValue& v) {
+        std::optional<std::variant<Ts...>> out;
+        (try_alternative<Ts>(v, out) || ...);
+        if (!out.has_value()) {
+            detail::kind_mismatch("a union alternative", v);
+        }
+        return std::move(*out);
+    }
+
+private:
+    template <typename T>
+    static bool try_alternative(const detail::OutboundValue& v,
+                                std::optional<std::variant<Ts...>>& out) {
+        try {
+            out.emplace(std::in_place_type<T>, codec<T>::decode(v));
+            return true;
+        } catch (const BamlError&) {
+            return false;
+        }
+    }
+};
+
 template <typename T>
 struct codec<std::optional<T>> {
     static void encode(detail::wire::Writer& value_msg, const std::optional<T>& v) {

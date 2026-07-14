@@ -382,20 +382,31 @@ fn translate_ty(ty: &Ty, emitted_types: &BTreeSet<Name>) -> Translated {
         }
         Ty::Union(items) => {
             // Null-normalization (spec D-unions v2): strip the null member,
-            // wrap the rest in optional. Multi-member variants land with the
-            // union codec in a later slice.
+            // dedup alternatives that map to the same C++ type, emit a
+            // variant (or the bare type when one alternative remains), and
+            // wrap in optional when null was a member.
             let non_null: Vec<&Ty> = items.iter().filter(|t| !matches!(t, Ty::Null)).collect();
             let had_null = non_null.len() != items.len();
-            match (had_null, non_null.as_slice()) {
-                (true, [single]) => match translate_ty(single, emitted_types) {
-                    Translated::Cpp(inner) => format!("std::optional<{inner}>"),
+            let mut alternatives: Vec<String> = Vec::new();
+            for item in non_null {
+                match translate_ty(item, emitted_types) {
+                    Translated::Cpp(alt) => {
+                        if !alternatives.contains(&alt) {
+                            alternatives.push(alt);
+                        }
+                    }
                     other => return other,
-                },
-                _ => {
-                    return Translated::Unsupported(
-                        "multi-member union (variant codec lands in a later slice)".to_string(),
-                    );
                 }
+            }
+            let inner = match alternatives.as_slice() {
+                [] => return Translated::Unsupported("empty union".to_string()),
+                [single] => single.clone(),
+                _ => format!("std::variant<{}>", alternatives.join(", ")),
+            };
+            if had_null {
+                format!("std::optional<{inner}>")
+            } else {
+                inner
             }
         }
         other => return Translated::Unsupported(format!("type {other}")),
@@ -711,7 +722,8 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[EmittedClas
         let _ = writeln!(
             buf,
             "    static {q} decode(const detail::OutboundValue& v) {{\n        \
-             if (v.kind != detail::OutboundValue::Kind::Class) {{\n            \
+             if (v.kind != detail::OutboundValue::Kind::Class ||\n            \
+             (!v.name.empty() && v.name != \"{fqn}\")) {{\n            \
              detail::kind_mismatch(\"class {fqn}\", v);\n        }}\n        \
              {q} out{{}};",
             q = c.qualified,
