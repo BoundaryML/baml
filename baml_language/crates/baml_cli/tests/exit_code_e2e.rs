@@ -907,7 +907,7 @@ function make_user(name: string) -> User {
 }
 
 #[test]
-fn describe_search_lists_top_level_candidates_and_previews_source_matches() {
+fn describe_search_groups_candidates_and_previews_only_unique_exact_matches() {
     let built = common::ensure_built();
     let tmp = tempfile::tempdir().unwrap();
     create_project(
@@ -917,6 +917,11 @@ class Trophy {}
 
 function parse_trophy(raw: string) -> Trophy {
   Trophy {}
+}
+
+function process_trophy(trophy: Trophy) -> string {
+  let channel = "slack";
+  channel
 }
 
 function slack_post_message(message: string) -> string {
@@ -946,7 +951,7 @@ function slack_post_message(message: string) -> string {
         String::from_utf8_lossy(&name_search.stderr),
     );
     let name_stdout = String::from_utf8_lossy(&name_search.stdout);
-    assert!(name_stdout.contains("Matches:"), "{name_stdout}");
+    assert!(name_stdout.contains("trophy (3 matches):"), "{name_stdout}");
     assert!(name_stdout.contains("Trophy"), "{name_stdout}");
     assert!(name_stdout.contains("parse_trophy"), "{name_stdout}");
     assert!(name_stdout.contains("Previewing: Trophy"), "{name_stdout}");
@@ -975,11 +980,106 @@ function slack_post_message(message: string) -> string {
         source_stdout.contains("slack_post_message"),
         "{source_stdout}"
     );
+    assert!(!source_stdout.contains("Previewing:"), "{source_stdout}");
     assert!(
-        source_stdout.contains("Previewing: slack_post_message"),
+        source_stdout.contains("suggested: baml describe slack_post_message"),
         "{source_stdout}"
     );
     assert!(source_stdout.lines().count() <= 20, "{source_stdout}");
+
+    let compact_search = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "--search",
+            "trophy",
+            "--output",
+            "compact",
+            "--max-lines",
+            "20",
+        ],
+    );
+    assert!(compact_search.status.success());
+    let compact_stdout = String::from_utf8_lossy(&compact_search.stdout);
+    assert!(compact_stdout.contains("trophy ("), "{compact_stdout}");
+    assert!(
+        compact_stdout.contains("suggested: baml describe"),
+        "{compact_stdout}"
+    );
+    assert!(!compact_stdout.contains("Previewing:"), "{compact_stdout}");
+    assert!(
+        !compact_stdout.contains("class Trophy {}"),
+        "{compact_stdout}"
+    );
+
+    let multi_search = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "--search",
+            "trophy,slack",
+            "--view",
+            "impact",
+            "--max-lines",
+            "30",
+        ],
+    );
+    assert!(multi_search.status.success());
+    let multi_stdout = String::from_utf8_lossy(&multi_search.stdout);
+    assert!(
+        multi_stdout.contains("Matches multiple terms:"),
+        "{multi_stdout}"
+    );
+    assert_eq!(
+        multi_stdout.matches("process_trophy").count(),
+        2,
+        "{multi_stdout}"
+    );
+    assert!(multi_stdout.contains("trophy ("), "{multi_stdout}");
+    assert!(multi_stdout.contains("slack ("), "{multi_stdout}");
+    assert!(!multi_stdout.contains("Previewing:"), "{multi_stdout}");
+    assert!(
+        multi_stdout.contains("--view impact --output compact --max-lines 60"),
+        "{multi_stdout}"
+    );
+
+    let json_search = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "describe",
+            "--search",
+            "trophy,slack",
+            "--view",
+            "impact",
+            "--output",
+            "json",
+        ],
+    );
+    assert!(json_search.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&json_search.stdout).unwrap();
+    assert_eq!(json["schema_version"], 2);
+    assert_eq!(json["query"]["mode"], "balanced_or");
+    assert!(json["preview"].is_null());
+    assert!(json["groups"].as_array().unwrap().len() >= 2);
+    assert_eq!(json["groups"][0]["type"], "multi_term");
+    assert_eq!(json["groups"][0]["candidates"][0]["name"], "process_trophy");
+    assert_eq!(
+        json["groups"][0]["candidates"][0]["matches"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert!(
+        json["suggested"]["command"]
+            .as_str()
+            .unwrap()
+            .contains("--view impact --output compact --max-lines 60")
+    );
+    assert!(json["suggested"]["symbols"].as_array().unwrap().len() <= 4);
 
     let zero = run_baml_cli(
         built,

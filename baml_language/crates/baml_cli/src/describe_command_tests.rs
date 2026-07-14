@@ -6,14 +6,15 @@
 use std::path::{Path, PathBuf};
 
 use baml_db::baml_compiler2_hir;
-use baml_lsp2_actions::{ResolvedTarget, TextMatch};
+use baml_lsp2_actions::{ListingEntry, ResolvedTarget, TextMatch};
 use baml_project::ProjectDatabase;
 
 use crate::describe_command::{
-    DescribeArgs, DescribeOutput, DescribeView, definition_line_range, dispatch,
-    exact_item_candidates, filter_listing_by_kind, parse_kind_filter, parse_search_terms,
-    path_matches, resolve_exact_description, search_match_rank, search_to_json,
-    select_search_candidates, source_candidate_for_match, source_candidate_ranges,
+    DescribeArgs, DescribeOutput, DescribeView, SearchCandidate, SearchGroupKind,
+    SearchMatchReason, TermMatch, definition_line_range, dispatch, exact_item_candidates,
+    filter_listing_by_kind, parse_kind_filter, parse_search_terms, path_matches, preview_candidate,
+    resolve_exact_description, search_match_rank, search_to_json, select_search_candidates,
+    source_candidate_for_match, source_candidate_ranges, suggested_search_candidates,
     write_batch_output, write_description, write_keyword, write_listing, write_search_output,
 };
 
@@ -1737,6 +1738,24 @@ fn batch_args(budget: usize) -> DescribeArgs {
     }
 }
 
+fn search_candidate(
+    entry: ListingEntry,
+    matches: &[(usize, &str, SearchMatchReason)],
+) -> SearchCandidate {
+    SearchCandidate {
+        entry,
+        matches: matches
+            .iter()
+            .map(|(term_index, term, reason)| TermMatch {
+                term_index: *term_index,
+                term: (*term).to_string(),
+                reason: *reason,
+                evidence_count: 1,
+            })
+            .collect(),
+    }
+}
+
 #[test]
 fn search_terms_support_repeated_values_and_deduplicate_case() {
     let terms = parse_search_terms(&[
@@ -1895,10 +1914,22 @@ class ArchivedTrophy {}
         .find(|entry| entry.fqn() == "ArchivedTrophy")
         .unwrap();
 
-    assert_eq!(search_match_rank(trophy, "Trophy"), Some(0));
-    assert_eq!(search_match_rank(trophy, "trophy"), Some(1));
-    assert_eq!(search_match_rank(report, "trophy"), Some(2));
-    assert_eq!(search_match_rank(archived, "trophy"), Some(3));
+    assert_eq!(
+        search_match_rank(trophy, "Trophy"),
+        Some(SearchMatchReason::ExactName)
+    );
+    assert_eq!(
+        search_match_rank(trophy, "trophy"),
+        Some(SearchMatchReason::ExactNameIgnoreCase)
+    );
+    assert_eq!(
+        search_match_rank(report, "trophy"),
+        Some(SearchMatchReason::NamePrefix)
+    );
+    assert_eq!(
+        search_match_rank(archived, "trophy"),
+        Some(SearchMatchReason::NameSubstring)
+    );
 }
 
 #[test]
@@ -1968,30 +1999,190 @@ fn multi_query_selection_balances_terms_deduplicates_and_caps_results() {
         panic!("empty describe target should resolve to user package");
     };
     let entries = baml_lsp2_actions::list_package_items(&db, package);
-    let alpha = entries
-        .iter()
-        .filter(|entry| entry.item_name.as_str().starts_with("Alpha"))
-        .cloned()
+    let candidates = entries
+        .into_iter()
+        .map(|entry| {
+            let name = entry.fqn();
+            if name == "Alpha0" {
+                search_candidate(
+                    entry,
+                    &[
+                        (0, "alpha", SearchMatchReason::NamePrefix),
+                        (1, "beta", SearchMatchReason::SourceReference),
+                    ],
+                )
+            } else if name.starts_with("Alpha") {
+                search_candidate(entry, &[(0, "alpha", SearchMatchReason::NamePrefix)])
+            } else {
+                search_candidate(entry, &[(1, "beta", SearchMatchReason::NamePrefix)])
+            }
+        })
         .collect::<Vec<_>>();
-    let mut beta = entries
+
+    let selection =
+        select_search_candidates(&["alpha".to_string(), "beta".to_string()], candidates, 12);
+    let names = selection
+        .groups
         .iter()
-        .filter(|entry| entry.item_name.as_str().starts_with("Beta"))
-        .cloned()
+        .flat_map(|group| group.candidates.iter())
+        .map(|candidate| candidate.entry.fqn())
         .collect::<Vec<_>>();
-    beta.insert(0, alpha[0].clone());
 
-    let (selected, total) = select_search_candidates(&[alpha, beta], 12);
-    let names = selected.iter().map(|entry| entry.fqn()).collect::<Vec<_>>();
-
-    assert_eq!(selected.len(), 12);
-    assert_eq!(total, 16);
+    assert_eq!(names.len(), 12);
+    assert_eq!(selection.total, 16);
     assert_eq!(names[0], "Alpha0");
-    assert_eq!(names[1], "Alpha1");
+    assert_eq!(selection.groups[0].kind, SearchGroupKind::MultiTerm);
     assert!(names.iter().any(|name| name.starts_with("Beta")));
     assert_eq!(
         names.iter().collect::<std::collections::HashSet<_>>().len(),
         names.len()
     );
+}
+
+#[test]
+fn search_preview_requires_one_unique_exact_single_term_match() {
+    let db = make_db(&[(
+        "preview.baml",
+        "class Trophy {}\nclass TrophyReport {}\nfunction Trophy() -> string { \"ok\" }\n",
+    )]);
+    let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+        panic!("empty describe target should resolve to user package");
+    };
+    let entries = baml_lsp2_actions::list_package_items(&db, package);
+    let class_trophy = entries
+        .iter()
+        .find(|entry| entry.fqn() == "Trophy" && entry.kind.as_str() == "class")
+        .unwrap()
+        .clone();
+    let function_trophy = entries
+        .iter()
+        .find(|entry| entry.fqn() == "Trophy" && entry.kind.as_str() == "function")
+        .unwrap()
+        .clone();
+    let report = entries
+        .iter()
+        .find(|entry| entry.fqn() == "TrophyReport")
+        .unwrap()
+        .clone();
+    let terms = vec!["Trophy".to_string()];
+    let unique = vec![
+        search_candidate(
+            class_trophy.clone(),
+            &[(0, "Trophy", SearchMatchReason::ExactName)],
+        ),
+        search_candidate(
+            report.clone(),
+            &[(0, "Trophy", SearchMatchReason::NamePrefix)],
+        ),
+    ];
+    assert_eq!(
+        preview_candidate(&terms, &unique, DescribeOutput::Text)
+            .unwrap()
+            .entry
+            .kind
+            .as_str(),
+        "class"
+    );
+    assert!(preview_candidate(&terms, &unique, DescribeOutput::Compact).is_none());
+    assert!(
+        preview_candidate(
+            &terms,
+            &[search_candidate(
+                report,
+                &[(0, "Trophy", SearchMatchReason::NamePrefix)]
+            )],
+            DescribeOutput::Text,
+        )
+        .is_none()
+    );
+    let tied = vec![
+        search_candidate(class_trophy, &[(0, "Trophy", SearchMatchReason::ExactName)]),
+        search_candidate(
+            function_trophy,
+            &[(0, "Trophy", SearchMatchReason::ExactName)],
+        ),
+    ];
+    assert!(preview_candidate(&terms, &tied, DescribeOutput::Json).is_none());
+    assert!(
+        preview_candidate(
+            &["Trophy".to_string(), "report".to_string()],
+            &unique,
+            DescribeOutput::Text,
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn search_group_order_is_stable_across_file_insertion_order() {
+    fn selected_names(files: &[(&str, &str)]) -> Vec<String> {
+        let db = make_db(files);
+        let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+            panic!("empty describe target should resolve to user package");
+        };
+        let candidates = baml_lsp2_actions::list_package_items(&db, package)
+            .into_iter()
+            .map(|entry| {
+                search_candidate(entry, &[(0, "gateway", SearchMatchReason::NameSubstring)])
+            })
+            .collect::<Vec<_>>();
+        select_search_candidates(&["gateway".to_string()], candidates, 12)
+            .groups
+            .into_iter()
+            .flat_map(|group| group.candidates)
+            .map(|candidate| candidate.entry.fqn())
+            .collect()
+    }
+
+    let first = selected_names(&[
+        ("b.baml", "class ZGateway {}"),
+        ("a.baml", "class AGateway {}"),
+    ]);
+    let second = selected_names(&[
+        ("a.baml", "class AGateway {}"),
+        ("b.baml", "class ZGateway {}"),
+    ]);
+    assert_eq!(first, second);
+    assert_eq!(first, ["AGateway", "ZGateway"]);
+}
+
+#[test]
+fn suggested_search_batch_prefers_multi_term_then_balances_and_caps() {
+    let mut source = String::new();
+    for name in ["Bridge", "AlphaOne", "AlphaTwo", "BetaOne", "BetaTwo"] {
+        source.push_str(&format!("class {name} {{}}\n"));
+    }
+    let db = make_db(&[("suggested.baml", &source)]);
+    let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
+        panic!("empty describe target should resolve to user package");
+    };
+    let candidates = baml_lsp2_actions::list_package_items(&db, package)
+        .into_iter()
+        .map(|entry| match entry.fqn().as_str() {
+            "Bridge" => search_candidate(
+                entry,
+                &[
+                    (0, "alpha", SearchMatchReason::SourceReference),
+                    (1, "beta", SearchMatchReason::SourceReference),
+                ],
+            ),
+            name if name.starts_with("Alpha") => {
+                search_candidate(entry, &[(0, "alpha", SearchMatchReason::NamePrefix)])
+            }
+            _ => search_candidate(entry, &[(1, "beta", SearchMatchReason::NamePrefix)]),
+        })
+        .collect::<Vec<_>>();
+    let selection =
+        select_search_candidates(&["alpha".to_string(), "beta".to_string()], candidates, 12);
+    let suggested = suggested_search_candidates(&selection, 2);
+    let names = suggested
+        .iter()
+        .map(|candidate| candidate.entry.fqn())
+        .collect::<Vec<_>>();
+    assert_eq!(names.len(), 4);
+    assert_eq!(names[0], "Bridge");
+    assert!(names.iter().any(|name| name.starts_with("Alpha")));
+    assert!(names.iter().any(|name| name.starts_with("Beta")));
 }
 
 #[test]
@@ -2007,7 +2198,19 @@ class TrophyReport {}
     let Some(ResolvedTarget::Package(package)) = dispatch(&db, "") else {
         panic!("empty describe target should resolve to user package");
     };
-    let candidates = baml_lsp2_actions::list_package_items(&db, package);
+    let candidates = baml_lsp2_actions::list_package_items(&db, package)
+        .into_iter()
+        .map(|entry| {
+            let reason = if entry.fqn() == "Trophy" {
+                SearchMatchReason::ExactNameIgnoreCase
+            } else {
+                SearchMatchReason::NamePrefix
+            };
+            search_candidate(entry, &[(0, "trophy", reason)])
+        })
+        .collect::<Vec<_>>();
+    let terms = vec!["trophy".to_string()];
+    let selection = select_search_candidates(&terms, candidates.clone(), 12);
     let preview = resolve_exact_description(
         &db,
         &files,
@@ -2024,59 +2227,85 @@ class TrophyReport {}
         &db,
         &files,
         Path::new("/test"),
-        &candidates,
-        candidates.len(),
-        &preview,
+        &selection,
+        Some(&preview),
+        &[],
         &args,
+        &[],
+        0,
     )
     .unwrap();
     let text = String::from_utf8(text).unwrap();
-    assert!(text.contains("Matches:"), "{text}");
+    assert!(text.contains("trophy (2 matches):"), "{text}");
     assert!(text.contains("Previewing: Trophy"), "{text}");
     assert!(text.lines().count() <= args.max_lines, "{text}");
 
+    let tight_args = batch_args(4);
+    let mut tight = Vec::new();
+    write_search_output(
+        &mut tight,
+        &db,
+        &files,
+        Path::new("/test"),
+        &selection,
+        Some(&preview),
+        &[],
+        &tight_args,
+        &[],
+        0,
+    )
+    .unwrap();
+    let tight = String::from_utf8(tight).unwrap();
+    assert!(
+        tight.contains("2 unique matches · showing 1 · 1 omitted"),
+        "{tight}"
+    );
+    assert!(tight.lines().count() <= tight_args.max_lines, "{tight}");
+
     args.output = DescribeOutput::Compact;
+    let suggested = suggested_search_candidates(&selection, terms.len());
     let mut compact = Vec::new();
     write_search_output(
         &mut compact,
         &db,
         &files,
         Path::new("/test"),
-        &candidates,
-        candidates.len(),
-        &preview,
+        &selection,
+        None,
+        &suggested,
         &args,
+        &[],
+        0,
     )
     .unwrap();
     let compact = String::from_utf8(compact).unwrap();
     assert_eq!(
-        compact.matches("next: baml describe").count(),
+        compact.matches("suggested: baml describe").count(),
         1,
         "{compact}"
     );
-    assert!(compact.contains("Previewing: Trophy"), "{compact}");
+    assert!(!compact.contains("Previewing:"), "{compact}");
+    assert!(!compact.contains("class Trophy {"), "{compact}");
 
     args.output = DescribeOutput::Json;
     let json = search_to_json(
         &db,
         Path::new("/test"),
-        &["trophy".to_string()],
-        &candidates,
-        candidates.len(),
-        &preview,
+        &terms,
+        &selection,
+        Some(&preview),
+        &[],
         &args,
         &[],
+        0,
     );
     assert_eq!(json["query"]["search"][0], "trophy");
-    assert_eq!(json["candidates"].as_array().unwrap().len(), 2);
+    assert_eq!(json["schema_version"], 2);
+    assert_eq!(json["query"]["mode"], "balanced_or");
+    assert_eq!(json["groups"][0]["candidates"].as_array().unwrap().len(), 2);
     assert_eq!(json["preview"]["identity"]["name"], "Trophy");
     assert_eq!(json["omitted"], 0);
-    assert!(
-        json["next"]
-            .as_str()
-            .unwrap()
-            .contains("Trophy TrophyReport")
-    );
+    assert!(json["suggested"].is_null());
 }
 
 #[test]
@@ -2199,4 +2428,48 @@ function second() -> string { "second" }
     assert_eq!(output.matches("next: baml describe").count(), 1, "{output}");
     assert!(output.contains("--output compact"), "{output}");
     assert!(output.contains("first second"), "{output}");
+}
+
+#[test]
+fn compact_source_batch_gives_every_symbol_a_signature_and_follows_up_truncation() {
+    let mut source = String::new();
+    for name in ["first", "second", "third", "fourth"] {
+        source.push_str(&format!("function {name}() -> string {{\n"));
+        for _ in 0..20 {
+            source.push_str(&format!("    let value = \"{name}\";\n"));
+        }
+        source.push_str("    value\n}\n");
+    }
+    let db = make_db(&[("flow.baml", &source)]);
+    let files = baml_compiler2_hir::compiler2_all_files(&db);
+    let descriptions = ["first", "second", "third", "fourth"]
+        .into_iter()
+        .map(|name| describe_one(&db, name))
+        .collect::<Vec<_>>();
+    let mut args = batch_args(13);
+    args.output = DescribeOutput::Compact;
+    args.view = DescribeView::Source;
+    let mut output = Vec::new();
+    write_batch_output(
+        &mut output,
+        &db,
+        &files,
+        &descriptions,
+        &[],
+        &[],
+        &args,
+        Path::new("/test"),
+    )
+    .unwrap();
+    let output = String::from_utf8(output).unwrap();
+
+    assert!(output.lines().count() <= args.max_lines, "{output}");
+    for name in ["first", "second", "third", "fourth"] {
+        assert!(
+            output.contains(&format!("function {name}() -> string {{")),
+            "missing signature for {name}: {output}"
+        );
+    }
+    assert_eq!(output.matches("next: baml describe").count(), 1, "{output}");
+    assert!(output.contains("first second third fourth"), "{output}");
 }

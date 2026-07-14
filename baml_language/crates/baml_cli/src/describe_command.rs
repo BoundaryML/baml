@@ -1,6 +1,10 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::LazyLock,
+};
 
 use anyhow::{Context, Result};
 use baml_db::baml_compiler2_hir;
@@ -66,6 +70,96 @@ pub enum DescribeOutput {
 }
 
 const SEARCH_RESULT_LIMIT: usize = 12;
+const SOURCE_SEARCH_LIMIT_PER_TERM: usize = 200;
+const UNMAPPED_SOURCE_RESULT_LIMIT: usize = 6;
+const SEARCH_SUGGESTION_LIMIT: usize = 4;
+const SEARCH_SUGGESTION_MAX_LINES: usize = 60;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum SearchMatchReason {
+    ExactName,
+    ExactNameIgnoreCase,
+    NamePrefix,
+    NameSubstring,
+    SourceDefinition,
+    SourceReference,
+    SourceText,
+}
+
+impl SearchMatchReason {
+    fn json_name(self) -> &'static str {
+        match self {
+            Self::ExactName => "exact_name",
+            Self::ExactNameIgnoreCase => "exact_name_ignore_case",
+            Self::NamePrefix => "name_prefix",
+            Self::NameSubstring => "name_substring",
+            Self::SourceDefinition => "source_definition",
+            Self::SourceReference => "source_reference",
+            Self::SourceText => "source_text",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::ExactName => "exact name",
+            Self::ExactNameIgnoreCase => "exact name (case-insensitive)",
+            Self::NamePrefix => "name prefix",
+            Self::NameSubstring => "name substring",
+            Self::SourceDefinition => "source definition",
+            Self::SourceReference => "source reference",
+            Self::SourceText => "source text",
+        }
+    }
+
+    fn is_exact(self) -> bool {
+        matches!(self, Self::ExactName | Self::ExactNameIgnoreCase)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TermMatch {
+    pub(crate) term_index: usize,
+    pub(crate) term: String,
+    pub(crate) reason: SearchMatchReason,
+    pub(crate) evidence_count: usize,
+}
+
+#[derive(Clone)]
+pub(crate) struct SearchCandidate {
+    pub(crate) entry: ListingEntry,
+    pub(crate) matches: Vec<TermMatch>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum SearchGroupKind {
+    MultiTerm,
+    Term { term_index: usize, term: String },
+}
+
+#[derive(Clone)]
+pub(crate) struct SearchGroup {
+    pub(crate) kind: SearchGroupKind,
+    pub(crate) candidates: Vec<SearchCandidate>,
+    pub(crate) total: usize,
+}
+
+#[derive(Clone)]
+pub(crate) struct SearchSelection {
+    pub(crate) groups: Vec<SearchGroup>,
+    pub(crate) total: usize,
+}
+
+pub(crate) struct UnmappedSourceMatch {
+    pub(crate) term_index: usize,
+    pub(crate) term: String,
+    pub(crate) text_match: TextMatch,
+}
+
+impl SearchSelection {
+    fn shown(&self) -> usize {
+        self.groups.iter().map(|group| group.candidates.len()).sum()
+    }
+}
 
 #[derive(Args, Clone, Debug)]
 pub struct DescribeArgs {
@@ -456,7 +550,7 @@ pub(crate) fn resolve_exact_description(
     }
 }
 
-pub(crate) fn search_match_rank(entry: &ListingEntry, term: &str) -> Option<u8> {
+pub(crate) fn search_match_rank(entry: &ListingEntry, term: &str) -> Option<SearchMatchReason> {
     let name = entry.item_name.as_str();
     let fqn = entry.fqn();
     let term_lower = term.to_lowercase();
@@ -464,13 +558,13 @@ pub(crate) fn search_match_rank(entry: &ListingEntry, term: &str) -> Option<u8> 
     let fqn_lower = fqn.to_lowercase();
 
     if name == term || fqn == term {
-        Some(0)
+        Some(SearchMatchReason::ExactName)
     } else if name_lower == term_lower || fqn_lower == term_lower {
-        Some(1)
+        Some(SearchMatchReason::ExactNameIgnoreCase)
     } else if name_lower.starts_with(&term_lower) || fqn_lower.starts_with(&term_lower) {
-        Some(2)
+        Some(SearchMatchReason::NamePrefix)
     } else if name_lower.contains(&term_lower) || fqn_lower.contains(&term_lower) {
-        Some(3)
+        Some(SearchMatchReason::NameSubstring)
     } else {
         None
     }
@@ -519,38 +613,235 @@ pub(crate) fn source_candidate_for_match(
         .map(|(entry, _, _)| entry.clone())
 }
 
-pub(crate) fn select_search_candidates(
-    candidates_by_term: &[Vec<ListingEntry>],
-    limit: usize,
-) -> (Vec<ListingEntry>, usize) {
-    let all_candidate_count = candidates_by_term
+fn source_match_reason(text_match: &TextMatch) -> SearchMatchReason {
+    match text_match.annotation {
+        Some(MatchAnnotation::Definition { .. }) => SearchMatchReason::SourceDefinition,
+        Some(MatchAnnotation::Reference { .. }) => SearchMatchReason::SourceReference,
+        None => SearchMatchReason::SourceText,
+    }
+}
+
+fn add_search_evidence(
+    candidates: &mut HashMap<(String, DefinitionKind, String, usize), SearchCandidate>,
+    entry: ListingEntry,
+    term_index: usize,
+    term: &str,
+    reason: SearchMatchReason,
+) {
+    let candidate = candidates
+        .entry(listing_entry_identity(&entry))
+        .or_insert_with(|| SearchCandidate {
+            entry,
+            matches: Vec::new(),
+        });
+    if let Some(term_match) = candidate
+        .matches
+        .iter_mut()
+        .find(|term_match| term_match.term_index == term_index)
+    {
+        term_match.reason = term_match.reason.min(reason);
+        term_match.evidence_count += 1;
+    } else {
+        candidate.matches.push(TermMatch {
+            term_index,
+            term: term.to_string(),
+            reason,
+            evidence_count: 1,
+        });
+        candidate
+            .matches
+            .sort_by_key(|term_match| term_match.term_index);
+    }
+}
+
+fn strongest_reason(candidate: &SearchCandidate) -> SearchMatchReason {
+    candidate
+        .matches
         .iter()
-        .flatten()
-        .map(listing_entry_identity)
-        .collect::<std::collections::HashSet<_>>()
-        .len();
-    let mut candidates = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    let mut candidate_index = 0usize;
-    while candidates.len() < limit {
+        .map(|term_match| term_match.reason)
+        .min()
+        .unwrap_or(SearchMatchReason::SourceText)
+}
+
+fn compare_search_candidates(
+    candidate_a: &SearchCandidate,
+    candidate_b: &SearchCandidate,
+) -> std::cmp::Ordering {
+    strongest_reason(candidate_a)
+        .cmp(&strongest_reason(candidate_b))
+        .then_with(|| candidate_b.matches.len().cmp(&candidate_a.matches.len()))
+        .then_with(|| candidate_a.entry.fqn().cmp(&candidate_b.entry.fqn()))
+        .then_with(|| {
+            candidate_a
+                .entry
+                .kind
+                .as_str()
+                .cmp(candidate_b.entry.kind.as_str())
+        })
+        .then_with(|| {
+            candidate_a
+                .entry
+                .file_path
+                .cmp(&candidate_b.entry.file_path)
+        })
+        .then_with(|| candidate_a.entry.line.cmp(&candidate_b.entry.line))
+}
+
+pub(crate) fn select_search_candidates(
+    terms: &[String],
+    candidates: impl IntoIterator<Item = SearchCandidate>,
+    limit: usize,
+) -> SearchSelection {
+    let mut all = candidates.into_iter().collect::<Vec<_>>();
+    all.sort_by(compare_search_candidates);
+    let total = all.len();
+
+    let mut multi = all
+        .iter()
+        .filter(|candidate| candidate.matches.len() > 1)
+        .cloned()
+        .collect::<Vec<_>>();
+    multi.sort_by(compare_search_candidates);
+
+    let per_term = terms
+        .iter()
+        .enumerate()
+        .map(|(term_index, _)| {
+            let mut term_candidates = all
+                .iter()
+                .filter(|candidate| {
+                    candidate.matches.len() == 1 && candidate.matches[0].term_index == term_index
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            term_candidates.sort_by(compare_search_candidates);
+            term_candidates
+        })
+        .collect::<Vec<_>>();
+
+    let multi_total = multi.len();
+    let term_totals = per_term.iter().map(Vec::len).collect::<Vec<_>>();
+    let selected_multi = multi.drain(..multi.len().min(limit)).collect::<Vec<_>>();
+    let mut remaining = limit.saturating_sub(selected_multi.len());
+    let mut selected_by_term = vec![Vec::new(); terms.len()];
+    let mut rank = 0usize;
+    while remaining > 0 {
         let mut advanced = false;
-        for term_candidates in candidates_by_term {
-            if let Some(candidate) = term_candidates.get(candidate_index) {
+        for (term_index, term_candidates) in per_term.iter().enumerate() {
+            if let Some(candidate) = term_candidates.get(rank) {
+                selected_by_term[term_index].push(candidate.clone());
+                remaining -= 1;
                 advanced = true;
-                if seen.insert(listing_entry_identity(candidate)) {
-                    candidates.push(candidate.clone());
-                    if candidates.len() >= limit {
-                        break;
-                    }
+                if remaining == 0 {
+                    break;
                 }
             }
         }
         if !advanced {
             break;
         }
-        candidate_index += 1;
+        rank += 1;
     }
-    (candidates, all_candidate_count)
+
+    let mut groups = Vec::new();
+    if multi_total > 0 {
+        groups.push(SearchGroup {
+            kind: SearchGroupKind::MultiTerm,
+            candidates: selected_multi,
+            total: multi_total,
+        });
+    }
+    for (term_index, term) in terms.iter().enumerate() {
+        if term_totals[term_index] > 0 {
+            groups.push(SearchGroup {
+                kind: SearchGroupKind::Term {
+                    term_index,
+                    term: term.clone(),
+                },
+                candidates: std::mem::take(&mut selected_by_term[term_index]),
+                total: term_totals[term_index],
+            });
+        }
+    }
+
+    SearchSelection { groups, total }
+}
+
+pub(crate) fn preview_candidate<'a>(
+    terms: &[String],
+    candidates: &'a [SearchCandidate],
+    output: DescribeOutput,
+) -> Option<&'a SearchCandidate> {
+    if terms.len() != 1 || output == DescribeOutput::Compact {
+        return None;
+    }
+    let mut exact = candidates.iter().filter(|candidate| {
+        candidate
+            .matches
+            .iter()
+            .any(|term_match| term_match.term_index == 0 && term_match.reason.is_exact())
+    });
+    let candidate = exact.next()?;
+    exact.next().is_none().then_some(candidate)
+}
+
+pub(crate) fn suggested_search_candidates(
+    selection: &SearchSelection,
+    term_count: usize,
+) -> Vec<&SearchCandidate> {
+    let mut suggested = Vec::new();
+    let mut seen = HashSet::new();
+
+    if let Some(group) = selection
+        .groups
+        .iter()
+        .find(|group| group.kind == SearchGroupKind::MultiTerm)
+        && let Some(candidate) = group.candidates.first()
+    {
+        push_search_suggestion(candidate, &mut suggested, &mut seen);
+    }
+    for term_index in 0..term_count {
+        if let Some(candidate) = selection.groups.iter().find_map(|group| match &group.kind {
+            SearchGroupKind::Term {
+                term_index: group_term_index,
+                ..
+            } if *group_term_index == term_index => group.candidates.first(),
+            _ => None,
+        }) {
+            push_search_suggestion(candidate, &mut suggested, &mut seen);
+        }
+    }
+    let mut rank = 1usize;
+    while suggested.len() < SEARCH_SUGGESTION_LIMIT {
+        let mut advanced = false;
+        for term_index in 0..term_count {
+            if let Some(candidate) = selection.groups.iter().find_map(|group| match &group.kind {
+                SearchGroupKind::Term {
+                    term_index: group_term_index,
+                    ..
+                } if *group_term_index == term_index => group.candidates.get(rank),
+                _ => None,
+            }) {
+                push_search_suggestion(candidate, &mut suggested, &mut seen);
+                advanced = true;
+            }
+        }
+        if !advanced {
+            break;
+        }
+        rank += 1;
+    }
+    suggested
+}
+
+fn push_search_suggestion<'a>(
+    candidate: &'a SearchCandidate,
+    suggested: &mut Vec<&'a SearchCandidate>,
+    seen: &mut HashSet<String>,
+) {
+    if suggested.len() < SEARCH_SUGGESTION_LIMIT && seen.insert(candidate.entry.fqn()) {
+        suggested.push(candidate);
+    }
 }
 
 fn listing_entry_identity(entry: &ListingEntry) -> (String, DefinitionKind, String, usize) {
@@ -858,85 +1149,107 @@ impl DescribeArgs {
             &kind_filter,
         )
         .into_iter()
+        .filter(|entry| !entry.item_name.as_str().starts_with("$init_test__"))
         .filter(|entry| path_matches(&entry.file_path, &self.file))
         .collect::<Vec<_>>();
         let source_ranges = source_candidate_ranges(db, &search_files, &entries);
 
-        let mut candidates_by_term = Vec::new();
+        let mut candidate_map = HashMap::new();
         let mut unmatched = Vec::new();
-        for term in &terms {
-            let mut candidates = entries
-                .iter()
-                .filter_map(|entry| {
-                    search_match_rank(entry, term).map(|rank| (rank, entry.clone()))
-                })
-                .collect::<Vec<_>>();
-            candidates.sort_by(|(rank_a, entry_a), (rank_b, entry_b)| {
-                rank_a
-                    .cmp(rank_b)
-                    .then_with(|| entry_a.fqn().cmp(&entry_b.fqn()))
-                    .then_with(|| entry_a.kind.as_str().cmp(entry_b.kind.as_str()))
-                    .then_with(|| entry_a.file_path.cmp(&entry_b.file_path))
-                    .then_with(|| entry_a.line.cmp(&entry_b.line))
-            });
-
-            let mut ranked = candidates
-                .into_iter()
-                .map(|(_, entry)| entry)
-                .collect::<Vec<_>>();
-            if ranked.is_empty() {
-                let opts = ProjectSearchOptions {
-                    pattern: term,
-                    ignore_case: true,
-                    kind_filter: &kind_filter,
-                };
-                for text_match in search_text(db, &search_files, &opts) {
-                    if !path_matches(&text_match.file_path, &self.file) {
-                        continue;
-                    }
-                    if let Some(entry) = source_candidate_for_match(&source_ranges, &text_match) {
-                        if !ranked.iter().any(|candidate| {
-                            listing_entry_identity(candidate) == listing_entry_identity(&entry)
-                        }) {
-                            ranked.push(entry);
-                        }
-                    } else {
-                        unmatched.push(text_match);
-                    }
+        for (term_index, term) in terms.iter().enumerate() {
+            for entry in &entries {
+                if let Some(reason) = search_match_rank(entry, term) {
+                    add_search_evidence(
+                        &mut candidate_map,
+                        entry.clone(),
+                        term_index,
+                        term,
+                        reason,
+                    );
                 }
-                ranked.sort_by(|entry_a, entry_b| {
-                    entry_a
-                        .fqn()
-                        .cmp(&entry_b.fqn())
-                        .then_with(|| entry_a.kind.as_str().cmp(entry_b.kind.as_str()))
-                        .then_with(|| entry_a.file_path.cmp(&entry_b.file_path))
-                        .then_with(|| entry_a.line.cmp(&entry_b.line))
-                });
             }
-            candidates_by_term.push(ranked);
+
+            let opts = ProjectSearchOptions {
+                pattern: term,
+                ignore_case: true,
+                kind_filter: &kind_filter,
+            };
+            for text_match in search_text(db, &search_files, &opts)
+                .into_iter()
+                .filter(|text_match| path_matches(&text_match.file_path, &self.file))
+                .take(SOURCE_SEARCH_LIMIT_PER_TERM)
+            {
+                if let Some(entry) = source_candidate_for_match(&source_ranges, &text_match) {
+                    let reason = source_match_reason(&text_match);
+                    add_search_evidence(&mut candidate_map, entry, term_index, term, reason);
+                } else {
+                    unmatched.push(UnmappedSourceMatch {
+                        term_index,
+                        term: term.clone(),
+                        text_match,
+                    });
+                }
+            }
         }
+        unmatched.sort_by(|match_a, match_b| {
+            match_a
+                .term_index
+                .cmp(&match_b.term_index)
+                .then_with(|| {
+                    match_a
+                        .text_match
+                        .file_path
+                        .cmp(&match_b.text_match.file_path)
+                })
+                .then_with(|| {
+                    match_a
+                        .text_match
+                        .line_number
+                        .cmp(&match_b.text_match.line_number)
+                })
+                .then_with(|| {
+                    match_a
+                        .text_match
+                        .line_text
+                        .cmp(&match_b.text_match.line_text)
+                })
+        });
+        let unmatched_total = unmatched.len();
+        unmatched.truncate(UNMAPPED_SOURCE_RESULT_LIMIT);
 
-        let (candidates, all_candidate_count) =
-            select_search_candidates(&candidates_by_term, SEARCH_RESULT_LIMIT);
+        let mut all_candidates = candidate_map.into_values().collect::<Vec<_>>();
+        all_candidates.sort_by(compare_search_candidates);
+        let selection =
+            select_search_candidates(&terms, all_candidates.clone(), SEARCH_RESULT_LIMIT);
 
-        let Some(preview_entry) = candidates.first() else {
+        if selection.total == 0 && unmatched.is_empty() {
             eprintln!("No search results for: {}", terms.join(", "));
             return Ok(crate::ExitCode::Other);
-        };
+        }
         let files = baml_compiler2_hir::compiler2_all_files(db);
-        let preview = describe_listing_entry(db, &files, preview_entry, self.describe_options())
-            .context("Search preview candidate did not resolve")?;
+        let preview_candidate = preview_candidate(&terms, &all_candidates, self.output);
+        let preview = preview_candidate
+            .map(|candidate| {
+                describe_listing_entry(db, &files, &candidate.entry, self.describe_options())
+                    .context("Search preview candidate did not resolve")
+            })
+            .transpose()?;
+        let suggested = preview
+            .is_none()
+            .then(|| suggested_search_candidates(&selection, terms.len()))
+            .unwrap_or_default();
 
         if self.output == DescribeOutput::Json {
             let envelope = search_to_json(
                 db,
                 from,
                 &terms,
-                &candidates,
-                all_candidate_count,
-                &preview,
+                &selection,
+                preview.as_ref(),
+                &suggested,
                 self,
                 &unmatched,
+                unmatched_total,
             );
             println!(
                 "{}",
@@ -949,10 +1262,12 @@ impl DescribeArgs {
                 db,
                 &files,
                 from,
-                &candidates,
-                all_candidate_count,
-                &preview,
+                &selection,
+                preview.as_ref(),
+                &suggested,
                 self,
+                &unmatched,
+                unmatched_total,
             )?;
         }
 
@@ -1162,15 +1477,55 @@ fn batch_description_to_json(
 }
 
 fn search_candidate_to_json(
-    entry: &ListingEntry,
+    candidate: &SearchCandidate,
     project_root: &std::path::Path,
 ) -> serde_json::Value {
-    let path = relative_path(std::path::Path::new(&entry.file_path), project_root);
+    let path = relative_path(
+        std::path::Path::new(&candidate.entry.file_path),
+        project_root,
+    );
     serde_json::json!({
-        "name": entry.fqn(),
-        "kind": entry.kind.as_str(),
+        "name": candidate.entry.fqn(),
+        "kind": candidate.entry.kind.as_str(),
         "file": path.to_string_lossy(),
-        "line": entry.line,
+        "line": candidate.entry.line,
+        "matches": candidate.matches.iter().map(|term_match| serde_json::json!({
+            "term": term_match.term,
+            "reason": term_match.reason.json_name(),
+            "evidence_count": term_match.evidence_count,
+        })).collect::<Vec<_>>(),
+    })
+}
+
+fn suggested_command(suggested: &[&SearchCandidate], view: DescribeView) -> Option<String> {
+    (!suggested.is_empty()).then(|| {
+        format!(
+            "baml describe {} --view {} --output compact --max-lines {}",
+            suggested
+                .iter()
+                .map(|candidate| candidate.entry.fqn())
+                .collect::<Vec<_>>()
+                .join(" "),
+            describe_view_name(view),
+            SEARCH_SUGGESTION_MAX_LINES,
+        )
+    })
+}
+
+fn search_group_to_json(group: &SearchGroup, project_root: &std::path::Path) -> serde_json::Value {
+    let (group_type, term) = match &group.kind {
+        SearchGroupKind::MultiTerm => ("multi_term", None),
+        SearchGroupKind::Term { term, .. } => ("term", Some(term.as_str())),
+    };
+    serde_json::json!({
+        "type": group_type,
+        "term": term,
+        "candidates": group.candidates.iter()
+            .map(|candidate| search_candidate_to_json(candidate, project_root))
+            .collect::<Vec<_>>(),
+        "shown": group.candidates.len(),
+        "total": group.total,
+        "omitted": group.total.saturating_sub(group.candidates.len()),
     })
 }
 
@@ -1178,41 +1533,80 @@ pub(crate) fn search_to_json(
     db: &ProjectDatabase,
     project_root: &std::path::Path,
     terms: &[String],
-    candidates: &[ListingEntry],
-    all_candidate_count: usize,
-    preview: &SymbolDescription,
+    selection: &SearchSelection,
+    preview: Option<&SymbolDescription>,
+    suggested: &[&SearchCandidate],
     args: &DescribeArgs,
-    unmatched: &[TextMatch],
+    unmatched: &[UnmappedSourceMatch],
+    unmatched_total: usize,
 ) -> serde_json::Value {
-    let next = format!(
-        "baml describe {}",
-        candidates
-            .iter()
-            .map(ListingEntry::fqn)
-            .collect::<Vec<_>>()
-            .join(" ")
-    );
+    let command = suggested_command(suggested, args.view);
+    let mut groups = selection
+        .groups
+        .iter()
+        .map(|group| search_group_to_json(group, project_root))
+        .collect::<Vec<_>>();
+    if !unmatched.is_empty() {
+        groups.push(serde_json::json!({
+            "type": "unmapped_source",
+            "matches": unmatched.iter().map(|unmapped| {
+                let mut value = text_match_to_json(db, &unmapped.text_match, project_root);
+                value["term"] = serde_json::Value::String(unmapped.term.clone());
+                value["term_index"] = serde_json::json!(unmapped.term_index);
+                value
+            }).collect::<Vec<_>>(),
+            "shown": unmatched.len(),
+            "total": unmatched_total,
+            "omitted": unmatched_total.saturating_sub(unmatched.len()),
+        }));
+    }
     serde_json::json!({
-        "schema_version": 1,
-        "query": { "search": terms },
-        "candidates": candidates
-            .iter()
-            .map(|entry| search_candidate_to_json(entry, project_root))
-            .collect::<Vec<_>>(),
-        "preview": batch_description_to_json(
-            db,
-            preview,
-            args.view,
-            args.max_lines,
-            project_root,
-        ),
-        "unmatched": unmatched
-            .iter()
-            .map(|text_match| text_match_to_json(db, text_match, project_root))
-            .collect::<Vec<_>>(),
-        "omitted": all_candidate_count.saturating_sub(candidates.len()),
-        "next": next,
+        "schema_version": 2,
+        "query": { "search": terms, "mode": "balanced_or" },
+        "groups": groups,
+        "preview": preview.map(|preview| batch_description_to_json(
+            db, preview, args.view, args.max_lines, project_root,
+        )),
+        "suggested": command.map(|command| serde_json::json!({
+            "symbols": suggested.iter().map(|candidate| candidate.entry.fqn()).collect::<Vec<_>>(),
+            "command": command,
+        })),
+        "shown": selection.shown(),
+        "total": selection.total,
+        "omitted": selection.total.saturating_sub(selection.shown()),
     })
+}
+
+fn candidate_reason_label(candidate: &SearchCandidate, term_index: usize) -> &'static str {
+    candidate
+        .matches
+        .iter()
+        .find(|term_match| term_match.term_index == term_index)
+        .map_or("source text", |term_match| term_match.reason.label())
+}
+
+fn write_search_candidate_row(
+    w: &mut impl std::io::Write,
+    painter: &crate::paint::Painter,
+    project_root: &std::path::Path,
+    candidate: &SearchCandidate,
+    suffix: &str,
+) -> std::io::Result<()> {
+    let abs = std::path::Path::new(&candidate.entry.file_path);
+    let rel = relative_path(abs, project_root);
+    let loc = painter.location(
+        abs,
+        &rel.display().to_string(),
+        &candidate.entry.line.to_string(),
+    );
+    write_symbol_row(
+        w,
+        painter,
+        "  ",
+        candidate.entry.kind,
+        &candidate.entry.fqn(),
+        &format!("{loc}  {suffix}"),
+    )
 }
 
 pub(crate) fn write_search_output(
@@ -1220,78 +1614,128 @@ pub(crate) fn write_search_output(
     db: &ProjectDatabase,
     files: &[baml_db::SourceFile],
     project_root: &std::path::Path,
-    candidates: &[ListingEntry],
-    all_candidate_count: usize,
-    preview: &SymbolDescription,
+    selection: &SearchSelection,
+    preview: Option<&SymbolDescription>,
+    suggested: &[&SearchCandidate],
     args: &DescribeArgs,
+    unmatched: &[UnmappedSourceMatch],
+    unmatched_total: usize,
 ) -> std::io::Result<()> {
     let painter = crate::paint::Painter::stdout();
     let mut used = 0usize;
-    if args.max_lines > 0 {
-        writeln!(w, "Matches:")?;
+    let mut rendered_candidates = 0usize;
+    let reserve_footer =
+        usize::from(selection.total > 0) + usize::from(!suggested.is_empty() || preview.is_some());
+    for group in &selection.groups {
+        if used >= args.max_lines.saturating_sub(reserve_footer) {
+            break;
+        }
+        match &group.kind {
+            SearchGroupKind::MultiTerm => writeln!(w, "Matches multiple terms:")?,
+            SearchGroupKind::Term { term, .. } => writeln!(w, "{term} ({} matches):", group.total)?,
+        }
         used += 1;
+        let mut rendered_in_group = 0usize;
+        for candidate in &group.candidates {
+            if used >= args.max_lines.saturating_sub(reserve_footer) {
+                break;
+            }
+            let suffix = match &group.kind {
+                SearchGroupKind::MultiTerm => candidate
+                    .matches
+                    .iter()
+                    .map(|term_match| {
+                        format!("{}: {}", term_match.term, term_match.reason.json_name())
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" · "),
+                SearchGroupKind::Term { term_index, .. } => {
+                    candidate_reason_label(candidate, *term_index).to_string()
+                }
+            };
+            write_search_candidate_row(w, &painter, project_root, candidate, &suffix)?;
+            used += 1;
+            rendered_candidates += 1;
+            rendered_in_group += 1;
+        }
+        let hidden = group.total.saturating_sub(rendered_in_group);
+        if hidden > 0 && used < args.max_lines.saturating_sub(reserve_footer) {
+            writeln!(w, "  … {hidden} more")?;
+            used += 1;
+        }
     }
-
-    let compact = args.output == DescribeOutput::Compact;
-    let reserve = usize::from(args.max_lines > used) * (2 + usize::from(compact));
-    let mut candidate_budget = args.max_lines.saturating_sub(used + reserve);
-    let omitted = all_candidate_count.saturating_sub(candidates.len());
-    if omitted > 0 && candidate_budget > 0 {
-        candidate_budget = candidate_budget.saturating_sub(1);
-    }
-    let shown = candidates.len().min(candidate_budget);
-    for entry in candidates.iter().take(shown) {
-        let abs = std::path::Path::new(&entry.file_path);
-        let rel = relative_path(abs, project_root);
-        let loc = painter.location(abs, &rel.display().to_string(), &entry.line.to_string());
-        write_symbol_row(w, &painter, "  ", entry.kind, &entry.fqn(), &loc)?;
-        used += 1;
-    }
-    let hidden = all_candidate_count.saturating_sub(shown);
-    if hidden > 0 && used < args.max_lines {
-        writeln!(w, "  … {hidden} more matches")?;
-        used += 1;
-    }
-
-    if compact && used < args.max_lines {
+    if !unmatched.is_empty() && used < args.max_lines.saturating_sub(reserve_footer) {
         writeln!(
             w,
-            "next: baml describe {} --view {} --max-lines {} --output compact",
-            candidates
-                .iter()
-                .map(ListingEntry::fqn)
-                .collect::<Vec<_>>()
-                .join(" "),
-            describe_view_name(args.view),
-            args.max_lines,
+            "Unmapped source matches ({} of {}):",
+            unmatched.len(),
+            unmatched_total
         )?;
         used += 1;
+        for unmapped in unmatched {
+            if used >= args.max_lines.saturating_sub(reserve_footer) {
+                break;
+            }
+            let path = relative_path(
+                std::path::Path::new(&unmapped.text_match.file_path),
+                project_root,
+            );
+            writeln!(
+                w,
+                "  {}  {}:{}  {}",
+                unmapped.term,
+                path.display(),
+                unmapped.text_match.line_number,
+                unmapped.text_match.line_text.trim(),
+            )?;
+            used += 1;
+        }
     }
-
-    if used < args.max_lines {
+    if selection.total > 0 && used < args.max_lines {
+        write!(
+            w,
+            "{} unique matches · showing {}",
+            selection.total, rendered_candidates
+        )?;
+        let omitted = selection.total.saturating_sub(rendered_candidates);
+        if omitted > 0 {
+            write!(w, " · {omitted} omitted")?;
+        }
+        writeln!(w)?;
+        used += 1;
+    }
+    if let Some(command) = suggested_command(suggested, args.view)
+        && used < args.max_lines
+    {
+        writeln!(w, "suggested: {command}")?;
+        return Ok(());
+    }
+    if let Some(preview) = preview
+        && used < args.max_lines
+    {
         writeln!(
             w,
             "Previewing: {}",
             preview.canonical_fqn.as_deref().unwrap_or(&preview.name)
         )?;
         used += 1;
-    }
-    let remaining = args.max_lines.saturating_sub(used);
-    if remaining > 0 {
-        let mut preview_output = Vec::new();
-        write_view(
-            &mut preview_output,
-            db,
-            files,
-            preview,
-            args.view,
-            remaining,
-            args.depth,
-            project_root,
-        )?;
-        let preview_output = String::from_utf8_lossy(&preview_output);
-        for line in preview_output.lines().take(remaining) {
-            writeln!(w, "{line}")?;
+        let remaining = args.max_lines.saturating_sub(used);
+        if remaining > 0 {
+            let mut preview_output = Vec::new();
+            write_view(
+                &mut preview_output,
+                db,
+                files,
+                preview,
+                args.view,
+                remaining,
+                args.depth,
+                project_root,
+            )?;
+            let preview_output = String::from_utf8_lossy(&preview_output);
+            for line in preview_output.lines().take(remaining) {
+                writeln!(w, "{line}")?;
+            }
         }
     }
     Ok(())
@@ -1351,6 +1795,9 @@ pub(crate) fn write_batch_output(
         if let Some(identity) = rendered.first() {
             block.push(identity.clone());
         }
+        if compact && args.view == DescribeView::Source {
+            block.extend(description.full_body.lines().map(ToOwned::to_owned));
+        }
         if compact {
             let mut seen_relationships = std::collections::HashSet::new();
             for dependency in description.dependencies.iter().take(6) {
@@ -1383,7 +1830,9 @@ pub(crate) fn write_batch_output(
                 }
             }
         }
-        block.extend(rendered.into_iter().skip(1));
+        if !(compact && args.view == DescribeView::Source) {
+            block.extend(rendered.into_iter().skip(1));
+        }
         blocks.push(block);
     }
 
@@ -1397,36 +1846,56 @@ pub(crate) fn write_batch_output(
 
     let view = describe_view_name(args.view);
     if compact {
-        // Only reserve a follow-up hint when the global budget cannot give
-        // every symbol even one content line. Partially bounded source is
-        // already useful; advertising an executable `next:` command for it
-        // caused agents to repeat the whole batch unnecessarily.
-        let reserve_next = usize::from(remaining > 0 && remaining < blocks.len());
+        let total_content = blocks
+            .iter()
+            .map(|block| block.len().saturating_sub(1))
+            .sum::<usize>();
+        let reserve_next = usize::from(remaining > 0 && total_content > remaining);
         let content_budget = remaining.saturating_sub(reserve_next);
         let mut emitted = vec![0usize; blocks.len()];
         let mut content_remaining = content_budget;
+        while content_remaining > 0 {
+            let mut progressed = false;
+            for (index, block) in blocks.iter().enumerate() {
+                if emitted[index] >= block.len().saturating_sub(1) {
+                    continue;
+                }
+                emitted[index] += 1;
+                content_remaining -= 1;
+                progressed = true;
+                if content_remaining == 0 {
+                    break;
+                }
+            }
+            if !progressed {
+                break;
+            }
+        }
         for (index, block) in blocks.iter().enumerate() {
-            let symbols_left = blocks.len() - index;
-            let allowance = content_remaining.div_ceil(symbols_left);
-            let shown = block.len().saturating_sub(1).min(allowance);
-            for line in block.iter().skip(1).take(shown) {
+            for line in block.iter().skip(1).take(emitted[index]) {
                 writeln!(w, "{line}")?;
             }
-            emitted[index] = shown;
-            content_remaining = content_remaining.saturating_sub(shown);
         }
         remaining = remaining.saturating_sub(emitted.iter().sum::<usize>());
-        let omitted_names = blocks
+        let truncated = blocks
             .iter()
             .enumerate()
-            .filter(|(index, block)| block.len() > 1 && emitted[*index] == 0)
-            .map(|(index, _)| descriptions[index].name.as_str())
+            .filter(|(index, block)| emitted[*index] < block.len().saturating_sub(1))
+            .map(|(index, block)| (index, block))
             .collect::<Vec<_>>();
-        if !omitted_names.is_empty() && remaining > 0 {
+        if !truncated.is_empty() && remaining > 0 {
+            let names = truncated
+                .iter()
+                .map(|(index, _)| descriptions[*index].name.as_str())
+                .collect::<Vec<_>>();
+            let needed = truncated
+                .iter()
+                .map(|(_, block)| block.len())
+                .sum::<usize>();
             writeln!(
                 w,
-                "next: baml describe {} --view {view} --max-lines 80 --output compact",
-                omitted_names.join(" ")
+                "next: baml describe {} --view {view} --max-lines {needed} --output compact",
+                names.join(" ")
             )?;
             remaining -= 1;
         }
