@@ -51,6 +51,7 @@ pub(crate) enum GoNameKind {
     FunctionOptionSetter,
     Class,
     Enum,
+    EnumVariant,
     TypeAlias,
     Parameter,
     Field,
@@ -193,6 +194,7 @@ impl NameRequest {
             | GoNameKind::FunctionOptionSetter
             | GoNameKind::Class
             | GoNameKind::Enum
+            | GoNameKind::EnumVariant
             | GoNameKind::TypeAlias => NameScope::Package(self.fqn.symbol.pkg.clone()),
             GoNameKind::Parameter => NameScope::Function(
                 self.fqn
@@ -329,6 +331,15 @@ impl GoNames {
                     )
                 }));
             }
+            if let Symbol::Enum(enum_) = symbol {
+                requests.extend(enum_.variants.iter().map(|variant| {
+                    NameRequest::new(
+                        fqn.member(&variant.name),
+                        GoNameKind::EnumVariant,
+                        GoVisibility::Exported,
+                    )
+                }));
+            }
         }
         let generated_package_aliases = packages
             .iter()
@@ -430,6 +441,13 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
             push_upper_component(&mut value, &request.fqn.symbol.name);
             push_upper_component(&mut value, request.fqn.leaf());
         }
+        GoNameKind::EnumVariant => {
+            for segment in &request.fqn.symbol.namespace_path {
+                push_upper_component(&mut value, segment);
+            }
+            push_upper_component(&mut value, &request.fqn.symbol.name);
+            push_upper_component(&mut value, request.fqn.leaf());
+        }
         GoNameKind::Parameter | GoNameKind::Field => {
             push_upper_component(&mut value, request.fqn.leaf());
         }
@@ -460,9 +478,10 @@ fn wire_name(request: &NameRequest) -> BamlWireName {
         | GoNameKind::Class
         | GoNameKind::Enum
         | GoNameKind::TypeAlias => BamlWireName::Symbol(request.fqn.symbol.clone()),
-        GoNameKind::FunctionOptionSetter | GoNameKind::Parameter | GoNameKind::Field => {
-            BamlWireName::Key(request.fqn.leaf().clone())
-        }
+        GoNameKind::FunctionOptionSetter
+        | GoNameKind::EnumVariant
+        | GoNameKind::Parameter
+        | GoNameKind::Field => BamlWireName::Key(request.fqn.leaf().clone()),
     }
 }
 
@@ -511,6 +530,7 @@ fn short_hash(request: &NameRequest) -> String {
         GoNameKind::Field => 5,
         GoNameKind::FunctionOptionType => 6,
         GoNameKind::FunctionOptionSetter => 7,
+        GoNameKind::EnumVariant => 8,
     });
     hash.byte(match request.visibility {
         GoVisibility::Exported => 0,
@@ -718,6 +738,48 @@ mod tests {
         );
         assert_eq!(identifier(setter), "WithBillingLookupInvoiceMaxRows");
         assert_eq!(setter.wire(), &BamlWireName::Key(BaseName::new("max_rows")));
+    }
+
+    #[test]
+    fn enum_variants_are_type_prefixed_package_declarations_with_wire_identity() {
+        let enum_ = symbol(&["review_queue"], "response_state");
+        let variant = enum_.member(&BaseName::new("pending_review"));
+        let colliding_function = symbol(&[], "review_queue_response_state_pending_review");
+        let names = GoNames::new(
+            &generated_package(),
+            vec![
+                request(enum_.clone(), GoNameKind::Enum, GoVisibility::Exported),
+                request(
+                    variant.clone(),
+                    GoNameKind::EnumVariant,
+                    GoVisibility::Exported,
+                ),
+                request(
+                    colliding_function.clone(),
+                    GoNameKind::Function,
+                    GoVisibility::Exported,
+                ),
+            ],
+        );
+
+        assert_eq!(
+            identifier(names.project(&enum_, GoNameKind::Enum, GoVisibility::Exported)),
+            "ReviewQueueResponseState"
+        );
+        let projected = names.project(&variant, GoNameKind::EnumVariant, GoVisibility::Exported);
+        assert!(identifier(projected).starts_with("ReviewQueueResponseStatePendingReview_"));
+        assert_eq!(
+            projected.wire(),
+            &BamlWireName::Key(BaseName::new("pending_review"))
+        );
+        assert!(
+            identifier(names.project(
+                &colliding_function,
+                GoNameKind::Function,
+                GoVisibility::Exported,
+            ))
+            .starts_with("ReviewQueueResponseStatePendingReview_")
+        );
     }
 
     #[test]

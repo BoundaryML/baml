@@ -5,6 +5,7 @@ import (
 	"context"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 
 	"baml.local/sdk/baml_sdk"
@@ -72,6 +73,18 @@ var (
 	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesNullableContainers) (baml_sdk.GoCodegenPrimitiveEdgesNullableContainers, error)   = baml_sdk.GoCodegenPrimitiveEdgesRoundTripNullableContainers
 	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesContainerTree) (baml_sdk.GoCodegenPrimitiveEdgesContainerTree, error)             = baml_sdk.GoCodegenPrimitiveEdgesRoundTripContainerTree
 	_ func(context.Context, baml_sdk.GoCodegenPrimitiveEdgesContainerLeafMatrix) (baml_sdk.GoCodegenPrimitiveEdgesContainerLeafMatrix, error) = baml_sdk.GoCodegenPrimitiveEdgesRoundTripContainerLeafMatrix
+
+	_ func(context.Context, bool) (baml_sdk.EnumsSentiment, error)                                                                = baml_sdk.EnumsPickSentiment
+	_ func(context.Context) (baml_sdk.EnumsSentiment, error)                                                                      = baml_sdk.EnumsPickPositive
+	_ func(context.Context, baml_sdk.EnumsSentiment) (baml_sdk.EnumsSentiment, error)                                             = baml_sdk.EnumsRoundTripSentiment
+	_ func(context.Context, baml_sdk.EnumsSentiment) (baml_sdk.EnumsSentiment, error)                                             = baml_sdk.EnumsRoundTripSentimentPositive
+	_ func(context.Context, baml_sdk.EnumsEnums) (baml_sdk.EnumsEnums, error)                                                     = baml_sdk.EnumsRoundTripEnums
+	_ func(context.Context, baml_sdk.MapsSentiment) (baml_sdk.MapsSentiment, error)                                               = baml_sdk.MapsRoundTripSentiment
+	_ func(context.Context, baml_sdk.GoCodegenEnumEdgesResponseState) (baml_sdk.GoCodegenEnumEdgesResponseState, error)           = baml_sdk.GoCodegenEnumEdgesRoundTripState
+	_ func(context.Context, *baml_sdk.GoCodegenEnumEdgesResponseState) (*baml_sdk.GoCodegenEnumEdgesResponseState, error)         = baml_sdk.GoCodegenEnumEdgesRoundTripOptionalState
+	_ func(context.Context, baml_sdk.GoCodegenEnumEdgesEnumMatrix) (baml_sdk.GoCodegenEnumEdgesEnumMatrix, error)                 = baml_sdk.GoCodegenEnumEdgesRoundTripMatrix
+	_ func(context.Context, ...baml_sdk.GoCodegenEnumEdgesDefaultedStateOption) (baml_sdk.GoCodegenEnumEdgesResponseState, error) = baml_sdk.GoCodegenEnumEdgesDefaultedState
+	_ func(baml_sdk.GoCodegenEnumEdgesResponseState) baml_sdk.GoCodegenEnumEdgesDefaultedStateOption                              = baml_sdk.WithGoCodegenEnumEdgesDefaultedStateValue
 )
 
 var (
@@ -480,6 +493,151 @@ func TestContainerRecursiveClassRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("container-recursive class round trip = %#v, want %#v", got, want)
+	}
+}
+
+func TestDeclaredEnumFunctionsAndClassRoundTrip(t *testing.T) {
+	positive, err := baml_sdk.EnumsPickSentiment(context.Background(), true)
+	if err != nil || positive != baml_sdk.EnumsSentimentPositive {
+		t.Fatalf("PickSentiment(true) = %q, %v", positive, err)
+	}
+	negative, err := baml_sdk.EnumsPickSentiment(context.Background(), false)
+	if err != nil || negative != baml_sdk.EnumsSentimentNegative {
+		t.Fatalf("PickSentiment(false) = %q, %v", negative, err)
+	}
+	picked, err := baml_sdk.EnumsPickPositive(context.Background())
+	if err != nil || picked != baml_sdk.EnumsSentimentPositive {
+		t.Fatalf("PickPositive() = %q, %v", picked, err)
+	}
+
+	roundTripped, err := baml_sdk.EnumsRoundTripSentiment(
+		context.Background(),
+		baml_sdk.EnumsSentimentNegative,
+	)
+	if err != nil || roundTripped != baml_sdk.EnumsSentimentNegative {
+		t.Fatalf("RoundTripSentiment() = %q, %v", roundTripped, err)
+	}
+	roundTripped, err = baml_sdk.EnumsRoundTripSentimentPositive(
+		context.Background(),
+		baml_sdk.EnumsSentimentPositive,
+	)
+	if err != nil || roundTripped != baml_sdk.EnumsSentimentPositive {
+		t.Fatalf("RoundTripSentimentPositive() = %q, %v", roundTripped, err)
+	}
+
+	wantClass := baml_sdk.EnumsEnums{
+		BareEnum:      baml_sdk.EnumsSentimentNegative,
+		VariantAsType: baml_sdk.EnumsSentimentPositive,
+	}
+	gotClass, err := baml_sdk.EnumsRoundTripEnums(context.Background(), wantClass)
+	if err != nil || gotClass != wantClass {
+		t.Fatalf("RoundTripEnums() = %#v, %v, want %#v", gotClass, err, wantClass)
+	}
+
+	mapEnum, err := baml_sdk.MapsRoundTripSentiment(
+		context.Background(),
+		baml_sdk.MapsSentimentPositive,
+	)
+	if err != nil || mapEnum != baml_sdk.MapsSentimentPositive {
+		t.Fatalf("MapsRoundTripSentiment() = %q, %v", mapEnum, err)
+	}
+}
+
+func TestEnumCompositionMatrixRoundTrip(t *testing.T) {
+	pending := baml_sdk.GoCodegenEnumEdgesResponseStatePendingReview
+	accepted := baml_sdk.GoCodegenEnumEdgesResponseStateAccepted
+	httpError := baml_sdk.GoCodegenEnumEdgesResponseStateHTTPError
+	if string(httpError) != "HTTP_error" {
+		t.Fatalf("HTTP variant wire value = %q", httpError)
+	}
+
+	optionalList := []baml_sdk.GoCodegenEnumEdgesResponseState{accepted, pending}
+	optionalMap := map[string]baml_sdk.GoCodegenEnumEdgesResponseState{"error": httpError}
+	want := baml_sdk.GoCodegenEnumEdgesEnumMatrix{
+		State:                httpError,
+		OptionalState:        &accepted,
+		States:               []baml_sdk.GoCodegenEnumEdgesResponseState{pending, accepted, httpError},
+		OptionalStates:       []*baml_sdk.GoCodegenEnumEdgesResponseState{nil, &pending, &httpError},
+		StatesByName:         map[string]baml_sdk.GoCodegenEnumEdgesResponseState{"pending": pending, "accepted": accepted},
+		OptionalStatesByName: map[string]*baml_sdk.GoCodegenEnumEdgesResponseState{"nil": nil, "value": &httpError},
+		OptionalList:         &optionalList,
+		OptionalMap:          &optionalMap,
+	}
+	got, err := baml_sdk.GoCodegenEnumEdgesRoundTripMatrix(context.Background(), want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("enum matrix = %#v, want %#v", got, want)
+	}
+
+	empty, err := baml_sdk.GoCodegenEnumEdgesRoundTripMatrix(
+		context.Background(),
+		baml_sdk.GoCodegenEnumEdgesEnumMatrix{
+			State:                pending,
+			States:               []baml_sdk.GoCodegenEnumEdgesResponseState{},
+			OptionalStates:       []*baml_sdk.GoCodegenEnumEdgesResponseState{},
+			StatesByName:         map[string]baml_sdk.GoCodegenEnumEdgesResponseState{},
+			OptionalStatesByName: map[string]*baml_sdk.GoCodegenEnumEdgesResponseState{},
+		},
+	)
+	if err != nil || empty.OptionalState != nil || empty.OptionalList != nil || empty.OptionalMap != nil {
+		t.Fatalf("null enum boundaries = %#v, %v", empty, err)
+	}
+
+	assertOptionalRoundTrip(
+		t,
+		baml_sdk.GoCodegenEnumEdgesRoundTripOptionalState,
+		&accepted,
+	)
+}
+
+func TestDefaultedEnumArgumentAndInvalidValues(t *testing.T) {
+	pending := baml_sdk.GoCodegenEnumEdgesResponseStatePendingReview
+	httpError := baml_sdk.GoCodegenEnumEdgesResponseStateHTTPError
+
+	got, err := baml_sdk.GoCodegenEnumEdgesDefaultedState(context.Background())
+	if err != nil || got != pending {
+		t.Fatalf("omitted default = %q, %v", got, err)
+	}
+	got, err = baml_sdk.GoCodegenEnumEdgesDefaultedState(
+		context.Background(),
+		baml_sdk.WithGoCodegenEnumEdgesDefaultedStateValue(httpError),
+	)
+	if err != nil || got != httpError {
+		t.Fatalf("explicit default override = %q, %v", got, err)
+	}
+
+	invalid := baml_sdk.GoCodegenEnumEdgesResponseState("not_declared")
+	if _, err := baml_sdk.GoCodegenEnumEdgesRoundTripState(context.Background(), invalid); err == nil || !strings.Contains(err.Error(), `invalid BAML enum "user.go_codegen.enum_edges.ResponseState" variant "not_declared"`) {
+		t.Fatalf("invalid direct enum error = %v", err)
+	}
+	if _, err := baml_sdk.GoCodegenEnumEdgesDefaultedState(
+		context.Background(),
+		baml_sdk.WithGoCodegenEnumEdgesDefaultedStateValue(invalid),
+	); err == nil || !strings.Contains(err.Error(), `invalid BAML enum "user.go_codegen.enum_edges.ResponseState" variant "not_declared"`) {
+		t.Fatalf("invalid option enum error = %v", err)
+	}
+	if _, err := baml_sdk.GoCodegenEnumEdgesRoundTripMatrix(
+		context.Background(),
+		baml_sdk.GoCodegenEnumEdgesEnumMatrix{
+			State:                pending,
+			States:               []baml_sdk.GoCodegenEnumEdgesResponseState{invalid},
+			OptionalStates:       []*baml_sdk.GoCodegenEnumEdgesResponseState{},
+			StatesByName:         map[string]baml_sdk.GoCodegenEnumEdgesResponseState{},
+			OptionalStatesByName: map[string]*baml_sdk.GoCodegenEnumEdgesResponseState{},
+		},
+	); err == nil || !strings.Contains(err.Error(), `variant "not_declared"`) {
+		t.Fatalf("invalid nested enum error = %v", err)
+	}
+}
+
+func TestEnumPackageScopeCollisionsCompileAndRun(t *testing.T) {
+	_ = baml_sdk.GoCodegenEnumEdgesCollisionValue_5169cfc7
+	_ = baml_sdk.GoCodegenEnumEdgesCollisionValue_538227f1{}
+	got, err := baml_sdk.GoCodegenEnumEdgesCollisionValue_8f55bfa0(context.Background())
+	if err != nil || got != "function" {
+		t.Fatalf("colliding function = %q, %v", got, err)
 	}
 }
 

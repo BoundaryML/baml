@@ -10,8 +10,8 @@ use std::{collections::HashMap, env, fs, path::PathBuf};
 
 use baml_base::Name as BaseName;
 use baml_codegen_types::{
-    Class, ClassProperty, Function, FunctionArgument, Name, NamingConvention, Origin, Symbol,
-    SymbolPool, Ty,
+    Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, NamingConvention,
+    Origin, Symbol, SymbolPool, Ty,
 };
 
 use crate::{
@@ -96,8 +96,10 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
     let dashed = Name::new(BaseName::new("foo-bar"), vec![], BaseName::new("Thing"));
     let snake = Name::new(BaseName::new("foo_bar"), vec![], BaseName::new("Thing"));
     let models = Name::new(BaseName::new("models"), vec![], BaseName::new("Thing"));
+    let status = Name::new(BaseName::new("models"), vec![], BaseName::new("Status"));
     let holder = Name::new(BaseName::new("user"), vec![], BaseName::new("Holder"));
     let envelope = Name::new(BaseName::new("user"), vec![], BaseName::new("Envelope"));
+    let enum_holder = Name::new(BaseName::new("user"), vec![], BaseName::new("EnumHolder"));
     let round_trip = Name::new(
         BaseName::new("user"),
         vec![],
@@ -113,11 +115,17 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
         vec![],
         BaseName::new("round_trip_envelope"),
     );
+    let enum_round_trip = Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("round_trip_enum_holder"),
+    );
     let pool = SymbolPool::from([
         synthetic_class(context.clone(), vec![("value", Ty::String)]),
         synthetic_class(dashed.clone(), vec![("value", Ty::Int)]),
         synthetic_class(snake.clone(), vec![("value", Ty::Bool)]),
         synthetic_class(models.clone(), vec![("value", Ty::String)]),
+        synthetic_enum(status.clone(), &["ready", "done"]),
         synthetic_class(
             holder.clone(),
             vec![
@@ -130,6 +138,7 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
             envelope.clone(),
             vec![("holder", Ty::Class(holder, vec![]))],
         ),
+        synthetic_class(enum_holder.clone(), vec![("status", Ty::Enum(status))]),
         (
             round_trip,
             Symbol::Function(Function {
@@ -201,6 +210,27 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
                 },
             }),
         ),
+        (
+            enum_round_trip,
+            Symbol::Function(Function {
+                name: BaseName::new("round_trip_enum_holder"),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    name: BaseName::new("value"),
+                    docstring: None,
+                    ty: Ty::Class(enum_holder.clone(), vec![]),
+                    default: None,
+                }],
+                return_type: Ty::Class(enum_holder, vec![]),
+                throws: None,
+                watchers: vec![],
+                origin: Origin {
+                    source_file_path: "synthetic.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        ),
     ]);
     let output = sdkgen_go::to_source_code_with_bytecode(
         &pool,
@@ -233,4 +263,24 @@ fn synthetic_class(name: Name, properties: Vec<(&str, Ty)>) -> (Name, Symbol) {
         },
     };
     (name, Symbol::Class(class))
+}
+
+fn synthetic_enum(name: Name, variants: &[&str]) -> (Name, Symbol) {
+    let enum_ = Enum {
+        name: name.clone(),
+        docstring: None,
+        variants: variants
+            .iter()
+            .map(|variant| EnumVariant {
+                name: BaseName::new(*variant),
+                docstring: None,
+                value: (*variant).to_string(),
+            })
+            .collect(),
+        origin: Origin {
+            source_file_path: "synthetic.baml".to_string(),
+            span_start: 0,
+        },
+    };
+    (name, Symbol::Enum(enum_))
 }

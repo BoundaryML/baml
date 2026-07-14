@@ -76,6 +76,7 @@ func Initialize(bytecode []byte) error {
 // Input is a value supplied to a BAML callable.
 type Input struct {
 	value *cffi.InboundValue
+	err   error
 }
 
 // Null is the sole Go value corresponding to BAML's standalone null type.
@@ -183,6 +184,9 @@ func encodeCall(callID uint64, args map[string]Input) ([]byte, error) {
 	kwargs := make([]*cffi.InboundMapEntry, 0, len(keys))
 	for _, key := range keys {
 		input := args[key]
+		if input.err != nil {
+			return nil, fmt.Errorf("argument %q: %w", key, input.err)
+		}
 		if input.value == nil {
 			return nil, fmt.Errorf("argument %q has an uninitialized baml_go.Input", key)
 		}

@@ -13,6 +13,9 @@ func List[T any](values []T, encode func(T) Input) Input {
 	items := make([]*cffi.InboundValue, 0, len(values))
 	for _, value := range values {
 		encoded := encode(value)
+		if encoded.err != nil {
+			return encoded
+		}
 		if encoded.value == nil {
 			return Input{}
 		}
@@ -42,6 +45,9 @@ func Map[T any](values map[string]T, encode func(T) Input) Input {
 	entries := make([]*cffi.InboundMapEntry, 0, len(keys))
 	for _, key := range keys {
 		encoded := encode(values[key])
+		if encoded.err != nil {
+			return encoded
+		}
 		if encoded.value == nil {
 			return Input{}
 		}

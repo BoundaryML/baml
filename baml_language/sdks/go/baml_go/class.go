@@ -20,6 +20,9 @@ func Class(name string, fields map[string]Input) Input {
 	entries := make([]*cffi.InboundMapEntry, 0, len(keys))
 	for _, key := range keys {
 		field := fields[key]
+		if field.err != nil {
+			return field
+		}
 		if field.value == nil {
 			return Input{}
 		}

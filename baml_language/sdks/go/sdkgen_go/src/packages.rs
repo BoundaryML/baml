@@ -53,6 +53,7 @@ impl GoPackages {
 
         let reserved = GeneratorIdent::IMPORT_ALIASES
             .iter()
+            .chain(GeneratorIdent::PREDECLARED_TYPES)
             .map(|identifier| identifier.as_str().to_string())
             .chain(["baml_sdk".to_string()])
             .collect::<BTreeSet<_>>();
@@ -211,6 +212,7 @@ mod tests {
     fn package_names_avoid_import_aliases_and_normalization_collisions() {
         let pool = SymbolPool::from([
             class("context"),
+            class("string"),
             class("foo-bar"),
             class("foo_bar"),
             class("internal"),
@@ -221,6 +223,10 @@ mod tests {
         assert_ne!(
             packages.get(&Name::new("context")).go_name().as_str(),
             "context"
+        );
+        assert_ne!(
+            packages.get(&Name::new("string")).go_name().as_str(),
+            "string"
         );
         assert_ne!(
             packages.get(&Name::new("foo-bar")).go_name(),

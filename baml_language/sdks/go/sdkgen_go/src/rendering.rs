@@ -39,12 +39,31 @@ pub(crate) enum ClassCodecDirection {
     Decode,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum EnumCodecDirection {
+    Encode,
+    Decode,
+}
+
 /// A generator-owned package declaration. Projected BAML declarations are
 /// exported and can never start with `_`, so this namespace cannot collide
 /// with user code. The stable index comes from sorted BAML class FQNs.
 pub(crate) struct ClassCodecIdent {
     direction: ClassCodecDirection,
     index: usize,
+}
+
+/// A generator-owned enum codec name. Stable indexes come from sorted BAML
+/// enum FQNs independently of class codec indexes.
+pub(crate) struct EnumCodecIdent {
+    direction: EnumCodecDirection,
+    index: usize,
+}
+
+impl EnumCodecIdent {
+    pub(crate) fn new(direction: EnumCodecDirection, index: usize) -> Self {
+        Self { direction, index }
+    }
 }
 
 impl ClassCodecIdent {
@@ -63,12 +82,34 @@ impl fmt::Display for ClassCodecIdent {
     }
 }
 
+impl fmt::Display for EnumCodecIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let direction = match self.direction {
+            EnumCodecDirection::Encode => "Encode",
+            EnumCodecDirection::Decode => "Decode",
+        };
+        write!(f, "_baml{direction}Enum{}", self.index)
+    }
+}
+
 impl GeneratorIdent {
     pub(crate) const IMPORT_ALIASES: &'static [Self] = &[
         Self::ContextPackage,
         Self::BigPackage,
         Self::BootstrapPackage,
         Self::RuntimePackage,
+    ];
+
+    /// Predeclared identifiers emitted as types or conversions. Go permits an
+    /// import to shadow these names, so generated package aliases must avoid
+    /// them even though they are not language keywords.
+    pub(crate) const PREDECLARED_TYPES: &'static [Self] = &[
+        Self::StringType,
+        Self::Int64Type,
+        Self::Float64Type,
+        Self::BoolType,
+        Self::ByteType,
+        Self::ErrorType,
     ];
 
     pub(crate) const FUNCTION_SCOPE: &'static [Self] = &[
@@ -185,6 +226,14 @@ mod tests {
         assert_eq!(
             ClassCodecIdent::new(ClassCodecDirection::Decode, 7).to_string(),
             "_bamlDecodeClass7"
+        );
+        assert_eq!(
+            EnumCodecIdent::new(EnumCodecDirection::Encode, 4).to_string(),
+            "_bamlEncodeEnum4"
+        );
+        assert_eq!(
+            EnumCodecIdent::new(EnumCodecDirection::Decode, 4).to_string(),
+            "_bamlDecodeEnum4"
         );
     }
 
