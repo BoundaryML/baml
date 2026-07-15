@@ -1535,7 +1535,8 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
     jump L2
     load_var e
     type_tag
-    jump_table [L1, L1, L1, _, L1, _, _, L1, L1, _, L1, _, _, L1, _, _, L1, _, L1, L1, _, L1, _, L1, _, _, L1, _, L1, L1], default L0
+    dense_tag [DivisionByZero, IndexOutOfBounds, InvalidFieldAccess, MapKeyNotFound, StackOverflow, AssertionFailed, Unreachable, Cancelled, UserPanic, Exit, AllocFailure, HostUnavailable, NegativeBitShift, SdkPanic, HostContractViolation, IntegerOverflow]
+    jump_table [L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1, L1], default L0
 
   L0:
     load_var e
@@ -1548,7 +1549,7 @@ function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testi
     alloc_array 1
     jump L2
 
-  L1: SdkPanic
+  L1: IntegerOverflow
     load_var ts
     load_field .name
     load_const "/(failed to expand)"

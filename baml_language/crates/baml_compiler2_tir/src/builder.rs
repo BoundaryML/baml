@@ -590,8 +590,9 @@ impl baml_type::normalize::TypeContext for TypeInferenceBuilder<'_> {
         base: &Ty,
         interface: &baml_type::Interface,
         member: &Name,
+        fuel: u32,
     ) -> baml_type::normalize::ProjectionStep {
-        self.as_global().project(base, interface, member)
+        self.as_global().project(base, interface, member, fuel)
     }
 }
 
@@ -1802,19 +1803,19 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // The arms below bridge between the builtin `Class<Array, [T]>` /
         // `Class<Map, [K, V]>` wrapper types and their raw `List<T>` /
-        // `Map<K, V>` shapes, recursing structurally on the element types.
-        // `List`/`Map` are invariant, so an `int[]` argument does not satisfy
-        // an `(int | string)[]` slot.
+        // `Map<K, V>` shapes. `List`/`Map` are invariant (TYPE_SYSTEM.md, Subtyping
+        // Rules → Variance), so the element types must be *equivalent*, not merely
+        // subtypes — an `int[]` argument does not satisfy an `(int | string)[]` slot.
         match (&expanded_expected, &expanded_got) {
             (Ty::Class(class_name, expected_args, _), Ty::List(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.container_arg_subtype_without_nominal(actual_inner, &expected_args[0])
+                self.equivalent(actual_inner, &expected_args[0])
             }
             (Ty::Class(class_name, expected_args, _), Ty::EvolvingList(actual_inner, _))
                 if class_name.is_builtin_root_type("Array") && expected_args.len() == 1 =>
             {
-                self.container_arg_subtype_without_nominal(actual_inner, &expected_args[0])
+                self.equivalent(actual_inner, &expected_args[0])
             }
             (
                 Ty::Class(class_name, expected_args, _),
@@ -1825,15 +1826,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 | Ty::EvolvingMap(actual_key, actual_val, _),
             ) if class_name.is_builtin_root_type("Map") && expected_args.len() == 2 => {
-                self.container_arg_subtype_without_nominal(actual_key, &expected_args[0])
-                    && self.container_arg_subtype_without_nominal(actual_val, &expected_args[1])
+                self.equivalent(actual_key, &expected_args[0])
+                    && self.equivalent(actual_val, &expected_args[1])
             }
             _ => false,
         }
-    }
-
-    fn container_arg_subtype_without_nominal(&self, actual: &Ty, expected: &Ty) -> bool {
-        crate::normalize::is_subtype_of(actual, expected, &self.aliases)
     }
 
     fn function_coercion_for(
@@ -8359,11 +8356,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 base, interface, ..
             } => {
                 Self::ty_contains_unknown_like(base, count_builtin)
-                    || interface.as_ref().is_some_and(|interface| {
-                        interface
-                            .tys()
-                            .any(|t| Self::ty_contains_unknown_like(t, count_builtin))
-                    })
+                    || interface
+                        .tys()
+                        .any(|t| Self::ty_contains_unknown_like(t, count_builtin))
             }
             Ty::List(elem, _) | Ty::EvolvingList(elem, _) => {
                 Self::ty_contains_unknown_like(elem, count_builtin)
@@ -8388,9 +8383,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Self::ty_contains_unknown_like(value, count_builtin)
                     || Self::ty_contains_unknown_like(error, count_builtin)
             }
-            // `WatchAccessor` is never built by TIR; the arm exists only so the
-            // match stays exhaustive over the shared `baml_type::Ty`.
-            Ty::WatchAccessor(inner, _) => Self::ty_contains_recovery_unknown(inner),
             Ty::Enum(..)
             | Ty::EnumVariant(..)
             | Ty::TypeAlias(..)
@@ -10830,7 +10822,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Ty::AssociatedTypeProjection {
-                interface: Some(projection_iface),
+                interface: projection_iface,
                 member: assoc,
                 ..
             } if member.as_str() != "from_json" => {
@@ -14463,7 +14455,6 @@ impl crate::exhaustiveness::PatCtx for TypeInferenceBuilder<'_> {
             | Ty::Unknown { .. }
             | Ty::Error { .. }
             | Ty::Infer { .. }
-            | Ty::WatchAccessor(..)
             | Ty::TypeVar(_, _)
             | Ty::AssociatedTypeProjection { .. } => vec![Ctor::NonExhaustive],
             Ty::Never { .. } => vec![],
@@ -15960,47 +15951,60 @@ impl TypeInferenceBuilder<'_> {
             },
         };
 
-        // Reject any non-trivial rest sub-pattern: only bare `..` is
-        // allowed for now. Bindings (`..let r`), structural rests
-        // (`..[a, b]`), class destructures (`..Box {}`), and chain
-        // ascriptions (`..pat: T`) are all disallowed while we settle
-        // the rest-vs-slice typing semantics. The chain widening rule
-        // only catches mismatches *between* chain links, not the
-        // implicit "rest is a slice" constraint, so partial support
-        // would let contradictory annotations slip through silently.
-        if let Some(rp) = rest
-            && let Some(rest_pat) = rp.pat
-        {
-            self.report_at_pat_or_expr(TirTypeError::RestSubPatternNotSupported, rest_pat, at_expr);
-        }
-
-        // Pre-flatten nested rest sub-patterns: `[a, ..[b, ..c, d], e]`
-        // collapses to `[a, b, ..c, d, e]`. baml has no equivalent of this
-        // in rustc — rustc's `..` is a position marker and can only carry a
-        // binding (`name @ ..`). To stay faithful to rustc's flat slice
-        // model in the matrix algorithm we rewrite to flat shape here.
-        //
-        // Returns (flat_prefix, has_rest, rest_binding_pat, flat_suffix):
-        //   - has_rest=false → Fixed shape, no rest binding
-        //   - has_rest=true, rest_binding_pat=None → bare `..` (Variable, no binding)
-        //   - has_rest=true, rest_binding_pat=Some(p) → `..p` where p is a
-        //     non-flattenable sub-pattern (binding/wildcard/etc.)
-        let (flat_prefix, has_rest, rest_binding_pat, flat_suffix) =
-            Self::flatten_array_rest(body, prefix.to_vec(), rest, suffix.to_vec());
-
-        let mut sub_dpats: Vec<DPat> = Vec::with_capacity(flat_prefix.len() + flat_suffix.len());
+        // `..` may carry a binding-shaped sub-pattern: `..let r`, `.._`,
+        // pure bind chains (`..let r: let s`), optionally terminated by a
+        // `: T` ascription link (`..let r: int[]`, checked against the
+        // slice type below). Anything else is rejected:
+        //   - type patterns and class destructures are statically dead —
+        //     the slice's runtime tag is always exactly `elem[]` (built by
+        //     `Array.slice` from the scrutinee) and list type tests are
+        //     invariant tag compares, so they can never narrow;
+        //   - refutable shapes (or-patterns like `..([] | [_])`) have no
+        //     column in the usefulness matrix: the slice DPat below is
+        //     rustc's model, whose `..` only ever carries a binding, so
+        //     allowing them makes "exhaustive" matches that fall through
+        //     at runtime;
+        //   - nested array rests (`..[a, ..r, b]`) are sound if flattened
+        //     into the outer shape before the matrix runs, but they are a
+        //     second spelling of the flat pattern (`[..[]]` = `[]`), so
+        //     they stay out until someone wants them.
+        // The set could be expanded in the future along exactly those
+        // lines: flatten nested arrays, extend the matrix with a rest
+        // constraint, or make list tests structural.
         let mut bindings: Vec<PatternBinding> = Vec::new();
+        let (has_rest, rest_binding_pat) = match rest.and_then(|rp| rp.pat) {
+            None => (rest.is_some(), None),
+            Some(rest_pat) => {
+                if Self::rest_subpattern_is_binding_shaped(body, rest_pat, false) {
+                    (true, Some(rest_pat))
+                } else {
+                    self.report_at_pat_or_expr(
+                        TirTypeError::RestSubPatternNotBinding,
+                        rest_pat,
+                        at_expr,
+                    );
+                    // Recovery: keep the rejected sub-pattern's names in
+                    // scope (typed unknown) so the body doesn't cascade
+                    // unresolved-name errors, and treat the rest as bare
+                    // `..` for the slice shape.
+                    for name in body.patterns[rest_pat].bound_names(&body.patterns) {
+                        bindings.push(PatternBinding {
+                            name: name.clone(),
+                            pat_id: rest_pat,
+                            ty: Ty::Unknown {
+                                attr: TyAttr::default(),
+                            },
+                        });
+                    }
+                    (true, None)
+                }
+            }
+        };
+
+        let mut sub_dpats: Vec<DPat> = Vec::with_capacity(prefix.len() + suffix.len());
         let mut element_required_tys: Vec<Ty> = Vec::new();
 
-        for &p in &flat_prefix {
-            let r = self.analyze_and_lower(p, &elem_ty, body, at_expr);
-            sub_dpats.push(r.dpat);
-            bindings.extend(r.bindings);
-            if let Some(req) = r.required_ty {
-                element_required_tys.push(req);
-            }
-        }
-        for &p in &flat_suffix {
+        for &p in prefix.iter().chain(suffix) {
             let r = self.analyze_and_lower(p, &elem_ty, body, at_expr);
             sub_dpats.push(r.dpat);
             bindings.extend(r.bindings);
@@ -16012,15 +16016,17 @@ impl TypeInferenceBuilder<'_> {
         // doesn't consume a slot in the slice shape.
         if let Some(rest_pat) = rest_binding_pat {
             let rest_ty = Ty::List(Box::new(elem_ty.clone()), TyAttr::default());
-            // The rest sub-pattern matches against the *slice* (a list),
-            // not against an element. If the user annotates it with a
-            // non-list type (e.g. `..let r: int`, or `..Box { .. }`, or
-            // `..[x]: int`), that's a type mismatch — the annotation
-            // claims something incompatible with `List<elem>`.
+            // A `: T` ascription on the rest binding must be EQUIVALENT to
+            // the slice type, not merely a subtype. The slice's runtime tag
+            // is always exactly `elem[]`, so a narrowing ascription (e.g.
+            // `..let r: int[]` on `(int|string)[]`) can never match — better
+            // a mismatch here than a statically-dead arm. Non-list types
+            // (`..let r: int`) fail the same check.
             if let Some(expected) = self.pattern_expected_ty(rest_pat, body)
                 && !Self::ty_contains_recovery_unknown(&rest_ty)
                 && !crate::generics::contains_typevar(&rest_ty)
-                && !self.is_subtype(expected.ty(), &rest_ty)
+                && !(self.is_subtype(expected.ty(), &rest_ty)
+                    && self.is_subtype(&rest_ty, expected.ty()))
             {
                 let got = expected.into_ty();
                 let err = TirTypeError::TypeMismatch {
@@ -16035,11 +16041,11 @@ impl TypeInferenceBuilder<'_> {
 
         let shape = if has_rest {
             SliceShape::Variable {
-                prefix: flat_prefix.len(),
-                suffix: flat_suffix.len(),
+                prefix: prefix.len(),
+                suffix: suffix.len(),
             }
         } else {
-            SliceShape::Fixed(flat_prefix.len() + flat_suffix.len())
+            SliceShape::Fixed(prefix.len() + suffix.len())
         };
 
         // Required type: List<join of element required tys>, or List<elem>
@@ -16062,48 +16068,22 @@ impl TypeInferenceBuilder<'_> {
         }
     }
 
-    /// Recursively merge nested rest sub-patterns into a flat slice shape.
-    ///
-    /// Returns `(flat_prefix, has_rest, rest_binding_pat, flat_suffix)`. See
-    /// [`Self::lower_array_pat`] for the encoding.
-    ///
-    /// When the rest sub-pattern is itself an array (possibly wrapped in a
-    /// chain — only the leftmost link is structural), its prefix/suffix get
-    /// merged into the outer prefix/suffix and we recurse into its inner
-    /// rest. When the rest sub-pattern is anything else (binding, wildcard,
-    /// or-pattern, etc.), we keep it as the variable-shape's binding slot.
-    fn flatten_array_rest(
-        body: &ExprBody,
-        prefix: Vec<PatId>,
-        rest: Option<&ast::ArrayRestPat>,
-        suffix: Vec<PatId>,
-    ) -> (Vec<PatId>, bool, Option<PatId>, Vec<PatId>) {
-        let Some(rp) = rest else {
-            return (prefix, false, None, suffix);
-        };
-        let Some(rest_pat) = rp.pat else {
-            return (prefix, true, None, suffix);
-        };
-
-        // Rest sub-patterns are disabled at TIR (we emit
-        // `RestSubPatternNotSupported` elsewhere). For error recovery
-        // here we simply treat the rest as a bare binding-like slot —
-        // no nested array flattening, no chain unwrapping.
-        match &body.patterns[rest_pat] {
-            ast::Pattern::Array {
-                prefix: ip,
-                rest: ir,
-                suffix: is,
-                ascription: _,
-            } => {
-                let mut new_prefix = prefix;
-                new_prefix.extend(ip.iter().copied());
-                let mut new_suffix: Vec<PatId> = is.clone();
-                new_suffix.extend(suffix);
-                let ir_owned = ir.clone();
-                Self::flatten_array_rest(body, new_prefix, ir_owned.as_ref(), new_suffix)
-            }
-            _ => (prefix, true, Some(rest_pat), suffix),
+    /// Whether a rest sub-pattern is binding-shaped: a wildcard, a bare
+    /// binding, or a bind chain whose links are all binds with an optional
+    /// terminal `: T` ascription link (`in_chain` distinguishes that
+    /// position — a bare type pattern as the WHOLE sub-pattern, `..int`, is
+    /// not binding-shaped). These shapes are irrefutable against the slice,
+    /// which is what lets the usefulness matrix keep treating the rest as
+    /// "matches any length" while MIR materializes the binding.
+    fn rest_subpattern_is_binding_shaped(body: &ExprBody, pat: PatId, in_chain: bool) -> bool {
+        match &body.patterns[pat] {
+            ast::Pattern::Wildcard => true,
+            ast::Pattern::Type(_) => in_chain,
+            ast::Pattern::Bind { subpat, .. } => match subpat {
+                None => true,
+                Some(sp) => Self::rest_subpattern_is_binding_shaped(body, *sp, true),
+            },
+            ast::Pattern::Array { .. } | ast::Pattern::Class { .. } | ast::Pattern::Or(_) => false,
         }
     }
 

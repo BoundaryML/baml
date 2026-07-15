@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 55645
 ---
 === TIR2 ===
 type user.foo = user.bar

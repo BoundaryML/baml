@@ -24,6 +24,17 @@ export interface ExportPage {
   title: string;
   content: string;
   order: number;
+  parentSlug?: string;
+}
+
+/**
+ * Relative path of a page file within the export bundle.
+ * Nested pages live in a subfolder named after their parent slug.
+ */
+export function pageExportPath(page: { slug: string; parentSlug?: string }): string {
+  return page.parentSlug
+    ? `pages/${page.parentSlug}/${page.slug}.md`
+    : `pages/${page.slug}.md`;
 }
 
 export interface ExportComment {
@@ -84,6 +95,7 @@ export interface ExportVersion {
     title: string;
     content: string;
     order: number;
+    parentSlug?: string;
   }>;
   editorName: string;
   editNote?: string;
@@ -328,7 +340,7 @@ export function generateReadme(data: ExportData): string {
   if (pages.length > 0) {
     md += `---\n\n## Additional Pages\n\n`;
     for (const page of pages) {
-      md += `- [${page.title}](pages/${page.slug}.md)\n`;
+      md += `- [${page.title}](${pageExportPath(page)})\n`;
     }
     md += `\n`;
   }
@@ -803,7 +815,7 @@ export function generateMetadataJson(data: ExportData): string {
     files: [
       "README.md",
       "AGENT_CONTEXT.md",
-      ...pages.map((p) => `pages/${p.slug}.md`),
+      ...pages.map((p) => pageExportPath(p)),
       "discussion/issues.md",
       "discussion/decisions.md",
       "history/versions.md",
@@ -873,7 +885,7 @@ ${contentSummary}${contentSummary.length >= 500 ? "..." : ""}
 ## Pages
 
 - Main Content (README.md) - includes current version comments only
-${pages.length > 0 ? pages.map((p) => `- ${p.title} (pages/${p.slug}.md)`).join("\n") : ""}
+${pages.length > 0 ? pages.map((p) => `- ${p.title} (${pageExportPath(p)})`).join("\n") : ""}
 
 ## Comment Overview
 
@@ -924,7 +936,7 @@ ${bepNum}/
 ├── AGENT_CONTEXT.md        # This file
 ├── metadata.json           # Machine-readable metadata${pages.length > 0 ? `
 ├── pages/                  # Additional pages + v${currentVersion} comments
-${pages.map((p) => `│   └── ${p.slug}.md`).join("\n")}` : ""}
+${pages.map((p) => `│   └── ${p.parentSlug ? `${p.parentSlug}/` : ""}${p.slug}.md`).join("\n")}` : ""}
 ├── discussion/
 │   ├── issues.md           # Open and resolved issues
 │   └── decisions.md        # Recorded decisions
@@ -996,9 +1008,10 @@ export function generateAllExportFiles(data: ExportData): ExportFile[] {
       title: page.title,
       slug: page.slug,
       order: page.order,
+      ...(page.parentSlug ? { parent: page.parentSlug } : {}),
     });
     files.push({
-      path: `pages/${page.slug}.md`,
+      path: pageExportPath(page),
       content: `${pageFrontmatter}# ${page.title}\n\n${contentWithComments}\n`,
     });
   }

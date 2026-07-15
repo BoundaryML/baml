@@ -24,7 +24,7 @@ SOURCE_FILE
         CALL_ARGS
           L_PAREN "("
           CALL_ARG "true"
-            WORD "true"
+            KW_TRUE "true"
           R_PAREN ")"
       R_BRACE "}"
   TEST_EXPR_DEF
@@ -50,7 +50,7 @@ SOURCE_FILE
         CALL_ARGS
           L_PAREN "("
           CALL_ARG "true"
-            WORD "true"
+            KW_TRUE "true"
           R_PAREN ")"
       R_BRACE "}"
   TESTSET_DEF
@@ -87,7 +87,7 @@ SOURCE_FILE
             CALL_ARGS
               L_PAREN "("
               CALL_ARG "true"
-                WORD "true"
+                KW_TRUE "true"
               R_PAREN ")"
           R_BRACE "}"
       R_BRACE "}"

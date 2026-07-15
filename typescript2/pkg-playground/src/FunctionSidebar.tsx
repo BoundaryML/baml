@@ -40,6 +40,8 @@ import {
 interface TestTreeNodeProps {
   def: SerializedTestDef;
   depth?: number;
+  /** Disable run/retry actions while the runtime is unavailable. */
+  disabled?: boolean;
   onRunTest?: (name: string) => void;
   testRunResults?: Map<string, unknown>;
   failedExpands?: Set<string>;
@@ -49,6 +51,7 @@ interface TestTreeNodeProps {
 function TestTreeNode({
   def,
   depth = 0,
+  disabled = false,
   onRunTest,
   testRunResults,
   failedExpands,
@@ -85,7 +88,8 @@ function TestTreeNode({
         </span>
         {isFailed && onRetryExpand && (
           <button
-            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0"
+            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={disabled}
             onClick={(e) => {
               e.stopPropagation();
               onRetryExpand(def.name);
@@ -118,7 +122,8 @@ function TestTreeNode({
         </span>
         {onRunTest && (
           <button
-            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0"
+            className="ml-auto text-[9px] text-vsc-text-faint hover:text-vsc-text px-1 shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={disabled}
             onClick={(e) => {
               e.stopPropagation();
               onRunTest(def.name);
@@ -174,6 +179,7 @@ function TestTreeNode({
             key={`${'name' in child ? child.name : i}-${i}`}
             def={child}
             depth={depth + 1}
+            disabled={disabled}
             onRunTest={onRunTest}
             testRunResults={testRunResults}
             failedExpands={failedExpands}
@@ -196,6 +202,8 @@ export interface FunctionSidebarProps {
   showInternalFunctions: boolean;
   internalFunctionCount: number;
   isLoadingProject?: boolean;
+  /** Disable Run/Test-derived actions until the current build is ready. */
+  runtimeControlsDisabled?: boolean;
   testTree?: SerializedTestDef[] | null;
   previewTests?: TestInfo[];
   selectedPreviewTestKey?: string | null;
@@ -242,21 +250,36 @@ function FunctionTreeNode({
 
   if (node.type === 'folder') {
     const forcedOpen = forcedOpenFolderKeys.has(node.key);
-    const open = forcedOpen || (openFolderKeys[node.key] ?? false);
+    const requestedOpen = openFolderKeys[node.key];
+    const collapsePending = forcedOpen && requestedOpen === false;
+    const open = forcedOpen || (requestedOpen ?? false);
+    const collapsePendingMessage =
+      'Will collapse when this folder is no longer kept open automatically';
     return (
       <Collapsible
         open={open}
-        onOpenChange={(nextOpen) => onFolderOpenChange(node.key, nextOpen)}
+        onOpenChange={(nextOpen) =>
+          onFolderOpenChange(
+            node.key,
+            collapsePending && !nextOpen ? true : nextOpen,
+          )
+        }
       >
         <CollapsibleTrigger
           className="flex items-center gap-1 w-full pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover"
           style={{ paddingLeft: indent }}
-          title={node.path.join('.')}
+          title={
+            collapsePending
+              ? `${node.path.join('.')} — ${collapsePendingMessage}`
+              : node.path.join('.')
+          }
+          data-collapse-pending={collapsePending || undefined}
         >
           <ChevronRight
             className={cn(
-              'h-3 w-3 text-vsc-text-faint transition-transform',
-              open && 'rotate-90',
+              'h-3 w-3 shrink-0 transition-transform',
+              collapsePending ? 'text-vsc-accent' : 'text-vsc-text-faint',
+              open && !collapsePending && 'rotate-90',
             )}
           />
           <Folder className="h-3.5 w-3.5 shrink-0 text-vsc-text-faint" />
@@ -266,6 +289,9 @@ function FunctionTreeNode({
           <span className="text-vsc-text-faint ml-1">
             ({node.functionCount})
           </span>
+          {collapsePending && (
+            <span className="sr-only">{collapsePendingMessage}</span>
+          )}
         </CollapsibleTrigger>
         <CollapsibleContent>
           {node.children.map((child) => (
@@ -321,6 +347,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   showInternalFunctions,
   internalFunctionCount,
   isLoadingProject = false,
+  runtimeControlsDisabled = false,
   testTree,
   previewTests = [],
   selectedPreviewTestKey,
@@ -468,6 +495,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                 size="icon"
                 className={`h-5 w-5 text-vsc-text-faint hover:text-vsc-text${onSelectCollectionView ? '' : ' ml-auto'}`}
                 onClick={onRefreshTests}
+                disabled={runtimeControlsDisabled}
                 title="Re-collect tests"
               >
                 <RefreshCw size={10} />
@@ -520,9 +548,11 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                 <TestTreeNode
                   key={`${'name' in def ? def.name : i}-${i}`}
                   def={def}
+                  disabled={runtimeControlsDisabled}
                   onRunTest={onRunTest}
                   testRunResults={testRunResults}
                   failedExpands={failedExpands}
+                  onRetryExpand={onRetryExpand}
                 />
               ))}
             </CollapsibleContent>

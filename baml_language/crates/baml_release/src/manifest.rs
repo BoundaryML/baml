@@ -43,6 +43,12 @@ pub struct ToolchainManifest {
     /// attached to the same baml-language release tag as `artifacts`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub baml_cpp: Option<BTreeMap<String, Artifact>>,
+    /// Engine cdylib assets (`target -> {url, sha256}`), recorded for
+    /// completeness. The dylib-loader SDKs construct these GitHub-release URLs
+    /// directly, so the loader never consults the manifest for them; `default`
+    /// keeps older manifests without this field deserializable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cffi: Option<BTreeMap<String, Artifact>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +74,11 @@ impl ToolchainManifest {
         }
         if let Some(baml_cpp) = &self.baml_cpp {
             validate_artifacts(&self.version, baml_cpp)?;
+        }
+        if let Some(cffi) = &self.cffi {
+            for (target, artifact) in cffi {
+                validate_artifact(&format!("cffi/{target}"), artifact)?;
+            }
         }
         Ok(())
     }
@@ -144,6 +155,13 @@ mod tests {
             .collect()
     }
 
+    fn artifact() -> Artifact {
+        Artifact {
+            url: "https://example.com/x".to_string(),
+            sha256: "a".repeat(64),
+        }
+    }
+
     fn manifest_with_baml_cpp(baml_cpp: Option<BTreeMap<String, Artifact>>) -> ToolchainManifest {
         ToolchainManifest {
             schema: MANIFEST_SCHEMA,
@@ -154,6 +172,21 @@ mod tests {
             vsix: None,
             baml_bridge_pypi: None,
             baml_cpp,
+            cffi: None,
+        }
+    }
+
+    fn manifest_with(cffi: Option<BTreeMap<String, Artifact>>) -> ToolchainManifest {
+        ToolchainManifest {
+            schema: crate::MANIFEST_SCHEMA,
+            version: "0.15.0".to_string(),
+            channel: Channel::Canary,
+            released_at: "2026-07-14T00:00:00Z".to_string(),
+            artifacts: full_target_artifacts(),
+            vsix: None,
+            baml_bridge_pypi: None,
+            baml_cpp: None,
+            cffi,
         }
     }
 
@@ -192,6 +225,50 @@ mod tests {
         let json = serde_json::to_string(&manifest).unwrap();
         let parsed: ToolchainManifest = serde_json::from_str(&json).unwrap();
         assert!(parsed.baml_cpp.is_none());
+    }
+
+    #[test]
+    fn cffi_map_round_trips_and_validates() {
+        let cffi = BTreeMap::from([("aarch64-apple-darwin".to_string(), artifact())]);
+        let manifest = manifest_with(Some(cffi));
+        manifest.validate().unwrap();
+
+        let json = serde_json::to_string(&manifest).unwrap();
+        assert!(json.contains("\"cffi\""), "cffi should serialize: {json}");
+        let back: ToolchainManifest = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.cffi.as_ref().unwrap().len(), 1);
+        back.validate().unwrap();
+    }
+
+    #[test]
+    fn cffi_is_omitted_when_absent() {
+        let json = serde_json::to_string(&manifest_with(None)).unwrap();
+        assert!(!json.contains("\"cffi\""), "cffi should be omitted: {json}");
+    }
+
+    #[test]
+    fn older_manifest_without_cffi_deserializes() {
+        // A manifest predating the cffi field must still load (serde default).
+        let json =
+            r#"{"schema":1,"version":"0.1.0","channel":"canary","released_at":"t","artifacts":{}}"#;
+        let manifest: ToolchainManifest = serde_json::from_str(json).unwrap();
+        assert!(manifest.cffi.is_none());
+    }
+
+    #[test]
+    fn invalid_cffi_artifact_is_rejected() {
+        let bad = BTreeMap::from([(
+            "aarch64-apple-darwin".to_string(),
+            Artifact {
+                url: "http://insecure".to_string(),
+                sha256: "a".repeat(64),
+            },
+        )]);
+        let err = manifest_with(Some(bad)).validate().unwrap_err();
+        assert!(
+            format!("{err}").contains("cffi/aarch64-apple-darwin"),
+            "{err}"
+        );
     }
 }
 

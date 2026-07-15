@@ -125,6 +125,26 @@ pub(crate) enum Commands {
 
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
+
+    // Hidden from `baml --help` by default: the first-run notice + the
+    // `boundaryml.com/telemetry` docs page cover discovery for users who
+    // want to opt out, and hiding keeps the top-level command list from
+    // reading like an ops-console. Still fully functional (`baml
+    // telemetry`, `baml telemetry disable`, etc.) and re-listed
+    // automatically by `parse_from_smart` when `BAML_INTERNAL=1`.
+    #[command(about = "Show or change BAML CLI telemetry preferences", hide = true)]
+    Telemetry(crate::telemetry_command::TelemetryArgs),
+
+    // The detached telemetry flush child (see `telemetry::queue`). Spawned
+    // by the CLI itself on exit / rotation; hidden even from
+    // `BAML_INTERNAL=1` listings by the `__` naming convention being
+    // self-explanatory, but marked hide for good measure.
+    #[command(
+        name = "__flush-telemetry",
+        about = "(internal) drain the on-disk telemetry queue",
+        hide = true
+    )]
+    FlushTelemetry(crate::telemetry_command::FlushTelemetryArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     // Repl(baml_runtime::cli::repl::ReplArgs),
 
@@ -194,16 +214,37 @@ impl RuntimeCli {
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
-        // Fire anonymous, best-effort telemetry for this invocation. The guard
-        // overlaps the request with command execution and, on drop (after the
-        // match below returns), waits briefly for it to finish. It never fails
-        // or noticeably delays the command.
+        // The detached telemetry flush child must run before (and without)
+        // `record_invocation` below: recording its own invocation would
+        // seal a new queue file on drop and spawn another child, forever.
+        if let Commands::FlushTelemetry(args) = &self.command {
+            return args.run();
+        }
+
+        // Fire anonymous, best-effort telemetry for this invocation. The
+        // event is appended to an on-disk queue (one atomic write); on drop
+        // of the guard (after the match below returns) the queue file is
+        // sealed and a detached child process delivers it after this
+        // process has already exited. It never fails or delays the command.
         let _telemetry = crate::telemetry::record_invocation(
             self.invoked_subcommand.as_deref().unwrap_or("unknown"),
         );
 
         // Resolve color/hyperlink output once, before any subcommand writes.
         crate::paint::init_color(self.color);
+
+        // Passive skill warning + background freshness refresh, only on the
+        // core authoring commands (init, run, generate, pack) so the nag
+        // never bleeds into machine-facing or utility invocations. The
+        // guard's drop, after the match below returns, gives the background
+        // refresh the rest of its time budget.
+        let _skill_check = match &self.command {
+            Commands::Init(_) | Commands::Run(_) | Commands::Generate(_) | Commands::Pack(_) => {
+                crate::skill_check::SkillCheck::start()
+            }
+            _ => crate::skill_check::SkillCheck::skipped(),
+        };
+
         match &self.command {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
@@ -224,6 +265,9 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            Commands::Telemetry(args) => args.run(),
+            // Handled by the early return above, before telemetry wiring.
+            Commands::FlushTelemetry(args) => args.run(),
             Commands::Format(args) => args.run(),
         }
     }

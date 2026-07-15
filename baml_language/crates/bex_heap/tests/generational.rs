@@ -414,7 +414,7 @@ fn test_mark_card_for_gen2_object() {
 
     // Create an object and promote to Gen2 via major GC
     let arr = tlab.alloc_array(
-        baml_type::RuntimeTy::int(),
+        baml_type::RealizedTy::int(),
         vec![bex_vm_types::Value::int(0)],
     );
     let (_, roots, _) =
@@ -445,7 +445,7 @@ fn test_dirty_card_roots_keep_gen0_alive_during_minor_gc() {
 
     // Step 1: Create an array and promote to Gen2
     let arr = tlab.alloc_array(
-        baml_type::RuntimeTy::unknown(),
+        baml_type::RealizedTy::unknown(),
         vec![bex_vm_types::Value::NULL],
     );
     let (_, roots1, _) =
@@ -504,7 +504,7 @@ fn test_clean_card_does_not_root_gen0_objects() {
 
     // Promote an array to Gen2 (no cross-gen references, no dirty cards)
     let arr = tlab.alloc_array(
-        baml_type::RuntimeTy::int(),
+        baml_type::RealizedTy::int(),
         vec![bex_vm_types::Value::int(99)],
     );
     let (_, roots1, _) =
@@ -538,7 +538,7 @@ fn test_stale_dirty_card_does_not_root_unrelated_gen0_object() {
 
     // Promote an array with no object references into Gen2.
     let arr = tlab.alloc_array(
-        baml_type::RuntimeTy::unknown(),
+        baml_type::RealizedTy::unknown(),
         vec![bex_vm_types::Value::NULL],
     );
     let (_, roots1, _) =
@@ -598,7 +598,7 @@ fn test_critical_gen2_stale_pointer_after_minor_gc() {
 
     // Step 1: Allocate a Gen0 array and promote it to Gen2 via major GC.
     let container = tlab.alloc_array(
-        baml_type::RuntimeTy::unknown(),
+        baml_type::RealizedTy::unknown(),
         vec![bex_vm_types::Value::NULL],
     );
     let (_, roots1, _) =
@@ -662,7 +662,7 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
 
     // Step 1: Promote an array container to Gen2.
     let container = tlab.alloc_array(
-        baml_type::RuntimeTy::unknown(),
+        baml_type::RealizedTy::unknown(),
         vec![bex_vm_types::Value::NULL],
     );
     let (_, roots1, _) =
@@ -674,7 +674,7 @@ fn test_critical_gen2_chain_through_gen0_after_minor_gc() {
     // Step 2: Build a Gen0 chain: inner_leaf <- wrapper_array
     let inner_leaf = tlab.alloc_string("inner_leaf".to_string());
     let wrapper = tlab.alloc_array(
-        baml_type::RuntimeTy::unknown(),
+        baml_type::RealizedTy::unknown(),
         vec![bex_vm_types::Value::object(inner_leaf)],
     );
     assert_eq!(heap.generation_of(inner_leaf), Generation::Gen0);
@@ -843,7 +843,7 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
 
     // T0: Allocate container A in Gen0 with a placeholder slot.
     let a_g0 = tlab.alloc_array(
-        baml_type::RuntimeTy::unknown(),
+        baml_type::RealizedTy::unknown(),
         vec![bex_vm_types::Value::NULL],
     );
     assert_eq!(heap.generation_of(a_g0), Generation::Gen0);

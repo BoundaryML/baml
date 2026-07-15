@@ -37,6 +37,20 @@ use crate::{
     ty::{FunctionParamTy, Ty, TyAttr},
 };
 
+/// Count of honest `infer_scope_types` bodies walked (Salsa cache misses) since
+/// process start. The per-file diagnostics cache serves clean files' diagnostics
+/// without querying their scopes, so a warm incremental compile leaves this at
+/// only the dirty files' scope count; a cold compile bumps it once per scope.
+/// Exposed for the `BAML_CACHE_DEBUG` warm-run evidence, not part of any result.
+static SCOPE_INFERENCES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Number of scopes whose bodies `infer_scope_types` walked honestly (not served
+/// from a Salsa memo) since process start. Small on a warm incremental compile
+/// (dirty scopes only); large on a cold compile.
+pub fn scope_inferences() -> usize {
+    SCOPE_INFERENCES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 #[derive(Debug, Clone, Default)]
 struct GenericEnv {
     params: Vec<Name>,
@@ -157,6 +171,108 @@ pub(crate) fn inference_owner_scope(
             return scope_id;
         };
         scope_id = parent;
+    }
+}
+
+/// The expression body + source map of an inference-bearing scope, plus the
+/// scope id to feed `infer_scope_types`.
+#[derive(Clone)]
+pub struct ScopeBody<'db> {
+    /// The inference-owner scope (`Function` / `Let` / `Lambda`).
+    pub scope: ScopeId<'db>,
+    pub expr_body: ExprBody,
+    pub source_map: AstSourceMap,
+}
+
+/// The body + source map of the scope that owns `scope_id`'s inference (its
+/// nearest `Function` / `Let` / `Lambda`) — the uniform map from a scope to its
+/// expression body, covering function bodies, top-level `let` initializers, and
+/// lambda/closure bodies (including nested ones and `spawn`/block bodies that
+/// lower to closures).
+///
+/// The single place that resolves a scope to its body, so consumers (e.g. the
+/// LSP semantic layer) never reimplement the per-scope-kind lookup that
+/// `infer_scope_types` performs internally.
+pub fn scope_body<'db>(db: &'db dyn crate::Db, scope_id: ScopeId<'db>) -> Option<ScopeBody<'db>> {
+    let file = scope_id.file(db);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let owner = inference_owner_scope(index, scope_id.file_scope_id(db));
+    let (expr_body, source_map) = fetch_scope_body(db, file, index, owner)?;
+    Some(ScopeBody {
+        scope: index.scope_ids[owner.index() as usize],
+        expr_body,
+        source_map,
+    })
+}
+
+/// The inference-owner scope of `scope_id` (its nearest enclosing `Function` /
+/// `Let` / `Lambda` body) WITHOUT fetching or cloning the body — the cheap
+/// key-normalization counterpart to [`scope_body`]. Use it to memoize a
+/// per-body index (e.g. the LSP `scope_resolution_index`) under one stable
+/// Salsa key, so sibling block/template scopes that share an owner don't each
+/// rebuild the same body index under a distinct key.
+pub fn scope_inference_owner<'db>(db: &'db dyn crate::Db, scope_id: ScopeId<'db>) -> ScopeId<'db> {
+    let index = baml_compiler2_ppir::file_semantic_index(db, scope_id.file(db));
+    let owner = inference_owner_scope(index, scope_id.file_scope_id(db));
+    index.scope_ids[owner.index() as usize]
+}
+
+/// Fetch the `(ExprBody, AstSourceMap)` for an inference-owner scope.
+fn fetch_scope_body<'db>(
+    db: &'db dyn crate::Db,
+    file: SourceFile,
+    index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'db>,
+    owner: FileScopeId,
+) -> Option<(ExprBody, AstSourceMap)> {
+    let scope = &index.scopes[owner.index() as usize];
+    match scope.kind {
+        ScopeKind::Function => {
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            let (local_id, _) = item_tree
+                .functions
+                .iter()
+                .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name))?;
+            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
+            let body = baml_compiler2_ppir::function_body(db, func_loc);
+            let baml_compiler2_hir::body::FunctionBody::Expr(eb) = body.as_ref() else {
+                return None;
+            };
+            let sm = baml_compiler2_ppir::function_body_source_map(db, func_loc)?;
+            Some((eb.clone(), sm))
+        }
+        ScopeKind::Let => {
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            let (local_id, _) = item_tree
+                .lets
+                .iter()
+                .find(|(_, l)| l.span == scope.range && scope.name.as_ref() == Some(&l.name))?;
+            let let_loc = baml_compiler2_hir::loc::LetLoc::new(db, file, *local_id);
+            let body = baml_compiler2_hir::body::let_body(db, let_loc);
+            let baml_compiler2_hir::body::LetBody::Expr(eb) = body.as_ref() else {
+                return None;
+            };
+            let sm = baml_compiler2_hir::body::let_body_source_map(db, let_loc)?;
+            Some((eb.clone(), sm))
+        }
+        ScopeKind::Lambda => {
+            // The lambda body is nested inside the enclosing Function/Let body;
+            // descend to it by span.
+            let mut parent = scope.parent;
+            let enclosing = loop {
+                let p = parent?;
+                if matches!(
+                    index.scopes[p.index() as usize].kind,
+                    ScopeKind::Function | ScopeKind::Let
+                ) {
+                    break p;
+                }
+                parent = index.scopes[p.index() as usize].parent;
+            };
+            let (eb, sm) = fetch_scope_body(db, file, index, enclosing)?;
+            let (_, lambda_body, lambda_sm, _) = find_lambda_by_span(&eb, &sm, scope.range)?;
+            Some((lambda_body.clone(), lambda_sm.clone()))
+        }
+        _ => None,
     }
 }
 
@@ -1513,6 +1629,10 @@ pub fn infer_scope_types<'db>(
     db: &'db dyn crate::Db,
     scope_id: ScopeId<'db>,
 ) -> ScopeInference<'db> {
+    // Salsa only enters the query body on a cache miss, so this counts scopes
+    // actually re-inferred — the warm-incremental evidence that clean files
+    // (never queried, because the diagnostics cache serves them) skip inference.
+    SCOPE_INFERENCES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let file = scope_id.file(db);
     let file_scope = scope_id.file_scope_id(db);
     let index = baml_compiler2_ppir::file_semantic_index(db, file);

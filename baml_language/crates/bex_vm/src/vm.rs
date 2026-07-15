@@ -19,65 +19,47 @@ use std::{collections::HashMap, sync::Arc};
 use baml_type::Name;
 use smallvec::SmallVec;
 
-/// Branch hint: tells the compiler this condition is almost never true.
-/// Used on the cold side of `if unlikely(cond) { ... }` in the dispatch
-/// loop's hot path — measurably faster than letting the compiler guess
-/// for checks like "any watch installed?" that fire on every variable
-/// store but are virtually always false outside of a debug session.
-#[allow(clippy::inline_always)]
-#[inline(always)]
-#[cold]
-fn cold() {}
-
-#[allow(clippy::inline_always)]
-#[inline(always)]
-fn unlikely(b: bool) -> bool {
-    if b {
-        cold();
-    }
-    b
-}
-
 fn guard_template_matches(
     template: &baml_type::TyTemplate,
-    frame_type_args: &[baml_type::RuntimeTy],
-    actual: &baml_type::RuntimeTy,
+    frame_type_args: &[baml_type::RealizedTy],
+    actual: &baml_type::RealizedTy,
 ) -> bool {
-    use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
+    use baml_type::{RealizedTy, TyTemplate};
 
     // A fully-realized template carries no frame refs or holes: compare it to
     // the actual arg by exact structural equality (the invariant-position rule
     // for reified type args). This is the flattened successor to the old
     // `Concrete(expected) => expected == actual` arm.
     if let Ok(realized) = <&RealizedTy>::try_from(template) {
-        return realized.as_runtime_ty() == actual;
+        return realized == actual;
     }
 
     match template {
         TyTemplate::Wildcard => true,
         #[expect(deprecated)]
         TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
-            Some(RuntimeTy::BuiltinUnknown { .. }) | None => true,
-            Some(expected) => actual.is_subtype_of(expected),
+            Some(RealizedTy::BuiltinUnknown { .. }) | None => true,
+            // The context-free subtype fork lives on `RuntimeTy`; upcast only to
+            // consult it.
+            Some(expected) => actual
+                .as_runtime_ty()
+                .is_subtype_of(expected.as_runtime_ty()),
         },
-        TyTemplate::TypeArgRef(n) => {
-            frame_type_args
-                .get(*n as usize)
-                .cloned()
-                .unwrap_or_else(RuntimeTy::unknown)
-                == *actual
-        }
+        TyTemplate::TypeArgRef(n) => frame_type_args.get(*n as usize).map_or_else(
+            || RealizedTy::unknown() == *actual,
+            |expected| expected == actual,
+        ),
         TyTemplate::List(inner, _) => {
-            matches!(actual, RuntimeTy::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
+            matches!(actual, RealizedTy::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
         }
         TyTemplate::Map { key, value, .. } => {
-            matches!(actual, RuntimeTy::Map { key: actual_key, value: actual_value, .. } if guard_template_matches(key, frame_type_args, actual_key) && guard_template_matches(value, frame_type_args, actual_value))
+            matches!(actual, RealizedTy::Map { key: actual_key, value: actual_value, .. } if guard_template_matches(key, frame_type_args, actual_key) && guard_template_matches(value, frame_type_args, actual_value))
         }
         TyTemplate::Class(name, args, _) => {
-            matches!(actual, RuntimeTy::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
+            matches!(actual, RealizedTy::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
         }
         TyTemplate::Interface(name, args, assoc, _) => {
-            matches!(actual, RuntimeTy::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
+            matches!(actual, RealizedTy::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
             && args.len() == actual_args.len()
             && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual))
             && assoc.iter().all(|(name, template)| {
@@ -88,7 +70,7 @@ fn guard_template_matches(
             }))
         }
         TyTemplate::Union(parts, _) => match actual {
-            RuntimeTy::Union(actual_parts, _) => actual_parts.iter().all(|actual_part| {
+            RealizedTy::Union(actual_parts, _) => actual_parts.iter().all(|actual_part| {
                 parts
                     .iter()
                     .any(|part| guard_template_matches(part, frame_type_args, actual_part))
@@ -103,7 +85,7 @@ fn guard_template_matches(
             throws,
             ..
         } => {
-            matches!(actual, RuntimeTy::Function { params: actual_params, ret: actual_ret, throws: actual_throws, .. }
+            matches!(actual, RealizedTy::Function { params: actual_params, ret: actual_ret, throws: actual_throws, .. }
                 if params.len() == actual_params.len()
                 && params.iter().zip(actual_params).all(|(param, actual_param)| {
                     param.mode == actual_param.mode
@@ -113,13 +95,9 @@ fn guard_template_matches(
                 && guard_template_matches(throws, frame_type_args, actual_throws))
         }
         TyTemplate::Future(value, error, _) => {
-            matches!(actual, RuntimeTy::Future(actual_value, actual_error, _)
+            matches!(actual, RealizedTy::Future(actual_value, actual_error, _)
                 if guard_template_matches(value, frame_type_args, actual_value)
                 && guard_template_matches(error, frame_type_args, actual_error))
-        }
-        TyTemplate::WatchAccessor(inner, _) => {
-            matches!(actual, RuntimeTy::WatchAccessor(actual_inner, _)
-                if guard_template_matches(inner, frame_type_args, actual_inner))
         }
         // A symbolic projection whose witness type was not resolved at compile
         // time — never a match: a runtime value's concrete type carries no
@@ -141,12 +119,12 @@ fn guard_template_matches(
 /// fallback, matching the host's De Bruijn send order.
 fn lower_named_type_args(
     param_names: &[String],
-    type_args: IndexMap<String, baml_type::RuntimeTy>,
-) -> Vec<baml_type::RuntimeTy> {
+    type_args: IndexMap<String, baml_type::RealizedTy>,
+) -> Vec<baml_type::RealizedTy> {
     if param_names.is_empty() {
         return type_args.into_iter().map(|(_, ty)| ty).collect();
     }
-    let mut positional = vec![baml_type::RuntimeTy::unknown(); param_names.len()];
+    let mut positional = vec![baml_type::RealizedTy::unknown(); param_names.len()];
     for (name, ty) in type_args {
         if let Some(idx) = param_names.iter().position(|p| *p == name) {
             positional[idx] = ty;
@@ -206,9 +184,9 @@ use indexmap::IndexMap;
 use crate::{
     errors::{StackFrame, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::{EvalStack, EvalStackTrait},
-    package_baml::{BamlPackageBaml, NativeCallResult, NativeFunction},
+    package_baml::{NativeCallResult, NativeFunction},
+    type_context::RuntimeTypeContext,
     types::ObjectTrait,
-    watch::{self, NodeId, RootState, Watch, WatchFilter},
 };
 
 /// Max call stack size.
@@ -305,7 +283,12 @@ pub struct BytecodeFrame {
     /// Populated by the `Call { ntypeargs }` instruction when the callee is
     /// generic.  Empty for non-generic calls.  Used by the `LoadType`
     /// instruction to substitute `TypeArgRef(n)` leaves in a `TyTemplate`.
-    pub type_args: Vec<baml_type::RuntimeTy>,
+    ///
+    /// Realized by construction: a generic call binds each parameter to a
+    /// concrete type, seeded from the callee's realized `Object` type args
+    /// (`GenericFunction`/`BoundMethod`/`Closure`/`Instance`), so a `LoadType`
+    /// substitutes them into a fully realized type.
+    pub type_args: Vec<baml_type::RealizedTy>,
     /// Byte offset of the most recently dispatched opcode (compact path).
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
@@ -373,56 +356,29 @@ impl Frame {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::AtomicBool;
-    use std::{collections::HashMap, sync::Arc};
 
-    use baml_type::{Name, RuntimeTy, TyAttr, TyTemplate, TypeName};
+    use baml_type::{Name, RealizedTy, RuntimeTy, TyAttr, TyTemplate, TypeName};
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
         EarlyYieldCheck, FunctionCaptureProps, FunctionKind, GlobalPool, HeapPtr, Object,
         ObjectIndex, RootHaver, Value, ValueKind, VmGlobals,
-        bytecode::{Bytecode, FieldCopy, FieldCopySet},
-        types::{Class, ClassField, Function, FunctionOrigin, Instance, type_tags},
+        bytecode::Bytecode,
+        types::{Function, FunctionOrigin, type_tags},
     };
 
-    use super::{BexVm, Frame, VmCaptureMask, VmExecState, WatchNotification, value_type_tag};
+    use super::{BexVm, Frame, VmCaptureMask, VmExecState, value_type_tag};
     use crate::{
         indexable::EvalStack,
         package_baml::{NativeCallResult, NativeFunction},
-        watch::{NodeId, RootState, Watch, WatchFilter},
     };
 
     fn int_ty() -> RuntimeTy {
         RuntimeTy::Int {
             attr: TyAttr::default(),
         }
-    }
-
-    fn test_field(name: &str) -> ClassField {
-        ClassField {
-            name: name.to_string(),
-            field_type: int_ty(),
-            field_template: TyTemplate::from(baml_type::RealizedTy::int()),
-            description: None,
-            alias: None,
-            skip: false,
-        }
-    }
-
-    fn test_class(field_count: usize) -> Object {
-        Object::Class(Box::new(Class {
-            name: TypeName::local(Name::new("TestClass")),
-            fields: (0..field_count)
-                .map(|idx| test_field(&format!("field{idx}")))
-                .collect(),
-            description: None,
-            alias: None,
-            type_tag: 100,
-            ty_attr: TyAttr::default(),
-            has_cleanup: false,
-            generic_param_count: 0,
-        }))
     }
 
     fn early_yield_for_test() -> EarlyYieldCheck {
@@ -449,9 +405,6 @@ mod tests {
             globals: VmGlobals::Owned(GlobalPool::new()),
             error_class_ptrs: Arc::from(Vec::new()),
             panic_class_ptrs: Arc::from(Vec::new()),
-            watch: Watch::new(),
-            watched_vars: HashMap::new(),
-            interrupt_frame: None,
             prof_ring: None,
             prof_suppressed: false,
             prof_thread_id: 0,
@@ -530,92 +483,6 @@ mod tests {
             Value::int(type_tags::INT).kind(),
             ValueKind::Int(tag) if value_type_tag(value) == tag
         ));
-    }
-
-    #[test]
-    fn init_spread_preserves_pre_spread_watch_baseline() {
-        let mut vm = test_vm(vec![test_class(2)]);
-        let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
-        let source_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Vec::new(),
-            vec![Value::int(10), Value::int(2)],
-        )));
-        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Vec::new(),
-            vec![Value::int(1), Value::int(2)],
-        )));
-        let root = NodeId::HeapObject(dest_ptr);
-        vm.watch.register_root(
-            root,
-            RootState {
-                value: Value::object(dest_ptr),
-                last_assigned: None,
-                last_notified: None,
-                channel: "test".to_string(),
-                filter: WatchFilter::Default,
-            },
-        );
-
-        let result = vm
-            .init_spread(
-                Value::object(dest_ptr),
-                Value::object(source_ptr),
-                &FieldCopySet {
-                    fields: vec![
-                        FieldCopy { source: 0, dest: 0 },
-                        FieldCopy { source: 1, dest: 1 },
-                    ],
-                },
-            )
-            .expect("spread should succeed");
-
-        let Some(VmExecState::Notify(WatchNotification::Variables(notifications))) = result else {
-            panic!("expected watched spread notification");
-        };
-        assert_eq!(notifications, vec![root]);
-
-        let Object::Instance(dest) = vm.get_object(dest_ptr) else {
-            panic!("destination should remain an instance");
-        };
-        assert_eq!(
-            dest.field_values().collect::<Vec<_>>(),
-            vec![Value::int(10), Value::int(2)]
-        );
-    }
-
-    #[test]
-    fn init_spread_without_watch_does_not_populate_watch_graph() {
-        let mut vm = test_vm(vec![test_class(1)]);
-        let class_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(0));
-        let old_value = vm.tlab.alloc_string("old".to_string());
-        let new_value = vm.tlab.alloc_string("new".to_string());
-        let source_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Vec::new(),
-            vec![Value::object(new_value)],
-        )));
-        let dest_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Vec::new(),
-            vec![Value::object(old_value)],
-        )));
-
-        let result = vm
-            .init_spread(
-                Value::object(dest_ptr),
-                Value::object(source_ptr),
-                &FieldCopySet {
-                    fields: vec![FieldCopy { source: 0, dest: 0 }],
-                },
-            )
-            .expect("spread should succeed");
-
-        assert!(result.is_none());
-        let mut watch_roots = Vec::new();
-        vm.watch.collect_roots(&mut watch_roots);
-        assert!(watch_roots.is_empty());
     }
 
     #[test]
@@ -715,10 +582,10 @@ mod tests {
     fn guard_template_type_arg_ref_or_wildcard_honors_subtyping() {
         use super::guard_template_matches;
 
-        let shape = RuntimeTy::class("Shape");
-        let sq = RuntimeTy::class("Sq");
+        let shape = RealizedTy::class("Shape");
+        let sq = RealizedTy::class("Sq");
         // The reified frame `T` from the B-634 repro: the un-subsumed join.
-        let widened_t = RuntimeTy::union([shape.clone(), sq.clone()]);
+        let widened_t = RealizedTy::union([shape.clone(), sq.clone()]);
 
         // Under-match fix: the value's actual arg (`Shape`) is a member of the
         // widened frame `T` (`Shape | Sq`), so the subtype-or-wildcard template
@@ -761,7 +628,7 @@ mod tests {
 
         // An unconcretized (all-`unknown`) frame slot matches any instance.
         assert!(
-            guard_template_matches(&subtype_template, &[RuntimeTy::unknown()], &shape),
+            guard_template_matches(&subtype_template, &[RealizedTy::unknown()], &shape),
             "an unknown frame slot must match any runtime arg"
         );
     }
@@ -778,8 +645,8 @@ mod tests {
             foo.clone(),
             vec![TyTemplate::from(baml_type::RealizedTy::int())],
         );
-        let foo_int_value = RuntimeTy::class_with_args(foo.clone(), vec![RuntimeTy::int()]);
-        let foo_string_value = RuntimeTy::class_with_args(foo, vec![RuntimeTy::string()]);
+        let foo_int_value = RealizedTy::class_with_args(foo.clone(), vec![RealizedTy::int()]);
+        let foo_string_value = RealizedTy::class_with_args(foo, vec![RealizedTy::string()]);
 
         assert!(
             guard_template_matches(&foo_int_template, &[], &foo_int_value),
@@ -972,14 +839,6 @@ pub struct BexVm {
     /// `PanicClass` discriminant. Shared (`Arc`) across spawned VMs.
     panic_class_ptrs: Arc<[HeapPtr]>,
 
-    /// Emit dependency graph.
-    pub watch: Watch,
-
-    /// Tracks which local variables are watched (have @watch).
-    pub(crate) watched_vars: HashMap<StackIndex, (String, String)>,
-
-    pub interrupt_frame: Option<usize>,
-
     /// D5a snapshot: the profiling ring this engine claimed on the current
     /// OS thread, refreshed by the engine at the top of every exec resume
     /// (`run_thread_event_loop`) and **never valid across an `.await`**.
@@ -1071,7 +930,7 @@ pub struct BexVm {
     /// Saved/restored across nested `Call` instructions; native handlers that
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
-    pending_call_type_args: Vec<baml_type::RuntimeTy>,
+    pending_call_type_args: Vec<baml_type::RealizedTy>,
 }
 
 /// VM execution state.
@@ -1162,9 +1021,6 @@ pub enum VmExecState {
     /// VM has completed the execution of all available bytecode.
     Complete(Value),
 
-    /// Notify about watched variables.
-    Notify(WatchNotification),
-
     /// The VM is yielding a custom event to be emitted.
     ///
     /// The engine handles this by converting both values to `BexExternalValue`
@@ -1180,12 +1036,6 @@ pub enum VmExecState {
 
     /// We are still executing, but we should yield to allow other threads or the GC to run.
     EarlyYield,
-}
-
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug, PartialEq)]
-pub enum WatchNotification {
-    Variables(Vec<watch::NodeId>),
 }
 
 /// Intermediate representation of a compiled BAML program.
@@ -1519,9 +1369,6 @@ impl BexVm {
             globals,
             error_class_ptrs,
             panic_class_ptrs,
-            watch: Watch::new(),
-            watched_vars: HashMap::new(),
-            interrupt_frame: None,
             prof_ring: None,
             prof_suppressed: false,
             prof_thread_id: 0,
@@ -1551,7 +1398,7 @@ impl BexVm {
     ///
     /// Returns an empty slice for calls with `ntypeargs == 0` and from outside
     /// any call dispatch context.
-    pub fn current_call_type_args(&self) -> &[baml_type::RuntimeTy] {
+    pub fn current_call_type_args(&self) -> &[baml_type::RealizedTy] {
         &self.pending_call_type_args
     }
 
@@ -1783,14 +1630,14 @@ impl BexVm {
     /// `unknown`. The generated array-receiver glue calls this to build the
     /// [`ArrayView`](crate::package_baml::ArrayView) it hands a builtin, so a
     /// type-preserving builtin (e.g. `filter`) can tag its result array.
-    pub fn array_element_ty(&self, value: &Value) -> baml_type::RuntimeTy {
+    pub fn array_element_ty(&self, value: &Value) -> baml_type::RealizedTy {
         value
             .as_object_ptr()
             .and_then(|ptr| match self.get_object(ptr) {
                 Object::Array(arr) => Some((*arr.element_ty).clone()),
                 _ => None,
             })
-            .unwrap_or_else(baml_type::RuntimeTy::unknown)
+            .unwrap_or_else(baml_type::RealizedTy::unknown)
     }
 
     /// The declared key type of `value` when it is an `Object::Map`, else
@@ -1798,27 +1645,49 @@ impl BexVm {
     /// [`Self::map_value_ty`]) to build the
     /// [`MapView`](crate::package_baml::MapView) it hands a builtin, so a
     /// type-preserving builtin can tag its result map.
-    pub fn map_key_ty(&self, value: &Value) -> baml_type::RuntimeTy {
+    pub fn map_key_ty(&self, value: &Value) -> baml_type::RealizedTy {
         value
             .as_object_ptr()
             .and_then(|ptr| match self.get_object(ptr) {
                 Object::Map(map) => Some((*map.key_ty).clone()),
                 _ => None,
             })
-            .unwrap_or_else(baml_type::RuntimeTy::unknown)
+            .unwrap_or_else(baml_type::RealizedTy::unknown)
     }
 
     /// The declared value type of `value` when it is an `Object::Map`, else
     /// `unknown`. The map analogue of [`Self::array_element_ty`]; see
     /// [`Self::map_key_ty`].
-    pub fn map_value_ty(&self, value: &Value) -> baml_type::RuntimeTy {
+    pub fn map_value_ty(&self, value: &Value) -> baml_type::RealizedTy {
         value
             .as_object_ptr()
             .and_then(|ptr| match self.get_object(ptr) {
                 Object::Map(map) => Some((*map.value_ty).clone()),
                 _ => None,
             })
-            .unwrap_or_else(baml_type::RuntimeTy::unknown)
+            .unwrap_or_else(baml_type::RealizedTy::unknown)
+    }
+
+    /// Realize a class field's type template against an instance's realized class
+    /// type args, reducing any associated projection through the impl registry.
+    ///
+    /// A field template references only the class's own generic params (each bound
+    /// to a realized arg here) and the fields have concrete declared types, so this
+    /// always realizes; a substitution failure is a broken compiler/VM invariant,
+    /// surfaced as a panic rather than a silent `unknown`.
+    pub(crate) fn realize_field_ty(
+        &self,
+        template: &baml_type::TyTemplate,
+        class_type_args: &[baml_type::RealizedTy],
+    ) -> baml_type::RealizedTy {
+        let ctx = RuntimeTypeContext::new(self);
+        template
+            .substitute(class_type_args, &ctx)
+            .unwrap_or_else(|e| {
+                unreachable!(
+                    "class field type template did not realize against realized class args: {e}"
+                )
+            })
     }
 
     /// Read an object from the heap via `HeapPtr`.
@@ -2094,15 +1963,14 @@ impl BexVm {
                     ) {
                         ConcreteRealizedTy::Media(kind, TyAttr::default())
                     } else {
-                        // A generic instance's stored `class_type_args` are realized
-                        // at construction (`Box<int>` ⇒ `T = int`); narrow each into
-                        // the `ConcreteRealizedTy::Class` argument list.
-                        let type_args = inst
-                            .class_type_args
-                            .iter()
-                            .map(realized_arg)
-                            .collect::<Option<Vec<_>>>()?;
-                        ConcreteRealizedTy::Class(class.name.clone(), type_args, TyAttr::default())
+                        // A generic instance's stored `class_type_args` are already
+                        // realized (`Box<int>` ⇒ `T = int`), so they are exactly the
+                        // `ConcreteRealizedTy::Class` argument list.
+                        ConcreteRealizedTy::Class(
+                            class.name.clone(),
+                            inst.class_type_args.to_vec(),
+                            TyAttr::default(),
+                        )
                     }
                 }
                 other => unreachable!(
@@ -2124,13 +1992,12 @@ impl BexVm {
             },
             // Arrays/maps carry their element/key/value types, so the faithful
             // `list<T>` / `map<K, V>` is reconstructed from the value itself.
-            Object::Array(arr) => ConcreteRealizedTy::List(
-                Box::new(realized_arg(&arr.element_ty)?),
-                TyAttr::default(),
-            ),
+            Object::Array(arr) => {
+                ConcreteRealizedTy::List(Box::new((*arr.element_ty).clone()), TyAttr::default())
+            }
             Object::Map(map) => ConcreteRealizedTy::Map {
-                key: Box::new(realized_arg(&map.key_ty)?),
-                value: Box::new(realized_arg(&map.value_ty)?),
+                key: Box::new((*map.key_ty).clone()),
+                value: Box::new((*map.value_ty).clone()),
                 attr: TyAttr::default(),
             },
             // A cell is a transparent capture/mutable-binding slot, not a value
@@ -2162,19 +2029,10 @@ impl BexVm {
                 }
             }
             Object::HostClosure(hc) => ConcreteRealizedTy::Function {
-                params: hc
-                    .params
-                    .iter()
-                    .map(|p| {
-                        Some(baml_type::RealizedFunctionParamTy {
-                            name: p.name.clone(),
-                            ty: realized_arg(&p.ty)?,
-                            mode: p.mode,
-                        })
-                    })
-                    .collect::<Option<Vec<_>>>()?,
-                ret: Box::new(realized_arg(&hc.ret_ty)?),
-                throws: Box::new(realized_arg(&hc.throws_ty)?),
+                // The host-closure signature is already stored as realized types.
+                params: (*hc.params).clone(),
+                ret: Box::new((*hc.ret_ty).clone()),
+                throws: Box::new((*hc.throws_ty).clone()),
                 attr: TyAttr::default(),
             },
             // BUG: a `BoundMethod` is a callable value and *should* reconstruct
@@ -2401,7 +2259,7 @@ impl BexVm {
         // inherited positional slots — so fall back to the index as a key; the
         // named lowering then emits the unnamed bindings in order.
         let param_names = self.entry_point_generic_param_names(function);
-        let type_args: IndexMap<String, baml_type::RuntimeTy> = positional
+        let type_args: IndexMap<String, baml_type::RealizedTy> = positional
             .into_iter()
             .enumerate()
             .map(|(i, ty)| {
@@ -2436,7 +2294,7 @@ impl BexVm {
         &mut self,
         function: HeapPtr,
         args: &[Value],
-        type_args: IndexMap<String, baml_type::RuntimeTy>,
+        type_args: IndexMap<String, baml_type::RealizedTy>,
     ) {
         debug_assert!(
             matches!(
@@ -2558,7 +2416,7 @@ impl BexVm {
         &mut self,
         function: HeapPtr,
         args: &[Value],
-        type_args: Vec<baml_type::RuntimeTy>,
+        type_args: Vec<baml_type::RealizedTy>,
         callable_kind: FunctionKind,
     ) {
         let callee_global = self
@@ -2656,8 +2514,6 @@ impl BexVm {
         // stack and call stack should be empty.
         self.stack.clear();
         self.frames.clear();
-        self.watched_vars.clear();
-        self.watch = Watch::new();
         self.pending_call_captures.clear();
         self.seen_throw_values.clear();
         self.thrown_value_causes.clear();
@@ -3100,102 +2956,6 @@ impl BexVm {
         None
     }
 
-    /// Stops the execution of the current bytecode in favor of the given
-    /// function
-    ///
-    /// When the new control flow ends (given functions pops from the stack)
-    /// then the previosly running bytecode resumes execution.
-    fn interrupt(&mut self, function_ptr: HeapPtr, args: &[Value]) -> Result<VmExecState, VmError> {
-        let obj = self.get_object(function_ptr);
-        if !matches!(obj, Object::Function(_)) {
-            return Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::Function(FunctionType::Any)),
-                got: Type::Object(ObjectType::of(obj)),
-            }
-            .into());
-        }
-
-        // Persist the caller's live PC before pushing the interrupt frame.
-        // Once this frame is no longer innermost, unwinding/stack-trace lookups
-        // read its `faulting_pc` (no longer updated per-op under lazy `cur_pc`),
-        // so it must capture the instruction we interrupted. Mirrors
-        // `execute_call_from_locals_offset`.
-        if let Some(Frame::Bytecode(bf)) = self.frames.last_mut() {
-            bf.faulting_pc = self.cur_pc;
-        }
-
-        // Index of the frame that starts the interrupt code.
-        self.interrupt_frame = Some(self.frames.len());
-
-        let locals_offset = self.stack.len();
-
-        // Params.
-        self.stack.extend(args.iter().copied());
-
-        // Push the new frame. Interrupt frames participate in profiling like
-        // any call: their pop goes through the Return arm, which emits
-        // EndFunction — entry/exit must stay balanced.
-        let interrupt_function_id = self
-            .get_object(function_ptr)
-            .as_callable()
-            .map_or(0, |f| f.function_id);
-        let call_site_source =
-            self.call_site_source_for_frame(self.frames.len().saturating_sub(1), self.cur_pc);
-        let (call_id, parent_call_id) =
-            self.prof_enter_call(interrupt_function_id, call_site_source);
-        self.frames.push(Frame::Bytecode(BytecodeFrame {
-            function: function_ptr,
-            instruction_ptr: 0,
-            locals_offset: StackIndex::from_raw(locals_offset),
-            type_args: vec![],
-            faulting_pc: 0,
-            call_id,
-            parent_call_id,
-            capture_mask: VmCaptureMask::disabled(),
-        }));
-        self.allocate_real_locals_for_frame(function_ptr)?;
-
-        // Execute the interrupt code and return the result.
-        //
-        // Interrupt-internal calls mint call ids and, with profiling on,
-        // write balanced CallFunction/EndFunction records to the ring (§7
-        // decision 6, settled: filter calls stay in the .bamlprof stream —
-        // they are code that runs, attached under the interrupted call;
-        // program-only views hide them renderer-side). An exception CAUGHT
-        // inside the interrupt body unwinds normally; one that escapes the
-        // boundary fails loudly at the unwind site (see
-        // try_unwind_exception's crossed-boundary contract).
-        //
-        // The dispatch loop can yield states this synchronous mini-runner
-        // has no consumer for; they are handled here instead of surfacing as
-        // `ExpectedCompletion` errors in the caller:
-        // - `EarlyYield`: honoring it would suspend mid-interrupt with no way
-        //   to resume from `process_notifications`, so parking is delayed
-        //   until the interrupt completes. Note this delays the *engine-wide*
-        //   GC stop-the-world for the duration of the filter body (every
-        //   other thread parks and waits) — acceptable only because filter
-        //   bodies are expected to be tiny; revisit if filters grow.
-        // Everything else (`Complete`, `Await`, `SysOp`, ...) is returned to
-        // the caller unchanged.
-        //
-        // Swallowing is gated on the interrupt frame still being alive: an
-        // exception that escapes the interrupt body does NOT stop at the
-        // boundary — the unwinder clears `interrupt_frame` and keeps
-        // unwinding into the interrupted program's frames, which the engine
-        // HAS been told about. From that point every notification (most
-        // importantly `Unwound`) belongs to the outer program and must not
-        // be discarded: propagate it to the caller, which surfaces a loud
-        // `ExpectedCompletion` error rather than silently desyncing the
-        // engine's span bookkeeping or consuming the program's own
-        // completion as the filter verdict.
-        loop {
-            match self.exec()? {
-                VmExecState::EarlyYield if self.interrupt_frame.is_some() => {}
-                state => return Ok(state),
-            }
-        }
-    }
-
     fn allocate_real_locals_for_frame(
         &mut self,
         function_ptr: HeapPtr,
@@ -3271,94 +3031,8 @@ impl BexVm {
 
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    fn store_local_value(
-        &mut self,
-        local_var_index: StackIndex,
-        value: Value,
-    ) -> Result<Option<VmExecState>, VmError> {
-        // Fast path: no locals are watched, so a local store is just a stack
-        // write. The watch bookkeeping lives in a cold, never-inlined handler
-        // (`store_local_value_watched`) so this hot path stays inlined into
-        // `exec` and costs one predicted branch + one store. `Value` is `Copy`,
-        // so the overwrite needs no `mem::replace`/drop.
-        if unlikely(!self.watched_vars.is_empty()) {
-            return self.store_local_value_watched(local_var_index, value);
-        }
+    fn store_local_value(&mut self, local_var_index: StackIndex, value: Value) {
         self.stack.set_at(local_var_index, value);
-        Ok(None)
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn store_local_value_watched(
-        &mut self,
-        local_var_index: StackIndex,
-        value: Value,
-    ) -> Result<Option<VmExecState>, VmError> {
-        // Old value being replaced.
-        let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
-
-        // If this local is watched, update the watch graph.
-        //
-        // A watched local is a root in the watch graph. When
-        // reassigned (e.g. `v = new_val`), three things happen:
-        //
-        // 1. `update_watched_node` handles edge topology: unlinks
-        //    the old binding (so mutations to the old object no
-        //    longer trigger notifications), links the new one, and
-        //    deep-copies the previous root state into
-        //    `last_assigned` so the notification filter can diff
-        //    old vs new.
-        //
-        // 2. `state.value` is updated to the new value. This is
-        //    specific to local stores — for field/array/map stores
-        //    the root's top-level binding hasn't changed, but here
-        //    the root itself is being rebound.
-        //
-        // 3. `process_notifications` walks all roots reaching this
-        //    node (just itself, since it IS a root) and applies
-        //    the watch filter to decide whether to notify.
-        if self.watched_vars.contains_key(&local_var_index) {
-            let watched_node = NodeId::LocalVar(local_var_index);
-
-            self.update_watched_node(watched_node, watch::Path::Binding, old_value, value);
-
-            if let Some(state) = self.watch.root_state_mut(watched_node) {
-                state.value = value;
-            }
-
-            let notifications = self.process_notifications(watched_node)?;
-
-            if !notifications.is_empty() {
-                return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                    notifications,
-                ))));
-            }
-        }
-
-        Ok(None)
-    }
-
-    /// Combine the two `store_local_value` yields from a fused `StoreVar2` when
-    /// at least one watched local notified. `store_local_value` only ever yields
-    /// `Notify(Variables(..))`, so when both locals notify their node lists are
-    /// concatenated into one yield — no watch event is dropped. Cold: reached
-    /// only on the watched-local path, never in normal execution.
-    #[cold]
-    #[inline(never)]
-    fn merge_store_yields(y1: Option<VmExecState>, y2: Option<VmExecState>) -> VmExecState {
-        match (y1, y2) {
-            (
-                Some(VmExecState::Notify(WatchNotification::Variables(mut n1))),
-                Some(VmExecState::Notify(WatchNotification::Variables(n2))),
-            ) => {
-                n1.extend(n2);
-                VmExecState::Notify(WatchNotification::Variables(n1))
-            }
-            // Exactly one notified (or a defensive non-`Variables` variant).
-            (Some(state), _) | (_, Some(state)) => state,
-            (None, None) => unreachable!("merge_store_yields called with both None"),
-        }
     }
 
     pub fn error_to_exception_value(&mut self, error: VmBamlError) -> Value {
@@ -3453,9 +3127,11 @@ impl BexVm {
 
     pub(crate) fn alloc_error_value(&mut self, class: ErrorClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.error_class_ptrs[class as usize];
-        let instance_ptr =
-            self.tlab
-                .alloc(Object::Instance(Instance::new(class_ptr, vec![], fields)));
+        let instance_ptr = self.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Box::new([]),
+            fields,
+        )));
         Value::object(instance_ptr)
     }
 
@@ -3481,7 +3157,7 @@ impl BexVm {
         // element type.
         let frames_array = Value::object(
             self.tlab
-                .alloc_array(baml_type::RuntimeTy::unknown(), frames),
+                .alloc_array(baml_type::RealizedTy::unknown(), frames),
         );
         self.alloc_error_value(ErrorClass::StackTrace, vec![frames_array])
     }
@@ -3690,9 +3366,11 @@ impl BexVm {
     /// Allocate a `baml.panics.*` class instance using pre-resolved pointers.
     pub fn alloc_panic_value(&mut self, class: PanicClass, fields: Vec<Value>) -> Value {
         let class_ptr = self.panic_class_ptrs[class as usize];
-        let instance_ptr =
-            self.tlab
-                .alloc(Object::Instance(Instance::new(class_ptr, vec![], fields)));
+        let instance_ptr = self.tlab.alloc(Object::Instance(Instance::new(
+            class_ptr,
+            Box::new([]),
+            fields,
+        )));
         Value::object(instance_ptr)
     }
 
@@ -3742,20 +3420,14 @@ impl BexVm {
     /// Walk the call stack outward from the current frame looking for an
     /// exception handler.
     ///
-    /// On `Ok(crossed)` a handler was found and the VM is positioned at it;
-    /// `crossed` reports whether the unwind crossed the interrupt boundary —
-    /// an escaping watch-filter exception caught by the *interrupted
-    /// program's* own handler must still fail the filter loudly (the in-loop
-    /// call sites turn `crossed` into an error) instead of letting
-    /// `interrupt()`'s mini-runner keep executing the outer program and
-    /// consume its completion as the filter verdict.
+    /// On `Ok(())` a handler was found and the VM is positioned at it.
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
         function: &mut &'static Function,
         exception_value: Value,
         is_rethrow: bool,
-    ) -> Result<bool, VmError> {
+    ) -> Result<(), VmError> {
         // Capture the stack trace before unwinding destroys frame information.
         let trace: Vec<StackFrame> = self.capture_stack_trace();
 
@@ -3796,9 +3468,6 @@ impl BexVm {
         // here; per-frame truthful whether or not a handler catches it.
         let unwind_status = self.prof_unwind_status(exception_value);
 
-        // Whether this unwind popped past the live interrupt frame.
-        let mut crossed_interrupt_boundary = false;
-
         // The innermost (first) bytecode frame's faulting PC is the live
         // `cur_pc`; outer frames use the call-site PC they recorded at call time.
         let mut innermost_bc = true;
@@ -3823,17 +3492,6 @@ impl BexVm {
                     return Err(VmError::Thrown(exception_value));
                 }
                 self.frames.pop();
-                // Clean up interrupt bookkeeping
-                if let Some(interrupt_depth) = self.interrupt_frame
-                    && interrupt_depth >= self.frames.len()
-                {
-                    self.interrupt_frame = None;
-                    // Crossing the interrupt boundary must surface to the
-                    // caller: the in-loop call sites turn it into a loud
-                    // error, so the escape fails instead of the program's
-                    // own completion being consumed as the filter verdict.
-                    crossed_interrupt_boundary = true;
-                }
                 continue; // try next outer frame
             }
 
@@ -3949,7 +3607,7 @@ impl BexVm {
                 // Update caller's frame_idx / function references.
                 *frame_idx = depth;
                 *function = frame_function;
-                return Ok(crossed_interrupt_boundary);
+                return Ok(());
             }
 
             // No handler in this frame -- pop it and try the caller.
@@ -3973,7 +3631,6 @@ impl BexVm {
             let popped = self.frames.pop().expect("frame stack is not empty");
             match popped {
                 Frame::Bytecode(bf) => {
-                    self.unregister_frame_watches(bf.locals_offset);
                     self.stack.drain(bf.locals_offset..);
                     // Unwound frames close with the unwind status (Errored /
                     // Cancelled / Exited by thrown class); native frames emit
@@ -3982,16 +3639,6 @@ impl BexVm {
                     self.prof_exit_call(bf.call_id, bf.parent_call_id, unwind_status);
                 }
                 Frame::Native(_) => {} // native frames own no stack region
-            }
-
-            // Clean up interrupt bookkeeping for popped frames.
-            if let Some(interrupt_depth) = self.interrupt_frame
-                && interrupt_depth >= self.frames.len()
-            {
-                self.interrupt_frame = None;
-                // See the native-frame arm above: an interrupt-boundary
-                // crossing fails the filter loudly.
-                crossed_interrupt_boundary = true;
             }
         }
     }
@@ -4133,7 +3780,7 @@ impl BexVm {
     pub(crate) fn bound_method_curried_type_args(
         &self,
         receiver: Value,
-    ) -> Box<[baml_type::RuntimeTy]> {
+    ) -> Box<[baml_type::RealizedTy]> {
         match receiver.as_object_ptr() {
             Some(ptr) => match self.get_object(ptr) {
                 Object::Instance(inst) => inst.class_type_args.clone(),
@@ -4546,14 +4193,14 @@ impl BexVm {
         // a host callable accepts arbitrary argument types.
         let positional_ptr = self
             .tlab
-            .alloc_array(baml_type::RuntimeTy::unknown(), positional);
+            .alloc_array(baml_type::RealizedTy::unknown(), positional);
         let optional_ptr = self.tlab.alloc_map(
-            baml_type::RuntimeTy::string(),
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::unknown(),
             optional,
         );
         let args_array_ptr = self.tlab.alloc_array(
-            baml_type::RuntimeTy::unknown(),
+            baml_type::RealizedTy::unknown(),
             vec![Value::object(positional_ptr), Value::object(optional_ptr)],
         );
         let ret_ty_ptr = self.tlab.alloc(Object::Type(Box::new(ret_ty)));
@@ -4606,8 +4253,8 @@ impl BexVm {
         // BytecodeFrame after it is created.
         let (is_host, closure_type_args, bound_method_class_type_args): (
             bool,
-            Box<[baml_type::RuntimeTy]>,
-            Box<[baml_type::RuntimeTy]>,
+            Box<[baml_type::RealizedTy]>,
+            Box<[baml_type::RealizedTy]>,
         ) = match self.get_object(callee_ptr) {
             Object::HostClosure(_) => (true, Box::new([]), Box::new([])),
             Object::Closure(c) => (false, c.captured_type_args.clone(), Box::new([])),
@@ -4645,7 +4292,7 @@ impl BexVm {
         // (reflect.type_of<T>, json natives) resolve T at runtime. (The
         // Closure/BoundMethod type args are classified in the consolidated match
         // above; GenericFunction is specific to generic instantiation values.)
-        let gf_type_args: Box<[baml_type::RuntimeTy]> = match self.get_object(callee_ptr) {
+        let gf_type_args: Box<[baml_type::RealizedTy]> = match self.get_object(callee_ptr) {
             Object::GenericFunction(gf) => gf.type_args.clone(),
             _ => Box::new([]),
         };
@@ -4773,7 +4420,7 @@ impl BexVm {
                 // `gf_type_args`; a closure-wrapped value
                 // (`let g = baml.json.from_string; let f = g<User>`) carries them
                 // on the closure's `captured_type_args`. Use whichever is set.
-                let native_type_args: &[baml_type::RuntimeTy] = if !gf_type_args.is_empty() {
+                let native_type_args: &[baml_type::RealizedTy] = if !gf_type_args.is_empty() {
                     &gf_type_args
                 } else {
                     &closure_type_args
@@ -5017,102 +4664,12 @@ impl BexVm {
         }
     }
 
-    // Runs filters and returns remaining notifications for the watched node.
-    fn process_notifications(
-        &mut self,
-        watched_node: NodeId,
-    ) -> Result<Vec<watch::NodeId>, VmError> {
-        // Make a copy of all the roots that reach the watched node.
-        let mut notifications = self.watch.copy_roots_reaching(watched_node);
-
-        // Some notifications might be removed with filters,  we'll return this.
-        let mut filtered_notifications = vec![];
-
-        // Sort them by variables first. At the moment this is not really used
-        // because we only have variables, at this point it's unlikely we will
-        // implement notifications on objects (references), so we might be able
-        // to get rid of this.
-        notifications.sort_by(|a, b| match (a, b) {
-            (NodeId::LocalVar(a), NodeId::LocalVar(b)) => a.cmp(b),
-            (NodeId::LocalVar(_), NodeId::HeapObject(_)) => std::cmp::Ordering::Less,
-            (NodeId::HeapObject(_), NodeId::LocalVar(_)) => std::cmp::Ordering::Greater,
-            (NodeId::HeapObject(a), NodeId::HeapObject(b)) => a.cmp(b),
-        });
-
-        for notification in notifications {
-            // The call to copy_roots_reaching() should always return valid
-            // roots, so this should really be unreachable.
-            let Some(state) = self.watch.root_state(notification) else {
-                continue;
-            };
-
-            match state.filter {
-                // Manual notify means skip this notification. If paused also skip
-                WatchFilter::Manual | WatchFilter::Paused => continue,
-
-                // Default filter is a basic diff. If the value has actually
-                // changed, then notify.
-                WatchFilter::Default => {
-                    let Some(last_assigned) = state.last_assigned else {
-                        filtered_notifications.push(notification);
-                        continue;
-                    };
-
-                    if !crate::package_baml::PackageBamlImpl::deep_equals(
-                        self,
-                        &last_assigned,
-                        &state.value,
-                    ) {
-                        filtered_notifications.push(notification);
-                    }
-                }
-
-                // Run user function to decide if we should notify.
-                WatchFilter::Function(filter_func) => {
-                    match self.interrupt(filter_func, &[state.value])? {
-                        VmExecState::Complete(v) => match v.as_bool() {
-                            Some(true) => filtered_notifications.push(notification),
-                            Some(false) => {}
-                            None => {
-                                return Err(VmInternalError::TypeError {
-                                    expected: Type::Bool,
-                                    got: self.type_of(&v),
-                                }
-                                .into());
-                            }
-                        },
-                        _ => {
-                            // The filter body yielded a state this
-                            // synchronous mini-runner cannot service
-                            // (SysOp/Await/Spawn/Event). A sys-op yield has
-                            // already written its CallFunction and armed
-                            // `pending_sysop_call_id`; its only close site
-                            // (the engine's SysOp arm) is unreachable from
-                            // here, so close the pair before failing loudly.
-                            if let Some(call_id) = self.pending_sysop_call_id.take() {
-                                let parent = self.current_call_id;
-                                self.prof_exit_call(
-                                    call_id,
-                                    parent,
-                                    bex_events::prof::record::FunctionEndStatus::Errored,
-                                );
-                            }
-                            return Err(VmInternalError::ExpectedCompletion.into());
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(filtered_notifications)
-    }
-
     fn init_spread(
         &mut self,
         dest_value: Value,
         source_value: Value,
         field_copy_set: &bytecode::FieldCopySet,
-    ) -> Result<Option<VmExecState>, VmError> {
+    ) -> Result<(), VmError> {
         let dest_ptr = self.as_object_ptr(dest_value, ObjectType::Instance)?;
         let source_ptr = self.as_object_ptr(source_value, ObjectType::Instance)?;
 
@@ -5135,15 +4692,15 @@ impl BexVm {
             let mut copied_fields = Vec::with_capacity(field_copy_set.fields.len());
             let mut invalid_field_access = None;
             for copy in &field_copy_set.fields {
-                let Some(old_value) = dest.try_load_field(copy.dest) else {
+                if dest.try_load_field(copy.dest).is_none() {
                     invalid_field_access = Some((copy.dest, dest.field_len()));
                     break;
-                };
+                }
                 let Some(new_value) = source.try_load_field(copy.source) else {
                     invalid_field_access = Some((copy.source, source.field_len()));
                     break;
                 };
-                copied_fields.push((copy.dest, old_value, new_value));
+                copied_fields.push((copy.dest, new_value));
             }
             if let Some((index, field_count)) = invalid_field_access {
                 return Err(self.invalid_field_access_error(index, field_count));
@@ -5152,22 +4709,7 @@ impl BexVm {
             copied_fields
         };
 
-        let watched_node = NodeId::HeapObject(dest_ptr);
-        let roots = self.watch.copy_roots_reaching(watched_node);
-        let mut old_roots_copies = Vec::with_capacity(roots.len());
-        for &root in &roots {
-            if let Some(val) = self.watch.root_state(root).map(|s| s.value) {
-                old_roots_copies.push(crate::package_baml::PackageBamlImpl::deep_copy(self, &val));
-            }
-        }
-
-        for (dest_field, old_value, new_value) in copied_fields {
-            self.update_watched_node_dependencies(
-                watched_node,
-                watch::Path::InstanceField(dest_field),
-                old_value,
-                new_value,
-            );
+        for (dest_field, new_value) in copied_fields {
             let store_error = {
                 let Object::Instance(dest) = self.get_object(dest_ptr) else {
                     unreachable!("destination instance already type-checked above");
@@ -5184,20 +4726,7 @@ impl BexVm {
             dest.store_field(dest_field, new_value);
         }
 
-        for (&root, old_value) in roots.iter().zip(old_roots_copies) {
-            if let Some(state) = self.watch.root_state_mut(root) {
-                state.last_assigned = Some(old_value);
-            }
-        }
-
-        let notifications = self.process_notifications(watched_node)?;
-        if !notifications.is_empty() {
-            return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                notifications,
-            ))));
-        }
-
-        Ok(None)
+        Ok(())
     }
 
     fn alloc_initialized_instance(
@@ -5267,117 +4796,8 @@ impl BexVm {
         };
 
         Ok(Value::object(self.tlab.alloc(Object::Instance(
-            Instance::new(class_ptr, class_type_args, fields),
+            Instance::new(class_ptr, class_type_args.into(), fields),
         ))))
-    }
-
-    /// When a watched node changes, we need to update the graph topology
-    /// and copy the previous values of the affected roots.
-    fn update_watched_node(
-        &mut self,
-        watched_node: NodeId,
-        path: watch::Path,
-        old_value: Value,
-        new_value: Value,
-    ) {
-        let Some(snapshot) = self.snapshot_watched_node(watched_node) else {
-            return;
-        };
-        self.finish_watched_node_update(watched_node, path, old_value, new_value, snapshot);
-    }
-
-    /// Copies the roots affected by `watched_node` before a mutation occurs.
-    ///
-    /// Array and map element stores must release their object lock before
-    /// walking/deep-copying the graph, so they take this snapshot before the
-    /// atomic locked mutation and finish the topology update afterward.
-    fn snapshot_watched_node(&mut self, watched_node: NodeId) -> Option<(Vec<NodeId>, Vec<Value>)> {
-        if !self.watch.is_watched(watched_node) {
-            return None;
-        }
-
-        // Deep-copy previous root values so the notification filter can diff
-        // old vs new. Two-pass because `baml_deep_copy` needs `&mut self`,
-        // which conflicts with borrowing `self.watch` for root_state.
-        let roots = self.watch.copy_roots_reaching(watched_node);
-        let mut old_roots_copies = Vec::with_capacity(roots.len());
-
-        for &root in &roots {
-            if let Some(val) = self.watch.root_state(root).map(|s| s.value) {
-                let deep_copy = crate::package_baml::PackageBamlImpl::deep_copy(self, &val);
-                old_roots_copies.push(deep_copy);
-            }
-        }
-
-        Some((roots, old_roots_copies))
-    }
-
-    fn finish_watched_node_update(
-        &mut self,
-        watched_node: NodeId,
-        path: watch::Path,
-        old_value: Value,
-        new_value: Value,
-        (roots, old_roots_copies): (Vec<NodeId>, Vec<Value>),
-    ) {
-        self.update_watched_node_dependencies(watched_node, path, old_value, new_value);
-
-        for (&root, old_value) in roots.iter().zip(old_roots_copies) {
-            if let Some(state) = self.watch.root_state_mut(root) {
-                state.last_assigned = Some(old_value);
-            }
-        }
-    }
-
-    fn update_watched_node_dependencies(
-        &mut self,
-        watched_node: NodeId,
-        path: watch::Path,
-        old_value: Value,
-        new_value: Value,
-    ) {
-        if !self.watch.is_watched(watched_node) {
-            return;
-        }
-
-        if let Some(old) = old_value.as_object_ptr() {
-            self.watch
-                .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
-        }
-
-        if let Some(new) = new_value.as_object_ptr() {
-            watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
-        }
-    }
-
-    /// Removes Watch roots owned by the bytecode frame whose locals begin at
-    /// `locals_offset`.
-    ///
-    /// MIR normally emits `Unwatch` before a watched local leaves scope. This
-    /// is the VM's lifetime backstop for non-local exits (for example, a native
-    /// panic unwinding the frame before its explicit `Unwatch` executes).
-    fn unregister_frame_watches(&mut self, locals_offset: StackIndex) {
-        if self.watched_vars.is_empty() {
-            return;
-        }
-
-        let locals_offset = locals_offset.raw();
-        let frame_watches: Vec<StackIndex> = self
-            .watched_vars
-            .keys()
-            .copied()
-            .filter(|index| index.raw() >= locals_offset)
-            .collect();
-
-        if frame_watches.is_empty() {
-            return;
-        }
-
-        for &local_var_index in &frame_watches {
-            self.watched_vars.remove(&local_var_index);
-        }
-        self.watch
-            .unregister_roots(frame_watches.into_iter().map(NodeId::LocalVar));
     }
 
     /// Load the function object for the given frame.
@@ -5468,13 +4888,10 @@ impl BexVm {
     /// unwinder walk frames and match handlers — the same path a `throw`
     /// opcode or an internal bytecode throw site takes.
     ///
-    /// On `Ok(n)` a handler was found: `self.frames` is now at the catching
+    /// On `Ok(())` a handler was found: `self.frames` is now at the catching
     /// frame, the exception value is stored in the handler's binding slot, the
     /// instruction pointer is at the handler's PC, and the next [`Self::exec`]
-    /// resumes the catch body. `n` is the number of *notified* frames (see
-    /// `try_unwind_exception`) popped on the way — when `n > 0` the
-    /// caller must close those frames' spans itself (the VM cannot yield here;
-    /// pair with [`Self::frame_count`] to truncate to the surviving depth).
+    /// resumes the catch body.
     /// On `Err(VmError::ThrownUnhandled { .. })` (or, for a degenerate
     /// Native-only frame stack, `Err(VmError::Thrown(..))`) no handler
     /// matched; the caller should route the result through whatever path it
@@ -5485,10 +4902,7 @@ impl BexVm {
     /// pick the topmost Bytecode frame's `Function` for that role, walking
     /// past any Native frames at the top (which the unwinder would pop
     /// unconditionally).
-    pub fn try_handle_external_exception(
-        &mut self,
-        exception_value: Value,
-    ) -> Result<bool, VmError> {
+    pub fn try_handle_external_exception(&mut self, exception_value: Value) -> Result<(), VmError> {
         if self.frames.is_empty() {
             let trace = self.capture_stack_trace();
             return Err(VmError::ThrownUnhandled {
@@ -5817,18 +5231,12 @@ impl BexVm {
                     }
                     NativeCallResult::Error(e) => match self.native_error_to_vm_error(e) {
                         VmError::Thrown(exception_value) => {
-                            let crossed = self.try_unwind_exception(
+                            self.try_unwind_exception(
                                 &mut frame_idx,
                                 &mut function,
                                 exception_value,
                                 false,
                             )?;
-                            if crossed {
-                                // The exception escaped the watch filter:
-                                // fail the interrupt loudly (see
-                                // try_unwind_exception).
-                                return Err(VmInternalError::ExpectedCompletion.into());
-                            }
                             break;
                         }
                         other => return Err(other),
@@ -5878,18 +5286,12 @@ impl BexVm {
                         let ecflo_result = match ecflo_outcome {
                             Ok(result) => result,
                             Err(VmError::Thrown(exception_value)) => {
-                                let crossed = self.try_unwind_exception(
+                                self.try_unwind_exception(
                                     &mut frame_idx,
                                     &mut function,
                                     exception_value,
                                     false,
                                 )?;
-                                if crossed {
-                                    // The exception escaped the watch
-                                    // filter: fail the interrupt loudly
-                                    // (see try_unwind_exception).
-                                    return Err(VmInternalError::ExpectedCompletion.into());
-                                }
                                 break;
                             }
                             Err(other) => return Err(other),
@@ -5955,18 +5357,12 @@ impl BexVm {
                     }
                     Err(VmError::Thrown(exception_value)) => {
                         // Throw saves pc inside its handler before unwinding.
-                        let crossed = self.try_unwind_exception(
+                        self.try_unwind_exception(
                             &mut frame_idx,
                             &mut function,
                             exception_value,
                             false,
                         )?;
-                        if crossed {
-                            // The exception escaped the watch filter: fail
-                            // the interrupt loudly (see
-                            // try_unwind_exception).
-                            return Err(VmInternalError::ExpectedCompletion.into());
-                        }
                         break; // re-extract code/function after unwind
                     }
                     Err(
@@ -6159,9 +5555,7 @@ impl BexVm {
                     };
                     let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
                     let value = self.stack.ensure_pop();
-                    if let Some(state) = self.store_local_value(local_var_index, value)? {
-                        return Ok(Some(state));
-                    }
+                    self.store_local_value(local_var_index, value);
                 }
 
                 // ── Operand-movement superinstructions (CPython-style) ────────
@@ -6181,14 +5575,7 @@ impl BexVm {
                     self.stack.push(vb);
                 }
                 // StoreVar2(a, b) == `StoreVar(a); StoreVar(b)`: pop TOS into
-                // local[a], then pop into local[b]. Both stores always complete
-                // before returning — a single fused op can't yield mid-way and
-                // resume into the second store (the saved PC is already past the
-                // whole instruction), so each `store_local_value` must run. When
-                // both are watched locals and both notify, the two node lists are
-                // merged into one yield rather than dropping the second, so no
-                // watch event is lost (equivalent to two sequential StoreVar
-                // notifications, coalesced into a single batch).
+                // local[a], then pop into local[b].
                 OpCode::StoreVar2 => {
                     let a = { read_u32_unchecked(code, pc) as usize };
                     let b = { read_u32_unchecked(code, pc) as usize };
@@ -6202,15 +5589,8 @@ impl BexVm {
                     let sb = Self::local_slot_stack_index(off, b);
                     let va = self.stack.ensure_pop();
                     let vb = self.stack.ensure_pop();
-                    let y1 = self.store_local_value(sa, va)?;
-                    let y2 = self.store_local_value(sb, vb)?;
-                    // Hot path: no watched locals, both stores returned `None` —
-                    // fall through. The merge (only reached when a watched local
-                    // notifies) is outlined into a cold helper so this arm stays
-                    // a single predicted branch.
-                    if unlikely(y1.is_some() || y2.is_some()) {
-                        return Ok(Some(Self::merge_store_yields(y1, y2)));
-                    }
+                    self.store_local_value(sa, va);
+                    self.store_local_value(sb, vb);
                 }
 
                 OpCode::StoreVarLoadVar => {
@@ -6221,9 +5601,7 @@ impl BexVm {
                     let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
                     let value_slot = self.stack.ensure_slot_from_top(0);
                     let value = self.stack[value_slot];
-                    if let Some(state) = self.store_local_value(local_var_index, value)? {
-                        return Ok(Some(state));
-                    }
+                    self.store_local_value(local_var_index, value);
                 }
 
                 // ── LoadGlobal / StoreGlobal ──────────────────────────────────
@@ -6276,35 +5654,13 @@ impl BexVm {
                     let instance_value = self.stack.ensure_pop();
                     let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
 
-                    let old_value = {
+                    let store_error = {
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             return Err(VmInternalError::TypeError {
                                 expected: ObjectType::Instance.into(),
                                 got: ObjectType::of(self.get_object(obj_ptr)).into(),
                             }
                             .into());
-                        };
-                        instance
-                            .try_load_field(idx)
-                            .ok_or_else(|| instance.field_len())
-                    };
-                    let old_value = match old_value {
-                        Ok(old_value) => old_value,
-                        Err(length) => {
-                            return Err(self.invalid_field_access_error(idx, length));
-                        }
-                    };
-
-                    let watched_node = NodeId::HeapObject(obj_ptr);
-                    self.update_watched_node(
-                        watched_node,
-                        watch::Path::InstanceField(idx),
-                        old_value,
-                        new_value,
-                    );
-                    let store_error = {
-                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                            unreachable!("already type-checked above");
                         };
                         (idx >= instance.field_len()).then_some(instance.field_len())
                     };
@@ -6316,13 +5672,6 @@ impl BexVm {
                         unreachable!("already type-checked above");
                     };
                     instance.store_field(idx, new_value);
-
-                    let notifications = self.process_notifications(watched_node)?;
-                    if !notifications.is_empty() {
-                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                            notifications,
-                        ))));
-                    }
                 }
 
                 OpCode::InitField => {
@@ -6356,13 +5705,11 @@ impl BexVm {
                     let source_value = self.stack.ensure_pop();
                     let dest_slot = self.stack.ensure_slot_from_top(0);
                     let dest_value = self.stack[dest_slot];
-                    if let Some(state) = self.init_spread(
+                    self.init_spread(
                         dest_value,
                         source_value,
                         &function.bytecode.field_copy_sets[idx],
-                    )? {
-                        return Ok(Some(state));
-                    }
+                    )?;
                 }
 
                 // ── Pop / Copy ────────────────────────────────────────────────
@@ -6455,7 +5802,7 @@ impl BexVm {
 
                     // Pop class-level type args from the stack (sitting below any
                     // field init instructions that follow).
-                    let class_type_args: Vec<baml_type::RuntimeTy> = if ntypeargs > 0 {
+                    let class_type_args: Vec<baml_type::RealizedTy> = if ntypeargs > 0 {
                         let base = self
                             .stack
                             .len()
@@ -6491,7 +5838,7 @@ impl BexVm {
                         self.tlab
                             .alloc(Object::Instance(bex_vm_types::types::Instance::new(
                                 class_ptr,
-                                class_type_args,
+                                class_type_args.into(),
                                 fields,
                             )));
                     self.stack.push(Value::object(instance_ptr));
@@ -6665,89 +6012,6 @@ impl BexVm {
                     return Ok(Some(VmExecState::Spawn(object_index)));
                 }
 
-                // ── Watch / Unwatch / Notify ──────────────────────────────────
-                OpCode::Watch => {
-                    let index = { read_u32_unchecked(code, pc) as usize };
-                    let popped = self.stack.ensure_pop();
-                    let filter = if popped.is_null() {
-                        WatchFilter::Default
-                    } else if let Some(object_index) = popped.as_object_ptr() {
-                        match self.get_object(object_index) {
-                            Object::Function(_) => WatchFilter::Function(object_index),
-                            Object::String(mode) if mode == "manual" => WatchFilter::Manual,
-                            Object::String(mode) if mode == "never" => WatchFilter::Paused,
-                            _ => return Err(VmInternalError::InvalidFilter.into()),
-                        }
-                    } else {
-                        return Err(VmInternalError::InvalidFilter.into());
-                    };
-                    let channel_value = self.stack.ensure_pop();
-                    let channel = self.as_string(&channel_value)?.to_string();
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
-                    let value = self.stack[local_var_index];
-                    let var_node = NodeId::LocalVar(local_var_index);
-                    self.watch.register_root(
-                        var_node,
-                        RootState {
-                            channel,
-                            value,
-                            filter,
-                            last_notified: None,
-                            last_assigned: None,
-                        },
-                    );
-                    let watched_var_name = &function.local_names[index];
-                    self.watched_vars.insert(
-                        local_var_index,
-                        (watched_var_name.clone(), function.name.clone()),
-                    );
-                    if let Some(object_index) = value.as_object_ptr() {
-                        watch::track_watch_dependencies(
-                            &mut self.watch,
-                            var_node,
-                            watch::Path::Binding,
-                            object_index,
-                        );
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                OpCode::Unwatch => {
-                    let index = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
-                    if self.watched_vars.remove(&local_var_index).is_some() {
-                        let var_node = NodeId::LocalVar(local_var_index);
-                        self.watch.unregister_root(var_node);
-                    }
-                    if self.early_yield.should_early_yield() {
-                        return Ok(Some(VmExecState::EarlyYield));
-                    }
-                }
-
-                OpCode::Notify => {
-                    let index = { read_u32_unchecked(code, pc) as usize };
-                    let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                        unreachable!()
-                    };
-                    let local_var_index = Self::local_slot_stack_index(bf.locals_offset, index);
-                    let var_node = NodeId::LocalVar(local_var_index);
-                    let notifications = self.watch.copy_roots_reaching(var_node);
-                    if notifications.len() != 1 && notifications.first() != Some(&var_node) {
-                        return Err(VmInternalError::InvalidManualNotify.into());
-                    }
-                    return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                        notifications,
-                    ))));
-                }
-
                 // ── Call ──────────────────────────────────────────────────────
                 OpCode::Call | OpCode::CallWithRuntimeId => {
                     let raw = read_u32_unchecked(code, pc);
@@ -6763,7 +6027,7 @@ impl BexVm {
 
                     // Pop `ntypeargs` Object::Type values from the stack into a Vec<RuntimeTy>.
                     // These sit below the regular value args on the stack.
-                    let type_args: Vec<baml_type::RuntimeTy> = if ntypeargs > 0 {
+                    let type_args: Vec<baml_type::RealizedTy> = if ntypeargs > 0 {
                         let total_needed = arg_count + ntypeargs;
                         let base = self
                             .stack
@@ -6851,7 +6115,7 @@ impl BexVm {
                             // interfaces carry none and resolve by name + `Self`.
                             // Associated types are outputs, not part of the key.
                             Object::Type(ty) => match ty.as_ref() {
-                                baml_type::RuntimeTy::Interface(qtn, args, _assoc, _attr) => {
+                                baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
                                     (qtn.clone(), args.clone())
                                 }
                                 other => unreachable!(
@@ -6868,7 +6132,7 @@ impl BexVm {
                     // Extract the `ntypeargs` method-level type args (sitting below
                     // the value args, as in `Call`) and remove them, leaving the
                     // `nargs` value args (receiver first).
-                    let method_type_args: Vec<baml_type::RuntimeTy> = if ntypeargs > 0 {
+                    let method_type_args: Vec<baml_type::RealizedTy> = if ntypeargs > 0 {
                         let total_needed = nargs + ntypeargs;
                         let base = self
                             .stack
@@ -6904,9 +6168,8 @@ impl BexVm {
                     // agrees. The rule borrows `self`; scope it so the borrow ends
                     // before the `&mut self` call below.
                     let receiver = self.stack[StackIndex::from_raw(args_offset)];
-                    // The resolver operates on the loose `RuntimeTy`; widen back
-                    // from the value's concrete-realized type.
-                    let self_ty = baml_type::RuntimeTy::from(
+                    // `Self` is the receiver value's realized concrete type.
+                    let self_ty = baml_type::RealizedTy::from(
                         self.value_concrete_ty(receiver).unwrap_or_else(|| {
                             unreachable!(
                                 "value of kind {:?} cannot be a virtual-call receiver",
@@ -6940,7 +6203,7 @@ impl BexVm {
                         // default), then the method-level type args — matching the
                         // callee's De Bruijn layout `[owner… ++ method…]`.
                         let mut frame =
-                            crate::package_baml::realize_frame(&method.frame, &bound_args);
+                            crate::package_baml::realize_frame(self, &method.frame, &bound_args)?;
                         frame.extend(method_type_args);
                         (callee, frame)
                     };
@@ -7121,7 +6384,6 @@ impl BexVm {
                         capture_mask,
                         result,
                     );
-                    self.unregister_frame_watches(locals_offset);
                     self.stack.drain(locals_offset..);
                     self.stack.push(result);
                     self.frames.pop();
@@ -7134,10 +6396,6 @@ impl BexVm {
                     // and re-extracts code/pc/function for the parent frame.
                     if !self.frames.is_empty() {
                         *frame_idx = self.frames.len() - 1;
-                    }
-                    if Some(self.frames.len()) == self.interrupt_frame {
-                        self.interrupt_frame = None;
-                        return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
                     }
                     if self.frames.is_empty() {
                         return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
@@ -7274,13 +6532,7 @@ impl BexVm {
                     if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                         bf.instruction_ptr = *pc;
                     }
-                    let crossed =
-                        self.try_unwind_exception(frame_idx, function, value, is_rethrow)?;
-                    if crossed {
-                        // The exception escaped the watch filter: fail the
-                        // interrupt loudly (see try_unwind_exception).
-                        return Err(VmInternalError::ExpectedCompletion.into());
-                    }
+                    self.try_unwind_exception(frame_idx, function, value, is_rethrow)?;
                     // A handler was found; sync the local `pc` to its entry.
                     // When the handler is in the SAME frame, the dispatch loop
                     // would otherwise `continue` with the stale post-throw `pc`
@@ -7514,13 +6766,7 @@ impl BexVm {
                         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                             bf.instruction_ptr = *pc;
                         }
-                        let crossed =
-                            self.try_unwind_exception(frame_idx, function, value, true)?;
-                        if crossed {
-                            // See OpCode::Throw: an escaping watch-filter
-                            // exception fails the interrupt loudly.
-                            return Err(VmInternalError::ExpectedCompletion.into());
-                        }
+                        self.try_unwind_exception(frame_idx, function, value, true)?;
                         // Sync the local `pc` to the handler entry (see
                         // OpCode::Throw): a same-frame rethrow — an inner
                         // wildcard catch rethrowing a panic to an outer catch in
@@ -7562,7 +6808,7 @@ impl BexVm {
                     captures.reverse();
 
                     // Pop type args (pushed before the captures).
-                    let captured_type_args: Vec<baml_type::RuntimeTy> = if ntypeargs > 0 {
+                    let captured_type_args: Vec<baml_type::RealizedTy> = if ntypeargs > 0 {
                         let mut type_args = Vec::with_capacity(ntypeargs);
                         for _ in 0..ntypeargs {
                             let v = self.stack.ensure_pop();
@@ -7598,13 +6844,15 @@ impl BexVm {
                         }
                     };
 
-                    let ty = {
-                        // A fully-realized template narrows to `RealizedTy` (a
-                        // single validation walk) and widens to `RuntimeTy` by
-                        // transmute — no substitution environment needed.
-                        // Otherwise resolve its frame refs.
+                    let ty: baml_type::RealizedTy = {
+                        // A fully-realized template narrows to `RealizedTy` in a
+                        // single validation walk — no substitution environment
+                        // needed. Otherwise resolve its frame refs (and reduce any
+                        // projection) against the frame's realized type args; the
+                        // result must be realized or it is an internal error, never
+                        // a `unknown` erasure.
                         if let Ok(realized) = <&baml_type::RealizedTy>::try_from(&template) {
-                            baml_type::RuntimeTy::from(realized)
+                            realized.clone()
                         } else {
                             let frame_type_args =
                                 if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
@@ -7612,7 +6860,12 @@ impl BexVm {
                                 } else {
                                     vec![]
                                 };
-                            template.substitute(&frame_type_args)
+                            let ctx = RuntimeTypeContext::new(self);
+                            template.substitute(&frame_type_args, &ctx).map_err(|e| {
+                                VmInternalError::TypeSubstitution {
+                                    message: e.to_string(),
+                                }
+                            })?
                         }
                     };
 
@@ -7661,7 +6914,7 @@ impl BexVm {
                         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
                         match self.get_object(iface_ptr) {
                             Object::Type(ty) => match ty.as_ref() {
-                                baml_type::RuntimeTy::Interface(qtn, args, _assoc, _attr) => {
+                                baml_type::RealizedTy::Interface(qtn, args, _assoc, _attr) => {
                                     (qtn.clone(), args.clone())
                                 }
                                 other => unreachable!(
@@ -7678,7 +6931,7 @@ impl BexVm {
                     // The method-level type args (a generic interface method's own
                     // generics, specialized at the reference site) sit below the
                     // interface type; they append to the resolved impl frame.
-                    let mut method_type_args: Vec<baml_type::RuntimeTy> =
+                    let mut method_type_args: Vec<baml_type::RealizedTy> =
                         Vec::with_capacity(ntypeargs);
                     for _ in 0..ntypeargs {
                         let v = self.stack.ensure_pop();
@@ -7690,9 +6943,8 @@ impl BexVm {
                     }
                     method_type_args.reverse();
                     let receiver = self.stack.ensure_pop();
-                    // The resolver operates on the loose `RuntimeTy`; widen back
-                    // from the value's concrete-realized type.
-                    let self_ty = baml_type::RuntimeTy::from(
+                    // `Self` is the receiver value's realized concrete type.
+                    let self_ty = baml_type::RealizedTy::from(
                         self.value_concrete_ty(receiver).unwrap_or_else(|| {
                             unreachable!(
                                 "value of kind {:?} cannot be a virtual bound-method receiver",
@@ -7718,7 +6970,7 @@ impl BexVm {
                             }
                         })?;
                         let mut frame =
-                            crate::package_baml::realize_frame(&method.frame, &bound_args);
+                            crate::package_baml::realize_frame(self, &method.frame, &bound_args)?;
                         frame.extend(method_type_args);
                         (method.fqn, frame)
                     };
@@ -7738,7 +6990,7 @@ impl BexVm {
                     let ntypeargs = { read_u16_unchecked(code, pc) as usize };
                     // Pop the `ntypeargs` `Object::Type` values (resolved against
                     // the current frame by the preceding LoadType instructions).
-                    let mut type_args: Vec<baml_type::RuntimeTy> = Vec::with_capacity(ntypeargs);
+                    let mut type_args: Vec<baml_type::RealizedTy> = Vec::with_capacity(ntypeargs);
                     for _ in 0..ntypeargs {
                         let v = self.stack.ensure_pop();
                         let ptr = self.as_object_ptr(v, ObjectType::Type)?;
@@ -7767,7 +7019,7 @@ impl BexVm {
                     // The callable value was pushed last (top of stack); the
                     // resolved `Object::Type` args sit beneath it.
                     let callable = self.stack.ensure_pop();
-                    let mut type_args: Vec<baml_type::RuntimeTy> = Vec::with_capacity(ntypeargs);
+                    let mut type_args: Vec<baml_type::RealizedTy> = Vec::with_capacity(ntypeargs);
                     for _ in 0..ntypeargs {
                         let v = self.stack.ensure_pop();
                         let ptr = self.as_object_ptr(v, ObjectType::Type)?;
@@ -7795,7 +7047,7 @@ impl BexVm {
                     // `T` at runtime, and — unlike closure-wrapping it — never
                     // crashes. (`GenericFunction` does not reach here: TIR rejects
                     // type args on an already-specialized value.)
-                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<baml_type::RuntimeTy>)> =
+                    let wrap: Option<(HeapPtr, Vec<Value>, Vec<baml_type::RealizedTy>)> =
                         match self.get_object(callable_ptr) {
                             Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
                             Object::Closure(c) => Some((
@@ -8092,21 +7344,15 @@ impl BexVm {
                     };
                     let new_value_u8: Option<u8> =
                         new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
-                    let watched_node = NodeId::HeapObject(array_object_index);
-                    let watch_snapshot = self.snapshot_watched_node(watched_node);
-                    // Acquire the array's write lock for bounds-check + old
-                    // read + new write atomically. The Watch snapshot above is
-                    // taken before the mutation without holding this lock.
-                    let store_result: Result<(Value, usize), (i64, usize)> = {
+                    let store_result: Result<(), (i64, usize)> = {
                         match self.get_object(array_object_index) {
                             Object::Array(arr) => {
                                 let mut guard = arr.lock_mut();
                                 let len = guard.len();
                                 match crate::array_index::resolve_index(i, len) {
                                     Some(idx) => {
-                                        let old = guard[idx];
                                         guard[idx] = new_value;
-                                        Ok((old, idx))
+                                        Ok(())
                                     }
                                     None => Err((i, len)),
                                 }
@@ -8123,9 +7369,8 @@ impl BexVm {
                                 let len = guard.len();
                                 match crate::array_index::resolve_index(i, len) {
                                     Some(idx) => {
-                                        let old = Value::int(i64::from(guard[idx]));
                                         guard[idx] = byte_v;
-                                        Ok((old, idx))
+                                        Ok(())
                                     }
                                     None => Err((i, len)),
                                 }
@@ -8139,8 +7384,8 @@ impl BexVm {
                             }
                         }
                     };
-                    let (old_value, index) = match store_result {
-                        Ok(v) => v,
+                    match store_result {
+                        Ok(()) => {}
                         Err((idx, len)) => {
                             return Err(VmError::Thrown(self.panic_to_exception_value(
                                 VmPanic::IndexOutOfBounds {
@@ -8149,23 +7394,8 @@ impl BexVm {
                                 },
                             )));
                         }
-                    };
-                    if let Some(snapshot) = watch_snapshot {
-                        self.finish_watched_node_update(
-                            watched_node,
-                            watch::Path::ArrayIndex(index),
-                            old_value,
-                            new_value,
-                            snapshot,
-                        );
                     }
                     self.heap.write_barrier(array_object_index, new_value);
-                    let notifications = self.process_notifications(watched_node)?;
-                    if !notifications.is_empty() {
-                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                            notifications,
-                        ))));
-                    }
                 }
 
                 OpCode::StoreMapElement => {
@@ -8175,24 +7405,18 @@ impl BexVm {
                     let key_index = self.as_object_ptr(key_value, ObjectType::String)?;
                     let key = self.get_object(key_index).as_string()?.clone();
                     let map_index = self.as_object_ptr(map_value, ObjectType::Map)?;
-                    let watched_node = NodeId::HeapObject(map_index);
-                    let watch_snapshot = self.snapshot_watched_node(watched_node);
-                    // Keep capture-old + insert-new atomic. The Watch snapshot
-                    // above is taken before the mutation without holding this
-                    // lock.
-                    let store_result: Result<Value, ObjectType> = {
+                    let store_result: Result<(), ObjectType> = {
                         match self.get_object(map_index) {
                             Object::Map(map) => {
                                 let mut guard = map.lock_mut();
-                                let old = guard.get(&key).copied().unwrap_or(Value::NULL);
-                                guard.insert(key.clone(), new_value);
-                                Ok(old)
+                                guard.insert(key, new_value);
+                                Ok(())
                             }
                             other => Err(ObjectType::of(other)),
                         }
                     };
-                    let old_value = match store_result {
-                        Ok(v) => v,
+                    match store_result {
+                        Ok(()) => {}
                         Err(got) => {
                             return Err(VmInternalError::TypeError {
                                 expected: ObjectType::Map.into(),
@@ -8200,23 +7424,8 @@ impl BexVm {
                             }
                             .into());
                         }
-                    };
-                    if let Some(snapshot) = watch_snapshot {
-                        self.finish_watched_node_update(
-                            watched_node,
-                            watch::Path::MapKey(key.to_string()),
-                            old_value,
-                            new_value,
-                            snapshot,
-                        );
                     }
                     self.heap.write_barrier(map_index, new_value);
-                    let notifications = self.process_notifications(watched_node)?;
-                    if !notifications.is_empty() {
-                        return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
-                            notifications,
-                        ))));
-                    }
                 }
 
                 // ── Expanded arithmetic ───────────────────────────────────────
@@ -8592,9 +7801,6 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // Stack values
         roots.extend(self.stack.iter().filter_map(Value::as_object_ptr));
 
-        // Watch state (last_assigned/last_notified values that aren't on the stack)
-        self.watch.collect_roots(roots);
-
         roots.extend(
             self.pending_call_captures
                 .iter()
@@ -8634,9 +7840,6 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 }
             }
         }
-
-        // Watch state (last_assigned/last_notified values that aren't on the stack)
-        self.watch.forward_roots(roots);
 
         for event in &mut self.pending_call_captures {
             if let Some(ptr) = event.value.as_object_ptr()

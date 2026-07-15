@@ -109,6 +109,93 @@ fn install_command(server: &str, home: &std::path::Path, dir: &std::path::Path) 
     command
 }
 
+/// The first-run journey: `baml init` in an empty directory sets up the
+/// project and warns that no agent skill is installed; `baml agent install`
+/// (run plain, exercising install-root detection from the cwd) fetches the
+/// codeload-shaped tarball — never the GitHub REST API, whose stub here
+/// doesn't exist — and installs into the project's `.claude/skills/` and
+/// `.agents/skills/`; the next authoring command is then quiet.
+#[test]
+fn init_warns_then_default_install_sets_up_skills_and_silences() {
+    let server = spawn_stub_codeload(skill_archive(Some(COMMIT)));
+    let home = tempfile::tempdir().unwrap();
+    // Keep the passive freshness auto-check offline and deterministic.
+    fs::write(
+        home.path().join("config.toml"),
+        "[update]\nauto_check = false\n",
+    )
+    .unwrap();
+    let tree = tempfile::tempdir().unwrap();
+    let project = tree.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+
+    let run = |args: &[&str]| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_baml-cli"));
+        command
+            .args(args)
+            .current_dir(&project)
+            .env("BAML_HOME", home.path())
+            // $HOME bounds the skills walk and the install-root detection.
+            .env("HOME", tree.path())
+            .env(
+                "BAML_AGENT_SKILLS_ARCHIVE_BASE_URL",
+                format!("{server}/archive"),
+            )
+            .env_remove("GITHUB_TOKEN")
+            .env_remove("GH_TOKEN");
+        command.output().unwrap()
+    };
+
+    // Step 1: init sets up the project and nudges toward agent install.
+    let output = run(&["init"]);
+    assert!(
+        output.status.success(),
+        "init failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(project.join("baml.toml").is_file());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("No baml skill is installed, set it up with baml agent install."),
+        "{stderr}"
+    );
+    // A generator section makes the step-3 `generate` genuinely succeed, so
+    // its quietness assertion can also require success.
+    let mut baml_toml = fs::read_to_string(project.join("baml.toml")).unwrap();
+    baml_toml.push_str(
+        "\n[generator.py]\noutput_type = \"python/pydantic\"\noutput_dir = \"generated\"\nnaming_convention = \"preserve-case\"\n",
+    );
+    fs::write(project.join("baml.toml"), baml_toml).unwrap();
+
+    // Step 2: plain `baml agent install` finds the project root from the cwd
+    // and installs the skills into both agent directories.
+    let output = run(&["agent", "install"]);
+    assert!(
+        output.status.success(),
+        "agent install failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for dir in [".agents/skills", ".claude/skills"] {
+        assert!(project.join(dir).join("baml-core/SKILL.md").is_file());
+    }
+    let state = fs::read_to_string(home.path().join("state.toml")).unwrap();
+    assert!(
+        state.contains(&format!("installed_commit = \"{COMMIT}\"")),
+        "{state}"
+    );
+
+    // Step 3: the installed, up-to-date skill keeps later authoring commands
+    // quiet.
+    let output = run(&["generate"]);
+    assert!(
+        output.status.success(),
+        "generate failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("baml skill"), "{stderr}");
+}
+
 #[test]
 fn default_install_needs_no_github_api_and_records_pax_provenance() {
     let server = spawn_stub_codeload(skill_archive(Some(COMMIT)));

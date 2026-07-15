@@ -960,7 +960,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let binding_visible_from = source_map.pattern_span(clause.binding).start();
         self.register_local_pattern(
             clause.binding,
-            DefinitionSite::PatternBinding(clause.binding),
+            DefinitionSite::CatchBinding(clause.binding),
             body,
             source_map,
             binding_visible_from,
@@ -969,7 +969,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             let st_visible_from = source_map.pattern_span(st_pat).start();
             self.register_local_pattern(
                 st_pat,
-                DefinitionSite::PatternBinding(st_pat),
+                DefinitionSite::CatchBinding(st_pat),
                 body,
                 source_map,
                 st_visible_from,
@@ -1435,6 +1435,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.class_depth -= 1;
 
         let local_id = self.item_tree.alloc_interface(i, default_method_ids);
+        ItemTree::collect_interface_spans(&mut self.item_tree_source_map, local_id, i);
         let loc = InterfaceLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             i.name.clone(),

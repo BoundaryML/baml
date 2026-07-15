@@ -1050,7 +1050,6 @@ pub enum Stmt {
         /// `Stmt::Let` — see [`Pattern::Bind`].
         pattern: PatId,
         initializer: Option<ExprId>,
-        is_watched: bool,
         origin: LetOrigin,
         /// `let PATTERN = init else { … };` — refutable binding with a
         /// diverging else clause. `Some` activates let-else semantics:
@@ -1516,7 +1515,7 @@ pub enum FunctionBodyDef {
 }
 
 /// What kind of builtin a function is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum BuiltinKind {
     /// VM instruction — fast, synchronous, no I/O.
     Vm,

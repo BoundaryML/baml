@@ -72,6 +72,7 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
+bex_cache = { path = "crates/bex_cache" }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
@@ -84,6 +85,7 @@ sys_native = { path = "crates/sys_native", default-features = false }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
+baml_lsp2_actions_tests = { path = "crates/baml_lsp2_actions_tests" }
 baml_lsp_server = { path = "crates/baml_lsp_server", default-features = false }
 baml_project = { path = "crates/baml_project" }
 baml_release = { path = "crates/baml_release" }
@@ -131,6 +133,7 @@ aws-sigv4 = { path = "forks/aws-sigv4", package = "forked_aws_sigv4" }
 aws-bedrock = { path = "forks/aws-bedrock", package = "forked_aws_bedrock" }
 google-cloud-auth = { path = "forks/google-cloud-auth", package = "forked_google_cloud_auth" }
 axum = { version = "0.8.4", default-features = false, features = [ "http1", "matched-path", "original-uri", "query", "tokio", "ws" ] }
+bitflags = "2"
 # Native `borsh` derives on the entire Program type graph (bex_vm_types +
 # baml_type + baml_exec envelope). The pack envelope was previously
 # bitcode-with-serde; borsh's native derive avoids both the bitcode crate
@@ -418,9 +421,11 @@ panic = "unwind"
 inherits = "release"
 panic = "unwind"
 
-# The cdylib is loaded into a user's process (C/C++ SDK); the engine's
-# catch_unwind boundary needs unwinding to turn panics into BamlPanic
-# envelopes instead of aborting the host.
+# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
+# target, language-neutral) that dylib-loader SDKs dlopen at runtime, again
+# *inside the user's process* — so it needs `unwind` for the same reason: its
+# `catch_unwind` -> `SdkPanic` boundary only fires when the stack can unwind.
+# The standalone cdylib matrix selects it via `--profile release-bridge-cffi`.
 [profile.release-bridge-cffi]
 inherits = "release"
 panic = "unwind"

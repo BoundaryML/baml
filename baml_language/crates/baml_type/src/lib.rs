@@ -35,6 +35,7 @@ mod realized_ty;
 mod runtime_ty;
 pub mod simplify_sap;
 pub mod template;
+pub mod throw_facts;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;
@@ -42,6 +43,7 @@ pub use family::*;
 pub use names::*;
 pub use primitive::*;
 pub use runtime_ty::*;
+pub use template::SubstituteError;
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to
 /// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
@@ -154,8 +156,6 @@ impl Ty {
     ///     their own;
     ///   - `Interface` (existential) and `Union` — no single concrete implementor;
     ///   - `Function` (an arrow type) and `RustType` (an opaque native leaf);
-    ///   - `WatchAccessor` — the compiler-internal type of `x.$watch`, not a
-    ///     user-facing data type;
     ///   - `Void`, the top type `BuiltinUnknown`, and the compiler-only sentinels
     ///     `Unknown` / `Error` / `EvolvingList` / `EvolvingMap`;
     ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
@@ -190,7 +190,6 @@ impl Ty {
             | Ty::Future(..)
             | Ty::Function { .. }
             | Ty::RustType { .. }
-            | Ty::WatchAccessor(..)
             | Ty::TypeAlias(..)
             | Ty::Void { .. }
             | Ty::BuiltinUnknown { .. }
@@ -207,7 +206,7 @@ impl Ty {
     /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
     /// enums, the containers `T[]` / `map<K, V>` (with their inference-time `Evolving*`
     /// forms), function types, `Future`, the builtin handles `Type` / `Resource` /
-    /// `PromptAst`, the native `RustType`, and the compiler-internal `WatchAccessor`.
+    /// `PromptAst`, and the native `RustType`.
     ///
     /// NOT concrete — the doc's *abstract* and *literal* categories, plus `never`:
     ///   - `Union` and `Interface` (existential) — the union of several concrete
@@ -252,8 +251,7 @@ impl Ty {
             | Ty::Type { .. }
             | Ty::Resource { .. }
             | Ty::PromptAst { .. }
-            | Ty::RustType { .. }
-            | Ty::WatchAccessor(..) => true,
+            | Ty::RustType { .. } => true,
             Ty::Union(..)
             | Ty::Interface(..)
             | Ty::BuiltinUnknown { .. }
@@ -638,7 +636,6 @@ impl Ty {
             // for output format rendering (cycle detection needs the alias name).
             Ty::TypeAlias(_, _) => Ok(()),
             Ty::Void { .. } => Err("Void type should not reach runtime".to_string()),
-            Ty::WatchAccessor(inner, _) => inner.validate_runtime(),
             Ty::BuiltinUnknown { .. } => Ok(()),
             // Recurse into containers
             Ty::List(inner, _) => inner.validate_runtime(),
@@ -918,16 +915,12 @@ impl Ty {
                 member,
                 ..
             } => {
-                if let Some(interface) = interface {
-                    format!(
-                        "({} as {}).{}",
-                        base.render_with(s),
-                        interface.to_ty().render_with(s),
-                        member
-                    )
-                } else {
-                    format!("{}.{}", base.render_with(s), member)
-                }
+                format!(
+                    "({} as {}).{}",
+                    base.render_with(s),
+                    interface.to_ty().render_with(s),
+                    member
+                )
             }
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
@@ -944,7 +937,6 @@ impl Ty {
             Ty::Future(value, error, _) => {
                 format!("Future<{}, {}>", value.render_with(s), error.render_with(s))
             }
-            Ty::WatchAccessor(inner, _) => format!("{}.$watch", inner.render_with(s)),
         }
     }
 }
@@ -1122,7 +1114,6 @@ impl fmt::Display for Ty {
                 write!(f, " throws {}", throws_display)
             }
             Ty::Void { .. } => write!(f, "void"),
-            Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
             Ty::Future(value, error, _) => write!(f, "future<{value}, {error}>"),
             Ty::TypeVar(name, _) => write!(f, "{name}"),
@@ -1131,10 +1122,7 @@ impl fmt::Display for Ty {
                 interface,
                 member,
                 ..
-            } => match interface {
-                Some(iface) => write!(f, "({base} as {}).{member}", iface.to_ty()),
-                None => write!(f, "{base}.{member}"),
-            },
+            } => write!(f, "({base} as {}).{member}", interface.to_ty()),
             Ty::Never { .. } => write!(f, "never"),
             Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "<error>"),
@@ -1216,7 +1204,7 @@ mod tests {
             Ty::TypeVar(Name::new("T"), TyAttr::default()),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
-                interface: None,
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },
@@ -1243,7 +1231,6 @@ mod tests {
             Ty::RustType {
                 attr: TyAttr::default(),
             },
-            Ty::WatchAccessor(boxed(ty_int()), TyAttr::default()),
             Ty::TypeAlias(qtn("A"), TyAttr::default()),
             Ty::Void {
                 attr: TyAttr::default(),
@@ -1271,9 +1258,9 @@ mod tests {
         let boxed = |t: Ty| Box::new(t);
 
         // Concrete: a single run-time representation dispatch can key on. Note the
-        // differences from `is_valid_impl_subject` — `Function`/`Future`/`RustType`/
-        // `WatchAccessor` are concrete types even though they are not written-impl
-        // targets, and the `Evolving*` inference forms are lists/maps.
+        // differences from `is_valid_impl_subject` — `Function`/`Future`/`RustType`
+        // are concrete types even though they are not written-impl targets, and
+        // the `Evolving*` inference forms are lists/maps.
         let concrete = [
             ty_int(),
             Ty::Bigint {
@@ -1307,7 +1294,6 @@ mod tests {
             Ty::RustType {
                 attr: TyAttr::default(),
             },
-            Ty::WatchAccessor(boxed(ty_int()), TyAttr::default()),
         ];
         for ty in &concrete {
             assert!(ty.is_concrete(), "{ty:?} should be concrete");
@@ -1334,7 +1320,7 @@ mod tests {
             Ty::TypeVar(Name::new("T"), TyAttr::default()),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
-                interface: None,
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },

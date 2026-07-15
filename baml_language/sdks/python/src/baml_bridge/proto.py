@@ -617,7 +617,7 @@ def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: BamlTypeMap) -> Any
         except BamlError:
             return typing.Any
     # enum_variant / interface / function / future / rust_type / meta_type /
-    # resource / prompt_ast / void / watch_accessor / type_var /
+    # resource / prompt_ast / void / type_var /
     # associated_type_projection / never — no concrete Python binding in a
     # generic-arg position; treat as an unbound wildcard.
     return typing.Any

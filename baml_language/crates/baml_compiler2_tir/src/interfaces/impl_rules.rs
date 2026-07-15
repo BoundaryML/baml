@@ -11,7 +11,7 @@ use crate::{
         normalized_arg_implements_bound, resolve_path_to_interface,
     },
     lower_type_expr::qualify_def,
-    normalize::is_same_normalized_type,
+    type_context::AliasEquivCtx,
 };
 
 /// Fully-resolved data for one `implements` block, keyed by its stable
@@ -845,7 +845,7 @@ pub fn impl_data_source_map<'db>(
 fn collect_type_var_names(ty: &Ty, out: &mut Vec<Name>) {
     match ty {
         Ty::TypeVar(name, _) => out.push(name.clone()),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             collect_type_var_names(inner, out);
         }
         Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) => {
@@ -1587,7 +1587,7 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
             }
         }
         Ty::Enum(qtn, _) | Ty::EnumVariant(qtn, _, _) | Ty::TypeAlias(qtn, _) => push(qtn, out),
-        Ty::List(inner, _) | Ty::EvolvingList(inner, _) | Ty::WatchAccessor(inner, _) => {
+        Ty::List(inner, _) | Ty::EvolvingList(inner, _) => {
             collect_ty_packages(inner, out);
         }
         Ty::Map { key, value, .. } | Ty::EvolvingMap(key, value, _) | Ty::Future(key, value, _) => {
@@ -1615,9 +1615,7 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<Name>) {
             base, interface, ..
         } => {
             collect_ty_packages(base, out);
-            if let Some(iface) = interface {
-                collect_interface_packages(iface, out);
-            }
+            collect_interface_packages(interface, out);
         }
         // No qualified name: primitives, literals, type variables, and sentinels.
         Ty::Int { .. }
@@ -1910,11 +1908,8 @@ fn match_impl_head<'db>(
             .iter()
             .all(|(name, requested_ty)| {
                 match data.associated_types.iter().find(|(n, _)| n == name) {
-                    Some((_, impl_ty)) => is_same_normalized_type(
-                        &substitute_ty(impl_ty, &bindings),
-                        requested_ty,
-                        aliases,
-                    ),
+                    Some((_, impl_ty)) => AliasEquivCtx(aliases)
+                        .equivalent(&substitute_ty(impl_ty, &bindings), requested_ty),
                     None => true,
                 }
             });

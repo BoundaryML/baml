@@ -192,9 +192,8 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
         db.add_or_update_file(file_path, &content);
     }
 
-    let project = db.get_project().expect("no project context");
     let source_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+    let diagnostics = baml_project::collect_diagnostics(&db);
     let errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == Severity::Error)

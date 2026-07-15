@@ -4,12 +4,13 @@ import { Plus, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { buildBepPath, MAIN_CONTENT_ID } from "@/lib/bep-routes";
-import type { MouseEvent } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 
 interface Section {
   id: string;
   title: string;
   hasContent: boolean;
+  parentSlug?: string;
 }
 
 type PageStatus = "modified" | "new" | "deleted";
@@ -83,10 +84,56 @@ export function BepNav({
   pageStatuses = {},
   onAddPage,
 }: BepNavProps) {
+  // Arrange sections as a tree: children (parentSlug) render under their
+  // parent, indented. Children whose parent isn't visible stay at top level.
+  const visibleSections = sections.filter(
+    (s) => s.hasContent || pageStatuses[s.id] === "new"
+  );
+  const visibleIds = new Set(visibleSections.map((s) => s.id));
+  const orderedSections: Array<Section & { depth: number }> = [];
+  for (const section of visibleSections) {
+    // Self-referential pages (parentSlug === own id) render at top level
+    if (
+      section.parentSlug &&
+      section.parentSlug !== section.id &&
+      visibleIds.has(section.parentSlug)
+    ) {
+      continue;
+    }
+    orderedSections.push({ ...section, depth: 0 });
+    for (const child of visibleSections) {
+      if (child.id !== section.id && child.parentSlug === section.id) {
+        orderedSections.push({ ...child, depth: 1 });
+      }
+    }
+  }
+
+  // Keep the active item visible inside the sidebar's own scroll container
+  // without touching window scroll (scrollIntoView would also scroll
+  // ancestors, which is exactly the jarring jump we're avoiding).
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!active) return;
+    // The scrollable ancestor is the sticky wrapper around this nav
+    const container = nav.parentElement;
+    if (!container || container.scrollHeight <= container.clientHeight) return;
+    const containerTop = container.getBoundingClientRect().top;
+    const activeRect = active.getBoundingClientRect();
+    const top = activeRect.top - containerTop + container.scrollTop;
+    const bottom = top + activeRect.height;
+    if (top < container.scrollTop) {
+      container.scrollTop = top - 8;
+    } else if (bottom > container.scrollTop + container.clientHeight) {
+      container.scrollTop = bottom - container.clientHeight + 8;
+    }
+  }, [activeSection]);
+
   return (
-    <nav className="space-y-1">
-      {sections
-        .filter((s) => s.hasContent || pageStatuses[s.id] === "new")
+    <nav ref={navRef} className="space-y-1">
+      {orderedSections
         .map((section) => {
           const status = pageStatuses[section.id];
           const isDeleted = status === "deleted";
@@ -96,13 +143,15 @@ export function BepNav({
               key={section.id}
               href={sectionHref(section.id, bepNumber, versionNumber)}
               onClick={(e) => handleNavClick(e, section.id, onSectionClick)}
+              aria-current={activeSection === section.id ? "page" : undefined}
               className={cn(
                 "block w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
                 "hover:bg-accent hover:text-accent-foreground",
                 activeSection === section.id
                   ? "bg-accent text-accent-foreground font-medium"
                   : "text-muted-foreground",
-                isDeleted && "opacity-50 line-through"
+                isDeleted && "opacity-50 line-through",
+                section.depth > 0 && "ml-4 border-l pl-3"
               )}
             >
               <span className="flex items-center justify-between gap-2">

@@ -3119,14 +3119,11 @@ fn validate_client_options(
         });
     }
 
-    if provider == "vertex-ai" && !has_base_url && !has_prov("location") {
-        diags.push(LoweringDiagnostic::MissingClientOptions {
-            client_name: client_name.to_string(),
-            message: "vertex-ai requires either base_url or location (e.g. us-central1) in options"
-                .to_string(),
-            span,
-        });
-    }
+    // vertex-ai deliberately has no compile-time location requirement:
+    // `location` (like `project_id`) can come from the GOOGLE_CLOUD_LOCATION
+    // env var at request time, which the compiler cannot see. A client with
+    // neither base_url, location, nor the env var fails at $build_request
+    // with an actionable error (see sys_llm auth_request/vertex.rs).
 }
 
 /// Lower variant-level attributes from an `EnumVariant` node.

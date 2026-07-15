@@ -1936,7 +1936,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnreachableArm => DiagnosticId::UnreachableArm,
         TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericClassDestructureRequiresTypeArgs { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::RestSubPatternNotSupported => DiagnosticId::TypeMismatch,
+        TirTypeError::RestSubPatternNotBinding => DiagnosticId::TypeMismatch,
         TirTypeError::RefutablePatternInLet { .. } => DiagnosticId::RefutablePatternInLet,
         TirTypeError::IrrefutablePatternInIfLet => DiagnosticId::IrrefutablePatternInIfLet,
         TirTypeError::LetElseMustDiverge { .. } => DiagnosticId::LetElseMustDiverge,

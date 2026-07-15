@@ -3570,8 +3570,7 @@ impl CompilerRunner {
         let mut output_annotated = Vec::new();
 
         // Collect all diagnostics using the unified collect_diagnostics function
-        let source_files: Vec<_> = self.source_files.values().copied().collect();
-        self.diagnostics = collect_diagnostics(&self.db, self.project_root, &source_files);
+        self.diagnostics = collect_diagnostics(&self.db);
 
         // Build sources and file_paths maps for rendering
         let mut sources: HashMap<FileId, String> = HashMap::new();
@@ -4051,13 +4050,6 @@ impl CompilerRunner {
                 Ok(VmExecState::SysOp { .. }) => {
                     self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
                         "Function invoked a sys-op (not supported in VM Runner)".to_string(),
-                    ));
-                    break;
-                }
-                Ok(VmExecState::Notify(_)) => {
-                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                        "Function sent a watch notification (not supported in VM Runner)"
-                            .to_string(),
                     ));
                     break;
                 }

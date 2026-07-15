@@ -37,15 +37,6 @@ typedef uint32_t BamlCffiStatus;
 #endif // __cplusplus
 
 /**
- * Callback signature: (call_id, content, length).
- *
- * `content` is always a protobuf-encoded `BamlOutboundResult` envelope —
- * carrying the ok value, a thrown error, a panic, or a synthesized pre-call
- * host-boundary failure. There is no separate error channel.
- */
-typedef void (*CallbackFn)(uint32_t call_id, const int8_t *content, uintptr_t length);
-
-/**
  * Buffer type for returning data across FFI boundary.
  * Caller must free with `free_buffer()`.
  *
@@ -55,6 +46,15 @@ typedef struct Buffer {
   const int8_t *ptr;
   uintptr_t len;
 } Buffer;
+
+/**
+ * Callback signature: (call_id, content, length).
+ *
+ * `content` is always a protobuf-encoded `BamlOutboundResult` envelope —
+ * carrying the ok value, a thrown error, a panic, or a synthesized pre-call
+ * host-boundary failure. There is no separate error channel.
+ */
+typedef void (*CallbackFn)(uint32_t call_id, const int8_t *content, uintptr_t length);
 
 /**
  * C-compatible dispatch callback installed by the host bridge.
@@ -87,6 +87,139 @@ typedef void (*HostDispatchFn)(uint64_t host_value_key,
  */
 typedef void (*HostReleaseFn)(uint64_t host_value_key);
 
+/**
+ * Version-1 C representation of bridge registration metadata.
+ *
+ * Fields may only be appended. Existing fields must retain their order,
+ * types, and semantics for the lifetime of ABI version 1. The `language`
+ * field is a raw `uint32_t` at the C boundary and is validated before it is
+ * converted to [`BridgeLanguage`].
+ */
+typedef struct BamlBridgeInfoV1 {
+  uintptr_t struct_size;
+  uint32_t language;
+  const uint8_t *sdk_version;
+  uintptr_t sdk_version_len;
+} BamlBridgeInfoV1;
+
+/**
+ * First version of the shared BAML C API.
+ *
+ * Fields may only be appended. Existing fields must retain their order,
+ * signatures, and semantics for the lifetime of ABI version 1.
+ */
+typedef struct BamlApiV1 {
+  /**
+   * ABI version represented by this table. Always `1` for this type.
+   */
+  uint32_t abi_version;
+  /**
+   * Size of the table in bytes, allowing hosts to reject truncated tables.
+   */
+  uintptr_t struct_size;
+  /**
+   * Return the canonical BAML product version.
+   */
+  struct Buffer (*version)(void);
+  /**
+   * Replace the process-wide runtime with a serialized BAML program.
+   */
+  struct Buffer (*initialize_runtime_from_bytecode)(const uint8_t *bytecode, uintptr_t length);
+  /**
+   * Release a buffer allocated by the runtime.
+   */
+  void (*free_buffer)(struct Buffer buffer);
+  /**
+   * Register the host callback that receives completed calls.
+   */
+  void (*register_callback)(CallbackFn callback);
+  /**
+   * Begin a BAML function call.
+   */
+  void (*call_function)(const char *function_name,
+                        const uint8_t *encoded_args,
+                        uintptr_t length,
+                        uint32_t callback_id);
+  /**
+   * Allocate a process-unique function-call identifier.
+   */
+  uint64_t (*new_function_call)(void);
+  /**
+   * Cancel a function call. Zero means success.
+   */
+  int32_t (*cancel_function_call)(uint64_t id);
+  /**
+   * Register the host callback used when BAML invokes a host value.
+   */
+  void (*register_host_dispatch_callback)(HostDispatchFn callback);
+  /**
+   * Register the callback used to release host-language values.
+   */
+  void (*register_host_release_callback)(HostReleaseFn callback);
+  /**
+   * Complete one host-value invocation.
+   */
+  void (*complete_host_call)(uint32_t call_id,
+                             int32_t is_error,
+                             const int8_t *content,
+                             uintptr_t length);
+  /**
+   * Clone an owned CFFI handle.
+   */
+  BamlCffiStatus (*handle_clone)(uint64_t key, uint64_t *out_key);
+  /**
+   * Release an owned CFFI handle.
+   */
+  BamlCffiStatus (*handle_release)(uint64_t key);
+  /**
+   * Construct a media handle backed by a URL.
+   */
+  BamlCffiStatus (*media_from_url)(int32_t media_kind,
+                                   const char *url,
+                                   const char *mime_type_or_null,
+                                   uint64_t *out_key,
+                                   int32_t *out_handle_type);
+  /**
+   * Construct a media handle backed by a local file.
+   */
+  BamlCffiStatus (*media_from_file)(int32_t media_kind,
+                                    const char *path,
+                                    const char *mime_type_or_null,
+                                    uint64_t *out_key,
+                                    int32_t *out_handle_type);
+  /**
+   * Construct a media handle backed by base64 data.
+   */
+  BamlCffiStatus (*media_from_base64)(int32_t media_kind,
+                                      const char *base64,
+                                      const char *mime_type_or_null,
+                                      uint64_t *out_key,
+                                      int32_t *out_handle_type);
+  /**
+   * Read the URL of a media handle.
+   */
+  BamlCffiStatus (*media_url)(uint64_t key, int32_t handle_type, struct Buffer *out);
+  /**
+   * Read the local path of a media handle.
+   */
+  BamlCffiStatus (*media_file)(uint64_t key, int32_t handle_type, struct Buffer *out);
+  /**
+   * Read the base64 contents of a media handle.
+   */
+  BamlCffiStatus (*media_base64)(uint64_t key, int32_t handle_type, struct Buffer *out);
+  /**
+   * Read the MIME type of a media handle.
+   */
+  BamlCffiStatus (*media_mime_type)(uint64_t key, int32_t handle_type, struct Buffer *out);
+  /**
+   * Register the calling bridge and require an exact release-version match.
+   *
+   * An empty buffer means compatible. A non-empty buffer is an owned UTF-8
+   * diagnostic that must be released with [`crate::free_buffer`].
+   */
+  struct Buffer (*register_bridge)(const struct BamlBridgeInfoV1 *info);
+} BamlApiV1;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -115,6 +248,13 @@ uint64_t new_function_call(void);
  * Returns 0 on success, 1 if the call ID is unknown or already completed.
  */
 int32_t cancel_function_call(uint64_t id);
+
+/**
+ * Return the immutable version-1 BAML C API function table.
+ *
+ * This is the only symbol a manually loaded host bridge needs to resolve.
+ */
+const struct BamlApiV1 *baml_get_api_v1(void);
 
 void register_callback(CallbackFn callback_fn);
 
@@ -294,6 +434,15 @@ struct Buffer version(void);
 const void *create_baml_runtime(const char *root_path, const char *src_files_json);
 
 /**
+ * Initialize the process-global BAML runtime from serialized bytecode.
+ *
+ * An empty returned buffer means success. On failure, the buffer contains a
+ * UTF-8 error message. The caller owns every returned buffer and must release
+ * it with [`crate::free_buffer`].
+ */
+struct Buffer initialize_runtime_from_bytecode(const uint8_t *bytecode, uintptr_t length);
+
+/**
  * Destroy the BAML runtime.
  * This is a no-op since the global engine persists for the process lifetime.
  */
@@ -304,18 +453,6 @@ void destroy_baml_runtime(const void *_runtime);
  * Currently returns 1 (error) as CLI is not implemented for bridge.
  */
 int invoke_runtime_cli(const char *const *_args);
-
-/**
- * Create/initialize the BAML runtime (global BexEngine) from serialized
- * BAML bytecode — the borsh-encoded `Program` payload that `baml pack`
- * embeds and that generated SDKs inline. The bytecode-first counterpart of
- * [`create_baml_runtime`], enabling SDKs to boot without shipping `.baml`
- * sources.
- *
- * # Returns
- * Non-null pointer on success (value is opaque, not used), null on failure.
- */
-const void *create_baml_runtime_from_bytecode(const uint8_t *bytecode, uintptr_t length);
 
 #ifdef __cplusplus
 }  // extern "C"

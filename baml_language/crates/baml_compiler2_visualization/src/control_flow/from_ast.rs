@@ -1613,7 +1613,6 @@ mod tests {
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
                 initializer: Some(if_expr),
-                is_watched: false,
                 origin: ast::LetOrigin::Source,
                 else_branch: None,
             });
@@ -1654,7 +1653,6 @@ mod tests {
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
                 initializer: Some(if_expr),
-                is_watched: false,
                 origin: ast::LetOrigin::Source,
                 else_branch: None,
             });

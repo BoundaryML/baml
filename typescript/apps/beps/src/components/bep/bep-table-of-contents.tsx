@@ -4,51 +4,17 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, List } from "lucide-react";
 
-interface TocItem {
-  id: string;
-  text: string;
-  level: number;
-}
+import {
+  extractHeadings,
+  stripFrontmatter,
+  type HeadingInfo,
+} from "@/lib/heading-utils";
+
+type TocItem = HeadingInfo;
 
 interface BepTableOfContentsProps {
   content: string;
   className?: string;
-}
-
-function slugifyHeading(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/[\s_]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function extractHeadings(content: string): TocItem[] {
-  if (!content) return [];
-
-  const contentWithoutFrontmatter = content.replace(/^---[\s\S]*?---\n*/, "");
-  const headingRegex = /^(#{1,4})\s+(.+)$/gm;
-  const headings: TocItem[] = [];
-  const slugCounts = new Map<string, number>();
-
-  let match;
-  while ((match = headingRegex.exec(contentWithoutFrontmatter)) !== null) {
-    const level = match[1].length;
-    const text = match[2].trim();
-    const baseSlug = slugifyHeading(text);
-
-    if (!baseSlug) continue;
-
-    const count = (slugCounts.get(baseSlug) ?? 0) + 1;
-    slugCounts.set(baseSlug, count);
-    const id = count === 1 ? baseSlug : `${baseSlug}-${count}`;
-
-    headings.push({ id, text, level });
-  }
-
-  return headings;
 }
 
 function TocList({
@@ -96,7 +62,10 @@ export function BepTableOfContents({ content, className }: BepTableOfContentsPro
   const observerRef = useRef<IntersectionObserver | null>(null);
   const headingElementsRef = useRef<Map<string, IntersectionObserverEntry>>(new Map());
 
-  const headings = useMemo(() => extractHeadings(content), [content]);
+  const headings = useMemo(
+    () => extractHeadings(stripFrontmatter(content ?? "")),
+    [content]
+  );
 
   const getActiveHeading = useCallback(() => {
     const entries = Array.from(headingElementsRef.current.values());
@@ -144,18 +113,62 @@ export function BepTableOfContents({ content, className }: BepTableOfContentsPro
 
     const observer = observerRef.current;
 
-    headings.forEach(({ id }) => {
-      const element = document.getElementById(id);
-      if (element) {
-        observer.observe(element);
+    // The markdown renders asynchronously, so some headings may not be in
+    // the DOM yet — keep retrying until they appear (or we time out).
+    let cancelled = false;
+    const pending = new Set(headings.map((h) => h.id));
+    const deadline = Date.now() + 5000;
+    const attach = () => {
+      if (cancelled) return;
+      for (const id of pending) {
+        const element = document.getElementById(id);
+        if (element) {
+          observer.observe(element);
+          pending.delete(id);
+        }
       }
-    });
+      if (pending.size > 0 && Date.now() < deadline) {
+        requestAnimationFrame(attach);
+      }
+    };
+    attach();
 
     return () => {
+      cancelled = true;
       observer.disconnect();
       headingElements.clear();
     };
   }, [headings, getActiveHeading]);
+
+  // Honor a #hash on initial load. The markdown renders asynchronously
+  // (MarkdownHooks), so the browser's native anchor jump fires before the
+  // heading exists — retry briefly until it appears.
+  const scrolledToHashRef = useRef(false);
+  useEffect(() => {
+    if (scrolledToHashRef.current || headings.length === 0) return;
+    const hash = decodeURIComponent(window.location.hash.slice(1));
+    if (!hash || !headings.some((h) => h.id === hash)) return;
+
+    let cancelled = false;
+    const deadline = Date.now() + 3000;
+    const tryScroll = () => {
+      if (cancelled) return;
+      const element = document.getElementById(hash);
+      if (element) {
+        element.scrollIntoView({ block: "start" });
+        setActiveId(hash);
+        scrolledToHashRef.current = true;
+        return;
+      }
+      if (Date.now() < deadline) {
+        requestAnimationFrame(tryScroll);
+      }
+    };
+    tryScroll();
+    return () => {
+      cancelled = true;
+    };
+  }, [headings]);
 
   const handleClick = useCallback((id: string) => {
     const element = document.getElementById(id);

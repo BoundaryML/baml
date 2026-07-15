@@ -320,7 +320,7 @@ pub struct Closure {
     /// before the cell captures.  These become `frame.type_args` when the
     /// closure is invoked, so that `LoadType(TypeArgRef(N))` inside the
     /// closure body resolves correctly.
-    pub captured_type_args: Box<[baml_type::RuntimeTy]>,
+    pub captured_type_args: Box<[baml_type::RealizedTy]>,
 }
 
 /// A method bound to a specific receiver instance.
@@ -357,7 +357,7 @@ pub struct BoundMethod {
     /// type variable, but the upstream fix that stops typevars leaking into
     /// value positions is still in flight, so all three stay `RuntimeTy` and
     /// narrow to `RealizedTy` together once it lands.
-    pub type_args: Box<[baml_type::RuntimeTy]>,
+    pub type_args: Box<[baml_type::RealizedTy]>,
 }
 
 /// A generic function instantiation carrying concrete type arguments.
@@ -373,7 +373,7 @@ pub struct GenericFunction {
     /// via the global table, mirroring `MakeBoundMethod`).
     pub function: crate::GlobalIndex,
     /// Concrete type arguments to seed into `frame.type_args` when called.
-    pub type_args: Box<[baml_type::RuntimeTy]>,
+    pub type_args: Box<[baml_type::RealizedTy]>,
 }
 
 /// A host-language callable bound to a BAML function type.
@@ -394,7 +394,7 @@ pub struct HostClosure {
     /// The declared return type of the host-callable, threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_0` so the sysop impl
     /// can validate the host's returned value against the BAML signature.
-    pub ret_ty: Box<baml_type::RuntimeTy>,
+    pub ret_ty: Box<baml_type::RealizedTy>,
     /// The declared error/throws contract of the host-callable (`E` in
     /// `call_host_value<T, E>`), threaded through
     /// `SysOp::BamlHostCallHostValue` as `type_arg_1`. A host throw is
@@ -404,7 +404,7 @@ pub struct HostClosure {
     /// accepts any thrown value — the "unknown" fallback. Concrete throws
     /// (e.g. `throws ParseError`) pass through unchanged so the contract
     /// check can reject off-type throws as `HostContractViolation`.
-    pub throws_ty: Box<baml_type::RuntimeTy>,
+    pub throws_ty: Box<baml_type::RealizedTy>,
     /// Number of value arguments the host callable expects.
     ///
     /// `CallIndirect` reads this to drain the right number of operand slots
@@ -418,7 +418,7 @@ pub struct HostClosure {
     /// optionals, omitted ones dropped), so each bridge can apply its calling
     /// convention (e.g. TypeScript's trailing `$opts`) without the callee type
     /// on the wire. `Box`-ed to keep `Object` within its size budget.
-    pub params: Box<Vec<baml_type::RuntimeFunctionParamTy>>,
+    pub params: Box<Vec<baml_type::RealizedFunctionParamTy>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]

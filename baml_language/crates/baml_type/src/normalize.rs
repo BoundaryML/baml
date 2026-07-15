@@ -41,12 +41,15 @@ use crate::{
 // CONTEXT
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Starting fuel for projection reduction in one `from_ty` walk: the maximum
-/// length of a reduction chain (`(A as I).X` → `(B as J).Y` → …) before a
-/// projection is left opaque. Generous for any real program; bounds a cyclic
-/// `type A = (C as I).B` / `type B = (C as J).A` (itself a declaration-level error
-/// caught elsewhere) so normalization terminates instead of recursing forever.
-const PROJECTION_REDUCTION_FUEL: u32 = 256;
+/// Starting fuel for projection reduction: the maximum length of a reduction
+/// chain (`(A as I).X` → `(B as J).Y` → …) before a projection is left opaque (the
+/// canonical algebra) or its realization fails (the runtime). Generous for any
+/// real program; bounds a cyclic `type A = (C as I).B` / `type B = (C as J).A`
+/// (itself a declaration-level error caught elsewhere) so both the `from_ty` walk
+/// here and the runtime `TyTemplate::substitute` reduction terminate instead of
+/// recursing forever. Shared by both paths so the single limit shrinks in one
+/// place once declaration-level cycle rejection lands.
+pub(crate) const PROJECTION_REDUCTION_FUEL: u32 = 256;
 
 /// The result of reducing an associated-type projection `(base as I).member`
 /// through [`TypeContext::project`].
@@ -162,7 +165,15 @@ pub trait TypeContext {
     /// dead symbolic type with no error, a silent soundness hole (same class as
     /// [`associated_type_bound`](Self::associated_type_bound)). A context over
     /// already-realized values (the runtime) returns `Opaque` explicitly.
-    fn project(&self, base: &Ty, interface: &Interface, member: &Name) -> ProjectionStep;
+    ///
+    /// `fuel` is the remaining projection-reduction budget. A context that itself
+    /// drives the reduction recursion — the runtime, whose `project` realizes the
+    /// impl binding through `TyTemplate::substitute` and can re-enter `project` —
+    /// threads it on so a cyclic associated-type binding terminates. A single-step
+    /// reducer whose recursion is instead bounded by its caller (the canonical
+    /// `from_ty` walk, which decrements its own fuel) ignores it.
+    fn project(&self, base: &Ty, interface: &Interface, member: &Name, fuel: u32)
+    -> ProjectionStep;
 
     // ── type algebra (defaulted; the canonical implementation) ──────────────
     //
@@ -253,8 +264,8 @@ pub trait TypeContext {
     ///   the enum, and a custom `Equals` on `E` could equate distinct variants.
     /// - **An instantiation with a not-yet-resolved argument** (`Box<T>` for a
     ///   generic `T`, or an error sentinel): it could still resolve to match.
-    /// - Functions (not invariant — contravariant/covariant), watch accessors
-    ///   (identity), interfaces, bare type variables, and a bare `unknown`.
+    /// - Functions (not invariant — contravariant/covariant), interfaces, bare
+    ///   type variables, and a bare `unknown`.
     fn definitely_disjoint(&self, a: &Ty, b: &Ty) -> bool
     where
         Self: Sized,
@@ -387,7 +398,6 @@ enum Category {
     Enum,
     Function,
     Future,
-    WatchAccessor,
 }
 
 impl NormalTy {
@@ -415,7 +425,6 @@ impl NormalTy {
             NormalTy::Enum(_) | NormalTy::EnumVariant(..) => Category::Enum,
             NormalTy::Function { .. } => Category::Function,
             NormalTy::Future(..) => Category::Future,
-            NormalTy::WatchAccessor(_) => Category::WatchAccessor,
             // Not a ground concrete head — nothing provable.
             NormalTy::Interface(..)
             | NormalTy::Union(_)
@@ -470,9 +479,7 @@ impl NormalTy {
             | NormalTy::Never
             // A μ-bound recursion variable refers to its enclosing (ground) μ-type.
             | NormalTy::RecVar(_) => true,
-            NormalTy::List(inner)
-            | NormalTy::WatchAccessor(inner)
-            | NormalTy::Mu { body: inner, .. } => inner.is_ground(),
+            NormalTy::List(inner) | NormalTy::Mu { body: inner, .. } => inner.is_ground(),
             NormalTy::Map { key, value } | NormalTy::Future(key, value) => {
                 key.is_ground() && value.is_ground()
             }
@@ -523,10 +530,8 @@ impl NormalTy {
             }
 
             // Functions are *not* invariant (contravariant args, covariant
-            // return/throws), and watch accessors compare by identity — neither is
-            // provably disjoint from another of its kind here.
-            (NormalTy::Function { .. }, NormalTy::Function { .. })
-            | (NormalTy::WatchAccessor(_), NormalTy::WatchAccessor(_)) => false,
+            // return/throws), so they are not provably disjoint here.
+            (NormalTy::Function { .. }, NormalTy::Function { .. }) => false,
 
             // A value's `eq` dispatches on its enum, so only *different* enums are
             // disjoint — a custom (or later-added) `Equals` on one enum could
@@ -632,10 +637,13 @@ enum NormalTy {
         throws: Box<NormalTy>,
     },
     Future(Box<NormalTy>, Box<NormalTy>),
-    WatchAccessor(Box<NormalTy>),
     AssociatedTypeProjection {
         base: Box<NormalTy>,
-        interface: Option<Box<NormalTy>>,
+        /// The declaring interface (a normalized `NormalTy::Interface`), always
+        /// present — mirrors the non-optional `Ty::AssociatedTypeProjection`
+        /// qualifier it is built from, and is what makes a realized-base
+        /// projection reducible via [`TypeContext::project`].
+        interface: Box<NormalTy>,
         member: Name,
     },
     // Recursion
@@ -766,9 +774,6 @@ impl NormalTy {
                 Box::new(Self::from_ty(value, ctx, expanding, fuel)),
                 Box::new(Self::from_ty(error, ctx, expanding, fuel)),
             ),
-            Ty::WatchAccessor(inner, _) => {
-                NormalTy::WatchAccessor(Box::new(Self::from_ty(inner, ctx, expanding, fuel)))
-            }
             Ty::TypeVar(name, _) => NormalTy::TypeVar(name.clone()),
             Ty::AssociatedTypeProjection {
                 base,
@@ -780,27 +785,19 @@ impl NormalTy {
                 // *is* the type the impl binds (like `1 + 1` *is* `2`). Reduce it to
                 // that whenever the context can determine it — the reduced type
                 // becomes the canonical form, so the projection compares equal to /
-                // is assignable from its realization. Only a `Some(interface)`
-                // projection is reducible (the qualifier names the impl); fuel guards
-                // a cyclic reduction.
-                if let Some(iface) = interface
-                    && fuel > 0
-                    && let ProjectionStep::Reduced(reduced) = ctx.project(base, iface, member)
+                // is assignable from its realization. The qualifier always names the
+                // impl; fuel guards a cyclic reduction.
+                if fuel > 0
+                    && let ProjectionStep::Reduced(reduced) =
+                        ctx.project(base, interface, member, fuel)
                 {
                     return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
                 }
-                // Not reducible — symbolic base, an unresolved `(T as ?).M` qualifier,
-                // or exhausted fuel: an opaque leaf, equal only to a
-                // structurally-identical projection. The two spellings `(T as ?).M`
-                // and `(T as I).M` of the same associated type are deliberately NOT
-                // equated here; the TIR must resolve the interface to `Some(I)` before
-                // an equivalence/subtype check relies on it (pinned by
-                // `projection_with_unresolved_interface_is_opaque`).
+                // Not reducible — symbolic base or exhausted fuel: an opaque leaf,
+                // equal only to a structurally-identical projection.
                 NormalTy::AssociatedTypeProjection {
                     base: Box::new(Self::from_ty(base, ctx, expanding, fuel)),
-                    interface: interface
-                        .as_ref()
-                        .map(|i| Box::new(Self::from_ty(&i.to_ty(), ctx, expanding, fuel))),
+                    interface: Box::new(Self::from_ty(&interface.to_ty(), ctx, expanding, fuel)),
                     member: member.clone(),
                 }
             }
@@ -853,7 +850,7 @@ impl NormalTy {
                 args.iter().any(|a| a.mentions_rec_var(var))
                     || bindings.iter().any(|(_, t)| t.mentions_rec_var(var))
             }
-            NormalTy::List(inner) | NormalTy::WatchAccessor(inner) => inner.mentions_rec_var(var),
+            NormalTy::List(inner) => inner.mentions_rec_var(var),
             NormalTy::Map { key, value } => {
                 key.mentions_rec_var(var) || value.mentions_rec_var(var)
             }
@@ -872,10 +869,7 @@ impl NormalTy {
             }
             NormalTy::AssociatedTypeProjection {
                 base, interface, ..
-            } => {
-                base.mentions_rec_var(var)
-                    || interface.as_ref().is_some_and(|i| i.mentions_rec_var(var))
-            }
+            } => base.mentions_rec_var(var) || interface.mentions_rec_var(var),
             NormalTy::Int
             | NormalTy::Bigint
             | NormalTy::Float
@@ -931,16 +925,13 @@ impl NormalTy {
                 Box::new(value.canonicalize(ctx)),
                 Box::new(error.canonicalize(ctx)),
             ),
-            NormalTy::WatchAccessor(inner) => {
-                NormalTy::WatchAccessor(Box::new(inner.canonicalize(ctx)))
-            }
             NormalTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
             } => NormalTy::AssociatedTypeProjection {
                 base: Box::new(base.canonicalize(ctx)),
-                interface: interface.map(|i| Box::new(i.canonicalize(ctx))),
+                interface: Box::new(interface.canonicalize(ctx)),
                 member,
             },
             NormalTy::Function {
@@ -1035,7 +1026,7 @@ impl NormalTy {
         let (member, value) = pin;
         let NormalTy::AssociatedTypeProjection {
             base,
-            interface: Some(iface),
+            interface: iface,
             member: proj_member,
         } = value
         else {
@@ -1152,16 +1143,14 @@ impl NormalTy {
 
             // A still-symbolic associated-type projection is a subtype of `sup` if
             // any of its associated type's declared bounds is — the projection
-            // analogue of the `TypeVar` rule above. Fires only when the projection
-            // carries a resolved interface; an unresolved one (`interface: None`)
-            // stays opaque (equal only to itself, via reflexivity). A realized-base
-            // projection is intended to be resolved to a concrete type by an
-            // upstream pre-pass before reaching here. Must precede the interface
-            // arms below, which would otherwise ask `implements_interface` about a
-            // non-concrete projection.
+            // analogue of the `TypeVar` rule above. The projection always carries
+            // its declaring interface; a realized-base projection is intended to be
+            // resolved to a concrete type by an upstream pre-pass before reaching
+            // here. Must precede the interface arms below, which would otherwise ask
+            // `implements_interface` about a non-concrete projection.
             (
                 NormalTy::AssociatedTypeProjection {
-                    interface: Some(iface),
+                    interface: iface,
                     member,
                     ..
                 },
@@ -1217,15 +1206,11 @@ impl NormalTy {
                     && v1.invariant_compatible(v2, ctx, assumptions)
             }
 
-            // Future/WatchAccessor are invariant containers.
+            // Future is an invariant container.
             (NormalTy::Future(v1, e1), NormalTy::Future(v2, e2)) => {
                 v1.invariant_compatible(v2, ctx, assumptions)
                     && e1.invariant_compatible(e2, ctx, assumptions)
             }
-            (NormalTy::WatchAccessor(a), NormalTy::WatchAccessor(b)) => {
-                a.invariant_compatible(b, ctx, assumptions)
-            }
-
             // Literal types are subtypes of their (same-representation) base only.
             (NormalTy::Literal(Literal::Int(_)), NormalTy::Int) => true,
             (NormalTy::Literal(Literal::Bigint(_)), NormalTy::Bigint) => true,
@@ -1322,14 +1307,19 @@ impl NormalTy {
             NormalTy::Future(value, error) => {
                 Ty::Future(Box::new(value.into_ty()), Box::new(error.into_ty()), attr)
             }
-            NormalTy::WatchAccessor(inner) => Ty::WatchAccessor(Box::new(inner.into_ty()), attr),
             NormalTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
             } => Ty::AssociatedTypeProjection {
                 base: Box::new(base.into_ty()),
-                interface: interface.and_then(|i| i.into_interface()).map(Box::new),
+                // The projection's qualifier is always a normalized interface, so
+                // it round-trips back to an `Interface` here.
+                interface: Box::new(
+                    interface
+                        .into_interface()
+                        .unwrap_or_else(|| unreachable!("projection qualifier is an interface")),
+                ),
                 member,
                 attr,
             },
@@ -1526,9 +1516,6 @@ impl NormalTy {
                     .collect(),
             ),
             NormalTy::List(inner) => NormalTy::List(Box::new(inner.substitute(var, replacement))),
-            NormalTy::WatchAccessor(inner) => {
-                NormalTy::WatchAccessor(Box::new(inner.substitute(var, replacement)))
-            }
             NormalTy::Map { key, value } => NormalTy::Map {
                 key: Box::new(key.substitute(var, replacement)),
                 value: Box::new(value.substitute(var, replacement)),
@@ -1565,9 +1552,7 @@ impl NormalTy {
                 member,
             } => NormalTy::AssociatedTypeProjection {
                 base: Box::new(base.substitute(var, replacement)),
-                interface: interface
-                    .as_ref()
-                    .map(|i| Box::new(i.substitute(var, replacement))),
+                interface: Box::new(interface.substitute(var, replacement)),
                 member: member.clone(),
             },
             // A nested μ binding the same name shadows it; do not substitute inside.

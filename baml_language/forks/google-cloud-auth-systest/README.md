@@ -6,9 +6,10 @@ mints a usable access token and that real Google APIs accept it**.
 
 Two layers:
 
-1. **Offline** — `cargo test -p forked_google_cloud_auth` (21 tests). Deterministic,
+1. **Offline** — `cargo test -p forked_google_cloud_auth` (40 tests). Deterministic,
    no creds/network. Covers each flow's logic plus the **ADC source-precedence guard**
-   (`tests/adc_precedence.rs`). Everyday / CI guard.
+   (`tests/adc_precedence.rs`) and the **project-id / quota-project chain**
+   (`tests/project_id.rs`). Everyday / CI guard.
 2. **Live** — `forks/google-cloud-auth-systest/run-e2e.py` builds the `gcp-systest` binary, mints a
    token through the fork for each flow, and validates it against real Google APIs:
    `tokeninfo` (token is valid + carries the cloud-platform scope) and Cloud Resource
@@ -22,17 +23,24 @@ Two layers:
 | Service-account JSON (RS256 JWT-bearer) | `auth_flows.rs::service_account_*` | `local:service-account-json` (requires `--sa-file`) | offline (+local w/ key) |
 | ADC `authorized_user` (refresh-token grant) | `auth_flows.rs::adc_authorized_user_*` | `local:adc-well-known`, `local:adc-GOOGLE_APPLICATION_CREDENTIALS` | local |
 | ADC `service_account` (via `GOOGLE_APPLICATION_CREDENTIALS`) | `auth_flows.rs::adc_service_account_via_gac` | (offline; live needs a key) | offline |
-| Well-known ADC path discovery (`HOME`/`CLOUDSDK_CONFIG`) | `auth_flows.rs::adc_discovers_well_known_*`, `adc_honors_cloudsdk_config` | `local:adc-well-known` | local |
+| Workload identity federation (`external_account`, file/url subject tokens, ± impersonation, workforce user-project) | `auth_flows.rs::wif_*` | (offline; live needs a WIF pool) | offline |
+| Workforce refresh grant (`external_account_authorized_user`) | `auth_flows.rs::external_account_authorized_user_*` | — | offline |
+| Impersonated service account (`impersonated_service_account`) | `auth_flows.rs::impersonated_service_account_*` | — | offline |
+| Well-known ADC path discovery (`HOME`/`CLOUDSDK_CONFIG`/`APPDATA`) | `auth_flows.rs::adc_discovers_well_known_*`, `adc_honors_cloudsdk_config` | `local:adc-well-known` | local |
 | GCE metadata server | `auth_flows.rs::adc_falls_back_to_metadata_server` | `cloud:gce-metadata` — **real VM** | cloud |
 | **ADC source precedence** (GAC > well-known > metadata) + metadata failure | `adc_precedence.rs` | — | offline |
-| token-endpoint / unsupported-type / missing-token errors | `auth_flows.rs` (error cases) | — | offline |
+| GAC set-but-unreadable is a hard error (google-auth parity, no fallthrough) | `auth_flows.rs::gac_set_but_unreadable_*` | — | offline |
+| Token caching (reuse until google-auth's 3m45s refresh threshold) | `auth_flows.rs::tokens_are_cached_*`, `lib.rs::cache_respects_refresh_threshold` | — | offline |
+| Project-id / quota-project chain (env > GAC file > gcloud config > ADC file > metadata) | `project_id.rs` | — | offline |
+| token-endpoint / unsupported-type (AWS-WIF, executable, GDCH) / missing-token errors | `auth_flows.rs` (error cases) | — | offline |
 
 Token validation per live scenario: **tokeninfo** (always; asserts 200 + cloud-platform
 scope) and **Cloud Resource Manager** `projects.get` (local scenarios; asserts 200 + the
 expected project). The GCE default service account has no project-get role in the dev
 project, so the metadata tier asserts token validity + scope (resourcemanager status is
 shown but not gated). Vertex AI `generateContent` is an optional check via
-`--vertex-model`/`--vertex-region` (the dev project currently lacks model-garden access).
+`--vertex-model`/`--vertex-region` (e.g. `gemini-2.5-flash` / `us-central1`); when
+supplied, every scenario also gates on `vertex=200`.
 
 ## Running it
 

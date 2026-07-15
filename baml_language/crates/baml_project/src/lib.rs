@@ -31,7 +31,10 @@ pub mod symbols;
 #[cfg(feature = "testing")]
 pub mod testing;
 
-pub use check::{CheckResult, collect_compiler2_diagnostics, collect_diagnostics};
+pub use check::{
+    CheckResult, NarrowedDiagnostics, collect_compiler2_diagnostics,
+    collect_compiler2_diagnostics_narrowed, collect_diagnostics,
+};
 pub use client_codegen::build_symbol_pool;
 pub use db::{CursorContext, EventCallback, ProjectDatabase};
 pub use param_schema::{FieldSchema, FieldSchemaField, ParamSchema, TypeSchema};

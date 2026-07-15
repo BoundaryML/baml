@@ -265,10 +265,12 @@ pub enum TirTypeError {
     /// A generic class destructure with fields must write its type arguments
     /// directly on the class pattern, e.g. `Box<int> { value }`.
     GenericClassDestructureRequiresTypeArgs { class_name: Name },
-    /// A rest pattern (`..`) carries a sub-pattern (`..let r`, `..[a, b]`,
-    /// `..pat: T`, etc.). Currently unsupported — only bare `..` is allowed
-    /// while we settle the rest-vs-slice typing semantics.
-    RestSubPatternNotSupported,
+    /// A rest pattern (`..`) carries a sub-pattern that is not binding-shaped.
+    /// Allowed: `..let r`, `.._`, bind chains, and a terminal `: T` ascription
+    /// link. Rejected: bare type patterns, structural destructures, and
+    /// or-patterns — see `lower_array_pat` for why each is blocked and what
+    /// expanding the set would take.
+    RestSubPatternNotBinding,
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
     RefutablePatternInLet {
@@ -1000,9 +1002,9 @@ impl fmt::Display for TirTypeError {
                 f,
                 "generic class destructure `{class_name} {{ ... }}` must specify type arguments"
             ),
-            TirTypeError::RestSubPatternNotSupported => write!(
+            TirTypeError::RestSubPatternNotBinding => write!(
                 f,
-                "rest pattern `..` cannot carry a sub-pattern; only bare `..` is allowed"
+                "rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`"
             ),
             TirTypeError::RefutablePatternInLet { context } => write!(
                 f,
