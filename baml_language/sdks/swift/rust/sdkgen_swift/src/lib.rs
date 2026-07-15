@@ -6,11 +6,17 @@
 //! The paths are relative to the generated package's `Sources/Baml/`
 //! output root (the harness / CLI decides where that root lives).
 //!
-//! Phase 1 scope: free functions over the primitive subset (see
-//! `translate_ty`). Functions whose signature contains an unsupported
-//! type, that declare generics, defaults, or that are `$`-companions
-//! are skipped — the generated package must always compile; coverage
-//! widens phase by phase.
+//! Phase 2 scope: free functions (required + optional args), classes as
+//! Equatable/Sendable structs, enums, non-recursive type aliases —
+//! over the type subset in `translate_ty`. Symbols whose signature the
+//! translator can't spell are skipped (a fixpoint removes classes with
+//! unsupported fields, then anything referencing them) — the generated
+//! package must always compile; coverage widens phase by phase.
+//!
+//! Recursive classes: Swift structs can't contain themselves, so any
+//! field whose (optional-stripped) class target can reach the
+//! containing class through direct (non-List/Map) references is boxed
+//! with the runtime's `@BamlIndirect` CoW wrapper.
 //!
 //! Unlike Python (which binds callables at runtime with
 //! `define_function`), Swift cannot synthesize functions, so this
@@ -18,19 +24,22 @@
 //! `BamlRuntime.shared.callSync(...)` / `call(...)` from the
 //! `BamlBridge` runtime package.
 
+mod emit;
 mod translate_ty;
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Write as _,
     path::PathBuf,
 };
 
 use base64::Engine as _;
 
-use baml_codegen_types::{Function, Symbol, SymbolPool};
+use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
-use translate_ty::translate_ty;
+use emit::{RenderedField, indent_lines, render_class, render_enum, render_function,
+    render_type_alias, sort_key};
+use translate_ty::{TranslateCtx, translate_ty};
 
 /// Build the Swift SDK output tree using precompiled BAML bytecode as
 /// the runtime payload. Returned paths are relative to the generated
@@ -47,43 +56,66 @@ pub fn to_source_code_with_bytecode(
         render_inlined_baml(baml_bytecode),
     );
 
-    // namespace path (joined) -> function renderings, both BTree-sorted
-    // for deterministic output.
+    let ctx = build_translate_ctx(pool);
+    let boxed_fields = compute_boxed_fields(pool, &ctx);
+
+    // namespace path -> (sort_key -> rendered decl), BTree-sorted for
+    // deterministic output.
     let mut namespaces: BTreeMap<Vec<String>, BTreeMap<String, String>> = BTreeMap::new();
     for (key, symbol) in pool {
-        let Symbol::Function(function) = symbol else {
-            continue; // classes/enums/aliases arrive in Phase 2+
-        };
-        // Only user-package free functions for now; stdlib (`baml`) and
-        // vendor packages land with their capability phases.
-        if key.pkg.as_str() != "user" {
+        if key.pkg.as_str() != "user" || key.is_stream() {
             continue;
         }
+        let fqn = key.to_string();
+        let rendered = match symbol {
+            Symbol::Function(function) => render_function(key, function, &ctx),
+            Symbol::Class(class) => {
+                if !ctx.supported_classes.contains(&fqn) {
+                    None
+                } else {
+                    render_supported_class(class, key, &ctx, &boxed_fields)
+                }
+            }
+            Symbol::Enum(enum_) => Some(render_enum(enum_, key)),
+            Symbol::TypeAlias(alias) => {
+                if ctx.supported_aliases.contains(&fqn) {
+                    render_type_alias(alias, &ctx)
+                } else {
+                    None
+                }
+            }
+        };
+        let Some(rendered) = rendered else { continue };
         let ns: Vec<String> = key
             .namespace_path
             .iter()
             .map(|s| s.as_str().to_string())
             .collect();
-        if let Some(rendered) = render_function(key, function) {
-            namespaces
-                .entry(ns)
-                .or_default()
-                .insert(function.name.as_str().to_string(), rendered);
+        let bare = key.bare_name().to_string();
+        namespaces
+            .entry(ns)
+            .or_default()
+            .insert(sort_key(symbol, &bare), rendered);
+    }
+
+    // Ensure ancestor namespaces exist so deep paths (`a.b.Thing`)
+    // get their intermediate enums rendered.
+    let paths: Vec<Vec<String>> = namespaces.keys().cloned().collect();
+    for path in paths {
+        for depth in 1..path.len() {
+            namespaces.entry(path[..depth].to_vec()).or_default();
         }
     }
 
-    let root_fns = namespaces.remove(&Vec::new()).unwrap_or_default();
-    out.insert(PathBuf::from("Baml.swift"), render_root(&root_fns));
+    let root_decls = namespaces.remove(&Vec::new()).unwrap_or_default();
+    out.insert(PathBuf::from("Baml.swift"), render_root(&root_decls));
 
     // One file per top-level namespace segment; deeper segments nest as
     // enums inside it.
     let mut by_top: BTreeMap<String, BTreeMap<Vec<String>, BTreeMap<String, String>>> =
         BTreeMap::new();
-    for (ns, fns) in namespaces {
-        by_top
-            .entry(ns[0].clone())
-            .or_default()
-            .insert(ns, fns);
+    for (ns, decls) in namespaces {
+        by_top.entry(ns[0].clone()).or_default().insert(ns, decls);
     }
     for (top, ns_map) in by_top {
         out.insert(
@@ -95,98 +127,177 @@ pub fn to_source_code_with_bytecode(
     out
 }
 
-/// Render one free function as a sync + async pair, or `None` if any
-/// part of its signature is outside the supported subset.
-fn render_function(key: &baml_codegen_types::Name, function: &Function) -> Option<String> {
-    let bare = function.name.as_str();
-    // `$stream` / `$build_request` companions come with their own
-    // phases; `$` is not a Swift identifier character anyway.
-    if bare.contains('$') || !function.generic_params.is_empty() {
-        return None;
-    }
+/// Fixpoint over named types: start assuming every candidate class /
+/// alias is supported, then repeatedly drop any whose definition uses
+/// an unsupported type, until stable. Enums are always supported.
+/// Generic and `$stream` classes are excluded up front (later phases).
+fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
+    let mut supported_classes: BTreeSet<String> = BTreeSet::new();
+    let mut supported_aliases: BTreeSet<String> = BTreeSet::new();
+    let mut supported_enums: BTreeSet<String> = BTreeSet::new();
 
-    let mut params = Vec::new(); // (label, swift_ty)
-    for arg in &function.arguments {
-        if arg.default.is_some() {
-            return None; // optional args are Phase 2 (BamlOptional design)
+    for (key, symbol) in pool {
+        if key.pkg.as_str() != "user" || key.is_stream() {
+            continue;
         }
-        params.push((escape_ident(arg.name.as_str()), translate_ty(&arg.ty)?));
-    }
-
-    let ret = match &function.return_type {
-        baml_codegen_types::Ty::Unit => None,
-        other => Some(translate_ty(other)?),
-    };
-
-    let fqn = key.to_string();
-    let param_list = params
-        .iter()
-        .map(|(name, ty)| format!("{name}: {ty}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let args_literal = if params.is_empty() {
-        "[]".to_string()
-    } else {
-        format!(
-            "[{}]",
-            params
-                .iter()
-                .map(|(name, _)| format!("(\"{}\", {name})", name.trim_matches('`')))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    };
-
-    let fn_name = escape_ident(bare);
-    let async_name = escape_ident(&format!("{bare}_async"));
-    let mut out = String::new();
-    let doc = function
-        .docstring
-        .as_deref()
-        .map(render_docstring)
-        .unwrap_or_default();
-
-    match &ret {
-        Some(ret_ty) => {
-            let _ = write!(
-                out,
-                "{doc}public static func {fn_name}({param_list}) throws -> {ret_ty} {{\n\
-                 \t_ = Baml._initialized\n\
-                 \treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_literal})\n\
-                 }}\n\n\
-                 {doc}public static func {async_name}({param_list}) async throws -> {ret_ty} {{\n\
-                 \t_ = Baml._initialized\n\
-                 \treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_literal})\n\
-                 }}\n"
-            );
-        }
-        None => {
-            let _ = write!(
-                out,
-                "{doc}public static func {fn_name}({param_list}) throws {{\n\
-                 \t_ = Baml._initialized\n\
-                 \ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_literal})\n\
-                 }}\n\n\
-                 {doc}public static func {async_name}({param_list}) async throws {{\n\
-                 \t_ = Baml._initialized\n\
-                 \ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_literal})\n\
-                 }}\n"
-            );
+        match symbol {
+            Symbol::Class(class) if class.generic_params.is_empty() => {
+                supported_classes.insert(key.to_string());
+            }
+            Symbol::Enum(_) => {
+                supported_enums.insert(key.to_string());
+            }
+            Symbol::TypeAlias(alias) if !alias.recursive => {
+                supported_aliases.insert(key.to_string());
+            }
+            _ => {}
         }
     }
-    Some(out)
+
+    loop {
+        let ctx = TranslateCtx {
+            supported_classes: supported_classes.clone(),
+            supported_enums: supported_enums.clone(),
+            supported_aliases: supported_aliases.clone(),
+        };
+        let mut changed = false;
+        for (key, symbol) in pool {
+            if key.pkg.as_str() != "user" || key.is_stream() {
+                continue;
+            }
+            let fqn = key.to_string();
+            match symbol {
+                Symbol::Class(class) => {
+                    if supported_classes.contains(&fqn)
+                        && class
+                            .properties
+                            .iter()
+                            .any(|p| translate_ty(&p.ty, &ctx).is_none())
+                    {
+                        supported_classes.remove(&fqn);
+                        changed = true;
+                    }
+                }
+                Symbol::TypeAlias(alias) => {
+                    if supported_aliases.contains(&fqn)
+                        && translate_ty(&alias.resolves_to, &ctx).is_none()
+                    {
+                        supported_aliases.remove(&fqn);
+                        changed = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !changed {
+            return TranslateCtx {
+                supported_classes,
+                supported_enums,
+                supported_aliases,
+            };
+        }
+    }
 }
 
-fn render_docstring(doc: &str) -> String {
-    let mut out = String::new();
-    for line in doc.lines() {
-        let _ = writeln!(out, "/// {line}");
+/// Direct (non-heap) class targets of a field type: bare class refs
+/// and refs behind Optional (null-unions) store inline in a Swift
+/// struct; List/Map contents are already heap-allocated and never
+/// force boxing. Aliases resolve through (they're non-recursive here).
+fn direct_class_targets<'p>(
+    ty: &Ty,
+    pool: &'p SymbolPool,
+    out: &mut Vec<String>,
+) {
+    match ty {
+        Ty::Class(name, args) if args.is_empty() => out.push(name.to_string()),
+        Ty::Union(members) => {
+            for member in members {
+                direct_class_targets(member, pool, out);
+            }
+        }
+        Ty::TypeAlias(name) => {
+            if let Some(Symbol::TypeAlias(alias)) = pool.get(name) {
+                if !alias.recursive {
+                    direct_class_targets(&alias.resolves_to, pool, out);
+                }
+            }
+        }
+        _ => {}
     }
-    out
+}
+
+/// `(class FQN, field name)` pairs that must be `@BamlIndirect`-boxed:
+/// the field's direct class target can reach the containing class back
+/// through direct references (self-recursion, mutual recursion, SCCs).
+fn compute_boxed_fields(pool: &SymbolPool, ctx: &TranslateCtx) -> BTreeSet<(String, String)> {
+    // Adjacency over supported classes via direct references.
+    let mut edges: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut field_targets: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
+    for (key, symbol) in pool {
+        let Symbol::Class(class) = symbol else { continue };
+        let fqn = key.to_string();
+        if !ctx.supported_classes.contains(&fqn) {
+            continue;
+        }
+        for prop in &class.properties {
+            let mut targets = Vec::new();
+            direct_class_targets(&prop.ty, pool, &mut targets);
+            targets.retain(|t| ctx.supported_classes.contains(t));
+            if !targets.is_empty() {
+                edges.entry(fqn.clone()).or_default().extend(targets.iter().cloned());
+                field_targets.insert((fqn.clone(), prop.name.as_str().to_string()), targets);
+            }
+        }
+    }
+
+    // reaches(b, a): DFS over direct edges.
+    let reaches = |from: &str, to: &str| -> bool {
+        let mut stack = vec![from.to_string()];
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        while let Some(node) = stack.pop() {
+            if node == to {
+                return true;
+            }
+            if !seen.insert(node.clone()) {
+                continue;
+            }
+            if let Some(next) = edges.get(&node) {
+                stack.extend(next.iter().cloned());
+            }
+        }
+        false
+    };
+
+    let mut boxed = BTreeSet::new();
+    for ((class_fqn, field), targets) in &field_targets {
+        if targets.iter().any(|t| reaches(t, class_fqn)) {
+            boxed.insert((class_fqn.clone(), field.clone()));
+        }
+    }
+    boxed
+}
+
+fn render_supported_class(
+    class: &Class,
+    key: &Name,
+    ctx: &TranslateCtx,
+    boxed_fields: &BTreeSet<(String, String)>,
+) -> Option<String> {
+    let fqn = key.to_string();
+    let mut fields = Vec::new();
+    for prop in &class.properties {
+        fields.push(RenderedField {
+            name: escape_ident(prop.name.as_str()),
+            ty: translate_ty(&prop.ty, ctx)?,
+            boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
+            doc: prop.docstring.clone(),
+        });
+    }
+    Some(render_class(class, key, &fields))
 }
 
 /// Backtick-escape Swift keywords that can appear as BAML identifiers.
-fn escape_ident(name: &str) -> String {
+pub(crate) fn escape_ident(name: &str) -> String {
     const KEYWORDS: &[&str] = &[
         "associatedtype", "class", "deinit", "enum", "extension", "func", "import", "init",
         "inout", "internal", "let", "operator", "private", "protocol", "public", "static",
@@ -202,7 +313,7 @@ fn escape_ident(name: &str) -> String {
     }
 }
 
-fn render_root(root_fns: &BTreeMap<String, String>) -> String {
+fn render_root(root_decls: &BTreeMap<String, String>) -> String {
     let mut out = String::from(
         "// Generated by BAML. DO NOT EDIT.\n\
          import BamlBridge\nimport Foundation\n\n\
@@ -215,9 +326,9 @@ fn render_root(root_fns: &BTreeMap<String, String>) -> String {
          \t\treturn true\n\
          \t}()\n",
     );
-    for rendered in root_fns.values() {
+    for rendered in root_decls.values() {
         out.push('\n');
-        out.push_str(&indent(rendered, 1));
+        out.push_str(&indent_lines(rendered, 1));
     }
     out.push_str("}\n");
     out
@@ -227,13 +338,15 @@ fn render_namespace_file(
     top: &str,
     ns_map: &BTreeMap<Vec<String>, BTreeMap<String, String>>,
 ) -> String {
-    let mut out = String::from("// Generated by BAML. DO NOT EDIT.\nimport BamlBridge\nimport Foundation\n\nextension Baml {\n");
+    let mut out = String::from(
+        "// Generated by BAML. DO NOT EDIT.\nimport BamlBridge\nimport Foundation\n\nextension Baml {\n",
+    );
     out.push_str(&render_ns_enum(top, &[top.to_string()], ns_map, 1));
     out.push_str("}\n");
     out
 }
 
-/// Recursively render `enum <seg> { fns…; child enums… }`.
+/// Recursively render `enum <seg> { decls…; child enums… }`.
 fn render_ns_enum(
     seg: &str,
     path: &[String],
@@ -242,10 +355,10 @@ fn render_ns_enum(
 ) -> String {
     let tab = "\t".repeat(depth);
     let mut out = format!("{tab}public enum {} {{\n", escape_ident(seg));
-    if let Some(fns) = ns_map.get(path) {
-        for rendered in fns.values() {
+    if let Some(decls) = ns_map.get(path) {
+        for rendered in decls.values() {
             out.push('\n');
-            out.push_str(&indent(rendered, depth + 1));
+            out.push_str(&indent_lines(rendered, depth + 1));
         }
     }
     // Immediate children: paths extending `path` by one segment.
@@ -263,19 +376,6 @@ fn render_ns_enum(
         out.push_str(&render_ns_enum(&child, &child_path, ns_map, depth + 1));
     }
     let _ = writeln!(out, "{tab}}}");
-    out
-}
-
-fn indent(block: &str, depth: usize) -> String {
-    let tab = "\t".repeat(depth);
-    let mut out = String::new();
-    for line in block.lines() {
-        if line.is_empty() {
-            out.push('\n');
-        } else {
-            let _ = writeln!(out, "{tab}{line}");
-        }
-    }
     out
 }
 
@@ -338,8 +438,12 @@ mod tests {
 
     #[test]
     fn translate_ty_primitive_subset() {
-        use baml_codegen_types::Ty;
-        let t = |ty: &Ty| crate::translate_ty::translate_ty(ty);
+        let ctx = TranslateCtx {
+            supported_classes: BTreeSet::new(),
+            supported_enums: BTreeSet::new(),
+            supported_aliases: BTreeSet::new(),
+        };
+        let t = |ty: &Ty| translate_ty(ty, &ctx);
         assert_eq!(t(&Ty::Int).as_deref(), Some("Int"));
         assert_eq!(t(&Ty::Float).as_deref(), Some("Double"));
         assert_eq!(t(&Ty::List(Box::new(Ty::Int))).as_deref(), Some("[Int]"));
@@ -357,7 +461,10 @@ mod tests {
             Some("[String?]")
         );
         // (int | string)[] — not yet
-        assert_eq!(t(&Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::String])))), None);
+        assert_eq!(
+            t(&Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::String])))),
+            None
+        );
         // map with non-string key — not yet
         assert_eq!(
             t(&Ty::Map {

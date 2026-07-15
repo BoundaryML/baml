@@ -181,6 +181,55 @@ extension Dictionary: BamlDecodable where Key == String, Value: BamlDecodable {
     }
 }
 
+/// Decoded class fields keyed by name — what a generated model's
+/// `_bamlDecode` walks. Missing fields decode as null (so optional
+/// properties come back `nil` and required ones throw `typeMismatch`).
+public struct BamlClassFields: Sendable {
+    let fields: [String: BamlBridge_Cffi_V1_BamlOutboundValue]
+
+    public func _baml<T: BamlDecodable>(_ name: String) throws -> T {
+        try T._bamlDecode(
+            BamlOutboundValue(fields[name] ?? BamlBridge_Cffi_V1_BamlOutboundValue())
+        )
+    }
+}
+
+extension BamlOutboundValue {
+    /// Interpret this value as a class and expose its fields. The wire
+    /// FQN is deliberately not validated against the expected type —
+    /// decoding is driven by the generated signature, mirroring
+    /// Python's tolerance (its typemap lookup falls back rather than
+    /// enforcing).
+    public func classFields() throws -> BamlClassFields {
+        let raw = normalized
+        guard case .classValue(let cls) = raw.value else {
+            throw BamlDecodeError.typeMismatch(expected: "class", got: wireArmName(raw))
+        }
+        var out: [String: BamlBridge_Cffi_V1_BamlOutboundValue] = [:]
+        for entry in cls.fields {
+            out[entry.key] = entry.value
+        }
+        return BamlClassFields(fields: out)
+    }
+
+    /// Interpret this value as an enum and return its variant name.
+    /// Generated enum conformances construct the member from it and
+    /// throw if the variant is absent (Python raises the same way).
+    public func enumVariant() throws -> String {
+        let raw = normalized
+        guard case .enumValue(let e) = raw.value else {
+            throw BamlDecodeError.typeMismatch(expected: "enum", got: wireArmName(raw))
+        }
+        return e.value
+    }
+}
+
+extension BamlIndirect: BamlDecodable where Value: BamlDecodable {
+    public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlIndirect<Value> {
+        BamlIndirect(wrappedValue: try Value._bamlDecode(value))
+    }
+}
+
 /// Strict lowercase-hex bigint parse (sign-prefixed), succeeding only
 /// when the value fits Swift's 64-bit `Int`.
 private func parseHexBigintFittingInt(_ hex: String) -> Int? {

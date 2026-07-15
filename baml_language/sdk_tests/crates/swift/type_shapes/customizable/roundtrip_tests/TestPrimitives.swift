@@ -1,10 +1,12 @@
 // Roundtrip coverage for `Baml.primitives` — port of
 // python_pydantic2 `roundtrip_tests/test_primitives.py`.
 //
-// Ported 1:1 where the capability exists. Not yet ported (arrive with
-// their phases): test_round_trip_primitives + the float_field variant
-// (classes, Phase 2). test_round_trip_float_accepts_int is Python-only
-// (Swift's type system forbids passing Int where Double is declared).
+// Ported 1:1 where the capability exists.
+// test_round_trip_float_accepts_int is Python-only (Swift's type
+// system forbids passing Int where Double is declared); its class
+// sibling test_round_trip_primitives_float_field_accepts_int maps to
+// Swift's literal inference (an integer literal in Double position IS
+// a Double — the coercion happens in the compiler, not pydantic).
 import XCTest
 import Foundation
 import Baml
@@ -56,6 +58,35 @@ final class TestPrimitives: XCTestCase {
             try Baml.primitives.round_trip_uint8_array(b: Data([0x00, 0x01, 0x02])),
             Data([0x00, 0x01, 0x02])
         )
+    }
+
+    func test_round_trip_primitives() throws {
+        let p = Baml.primitives.Primitives(
+            int_field: 1,
+            float_field: 1.5,
+            string_field: "s",
+            bool_field: true,
+            null_field: BamlNull(),
+            uint8array_field: Data([0x61, 0x62])
+        )
+        XCTAssertEqual(try Baml.primitives.round_trip_primitives(p: p), p)
+    }
+
+    func test_round_trip_primitives_float_field_accepts_int() throws {
+        // Python pins pydantic's int→float coercion at construction;
+        // Swift's equivalent contract is literal inference — `2` in a
+        // Double position is a Double. The wire must carry a float and
+        // hand back 2.0.
+        let p = Baml.primitives.Primitives(
+            int_field: 1,
+            float_field: 2,
+            string_field: "s",
+            bool_field: true,
+            null_field: BamlNull(),
+            uint8array_field: Data([0x61, 0x62])
+        )
+        let result = try Baml.primitives.round_trip_primitives(p: p)
+        XCTAssertEqual(result.float_field, 2.0)
     }
 
     // Swift-specific: exercises the async completion-callback path,

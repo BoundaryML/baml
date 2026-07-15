@@ -114,6 +114,46 @@ extension Dictionary: BamlEncodable where Key == String, Value: BamlEncodable {
     }
 }
 
+extension BamlInboundValue {
+    /// Build a class value for a generated model conformance. The FQN
+    /// is baked into generated code (Python derives it via the reverse
+    /// typemap; Swift types know their own). Fields encode
+    /// shape-driven, `nil` as explicit null.
+    public static func baml_class(
+        _ fqn: String,
+        _ fields: [(String, (any BamlEncodable)?)]
+    ) -> BamlInboundValue {
+        var cls = BamlBridge_Cffi_V1_InboundClassValue()
+        cls.classTy.name = fqn
+        cls.fields = fields.map { name, value in
+            var entry = BamlBridge_Cffi_V1_InboundMapEntry()
+            entry.stringKey = name
+            entry.value = value?._bamlEncode().raw ?? BamlBridge_Cffi_V1_InboundValue()
+            return entry
+        }
+        var v = BamlBridge_Cffi_V1_InboundValue()
+        v.classValue = cls
+        return BamlInboundValue(v)
+    }
+
+    /// Build an enum value: `name` is the BAML enum FQN, `variant`
+    /// the member's raw value.
+    public static func baml_enum(_ fqn: String, _ variant: String) -> BamlInboundValue {
+        var e = BamlBridge_Cffi_V1_InboundEnumValue()
+        e.name = fqn
+        e.value = variant
+        var v = BamlBridge_Cffi_V1_InboundValue()
+        v.enumValue = e
+        return BamlInboundValue(v)
+    }
+}
+
+extension BamlIndirect: BamlEncodable where Value: BamlEncodable {
+    public func _bamlEncode() -> BamlInboundValue {
+        wrappedValue._bamlEncode()
+    }
+}
+
 /// Serialize one call's kwargs to `CallFunctionArgs` bytes.
 /// `nil` in an argument slot encodes an explicit BAML null (the UNSET
 /// omission sentinel is a later phase alongside optional args).
