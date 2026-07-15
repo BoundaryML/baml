@@ -9,6 +9,7 @@ API is gone. Typemaps are built via `BamlTypeMap.from_lazy_entries(...)`
 from codegen-emitted `FQN → (module_path, attr_name)` dicts; resolution
 happens on first `get_*` call via `importlib.import_module + getattr`.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -27,6 +28,7 @@ def test_from_lazy_entries_resolves_class_via_importlib():
         type_aliases={},
     )
     import collections
+
     cls = tm.get_class("std.collections.OrderedDict")
     assert cls is collections.OrderedDict
     # Cached on second lookup — same object.
@@ -68,6 +70,7 @@ def test_py_type_to_baml_type_walks_mro():
     `cls.__mro__` so user subclasses of generated classes resolve to
     the parent's FQN (matching the deleted ClassVar's inheritance)."""
     import collections
+
     tm = BamlTypeMap.from_lazy_entries(
         classes={"std.collections.OrderedDict": ("collections", "OrderedDict")},
         enums={},
@@ -89,6 +92,22 @@ def test_py_type_to_baml_type_returns_empty_for_unknown():
         pass
 
     assert tm.py_type_to_baml_type(Unrelated) == ""
+
+
+def test_py_type_to_baml_type_resolves_runtime_type_alias_descriptor():
+    from typing_extensions import TypeAliasType
+
+    RecursiveInts = TypeAliasType("RecursiveInts", int | list["RecursiveInts"])
+    tm = BamlTypeMap.from_lazy_entries(
+        classes={},
+        enums={},
+        type_aliases={
+            "user.lorem.RecursiveInts": (__name__, "RecursiveInts"),
+        },
+    )
+    # The lazy forward lookup expects a module attribute. The reverse lookup is
+    # intentionally identity-by-module/name and does not need to import it.
+    assert tm.py_type_to_baml_type(RecursiveInts) == "user.lorem.RecursiveInts"
 
 
 def test_stdlib_reverse_overrides_seeded():

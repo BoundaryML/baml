@@ -362,3 +362,29 @@ enum SomeEnum {
   VARIANT
   OTHER
 }
+
+// Returned generic metadata must preserve concrete type shapes that are not
+// primitives or generated classes. These functions are deliberately
+// non-generic: the only behavior under test is BAML -> host reification of T.
+
+function make_union_box() -> GenericBox<int | string> {
+  GenericBox<int | string> { value: 7 }
+}
+
+function make_enum_box() -> GenericBox<SomeEnum> {
+  GenericBox<SomeEnum> { value: SomeEnum.VARIANT }
+}
+
+function make_literal_box() -> GenericBox<"fixed"> {
+  GenericBox<"fixed"> { value: "fixed" }
+}
+
+function make_image_box(url: string) -> GenericBox<image> {
+  GenericBox<image> { value: image.from_url(url, null) }
+}
+
+type RecursiveInts = int | RecursiveInts[]
+
+function make_alias_box() -> GenericBox<RecursiveInts> {
+  GenericBox<RecursiveInts> { value: [1, [2, 3]] }
+}

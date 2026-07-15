@@ -2,7 +2,7 @@
 // test_generic_calls.py. TypeScript erases generic arguments at runtime, so
 // generic calls carry their BAML type bindings in a trailing `$types` option
 // and generic instances carry class bindings in their `$types` metadata.
-import "./baml_sdk/index.js";
+import { baml } from "./baml_sdk/index.js";
 import type { BamlType } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import {
@@ -22,6 +22,13 @@ import {
   make_int_box,
   make_int_container,
   make_int_str_bool_triple,
+  SomeEnum,
+  RecursiveInts,
+  make_union_box,
+  make_enum_box,
+  make_literal_box,
+  make_image_box,
+  make_alias_box,
   make_nested_box,
   make_triple,
   one_type_arg,
@@ -390,5 +397,45 @@ describe("generic function calls", () => {
     expect(triple.first).toBe(1);
     expect(triple.second).toEqual(["a", "b"]);
     expect(triple.third).toEqual({ k: true });
+  });
+
+  it("test_make_union_box_reified", () => {
+    const box = make_union_box();
+    expect(box.$types).toEqual({ T: { union: ["int", "string"] } });
+    expect(box.value).toBe(7);
+    expect(box.get()).toBe("int | string");
+  });
+
+  it("test_make_enum_box_reified", () => {
+    const box = make_enum_box();
+    expect(box.$types).toEqual({ T: { enum: SomeEnum } });
+    expect(box.value).toBe(SomeEnum.VARIANT);
+    expect(box.get()).toContain("SomeEnum");
+  });
+
+  it("test_make_literal_box_reified", () => {
+    const box = make_literal_box();
+    expect(box.$types).toEqual({
+      T: { literal: { kind: "string", value: "fixed" } },
+    });
+    expect(box.value).toBe("fixed");
+    // Returned metadata keeps the exact literal token. Reusing it as an engine
+    // TypeVar binding intentionally widens to the safe primitive base type.
+    expect(box.get()).toBe("string");
+  });
+
+  it("test_make_image_box_reified", () => {
+    const box = make_image_box("https://example.com/image.png");
+    expect(box.$types?.T).toBe(baml.media.Image);
+    expect(box.value).toBeInstanceOf(baml.media.Image);
+    expect(box.value.url()).toBe("https://example.com/image.png");
+    expect(box.get()).toBe("image");
+  });
+
+  it("test_make_alias_box_reified", () => {
+    const box = make_alias_box();
+    expect(box.$types?.T).toEqual(RecursiveInts);
+    expect(box.value).toEqual([1, [2, 3]]);
+    expect(box.get()).toContain("RecursiveInts");
   });
 });

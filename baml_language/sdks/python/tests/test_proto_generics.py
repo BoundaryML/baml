@@ -17,12 +17,15 @@ Test matrix (per 13b §7):
 
 from __future__ import annotations
 
+import enum
 import sys
 import typing
 from pathlib import Path
 from typing import Generic, List, TypeVar
 
 import pydantic
+
+from baml_bridge.baml_py import BamlAudio, BamlImage, BamlPdf, BamlVideo
 
 from baml_bridge.proto import (  # noqa: E402
     _base_class_for_fqn,
@@ -37,8 +40,10 @@ from baml_bridge.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2, baml_type_p
 
 def _set_primitive(kind):
     """Return a setter that marks a wire `BamlTy` as the given primitive kind."""
+
     def setter(ty):
         ty.primitive.kind = kind
+
     return setter
 
 
@@ -64,6 +69,14 @@ class Crate(pydantic.BaseModel, Generic[T]):
 
 class Plain(pydantic.BaseModel):
     a: int
+
+
+class Status(str, enum.Enum):
+    OPEN = "OPEN"
+    CLOSED = "CLOSED"
+
+
+StringList = List[T]
 
 
 _FQN_BY_NAME = {
@@ -159,6 +172,15 @@ def test_baml_ty_optional_string_returns_optional_str():
     assert type(None) in args
 
 
+def test_baml_ty_map_string_bool_returns_typed_dict():
+    ty = baml_type_pb2.BamlTy()
+    ty.map.key.primitive.kind = baml_type_pb2.BAML_TY_PRIMITIVE_STRING
+    ty.map.value.primitive.kind = baml_type_pb2.BAML_TY_PRIMITIVE_BOOL
+    result = _ty_to_python_type(ty, BamlTypeMap())
+    assert typing.get_origin(result) is dict
+    assert typing.get_args(result) == (str, bool)
+
+
 def test_baml_ty_unknown_returns_typing_any():
     ty = baml_type_pb2.BamlTy()
     ty.unknown.SetInParent()
@@ -193,6 +215,117 @@ def test_baml_ty_union_with_unknown_member_keeps_any_arm():
     result = _ty_to_python_type(ty, BamlTypeMap())
     assert typing.get_origin(result) is typing.Union
     assert set(typing.get_args(result)) == {int, typing.Any}
+
+
+def test_baml_ty_enum_preserves_generated_enum_type():
+    ty = baml_type_pb2.BamlTy()
+    ty.enum.name = "user.lorem.Status"
+    tm = BamlTypeMap.from_lazy_entries(
+        classes={},
+        enums={"user.lorem.Status": (Status.__module__, Status.__name__)},
+        type_aliases={},
+    )
+    assert _ty_to_python_type(ty, tm) is Status
+
+
+def test_baml_ty_type_alias_preserves_alias_and_type_args():
+    ty = baml_type_pb2.BamlTy()
+    ty.type_alias.name = "user.lorem.StringList"
+    ty.type_alias.type_args.add().primitive.kind = baml_type_pb2.BAML_TY_PRIMITIVE_INT
+    tm = BamlTypeMap.from_lazy_entries(
+        classes={},
+        enums={},
+        type_aliases={"user.lorem.StringList": (__name__, "StringList")},
+    )
+    assert _ty_to_python_type(ty, tm) == List[int]
+
+
+def test_python_type_alias_lowers_back_to_named_wire_type():
+    from typing_extensions import TypeAliasType
+
+    alias = TypeAliasType("RuntimeAlias", int)
+    tm = BamlTypeMap.from_lazy_entries(
+        classes={},
+        enums={},
+        type_aliases={"user.lorem.RuntimeAlias": (__name__, "RuntimeAlias")},
+    )
+    saved = get_type_map()
+    set_type_map(tm)
+    try:
+        wire = python_type_to_wire_ty(alias)
+    finally:
+        set_type_map(saved)
+    assert wire.WhichOneof("ty") == "type_alias"
+    assert wire.type_alias.name == "user.lorem.RuntimeAlias"
+
+
+def test_baml_ty_literal_preserves_each_literal_kind():
+    cases = (
+        ("string_value", "draft", "draft"),
+        ("int_value", 42, 42),
+        ("bool_value", True, True),
+        (
+            "bigint_value",
+            "123456789012345678901234567890",
+            123456789012345678901234567890,
+        ),
+        ("float_value", "3.140", 3.14),
+    )
+    for field, wire_value, expected in cases:
+        ty = baml_type_pb2.BamlTy()
+        setattr(ty.literal, field, wire_value)
+        result = _ty_to_python_type(ty, BamlTypeMap())
+        assert typing.get_origin(result) is typing.Literal
+        assert typing.get_args(result) == (expected,)
+
+
+def test_python_literal_lowers_back_to_literal_wire_type():
+    wire = python_type_to_wire_ty(typing.Literal["draft"])
+    assert wire.WhichOneof("ty") == "literal"
+    assert wire.literal.WhichOneof("literal") == "string_value"
+    assert wire.literal.string_value == "draft"
+
+
+def test_baml_ty_media_preserves_known_media_classes():
+    tm = BamlTypeMap.from_lazy_entries(
+        classes={
+            "baml.media.Image": ("baml_bridge.baml_py", "BamlImage"),
+            "baml.media.Audio": ("baml_bridge.baml_py", "BamlAudio"),
+            "baml.media.Video": ("baml_bridge.baml_py", "BamlVideo"),
+            "baml.media.Pdf": ("baml_bridge.baml_py", "BamlPdf"),
+        },
+        enums={},
+        type_aliases={},
+    )
+    cases = (
+        (baml_type_pb2.BAML_TY_MEDIA_KIND_IMAGE, BamlImage),
+        (baml_type_pb2.BAML_TY_MEDIA_KIND_AUDIO, BamlAudio),
+        (baml_type_pb2.BAML_TY_MEDIA_KIND_VIDEO, BamlVideo),
+        (baml_type_pb2.BAML_TY_MEDIA_KIND_PDF, BamlPdf),
+    )
+    for kind, expected in cases:
+        ty = baml_type_pb2.BamlTy()
+        ty.media.kind = kind
+        assert _ty_to_python_type(ty, tm) is expected
+
+
+def test_python_media_classes_lower_back_to_media_wire_type():
+    cases = (
+        (BamlImage, baml_type_pb2.BAML_TY_MEDIA_KIND_IMAGE),
+        (BamlAudio, baml_type_pb2.BAML_TY_MEDIA_KIND_AUDIO),
+        (BamlVideo, baml_type_pb2.BAML_TY_MEDIA_KIND_VIDEO),
+        (BamlPdf, baml_type_pb2.BAML_TY_MEDIA_KIND_PDF),
+    )
+    for media_type, expected_kind in cases:
+        wire = python_type_to_wire_ty(media_type)
+        assert wire.WhichOneof("ty") == "media"
+        assert wire.media.kind == expected_kind
+
+
+def test_baml_ty_generic_media_widens_to_typing_any():
+    ty = baml_type_pb2.BamlTy()
+    ty.media.kind = baml_type_pb2.BAML_TY_MEDIA_KIND_GENERIC
+    assert _ty_to_python_type(ty, BamlTypeMap()) is typing.Any
 
 
 # ---------------------------------------------------------------------------
@@ -392,7 +525,6 @@ def test_decode_class_nested_generic():
 import pytest  # noqa: E402
 
 from baml_bridge import _resolve_types_kwarg  # noqa: E402
-from baml_bridge.cffi.v1 import baml_type_pb2  # noqa: E402
 
 
 def test_generic_instance_carries_class_ty():
@@ -403,7 +535,9 @@ def test_generic_instance_carries_class_ty():
     cv = inbound.class_value
     assert cv.HasField("class_ty")
     assert len(cv.class_ty.type_args) == 1
-    assert cv.class_ty.type_args[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
+    assert (
+        cv.class_ty.type_args[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
+    )
 
 
 def test_non_generic_instance_class_ty_has_no_type_args():

@@ -25,9 +25,9 @@ export declare class BamlTypeMap {
     getEnum(fqn: string): unknown;
     getTypeAlias(fqn: string): unknown;
     /**
-     * Reverse lookup for the encode path: given a value's constructor, return
-     * its BAML FQN, or "" if it is not a codegen-emitted class. Builds the
-     * reverse map lazily by resolving every class/enum thunk once.
+     * Reverse lookup for the encode path: given a generated class constructor
+     * or enum object, return its BAML FQN, or "" if it is not mapped. Builds
+     * the reverse map lazily by resolving every class/enum thunk once.
      */
     jsTypeToBamlType(ctor: unknown): string;
     warm(): void;

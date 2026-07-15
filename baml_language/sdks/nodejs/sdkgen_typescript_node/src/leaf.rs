@@ -643,8 +643,17 @@ fn render_type_alias(
 ) {
     let rhs = translate_ty(&a.resolves_to, ctx);
     state.merge(&rhs);
-    // TS resolves recursive aliases natively; same shape for both.
+    // TS resolves recursive aliases natively; same type shape for both. A type
+    // alias is otherwise erased at runtime, so emit a same-named value in the
+    // value namespace. The generic bridge uses this descriptor to round-trip a
+    // recursive alias carried as a concrete class type argument.
     let _ = writeln!(out, "export type {} = {};", a.name, rhs.expr);
+    let _ = writeln!(
+        out,
+        "export const {} = {{ typeAlias: {} }} as const;",
+        a.name,
+        crate::ts_string(&a.source.to_string()),
+    );
 }
 
 fn render_class_ts(out: &mut String, c: &NodeClass, ctx: &TranslateCtx, state: &mut RenderState) {

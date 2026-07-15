@@ -42,7 +42,15 @@ export { defineFunction, defineInstanceFunction, UNSET } from './define_function
 export type { GenericParams } from './define_function.js';
 // Generic-type spelling for `$types` bindings on generic classes / calls.
 export { Never, lowerTypeToWireTy } from './wire_ty.js';
-export type { BamlType, BamlPrimitiveToken, BamlClassCtor } from './wire_ty.js';
+export type {
+    BamlType,
+    BamlPrimitiveToken,
+    BamlClassCtor,
+    BamlEnumObject,
+    BamlLiteralToken,
+    BamlMediaCtor,
+    BamlTypeAliasToken,
+} from './wire_ty.js';
 
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
