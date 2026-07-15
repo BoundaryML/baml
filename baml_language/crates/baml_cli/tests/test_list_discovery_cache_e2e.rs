@@ -15,21 +15,29 @@ use std::{
     process::{Command, Output},
 };
 
-use common::BuiltPaths;
-
 /// Run `baml-cli` in `dir` with an isolated cache directory (so cold/warm state
 /// is under the test's control) and the passive skill/update checks disabled.
-fn run_list(built: &BuiltPaths, dir: &Path, cache_dir: &Path, args: &[&str]) -> Output {
+/// `extra_env` layers on top of the shared spawn matrix (e.g. an opt-out knob).
+fn run_list(
+    cli: &Path,
+    dir: &Path,
+    cache_dir: &Path,
+    args: &[&str],
+    extra_env: &[(&str, &str)],
+) -> Output {
     let home = dir.join(".baml-home");
     std::fs::create_dir_all(&home).unwrap();
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
-    let mut cmd = Command::new(&built.baml_cli);
+    let mut cmd = Command::new(cli);
     cmd.args(args);
     cmd.current_dir(dir);
     cmd.env("BAML_CLI_ALLOW_DIRECT", "1");
     cmd.env("BAML_HOME", &home);
     cmd.env("BAML_CACHE_DIR", cache_dir);
     cmd.env("BAML_CACHE_DEBUG", "1");
+    for (key, value) in extra_env {
+        cmd.env(key, value);
+    }
     cmd.output().expect("spawn baml-cli")
 }
 
@@ -83,7 +91,7 @@ const SERVED_FROM_CACHE: &str = "served `test --list` from discovery cache";
 /// run served from the discovery cache (proving it skipped engine boot). Works
 /// for both matching filters (exit 0) and no-match filters (exit 5), so the
 /// no-tests-selected edge is covered too.
-fn assert_cold_equals_warm(built: &BuiltPaths, extra: &[&str]) {
+fn assert_cold_equals_warm(cli: &Path, extra: &[&str]) {
     let tmp = tempfile::tempdir().unwrap();
     create_test_project(tmp.path());
     let cache_dir = tmp.path().join(".discovery-cache");
@@ -91,8 +99,8 @@ fn assert_cold_equals_warm(built: &BuiltPaths, extra: &[&str]) {
     let mut args = vec!["test", "--list", "--from", "."];
     args.extend_from_slice(extra);
 
-    let cold = run_list(built, tmp.path(), &cache_dir, &args);
-    let warm = run_list(built, tmp.path(), &cache_dir, &args);
+    let cold = run_list(cli, tmp.path(), &cache_dir, &args, &[]);
+    let warm = run_list(cli, tmp.path(), &cache_dir, &args, &[]);
 
     assert_eq!(
         cold.status.code(),
@@ -128,18 +136,19 @@ fn assert_cold_equals_warm(built: &BuiltPaths, extra: &[&str]) {
 /// sanity-checks that the fixture lists a non-empty set.
 #[test]
 fn list_unfiltered_cold_equals_warm() {
-    let built = common::ensure_built();
-    assert_cold_equals_warm(built, &[]);
+    let cli = common::baml_cli();
+    assert_cold_equals_warm(&cli, &[]);
 
     // Independent sanity: the unfiltered list is non-empty and exit 0.
     let tmp = tempfile::tempdir().unwrap();
     create_test_project(tmp.path());
     let cache_dir = tmp.path().join(".discovery-cache");
     let out = run_list(
-        built,
+        &cli,
         tmp.path(),
         &cache_dir,
         &["test", "--list", "--from", "."],
+        &[],
     );
     assert!(out.status.success(), "unfiltered `--list` should exit 0");
     assert!(
@@ -154,7 +163,7 @@ fn list_unfiltered_cold_equals_warm() {
 /// filter implementations select the same leaves (including a no-match case).
 #[test]
 fn list_filtered_cold_equals_warm_across_matrix() {
-    let built = common::ensure_built();
+    let cli = common::baml_cli();
     for extra in [
         vec!["-i", "suite::"],                     // whole named testset (+ nested)
         vec!["-i", "suite::one"],                  // exact leaf
@@ -166,7 +175,7 @@ fn list_filtered_cold_equals_warm_across_matrix() {
         vec!["-i", "suite::", "-x", "suite::two"], // mixed include + exclude
         vec!["-i", "totally-bogus-selector-xyz"],  // no match (exit 5, empty stdout)
     ] {
-        assert_cold_equals_warm(built, &extra);
+        assert_cold_equals_warm(&cli, &extra);
     }
 }
 
@@ -175,32 +184,28 @@ fn list_filtered_cold_equals_warm_across_matrix() {
 /// serves from the discovery cache even when the cache is warm.
 #[test]
 fn no_discovery_cache_knob_is_output_neutral() {
-    let built = common::ensure_built();
+    let cli = common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_test_project(tmp.path());
     let cache_dir = tmp.path().join(".discovery-cache");
     let args = ["test", "--list", "--from", "."];
 
     // Warm the discovery cache.
-    let cold = run_list(built, tmp.path(), &cache_dir, &args);
+    let cold = run_list(&cli, tmp.path(), &cache_dir, &args, &[]);
     assert!(cold.status.success());
-    let warm = run_list(built, tmp.path(), &cache_dir, &args);
+    let warm = run_list(&cli, tmp.path(), &cache_dir, &args, &[]);
     assert!(warm.status.success());
     assert!(String::from_utf8_lossy(&warm.stderr).contains(SERVED_FROM_CACHE));
 
     // With the knob set, the warm cache is ignored: honest discovery runs and
     // produces the same stdout.
-    let home = tmp.path().join(".baml-home");
-    let knobbed = Command::new(&built.baml_cli)
-        .args(args)
-        .current_dir(tmp.path())
-        .env("BAML_CLI_ALLOW_DIRECT", "1")
-        .env("BAML_HOME", &home)
-        .env("BAML_CACHE_DIR", &cache_dir)
-        .env("BAML_CACHE_DEBUG", "1")
-        .env("BAML_NO_DISCOVERY_CACHE", "1")
-        .output()
-        .expect("spawn baml-cli");
+    let knobbed = run_list(
+        &cli,
+        tmp.path(),
+        &cache_dir,
+        &args,
+        &[("BAML_NO_DISCOVERY_CACHE", "1")],
+    );
     assert!(knobbed.status.success());
     assert_eq!(
         stdout_of(&knobbed),

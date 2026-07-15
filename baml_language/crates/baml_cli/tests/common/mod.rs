@@ -11,13 +11,12 @@
 // `baml-cli` is *this* crate's own bin, so cargo builds it before the
 // integration test runs and hands us its path — for the exact profile AND
 // feature set the surrounding `cargo test` / nextest invocation used — via
-// `env!("CARGO_BIN_EXE_baml-cli")`. We use that directly: no in-test rebuild,
-// so we never relink the (huge, ~300-rlib) `baml-cli` under a *different*
-// feature set than the outer build. That mismatch is what previously made the
-// harness rebuild `baml-cli` from scratch inside the test (CI builds
-// `--all-features`; a plain `cargo build -p baml_cli` resolves to `default`),
-// doubling `baml-cli`'s artifacts on disk and blowing out the Windows runner's
-// volume with `LLVM ERROR: IO failure on output stream: no space on device`.
+// `env!("CARGO_BIN_EXE_baml-cli")`. We take that pre-built binary instead of
+// rebuilding: a `cargo build -p baml_cli` inside the test would relink the
+// (huge, ~300-rlib) `baml-cli` under `default` features while CI's outer build
+// used `--all-features`, so the two artifact sets would coexist and exhaust the
+// Windows runner's disk (`LLVM ERROR: IO failure on output stream: no space on
+// device`).
 //
 // `baml-pack-host` lives in a *different* crate, and cargo's `CARGO_BIN_EXE_*`
 // only exposes binaries from the test's own crate — so we still can't get its
