@@ -596,6 +596,107 @@ mod tests {
         ));
     }
 
+    /// Type and value lookup are separate implementation details; declarations
+    /// still share one BAML namespace and produce one complete diagnostic.
+    #[test]
+    fn mixed_declaration_kinds_across_files_produce_one_conflict() {
+        let mut db = make_db();
+        let file_a = db.add_file("a.baml", "class Shared { value int }");
+        let file_b = db.add_file("b.baml", "enum Shared { One\nTwo }");
+        let file_c = db.add_file("c.baml", "type Shared = string");
+        let file_d = db.add_file("d.baml", "function Shared() -> int { 1 }");
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+
+        assert_eq!(ns.conflicts().len(), 1);
+        let conflict = &ns.conflicts()[0];
+        assert_eq!(conflict.name, Name::new("Shared"));
+        assert_eq!(conflict.entries.len(), 4);
+        assert_eq!(
+            conflict
+                .entries
+                .iter()
+                .map(|entry| entry.definition.kind_name())
+                .collect::<Vec<_>>(),
+            vec!["class", "enum", "type", "function"]
+        );
+        assert!(
+            conflict
+                .entries
+                .iter()
+                .map(|entry| entry.definition.file(&db))
+                .eq([file_a, file_b, file_c, file_d])
+        );
+
+        let diagnostic = conflict.to_diagnostic(&db);
+        assert_eq!(diagnostic.annotations.len(), 4);
+        assert_eq!(
+            diagnostic
+                .annotations
+                .iter()
+                .map(|annotation| annotation.span.file_id)
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            4,
+            "every conflicting source location must be included"
+        );
+    }
+
+    #[test]
+    fn type_and_client_names_collide_across_files() {
+        let mut db = make_db();
+        let _type_file = db.add_file("types.baml", "type Backend = string");
+        let _client_file = db.add_file(
+            "clients.baml",
+            r#"client<llm> Backend {
+  provider openai
+  options { model "gpt-4o-mini" }
+}"#,
+        );
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        assert_eq!(ns.conflicts().len(), 1);
+        assert_eq!(
+            ns.conflicts()[0]
+                .entries
+                .iter()
+                .map(|entry| entry.definition.source_kind_name(&db))
+                .collect::<std::collections::HashSet<_>>(),
+            std::collections::HashSet::from(["type", "client"])
+        );
+    }
+
+    #[test]
+    fn type_and_value_names_in_different_baml_namespaces_are_legal() {
+        let mut db = make_db();
+        let _type_file = db.add_file("ns_models/types.baml", "class Shared { value int }");
+        let _value_file = db.add_file("ns_api/functions.baml", "function Shared() -> int { 1 }");
+
+        let package = PackageId::new(&db, Name::new("user"));
+        assert!(package_items(&db, package).conflicts().is_empty());
+    }
+
+    #[test]
+    fn same_named_tests_keep_function_scoped_identity() {
+        let mut db = make_db();
+        let _file_a = db.add_file(
+            "a.baml",
+            "function First() -> int { 1 }\ntest Shared { functions [First] }
+",
+        );
+        let _file_b = db.add_file(
+            "b.baml",
+            "function Second() -> int { 2 }\ntest Shared { functions [Second] }
+",
+        );
+
+        let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        assert!(ns.conflicts().is_empty());
+    }
+
     /// No conflict when names are unique across files.
     #[test]
     fn no_conflict_for_unique_names() {
