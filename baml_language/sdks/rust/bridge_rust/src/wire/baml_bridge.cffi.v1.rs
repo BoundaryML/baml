@@ -6,6 +6,10 @@ pub struct BamlHandle {
     #[prost(enumeration = "BamlHandleType", tag = "2")]
     pub handle_type: i32,
 }
+// -----------------------------------------------------------------------------
+// Handle types — shared between inbound and outbound
+// -----------------------------------------------------------------------------
+
 /// Tag for the host-language side to discriminate opaque handle entries.
 ///
 /// Stdlib symbols with special host-side decoding rules today:
@@ -109,10 +113,7 @@ impl BamlHandleType {
 /// the type of a function's arg (which, for a generic function, is a TypeVar).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlTy {
-    #[prost(
-        oneof = "baml_ty::Ty",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24"
-    )]
+    #[prost(oneof = "baml_ty::Ty", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 23, 24")]
     pub ty: ::core::option::Option<baml_ty::Ty>,
 }
 /// Nested message and enum types in `BamlTy`.
@@ -167,9 +168,7 @@ pub mod baml_ty {
         #[prost(message, tag = "22")]
         TypeVar(super::BamlTyTypeVar),
         #[prost(message, tag = "23")]
-        AssociatedTypeProjection(
-            ::prost::alloc::boxed::Box<super::BamlTyAssociatedTypeProjection>,
-        ),
+        AssociatedTypeProjection(::prost::alloc::boxed::Box<super::BamlTyAssociatedTypeProjection>),
         #[prost(message, tag = "24")]
         Never(super::BamlTyNever),
     }
@@ -225,7 +224,8 @@ pub struct BamlTyUnion {
     pub options: ::prost::alloc::vec::Vec<BamlTy>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlTyUnknown {}
+pub struct BamlTyUnknown {
+}
 /// Mirrors `baml_base::Literal`. `bigint_value` and `float_value` are decimal
 /// strings (a bigint has no fixed-width proto scalar; a BAML float is stored as
 /// its source string to preserve formatting). Literal types widen to their base
@@ -321,20 +321,25 @@ pub struct BamlTyFuture {
 }
 /// Opaque Rust-managed state (`RuntimeTy::RustType`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlTyRustType {}
+pub struct BamlTyRustType {
+}
 /// The `type` metatype — a runtime value wrapping a `BamlTy` (`RuntimeTy::Type`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlTyMetaType {}
+pub struct BamlTyMetaType {
+}
 /// Opaque resource handle: file, socket, or HTTP response body
 /// (`RuntimeTy::Resource`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlTyResource {}
+pub struct BamlTyResource {
+}
 /// Opaque structured prompt tree for LLM calls (`RuntimeTy::PromptAst`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlTyPromptAst {}
+pub struct BamlTyPromptAst {
+}
 /// The void type — the type of effectful expressions (`RuntimeTy::Void`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlTyVoid {}
+pub struct BamlTyVoid {
+}
 /// A type variable / generic parameter such as `T` in `Array<T>`
 /// (`RuntimeTy::TypeVar`).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -357,7 +362,8 @@ pub struct BamlTyAssociatedTypeProjection {
 /// The bottom type — an expression that never produces a value
 /// (`RuntimeTy::Never`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlTyNever {}
+pub struct BamlTyNever {
+}
 /// Scalar/leaf types with no parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -472,6 +478,10 @@ impl BamlTyFunctionParamMode {
         }
     }
 }
+// -----------------------------------------------------------------------------
+// Outbound values — engine to host (type-rich)
+// -----------------------------------------------------------------------------
+
 /// Result envelope for a top-level function call — engine to host. Wraps
 /// the bare `BamlOutboundValue` so a thrown value (error) or panic crosses
 /// the boundary as structured data alongside the ok value. Every result
@@ -535,10 +545,7 @@ pub struct BamlOutboundValue {
     /// Required for BAML -> CFFI
     /// But not for CFFI -> BAML (BAML always does type validation again at
     /// boundaries)
-    #[prost(
-        oneof = "baml_outbound_value::Value",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 16, 17, 18, 19, 20, 21"
-    )]
+    #[prost(oneof = "baml_outbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 16, 17, 18, 19, 20, 21")]
     pub value: ::core::option::Option<baml_outbound_value::Value>,
 }
 /// Nested message and enum types in `BamlOutboundValue`.
@@ -605,7 +612,8 @@ pub struct BamlOutboundHandle {
     pub ty: ::core::option::Option<BamlTy>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BamlValueNull {}
+pub struct BamlValueNull {
+}
 /// Each variant as a message.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BamlValueList {
@@ -800,6 +808,10 @@ pub mod baml_literal_value {
         FloatValue(::prost::alloc::string::String),
     }
 }
+// -----------------------------------------------------------------------------
+// BamlMedia definitions
+// -----------------------------------------------------------------------------
+
 /// We need to handle BamlMediaType. Since one variant is "Other(String)",
 /// we represent it as a message with an enum tag and an optional string.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -840,15 +852,16 @@ impl MediaTypeEnum {
         }
     }
 }
+// -----------------------------------------------------------------------------
+// Inbound values — host language to engine (value-only, no type metadata)
+// -----------------------------------------------------------------------------
+
 /// Core value type. No type metadata because not every language has union/class
 /// concepts (e.g. JS uses plain interfaces). Engine resolves types from function
 /// signatures.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InboundValue {
-    #[prost(
-        oneof = "inbound_value::Value",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13"
-    )]
+    #[prost(oneof = "inbound_value::Value", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13")]
     pub value: ::core::option::Option<inbound_value::Value>,
 }
 /// Nested message and enum types in `InboundValue`.
@@ -932,6 +945,10 @@ pub struct InboundEnumValue {
     #[prost(string, tag = "2")]
     pub value: ::prost::alloc::string::String,
 }
+// -----------------------------------------------------------------------------
+// Function call protocol
+// -----------------------------------------------------------------------------
+
 /// One explicit `TypeVar` binding for a generic function/method call: the
 /// TypeVar name paired with the concrete type it is bound to.
 #[derive(Clone, PartialEq, ::prost::Message)]

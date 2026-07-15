@@ -44,6 +44,13 @@ fn main() -> std::io::Result<()> {
     std::fs::create_dir_all(&rust_vendor_out)?;
     let mut vendor_config = prost_build::Config::new();
     vendor_config.out_dir(&rust_vendor_out);
+    // Do NOT run rustfmt on the committed vendored copy. This file is written
+    // back into the source tree on every build, so its content must be
+    // deterministic — but rustfmt's output for a given input varies by
+    // toolchain version, which would dirty the tree in CI vs locally. Raw
+    // prost output is stable (pinned via Cargo.lock), and `cargo fmt` skips
+    // it via the `ignore` entry in `baml_language/rustfmt.toml`.
+    vendor_config.format(false);
     vendor_config.compile_protos(&proto_strs, &["types"])?;
 
     // Generate Python pb2 + pyi.
