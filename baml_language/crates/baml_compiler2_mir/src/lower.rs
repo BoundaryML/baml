@@ -3256,34 +3256,33 @@ impl<'db> LoweringContext<'db> {
 
     /// Lower a method-signature type expression (a parameter or return type) to
     /// a runtime type. In a method signature `Self` is the receiver type
-    /// variable and `Self.Assoc` is an associated-type projection onto it.
-    /// A bare `lower_type_expr_in_ns` has neither in scope and would erase both
-    /// to `Ty::Unknown`, tripping the runtime lowering boundary — so rewrite
-    /// `Self.Assoc` paths into projections and bind `Self` as a type variable.
+    /// variable and `Self.Assoc` is an associated-type projection onto it. A bare
+    /// `lower_type_expr_in_ns` has neither in scope and would erase both to
+    /// `Ty::Unknown`, tripping the runtime lowering boundary — so bind `Self` to
+    /// its rigid type variable through the `self_ty` channel, which roots both a
+    /// bare `Self` and each `Self.Assoc` projection at it.
     fn lower_signature_runtime_ty(
         &self,
         te: &baml_compiler2_ast::TypeExpr,
         pkg_items: &baml_compiler2_hir::package::PackageItems<'_>,
         ns_context: &[baml_base::Name],
     ) -> RuntimeTy {
-        let self_subst = std::collections::HashMap::from([(
-            baml_base::Name::new("Self"),
-            baml_compiler2_tir::lower_type_expr::type_expr_for_name(baml_base::Name::new("Self")),
-        )]);
-        let te = baml_compiler2_tir::lower_type_expr::substitute_paths_in(te, &self_subst);
         let mut generic_params = self.enclosing_generic_params();
         generic_params.push(baml_base::Name::new("Self"));
         let generic_param_bounds = self.enclosing_generic_param_bounds();
         let mut diags = Vec::new();
         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-            &te,
+            te,
             &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                 db: self.db,
                 package_items: pkg_items,
                 ns_context,
                 generic_params: &generic_params,
                 bounds: &generic_param_bounds,
-                self_ty: None,
+                self_ty: Some(Tir2Ty::TypeVar(
+                    baml_base::Name::new("Self"),
+                    TyAttr::default(),
+                )),
             },
             &mut diags,
         );

@@ -3674,14 +3674,39 @@ fn compute_function_metadata_from_item_tree(
             None => rustc_hash::FxHashMap::default(),
         };
 
+    // The concrete receiver (`ClassName<T,…>` or a free-impl `for` target), lowered
+    // once. A non-interface method's `Self` / `Self.Assoc` then root at it through the
+    // `self_ty` channel — the same projection path the interface branch drives with its
+    // rigid `Self` type variable. `None` for a free function (no receiver in scope) and
+    // unused for interface methods (which bind `Self` via `interface_signature_bindings`).
+    let receiver_ty: Option<baml_compiler2_tir::ty::Ty> = if enclosing_interface.is_none() {
+        self_replacement.as_ref().map(|replacement| {
+            let mut receiver_diags = Vec::new();
+            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                replacement,
+                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &enclosing_generics,
+                    bounds: &scope_bounds,
+                    self_ty: None,
+                },
+                &mut receiver_diags,
+            )
+        })
+    } else {
+        None
+    };
+
     // Lower a signature type expression against this method's scope, recording any
     // diagnostics into `diags`. For an interface method the associated-type / `Self`
     // bindings are applied by lowering with their names in scope (so `Item` lowers
     // to `TypeVar(Item)`) and then substituting; for every other method `Self` is
-    // first replaced by the concrete receiver type. In both cases `scope_bounds`
-    // drives projection resolution. Namespace-relative resolution (e.g. `MyLorem`
-    // in a signature under `ns_lorem/`) uses the file's namespace so a non-root-ns
-    // class does not erase to `unknown`.
+    // bound to the concrete `receiver_ty` via the `self_ty` channel. In both cases
+    // `scope_bounds` drives projection resolution. Namespace-relative resolution
+    // (e.g. `MyLorem` in a signature under `ns_lorem/`) uses the file's namespace so
+    // a non-root-ns class does not erase to `unknown`.
     let lower_scoped = |te: &TypeExpr,
                         diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
      -> baml_compiler2_tir::ty::Ty {
@@ -3704,22 +3729,15 @@ fn compute_function_metadata_from_item_tree(
                 &interface_signature_bindings,
             );
         }
-        let resolved_te = match &self_replacement {
-            Some(replacement) => baml_compiler2_tir::lower_type_expr::substitute_paths_in(
-                te,
-                &std::collections::HashMap::from([(Name::new("Self"), replacement.clone())]),
-            ),
-            None => te.clone(),
-        };
         baml_compiler2_tir::lower_type_expr::lower_type_expr(
-            &resolved_te,
+            te,
             &baml_compiler2_tir::lower_type_expr::ScopeCtx {
                 db,
                 package_items: pkg_items,
                 ns_context: &pkg_info.namespace_path,
                 generic_params: &enclosing_generics,
                 bounds: &scope_bounds,
-                self_ty: None,
+                self_ty: receiver_ty.clone(),
             },
             diags,
         )
