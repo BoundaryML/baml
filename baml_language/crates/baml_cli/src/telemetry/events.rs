@@ -1,9 +1,19 @@
 //! Typed telemetry events. Direct analogue of Next.js's
 //! `packages/next/src/telemetry/events/*.ts` — one constructor per event
-//! type. Every new event goes here and every field is also documented in
-//! `TELEMETRY.md`. The snapshot test at the bottom of this file guards the
-//! set of event names, so adding one without documenting it is a
-//! review-time failure rather than a Twitter-time surprise.
+//! type.
+//!
+//! ## Adding a new event
+//!
+//! 1. Add a constructor below (name + `json!` payload of coarse,
+//!    non-identifying fields — never paths, file contents, or argument
+//!    values).
+//! 2. Add its name to the `event_names_snapshot` test at the bottom and a
+//!    bullet to `TELEMETRY.md`'s "What is being collected?" section, in
+//!    the same commit.
+//! 3. Fire it from anywhere: `crate::telemetry::record(TelemetryEvent::my_event(...))`.
+//!    Delivery, crash-safety, opt-out, and retries are handled for you.
+//! 4. Validate with `BAML_TELEMETRY_DEBUG=1 cargo run -- <cmd>` — the
+//!    payload prints to stderr instead of being sent.
 
 use serde::Serialize;
 use serde_json::json;

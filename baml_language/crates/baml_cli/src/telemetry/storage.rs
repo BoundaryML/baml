@@ -1,7 +1,9 @@
 //! `Telemetry`: the singleton that owns the persistent config file
 //! (`<baml_home>/telemetry.toml`), the first-run notice, the opt-out gate,
-//! and the background event queue. Direct rewrite of Next.js's
-//! `packages/next/src/telemetry/storage.ts` in Rust.
+//! and the handle to the on-disk event queue (see [`super::queue`]).
+//! Direct rewrite of Next.js's `packages/next/src/telemetry/storage.ts`
+//! in Rust, with delivery upgraded from in-process HTTP to a
+//! crash-safe disk queue drained by a detached child process.
 //!
 //! The persistent state — mirroring Next.js's four `conf` keys:
 //!
@@ -24,16 +26,15 @@
 use std::{
     io::IsTerminal,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
-    thread::JoinHandle,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    sync::{Arc, Mutex, OnceLock},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use console::style;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::{TELEMETRY_URL, events::TelemetryEvent, post};
+use super::{TELEMETRY_URL, events::TelemetryEvent, post, queue};
 
 /// Config schema version. Bumped on any breaking change to [`Config`].
 const SCHEMA_VERSION: u32 = 1;
@@ -44,10 +45,6 @@ const CONFIG_FILE_NAME: &str = "telemetry.toml";
 /// Legacy plain-text UUID file. Adopted as `anonymous_id` on first load,
 /// then removed. See [`load_or_init_config`].
 const LEGACY_ID_FILE_NAME: &str = "telemetry_id";
-
-/// Max time we wait, after the command finishes, for outstanding telemetry
-/// requests to complete before letting the process exit.
-const GRACE: Duration = Duration::from_secs(1);
 
 /// Persistent per-user telemetry state. Written as TOML to
 /// `<baml_home>/telemetry.toml`.
@@ -101,22 +98,44 @@ struct Inner {
     /// Snapshotted at construction so a race between `record` and env
     /// mutation can't leak an event.
     disabled_by_env: bool,
-    /// Live background POST handles. Joined on `flush()`.
-    queue: Mutex<Vec<JoinHandle<()>>>,
+    /// Path of this process's current live queue file. Recorded events
+    /// append here; the rotation timer swaps it out every
+    /// [`queue::ROTATE_INTERVAL`] so long-running processes ship events
+    /// without waiting for exit.
+    live_path: Mutex<PathBuf>,
 }
 
 impl Telemetry {
+    /// The process-wide singleton. First call loads the config and starts
+    /// the rotation timer (relevant only for long-running commands like
+    /// `baml lsp`; short commands exit long before the first tick).
+    ///
+    /// This is what makes `crate::telemetry::record(...)` a one-liner
+    /// anywhere in the crate: no loading, no guard-passing.
+    pub(crate) fn global() -> &'static Telemetry {
+        static GLOBAL: OnceLock<Telemetry> = OnceLock::new();
+        GLOBAL.get_or_init(|| {
+            let telemetry = Telemetry::load();
+            telemetry.spawn_rotation_timer();
+            telemetry
+        })
+    }
+
     /// Load (and lazily create) the persistent config, migrating from the
     /// legacy `telemetry_id` file if present. Never panics; on any I/O
     /// failure we fall back to an in-memory config so downstream code
     /// still has a working `anonymous_id` / `salt` for the duration of
     /// this process.
+    ///
+    /// Prefer [`Telemetry::global`] outside of tests and the flush child —
+    /// `load()` neither starts the rotation timer nor dedupes instances.
     pub(crate) fn load() -> Self {
         let config_path = config_path();
         let config = load_or_init_config(&config_path, &legacy_id_path());
         let session_id = random_hex_32();
         let debug = env_is_truthy("BAML_TELEMETRY_DEBUG");
         let disabled_by_env = env_disables();
+        let live_path = queue::new_live_path_in(&queue::queue_dir());
 
         Self {
             inner: Arc::new(Inner {
@@ -125,7 +144,7 @@ impl Telemetry {
                 session_id,
                 debug,
                 disabled_by_env,
-                queue: Mutex::new(Vec::new()),
+                live_path: Mutex::new(live_path),
             }),
         }
     }
@@ -224,62 +243,92 @@ impl Telemetry {
         }
     }
 
-    /// Record an event. Spawns a background POST (or, in debug mode, a
-    /// stderr print). Never blocks the caller; use [`flush`] / drop of an
-    /// [`InvocationGuard`] to wait for outstanding sends.
+    /// Record an event. Serializes the complete request body and appends
+    /// it to this process's live queue file — one atomic write syscall,
+    /// ~10µs. No HTTP happens on the caller's thread, ever; delivery is
+    /// the detached flush child's job (see [`queue`]). Because the event
+    /// hits disk immediately, it survives panics, Ctrl-C, and SIGKILL.
+    ///
+    /// In debug mode (`BAML_TELEMETRY_DEBUG=1`) the payload is printed to
+    /// stderr instead and nothing is written or sent — even when opted
+    /// out, so users can always audit what *would* go out.
     pub(crate) fn record(&self, event: TelemetryEvent) {
-        // Fast paths: env-disabled or unconfigured — nothing to send, no
-        // background thread to spawn.
-        if !self.is_enabled() && !self.debug_mode() {
+        if self.debug_mode() {
+            if let Some(body) = post::build_body(self, &event) {
+                if let Ok(rendered) = serde_json::to_string_pretty(&body) {
+                    eprintln!("[telemetry] {rendered}");
+                }
+            }
             return;
         }
-
-        let this = self.clone();
-        let spawned = std::thread::Builder::new()
-            .name("baml-telemetry".to_string())
-            .spawn(move || {
-                let _ = post::send(&this, &event);
-            });
-
-        if let Ok(handle) = spawned {
-            if let Ok(mut queue) = self.inner.queue.lock() {
-                queue.push(handle);
-            }
+        if !self.is_enabled() {
+            return;
+        }
+        let Some(body) = post::build_body(self, &event) else {
+            return;
+        };
+        let Ok(line) = serde_json::to_string(&body) else {
+            return;
+        };
+        if let Ok(path) = self.inner.live_path.lock() {
+            let _ = queue::append_line(&path, &line);
         }
     }
 
-    /// Wait up to [`GRACE`] for all outstanding background sends to finish.
-    /// Called automatically on drop of an [`InvocationGuard`].
+    /// Seal this process's live file and hand delivery to a detached
+    /// child. Non-blocking: total cost is one rename + one process spawn
+    /// (~1–2ms), after which the parent is free to exit. Also spawns a
+    /// child when older sealed files are waiting, so any backlog from
+    /// previous failed sends drains without this invocation having
+    /// recorded anything itself.
     pub(crate) fn flush(&self) {
-        let handles: Vec<JoinHandle<()>> = self
+        if self.debug_mode() {
+            return;
+        }
+        let sealed = self
             .inner
-            .queue
+            .live_path
             .lock()
-            .map(|mut q| std::mem::take(&mut *q))
-            .unwrap_or_default();
+            .ok()
+            .and_then(|path| queue::seal(&path))
+            .is_some();
+        if sealed || queue::has_sealed_work_in(&queue::queue_dir()) {
+            queue::spawn_flush_child();
+        }
+    }
 
-        // Simple deadline-shared join. Overkill precision isn't needed;
-        // GRACE is a soft cap. On timeout the threads keep running and
-        // the process moves on — matches the previous behavior.
-        let deadline = std::time::Instant::now() + GRACE;
-        for handle in handles {
-            // A brief per-handle wait; if we're already past deadline we
-            // detach immediately.
-            if std::time::Instant::now() >= deadline {
-                drop(handle);
-                continue;
-            }
-            // `JoinHandle` has no timeout join. Poll in a tight-ish loop
-            // by parking the thread on the handle until it either
-            // completes or we notice we've blown the budget. Since
-            // handles are short-lived HTTP POSTs, one join is normal.
-            let _ = handle.join();
+    /// Rotate + ship on a timer so long-running processes (LSP,
+    /// playground) deliver events within [`queue::ROTATE_INTERVAL`]
+    /// instead of hoarding them until exit. Short commands exit before
+    /// the first tick; the extra sleeping thread costs nothing.
+    fn spawn_rotation_timer(&self) {
+        let this = self.clone();
+        let _ = std::thread::Builder::new()
+            .name("baml-telemetry-rotate".to_string())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(queue::ROTATE_INTERVAL);
+                    this.rotate();
+                }
+            });
+    }
+
+    /// Seal the current live file (if it has events), point new records
+    /// at a fresh one, and spawn a child to ship what was sealed.
+    fn rotate(&self) {
+        let Ok(mut path) = self.inner.live_path.lock() else {
+            return;
+        };
+        if queue::seal(&path).is_some() {
+            *path = queue::new_live_path_in(&queue::queue_dir());
+            queue::spawn_flush_child();
         }
     }
 }
 
-/// RAII guard: on drop, awaits outstanding background sends for up to
-/// [`GRACE`]. Keep the guard alive for the duration of the command.
+/// RAII guard: on drop, seals the live queue file and spawns the detached
+/// flush child (see [`Telemetry::flush`] — non-blocking, ~1–2ms). Keep the
+/// guard alive for the duration of the command.
 pub(crate) struct InvocationGuard {
     telemetry: Option<Telemetry>,
 }
@@ -592,6 +641,71 @@ mod tests {
 
         let t = Telemetry::load();
         assert!(!t.is_enabled());
+    }
+
+    /// `record()` writes the full request body to the live queue file
+    /// immediately — this is the crash-safety property: an event is on
+    /// disk the moment it's recorded, not at process exit.
+    #[test]
+    fn record_appends_to_live_file_immediately() {
+        let _lock = env_lock();
+        let dir = tempfile::tempdir().unwrap();
+        let _home = EnvGuard::set("BAML_HOME", dir.path().to_str().unwrap());
+
+        let t = Telemetry::load();
+        t.record(TelemetryEvent::cli_invocation("fmt"));
+
+        let live = t.inner.live_path.lock().unwrap().clone();
+        let contents = std::fs::read_to_string(&live).expect("live file exists after record");
+        let line = contents.lines().next().expect("one event line");
+        let body: serde_json::Value = serde_json::from_str(line).expect("line is a full body");
+        assert_eq!(body["event"], "cli_invocation");
+        assert_eq!(body["properties"]["command"], "fmt");
+    }
+
+    /// `flush()` seals the live file (rename to `sealed_*`) so a flush
+    /// child can claim it. The parent-side cost is just that rename —
+    /// no joins, no network.
+    #[test]
+    fn flush_seals_live_file() {
+        let _lock = env_lock();
+        let dir = tempfile::tempdir().unwrap();
+        let _home = EnvGuard::set("BAML_HOME", dir.path().to_str().unwrap());
+
+        let t = Telemetry::load();
+        t.record(TelemetryEvent::cli_invocation("check"));
+        let live = t.inner.live_path.lock().unwrap().clone();
+        assert!(live.exists());
+
+        // Note: flush() also spawns the detached child, which will try to
+        // claim + send the sealed file. In tests the child is the test
+        // binary, which has no `__flush-telemetry` command, so it exits
+        // immediately without touching the queue.
+        t.flush();
+        assert!(!live.exists(), "live file renamed away");
+
+        let queue_dir = queue::queue_dir();
+        let sealed_exists = std::fs::read_dir(&queue_dir)
+            .unwrap()
+            .flatten()
+            .any(|e| e.file_name().to_string_lossy().starts_with("sealed_"));
+        assert!(sealed_exists, "sealed file waiting for the flush child");
+    }
+
+    /// When opted out via env, `record()` writes nothing at all — the
+    /// event never touches disk.
+    #[test]
+    fn record_writes_nothing_when_disabled() {
+        let _lock = env_lock();
+        let dir = tempfile::tempdir().unwrap();
+        let _home = EnvGuard::set("BAML_HOME", dir.path().to_str().unwrap());
+        let _disable = EnvGuard::set("BAML_TELEMETRY_DISABLED", "1");
+
+        let t = Telemetry::load();
+        t.record(TelemetryEvent::cli_invocation("fmt"));
+
+        let live = t.inner.live_path.lock().unwrap().clone();
+        assert!(!live.exists(), "no queue file when opted out");
     }
 
     /// Scoped set/restore of a process env var. Callers must hold

@@ -1,16 +1,12 @@
 //! HTTP transport. Analogue of Next.js's
 //! `packages/next/src/telemetry/post-telemetry-payload.ts`.
 //!
-//! Two output modes:
-//!
-//! - **Normal.** POST the payload to PostHog. Errors are swallowed; the
-//!   CLI must never fail or slow down because of telemetry.
-//! - **Debug** (`BAML_TELEMETRY_DEBUG=1`). Print the exact payload to
-//!   stderr, prefixed `[telemetry]`, and do NOT send it. This is the
-//!   audit-your-own-traffic feature; equivalent to Next's
-//!   `NEXT_TELEMETRY_DEBUG`.
-
-#![allow(clippy::print_stderr)] // The `[telemetry]` debug line is deliberate stderr output.
+//! [`build_body`] composes the complete PostHog request body at
+//! `record()` time (in the process that owns the event, so session id and
+//! metadata are correct); [`send_body`] POSTs one such body and runs only
+//! inside the detached flush child (see [`super::queue`]) — never on a
+//! user-visible code path. The `BAML_TELEMETRY_DEBUG=1` stderr dry-run
+//! lives in [`super::storage::Telemetry::record`].
 
 use std::time::Duration;
 
@@ -32,39 +28,24 @@ const POSTHOG_HOST: &str = "https://us.i.posthog.com";
 /// Per-request network timeout for the telemetry POST.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// Send (or print, in debug mode) one telemetry event. Returns `Some(())`
-/// on any completed action so tests can distinguish "we handled it" from
-/// "no-op because opted out".
-pub(crate) fn send(telemetry: &Telemetry, event: &TelemetryEvent) -> Option<()> {
-    // Belt-and-suspenders: `Telemetry::record` already short-circuits when
-    // opt-out is in effect, but a future direct caller of `post::send`
-    // shouldn't accidentally leak either.
-    if !telemetry.is_enabled() && !telemetry.debug_mode() {
-        return None;
-    }
-
-    let body = build_body(telemetry, event)?;
-
-    if telemetry.debug_mode() {
-        // Pretty-printed so users grepping their terminal can actually
-        // read what would have been sent. Matches Next's `[telemetry]`
-        // stderr line.
-        let rendered = serde_json::to_string_pretty(&body).ok()?;
-        eprintln!("[telemetry] {rendered}");
-        return Some(());
-    }
-
-    let client = reqwest::blocking::Client::builder()
+/// POST one pre-built request body to PostHog. Returns `true` on an HTTP
+/// 2xx so the flush child knows whether to delete the queue file or put
+/// it back for retry. Only ever runs in the detached child, so blocking
+/// on the network here is fine.
+pub(super) fn send_body(body: &Value) -> bool {
+    let Ok(client) = reqwest::blocking::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .build()
-        .ok()?;
+    else {
+        return false;
+    };
 
-    let _ = client
+    client
         .post(format!("{}/capture/", host()))
-        .json(&body)
-        .send();
-
-    Some(())
+        .json(body)
+        .send()
+        .map(|resp| resp.status().is_success())
+        .unwrap_or(false)
 }
 
 /// `true` if a PostHog key was compiled in. When empty (typically in a
@@ -81,7 +62,7 @@ pub(crate) fn api_key_configured() -> bool {
 ///
 /// Concretely: `context` and `meta` fields live at the top of `properties`,
 /// then the event-specific `fields` are merged in on top.
-fn build_body(telemetry: &Telemetry, event: &TelemetryEvent) -> Option<Value> {
+pub(super) fn build_body(telemetry: &Telemetry, event: &TelemetryEvent) -> Option<Value> {
     let api_key = POSTHOG_API_KEY.trim();
     if api_key.is_empty() {
         return None;

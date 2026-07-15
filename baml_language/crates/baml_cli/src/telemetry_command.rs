@@ -16,6 +16,22 @@ use console::style;
 
 use crate::{ExitCode, telemetry};
 
+/// `baml __flush-telemetry` — the hidden entry point for the detached
+/// child process that drains the on-disk telemetry queue (see
+/// `telemetry::queue`). Spawned automatically on command exit and on the
+/// 10-minute rotation timer; never invoked by humans. Takes no arguments:
+/// the child sweeps the whole queue directory, so it also drains any
+/// backlog left by earlier invocations whose sends failed.
+#[derive(Args, Debug)]
+pub(crate) struct FlushTelemetryArgs {}
+
+impl FlushTelemetryArgs {
+    pub(crate) fn run(&self) -> Result<ExitCode> {
+        telemetry::run_flush_child();
+        Ok(ExitCode::Success)
+    }
+}
+
 /// Show or change BAML CLI telemetry preferences.
 ///
 /// Run without an action to see the current status, config file path, and
