@@ -35,6 +35,18 @@ BAML_TEST(round_trip_rec_list) {
   BAML_ASSERT(aliases::round_trip_rec_list(nested) == nested);
 }
 
+BAML_TEST(round_trip_maybe_rec) {
+  // Nullable reference to a recursive alias: the null folds into the box
+  // (OptionalBox<RecList>), since optional<Box<T>> cannot hold an
+  // incomplete T.
+  const aliases::MaybeRec null_case{{}};
+  BAML_ASSERT(aliases::round_trip_maybe_rec(null_case) == null_case);
+
+  const aliases::MaybeRec set_case{
+      RecList{RecItems{RecList{int64_t{1}}, RecList{int64_t{2}}}}};
+  BAML_ASSERT(aliases::round_trip_maybe_rec(set_case) == set_case);
+}
+
 BAML_TEST(round_trip_alias_container) {
   const aliases::AliasContainer c{
       {"x"},
