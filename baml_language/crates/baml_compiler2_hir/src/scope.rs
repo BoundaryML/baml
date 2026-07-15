@@ -70,7 +70,7 @@ pub enum ScopeKind {
     Block,
     /// Lambda expression body — own scope for per-scope incremental inference.
     Lambda,
-    /// Client, test, generator, template string, retry policy body.
+    /// Client, test, template string, retry policy body.
     Item,
     /// Match arm body — holds pattern bindings visible to the arm body and guard.
     MatchArm,
@@ -98,4 +98,11 @@ pub struct Scope {
     /// Contiguous range of descendant scope IDs (DFS pre-order).
     /// All scopes in `descendants` are proper descendants of this scope.
     pub descendants: Range<FileScopeId>,
+    /// True for the synthetic `ScopeKind::Lambda` scope a tagged template's
+    /// body is walked in (BEP-049 `walk_template_lambda_body`). Unlike a real
+    /// lambda, this scope has no backing `Expr::Lambda` node and is type-checked
+    /// *inline* in its enclosing function/lambda — it records no bindings of its
+    /// own — so it must not be treated as an inference owner (see
+    /// `inference_owner_scope`). Always `false` for every other scope.
+    pub is_template_body: bool,
 }

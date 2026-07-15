@@ -79,48 +79,48 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 //     │
 //     │ Note: Error code: E0098
 // ────╯
-// error: type `Bar` has no member `field`
+// error: type `Foo | Bar` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[ expr_instanceof_narrowing.baml:13:18 ]
 //     │
 //  13 │         return x.field;
 //     │                  ──┬──
-//     │                    ╰──── type `Bar` has no member `field`
+//     │                    ╰──── type `Foo | Bar` has no member `field`: its members implement no common interface that declares `field`
 //     │
 //     │ Note: Error code: E0007
 // ────╯
 // error: did you mean `x?.field`? `x.field` does not handle the case when `x` is null
-//     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
+//     ╭─[ expr_instanceof_narrowing.baml:23:16 ]
 //     │
 //  23 │         return x.field;
-//     │               ────┬───
+//     │                ───┬───
 //     │                   ╰───── did you mean `x?.field`? `x.field` does not handle the case when `x` is null
 //     │
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected string, got string | null
-//     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
+//     ╭─[ expr_instanceof_narrowing.baml:23:16 ]
 //     │
 //  23 │         return x.field;
-//     │               ────┬───
+//     │                ───┬───
 //     │                   ╰───── type mismatch: expected string, got string | null
 //     │
 //     │ Note: Error code: E0001
 // ────╯
-// error: type `Bar` has no member `field`
+// error: type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[ expr_instanceof_narrowing.baml:36:18 ]
 //     │
 //  36 │         return x.field;
 //     │                  ──┬──
-//     │                    ╰──── type `Bar` has no member `field`
+//     │                    ╰──── type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
 //     │
 //     │ Note: Error code: E0007
 // ────╯
-// error: type `Bar` has no member `field`
+// error: type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
 //     ╭─[ expr_instanceof_narrowing.baml:38:18 ]
 //     │
 //  38 │         return x.field;
 //     │                  ──┬──
-//     │                    ╰──── type `Bar` has no member `field`
+//     │                    ╰──── type `Foo | Bar | Baz` has no member `field`: its members implement no common interface that declares `field`
 //     │
 //     │ Note: Error code: E0007
 // ────╯

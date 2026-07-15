@@ -1149,21 +1149,6 @@ importers:
         specifier: 5.8.3
         version: 5.8.3
 
-  typescript/packages/fiddle-proxy:
-    dependencies:
-      cors:
-        specifier: 2.8.5
-        version: 2.8.5
-      dotenv:
-        specifier: 16.5.0
-        version: 16.5.0
-      express:
-        specifier: 5.1.0
-        version: 5.1.0
-      http-proxy-middleware:
-        specifier: 3.0.5
-        version: 3.0.5
-
   typescript/packages/nextjs-plugin:
     devDependencies:
       '@types/node':
@@ -12195,6 +12180,7 @@ packages:
     resolution: {integrity: sha512-Quz3MvAwHxVYNXsOByL7xI5EB2WYOeFswqaHIA3qOK3isRWTxiplBEocmmru6XmxDB2L7jDNYtYA4FyimoAFEw==}
     engines: {node: '>=8.17.0'}
     hasBin: true
+    bundledDependencies: []
 
   jsonfile@6.1.0:
     resolution: {integrity: sha512-5dgndWOriYSm5cnYaJNhalLNDKOqFwyDB/rr1E9ZsGciGvKPs8R2xYGCacuf3z6K1YKDz182fd+fY3cn3pMqXQ==}

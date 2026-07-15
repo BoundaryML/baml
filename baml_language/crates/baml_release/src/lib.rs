@@ -1,6 +1,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 pub mod manifest;
+pub mod skills;
 
 use std::{
     fs::{self, OpenOptions},
@@ -13,6 +14,28 @@ use std::{
 use anyhow::{Context, Result};
 pub use manifest::{Artifact, Channel, ToolchainManifest, WrapperManifest};
 use sha2::{Digest, Sha256};
+
+/// Resolve the BAML home directory (`~/.baml`), the root under which the
+/// toolchain stores installed releases, config, and other per-user state.
+///
+/// Resolution order:
+///   1. `$BAML_HOME`, if set.
+///   2. `$HOME` (or `$USERPROFILE` on Windows) joined with `.baml`.
+///   3. A relative `.baml` as a last resort when no home directory is known.
+///
+/// This is the single source of truth shared by the `baml` wrapper and the
+/// `baml-cli` toolchain binary; don't reimplement it.
+pub fn baml_home() -> PathBuf {
+    std::env::var_os("BAML_HOME")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(PathBuf::from)
+                .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
+                .map(|home| home.join(".baml"))
+        })
+        .unwrap_or_else(|| PathBuf::from(".baml"))
+}
 
 pub const MANIFEST_SCHEMA: u32 = 1;
 pub const DEFAULT_MANIFEST_BASE_URL: &str = "https://pkg.boundaryml.com/manifest/v1";
@@ -130,7 +153,13 @@ impl Fetcher {
         )
     }
 
-    pub fn fetch_archive(&self) -> Result<Vec<u8>, FetchError> {
+    /// Download the release archive and verify its checksum, *without*
+    /// validating the full product layout. Callers that only need a single
+    /// binary out of the archive (`fetch_binary`) don't care whether the
+    /// archive also ships the vsix or playground assets: extracting one entry
+    /// by name into memory is safe regardless of the surrounding layout, and
+    /// the checksum is what guarantees authenticity.
+    fn download_and_verify(&self) -> Result<Vec<u8>, FetchError> {
         let url = self.artifact_url();
         let archive = download_bytes(&url)?;
         if let Some(artifact) = &self.artifact {
@@ -144,13 +173,29 @@ impl Fetcher {
                 })?;
             verify_release_archive_checksum_text(&archive, &url, checksum_text)?;
         }
-        validate_archive_layout(self.product, &self.spec.target, &archive, &url)?;
         Ok(archive)
     }
 
+    pub fn fetch_archive(&self) -> Result<Vec<u8>, FetchError> {
+        let archive = self.download_and_verify()?;
+        validate_archive_layout(
+            self.product,
+            &self.spec.target,
+            &archive,
+            &self.artifact_url(),
+        )?;
+        Ok(archive)
+    }
+
+    /// Pull a single binary out of the release archive. Used by `baml pack`
+    /// (to embed `baml-pack-host`) and wrapper self-update (to fetch `baml`).
+    /// Deliberately skips `validate_archive_layout` — requiring the playground
+    /// assets / vsix here would make `baml pack` fail on an archive that has a
+    /// perfectly good host binary. Extraction itself errors with
+    /// `BinaryNotInArchive` if the requested binary is absent.
     pub fn fetch_binary(&self, binary_name: &str) -> Result<Vec<u8>, FetchError> {
         let url = self.artifact_url();
-        let archive = self.fetch_archive()?;
+        let archive = self.download_and_verify()?;
         extract_binary_from_archive(&archive, &url, binary_name)
     }
 
@@ -542,6 +587,9 @@ fn validate_archive_layout(
             format!("bin/baml-cli{exe_suffix}"),
             format!("bin/baml-pack-host{exe_suffix}"),
             "assets/baml-vscode.vsix".to_string(),
+            "assets/playground/index.html".to_string(),
+            "assets/playground/assets/index.js".to_string(),
+            "assets/playground/assets/index.css".to_string(),
         ],
         Product::Wrapper => vec![format!("bin/baml{exe_suffix}")],
     };
@@ -556,6 +604,9 @@ fn validate_archive_layout(
             format!("bin/baml-cli{exe_suffix}"),
             format!("bin/baml-pack-host{exe_suffix}"),
             "assets/baml-vscode.vsix".to_string(),
+            "assets/playground/index.html".to_string(),
+            "assets/playground/assets/index.js".to_string(),
+            "assets/playground/assets/index.css".to_string(),
         ],
     };
     for path in &forbidden {
@@ -795,6 +846,9 @@ mod tests {
                 "bin/baml-cli",
                 "bin/baml-pack-host",
                 "assets/baml-vscode.vsix",
+                "assets/playground/index.html",
+                "assets/playground/assets/index.js",
+                "assets/playground/assets/index.css",
                 "bin/baml",
             ] {
                 let bytes = b"fake";
@@ -815,6 +869,100 @@ mod tests {
         )
         .unwrap_err();
         assert!(format!("{err}").contains("bin/baml"));
+    }
+
+    #[test]
+    fn test_validate_toolchain_archive_layout_accepts_playground_payload() {
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        {
+            let mut builder = tar::Builder::new(&mut gzip);
+            for path in [
+                "bin/baml-cli",
+                "bin/baml-pack-host",
+                "assets/baml-vscode.vsix",
+                "assets/playground/index.html",
+                "assets/playground/assets/index.js",
+                "assets/playground/assets/index.css",
+            ] {
+                let bytes = b"fake";
+                let mut header = tar::Header::new_gnu();
+                header.set_size(bytes.len() as u64);
+                header.set_mode(0o755);
+                header.set_cksum();
+                builder.append_data(&mut header, path, &bytes[..]).unwrap();
+            }
+            builder.finish().unwrap();
+        }
+        let archive = gzip.finish().unwrap();
+        validate_archive_layout(
+            Product::Toolchain,
+            "x86_64-unknown-linux-gnu",
+            &archive,
+            "https://example.com/archive.tar.gz",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_validate_windows_toolchain_archive_layout_accepts_playground_payload() {
+        use std::io::Write;
+
+        let mut archive = Cursor::new(Vec::new());
+        {
+            let mut zip = zip::ZipWriter::new(&mut archive);
+            for path in [
+                "bin/baml-cli.exe",
+                "bin/baml-pack-host.exe",
+                "assets/baml-vscode.vsix",
+                "assets/playground/index.html",
+                "assets/playground/assets/index.js",
+                "assets/playground/assets/index.css",
+            ] {
+                zip.start_file(path, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                zip.write_all(b"fake").unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        validate_archive_layout(
+            Product::Toolchain,
+            "x86_64-pc-windows-msvc",
+            &archive.into_inner(),
+            "https://example.com/archive.zip",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_validate_toolchain_archive_layout_rejects_incomplete_playground_payload() {
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        {
+            let mut builder = tar::Builder::new(&mut gzip);
+            for path in [
+                "bin/baml-cli",
+                "bin/baml-pack-host",
+                "assets/baml-vscode.vsix",
+                "assets/playground/index.html",
+                "assets/playground/assets/index.css",
+            ] {
+                let bytes = b"fake";
+                let mut header = tar::Header::new_gnu();
+                header.set_size(bytes.len() as u64);
+                header.set_mode(0o755);
+                header.set_cksum();
+                builder.append_data(&mut header, path, &bytes[..]).unwrap();
+            }
+            builder.finish().unwrap();
+        }
+        let archive = gzip.finish().unwrap();
+        let err = validate_archive_layout(
+            Product::Toolchain,
+            "x86_64-unknown-linux-gnu",
+            &archive,
+            "https://example.com/archive.tar.gz",
+        )
+        .unwrap_err();
+        assert!(format!("{err}").contains("assets/playground/assets/index.js"));
     }
 
     #[test]

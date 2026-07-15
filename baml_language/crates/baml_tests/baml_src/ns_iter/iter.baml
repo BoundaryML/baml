@@ -520,11 +520,14 @@ test "iter_flat_map_implicit_source" {
 }
 
 function iter_flatten() -> int[] throws unknown {
-  let xs: baml.iter.Iterable<Item = int, Error = never>[] = [
+  // `flatten`'s element type parameter (`I extends Iterable<…>`) must be a
+  // concrete implementor, so the elements are typed `ArrayIterator<int>` rather
+  // than the abstract `Iterable<…>` existential.
+  let xs: baml.iter.ArrayIterator<int>[] = [
     baml.iter.ArrayIterator.new([1, 2]),
     baml.iter.ArrayIterator.new([3, 4]),
   ];
-  let outer: baml.iter.Iterator<Item = baml.iter.Iterable<Item = int, Error = never>, Error = never> = baml.iter.ArrayIterator.new(xs);
+  let outer: baml.iter.Iterator<Item = baml.iter.ArrayIterator<int>, Error = never> = baml.iter.ArrayIterator.new(xs);
   baml.iter.flatten(outer).collect()
 }
 

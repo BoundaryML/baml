@@ -122,7 +122,7 @@ function reflect_type_of_generic.$init_test_ns_reflect_type_of_generic_reflect_t
 
 function reflect_type_of_generic.Box.describe(self: reflect_type_of_generic.Box<T>) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
@@ -136,19 +136,19 @@ function reflect_type_of_generic.HolderStr.delegate(self: reflect_type_of_generi
 
 function reflect_type_of_generic.Inner.name(self: reflect_type_of_generic.Inner<U>) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
 function reflect_type_of_generic.InnerShow.show(self: reflect_type_of_generic.InnerShow<U>) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
 function reflect_type_of_generic.Leaf.describe(self: reflect_type_of_generic.Leaf<T>) -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
@@ -168,14 +168,14 @@ function reflect_type_of_generic.array_of() -> type {
 function reflect_type_of_generic.array_of_int_fn() -> string {
     load_type int
     call user.reflect_type_of_generic.array_of
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
 function reflect_type_of_generic.array_of_user_to_string_fn() -> string {
     load_type reflect_type_of_generic.User
     call user.reflect_type_of_generic.array_of
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
@@ -209,7 +209,7 @@ function reflect_type_of_generic.closure_captures_type_arg_user_fn() -> string {
 
 function reflect_type_of_generic.describe() -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 
@@ -281,7 +281,7 @@ function reflect_type_of_generic.level1() -> type {
 
 function reflect_type_of_generic.level1_str() -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 

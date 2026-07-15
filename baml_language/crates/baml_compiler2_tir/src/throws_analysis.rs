@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId};
+use baml_compiler2_ast::{self as ast, Expr, ExprBody, ExprId, Stmt, StmtId};
 
 use crate::{
     throw_inference::flatten_ty_to_facts,
@@ -28,6 +28,108 @@ pub(crate) trait ThrowsAnalysisContext {
     /// `$id = e` would silently bypass the throws contract that a direct
     /// `baml.id.set(e)` call is held to.
     fn runtime_id_set_throws(&self) -> Option<BTreeSet<Ty>>;
+
+    /// Throw summary of `baml.json.from` — what a `recv.to_json()` sugar
+    /// fallback lowers to. Unlike `string.from` (`throws never`), `baml.json.from`
+    /// throws `JsonSerializationError`, so the fallback must charge that precise
+    /// type rather than be skipped.
+    fn to_json_fallback_throws(&self) -> Option<BTreeSet<Ty>>;
+
+    /// Throw summary of `baml.json.to` — what a `Type.from_json(j)` sugar fallback
+    /// lowers to. Decoding throws `JsonDecodeError`, so charge that precise type
+    /// rather than the unaccounted-callee `unknown` default. (Named for the
+    /// `from_json` sugar it serves, parallel to `to_json_fallback_throws`; the
+    /// `from_` prefix is not a constructor.)
+    #[allow(clippy::wrong_self_convention)]
+    fn from_json_fallback_throws(&self) -> Option<BTreeSet<Ty>>;
+}
+
+/// Whether `expr` has the shape of a `recv.to_string()` call callee: a
+/// `to_string` member access, or a dotted path whose last segment is `to_string`.
+/// This is the syntactic trigger shared by the `obj.to_string()` sugar across TIR
+/// (type inference + this throws pass) and MIR lowering; each site layers its own
+/// guards on top (in-scope-local root, callee left untyped, etc.).
+pub fn is_to_string_call_callee(expr: &Expr) -> bool {
+    match expr {
+        Expr::MemberAccess { member, .. } => member.as_str() == "to_string",
+        Expr::Path(segs) => {
+            segs.len() >= 2 && segs.last().is_some_and(|s| s.as_str() == "to_string")
+        }
+        _ => false,
+    }
+}
+
+/// Whether `callee` is the callee of a `recv.to_string()` sugar fallback — a
+/// `to_string` call shape the type checker left untyped (`Unknown`/`Error`)
+/// because the receiver has no real `to_string` method. Such a call lowers to
+/// `string.from(recv)`, which is `throws never`.
+fn is_to_string_fallback_callee<C: ThrowsAnalysisContext>(
+    context: &C,
+    callee: ExprId,
+    body: &ExprBody,
+) -> bool {
+    is_to_string_call_callee(&body.exprs[callee])
+        && context
+            .expression_type(callee)
+            .is_none_or(|t| matches!(t, Ty::Unknown { .. } | Ty::Error { .. }))
+}
+
+/// Whether `expr` has the shape of a `recv.to_json()` call callee: a `to_json`
+/// member access, or a dotted path whose last segment is `to_json`. The
+/// syntactic trigger shared by the `obj.to_json()` sugar across TIR (inference +
+/// this throws pass) and MIR lowering; the json analog of
+/// [`is_to_string_call_callee`].
+pub fn is_to_json_call_callee(expr: &Expr) -> bool {
+    match expr {
+        Expr::MemberAccess { member, .. } => member.as_str() == "to_json",
+        Expr::Path(segs) => segs.len() >= 2 && segs.last().is_some_and(|s| s.as_str() == "to_json"),
+        _ => false,
+    }
+}
+
+/// Whether `callee` is the callee of a `recv.to_json()` sugar fallback — a
+/// `to_json` call shape the type checker left untyped because the receiver has no
+/// real `to_json` method. Such a call lowers to `baml.json.from(recv)`, which
+/// throws `JsonSerializationError`.
+fn is_to_json_fallback_callee<C: ThrowsAnalysisContext>(
+    context: &C,
+    callee: ExprId,
+    body: &ExprBody,
+) -> bool {
+    is_to_json_call_callee(&body.exprs[callee])
+        && context
+            .expression_type(callee)
+            .is_none_or(|t| matches!(t, Ty::Unknown { .. } | Ty::Error { .. }))
+}
+
+/// Whether `expr` has the shape of a `Type.from_json(j)` static-call callee: a
+/// `from_json` member access, or a dotted path whose last segment is `from_json`.
+/// The deserialize analog of [`is_to_json_call_callee`]; the static-constructor
+/// counterpart of the instance-style `to_json` sugar. Each site layers its own
+/// guards (type-name receiver, callee left untyped, exactly one arg).
+pub fn is_from_json_call_callee(expr: &Expr) -> bool {
+    match expr {
+        Expr::MemberAccess { member, .. } => member.as_str() == "from_json",
+        Expr::Path(segs) => {
+            segs.len() >= 2 && segs.last().is_some_and(|s| s.as_str() == "from_json")
+        }
+        _ => false,
+    }
+}
+
+/// Whether `callee` is the callee of a `Type.from_json(j)` sugar fallback — a
+/// `from_json` call shape the type checker left untyped because the receiver type
+/// has no real `from_json` method (no `implements baml.FromJson` override). Such a
+/// call lowers to `baml.json.to<Type>(j)`, which throws `JsonDecodeError`.
+fn is_from_json_fallback_callee<C: ThrowsAnalysisContext>(
+    context: &C,
+    callee: ExprId,
+    body: &ExprBody,
+) -> bool {
+    is_from_json_call_callee(&body.exprs[callee])
+        && context
+            .expression_type(callee)
+            .is_none_or(|t| matches!(t, Ty::Unknown { .. } | Ty::Error { .. }))
 }
 
 /// True when `expr` is the bare `$id` special form used as an assignment
@@ -180,6 +282,11 @@ fn collect_from_stmt<C: ThrowsAnalysisContext>(
             collect_from_expr(context, *value, body, out);
             collect_value_throw_facts(context, *value, out);
         }
+        Stmt::Defer { body: defer_body } => {
+            // A `throw` inside a defer body propagates, so the defer body's
+            // throws contribute to the enclosing function's throw surface.
+            collect_from_expr(context, *defer_body, body, out);
+        }
         Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
     }
 }
@@ -195,16 +302,49 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
             collect_from_expr(context, *value, body, out);
             collect_value_throw_facts(context, *value, out);
         }
+        Expr::Return { value } => {
+            // Evaluating the returned value may throw; walk it. The value is
+            // returned, not raised, so do not charge it as a thrown error.
+            if let Some(value) = value {
+                collect_from_expr(context, *value, body, out);
+            }
+        }
         Expr::Call { callee, args, .. } => {
             collect_from_expr(context, *callee, body, out);
             let arg_exprs: Vec<_> = args.iter().map(|arg| arg.expr).collect();
             for arg in args {
                 collect_from_expr(context, arg.expr, body, out);
             }
+            // A `recv.to_string()` sugar fallback lowers to `string.from(recv)`,
+            // which is `throws never`. Its callee is left untyped (no real method),
+            // so charging it as `unknown` throws (the unaccounted-callee default in
+            // `collect_callee_escaping_throws`) would infect the enclosing
+            // function's inferred throws. Skip it — the receiver's own throws were
+            // already collected by the `*callee` recursion above.
+            if arg_exprs.is_empty() && is_to_string_fallback_callee(context, *callee, body) {
+                return;
+            }
+            // A `recv.to_json()` sugar fallback lowers to `baml.json.from(recv)`,
+            // which throws `JsonSerializationError`. Charge that precise type (not
+            // the unaccounted-callee `unknown` default) and stop — the receiver's
+            // own throws were already collected by the `*callee` recursion above.
+            if arg_exprs.is_empty() && is_to_json_fallback_callee(context, *callee, body) {
+                out.extend(context.to_json_fallback_throws().unwrap_or_default());
+                return;
+            }
+            // A `Type.from_json(j)` sugar fallback lowers to `baml.json.to<Type>(j)`,
+            // which throws `JsonDecodeError`. Charge that precise type (not the
+            // unaccounted-callee `unknown` default) and stop; the arg's own throws
+            // were already collected by the loop above.
+            if arg_exprs.len() == 1 && is_from_json_fallback_callee(context, *callee, body) {
+                out.extend(context.from_json_fallback_throws().unwrap_or_default());
+                return;
+            }
             // When the callee is an `OptionalMemberAccess` (`obj?.method`), the
-            // inferred callee type is `Ty::Optional(Ty::Function { ... })`.
+            // inferred callee type is a nullable `Union([Ty::Function { ... }, Null])`
+            // (the post-`Ty::Optional`-removal encoding).
             // `instantiated_callee_throws` only handles `Ty::Function`, so we
-            // must strip the optional wrapper to get the actual throws.  This
+            // must strip the nullable wrapper to get the actual throws.  This
             // mirrors the type-inference fast-path in `builder.rs` that routes
             // `Call { callee: OptionalMemberAccess }` through
             // `finalize_optional_callee_call`.
@@ -380,6 +520,15 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
                 _ => {}
             }
         }
+        Expr::Template { tag, segments } => {
+            if let ast::TemplateTag::Custom { tag, .. } = tag {
+                collect_from_expr(context, *tag, body, out);
+                // A tagged template invokes the tag fn, so its declared `throws`
+                // escape just like a direct call's would.
+                collect_callee_escaping_throws(context, *tag, &[], body, false, out);
+            }
+            collect_from_template_segments(context, segments, body, out);
+        }
         Expr::GenericApply { base, .. } => {
             collect_from_expr(context, *base, body, out);
         }
@@ -389,5 +538,56 @@ fn collect_from_expr<C: ThrowsAnalysisContext>(
         | Expr::Null
         | Expr::Path(_)
         | Expr::Missing => {}
+    }
+}
+
+/// Recursive walk of a template segment tree collecting throw facts from
+/// each interp/condition/iter expression and any nested for/if bodies.
+fn collect_from_template_segments<C: ThrowsAnalysisContext>(
+    context: &C,
+    segments: &[ast::TemplateSegment],
+    body: &ExprBody,
+    out: &mut BTreeSet<Ty>,
+) {
+    for seg in segments {
+        match seg {
+            ast::TemplateSegment::Text(_) => {}
+            ast::TemplateSegment::Interp(e) => collect_from_expr(context, *e, body, out),
+            ast::TemplateSegment::For {
+                collection,
+                body: inner,
+                ..
+            } => {
+                collect_from_expr(context, *collection, body, out);
+                collect_from_template_segments(context, inner, body, out);
+            }
+            ast::TemplateSegment::CStyleFor {
+                init,
+                cond,
+                step,
+                body: inner,
+            } => {
+                // `init`/`step` are statements (the `let` and the assignment) that
+                // can throw, so traverse them alongside `cond` and the body.
+                collect_from_stmt(context, *init, body, out);
+                collect_from_expr(context, *cond, body, out);
+                if let Some(step_stmt) = step {
+                    collect_from_stmt(context, *step_stmt, body, out);
+                }
+                collect_from_template_segments(context, inner, body, out);
+            }
+            ast::TemplateSegment::If {
+                branches,
+                else_body,
+            } => {
+                for branch in branches {
+                    collect_from_expr(context, branch.condition, body, out);
+                    collect_from_template_segments(context, &branch.body, body, out);
+                }
+                if let Some(eb) = else_body {
+                    collect_from_template_segments(context, eb, body, out);
+                }
+            }
+        }
     }
 }

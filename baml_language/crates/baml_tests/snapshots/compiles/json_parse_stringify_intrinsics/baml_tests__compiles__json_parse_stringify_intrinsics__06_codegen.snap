@@ -1,47 +1,91 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
 function user.match_parsed(s: string) -> string {
     load_var s
     call baml.json.parse
     store_var j
     load_var j
-    type_tag
-    jump_table [L4, L1, L2, L0, L3, _, L6, L5], default L8
+    is_type baml.json.json[]
+    pop_jump_if_false L0
+    jump L11
 
-  L0: null
+  L0:
+    load_var j
+    is_type map<string, baml.json.json>
+    pop_jump_if_false L1
+    jump L10
+
+  L1:
+    load_var j
+    is_type int
+    pop_jump_if_false L2
+    jump L9
+
+  L2:
+    load_var j
+    is_type float
+    pop_jump_if_false L3
+    jump L8
+
+  L3:
+    load_var j
+    is_type bool
+    pop_jump_if_false L4
+    jump L7
+
+  L4:
+    load_var j
+    is_type string
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var j
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L13
     load_const "null"
-    jump L7
+    jump L12
 
-  L1: string
+  L6:
     load_var j
-    jump L7
-
-  L2: bool
-    load_const "bool"
-    jump L7
-
-  L3: float
-    load_const "float"
-    jump L7
-
-  L4: int
-    load_const "int"
-    jump L7
-
-  L5: map
-    load_var j
-    call baml.json.stringify
-    jump L7
-
-  L6: list
-    load_var j
-    call baml.json.stringify
+    jump L12
 
   L7:
-    return
+    load_const "bool"
+    jump L12
 
   L8:
+    load_const "float"
+    jump L12
+
+  L9:
+    load_const "int"
+    jump L12
+
+  L10:
+    load_var j
+    call baml.json.stringify
+    jump L12
+
+  L11:
+    load_var j
+    call baml.json.stringify
+
+  L12:
+    return
+
+  L13:
     unreachable
 }
 

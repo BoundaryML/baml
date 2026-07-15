@@ -36,38 +36,27 @@ function user.or_pattern_leak() -> int throws never {
 class user.WrapNonGeneric {
   x: int
 }
-function user.WrapNonGeneric.to_json(self: user.WrapNonGeneric) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "x": baml.json.to_json(self.x) } : map<string, baml.json.json>
-}
-function user.WrapNonGeneric.from_json(j: baml.json.json) -> user.WrapNonGeneric throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WrapNonGeneric { x: baml.json.from_json<int>(baml.json.field(j, "x")) } : user.WrapNonGeneric
-}
 function user.unresolved_class_head(v: user.WrapNonGeneric) -> bool throws never {
   { : bool
     v is Frobnitz { x: x } : bool
   }
-  !! 1080..1095: unresolved name: Frobnitz
+  !! 1081..1095: unresolved name: Frobnitz
 }
 class user.WrapGeneric {
   val: T
-}
-function user.WrapGeneric.to_json(self: user.WrapGeneric) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "val": baml.json.to_json(self.val) } : map<string, baml.json.json>
-}
-function user.WrapGeneric.from_json(j: baml.json.json) -> user.WrapGeneric<unknown> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WrapGeneric { val: baml.json.from_json<T>(baml.json.field(j, "val")) } : user.WrapGeneric<T>
 }
 function user.unresolved_generic_arg(v: user.WrapGeneric<int>) -> bool throws never {
   { : bool
     v is WrapGeneric<Missing> : bool
   }
-  !! 1277..1298: unresolved type: Missing
+  !! 1278..1298: unresolved type: Missing
 }
 function user.unresolved_type_pattern(v: int | string) -> bool throws never {
   { : bool
     v is Frobnitz : bool
   }
-  !! 1438..1447: unresolved type: Frobnitz
+  !! 1439..1447: unresolved type: Frobnitz
+  !! 1439..1447: unresolved type: Frobnitz
 }
 class user.WrapNonGeneric$stream {
   x: int | null

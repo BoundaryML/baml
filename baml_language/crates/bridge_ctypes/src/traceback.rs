@@ -2,7 +2,7 @@
 
 /// Render a traceback as one string per frame, most-recent-call-last, for
 /// carrying structured onto the wire (`repeated string trace` in
-/// [`BamlOutboundPanic`](crate::baml_core::cffi::BamlOutboundPanic)). Each line
+/// [`BamlOutboundPanic`](crate::baml_bridge::cffi::BamlOutboundPanic)). Each line
 /// uses the per-frame format `File "<file>", line N, in <function_name>` —
 /// without a `Traceback (most recent call last):` header and without
 /// `\n`-joining, so the host can map each frame 1:1 onto a synthesized Python

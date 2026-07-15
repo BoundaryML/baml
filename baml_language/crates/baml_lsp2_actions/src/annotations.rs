@@ -1,7 +1,7 @@
 //! Inline type / parameter-name annotations for BAML files (inlay hints).
 //!
-//! Provides `annotations(db, file) -> Vec<InlineAnnotation>` — a regular
-//! function (not a Salsa query) that walks expression-body functions in a file
+//! Provides `file_annotations(db, file) -> &Vec<InlineAnnotation>` — a Salsa
+//! tracked query that walks expression-body functions in a file
 //! (top-level functions, class/interface methods, and the synthesized
 //! `$init_test` registration functions), recursing into lambda bodies (e.g.
 //! the bodies of `test` / `testset` blocks, which lower to lambdas passed to
@@ -81,7 +81,7 @@ pub enum AnnotationKind {
 }
 
 /// A single inline annotation (inlay hint) to display in the editor.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::Update)]
 pub struct InlineAnnotation {
     /// Byte offset in the file where the hint is inserted.
     pub offset: TextSize,
@@ -102,10 +102,16 @@ pub struct InlineAnnotation {
 /// Returns annotations sorted in document order (required by the LSP
 /// `textDocument/inlayHint` contract).
 ///
-/// Regular function (not a Salsa query). Internally calls Salsa-cached
-/// queries (`function_body`, `function_body_source_map`,
-/// `infer_scope_types`, `file_item_tree`, `file_semantic_index`).
-pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
+/// Salsa tracked query: walks every function body against type
+/// inference (measured 40–150ms on real projects), which is too slow to
+/// recompute per request while the file is unchanged. Editors re-request
+/// inlay hints on every scroll, so this is the hottest read path.
+///
+/// Named `file_annotations` (like `file_outline`) because the tracked-query
+/// machinery claims the bare name in the type namespace, which would collide
+/// with this module.
+#[salsa::tracked(returns(ref))]
+pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let index = baml_compiler2_hir::file_semantic_index(db, file);
 
@@ -171,10 +177,18 @@ fn process_body(
     out: &mut Vec<InlineAnnotation>,
 ) {
     // ── Type hints for let bindings without annotations ───────────────────────
-    for (_stmt_id, stmt) in body.stmts.iter() {
+    for (stmt_id, stmt) in body.stmts.iter() {
         let Stmt::Let { pattern, .. } = stmt else {
             continue;
         };
+
+        // Skip compiler-synthesized bindings — e.g. the accumulator a `${…}`
+        // interpolation lowers to (`let " __m3_concat" = ""`). Their spans point
+        // inside the backtick template, so a `: T` hint there is noise the user
+        // never wrote. Marked at lowering time (see `AstSourceMap::synthetic_stmts`).
+        if source_map.is_synthetic_stmt(stmt_id) {
+            continue;
+        }
 
         // `let x: T` (Bind with sub-pattern) or a bare type pattern already
         // carries an explicit annotation — skip.
@@ -236,6 +250,14 @@ fn process_body(
                 // not user-facing. We still recurse into their lambda arguments
                 // (the actual test bodies) via the `Expr::Lambda` arm below.
                 if is_synthetic_registration(body, *callee) {
+                    continue;
+                }
+                // Skip compiler-synthesized wrapping calls — e.g. the
+                // `string.from(${expr})` that `${…}` interpolation lowers to.
+                // Marked at lowering time (see `AstSourceMap::synthetic_exprs`),
+                // so without this every interpolation would get a spurious
+                // `value:` parameter hint.
+                if source_map.is_synthetic_expr(expr_id) {
                     continue;
                 }
                 let callee_span = source_map.expr_span(*callee);
@@ -417,7 +439,7 @@ function UseEcho() -> string {
         );
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         assert!(
@@ -429,6 +451,87 @@ function UseEcho() -> string {
                 .iter()
                 .all(|label| !matches!(*label, "client: " | "function_name: " | "args: ")),
             "LLM synthetic call hints should be suppressed, got {labels:?}"
+        );
+    }
+
+    #[test]
+    fn annotations_skip_tagged_template_synthetic_hints() {
+        // A custom `//baml:tagged_string` tag used in an expression function
+        // desugars to a closure body full of compiler-generated nodes
+        // (`__tt_parts`/`__tt_values`/`__tt_cur` accumulators and `.push(...)`
+        // calls). None of them should produce inlay hints — only the user's
+        // `let q` binding does. Marked synthetic at lowering (see
+        // `AstSourceMap::synthetic_stmts`/`synthetic_exprs`), so this holds even
+        // if those nodes later gain real spans / lose their type annotations.
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+//baml:tagged_string
+function sql(body: (x: int) -> baml.TaggedString) -> string {
+    "ok"
+}
+
+function Demo(items: int[]) -> string {
+    let q = sql`SELECT ${1} ${for (let x in items)}c_${x}, ${endfor}done`
+    q
+}
+"##,
+        );
+        let project = builder.build();
+        let hints = file_annotations(&project.db, project.files[0]);
+
+        // The synthesized `.push(...)` calls must not surface `value:`-style hints.
+        assert!(
+            hints.iter().all(|h| h.kind != AnnotationKind::Parameter),
+            "tagged-template desugaring must not emit parameter hints, got {:?}",
+            hints.iter().map(|h| h.label.as_str()).collect::<Vec<_>>()
+        );
+        // The only type hint is the user's `let q: string`; the `__tt_*`
+        // accumulators must not contribute their own.
+        let type_hints: Vec<_> = hints
+            .iter()
+            .filter(|h| h.kind == AnnotationKind::Type)
+            .map(|h| h.label.as_str())
+            .collect();
+        assert_eq!(
+            type_hints,
+            vec![": string"],
+            "only the user's `let q` should get a type hint"
+        );
+    }
+
+    #[test]
+    fn annotations_skip_string_interpolation_synthetic_hints() {
+        let mut builder = ProjectTest::builder();
+        builder.source(
+            "main.baml",
+            r##"
+function Greet(name: string, items: int[]) -> string {
+    let greeting = `Hi ${name}! you have ${items.length()} items`
+    let counted = `count: ${ let n = items.length() }${n} done`
+    greeting + counted
+}
+"##,
+        );
+        let project = builder.build();
+
+        let hints = file_annotations(&project.db, project.files[0]);
+        let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
+
+        // `${expr}` lowers to `string.from(expr)`; that synthetic wrapper call
+        // must not produce a `value:` parameter hint on every interpolation.
+        assert!(
+            !labels.contains(&"value: "),
+            "synthesized string.from() interpolation calls should not get parameter hints, got {labels:?}"
+        );
+        // The concat-scope accumulator (`let " __m3_concat" = ""`, a
+        // compiler-synthesized binding) must not produce a type hint either;
+        // real `let` bindings (`greeting`, `counted`) still do, so the
+        // suppression is targeted.
+        assert!(
+            labels.iter().any(|label| label.starts_with(": ")),
+            "real let bindings should still get type hints, got {labels:?}"
         );
     }
 
@@ -450,7 +553,7 @@ test "greets" {
         );
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         assert!(
@@ -485,7 +588,7 @@ class Greeter {
         );
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         assert!(
@@ -516,7 +619,7 @@ testset "math" {
         );
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let labels: Vec<_> = hints.iter().map(|hint| hint.label.as_str()).collect();
 
         assert!(
@@ -550,7 +653,7 @@ function Later() -> string {
         builder.source("main.baml", source);
         let project = builder.build();
 
-        let hints = annotations(&project.db, project.files[0]);
+        let hints = file_annotations(&project.db, project.files[0]);
         let y_offset = TextSize::from(
             u32::try_from(source.find("\"y\"").expect("test arg")).expect("offset fits"),
         );

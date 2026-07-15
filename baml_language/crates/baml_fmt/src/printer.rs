@@ -228,6 +228,27 @@ impl<'a> Printer<'a> {
         self.print_trivia_trailing(trailing_trivia);
     }
 
+    /// Like [`Self::print_standalone_with_trivia`] but omits the trailing trivia,
+    /// leaving it for an enclosing construct to emit.
+    ///
+    /// Used when wrapping a braceless `return` arm into a `{ … ; }` block: the
+    /// statement `;` must sit directly after the expression, and any same-line
+    /// trailing comment belongs to the whole arm (emitted after the wrapped
+    /// `},`). Printing the trailing trivia here would split the comment from its
+    /// `;` and — when the arm has no comma, so the arm's rightmost token *is* the
+    /// return value — duplicate it.
+    pub fn print_standalone_leading_and_body(&mut self, printable: &impl Printable, indent: usize) {
+        let leading_trivia = self.trivia.get_leading_for_element(printable);
+        self.print_trivia_with_newline(leading_trivia, indent);
+        self.print_spaces(indent);
+        let shape = Shape {
+            width: self.config.line_width.saturating_sub(indent),
+            indent,
+            first_line_offset: 0,
+        };
+        self.print(printable, shape);
+    }
+
     /// Checks that all the trivia can fit on a single line (no line comments or block comments containing newlines).
     /// If so, prints all the trivia with no spaces between and returns the length of the trivia.
     ///

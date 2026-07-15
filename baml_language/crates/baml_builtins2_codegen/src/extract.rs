@@ -11,6 +11,7 @@ use baml_compiler_diagnostics::ToDiagnostic;
 use baml_compiler_syntax::{NodeOrToken, SyntaxKind, SyntaxNode};
 use baml_compiler2_ast::ast::{
     BuiltinKind, ClassDef, FunctionBodyDef, FunctionDef, ImplementsForDef, Item, TypeExpr,
+    TypeExprKind,
 };
 
 use crate::types::{
@@ -116,8 +117,8 @@ pub fn extract_native_builtins()
         }
 
         // Build the namespace prefix from the file's package and path-derived namespace.
-        // e.g. package="baml", ns_path=["math"] → "baml.math"
-        //      package="baml", ns_path=[]        → "baml"
+        // e.g. package="baml", ns_path=["sys"] → "baml.sys"
+        //      package="baml", ns_path=[]       → "baml"
         let ns_path = builtin_file.namespace_path();
         let namespace_prefix = if ns_path.is_empty() {
             builtin_file.package.to_string()
@@ -303,7 +304,7 @@ fn extract_from_class(
                     ty: p
                         .type_expr
                         .as_ref()
-                        .map(|te| type_expr_to_baml_type(&te.expr, &all_generics))
+                        .map(|te| type_expr_to_baml_type(te, &all_generics))
                         .unwrap_or(BamlType::Named("unknown".to_string())),
                 })
                 .collect()
@@ -312,7 +313,7 @@ fn extract_from_class(
         let return_type = method
             .return_type
             .as_ref()
-            .map(|te| type_expr_to_baml_type(&te.expr, &all_generics))
+            .map(|te| type_expr_to_baml_type(te, &all_generics))
             .unwrap_or(BamlType::Null);
 
         let builtin = NativeBuiltin {
@@ -373,7 +374,7 @@ fn extract_class_fields(
             let field_type = field
                 .type_expr
                 .as_ref()
-                .map(|te| type_expr_to_baml_type(&te.expr, &generic_params))
+                .map(|te| type_expr_to_baml_type(te, &generic_params))
                 .unwrap_or(BamlType::Named("unknown".to_string()));
             NativeClassField {
                 name: field.name.as_str().to_string(),
@@ -447,7 +448,7 @@ fn extract_from_free_function(
             ty: p
                 .type_expr
                 .as_ref()
-                .map(|te| type_expr_to_baml_type(&te.expr, &generics))
+                .map(|te| type_expr_to_baml_type(te, &generics))
                 .unwrap_or(BamlType::Named("unknown".to_string())),
         })
         .collect();
@@ -455,7 +456,7 @@ fn extract_from_free_function(
     let return_type = func_def
         .return_type
         .as_ref()
-        .map(|te| type_expr_to_baml_type(&te.expr, &generics))
+        .map(|te| type_expr_to_baml_type(te, &generics))
         .unwrap_or(BamlType::Null);
 
     let builtin = NativeBuiltin {
@@ -501,15 +502,12 @@ fn extract_from_implements_for(
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
 ) {
-    let Some(recv_class) = receiver_class_for_target(&impl_def.for_target.expr) else {
+    let Some(recv_class) = receiver_class_for_target(&impl_def.for_target) else {
         return;
     };
 
     // The synthetic class segment must match MIR's `{iface}$for${for}` exactly.
-    let synthetic_class = format!(
-        "{}$for${}",
-        impl_def.interface_target.expr, impl_def.for_target.expr
-    );
+    let synthetic_class = format!("{}$for${}", impl_def.interface_target, impl_def.for_target);
 
     let impl_generics: Vec<String> = impl_def
         .generic_params
@@ -518,7 +516,7 @@ fn extract_from_implements_for(
         .collect();
 
     // `Self` inside method signatures resolves to the `for` target.
-    let self_baml = type_expr_to_baml_type(&impl_def.for_target.expr, &impl_generics);
+    let self_baml = type_expr_to_baml_type(&impl_def.for_target, &impl_generics);
 
     // Container element comparison reads heap values, so it needs a `&BexVm`;
     // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM. A
@@ -602,7 +600,7 @@ fn extract_from_implements_for(
                 ty: p
                     .type_expr
                     .as_ref()
-                    .map(|te| type_expr_to_baml_type_with_self(&te.expr, &all_generics, &self_baml))
+                    .map(|te| type_expr_to_baml_type_with_self(te, &all_generics, &self_baml))
                     .unwrap_or(BamlType::Named("unknown".to_string())),
             })
             .collect();
@@ -610,7 +608,7 @@ fn extract_from_implements_for(
         let return_type = method
             .return_type
             .as_ref()
-            .map(|te| type_expr_to_baml_type_with_self(&te.expr, &all_generics, &self_baml))
+            .map(|te| type_expr_to_baml_type_with_self(te, &all_generics, &self_baml))
             .unwrap_or(BamlType::Null);
 
         let builtin = NativeBuiltin {
@@ -639,16 +637,16 @@ fn extract_from_implements_for(
 /// extraction logic the codegen already knows. Returns `None` for targets that
 /// are not native-backed primitives/containers.
 fn receiver_class_for_target(ty: &TypeExpr) -> Option<&'static str> {
-    Some(match ty {
-        TypeExpr::Int { .. } => "Int",
-        TypeExpr::Bigint { .. } => "Bigint",
-        TypeExpr::Float { .. } => "Float",
-        TypeExpr::Bool { .. } => "Bool",
-        TypeExpr::Null { .. } => "Null",
-        TypeExpr::String { .. } => "String",
-        TypeExpr::Uint8Array { .. } => "Uint8Array",
-        TypeExpr::List { .. } => "Array",
-        TypeExpr::Map { .. } => "Map",
+    Some(match &ty.kind {
+        TypeExprKind::Int { .. } => "Int",
+        TypeExprKind::Bigint { .. } => "Bigint",
+        TypeExprKind::Float { .. } => "Float",
+        TypeExprKind::Bool { .. } => "Bool",
+        TypeExprKind::Null { .. } => "Null",
+        TypeExprKind::String { .. } => "String",
+        TypeExprKind::Uint8Array { .. } => "Uint8Array",
+        TypeExprKind::List { .. } => "Array",
+        TypeExprKind::Map { .. } => "Map",
         _ => return None,
     })
 }
@@ -670,21 +668,21 @@ fn type_expr_to_baml_type_with_self(
     self_baml: &BamlType,
 ) -> BamlType {
     let recurse = |inner: &TypeExpr| type_expr_to_baml_type_with_self(inner, generics, self_baml);
-    match ty {
-        TypeExpr::Path { segments, .. }
+    match &ty.kind {
+        TypeExprKind::Path { segments, .. }
             if segments.len() == 1 && segments[0].as_str() == "Self" =>
         {
             self_baml.clone()
         }
-        TypeExpr::Optional { inner, .. } => BamlType::Optional(Box::new(recurse(inner))),
-        TypeExpr::List { inner, .. } => BamlType::List(Box::new(recurse(inner))),
-        TypeExpr::Map { key, value, .. } => {
+        TypeExprKind::Optional { inner, .. } => BamlType::Optional(Box::new(recurse(inner))),
+        TypeExprKind::List { inner, .. } => BamlType::List(Box::new(recurse(inner))),
+        TypeExprKind::Map { key, value, .. } => {
             BamlType::Map(Box::new(recurse(key)), Box::new(recurse(value)))
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             let non_null: Vec<_> = variants
                 .iter()
-                .filter(|v| !matches!(v, TypeExpr::Null { .. }))
+                .filter(|v| !matches!(v.kind, TypeExprKind::Null { .. }))
                 .collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(recurse(non_null[0])))
@@ -708,9 +706,9 @@ fn extract_builtin_pipeline(func: &FunctionDef) -> Option<BuiltinPipeline> {
 /// Extract error categories from the `throws` clause of an IO function.
 ///
 /// The `throws` field is `Option<SpannedTypeExpr>`. For a single error like
-/// `throws root.errors.Io`, it's `TypeExpr::Path(["root", "errors", "Io"])`.
+/// `throws root.errors.Io`, it's `TypeExprKind::Path(["root", "errors", "Io"])`.
 /// For multiple errors like `throws root.errors.Io | root.errors.Timeout`,
-/// it's `TypeExpr::Union([Path(...), Path(...)])`.
+/// it's `TypeExprKind::Union([Path(...), Path(...)])`.
 /// Extract the `throws` clause of a builtin.
 ///
 /// - `None` — no `throws` clause (rejected by the missing-throws check).
@@ -718,13 +716,13 @@ fn extract_builtin_pipeline(func: &FunctionDef) -> Option<BuiltinPipeline> {
 /// - `Some([cats])` — one or more error categories; the builtin is fallible.
 fn extract_throws(func: &FunctionDef) -> Option<Vec<String>> {
     let throws_expr = func.throws.as_ref()?;
-    Some(extract_throw_categories(&throws_expr.expr))
+    Some(extract_throw_categories(throws_expr))
 }
 
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
-    match ty {
-        TypeExpr::Path { segments, .. } => {
+    match &ty.kind {
+        TypeExprKind::Path { segments, .. } => {
             let path: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
             if path.len() >= 3 && (path[0] == "baml" || path[0] == "root") && path[1] == "errors" {
                 vec![path[2..].join(".")]
@@ -738,7 +736,7 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
                 ]
             }
         }
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             variants.iter().flat_map(extract_throw_categories).collect()
         }
         _ => vec![],
@@ -750,7 +748,7 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
 /// Examples:
 /// - `"baml.Array.length"` → `"baml_array_length"`
 /// - `"baml.deep_copy"` → `"baml_deep_copy"`
-/// - `"baml.math.trunc"` → `"baml_math_trunc"`
+/// - `"baml.sys.now_ms"` → `"baml_sys_now_ms"`
 /// - `"baml.media.Pdf.url"` → `"baml_media_pdf_url"`
 fn path_to_fn_name(path: &str) -> String {
     path.replace('.', "_").to_lowercase()
@@ -766,7 +764,7 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
             ty: p
                 .type_expr
                 .as_ref()
-                .map(|te| type_expr_to_baml_type(&te.expr, generics))
+                .map(|te| type_expr_to_baml_type(te, generics))
                 .unwrap_or(BamlType::Named("unknown".to_string())),
         })
         .collect()
@@ -777,17 +775,17 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 /// `generics` is the combined set of type parameter names in scope (class + method).
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
-    match ty {
-        TypeExpr::Int { .. } => BamlType::Int,
-        TypeExpr::Bigint { .. } => BamlType::Bigint,
-        TypeExpr::Float { .. } => BamlType::Float,
-        TypeExpr::String { .. } => BamlType::String,
-        TypeExpr::Bool { .. } => BamlType::Bool,
-        TypeExpr::Null { .. } => BamlType::Null,
-        TypeExpr::Never { .. } => BamlType::Null,
-        TypeExpr::Void { .. } => BamlType::Null,
+    match &ty.kind {
+        TypeExprKind::Int { .. } => BamlType::Int,
+        TypeExprKind::Bigint { .. } => BamlType::Bigint,
+        TypeExprKind::Float { .. } => BamlType::Float,
+        TypeExprKind::String { .. } => BamlType::String,
+        TypeExprKind::Bool { .. } => BamlType::Bool,
+        TypeExprKind::Null { .. } => BamlType::Null,
+        TypeExprKind::Never { .. } => BamlType::Null,
+        TypeExprKind::Void { .. } => BamlType::Null,
 
-        TypeExpr::Media { kind, .. } => {
+        TypeExprKind::Media { kind, .. } => {
             // Map MediaKind to the class name string.
             let name = match kind {
                 baml_base::MediaKind::Image => "Image",
@@ -799,22 +797,22 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             BamlType::Media(name.to_string())
         }
 
-        TypeExpr::Uint8Array { .. } => BamlType::Uint8Array,
+        TypeExprKind::Uint8Array { .. } => BamlType::Uint8Array,
 
-        TypeExpr::Optional { inner, .. } => {
+        TypeExprKind::Optional { inner, .. } => {
             BamlType::Optional(Box::new(type_expr_to_baml_type(inner, generics)))
         }
 
-        TypeExpr::List { inner, .. } => {
+        TypeExprKind::List { inner, .. } => {
             BamlType::List(Box::new(type_expr_to_baml_type(inner, generics)))
         }
 
-        TypeExpr::Map { key, value, .. } => BamlType::Map(
+        TypeExprKind::Map { key, value, .. } => BamlType::Map(
             Box::new(type_expr_to_baml_type(key, generics)),
             Box::new(type_expr_to_baml_type(value, generics)),
         ),
 
-        TypeExpr::Path { segments, .. } => {
+        TypeExprKind::Path { segments, .. } => {
             // Single-segment path may be a generic type param or a named type.
             if segments.len() == 1 {
                 let name = segments[0].as_str();
@@ -834,10 +832,10 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             }
         }
 
-        TypeExpr::Union { variants, .. } => {
+        TypeExprKind::Union { variants, .. } => {
             let non_null: Vec<_> = variants
                 .iter()
-                .filter(|v| !matches!(v, TypeExpr::Null { .. }))
+                .filter(|v| !matches!(v.kind, TypeExprKind::Null { .. }))
                 .collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
@@ -845,14 +843,15 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
                 BamlType::Named("union".to_string())
             }
         }
-        TypeExpr::Literal { .. } => BamlType::Named("literal".to_string()),
-        TypeExpr::Function { .. } => BamlType::Named("function".to_string()),
-        TypeExpr::AssociatedTypeProjection { .. }
-        | TypeExpr::BuiltinUnknown { .. }
-        | TypeExpr::Unknown { .. }
-        | TypeExpr::Error { .. } => BamlType::Named("unknown".to_string()),
-        TypeExpr::Type { .. } => BamlType::Named("type".to_string()),
-        TypeExpr::Rust { .. } => BamlType::RustType,
+        TypeExprKind::Literal { .. } => BamlType::Named("literal".to_string()),
+        TypeExprKind::Function { .. } => BamlType::Named("function".to_string()),
+        TypeExprKind::AssociatedTypeProjection { .. }
+        | TypeExprKind::BuiltinUnknown { .. }
+        | TypeExprKind::Unknown { .. }
+        | TypeExprKind::Error { .. }
+        | TypeExprKind::Infer { .. } => BamlType::Named("unknown".to_string()),
+        TypeExprKind::Type { .. } => BamlType::Named("type".to_string()),
+        TypeExprKind::Rust { .. } => BamlType::RustType,
     }
 }
 
@@ -1148,7 +1147,7 @@ mod tests {
     fn test_path_to_fn_name() {
         assert_eq!(path_to_fn_name("baml.Array.length"), "baml_array_length");
         assert_eq!(path_to_fn_name("baml.deep_copy"), "baml_deep_copy");
-        assert_eq!(path_to_fn_name("baml.math.trunc"), "baml_math_trunc");
+        assert_eq!(path_to_fn_name("baml.sys.now_ms"), "baml_sys_now_ms");
         assert_eq!(path_to_fn_name("baml.media.Pdf.url"), "baml_media_pdf_url");
         assert_eq!(path_to_fn_name("baml.Array.push"), "baml_array_push");
     }
@@ -1255,13 +1254,13 @@ mod tests {
             .expect("missing String.length");
         assert_eq!(string_length.fn_name, "baml_string_length");
 
-        let math_trunc = vm_builtins
+        let trunc_to_int = vm_builtins
             .iter()
-            .find(|b| b.path == "baml.math.trunc")
-            .expect("missing math.trunc");
-        assert!(math_trunc.receiver.is_none());
-        assert_eq!(math_trunc.params.len(), 1);
-        assert!(matches!(math_trunc.params[0].ty, BamlType::Float));
+            .find(|b| b.path == "baml._trunc_to_int")
+            .expect("missing _trunc_to_int");
+        assert!(trunc_to_int.receiver.is_none());
+        assert_eq!(trunc_to_int.params.len(), 1);
+        assert!(matches!(trunc_to_int.params[0].ty, BamlType::Float));
 
         let pdf_url = vm_builtins
             .iter()
@@ -1280,7 +1279,7 @@ mod tests {
 
         assert_eq!(array_length.vm_usage, VmUsage::None);
         assert_eq!(array_push.vm_usage, VmUsage::None);
-        assert_eq!(math_trunc.vm_usage, VmUsage::None);
+        assert_eq!(trunc_to_int.vm_usage, VmUsage::None);
 
         let string_split = vm_builtins
             .iter()

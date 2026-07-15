@@ -1,43 +1,42 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{
-    Span,
+    FileId, Span,
     baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, render},
-    baml_compiler2_hir::{
-        self, file_package,
-        ids::{GeneratorMarker, LocalItemId},
-        item_tree::{Generator, GeneratorConfigItem, ItemTreeSourceMap},
-    },
 };
-use baml_project::ProjectDatabase;
 use clap::Args;
 use sdkgen_python_pydantic2::{NamingConvention, OutputType};
+use text_size::{TextRange, TextSize};
+use toml::Spanned;
 
-use crate::{
-    commands::release_version, project_load::load_project_from_reporting, reporter::Reporter,
-};
+use crate::{commands::release_version, project_load::load_project_for_build, reporter::Reporter};
 
 #[derive(Args, Clone, Debug)]
 pub struct GenerateArgs {
-    /// Path to the baml_src directory
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Defaults to the current directory.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Output directory override (takes precedence over generator config)
     #[arg(long, short = 'o')]
     pub output: Option<PathBuf>,
 }
 
-/// A parsed generator definition from a BAML source file.
+/// A validated generator, resolved from a `[generator.<name>]` section of
+/// `baml.toml`.
 struct GeneratorDef {
     name: String,
     output_type: OutputType,
     /// Resolved output directory (absolute).
     output_dir: PathBuf,
-    /// Required `naming_convention` from the generator block. No default
+    /// Required `naming_convention` from the generator section. No default
     /// is permitted — generators must spell out the policy explicitly.
     naming_convention: NamingConvention,
 }
@@ -49,7 +48,8 @@ impl GenerateArgs {
             "Generating",
             format!("clients with CLI version: {}", release_version()),
         );
-        let (db, from, baml_files) = load_project_from_reporting(&self.from, &reporter)?;
+        let (db, from, baml_files) =
+            load_project_for_build(self.from.as_deref(), &reporter, false)?;
         if baml_files.is_empty() {
             reporter.abandon();
             crate::reporter::print_error(format_args!(
@@ -58,16 +58,14 @@ impl GenerateArgs {
             ));
             return Ok(crate::ExitCode::Other);
         }
-        let project = db
-            .get_project()
-            .ok_or_else(|| anyhow!("No project context"))?;
-
         // Compile-time diagnostics — same shape as run/pack: render the
         // ariadne block after abandoning the spinner so the colored
-        // source-snippet output doesn't fight with the lamb.
-        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
+        // source-snippet output doesn't fight with the lamb. No "Checking"
+        // line here: the meaningful "Resolving" and "Compiling" phases below
+        // carry the progress, and a "Checking N file(s)" would just duplicate
+        // the "Compiling N file(s)" count.
         let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+        let diagnostics = baml_project::collect_diagnostics(&db);
         let errors: Vec<_> = diagnostics
             .iter()
             .filter(|d| d.severity == Severity::Error)
@@ -91,19 +89,28 @@ impl GenerateArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        // Discover generator definitions and validate per-target rules
-        // (e.g. python requires `naming_convention`). Validation runs here
-        // — not during HIR lowering — so non-codegen tooling (LSP, formatter)
-        // doesn't have to care about codegen-specific generator rules.
-        reporter.spin("Resolving", "generator blocks");
-        let (generators, gen_diags) = discover_generators(&db, &from);
+        // Discover generator definitions from `baml.toml`'s
+        // `[generator.<name>]` sections and validate per-target rules (e.g.
+        // python requires `naming_convention`). Validation runs here — at the
+        // CLI layer, not in the compiler — so the manifest never has to flow
+        // into salsa and non-codegen tooling stays codegen-agnostic.
+        reporter.spin("Resolving", "[generator] sections in baml.toml");
+        let (generators, gen_diags) = discover_generators(&from);
         if !gen_diags.is_empty() {
+            // Manifest diagnostics carry spans into `baml.toml`, which isn't a
+            // salsa source file — register it under a dedicated pseudo
+            // [`FileId`] so ariadne can render the offending snippet.
             let mut sources = HashMap::new();
             let mut file_paths = HashMap::new();
             for sf in &source_files {
                 let file_id = sf.file_id(&db);
                 sources.insert(file_id, sf.text(&db).to_string());
                 file_paths.insert(file_id, sf.path(&db));
+            }
+            let toml_path = from.join("baml.toml");
+            if let Ok(content) = std::fs::read_to_string(&toml_path) {
+                sources.insert(manifest_file_id(), content);
+                file_paths.insert(manifest_file_id(), toml_path);
             }
             let rendered = render::render_diagnostics(
                 &gen_diags,
@@ -118,16 +125,16 @@ impl GenerateArgs {
 
         if generators.is_empty() {
             reporter.abandon();
-            crate::reporter::print_error("no generator blocks found in BAML sources");
+            crate::reporter::print_error("no `[generator.<name>]` sections found in baml.toml");
             #[allow(clippy::print_stderr)]
             {
                 eprintln!();
-                eprintln!("Add a generator block to your .baml files, e.g.:");
+                eprintln!("Add a generator section to your baml.toml, e.g.:");
                 eprintln!();
-                eprintln!("  generator my_client {{");
-                eprintln!("    output_type python/pydantic");
-                eprintln!("    output_dir \"..\"");
-                eprintln!("  }}");
+                eprintln!("  [generator.my_client]");
+                eprintln!("  output_type = \"python/pydantic\"");
+                eprintln!("  output_dir = \"../python\"");
+                eprintln!("  naming_convention = \"preserve-case\"");
             }
             return Ok(crate::ExitCode::Other);
         }
@@ -211,114 +218,109 @@ impl GenerateArgs {
     }
 }
 
-/// Walk the HIR item trees to discover all `generator` blocks and their
-/// config, and run per-target validation (e.g. Python requires
-/// `naming_convention`). Returns the validated `GeneratorDef`s plus any
-/// diagnostics collected during validation.
-fn discover_generators(
-    db: &ProjectDatabase,
-    baml_src: &std::path::Path,
-) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
+/// Pseudo [`FileId`] for `baml.toml`. The manifest isn't a salsa source
+/// file, but generator diagnostics still need to point into it, so we mint a
+/// dedicated id at the top of the 28-bit range — far above any real
+/// sequentially-assigned source-file id, so a collision is impossible.
+fn manifest_file_id() -> FileId {
+    FileId::new(0x0FFF_FFFF)
+}
+
+/// Read `baml.toml`'s `[generator.<name>]` sections and run per-target
+/// validation (e.g. Python requires `naming_convention`). Returns the
+/// validated `GeneratorDef`s plus any diagnostics collected during
+/// validation (spans point into `baml.toml` via [`manifest_file_id()`]).
+///
+/// A manifest-less project (`baml_src/` only) has no `baml.toml`, hence no
+/// generators — the caller surfaces that as the "no `[generator]` sections"
+/// hint. A malformed manifest is impossible to reach here: the strict
+/// project loader parses and validates `baml.toml` before we ever get this
+/// far, so a parse error returns empty rather than double-reporting.
+fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
     let mut generators = Vec::new();
     let mut diags = Vec::new();
 
-    for source_file in db.get_source_files() {
-        let pkg_info = file_package::file_package(db, source_file);
-        if pkg_info.package.as_str() != "user" {
+    let Ok(content) = std::fs::read_to_string(root.join("baml.toml")) else {
+        return (generators, diags);
+    };
+    let Ok(manifest) = crate::manifest::parse(&content) else {
+        return (generators, diags);
+    };
+
+    for (name, spanned) in &manifest.generator {
+        let table_range = to_text_range(spanned.span());
+        let generator = spanned.get_ref();
+
+        // Run both validators unconditionally so a section missing multiple
+        // required properties surfaces all of its issues at once.
+        let output_type = parse_required_property::<OutputType>(
+            name,
+            "output_type",
+            generator.output_type.as_ref(),
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node""#,
+            table_range,
+            &mut diags,
+        );
+        let naming_convention = parse_required_property::<NamingConvention>(
+            name,
+            "naming_convention",
+            generator.naming_convention.as_ref(),
+            r#""preserve-case" or "language""#,
+            table_range,
+            &mut diags,
+        );
+
+        // `output_dir` is resolved relative to the project root and defaults
+        // to "..", with `baml_sdk` appended (matching the historic
+        // `generator {}` behavior).
+        let raw_output_dir = generator.output_dir.as_deref().unwrap_or("..");
+        let output_dir = root.join(raw_output_dir).join("baml_sdk");
+
+        // Skip codegen for sections that failed validation; their
+        // diagnostics block the run upstream.
+        let (Some(output_type), Some(naming_convention)) = (output_type, naming_convention) else {
             continue;
-        }
+        };
 
-        let item_tree = baml_compiler2_hir::file_item_tree(db, source_file);
-        let source_map = baml_compiler2_hir::file_item_tree_source_map(db, source_file);
-        let file_id = source_file.file_id(db);
-
-        for (id, generator_item) in &item_tree.generators {
-            // Run both validators unconditionally so that a block missing
-            // multiple required properties surfaces all of its issues at once.
-            let output_type = parse_required_property::<OutputType>(
-                *id,
-                generator_item,
-                "output_type",
-                r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node""#,
-                &source_map,
-                file_id,
-                &mut diags,
-            );
-            let naming_convention = parse_required_property::<NamingConvention>(
-                *id,
-                generator_item,
-                "naming_convention",
-                r#""preserve-case" or "language""#,
-                &source_map,
-                file_id,
-                &mut diags,
-            );
-
-            // output_dir is relative to baml_src, defaults to "../"
-            let raw_output_dir = get_config(&generator_item.config_items, "output_dir")
-                .unwrap_or_else(|| "..".to_string());
-            // Strip surrounding quotes if present (config values may be quoted strings)
-            let raw_output_dir = raw_output_dir.trim_matches('"').trim_matches('\'');
-
-            let output_dir = baml_src.join(raw_output_dir).join("baml_sdk");
-
-            // Skip codegen for generators that failed validation; their
-            // diagnostics will block the run upstream.
-            let (Some(output_type), Some(naming_convention)) = (output_type, naming_convention)
-            else {
-                continue;
-            };
-
-            generators.push(GeneratorDef {
-                name: generator_item.name.to_string(),
-                output_type,
-                output_dir,
-                naming_convention,
-            });
-        }
+        generators.push(GeneratorDef {
+            name: name.clone(),
+            output_type,
+            output_dir,
+            naming_convention,
+        });
     }
 
     (generators, diags)
 }
 
-/// Look up `property` on a generator block and parse it as `T` via strum.
-/// Pushes a `MissingGeneratorProperty` diagnostic if absent and an
+/// Parse a required `[generator.<name>]` property as `T` via strum. Pushes a
+/// `MissingGeneratorProperty` diagnostic if absent and an
 /// `InvalidGeneratorPropertyValue` diagnostic if present-but-unparseable;
 /// returns `None` in either case so the caller can keep going (and surface
-/// any other issues on the same block in one pass).
-fn parse_required_property<T: std::str::FromStr>(
-    id: LocalItemId<GeneratorMarker>,
-    generator: &Generator,
+/// any other issues on the same section in one pass). `table_range` locates
+/// the section header for the "missing" case; the value's own span locates
+/// the "invalid" case.
+fn parse_required_property<T: FromStr>(
+    generator_name: &str,
     property: &str,
+    value: Option<&Spanned<String>>,
     expected: &str,
-    source_map: &ItemTreeSourceMap,
-    file_id: baml_db::FileId,
+    table_range: TextRange,
     diags: &mut Vec<Diagnostic>,
 ) -> Option<T> {
-    let block_range = source_map
-        .generator_block_spans
-        .get(&id)
-        .copied()
-        .unwrap_or_default();
-
-    let Some(item_idx) = generator
-        .config_items
-        .iter()
-        .position(|c| c.key.as_str() == property)
-    else {
+    let Some(value) = value else {
         diags.push(
             Diagnostic::error(
                 DiagnosticId::MissingGeneratorProperty,
                 format!(
-                    "generator `{}` is missing required property `{property}` \
-                     (expected {expected})",
-                    generator.name
+                    "generator `{generator_name}` is missing required property \
+                     `{property}` (expected {expected})"
                 ),
             )
             .with_primary(
                 Span {
-                    file_id,
-                    range: block_range,
+                    file_id: manifest_file_id(),
+                    range: table_range,
                 },
                 "missing required property",
             )
@@ -327,28 +329,22 @@ fn parse_required_property<T: std::str::FromStr>(
         return None;
     };
 
-    let value = &generator.config_items[item_idx].value;
-    match value.parse::<T>() {
+    match value.get_ref().parse::<T>() {
         Ok(parsed) => Some(parsed),
         Err(_) => {
-            let item_range = source_map
-                .generator_config_item_spans
-                .get(&id)
-                .and_then(|spans| spans.get(item_idx).copied())
-                .unwrap_or(block_range);
             diags.push(
                 Diagnostic::error(
                     DiagnosticId::InvalidGeneratorPropertyValue,
                     format!(
-                        "invalid value `{value}` for `{property}` on generator \
-                         `{}` (expected {expected})",
-                        generator.name
+                        "invalid value `{}` for `{property}` on generator \
+                         `{generator_name}` (expected {expected})",
+                        value.get_ref()
                     ),
                 )
                 .with_primary(
                     Span {
-                        file_id,
-                        range: item_range,
+                        file_id: manifest_file_id(),
+                        range: to_text_range(value.span()),
                     },
                     "invalid value",
                 )
@@ -359,10 +355,11 @@ fn parse_required_property<T: std::str::FromStr>(
     }
 }
 
-/// Look up a config key in a generator's config items.
-fn get_config(items: &[GeneratorConfigItem], key: &str) -> Option<String> {
-    items
-        .iter()
-        .find(|item| item.key.as_str() == key)
-        .map(|item| item.value.clone())
+/// Convert a `toml::Spanned` byte range into the `TextRange` our diagnostics
+/// use.
+fn to_text_range(span: std::ops::Range<usize>) -> TextRange {
+    TextRange::new(
+        TextSize::new(span.start as u32),
+        TextSize::new(span.end as u32),
+    )
 }

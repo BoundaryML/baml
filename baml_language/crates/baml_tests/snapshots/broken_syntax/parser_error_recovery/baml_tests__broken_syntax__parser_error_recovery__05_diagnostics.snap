@@ -112,16 +112,6 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [type] error: unresolved name: GPT4
-    ╭─[ invalid_syntax.baml:11:10 ]
-    │
- 11 │   client GPT4
-    │          ──┬─  
-    │            ╰─── unresolved name: GPT4
-    │ 
-    │ Note: Error code: E0003
-────╯
-
   [parse] error: Expected '}', found class
    ╭─[ missing_braces.baml:5:1 ]
    │
@@ -133,10 +123,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [type] error: unresolved type: str
-   ╭─[ partial_input.baml:3:9 ]
+   ╭─[ partial_input.baml:3:10 ]
    │
  3 │   field1 str  // Incomplete type name
-   │         ──┬─  
+   │          ─┬─  
    │           ╰─── unresolved type: str
    │ 
    │ Note: Error code: E0002
@@ -164,14 +154,13 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] error: `@alias` argument must be a string literal, got `// Unclosed attribute
   field5`
-   ╭─[ partial_input.baml:6:24 ]
+   ╭─[ partial_input.baml:7:3 ]
    │
- 6 │ ╭─▶   field4 string @alias(  // Unclosed attribute
- 7 │ ├─▶   field5 string  // This should break as `field5` is treated as part of the attribute
-   │ │                                                                                           
-   │ ╰─────────────────────────────────────────────────────────────────────────────────────────── invalid builtin declaration
-   │     
-   │     Note: Error code: E0037
+ 7 │   field5 string  // This should break as `field5` is treated as part of the attribute
+   │   ───┬──  
+   │      ╰──── invalid builtin declaration
+   │ 
+   │ Note: Error code: E0037
 ───╯
 
   [parse] error: Expected ')', found identifier
@@ -265,11 +254,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [type] error: unresolved type: closed
-   ╭─[ unclosed_string.baml:4:32 ]
+   ╭─[ unclosed_string.baml:4:33 ]
    │
  4 │   field3 string @alias("another closed string")  // Should still parse this
-   │                                ───┬───  
-   │                                   ╰───── unresolved type: closed
+   │                                 ───┬──  
+   │                                    ╰──── unresolved type: closed
    │ 
    │ Note: Error code: E0002
 ───╯
@@ -278,8 +267,8 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[ unclosed_string.baml:5:2 ]
    │
  5 │ }
-   │  ┬  
-   │  ╰── Expected '}', found EOF
+   │  │ 
+   │  ╰─ Expected '}', found EOF
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -288,8 +277,8 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[ unclosed_string.baml:5:2 ]
    │
  5 │ }
-   │  ┬  
-   │  ╰── Expected Unclosed string literal, found EOF
+   │  │ 
+   │  ╰─ Expected Unclosed string literal, found EOF
    │ 
    │ Note: Error code: E0010
 ───╯

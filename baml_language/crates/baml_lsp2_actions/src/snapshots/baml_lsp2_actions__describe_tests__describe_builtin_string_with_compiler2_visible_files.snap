@@ -9,7 +9,6 @@ class String  (string)  string.baml:5
 /// All methods returning a new string do not mutate `self` unless noted otherwise.
 shape: class String {}
 methods:
-  function to_json(self) -> json
   /// Returns the number of **Unicode code points** (characters) in the string.
   function length(self) -> int
   /// Alias for `length()`.
@@ -34,6 +33,8 @@ methods:
   function ends_with(self, suffix: string) -> bool
   /// Splits the string by `delimiter` and returns an array of substrings.
   function split(self, delimiter: string) -> string[]
+  /// Returns the string's Unicode code points as one-character strings.
+  function chars(self) -> string[]
   /// Splits the string into lines, recognizing both `\n` and `\r\n` as line
   function lines(self) -> string[]
   /// Returns the substring between two **character** offsets `[start, end)`.
@@ -41,8 +42,9 @@ methods:
   /// Replaces the first occurrence of `search` with `replacement`.
   function replace(self, search: string, replacement: string) -> string
   /// Returns the **character index** of the first occurrence of `search`, or
-  function index_of(self, search: string) -> int
+  function index_of(self, search: string) -> int | null
   function char_at(self, index: int) -> string
+  function code_point_at(self, index: int) -> int
   /// Returns a new string that repeats `self` the given number of times.
   function repeat(self, count: int) -> string
   /// Returns true if the string contains the given `substring`.
@@ -87,7 +89,11 @@ methods:
   function is_ascii_hex(self) -> bool
   /// Returns the string encoded as a `uint8array` of UTF-8 bytes.
   function to_utf8(self) -> uint8array
+  /// Returns the string's Unicode code points as an array of `int`s.
+  function to_code_points(self) -> int[]
 static_methods:
+  /// Renders any value as a human-readable string.
+  function from(value: T) -> string
   /// Decodes a `uint8array` of UTF-8 bytes into a string.
   function from_utf8(utf8: uint8array) -> string throws root.errors.InvalidArgument
   /// Builds a string from an array of Unicode code points.

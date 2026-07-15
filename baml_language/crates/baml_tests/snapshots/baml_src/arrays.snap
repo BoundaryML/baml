@@ -758,6 +758,107 @@ function arrays.$init_test_ns_arrays_arrays(registry: testing.TestCollector) -> 
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "array_generate_passes_index_0_to_n_minus_1"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 179)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_maps_index_through_f"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 181)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_calls_f_once_per_index"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 183)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_slots_are_independent"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 185)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_filled_shares_mutable_slots_unlike_generate"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 186)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_zero_length_is_empty"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 187)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_negative_length_is_empty"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 189)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_generate_propagates_error"
+    make_closure .<lambda($init_test_ns_arrays_arrays, 191)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
+    return
+}
+
+function arrays.$init_test_ns_arrays_reductions(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "float_mean_basic"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_mean_single"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_mean_empty_throws"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_odd"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_even"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_unsorted_input"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_does_not_mutate_input"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "float_median_empty_throws"
+    make_closure .<lambda($init_test_ns_arrays_reductions, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }
@@ -893,33 +994,80 @@ function arrays.$init_test_ns_arrays_sort_comparable(registry: testing.TestColle
     return
 }
 
-function arrays.ComparableFlaky$stream.baml.Comparable.compare(self: arrays.ComparableFlaky$stream, other: arrays.ComparableFlaky$stream) -> int {
-    load_var self
-    load_field .0
-    store_var_load_var _3
-    is_type int
-    pop_jump_if_false L0
-    load_var other
-    load_field .0
-    store_var_load_var _6
-    is_type int
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_const "cannot compare null"
-    init_instance user.arrays.ComparableCompareError .message
-    throw
-
-  L1:
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
+function arrays.$init_test_ns_arrays_sum(registry: testing.TestCollector) -> null {
+    load_var registry
+    load_const "array_sum_int_basic"
+    make_closure .<lambda($init_test_ns_arrays_sum, 0)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_single"
+    make_closure .<lambda($init_test_ns_arrays_sum, 1)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_empty_is_zero"
+    make_closure .<lambda($init_test_ns_arrays_sum, 2)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_negatives"
+    make_closure .<lambda($init_test_ns_arrays_sum, 3)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_mixed_magnitudes"
+    make_closure .<lambda($init_test_ns_arrays_sum, 4)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_overflow_throws"
+    make_closure .<lambda($init_test_ns_arrays_sum, 5)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_int_boundary_no_overflow"
+    make_closure .<lambda($init_test_ns_arrays_sum, 6)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_basic"
+    make_closure .<lambda($init_test_ns_arrays_sum, 7)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_single"
+    make_closure .<lambda($init_test_ns_arrays_sum, 8)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_empty_is_zero"
+    make_closure .<lambda($init_test_ns_arrays_sum, 9)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "array_sum_float_mixed"
+    make_closure .<lambda($init_test_ns_arrays_sum, 10)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_const null
     return
 }
 
 function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableFlaky, other: arrays.ComparableFlaky) -> int {
     load_var self
-    load_field .0
+    load_field .value
     store_var_load_var _3
     is_type int
     pop_jump_if_false L0
@@ -936,80 +1084,51 @@ function arrays.ComparableFlaky.baml.Comparable.compare(self: arrays.ComparableF
     throw
 
   L1:
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
-function arrays.ComparableScore$stream.baml.Comparable.compare(self: arrays.ComparableScore$stream, other: arrays.ComparableScore$stream) -> int {
-    load_var self
-    load_field .0
-    store_var _3
-    load_var other
-    load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
+    load_var2 4 5
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.ComparableScore.baml.Comparable.compare(self: arrays.ComparableScore, other: arrays.ComparableScore) -> int {
     load_var self
-    load_field .0
-    store_var _3
+    load_field .points
     load_var other
     load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
-function arrays.OutOfBodyScore$stream.baml.Comparable.compare(self: arrays.OutOfBodyScore$stream, other: arrays.OutOfBodyScore$stream) -> int {
-    load_var self
-    load_field .0
-    store_var _3
-    load_var other
-    load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.OutOfBodyScore.baml.Comparable.compare(self: arrays.OutOfBodyScore, other: arrays.OutOfBodyScore) -> int {
     load_var self
-    load_field .0
-    store_var _3
+    load_field .points
     load_var other
     load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
-    return
-}
-
-function arrays.SortableItem$stream.baml.Comparable.compare(self: arrays.SortableItem$stream, other: arrays.SortableItem$stream) -> int {
-    load_var self
-    load_field .0
-    store_var _3
-    load_var other
-    load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.SortableItem.baml.Comparable.compare(self: arrays.SortableItem, other: arrays.SortableItem) -> int {
     load_var self
-    load_field .0
-    store_var _3
+    load_field .rank
     load_var other
     load_field .0
-    store_var _4
-    load_var2 3 4
-    call baml.Comparable$for$int.compare
+    load_type baml.Comparable<CompareError = never>
+    load_const "compare"
+    virtual_call nargs=2 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
@@ -1017,6 +1136,7 @@ function arrays.array_index_read(idx: int) -> int {
     load_const 10
     load_const 20
     load_const 30
+    load_type int
     alloc_array 3
     load_var idx
     load_array_element
@@ -1027,6 +1147,7 @@ function arrays.array_index_write(idx: int) -> int[] {
     load_const 10
     load_const 20
     load_const 30
+    load_type int
     alloc_array 3
     store_var xs
     load_var2 2 1
@@ -1036,61 +1157,163 @@ function arrays.array_index_write(idx: int) -> int[] {
     return
 }
 
+function arrays.filled_aliases_grid() -> int[][] {
+    load_type int
+    load_const 2
+    load_const 0
+    call baml.Array.filled
+    store_var row
+    load_type int[]
+    load_const 3
+    load_var row
+    call baml.Array.filled
+    store_var grid
+    load_type int
+    load_var grid
+    load_const 0
+    load_array_element
+    load_const 99
+    call baml.Array.push
+    pop 1
+    load_var grid
+    return
+}
+
+function arrays.generate_independence_grid() -> int[][] {
+    load_type int[]
+    load_type never
+    load_const 3
+    make_closure .<lambda(generate_independence_grid, 0)>, 0
+    call baml.Array.generate
+    store_var grid
+    load_type int
+    load_var grid
+    load_const 0
+    load_array_element
+    load_const 99
+    call baml.Array.push
+    pop 1
+    load_var grid
+    return
+}
+
 function arrays.run_sort_generic_ints() -> int[] {
     load_type int
     load_const 3
     load_const 1
     load_const 2
+    load_type int
     alloc_array 3
     call user.arrays.sort_generic
     return
 }
 
 function arrays.sort_bigints(xs: bigint[]) -> bigint[] {
-    load_type unknown
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (bigint as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_flaky(xs: arrays.ComparableFlaky[]) -> arrays.ComparableFlaky[] {
-    load_type unknown
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (arrays.ComparableFlaky as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_floats(xs: float[]) -> float[] {
-    load_type unknown
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (float as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_generic(xs: U[]) -> U[] {
-    load_type unknown
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (#0 as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_ints(xs: int[]) -> int[] {
-    load_type unknown
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (int as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_items(xs: arrays.SortableItem[]) -> arrays.SortableItem[] {
-    load_type unknown
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (arrays.SortableItem as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }
 
 function arrays.sort_strings(xs: string[]) -> string[] {
-    load_type unknown
     load_var xs
-    call baml.Sortable$for$T[].sort
+    load_type baml.Sortable<SortError = (string as baml.Comparable).CompareError>
+    load_const "sort"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
+    return
+}
+
+function arrays.sum_int_overflow_(a: int, b: int) -> int {
+    load_var2 1 2
+    load_type int
+    alloc_array 2
+    load_type baml.Summable<Sum = int>
+    load_const "sum"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    jump L2
+    load_var e
+    is_type baml.panics.IntegerOverflow
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var e
+    rethrow
+
+  L1:
+    load_const 1
+    unary_op -
+    store_var _0
+
+  L2:
+    load_var _0
+    return
+}
+
+function arrays.sum_int_two_(a: int, b: int) -> int {
+    load_var2 1 2
+    load_type int
+    alloc_array 2
+    load_type baml.Summable<Sum = int>
+    load_const "sum"
+    virtual_call nargs=1 ntypeargs=0
+    store_var _0
+    load_var _0
     return
 }

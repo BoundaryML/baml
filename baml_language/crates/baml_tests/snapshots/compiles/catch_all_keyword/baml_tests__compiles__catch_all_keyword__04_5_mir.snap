@@ -25,7 +25,7 @@ fn user.CatchAllTyped(x: int) -> string {
     }
 
     bb3: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb4: {
@@ -146,7 +146,7 @@ fn user.PartialCatch(x: int) -> string {
     }
 
     bb2: {
-        throw copy _2;
+        rethrow copy _2;
     }
 
     bb3: {

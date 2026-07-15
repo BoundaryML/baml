@@ -37,7 +37,7 @@ use std::sync::Arc;
 use baml_type::RuntimeTy;
 use bex_external_types::validate_host_return;
 use bex_heap::BexHeap;
-use bridge_ctypes::{CffiHandleTableOptions, external_to_outbound};
+use bridge_ctypes::CffiHandleTableOptions;
 use prost::Message as _;
 use sys_ops::io::{
     self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
@@ -95,28 +95,48 @@ impl io::IoNamespaceHost for NativeSysOps {
             }
         };
 
-        // Encode the args as a type-rich `BamlOutboundValue` list. The host
-        // receives the args as a single protobuf-encoded `BamlOutboundValue`
-        // whose variant is a `BamlValueList` — there is no dedicated arg-list
-        // proto message, so the list value is the canonical container.
+        // The VM split the call's args by the callable's declared params and
+        // packed them as `[positional_array, optional_map]` (see
+        // `host_closure_call_sysop`). Unpack and encode them into the
+        // `BamlToHostCall`'s flat `args` list: required args first, then the
+        // supplied optionals (tagged + keyed by name). Omitted optionals are
+        // already absent — the host's own default applies.
         let options = CffiHandleTableOptions::for_wire();
-        let arg_values = BexExternalValue::Array {
-            element_type: RuntimeTy::unknown(),
-            items: args,
-        };
-        let encoded: Vec<u8> = match external_to_outbound(&arg_values, &options) {
-            Ok(value) => value.encode_to_vec(),
-            Err(e) => {
-                // Arg encoding is bridge-side serialization, not a
-                // host-language error. A failure here means the engine
-                // had a `BexExternalValue` it could not put on the wire
-                // — an engine/bridge bug. Surface as a fatal internal
-                // error rather than a catchable `VmBamlError`.
+        let mut pack = args.into_iter();
+        let positional = match pack.next() {
+            Some(BexExternalValue::Array { items, .. }) => items,
+            other => {
                 return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
-                    message: format!("failed to encode host-call arguments: {e}"),
+                    message: format!(
+                        "host-call args pack[0] must be the positional array, got {other:?}"
+                    ),
                 });
             }
         };
+        let optional = match pack.next() {
+            Some(BexExternalValue::Map { entries, .. }) => entries,
+            other => {
+                return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
+                    message: format!(
+                        "host-call args pack[1] must be the optional map, got {other:?}"
+                    ),
+                });
+            }
+        };
+        let encoded: Vec<u8> =
+            match bridge_ctypes::build_to_host_call(&positional, &optional, &options) {
+                Ok(to_host_call) => to_host_call.encode_to_vec(),
+                Err(e) => {
+                    // Arg encoding is bridge-side serialization, not a
+                    // host-language error. A failure here means the engine
+                    // had a `BexExternalValue` it could not put on the wire
+                    // — an engine/bridge bug. Surface as a fatal internal
+                    // error rather than a catchable `VmBamlError`.
+                    return SysOpOutput::err(sys_types::VmInternalError::BridgeFailure {
+                        message: format!("failed to encode host-call arguments: {e}"),
+                    });
+                }
+            };
 
         // Allocate a fresh call id and create a CompletionHandle.
         let call_id = host_dispatch::next_call_id();

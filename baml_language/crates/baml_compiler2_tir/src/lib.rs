@@ -16,8 +16,15 @@
 //! result. This gives fine-grained incrementality: editing a lambda body only
 //! recomputes that lambda's `ScopeInference`, not the enclosing function's.
 
+/// Smallest representable BAML `int` (i63): `-2^62`. Mirrors
+/// `bex_vm_types::Value::INT_MIN` (`!(i64::MAX >> 1)`), redefined here to keep
+/// the type-checker free of a dependency on the VM crate.
+pub(crate) const INT_MIN: i64 = !(i64::MAX >> 1);
+/// Largest representable BAML `int` (i63): `2^62 - 1`. Mirrors
+/// `bex_vm_types::Value::INT_MAX` (`i64::MAX >> 1`).
+pub(crate) const INT_MAX: i64 = i64::MAX >> 1;
+
 pub mod analysis;
-pub mod associated_projection;
 pub mod builder;
 pub mod callable;
 pub mod cycle_detector;
@@ -32,9 +39,12 @@ pub mod normalize;
 pub mod package_interface;
 pub mod pattern_lowering;
 pub mod resolve;
+pub mod self_type;
+pub mod signature;
 pub mod throw_inference;
 pub mod throws_analysis;
 pub mod ty;
+pub mod type_context;
 pub mod user_facing;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────

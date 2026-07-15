@@ -45,7 +45,7 @@ import (
 	"unsafe"
 
 	"bridge_go/cffi"
-	pb "bridge_go/cffi/proto/baml_core/cffi/v1"
+	pb "bridge_go/cffi/proto/baml_bridge/cffi/v1"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -221,23 +221,24 @@ func runHostCallable(fn reflect.Value, callID uint32, argsBytes []byte) {
 		return
 	}
 
-	// Decode the wire payload: BamlOutboundValue whose variant is a list of
-	// the call arguments.
-	var holder pb.BamlOutboundValue
-	if err := proto.Unmarshal(argsBytes, &holder); err != nil {
+	// Decode the wire payload: a `BamlToHostCall` the engine already resolved
+	// against the callable's declared params (omitted optionals dropped), with
+	// `Args` in declared order. Go invokes host callables positionally and has no
+	// keyword-argument facility, so we take every supplied arg's value in order —
+	// `ArgName`/`IsOptionalArg` are not used here. An optional left out in the
+	// middle of the run cannot be expressed positionally and is unsupported (see
+	// the bridge-go divergences notes).
+	var toHostCall pb.BamlToHostCall
+	if err := proto.Unmarshal(argsBytes, &toHostCall); err != nil {
 		sendHostCallableError(callID, "DecodeError",
 			fmt.Sprintf("failed to decode host-call args: %v", err),
 			pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
 		return
 	}
-	listValue, ok := holder.Value.(*pb.BamlOutboundValue_ListValue)
-	if !ok || listValue.ListValue == nil {
-		sendHostCallableError(callID, "DecodeError",
-			fmt.Sprintf("host-call args decoded to a non-list value (got %T)", holder.Value),
-			pb.HostCallableErrorCategory_HOST_CALLABLE_INVALID_ARGUMENT)
-		return
+	rawArgs := make([]*pb.BamlOutboundValue, 0, len(toHostCall.GetArgs()))
+	for _, arg := range toHostCall.GetArgs() {
+		rawArgs = append(rawArgs, arg.GetValue())
 	}
-	rawArgs := listValue.ListValue.Items
 
 	// Convert the decoded args to reflect.Values matching the function's
 	// declared parameter types. `outboundToGo` returns idiomatic Go values

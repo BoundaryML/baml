@@ -21,6 +21,13 @@ pub enum VmPanic {
     #[error("division by zero: {left:?} / {right:?}")]
     DivisionByZero { left: Value, right: Value },
 
+    /// An `int` (i63) arithmetic operation overflowed the representable
+    /// range `[INT_MIN, INT_MAX]`. Carries a human-readable description of
+    /// the operation (e.g. `"4611686018427387903 + 1"`); built only on the
+    /// cold overflow path, so the `String` alloc never touches hot code.
+    #[error("integer overflow: {message}")]
+    IntegerOverflow { message: String },
+
     // Raised by array/byte-array subscripting and `string.char_at`, so the
     // message stays generic ("index", not "array index").
     #[error("index out of bounds: {index} of {length}")]
@@ -248,21 +255,6 @@ pub enum VmInternalError {
     #[error("missing native function: {name}")]
     MissingNativeFunction { name: String },
 
-    /// We expected a function to return `bex_vm::vm::VmExecState::Complete`,
-    /// but it returned a different (yielding) variant. (Plain prose: the
-    /// referenced type lives in `bex_vm`, which depends on this crate; an
-    /// intra-doc link would create a cycle.)
-    #[error(
-        "Expected a function to return completed, but it instead yielded at some incomplete state."
-    )]
-    ExpectedCompletion,
-
-    #[error("Invalid watch filter")]
-    InvalidFilter,
-
-    #[error("Invalid manual notify")]
-    InvalidManualNotify,
-
     #[error("unexpected constant kind: expected a TyTemplate constant at this index")]
     UnexpectedConstantKind,
 
@@ -293,6 +285,16 @@ pub enum VmInternalError {
     /// compiler/VM inconsistency, not a user-reachable condition.
     #[error("virtual call could not resolve interface method `{method}`")]
     UnresolvedVirtualCall { method: String },
+
+    /// A `LoadType` (or other materialization) could not fully realize a
+    /// `TyTemplate` against the frame's realized type arguments — a frame
+    /// reference out of range, a `Wildcard` hole reaching a materialization
+    /// position, or an associated-type projection that did not reduce. Runtime
+    /// type arguments are realized, so the compiler guarantees such templates
+    /// realize; a failure here is a compiler/VM inconsistency, surfaced loudly
+    /// rather than erased to `unknown`.
+    #[error("could not realize type template: {message}")]
+    TypeSubstitution { message: String },
 }
 
 /// Any kind of virtual machine error.

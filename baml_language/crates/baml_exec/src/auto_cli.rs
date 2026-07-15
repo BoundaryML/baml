@@ -91,7 +91,7 @@ pub fn parse_cli_value(raw: &str, ty: &RuntimeTy) -> Result<BexExternalValue> {
         // faithfully represent must be delivered via `--json-args`.
         // Structured types (class/list/map/union) are the obvious case;
         // media, literals, type aliases, opaque types, and the engine-
-        // internal types (function/void/watch/future) fall in the same
+        // internal types (function/void/future) fall in the same
         // bucket — they either can't survive shell quoting or aren't
         // valid CLI parameter types. The previous catchall silently
         // String-coerced everything that fell through; that hides
@@ -295,8 +295,6 @@ mod tests {
     #[test]
     fn parse_cli_value_engine_internal_type_rejected() {
         let ty = RuntimeTy::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(RuntimeTy::Int {
                 attr: TyAttr::default(),

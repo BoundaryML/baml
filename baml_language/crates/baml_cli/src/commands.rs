@@ -30,9 +30,28 @@ pub(crate) struct RuntimeCli {
     #[arg(long = "features", value_name = "FEATURE", global = true)]
     pub features: Vec<String>,
 
+    /// When to use colored / hyperlinked output: auto (default), always, or never.
+    ///
+    /// `auto` enables color on an interactive terminal and disables it when the
+    /// output is piped or captured by a known AI coding agent.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = crate::paint::ColorChoice::Auto,
+        global = true
+    )]
+    pub color: crate::paint::ColorChoice,
+
     /// Specifies a subcommand to run.
     #[command(subcommand)]
     pub(crate) command: Commands,
+
+    /// Name of the invoked top-level subcommand, as registered with clap
+    /// (e.g. `"fmt"`, `"lsp"`). Not a CLI argument: it's populated in
+    /// [`Self::parse_from_smart`] from the parsed matches so telemetry can
+    /// report the exact clap name without a hand-maintained mapping.
+    #[arg(skip)]
+    pub(crate) invoked_subcommand: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -92,6 +111,9 @@ pub(crate) enum Commands {
     #[command(about = "Run a BAML function or script", disable_help_flag = true)]
     Run(crate::run_command::RunArgs),
 
+    #[command(about = "Open the BAML playground in your browser")]
+    Playground(crate::playground_command::PlaygroundArgs),
+
     #[command(about = "Package a BAML target as a standalone executable")]
     Pack(crate::pack_command::PackArgs),
 
@@ -103,6 +125,26 @@ pub(crate) enum Commands {
 
     #[command(about = "Starts a language server", name = "lsp")]
     LanguageServer(crate::lsp::LanguageServerArgs),
+
+    // Hidden from `baml --help` by default: the first-run notice + the
+    // `boundaryml.com/telemetry` docs page cover discovery for users who
+    // want to opt out, and hiding keeps the top-level command list from
+    // reading like an ops-console. Still fully functional (`baml
+    // telemetry`, `baml telemetry disable`, etc.) and re-listed
+    // automatically by `parse_from_smart` when `BAML_INTERNAL=1`.
+    #[command(about = "Show or change BAML CLI telemetry preferences", hide = true)]
+    Telemetry(crate::telemetry_command::TelemetryArgs),
+
+    // The detached telemetry flush child (see `telemetry::queue`). Spawned
+    // by the CLI itself on exit / rotation; hidden even from
+    // `BAML_INTERNAL=1` listings by the `__` naming convention being
+    // self-explanatory, but marked hide for good measure.
+    #[command(
+        name = "__flush-telemetry",
+        about = "(internal) drain the on-disk telemetry queue",
+        hide = true
+    )]
+    FlushTelemetry(crate::telemetry_command::FlushTelemetryArgs),
     // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
     // Repl(baml_runtime::cli::repl::ReplArgs),
 
@@ -111,7 +153,18 @@ pub(crate) enum Commands {
 }
 
 impl RuntimeCli {
-    /// Parse CLI arguments, unhiding all subcommands if the BAML_INTERNAL environment variable is set.
+    /// Parse CLI arguments and optionally unhide internal subcommands.
+    ///
+    /// Parameters:
+    /// - `argv`: Raw process argument vector (`argv[0]` program name followed by CLI tokens).
+    ///
+    /// Returns:
+    /// - A fully parsed [`RuntimeCli`] value.
+    ///
+    /// Errors/Panics:
+    /// - Does not return recoverable errors. On parse failures this calls clap's
+    ///   `err.exit()` and terminates the process, matching normal CLI behavior.
+    /// - Does not panic.
     ///
     /// This should be used for CLI invocations instead of `RuntimeCli::parse_from`.
     pub fn parse_from_smart(argv: Vec<String>) -> Self {
@@ -153,15 +206,51 @@ impl RuntimeCli {
             err.exit();
         }
 
+        // Record the invoked subcommand's clap name for telemetry, straight
+        // from the parsed matches so it always matches what clap registered.
+        cli.invoked_subcommand = matches.subcommand_name().map(str::to_string);
+
         cli
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
+        // The detached telemetry flush child must run before (and without)
+        // `record_invocation` below: recording its own invocation would
+        // seal a new queue file on drop and spawn another child, forever.
+        if let Commands::FlushTelemetry(args) = &self.command {
+            return args.run();
+        }
+
+        // Fire anonymous, best-effort telemetry for this invocation. The
+        // event is appended to an on-disk queue (one atomic write); on drop
+        // of the guard (after the match below returns) the queue file is
+        // sealed and a detached child process delivers it after this
+        // process has already exited. It never fails or delays the command.
+        let _telemetry = crate::telemetry::record_invocation(
+            self.invoked_subcommand.as_deref().unwrap_or("unknown"),
+        );
+
+        // Resolve color/hyperlink output once, before any subcommand writes.
+        crate::paint::init_color(self.color);
+
+        // Passive skill warning + background freshness refresh, only on the
+        // core authoring commands (init, run, generate, pack) so the nag
+        // never bleeds into machine-facing or utility invocations. The
+        // guard's drop, after the match below returns, gives the background
+        // refresh the rest of its time budget.
+        let _skill_check = match &self.command {
+            Commands::Init(_) | Commands::Run(_) | Commands::Generate(_) | Commands::Pack(_) => {
+                crate::skill_check::SkillCheck::start()
+            }
+            _ => crate::skill_check::SkillCheck::skipped(),
+        };
+
         match &self.command {
             Commands::Init(args) => args.run(),
             Commands::New(args) => args.run(),
             Commands::Check(args) => args.run(),
             Commands::Run(args) => args.run(),
+            Commands::Playground(args) => args.run(),
             Commands::Pack(args) => args.run(),
             Commands::Ide(args) => args.run(),
             Commands::Agent(args) => args.run(),
@@ -176,6 +265,9 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            Commands::Telemetry(args) => args.run(),
+            // Handled by the early return above, before telemetry wiring.
+            Commands::FlushTelemetry(args) => args.run(),
             Commands::Format(args) => args.run(),
         }
     }
@@ -194,6 +286,17 @@ mod tests {
     #[test]
     fn release_version_matches_compile_time_setting() {
         assert_eq!(release_version(), baml_version::CANONICAL_VERSION);
+    }
+
+    /// `parse_from_smart` records the invoked subcommand's clap name for
+    /// telemetry, straight from the parsed matches.
+    #[test]
+    fn parse_records_invoked_subcommand_name() {
+        let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "fmt".into()]);
+        assert_eq!(cli.invoked_subcommand.as_deref(), Some("fmt"));
+
+        let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "lsp".into()]);
+        assert_eq!(cli.invoked_subcommand.as_deref(), Some("lsp"));
     }
 
     fn help_for(args: &[&str]) -> String {
@@ -242,12 +345,47 @@ mod tests {
     }
 
     #[test]
-    fn check_help_mentions_default_from_directory() {
+    fn check_help_mentions_default_search_start() {
         let help = help_for(&["baml-cli", "check", "--help"]);
         assert!(help.contains("Usage: baml check [OPTIONS]"), "{help}");
         assert!(
-            help.contains("Project root to check. Defaults to the current directory"),
+            help.contains("Project search starting point. Defaults to the current directory"),
             "{help}"
         );
+    }
+
+    #[test]
+    fn root_help_lists_playground_command() {
+        let help = help_for(&["baml-cli", "--help"]);
+        assert!(help.contains("playground"), "{help}");
+        assert!(help.contains("Open the BAML playground"), "{help}");
+    }
+
+    #[test]
+    fn playground_help_presents_public_baml_command() {
+        let help = help_for(&["baml-cli", "playground", "--help"]);
+        assert!(help.contains("Usage: baml playground [OPTIONS]"), "{help}");
+        assert!(help.contains("--file <PATH>"), "{help}");
+        assert!(help.contains("--from <PATH>"), "{help}");
+        assert!(help.contains("--port <PORT>"), "{help}");
+        assert!(help.contains("--no-open"), "{help}");
+    }
+
+    /// `run -e` accepts hyphen-prefixed values without consuming run flags.
+    #[test]
+    fn run_expression_accepts_hyphen_prefixed_value_and_preserves_run_flags() {
+        let cli = RuntimeCli::parse_from_smart(vec![
+            "baml-cli".into(),
+            "run".into(),
+            "-e".into(),
+            "-7 % 3".into(),
+            "--from".into(),
+            "project".into(),
+        ]);
+        let Commands::Run(args) = cli.command else {
+            panic!("expected run command");
+        };
+        assert_eq!(args.expression.as_deref(), Some("-7 % 3"));
+        assert_eq!(args.from, Some(std::path::PathBuf::from("project")));
     }
 }

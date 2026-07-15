@@ -872,7 +872,7 @@ impl Printable for ClientName {
 pub struct PromptField {
     pub prompt: t::Word,
     pub colon: Option<t::Colon>,
-    pub string: PromptValue,
+    pub string: StringLiteralValue,
 }
 
 impl FromCST for PromptField {
@@ -890,20 +890,7 @@ impl FromCST for PromptField {
             .map(t::Colon::from_cst)
             .transpose()?;
 
-        let string = it.expect_next("a prompt string")?;
-        let string = match string.kind() {
-            SyntaxKind::RAW_STRING_LITERAL => {
-                PromptValue::RawString(t::RawString::from_cst(string)?)
-            }
-            SyntaxKind::STRING_LITERAL => PromptValue::String(t::QuotedString::from_cst(string)?),
-            _ => {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "STRING_LITERAL or RAW_STRING_LITERAL".into(),
-                    found: string.kind(),
-                    at: string.text_range(),
-                });
-            }
-        };
+        let string = StringLiteralValue::from_cst(it.expect_next("a prompt string")?)?;
 
         it.expect_end()?;
 
@@ -944,30 +931,59 @@ impl Printable for PromptField {
     }
 }
 
-/// Any of the valid values in a [`PromptField`].
+/// A string-literal value as it appears in a declarative slot such as a
+/// [`PromptField`] or a [`TemplateStringDecl`]: a raw `#"..."#`, a quoted
+/// `"..."`, or a backtick `` `...` `` literal. All three parse equally in these
+/// positions, so the formatter accepts and re-emits any of them.
 #[derive(Debug)]
-pub enum PromptValue {
+pub enum StringLiteralValue {
     RawString(t::RawString),
     String(t::QuotedString),
+    Backtick(t::BacktickString),
 }
 
-impl Printable for PromptValue {
+impl FromCST for StringLiteralValue {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::RAW_STRING_LITERAL => {
+                Ok(StringLiteralValue::RawString(t::RawString::from_cst(elem)?))
+            }
+            SyntaxKind::STRING_LITERAL => {
+                Ok(StringLiteralValue::String(t::QuotedString::from_cst(elem)?))
+            }
+            SyntaxKind::BACKTICK_STRING_LITERAL => Ok(StringLiteralValue::Backtick(
+                t::BacktickString::from_cst(elem)?,
+            )),
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "STRING_LITERAL, RAW_STRING_LITERAL, or BACKTICK_STRING_LITERAL"
+                    .into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Printable for StringLiteralValue {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            PromptValue::RawString(raw_string) => printer.print(raw_string, shape),
-            PromptValue::String(string) => printer.print(string, shape),
+            StringLiteralValue::RawString(raw_string) => printer.print(raw_string, shape),
+            StringLiteralValue::String(string) => printer.print(string, shape),
+            StringLiteralValue::Backtick(backtick) => printer.print(backtick, shape),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
-            PromptValue::RawString(raw_string) => raw_string.leftmost_token(),
-            PromptValue::String(string) => string.leftmost_token(),
+            StringLiteralValue::RawString(raw_string) => raw_string.leftmost_token(),
+            StringLiteralValue::String(string) => string.leftmost_token(),
+            StringLiteralValue::Backtick(backtick) => backtick.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            PromptValue::RawString(raw_string) => raw_string.rightmost_token(),
-            PromptValue::String(string) => string.rightmost_token(),
+            StringLiteralValue::RawString(raw_string) => raw_string.rightmost_token(),
+            StringLiteralValue::String(string) => string.rightmost_token(),
+            StringLiteralValue::Backtick(backtick) => backtick.rightmost_token(),
         }
     }
 }
@@ -1333,7 +1349,7 @@ impl Printable for ImplementsTarget {
 /// BEP-057 associated type declaration or implementation witness.
 #[derive(Debug)]
 pub struct AssociatedTypeDecl {
-    pub keyword: t::Word,
+    pub keyword: t::TypeKw,
     pub name: t::Word,
     pub bound: Option<(t::Extends, Type)>,
     pub default: Option<(t::Equals, Type)>,
@@ -1422,7 +1438,7 @@ impl Printable for AssociatedTypeDecl {
 #[derive(Debug)]
 pub struct InterfaceFieldLink {
     pub interface_field: t::Word,
-    pub as_token: t::Word,
+    pub as_token: t::As,
     pub class_field: t::Word,
 }
 
@@ -3227,7 +3243,7 @@ pub struct TemplateStringDecl {
     pub keyword: t::TemplateString,
     pub name: t::Word,
     pub args: FunctionParamList,
-    pub raw_string: t::RawString,
+    pub body: StringLiteralValue,
 }
 
 impl FromCST for TemplateStringDecl {
@@ -3246,8 +3262,8 @@ impl FromCST for TemplateStringDecl {
         // args
         let args: FunctionParamList = it.expect_parse()?;
 
-        // raw string
-        let raw_string: t::RawString = it.expect_parse()?;
+        // body: a raw, quoted, or backtick string literal
+        let body = StringLiteralValue::from_cst(it.expect_next("a template_string body")?)?;
 
         it.expect_end()?;
 
@@ -3255,7 +3271,7 @@ impl FromCST for TemplateStringDecl {
             keyword,
             name,
             args,
-            raw_string,
+            body,
         })
     }
 }
@@ -3276,7 +3292,7 @@ impl Printable for TemplateStringDecl {
         multi_lined |= printer.print(&self.args, shape).multi_lined;
         printer.print_str(" ");
         multi_lined |= printer
-            .print(&self.raw_string, Shape::unlimited_single_line())
+            .print(&self.body, Shape::unlimited_single_line())
             .multi_lined;
         PrintInfo { multi_lined }
     }
@@ -3284,15 +3300,14 @@ impl Printable for TemplateStringDecl {
         self.keyword.span()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.raw_string.rightmost_token()
+        self.body.rightmost_token()
     }
 }
 
 /// Corresponds to a [`SyntaxKind::TYPE_ALIAS_DEF`] node.
 #[derive(Debug)]
 pub struct TypeAliasDecl {
-    /// For some reason, type is not currently a keyword
-    pub keyword: t::Word,
+    pub keyword: t::TypeKw,
     pub name: t::Word,
     pub equals: t::Equals,
     pub type_expr: Type,
@@ -3306,7 +3321,7 @@ impl FromCST for TypeAliasDecl {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        // keyword: "type" (it's actually just a WORD, not a keyword)
+        // keyword: `type` (KW_TYPE)
         let keyword = it.expect_parse()?;
 
         // name

@@ -1,8 +1,22 @@
 //! Unified type system for BAML.
 //!
-//! `baml_type::Ty` is the canonical type representation used from VIR through runtime.
-//! TIR keeps its own `Ty` with `QualifiedName` and `TypeAlias` — this crate
-//! provides the single conversion point from TIR types.
+//! Includes five main type representations:
+//! - [`Ty`]: the full type representation containing all compiler and runtime types.
+//! - [`RuntimeTy`]: the runtime-facing deep subset of [`Ty`] that excludes type inference helper types.
+//! - [`ConcreteTy`]: like [`RuntimeTy`] but only the concrete-layout variants (plus `never`).
+//!   Not deep: parameter types are [`RuntimeTy`]s.
+//! - [`RealizedTy`]: the realized deep subset of [`RuntimeTy`] that excludes type variables.
+//! - [`ConcreteRealizedTy`]: like [`RealizedTy`] but only contains concrete types.
+//!   Not deep: parameter types are [`RealizedTy`]s.
+//!
+//! The following represents the infallible conversion hierarchy:
+//! ```text
+//!     `Ty`
+//!      ↑
+//!  `RuntimeTy` <- `RealizedTy`
+//!      ↑               ↑
+//! `ConcreteTy` <- `ConcreteRealizedTy`
+//! ```
 
 use std::fmt;
 
@@ -13,21 +27,23 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
 mod defs;
-mod interface;
+mod family;
 mod names;
 pub mod normalize;
 mod primitive;
+mod realized_ty;
+mod runtime_ty;
 pub mod simplify_sap;
 pub mod template;
+pub mod throw_facts;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;
-pub use interface::*;
+pub use family::*;
 pub use names::*;
 pub use primitive::*;
-mod runtime_ty;
 pub use runtime_ty::*;
-pub use template::TyTemplate;
+pub use template::SubstituteError;
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to
 /// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
@@ -76,41 +92,6 @@ pub enum Freshness {
     Regular,
 }
 
-/// A single parameter of a [`Ty::Function`] — its (optional) name, type, and
-/// whether it is required or optional (has a default).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
-pub struct FunctionParamTy {
-    pub name: Option<Name>,
-    pub ty: Ty,
-    pub mode: FunctionParamMode,
-}
-
-impl FunctionParamTy {
-    pub fn required(name: Option<Name>, ty: Ty) -> Self {
-        Self {
-            name,
-            ty,
-            mode: FunctionParamMode::Required,
-        }
-    }
-
-    pub fn optional(name: Option<Name>, ty: Ty) -> Self {
-        Self {
-            name,
-            ty,
-            mode: FunctionParamMode::Optional,
-        }
-    }
-
-    pub fn is_required(&self) -> bool {
-        matches!(self.mode, FunctionParamMode::Required)
-    }
-
-    pub fn is_optional(&self) -> bool {
-        matches!(self.mode, FunctionParamMode::Optional)
-    }
-}
-
 /// Whether a [`FunctionParamTy`] is required or optional (has a default value).
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
@@ -118,168 +99,6 @@ impl FunctionParamTy {
 pub enum FunctionParamMode {
     Required,
     Optional,
-}
-
-/// The unified type representation for BAML, used from VIR through runtime.
-///
-/// Contains both core runtime variants and compiler-only variants.
-/// Runtime code should use `unreachable!()` for compiler-only variants.
-/// Runtime code should call `validate_runtime()` to catch any that leak.
-///
-/// Every variant carries an `attr: TyAttr` (or trailing `TyAttr` for tuple
-/// variants) that holds SAP streaming annotations. All existing code uses
-/// `TyAttr::default()` — only stream type generation (HIR lowering) will populate
-/// non-default values.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
-pub enum Ty {
-    Int {
-        attr: TyAttr,
-    },
-    Bigint {
-        attr: TyAttr,
-    },
-    Float {
-        attr: TyAttr,
-    },
-    String {
-        attr: TyAttr,
-    },
-    Bool {
-        attr: TyAttr,
-    },
-    Null {
-        attr: TyAttr,
-    },
-    Uint8Array {
-        attr: TyAttr,
-    },
-    Media(MediaKind, TyAttr),
-    /// A literal type — a single value (`1`, `"hi"`, `true`) as a type. The
-    /// [`Freshness`] flag is compiler-only (fresh literals widen at mutable
-    /// binding sites); it is normalized to `Regular` at the runtime boundary.
-    Literal(Literal, Freshness, TyAttr),
-    Class(TypeName, Vec<Ty>, TyAttr),
-    Interface(TypeName, Vec<Ty>, Vec<(Name, Ty)>, TyAttr),
-    Enum(TypeName, TyAttr),
-    /// A specific enum variant — `Status.HttpError`.
-    EnumVariant(TypeName, Name, TyAttr),
-    List(Box<Ty>, TyAttr),
-    Map {
-        key: Box<Ty>,
-        value: Box<Ty>,
-        attr: TyAttr,
-    },
-    Union(Vec<Ty>, TyAttr),
-
-    /// Function/arrow type: `<G…>(T1, T2, ...) -> R throws E`.
-    ///
-    /// `generic_params`/`generic_param_bounds` carry the function's declared
-    /// type parameters and their bounds (kept at runtime for reflection, even
-    /// though body `TypeVar`s are erased at the runtime boundary).
-    Function {
-        generic_params: Vec<Name>,
-        generic_param_bounds: Vec<Option<Ty>>,
-        params: Vec<FunctionParamTy>,
-        ret: Box<Ty>,
-        throws: Box<Ty>,
-        attr: TyAttr,
-    },
-    /// A future handle — the result of `schedule_future` or `spawn`
-    /// before `await`.
-    ///
-    /// Carries both the value type the future resolves to and the error
-    /// type the future may throw. The error type approximates `never` as
-    /// `Null` when the body of the future statically cannot throw.
-    Future(Box<Ty>, Box<Ty>, TyAttr),
-    /// Opaque Rust-managed state (`$rust_type` fields in builtin class stubs,
-    /// e.g. `Media._data`). A leaf concrete type with no inner structure.
-    ///
-    /// Renders as `$rust_type` (qualified name `baml.rust.RustType`).
-    RustType {
-        attr: TyAttr,
-    },
-    /// The `type` metatype keyword — a runtime value that wraps a `Ty`
-    /// (reflection). A leaf concrete type.
-    ///
-    /// Renders as the `type` keyword (qualified name `baml.reflect.Type`).
-    Type {
-        attr: TyAttr,
-    },
-    /// Opaque resource handle — file, socket, or HTTP response body. A leaf
-    /// concrete type whose *values* are concrete Rust types on the VM heap; the
-    /// type system treats it nominally (no structural decomposition).
-    ///
-    /// Renders as its qualified name `baml.llm.Resource`.
-    Resource {
-        attr: TyAttr,
-    },
-    /// Opaque structured prompt tree for LLM calls. A leaf concrete type whose
-    /// *values* are concrete Rust types on the VM heap; the type system treats
-    /// it nominally (no structural decomposition).
-    ///
-    /// Renders as its qualified name `baml.llm.PromptAst`.
-    PromptAst {
-        attr: TyAttr,
-    },
-
-    /// Void type — the type of effectful expressions (was VIR `Unit`).
-    Void {
-        attr: TyAttr,
-    },
-    /// Watch accessor type: represents `x.$watch` on a watched variable.
-    WatchAccessor(Box<Ty>, TyAttr),
-
-    /// Only recursive aliases survive lower_ty; non-recursive are expanded.
-    TypeAlias(TypeName, TyAttr),
-    /// A type variable (generic parameter) — e.g. `T` in `Array<T>`. Bound
-    /// during inference; can survive at runtime only inside reflective generic
-    /// metadata.
-    TypeVar(Name, TyAttr),
-    /// Associated type projection, e.g. `P.Output` or `(T as Iterator).Item`. Bound
-    /// during inference; can survive at runtime only inside reflective generic
-    /// metadata.
-    AssociatedTypeProjection {
-        base: Box<Ty>,
-        interface: Option<Box<Ty>>,
-        member: Name,
-        attr: TyAttr,
-    },
-    /// The top type - may have any concrete value.
-    ///
-    /// Similar to TypeScript's `unknown` - any value can be passed where
-    /// `BuiltinUnknown` is expected, but `BuiltinUnknown` cannot be used
-    /// where a specific type is required.
-    ///
-    /// Used in llm.baml for functions like:
-    /// ```baml
-    /// function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst
-    /// ```
-    BuiltinUnknown {
-        attr: TyAttr,
-    },
-    /// The bottom type — an expression that never produces a value (`return`,
-    /// `break`, `continue`, diverging blocks). A subtype of every type.
-    Never {
-        attr: TyAttr,
-    },
-
-    // --- TIR-only: present during type checking, erased at the runtime
-    // boundary (`convert_tir_ty_for_runtime`). Excluded from `ConcreteTy`; only the ones
-    // that can legitimately nest in a runtime type carry `RuntimeTy`.
-    /// Error-recovery sentinel: the type is structurally unknown (e.g. an
-    /// unresolved name). Distinct from `BuiltinUnknown` (a well-formed top type).
-    Unknown {
-        attr: TyAttr,
-    },
-    /// Error sentinel: a hard type error was emitted for this expression.
-    Error {
-        attr: TyAttr,
-    },
-    /// Evolving list — an empty `[]` literal at a mutable binding whose element
-    /// type is refined by mutations. Frozen to `List` at the runtime boundary.
-    EvolvingList(Box<Ty>, TyAttr),
-    /// Evolving map — the map analogue of [`Ty::EvolvingList`].
-    EvolvingMap(Box<Ty>, Box<Ty>, TyAttr),
 }
 
 /// Flatten, deduplicate, and collapse a vec of widened types into a single `Ty`.
@@ -316,115 +135,6 @@ fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
 }
 
 impl Ty {
-    // --- TyAttr accessor ---
-
-    /// Replace the TyAttr on this type, returning a new Ty with the given attr.
-    ///
-    /// Used during HIR lowering to apply SAP attributes (sap_in_progress) to the
-    /// resolved type of generated stream_* class fields.
-    pub fn with_attr(self, attr: TyAttr) -> Ty {
-        match self {
-            Ty::Int { .. } => Ty::Int { attr },
-            Ty::Bigint { .. } => Ty::Bigint { attr },
-            Ty::Float { .. } => Ty::Float { attr },
-            Ty::String { .. } => Ty::String { attr },
-            Ty::Bool { .. } => Ty::Bool { attr },
-            Ty::Null { .. } => Ty::Null { attr },
-            Ty::Void { .. } => Ty::Void { attr },
-            Ty::BuiltinUnknown { .. } => Ty::BuiltinUnknown { attr },
-            Ty::Uint8Array { .. } => Ty::Uint8Array { attr },
-            Ty::Media(kind, _) => Ty::Media(kind, attr),
-            Ty::Literal(lit, freshness, _) => Ty::Literal(lit, freshness, attr),
-            Ty::Class(tn, args, _) => Ty::Class(tn, args, attr),
-            Ty::Interface(tn, args, associated_bindings, _) => {
-                Ty::Interface(tn, args, associated_bindings, attr)
-            }
-            Ty::Enum(tn, _) => Ty::Enum(tn, attr),
-            Ty::EnumVariant(tn, v, _) => Ty::EnumVariant(tn, v, attr),
-            Ty::List(inner, _) => Ty::List(inner, attr),
-            Ty::Map { key, value, .. } => Ty::Map { key, value, attr },
-            Ty::Union(members, _) => Ty::Union(members, attr),
-            Ty::TypeAlias(tn, _) => Ty::TypeAlias(tn, attr),
-            Ty::Function {
-                generic_params,
-                generic_param_bounds,
-                params,
-                ret,
-                throws,
-                ..
-            } => Ty::Function {
-                generic_params,
-                generic_param_bounds,
-                params,
-                ret,
-                throws,
-                attr,
-            },
-            Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
-            Ty::Future(value, error, _) => Ty::Future(value, error, attr),
-            Ty::TypeVar(name, _) => Ty::TypeVar(name, attr),
-            Ty::AssociatedTypeProjection {
-                base,
-                interface,
-                member,
-                ..
-            } => Ty::AssociatedTypeProjection {
-                base,
-                interface,
-                member,
-                attr,
-            },
-            Ty::Never { .. } => Ty::Never { attr },
-            Ty::Unknown { .. } => Ty::Unknown { attr },
-            Ty::Error { .. } => Ty::Error { attr },
-            Ty::EvolvingList(inner, _) => Ty::EvolvingList(inner, attr),
-            Ty::EvolvingMap(key, value, _) => Ty::EvolvingMap(key, value, attr),
-            Ty::RustType { .. } => Ty::RustType { attr },
-            Ty::Type { .. } => Ty::Type { attr },
-            Ty::Resource { .. } => Ty::Resource { attr },
-            Ty::PromptAst { .. } => Ty::PromptAst { attr },
-        }
-    }
-
-    /// Get the TyAttr for this type.
-    pub fn attr(&self) -> &TyAttr {
-        match self {
-            Ty::Int { attr }
-            | Ty::Bigint { attr }
-            | Ty::Float { attr }
-            | Ty::String { attr }
-            | Ty::Bool { attr }
-            | Ty::Null { attr }
-            | Ty::Void { attr }
-            | Ty::BuiltinUnknown { attr }
-            | Ty::Uint8Array { attr }
-            | Ty::Map { attr, .. }
-            | Ty::Function { attr, .. }
-            | Ty::AssociatedTypeProjection { attr, .. }
-            | Ty::Never { attr }
-            | Ty::Unknown { attr }
-            | Ty::Error { attr }
-            | Ty::RustType { attr }
-            | Ty::Type { attr }
-            | Ty::Resource { attr }
-            | Ty::PromptAst { attr } => attr,
-            Ty::Media(_, attr)
-            | Ty::Literal(_, _, attr)
-            | Ty::Class(_, _, attr)
-            | Ty::Interface(_, _, _, attr)
-            | Ty::Enum(_, attr)
-            | Ty::EnumVariant(_, _, attr)
-            | Ty::List(_, attr)
-            | Ty::Union(_, attr)
-            | Ty::TypeAlias(_, attr)
-            | Ty::WatchAccessor(_, attr)
-            | Ty::Future(_, _, attr)
-            | Ty::TypeVar(_, attr)
-            | Ty::EvolvingList(_, attr)
-            | Ty::EvolvingMap(_, _, attr) => attr,
-        }
-    }
-
     /// Whether this type may be the *implementor* (`for`-target) of an interface
     /// implementation — i.e. `implement I for <Self>` is allowed.
     ///
@@ -446,8 +156,6 @@ impl Ty {
     ///     their own;
     ///   - `Interface` (existential) and `Union` — no single concrete implementor;
     ///   - `Function` (an arrow type) and `RustType` (an opaque native leaf);
-    ///   - `WatchAccessor` — the compiler-internal type of `x.$watch`, not a
-    ///     user-facing data type;
     ///   - `Void`, the top type `BuiltinUnknown`, and the compiler-only sentinels
     ///     `Unknown` / `Error` / `EvolvingList` / `EvolvingMap`;
     ///   - `TypeAlias` — callers resolve aliases first, so a surviving alias here
@@ -482,14 +190,81 @@ impl Ty {
             | Ty::Future(..)
             | Ty::Function { .. }
             | Ty::RustType { .. }
-            | Ty::WatchAccessor(..)
             | Ty::TypeAlias(..)
             | Ty::Void { .. }
             | Ty::BuiltinUnknown { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
+            | Ty::Infer { .. }
             | Ty::EvolvingList(..)
             | Ty::EvolvingMap(..) => false,
+        }
+    }
+
+    /// Whether this is a **concrete** type per the TYPE_SYSTEM.md taxonomy: a type
+    /// every value of which has exactly one run-time representation that method
+    /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
+    /// enums, the containers `T[]` / `map<K, V>` (with their inference-time `Evolving*`
+    /// forms), function types, `Future`, the builtin handles `Type` / `Resource` /
+    /// `PromptAst`, and the native `RustType`.
+    ///
+    /// NOT concrete — the doc's *abstract* and *literal* categories, plus `never`:
+    ///   - `Union` and `Interface` (existential) — the union of several concrete
+    ///     types, so no single run-time representation;
+    ///   - the top type `BuiltinUnknown` (`unknown`) — the union of all types;
+    ///   - `Literal` / `EnumVariant` — literal types, subsets of a concrete base that
+    ///     dispatch through it rather than being a concrete type of their own;
+    ///   - `Never` — the empty type (no values);
+    ///   - `Void`;
+    ///   - `TypeVar` and `AssociatedTypeProjection` — symbolic stand-ins whose
+    ///     concreteness, when required, is a separate *inductive* obligation on their
+    ///     own bound, not a property of the type as written here;
+    ///   - `TypeAlias` — callers resolve aliases first, so a survivor is unresolved;
+    ///   - the recovery sentinels `Unknown` / `Error` / `Infer`.
+    ///
+    /// Distinct from [`Self::is_valid_impl_subject`]: that asks whether a type may be a
+    /// *written impl's* for-type (rejecting `Function`/`Future`/`RustType`, which are
+    /// concrete yet undispatchable as impl targets, and admitting `Never`/`TypeVar`/a
+    /// projection). This asks the broader "is it a run-time concrete type" the taxonomy
+    /// defines — used to gate an interface-bounded type-parameter argument (an
+    /// interface bound admits only a single run-time type, so dispatch is well-defined).
+    ///
+    /// Exhaustive (no wildcard) so a new `Ty` variant must be classified here.
+    pub fn is_concrete(&self) -> bool {
+        match self {
+            Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Class(..)
+            | Ty::Enum(..)
+            | Ty::List(..)
+            | Ty::Map { .. }
+            | Ty::EvolvingList(..)
+            | Ty::EvolvingMap(..)
+            | Ty::Function { .. }
+            | Ty::Future(..)
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. }
+            | Ty::RustType { .. } => true,
+            Ty::Union(..)
+            | Ty::Interface(..)
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Literal(..)
+            | Ty::EnumVariant(..)
+            | Ty::Never { .. }
+            | Ty::Void { .. }
+            | Ty::TypeVar(..)
+            | Ty::AssociatedTypeProjection { .. }
+            | Ty::TypeAlias(..)
+            | Ty::Unknown { .. }
+            | Ty::Error { .. }
+            | Ty::Infer { .. } => false,
         }
     }
 
@@ -711,6 +486,26 @@ impl Ty {
         }
     }
 
+    pub fn type_var(name: &str) -> Self {
+        Ty::TypeVar(Name::new(name), TyAttr::default())
+    }
+
+    /// View this type as an [`Interface`] constraint when it is an interface
+    /// existential ([`Ty::Interface`]); `None` for any other type. Attributes
+    /// are dropped — the constraint is identity data (name, generic arguments,
+    /// associated-type bindings), not SAP metadata. The inverse of
+    /// [`Interface::to_ty`].
+    pub fn as_interface(&self) -> Option<Interface> {
+        match self {
+            Ty::Interface(name, generics, associated_types, _) => Some(Interface::new(
+                name.clone(),
+                generics.clone(),
+                associated_types.clone(),
+            )),
+            _ => None,
+        }
+    }
+
     // --- Opaque leaf-type constructors (default TyAttr) ---
 
     /// Opaque resource handle type (file, socket, HTTP response body).
@@ -841,7 +636,6 @@ impl Ty {
             // for output format rendering (cycle detection needs the alias name).
             Ty::TypeAlias(_, _) => Ok(()),
             Ty::Void { .. } => Err("Void type should not reach runtime".to_string()),
-            Ty::WatchAccessor(inner, _) => inner.validate_runtime(),
             Ty::BuiltinUnknown { .. } => Ok(()),
             // Recurse into containers
             Ty::List(inner, _) => inner.validate_runtime(),
@@ -897,6 +691,7 @@ impl Ty {
             | Ty::Never { .. }
             | Ty::Unknown { .. }
             | Ty::Error { .. }
+            | Ty::Infer { .. }
             | Ty::EvolvingList(..)
             | Ty::EvolvingMap(..) => Err("compiler-only type should not reach runtime".to_string()),
             Ty::Int { .. }
@@ -1090,29 +885,11 @@ impl Ty {
             }
             Ty::Literal(lit, _freshness, _) => lit.to_string(),
             Ty::Function {
-                generic_params,
-                generic_param_bounds,
                 params,
                 ret,
                 throws,
                 ..
             } => {
-                use std::fmt::Write as _;
-
-                let mut out = String::new();
-                if !generic_params.is_empty() {
-                    out.push('<');
-                    for (i, param) in generic_params.iter().enumerate() {
-                        if i > 0 {
-                            out.push_str(", ");
-                        }
-                        out.push_str(param.as_ref());
-                        if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
-                            let _ = write!(out, " extends {}", bound.render_with(s));
-                        }
-                    }
-                    out.push('>');
-                }
                 let ps: Vec<String> = params
                     .iter()
                     .map(|param| {
@@ -1125,7 +902,7 @@ impl Ty {
                     })
                     .collect();
                 format!(
-                    "{out}({}) -> {} throws {}",
+                    "({}) -> {} throws {}",
                     ps.join(", "),
                     ret.render_as_function_result(s),
                     throws.render_with(s),
@@ -1138,20 +915,18 @@ impl Ty {
                 member,
                 ..
             } => {
-                if let Some(interface) = interface {
-                    format!(
-                        "({} as {}).{}",
-                        base.render_with(s),
-                        interface.render_with(s),
-                        member
-                    )
-                } else {
-                    format!("{}.{}", base.render_with(s), member)
-                }
+                format!(
+                    "({} as {}).{}",
+                    base.render_with(s),
+                    interface.to_ty().render_with(s),
+                    member
+                )
             }
             Ty::Never { .. } => "never".to_string(),
             Ty::Void { .. } => "void".to_string(),
             Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
+            // The wildcard hole renders as the `_` the user wrote.
+            Ty::Infer { .. } => "_".to_string(),
             Ty::RustType { .. } => "$rust_type".to_string(),
             Ty::Type { .. } => "type".to_string(),
             // Opaque leaf types render as their fixed qualified names; these
@@ -1162,7 +937,6 @@ impl Ty {
             Ty::Future(value, error, _) => {
                 format!("Future<{}, {}>", value.render_with(s), error.render_with(s))
             }
-            Ty::WatchAccessor(inner, _) => format!("{}.$watch", inner.render_with(s)),
         }
     }
 }
@@ -1191,6 +965,53 @@ impl TyRenderStrategy for CanonicalTyRender {
         } else {
             name.to_string()
         }
+    }
+}
+
+impl Interface {
+    /// The interface *existential* type ([`Ty::Interface`]) denoted by this
+    /// constraint, with default attributes. The inverse of
+    /// [`Ty::as_interface`].
+    ///
+    /// A constraint may pin only some associated types whereas a fully-specified
+    /// existential pins all of them; this lifts the constraint verbatim, so the
+    /// result carries exactly the bindings the constraint holds.
+    pub fn to_ty(&self) -> Ty {
+        Ty::Interface(
+            self.name.clone(),
+            self.generics.clone(),
+            self.associated_types.clone(),
+            TyAttr::default(),
+        )
+    }
+
+    /// Iterate every [`Ty`] the constraint carries: its generic arguments
+    /// followed by the type of each associated-type binding (the names are not
+    /// yielded). Lets generic `Ty`-walkers descend into a constraint without
+    /// re-deriving its shape.
+    pub fn tys(&self) -> impl Iterator<Item = &Ty> {
+        self.generics
+            .iter()
+            .chain(self.associated_types.iter().map(|(_, ty)| ty))
+    }
+
+    /// Rebuild the constraint with every carried [`Ty`] (generics and
+    /// associated-type bindings) mapped through `f`. The name and the binding
+    /// names are preserved. The structure-preserving companion to [`tys`](Self::tys),
+    /// for substitution/erasure/normalization passes.
+    pub fn map_tys(&self, mut f: impl FnMut(&Ty) -> Ty) -> Interface {
+        // Route through `new` so the sort invariant is self-enforcing. `f` maps
+        // only the binding *types*, never the names, so on an already-sorted
+        // constraint the re-sort is a no-op — but it removes the dependence on
+        // every caller having sorted its input.
+        Interface::new(
+            self.name.clone(),
+            self.generics.iter().map(&mut f).collect(),
+            self.associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), f(ty)))
+                .collect(),
+        )
     }
 }
 
@@ -1293,7 +1114,6 @@ impl fmt::Display for Ty {
                 write!(f, " throws {}", throws_display)
             }
             Ty::Void { .. } => write!(f, "void"),
-            Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
             Ty::Future(value, error, _) => write!(f, "future<{value}, {error}>"),
             Ty::TypeVar(name, _) => write!(f, "{name}"),
@@ -1302,13 +1122,11 @@ impl fmt::Display for Ty {
                 interface,
                 member,
                 ..
-            } => match interface {
-                Some(iface) => write!(f, "({base} as {iface}).{member}"),
-                None => write!(f, "{base}.{member}"),
-            },
+            } => write!(f, "({base} as {}).{member}", interface.to_ty()),
             Ty::Never { .. } => write!(f, "never"),
             Ty::Unknown { .. } => write!(f, "unknown"),
             Ty::Error { .. } => write!(f, "<error>"),
+            Ty::Infer { .. } => write!(f, "_"),
             Ty::EvolvingList(inner, _) => write!(f, "{inner}[]"),
             Ty::EvolvingMap(key, value, _) => write!(f, "map<{key}, {value}>"),
             // Opaque leaf types: render identically to `render_with` so the two
@@ -1386,7 +1204,7 @@ mod tests {
             Ty::TypeVar(Name::new("T"), TyAttr::default()),
             Ty::AssociatedTypeProjection {
                 base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
-                interface: None,
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
                 member: Name::new("Item"),
                 attr: TyAttr::default(),
             },
@@ -1405,8 +1223,6 @@ mod tests {
             // `Future<T>` for-type errors rather than baking an undispatchable rule.
             Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
             Ty::Function {
-                generic_params: vec![],
-                generic_param_bounds: vec![],
                 params: vec![],
                 ret: boxed(Ty::null()),
                 throws: boxed(Ty::null()),
@@ -1415,7 +1231,6 @@ mod tests {
             Ty::RustType {
                 attr: TyAttr::default(),
             },
-            Ty::WatchAccessor(boxed(ty_int()), TyAttr::default()),
             Ty::TypeAlias(qtn("A"), TyAttr::default()),
             Ty::Void {
                 attr: TyAttr::default(),
@@ -1434,6 +1249,94 @@ mod tests {
                 !ty.is_valid_impl_subject(),
                 "{ty:?} should not be implementable"
             );
+        }
+    }
+
+    #[test]
+    fn is_concrete_classifies_variants() {
+        let qtn = |n: &str| QualifiedTypeName::local(Name::new(n));
+        let boxed = |t: Ty| Box::new(t);
+
+        // Concrete: a single run-time representation dispatch can key on. Note the
+        // differences from `is_valid_impl_subject` — `Function`/`Future`/`RustType`
+        // are concrete types even though they are not written-impl targets, and
+        // the `Evolving*` inference forms are lists/maps.
+        let concrete = [
+            ty_int(),
+            Ty::Bigint {
+                attr: TyAttr::default(),
+            },
+            ty_float(),
+            ty_string(),
+            ty_bool(),
+            Ty::null(),
+            Ty::class("Foo"),
+            Ty::Enum(qtn("Color"), TyAttr::default()),
+            Ty::list(ty_int()),
+            Ty::Map {
+                key: boxed(ty_string()),
+                value: boxed(ty_int()),
+                attr: TyAttr::default(),
+            },
+            Ty::EvolvingList(boxed(ty_int()), TyAttr::default()),
+            Ty::Function {
+                params: vec![],
+                ret: boxed(Ty::null()),
+                throws: boxed(Ty::null()),
+                attr: TyAttr::default(),
+            },
+            Ty::Future(boxed(ty_int()), boxed(Ty::null()), TyAttr::default()),
+            Ty::Type {
+                attr: TyAttr::default(),
+            },
+            Ty::resource(),
+            Ty::prompt_ast(),
+            Ty::RustType {
+                attr: TyAttr::default(),
+            },
+        ];
+        for ty in &concrete {
+            assert!(ty.is_concrete(), "{ty:?} should be concrete");
+        }
+
+        // Abstract (unions, existentials, `unknown`), literal types (`Literal`,
+        // `EnumVariant`), the empty type `never`, the symbolic stand-ins whose
+        // concreteness is an inductive obligation elsewhere (`TypeVar`, a
+        // projection), and the alias/sentinel non-types — all not concrete.
+        let not_concrete = [
+            Ty::union([ty_int(), ty_string()]),
+            Ty::Interface(qtn("I"), vec![], vec![], TyAttr::default()),
+            Ty::BuiltinUnknown {
+                attr: TyAttr::default(),
+            },
+            Ty::Literal(Literal::Int(1), Freshness::Regular, TyAttr::default()),
+            Ty::EnumVariant(qtn("Color"), Name::new("Red"), TyAttr::default()),
+            Ty::Never {
+                attr: TyAttr::default(),
+            },
+            Ty::Void {
+                attr: TyAttr::default(),
+            },
+            Ty::TypeVar(Name::new("T"), TyAttr::default()),
+            Ty::AssociatedTypeProjection {
+                base: boxed(Ty::TypeVar(Name::new("T"), TyAttr::default())),
+                interface: Box::new(Interface::new(qtn("Iterator"), vec![], vec![])),
+                member: Name::new("Item"),
+                attr: TyAttr::default(),
+            },
+            Ty::TypeAlias(qtn("A"), TyAttr::default()),
+            Ty::Unknown {
+                attr: TyAttr::default(),
+            },
+            Ty::Error {
+                attr: TyAttr::default(),
+            },
+            Ty::Infer {
+                attr: TyAttr::default(),
+            },
+        ];
+        for ty in &not_concrete {
+            assert!(!ty.is_concrete(), "{ty:?} should not be concrete");
         }
     }
 
@@ -1620,8 +1523,6 @@ mod tests {
     #[test]
     fn test_function_display_uses_never_for_void_throws_sentinel() {
         let ty = Ty::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![FunctionParamTy::required(None, ty_int())],
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {
@@ -1637,12 +1538,8 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_nested_function_returns() {
         let ty = Ty::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![],
             ret: Box::new(Ty::Function {
-                generic_params: vec![],
-                generic_param_bounds: vec![],
                 params: vec![FunctionParamTy::required(None, ty_int())],
                 ret: Box::new(ty_string()),
                 throws: Box::new(Ty::Void {
@@ -1665,8 +1562,6 @@ mod tests {
     #[test]
     fn test_function_display_parenthesizes_function_postfix_types() {
         let callback = Ty::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![FunctionParamTy::required(None, ty_int())],
             ret: Box::new(ty_string()),
             throws: Box::new(Ty::Void {

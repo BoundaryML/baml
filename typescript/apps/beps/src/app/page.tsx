@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useUser } from "@/components/providers/user-provider";
 import { BepList } from "@/components/bep/bep-list";
 import { BepCreateModal } from "@/components/bep/bep-create-modal";
@@ -15,17 +15,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, Users, ChevronDown } from "lucide-react";
+import { LogOut, User, Users, ChevronDown, LogIn } from "lucide-react";
 
 export default function Home() {
   const { user, userId, isLoading, logout, hasManagementPermissions } = useUser();
   const router = useRouter();
-
-  useEffect(() => {
-    if (!isLoading && !userId) {
-      router.push("/login");
-    }
-  }, [isLoading, userId, router]);
 
   const handleLogout = () => {
     logout();
@@ -48,54 +42,59 @@ export default function Home() {
     );
   }
 
-  if (!user) {
-    return null; // Will redirect
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="max-w-[1600px] mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">BAML Enhancement Proposals</h1>
           <div className="flex items-center gap-4">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-2">
-                  {user.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.name}
-                      className="w-6 h-6 rounded-full"
-                    />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                      <span className="text-xs text-muted-foreground font-medium">
-                        {user.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <span className="text-sm">{user.name}</span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => router.push("/profile")}>
-                  <User className="h-4 w-4 mr-2" />
-                  Your Profile
-                </DropdownMenuItem>
-                {hasManagementPermissions && (
-                  <DropdownMenuItem onClick={() => router.push("/users")}>
-                    <Users className="h-4 w-4 mr-2" />
-                    Manage Users
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    {user.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.name}
+                        className="w-6 h-6 rounded-full"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {user.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                    <span className="text-sm">{user.name}</span>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => router.push("/profile")}>
+                    <User className="h-4 w-4 mr-2" />
+                    Your Profile
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {hasManagementPermissions && (
+                    <DropdownMenuItem onClick={() => router.push("/users")}>
+                      <Users className="h-4 w-4 mr-2" />
+                      Manage Users
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Link href="/login">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <LogIn className="h-4 w-4" />
+                  Sign In
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -104,7 +103,7 @@ export default function Home() {
           <h2 className="text-xl font-semibold">All Proposals</h2>
           <div className="flex items-center gap-2">
             <BepExportAllDialog />
-            <BepCreateModal userId={userId} />
+            {userId && <BepCreateModal userId={userId} />}
           </div>
         </div>
         <BepList />

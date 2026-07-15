@@ -468,6 +468,7 @@ pub enum Instruction {
     /// created — sys-ops are not user-observable futures in BAML, so
     /// the schedule + await pair is pure overhead.
     SysOp(GlobalIndex),
+    SysOpWithRuntimeId(GlobalIndex),
 
     /// BEP-034 `spawn { body }`. Pops `[closure_value, name_value]` from
     /// the stack, allocates an `UnscheduledFuture { closure, name }`
@@ -492,21 +493,6 @@ pub enum Instruction {
     /// future and pushes its index. The combinators (`race`, `any`) are pure
     /// BAML built on top of this.
     AwaitAny,
-
-    /// Creates a watched var and tracks its state.
-    ///
-    /// Format: `WATCH i` where `i` is the relative index of the variable in the
-    /// `Vm::stack` array.
-    Watch(usize),
-
-    /// Unregisters a watched variable when it goes out of scope.
-    ///
-    /// Format: `UNWATCH i` where `i` is the relative index of the variable in the
-    /// `Vm::stack` array.
-    Unwatch(usize),
-
-    /// Manually triggers notifications for a watched variable.
-    Notify(usize),
 
     /// Call a statically-known global function.
     ///
@@ -533,6 +519,15 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
+    /// `Call` plus a caller-provided `boundary.LocalId` operand on top of the
+    /// stack. Ordinary call arity is unchanged; the VM pops the id first,
+    /// consumes it, installs the callee runtime-id/capture policy, then enters
+    /// the callee.
+    CallWithRuntimeId {
+        callee: GlobalIndex,
+        ntypeargs: u16,
+    },
+
     /// Call a function value from the eval stack.
     ///
     /// Format: `CALL_INDIRECT`.
@@ -541,6 +536,10 @@ pub enum Instruction {
     ///
     /// Arity is read from the runtime callee function object.
     CallIndirect,
+
+    /// `CallIndirect` plus a caller-provided `boundary.LocalId` operand above
+    /// the callee value.
+    CallIndirectWithRuntimeId,
 
     /// Virtual interface-method call: resolve the callee at runtime from the
     /// receiver's concrete `Self` type, then call it. The callee is *not* a
@@ -573,10 +572,22 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
+    /// `VirtualCall` plus a caller-provided `boundary.LocalId` operand above
+    /// the method-name value.
+    VirtualCallWithRuntimeId {
+        nargs: u16,
+        ntypeargs: u16,
+    },
+
     /// Throw the value on top of the stack.
     ///
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
     Throw,
+
+    /// Re-throw a caught value on top of the stack.
+    ///
+    /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
+    Rethrow,
 
     /// Return from a function.
     ///
@@ -705,6 +716,24 @@ pub enum Instruction {
     ///
     /// Stack: `[receiver]` -> `[bound_method]`
     MakeBoundMethod(GlobalIndex),
+
+    /// Create a bound method for an *interface* method by resolving the receiver's
+    /// impl at runtime — the value analogue of `VirtualCall` (`let f = x.eq` where
+    /// `x`'s concrete type is statically unknown). Pops the method name, the
+    /// interface type (`Object::Type`), `ntypeargs` method-level type args, and the
+    /// receiver; resolves the receiver's concrete `Self` to its `implements` rule
+    /// (coherence guarantees at most one) and pushes an `Object::BoundMethod` over
+    /// the resolved method, carrying the callee's complete frame type args — the
+    /// impl's realized frame followed by the method-level args (a generic method's
+    /// own type args must be captured here or they are lost; the receiver cannot
+    /// express them).
+    ///
+    /// Stack: `[receiver, type_args…, iface_type, method_name]` -> `[bound_method]`
+    MakeVirtualBoundMethod {
+        /// Number of method-level `Object::Type` args on the stack (below the
+        /// interface type), appended to the resolved impl frame.
+        ntypeargs: u16,
+    },
 
     /// Create a generic-function value (`foo<T>`) from a base function's global
     /// index, popping `ntypeargs` `Object::Type` values from the stack into its
@@ -918,9 +947,6 @@ pub enum OpCode {
     AllocVariant,
     SysOp,
     Spawn,
-    Watch,
-    Unwatch,
-    Notify,
     Call,
     IsType,
     DenseTag,
@@ -961,6 +987,21 @@ pub enum OpCode {
     // args and popped first; the callee is resolved at runtime from the receiver's
     // `Self`.
     VirtualCall,
+
+    // ── Phase 6 ID-aware call forms, appended to preserve discriminants ──
+    CallWithRuntimeId,
+    CallIndirectWithRuntimeId,
+    VirtualCallWithRuntimeId,
+    SysOpWithRuntimeId,
+
+    // ── Phase 5 trace-origin marker, appended to preserve discriminants ──
+    Rethrow,
+
+    // ── Appended to preserve discriminants ──
+    // Virtual interface-method *value* (the value analogue of `VirtualCall`):
+    // no operands (1 byte); receiver, interface type, and method name are popped
+    // from the stack and the resolved bound method is pushed.
+    MakeVirtualBoundMethod,
 }
 
 impl OpCode {
@@ -971,11 +1012,13 @@ impl OpCode {
             Self::Return
             | Self::Await
             | Self::Throw
+            | Self::Rethrow
             | Self::LoadArrayElement
             | Self::LoadMapElement
             | Self::StoreArrayElement
             | Self::StoreMapElement
             | Self::CallIndirect
+            | Self::CallIndirectWithRuntimeId
             | Self::Discriminant
             | Self::TypeTag
             | Self::ThrowIfPanic
@@ -1065,9 +1108,7 @@ impl OpCode {
             | Self::InitInstance
             | Self::AllocVariant
             | Self::SysOp
-            | Self::Watch
-            | Self::Unwatch
-            | Self::Notify
+            | Self::SysOpWithRuntimeId
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
@@ -1080,13 +1121,17 @@ impl OpCode {
             | Self::Jump
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse
-            | Self::VirtualCall => 5,
+            | Self::VirtualCall
+            | Self::VirtualCallWithRuntimeId => 5,
 
             // 3-byte: opcode + u16
-            Self::MakeGenericFunctionFromValue => 3,
+            Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::AllocInstance | Self::Call | Self::MakeGenericFunction => 7,
+            Self::AllocInstance
+            | Self::Call
+            | Self::CallWithRuntimeId
+            | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -1109,11 +1154,14 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Await as u8 => Ok(Self::Await),
             x if x == Self::AwaitAny as u8 => Ok(Self::AwaitAny),
             x if x == Self::Throw as u8 => Ok(Self::Throw),
+            x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
+            x if x == Self::MakeVirtualBoundMethod as u8 => Ok(Self::MakeVirtualBoundMethod),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
             x if x == Self::StoreMapElement as u8 => Ok(Self::StoreMapElement),
             x if x == Self::CallIndirect as u8 => Ok(Self::CallIndirect),
+            x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
             x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
@@ -1198,10 +1246,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::InitInstance as u8 => Ok(Self::InitInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
             x if x == Self::SysOp as u8 => Ok(Self::SysOp),
+            x if x == Self::SysOpWithRuntimeId as u8 => Ok(Self::SysOpWithRuntimeId),
             x if x == Self::Spawn as u8 => Ok(Self::Spawn),
-            x if x == Self::Watch as u8 => Ok(Self::Watch),
-            x if x == Self::Unwatch as u8 => Ok(Self::Unwatch),
-            x if x == Self::Notify as u8 => Ok(Self::Notify),
             x if x == Self::Call as u8 => Ok(Self::Call),
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
@@ -1224,6 +1270,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::LoadVar2 as u8 => Ok(Self::LoadVar2),
             x if x == Self::StoreVar2 as u8 => Ok(Self::StoreVar2),
             x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
+            x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
+            x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
             _ => Err(byte),
         }
     }
@@ -1236,12 +1284,16 @@ impl std::fmt::Display for OpCode {
             Self::Await => "AWAIT",
             Self::AwaitAny => "AWAIT_ANY",
             Self::VirtualCall => "VIRTUAL_CALL",
+            Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
             Self::Throw => "THROW",
+            Self::Rethrow => "RETHROW",
+            Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
             Self::StoreMapElement => "STORE_MAP_ELEMENT",
             Self::CallIndirect => "CALL_INDIRECT",
+            Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
             Self::ThrowIfPanic => "THROW_IF_PANIC",
@@ -1326,11 +1378,10 @@ impl std::fmt::Display for OpCode {
             Self::InitInstance => "INIT_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
             Self::SysOp => "SYS_OP",
+            Self::SysOpWithRuntimeId => "SYS_OP_WITH_RUNTIME_ID",
             Self::Spawn => "SPAWN",
-            Self::Watch => "WATCH",
-            Self::Unwatch => "UNWATCH",
-            Self::Notify => "NOTIFY",
             Self::Call => "CALL",
+            Self::CallWithRuntimeId => "CALL_WITH_RUNTIME_ID",
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
@@ -1513,11 +1564,17 @@ impl std::fmt::Display for Instruction {
             Instruction::InitInstance(i) => write!(f, "INIT_INSTANCE {i}"),
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
+            Instruction::SysOpWithRuntimeId(callee) => {
+                write!(f, "SYS_OP_WITH_RUNTIME_ID {callee}")
+            }
             Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::AwaitAny => f.write_str("AWAIT_ANY"),
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
+            }
+            Instruction::CallWithRuntimeId { callee, ntypeargs } => {
+                write!(f, "CALL_WITH_RUNTIME_ID {callee} ntypeargs={ntypeargs}")
             }
             Instruction::MakeGenericFunction {
                 function,
@@ -1529,16 +1586,24 @@ impl std::fmt::Display for Instruction {
                 write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
             }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
+            Instruction::CallIndirectWithRuntimeId => f.write_str("CALL_INDIRECT_WITH_RUNTIME_ID"),
             Instruction::VirtualCall { nargs, ntypeargs } => {
                 write!(f, "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs}")
             }
+            Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+                write!(
+                    f,
+                    "VIRTUAL_CALL_WITH_RUNTIME_ID nargs={nargs} ntypeargs={ntypeargs}"
+                )
+            }
             Instruction::Throw => f.write_str("THROW"),
+            Instruction::Rethrow => f.write_str("RETHROW"),
+            Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                write!(f, "MAKE_VIRTUAL_BOUND_METHOD {ntypeargs}")
+            }
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
-            Instruction::Watch(i) => write!(f, "WATCH {i}"),
-            Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),
-            Instruction::Notify(i) => write!(f, "NOTIFY {i}"),
             Instruction::JumpTable(table_idx) => {
                 write!(f, "JUMP_TABLE {table_idx}")
             }
@@ -1589,7 +1654,7 @@ impl std::fmt::Display for Instruction {
 /// need to resolve names from the `ObjectPool` or runtime stack.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum OperandMeta {
-    /// `LoadVar`, `StoreVar`, `Watch`, `Unwatch`, `Notify` — variable name.
+    /// `LoadVar`, `StoreVar` — variable name.
     Var(String),
     /// `LoadField`, `StoreField` — field name.
     Field(String),
@@ -1691,6 +1756,42 @@ impl ExceptionTableEntry {
     }
 }
 
+/// One handler-body PC range, for the BEP-042 cause-chain pre-walk.
+///
+/// A throw whose PC lies in `[start_pc, end_pc)` happened *during handling of*
+/// the error caught by the owning catch (or while unwinding through a defer
+/// pad). That caught error's materialized `ErrorContext` lives in
+/// `stack_trace_slot` and becomes the new error's `cause`.
+///
+/// One catch contributes one entry *per handler-body block*. A handler body is
+/// the union of blocks captured at lowering; layout can fragment it across
+/// non-contiguous PCs, so per-block ranges keep the coverage exact — unlike a
+/// single `[handler_pc, max_end)` span, which over-covers the gaps between
+/// fragments (and would mis-chain a throw in code laid out there).
+///
+/// `handler_pc` identifies the owning catch and keys nesting depth: among all
+/// entries covering a PC, the one with the largest `handler_pc` is the
+/// innermost (narrowest) handler and wins.
+#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
+pub struct HandlerContextEntry {
+    /// First instruction of this handler-body block (inclusive).
+    pub start_pc: usize,
+    /// One past the last instruction of this handler-body block (exclusive).
+    pub end_pc: usize,
+    /// Handler block PC of the owning catch — the nesting key.
+    pub handler_pc: usize,
+    /// Frame-local slot holding the owning catch's `ErrorContext`.
+    /// `ExceptionTableEntry::NO_STACK_TRACE` means the catch bound no `ctx`, so
+    /// there is no context object to chain — the pre-walk stops with `null`.
+    pub stack_trace_slot: usize,
+}
+
+impl HandlerContextEntry {
+    pub fn has_stack_trace_slot(&self) -> bool {
+        self.stack_trace_slot != ExceptionTableEntry::NO_STACK_TRACE
+    }
+}
+
 /// Compact jump table: maps discriminant values to i32 byte offsets
 /// (relative to the end of the `JumpTable` instruction in the compact stream).
 /// Parallel to `Bytecode::jump_tables` but with translated offsets.
@@ -1729,6 +1830,9 @@ pub struct CompactCode {
     pub line_table: Vec<LineTableEntry>,
     /// Exception table with PCs translated to byte offsets.
     pub exception_table: Vec<ExceptionTableEntry>,
+    /// Handler-body ranges (BEP-042 cause chain) with PCs translated to byte
+    /// offsets. Parallel to `Bytecode::handler_context_table`.
+    pub handler_context_table: Vec<HandlerContextEntry>,
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
@@ -1758,6 +1862,17 @@ impl CompactCode {
             .iter()
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
+
+    /// The innermost handler-body range (byte-offset) covering `pc`, or `None`.
+    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
+    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// Innermost = largest `handler_pc` among covering ranges.
+    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_context_table
+            .iter()
+            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
+            .max_by_key(|e| e.handler_pc)
+    }
 }
 
 /// Executable bytecode.
@@ -1772,8 +1887,9 @@ pub struct Bytecode {
     /// Contains `ObjectIndex` for object references.
     pub constants: Vec<ConstValue>,
 
-    /// Resolved constants (runtime, populated at load time).
+    /// Resolved constants (resolved from `constants` at load time via [`Bytecode::resolve_constants`]).
     /// Contains `HeapPtr` for object references. Used by `LoadConst`.
+    /// Set to `null` for types.
     #[borsh(skip)]
     pub resolved_constants: Vec<crate::Value>,
 
@@ -1806,6 +1922,12 @@ pub struct Bytecode {
     /// to find a handler covering the faulting instruction.
     pub exception_table: Vec<ExceptionTableEntry>,
 
+    /// Handler-body PC ranges for the BEP-042 cause chain. One entry per
+    /// handler-body block (a catch arm body, or a defer pad body). The cause
+    /// pre-walk scans this table — *not* the exception table — to decide
+    /// whether a throw happened "during handling of" another error.
+    pub handler_context_table: Vec<HandlerContextEntry>,
+
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
     #[borsh(skip)]
@@ -1831,6 +1953,7 @@ impl Bytecode {
             line_table: Vec::new(),
             meta: Vec::new(),
             exception_table: Vec::new(),
+            handler_context_table: Vec::new(),
             compact: None,
         }
     }
@@ -1861,6 +1984,17 @@ impl Bytecode {
         self.exception_table
             .iter()
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
+    }
+
+    /// The innermost handler-body range covering `pc`, or `None`.
+    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
+    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// Innermost = largest `handler_pc` among covering ranges.
+    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_context_table
+            .iter()
+            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
+            .max_by_key(|e| e.handler_pc)
     }
 
     /// Resolve constants from `ConstValue` to Value using a resolver function.
@@ -1930,11 +2064,13 @@ impl Bytecode {
                 Instruction::Return
                 | Instruction::Await
                 | Instruction::Throw
+                | Instruction::Rethrow
                 | Instruction::LoadArrayElement
                 | Instruction::LoadMapElement
                 | Instruction::StoreArrayElement
                 | Instruction::StoreMapElement
                 | Instruction::CallIndirect
+                | Instruction::CallIndirectWithRuntimeId
                 | Instruction::Discriminant
                 | Instruction::TypeTag
                 | Instruction::ThrowIfPanic
@@ -2010,9 +2146,6 @@ impl Bytecode {
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
                 | Instruction::AllocMap(v)
-                | Instruction::Watch(v)
-                | Instruction::Unwatch(v)
-                | Instruction::Notify(v)
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
@@ -2030,6 +2163,7 @@ impl Bytecode {
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
                 | Instruction::SysOp(g)
+                | Instruction::SysOpWithRuntimeId(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -2039,7 +2173,8 @@ impl Bytecode {
                 }
 
                 // ── Call: u32 callee + u16 ntypeargs ─────────────────
-                Instruction::Call { callee, ntypeargs } => {
+                Instruction::Call { callee, ntypeargs }
+                | Instruction::CallWithRuntimeId { callee, ntypeargs } => {
                     code.extend_from_slice(
                         &u32::try_from(callee.into_raw())
                             .expect("global index fits u32")
@@ -2062,12 +2197,14 @@ impl Bytecode {
                 }
 
                 // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
-                Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
+                Instruction::MakeGenericFunctionFromValue { ntypeargs }
+                | Instruction::MakeVirtualBoundMethod { ntypeargs } => {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
                 // ── VirtualCall: u16 nargs, u16 ntypeargs ────────────
-                Instruction::VirtualCall { nargs, ntypeargs } => {
+                Instruction::VirtualCall { nargs, ntypeargs }
+                | Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
                     code.extend_from_slice(&nargs.to_le_bytes());
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
@@ -2190,6 +2327,23 @@ impl Bytecode {
             })
             .collect();
 
+        let handler_context_table = self
+            .handler_context_table
+            .iter()
+            .map(|entry| HandlerContextEntry {
+                start_pc: index_to_offset[entry.start_pc],
+                // `end_pc` may equal `instructions.len()` when a handler-body
+                // block runs to the end of the function; map that to the total
+                // byte length.
+                end_pc: index_to_offset
+                    .get(entry.end_pc)
+                    .copied()
+                    .unwrap_or(code.len()),
+                handler_pc: index_to_offset[entry.handler_pc],
+                stack_trace_slot: entry.stack_trace_slot,
+            })
+            .collect();
+
         // ── Translate jump tables ────────────────────────────────────────
         // For each JumpTableData instruction at index `i`, the JumpTable opcode
         // is at byte offset `index_to_offset[i]` and its encoded size is 9.
@@ -2241,6 +2395,7 @@ impl Bytecode {
             code,
             line_table,
             exception_table,
+            handler_context_table,
             jump_tables,
         }
     }
@@ -2256,11 +2411,14 @@ impl Bytecode {
             Instruction::Await => OpCode::Await,
             Instruction::AwaitAny => OpCode::AwaitAny,
             Instruction::Throw => OpCode::Throw,
+            Instruction::Rethrow => OpCode::Rethrow,
+            Instruction::MakeVirtualBoundMethod { .. } => OpCode::MakeVirtualBoundMethod,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
             Instruction::StoreMapElement => OpCode::StoreMapElement,
             Instruction::CallIndirect => OpCode::CallIndirect,
+            Instruction::CallIndirectWithRuntimeId => OpCode::CallIndirectWithRuntimeId,
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
             Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
@@ -2324,11 +2482,10 @@ impl Bytecode {
             Instruction::InitInstance(_) => OpCode::InitInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
             Instruction::SysOp(_) => OpCode::SysOp,
+            Instruction::SysOpWithRuntimeId(_) => OpCode::SysOpWithRuntimeId,
             Instruction::Spawn => OpCode::Spawn,
-            Instruction::Watch(_) => OpCode::Watch,
-            Instruction::Unwatch(_) => OpCode::Unwatch,
-            Instruction::Notify(_) => OpCode::Notify,
             Instruction::Call { .. } => OpCode::Call,
+            Instruction::CallWithRuntimeId { .. } => OpCode::CallWithRuntimeId,
             Instruction::IsType(_) => OpCode::IsType,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
@@ -2397,6 +2554,7 @@ impl Bytecode {
                 OpCode::MakeGenericFunctionFromValue
             }
             Instruction::VirtualCall { .. } => OpCode::VirtualCall,
+            Instruction::VirtualCallWithRuntimeId { .. } => OpCode::VirtualCallWithRuntimeId,
         }
     }
 }
@@ -2430,6 +2588,7 @@ mod compact_tests {
             line_table: Vec::new(),
             meta,
             exception_table: Vec::new(),
+            handler_context_table: Vec::new(),
             compact: None,
         }
     }
@@ -2598,6 +2757,7 @@ mod compact_tests {
             ],
             meta: vec![InstructionMeta { operand: None }; 2],
             exception_table: Vec::new(),
+            handler_context_table: Vec::new(),
             compact: None,
         };
         let compact = bc.lower_to_compact();
@@ -2628,6 +2788,12 @@ mod compact_tests {
                 error_slot: 0,
                 stack_trace_slot: ExceptionTableEntry::NO_STACK_TRACE,
             }],
+            handler_context_table: vec![HandlerContextEntry {
+                start_pc: 2,
+                end_pc: 3, // one past the last instruction → mapped to total byte length
+                handler_pc: 2,
+                stack_trace_slot: 0,
+            }],
             compact: None,
         };
         let compact = bc.lower_to_compact();
@@ -2635,5 +2801,10 @@ mod compact_tests {
         assert_eq!(entry.start_pc, 0); // instruction 0 → byte 0
         assert_eq!(entry.end_pc, 3); // instruction 2 → byte 3 (2-byte LoadIntSmall + 1-byte Return)
         assert_eq!(entry.handler_pc, 3); // instruction 2 → byte 3
+
+        let hc = &compact.handler_context_table[0];
+        assert_eq!(hc.start_pc, 3); // instruction 2 → byte 3
+        assert_eq!(hc.end_pc, 4); // instruction 3 (end) → total byte length 4
+        assert_eq!(hc.handler_pc, 3);
     }
 }

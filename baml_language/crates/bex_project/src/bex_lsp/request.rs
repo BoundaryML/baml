@@ -33,14 +33,67 @@ macro_rules! define_lsp_request_trait {
             pub trait BexLspRequest {
                 fn handle_request(&self, notif: lsp_server::Request) {
                     let sender = self.request_sender();
+                    let mut responder = move |id, result| {
+                        let _ = sender(id, result);
+                    };
+                    self.handle_request_with_responder(notif, &mut responder);
+                }
+
+                /// Dispatch with a connection-owned responder. Transport
+                /// runtimes use this to race handler completion against
+                /// cancellation and to route reused request IDs through a
+                /// session-scoped response token instead of the shared
+                /// sender.
+                fn handle_request_with_responder(
+                    &self,
+                    notif: lsp_server::Request,
+                    responder: &mut dyn FnMut(
+                        lsp_server::RequestId,
+                        Result<serde_json::Value, LspError>,
+                    ),
+                ) {
+                    self.handle_request_with_cancellation(notif, None, responder);
+                }
+
+                /// Dispatch with an operation-owned cancellation token.
+                /// The token is observed only at safe handler boundaries —
+                /// entry, source-gate acquisition (see
+                /// `multi_project::read_for_request`), and completion — and
+                /// is never connected to Salsa's unwind-based cancellation
+                /// (abort-profile invariant).
+                fn handle_request_with_cancellation(
+                    &self,
+                    notif: lsp_server::Request,
+                    cancellation: Option<&sys_types::CancellationToken>,
+                    responder: &mut dyn FnMut(
+                        lsp_server::RequestId,
+                        Result<serde_json::Value, LspError>,
+                    ),
+                ) {
                     let id = notif.id.clone();
+                    if cancellation.is_some_and(sys_types::CancellationToken::is_cancelled) {
+                        responder(
+                            id,
+                            Err(LspError::RequestCanceled(
+                                "request canceled before handler entry".to_string(),
+                            )),
+                        );
+                        return;
+                    }
+                    // Install the ambient token so the bounded source-gate
+                    // read can observe it right after acquisition without
+                    // threading it through every handler signature.
+                    let _cancellation_scope =
+                        crate::bex_lsp::request_cancellation::RequestCancellationScope::enter(
+                            cancellation.cloned(),
+                        );
                     match notif.method.as_str() {
                         $(
                             lsp_request!($lsp_method) => {
                                 let (id, params) = match lsp_request_extract!(notif, $lsp_method) {
                                     Ok(extracted) => extracted,
                                     Err(err) => {
-                                        let _ = sender(id, Err(err));
+                                        responder(id, Err(err));
                                         return;
                                     }
                                 };
@@ -48,11 +101,20 @@ macro_rules! define_lsp_request_trait {
                                     Ok(result) => serde_json::to_value(result).map_err(LspError::RequestSerializeError),
                                     Err(err) => Err(err),
                                 };
-                                let _ = sender(id, result);
+                                if cancellation.is_some_and(sys_types::CancellationToken::is_cancelled) {
+                                    responder(
+                                        id,
+                                        Err(LspError::RequestCanceled(
+                                            "request canceled during handler execution".to_string(),
+                                        )),
+                                    );
+                                    return;
+                                }
+                                responder(id, result);
                             }
                         ),*,
                         other => {
-                            let _ = sender(notif.id, Err(LspError::UnknownErrorCode(format!("request not supported: {}", other))));
+                            responder(notif.id, Err(LspError::RequestNotSupported(other.to_string())));
                             return;
                         }
                     }
@@ -145,4 +207,93 @@ define_lsp_request_trait! {
     "typeHierarchy/subtypes" => type_hierarchy_subtypes,
     "typeHierarchy/supertypes" => type_hierarchy_supertypes,
     "workspaceSymbol/resolve" => workspace_symbol_resolve,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Minimal handler: `shutdown` succeeds and (optionally) cancels its own
+    /// token mid-handler, modelling a cancel that lands while the handler
+    /// runs on the dispatch worker.
+    struct ShutdownHandler {
+        cancel_during_handler: Option<sys_types::CancellationToken>,
+    }
+
+    impl BexLspRequest for ShutdownHandler {
+        fn request_sender(
+            &self,
+        ) -> Box<
+            dyn Fn(
+                    lsp_server::RequestId,
+                    Result<serde_json::Value, LspError>,
+                ) -> Result<(), LspError>
+                + '_,
+        > {
+            Box::new(|_, _| Ok(()))
+        }
+
+        fn on_request_shutdown(&self, _params: ()) -> Result<(), LspError> {
+            if let Some(token) = &self.cancel_during_handler {
+                token.cancel();
+            }
+            Ok(())
+        }
+    }
+
+    fn shutdown_request() -> lsp_server::Request {
+        lsp_server::Request {
+            id: lsp_server::RequestId::from(1),
+            method: "shutdown".to_string(),
+            params: serde_json::Value::Null,
+        }
+    }
+
+    fn dispatch(
+        handler: &ShutdownHandler,
+        token: Option<&sys_types::CancellationToken>,
+    ) -> Result<serde_json::Value, LspError> {
+        let mut observed = None;
+        handler.handle_request_with_cancellation(shutdown_request(), token, &mut |_, result| {
+            observed = Some(result);
+        });
+        observed.expect("dispatch must respond exactly once")
+    }
+
+    #[test]
+    fn uncancelled_dispatch_returns_the_handler_result() {
+        let handler = ShutdownHandler {
+            cancel_during_handler: None,
+        };
+        let token = sys_types::CancellationToken::new();
+        assert!(matches!(
+            dispatch(&handler, Some(&token)),
+            Ok(serde_json::Value::Null)
+        ));
+    }
+
+    #[test]
+    fn cancellation_before_entry_short_circuits_the_handler() {
+        let handler = ShutdownHandler {
+            cancel_during_handler: None,
+        };
+        let token = sys_types::CancellationToken::new();
+        token.cancel();
+        assert!(matches!(
+            dispatch(&handler, Some(&token)),
+            Err(LspError::RequestCanceled(_))
+        ));
+    }
+
+    #[test]
+    fn cancellation_during_the_handler_is_observed_at_completion() {
+        let token = sys_types::CancellationToken::new();
+        let handler = ShutdownHandler {
+            cancel_during_handler: Some(token.clone()),
+        };
+        assert!(matches!(
+            dispatch(&handler, Some(&token)),
+            Err(LspError::RequestCanceled(_))
+        ));
+    }
 }

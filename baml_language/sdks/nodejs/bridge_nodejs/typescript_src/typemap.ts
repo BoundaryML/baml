@@ -1,5 +1,5 @@
 // typemap.ts — runtime BamlTypeMap, the Node analog of
-// sdks/python/src/baml_core/typemap.py.
+// sdks/python/src/baml_bridge/typemap.py.
 //
 // Codegen emits `_typemap.ts` with `BamlTypeMap.fromLazyEntries({ classes,
 // enums, typeAliases })` where each entry is a resolver thunk over a statically

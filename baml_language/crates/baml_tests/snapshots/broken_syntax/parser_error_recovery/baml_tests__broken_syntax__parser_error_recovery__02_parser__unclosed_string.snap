@@ -76,8 +76,8 @@ error: Expected Unclosed string literal, found EOF
    ╭─[ unclosed_string.baml:5:2 ]
    │
  5 │ }
-   │  ┬  
-   │  ╰── Expected Unclosed string literal, found EOF
+   │  │ 
+   │  ╰─ Expected Unclosed string literal, found EOF
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -86,8 +86,8 @@ error: Expected '}', found EOF
    ╭─[ unclosed_string.baml:5:2 ]
    │
  5 │ }
-   │  ┬  
-   │  ╰── Expected '}', found EOF
+   │  │ 
+   │  ╰─ Expected '}', found EOF
    │ 
    │ Note: Error code: E0010
 ───╯

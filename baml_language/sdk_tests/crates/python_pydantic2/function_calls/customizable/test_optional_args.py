@@ -17,9 +17,11 @@ def test_optional_args_runtime_matrix():
 
 
 def test_python_unset_and_none_differ_in_one_call():
+    # UNSET means "omit this argument"; None means "pass an explicit null".
+    # The two must stay distinct within a single call.
+    assert baml.UNSET is not None
     assert optional_args_probe(1, opt1=baml.UNSET, opt2=None) == [1, 5, None]
-    assert baml.Unset() is baml.UNSET
-    assert optional_args_probe(1, opt1=baml.Unset(), opt2=None) == [1, 5, None]
+    assert optional_args_probe(1, opt1=None, opt2=baml.UNSET) == [1, None, 99]
 
 
 async def test_optional_args_async_samples():

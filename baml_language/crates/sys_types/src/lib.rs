@@ -196,7 +196,9 @@ impl OpErrorPayload {
         match self {
             Self::Vm(e) => std::fmt::Display::fmt(e, f),
             Self::HostThrown(boxed) => match boxed.as_ref() {
-                BexExternalValue::Instance { class_name, fields } => {
+                BexExternalValue::Instance {
+                    class_name, fields, ..
+                } => {
                     let message = fields.get("message").and_then(|v| match v {
                         BexExternalValue::String(s) => Some(s.as_str()),
                         _ => None,

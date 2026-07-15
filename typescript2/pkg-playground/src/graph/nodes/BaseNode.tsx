@@ -1,11 +1,8 @@
 import { type NodeProps } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
-import {
-  nodeBackground,
-  nodeShadow,
-  selectionRing,
-  stateColors,
-} from '../constants';
+import { getChrome, nodeBackground, nodeShadow, stateStyle } from '../constants';
+import { depthScale } from '../lod';
+import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 import { NodeOutputPreview } from './NodeOutputPreview';
@@ -91,7 +88,20 @@ const StateIcon = ({ state }: { state: string }) => {
 export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
-  const colors = stateColors[d.executionState] ?? stateColors['not-started'];
+  const theme = useGraphThemeContext();
+  const chrome = getChrome(theme);
+  const colors = stateStyle(theme, d.executionState);
+  // Set by the level-of-detail pass when this node hides a collapsed subgraph.
+  const collapsed = d.collapsed === true;
+  const collapsedCount =
+    typeof d.collapsedCount === 'number' ? d.collapsedCount : 0;
+  // Deeper nodes render smaller (semantic-zoom hierarchy) — but not when a
+  // preview is shown, so the content matches the (unshrunk) layout box.
+  const hasPreview =
+    (d.valuePreviews?.length ?? 0) > 0 || !!d.errorMessage || !!d.hasResult;
+  const s = hasPreview
+    ? 1
+    : depthScale(typeof d.depth === 'number' ? d.depth : 0);
 
   return (
     <>
@@ -101,12 +111,12 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'stretch',
-          gap: 6,
-          padding: '7px 11px 7px 9px',
+          gap: 6 * s,
+          padding: `${7 * s}px ${11 * s}px ${7 * s}px ${9 * s}px`,
           borderRadius: 8,
-          background: nodeBackground(colors),
-          border: `1px solid ${isHighlighted ? selectionRing.color : colors.border}`,
-          boxShadow: nodeShadow(colors, !!isHighlighted),
+          background: nodeBackground(colors, theme),
+          border: `1px solid ${isHighlighted ? chrome.selectionRing.color : colors.border}`,
+          boxShadow: nodeShadow(colors, !!isHighlighted, theme),
           width: '100%',
           height: '100%',
           boxSizing: 'border-box',
@@ -114,13 +124,15 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
           transition: 'box-shadow 120ms ease, border-color 120ms ease',
+          // A collapsed node hides a subgraph — hint that clicking expands it.
+          cursor: collapsed ? 'zoom-in' : undefined,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 * s }}>
           <div
             style={{
-              width: 20,
-              height: 20,
+              width: 20 * s,
+              height: 20 * s,
               borderRadius: 6,
               background: colors.accent,
               boxShadow: `inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.25)`,
@@ -134,7 +146,7 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           </div>
           <div
             style={{
-              fontSize: 12,
+              fontSize: 12 * s,
               fontWeight: 500,
               color: colors.text,
               flex: 1,
@@ -148,11 +160,35 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data }) => {
           >
             {d.label}
           </div>
+          {collapsed ? (
+            <div
+              title={`Click to expand ${collapsedCount} hidden node${
+                collapsedCount === 1 ? '' : 's'
+              }`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+                flexShrink: 0,
+                padding: '1px 6px',
+                borderRadius: 999,
+                fontSize: 10.5,
+                fontWeight: 600,
+                lineHeight: 1.4,
+                color: chrome.button.text,
+                background: chrome.button.bg,
+                border: `1px solid ${chrome.button.border}`,
+              }}
+            >
+              <span style={{ fontSize: 11, lineHeight: 1 }}>+</span>
+              {collapsedCount > 0 ? collapsedCount : null}
+            </div>
+          ) : null}
         </div>
         <NodeOutputPreview
           result={d.result}
           hasResult={d.hasResult}
-          images={d.imageOutputs}
+          valuePreviews={d.valuePreviews}
           errorMessage={d.errorMessage}
           customRenderers={d.customRenderers}
         />

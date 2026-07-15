@@ -43,28 +43,28 @@ function ArrayAssignments() -> int {
 //----
 //- diagnostics
 // error: type mismatch: expected int[], got string[]
-//     ╭─[ invalid_assignment_arrays.baml:18:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:18:6 ]
 //     │
 //  18 │     d = ["a", "b"];
-//     │        ─────┬─────
-//     │             ╰─────── type mismatch: expected int[], got string[]
+//     │         ─────┬────
+//     │              ╰────── type mismatch: expected int[], got string[]
 //     │
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected string[], got int[]
-//     ╭─[ invalid_assignment_arrays.baml:22:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:22:6 ]
 //     │
 //  22 │     e = [1, 2];
-//     │        ───┬───
-//     │           ╰───── type mismatch: expected string[], got int[]
+//     │         ───┬──
+//     │            ╰──── type mismatch: expected string[], got int[]
 //     │
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected int, got int[]
-//     ╭─[ invalid_assignment_arrays.baml:26:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:26:6 ]
 //     │
 //  26 │     f = [1, 2, 3];
-//     │        ─────┬────
+//     │         ────┬────
 //     │             ╰────── type mismatch: expected int, got int[]
 //     │
 //     │ Note: Error code: E0001
@@ -88,10 +88,10 @@ function ArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // error: type mismatch: expected string, got int[]
-//     ╭─[ invalid_assignment_arrays.baml:38:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:38:6 ]
 //     │
 //  38 │     i = [4, 5, 6];
-//     │        ─────┬────
+//     │         ────┬────
 //     │             ╰────── type mismatch: expected string, got int[]
 //     │
 //     │ Note: Error code: E0001

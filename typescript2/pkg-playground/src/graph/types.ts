@@ -2,9 +2,10 @@ import type {
   Node as ReactFlowNode,
   Edge as ReactFlowEdge,
 } from '@xyflow/react';
-import type { BamlJsMedia, BamlJsValue } from '@b/pkg-proto';
+import type { BamlJsValue } from '@b/pkg-proto';
 import type { FC } from 'react';
 import type { ResultRendererProps } from '../result-renderers';
+import type { GraphNodeValuePreview } from '../run-store-projections';
 import type { SourceNavigationTarget } from '../worker-protocol';
 
 // Internal graph types (between CFG JSON and ReactFlow)
@@ -60,9 +61,12 @@ export interface WorkflowNodeData {
   iterationCount?: number;
   result?: BamlJsValue | null;
   hasResult?: boolean;
-  imageOutputs?: BamlJsMedia[];
+  valuePreviews?: GraphNodeValuePreview[];
   errorMessage?: string | null;
   customRenderers?: Record<string, FC<ResultRendererProps>>;
+  syntheticKind?: 'group-value-preview';
+  sourceNodeId?: string;
+  groupValuePreviewsLifted?: boolean;
   [key: string]: unknown;
 }
 

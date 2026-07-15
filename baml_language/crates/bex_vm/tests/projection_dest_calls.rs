@@ -81,7 +81,7 @@ fn equality_result_assigned_to_field() {
 #[test]
 fn virtual_call_result_assigned_to_field() {
     const SRC: &str = r#"
-        interface Flag { function flag(self) -> bool }
+        interface Flag { function flag(self) -> bool throws never }
         class Yes { implements Flag { function flag(self) -> bool { true } } }
         class No { implements Flag { function flag(self) -> bool { false } } }
         class BoolBox { flag: bool }

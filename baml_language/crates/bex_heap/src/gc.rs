@@ -160,6 +160,141 @@ impl BexHeap {
     /// and clears Gen0 and Gen1. After collection all survivors reside in Gen2.
     ///
     /// Returns `(GcStats, remapped_roots, forwarding_map)`.
+    /// BEP-042: scan the given from-space generations for instances that died
+    /// this collection (not in `forwarding`), are not already cleaned, and
+    /// whose class defines a `cleanup` finalizer. Returns their (old) HeapPtrs
+    /// — the keep-alive seeds for finalization.
+    ///
+    /// Cheap: most objects are not instances, and most instances belong to
+    /// classes without `cleanup` (a single `has_cleanup` flag read). Only the
+    /// dead-and-finalizable minority is collected.
+    ///
+    /// SAFETY: call only at a GC safepoint, after the root trace has populated
+    /// `forwarding`, and before the space swap — the from-space objects must
+    /// still be intact.
+    unsafe fn scan_dead_finalizers(
+        &self,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
+        gens: &[&ChunkedVec<Object>],
+    ) -> Vec<(HeapPtr, String)> {
+        // Fast path: if no class defines `cleanup`, no instance can ever be
+        // finalizable, so skip the O(heap) from-space walk on every collection.
+        if !self.has_finalizable_classes {
+            return Vec::new();
+        }
+        let mut seeds = Vec::new();
+        for space in gens {
+            for i in 0..space.len() {
+                // SAFETY: index in bounds; GC safepoint.
+                let ptr = unsafe { self.make_heap_ptr(space.get_ptr(i)) };
+                if forwarding.contains_key(&ptr) {
+                    continue; // reachable from roots → not dead
+                }
+                // SAFETY: from-space object is still intact pre-swap.
+                let Object::Instance(inst) = (unsafe { ptr.get() }) else {
+                    continue;
+                };
+                if inst.cleaned.is_cleaned() {
+                    continue; // explicit/`defer` already cleaned it — SuppressFinalize
+                }
+                // The class object is compile-time/permanent — always valid.
+                let Object::Class(class) = (unsafe { inst.class.get() }) else {
+                    continue;
+                };
+                if class.has_cleanup {
+                    // Resolve the `cleanup` function name here, while the class
+                    // is in hand: methods register as `{class_fqn}.cleanup`
+                    // (matching `make_to_json_callee`'s `{fqn}.to_json`).
+                    let cleanup_fn = format!("{}.cleanup", class.name.render_dotted(false));
+                    seeds.push((ptr, cleanup_fn));
+                }
+            }
+        }
+        seeds
+    }
+
+    /// BEP-042 (major GC): keep alive every dead, not-yet-cleaned instance of a
+    /// `has_cleanup` class (and its transitive closure) by copying it into the
+    /// inactive space, and queue it for finalization. The copy loop mirrors the
+    /// root trace in [`copy_collection`]; queued pointers are the post-copy
+    /// locations, valid until the engine drains them at this same safepoint.
+    ///
+    /// SAFETY: GC safepoint, after the root trace, before the swap.
+    unsafe fn keepalive_finalizers_major(&self, forwarding: &mut HashMap<HeapPtr, HeapPtr>) {
+        let seeds = unsafe {
+            self.scan_dead_finalizers(
+                forwarding,
+                &[self.gen0_ref(), self.gen1_ref(), self.gen2_ref()],
+            )
+        };
+        if seeds.is_empty() {
+            return;
+        }
+        let mut worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
+        while let Some(old_ptr) = worklist.pop() {
+            if forwarding.contains_key(&old_ptr) {
+                continue;
+            }
+            if self.is_compile_time_ptr(old_ptr) {
+                forwarding.insert(old_ptr, old_ptr);
+                continue;
+            }
+            let new_ptr = self.copy_object_to_inactive(old_ptr, forwarding);
+            // SAFETY: just written into inactive; pointer valid.
+            let obj = unsafe { new_ptr.get() };
+            self.add_references_to_worklist(obj, &mut worklist);
+        }
+        for (old_ptr, cleanup_fn) in seeds {
+            // Every seed was copied above, so it is now in `forwarding`.
+            self.push_pending_finalizer(forwarding[&old_ptr], cleanup_fn);
+        }
+    }
+
+    /// BEP-042 (minor GC): like [`keepalive_finalizers_major`], but only the
+    /// young generations are collected, so only dead young instances are
+    /// finalized. The closure copy is generation-aware (Gen0→new Gen1,
+    /// Gen1→Gen2 promotion, Gen2 identity), mirroring [`copy_collection_minor`].
+    ///
+    /// SAFETY: GC safepoint, after the root trace, before the swap.
+    unsafe fn keepalive_finalizers_minor(
+        &self,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
+        promoted_to_gen2: &mut usize,
+    ) {
+        let seeds =
+            unsafe { self.scan_dead_finalizers(forwarding, &[self.gen0_ref(), self.gen1_ref()]) };
+        if seeds.is_empty() {
+            return;
+        }
+        let mut worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
+        while let Some(old_ptr) = worklist.pop() {
+            if forwarding.contains_key(&old_ptr) {
+                continue;
+            }
+            match self.generation_of(old_ptr) {
+                Generation::CompileTime | Generation::Gen2 => {
+                    forwarding.insert(old_ptr, old_ptr);
+                }
+                Generation::Gen0 => {
+                    let new_ptr = self.copy_object_to_space(&self.inactive, old_ptr, forwarding);
+                    // SAFETY: just written; pointer valid.
+                    let obj = unsafe { new_ptr.get() };
+                    self.add_references_to_worklist(obj, &mut worklist);
+                }
+                Generation::Gen1 => {
+                    let new_ptr = self.copy_object_to_space(&self.gen2, old_ptr, forwarding);
+                    // SAFETY: just written; pointer valid.
+                    let obj = unsafe { new_ptr.get() };
+                    self.add_references_to_worklist(obj, &mut worklist);
+                    *promoted_to_gen2 += 1;
+                }
+            }
+        }
+        for (old_ptr, cleanup_fn) in seeds {
+            self.push_pending_finalizer(forwarding[&old_ptr], cleanup_fn);
+        }
+    }
+
     fn copy_collection(
         &self,
         roots: &[HeapPtr],
@@ -222,6 +357,15 @@ impl BexHeap {
             // SAFETY: We just wrote the object into inactive, pointer is valid.
             let obj = unsafe { new_ptr.get() };
             self.add_references_to_worklist(obj, &mut worklist);
+        }
+
+        // BEP-042: keep alive every dead instance with a `cleanup` finalizer
+        // (and its transitive closure) by copying it into inactive, and queue
+        // it for post-collection finalization. After the root trace (so dead =
+        // not in `forwarding`), before the swap (so from-space is intact).
+        // SAFETY: GC safepoint; exclusive access.
+        unsafe {
+            self.keepalive_finalizers_major(&mut forwarding);
         }
 
         // Patch all intra-heap pointers in the inactive space to their new locations.
@@ -408,6 +552,9 @@ impl BexHeap {
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
+            | Object::Interface(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
             | Object::Function(_)
             | Object::GenericFunction(_)
             | Object::RustData(_)
@@ -554,6 +701,9 @@ impl BexHeap {
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
+            | Object::Interface(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
             | Object::Function(_)
             | Object::GenericFunction(_)
             | Object::RustData(_)
@@ -820,6 +970,9 @@ impl BexHeap {
             | Object::Uint8Array(_)
             | Object::Class(_)
             | Object::Enum(_)
+            | Object::Interface(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
             | Object::Function(_)
             | Object::GenericFunction(_)
             | Object::RustData(_)
@@ -907,6 +1060,15 @@ impl BexHeap {
                     forwarding.insert(old_ptr, old_ptr);
                 }
             }
+        }
+
+        // BEP-042: keep alive dead young instances with a `cleanup` finalizer
+        // (and their closure) and queue them. Runs after the root trace and
+        // before the fixup, so the just-promoted finalizable objects are
+        // covered by the same fixup/promotion-barrier passes below.
+        // SAFETY: GC safepoint; exclusive access.
+        unsafe {
+            self.keepalive_finalizers_minor(&mut forwarding, &mut promoted_to_gen2);
         }
 
         // Fix up references:
@@ -1136,7 +1298,7 @@ mod tests {
                 field_type: baml_type::RuntimeTy::Int {
                     attr: baml_type::TyAttr::default(),
                 },
-                field_template: baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Int {
+                field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
                     attr: baml_type::TyAttr::default(),
                 }),
                 description: None,
@@ -1147,6 +1309,8 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1159,7 +1323,7 @@ mod tests {
         // Instance has 3 fields but class expects 1 — should panic on verify
         let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance::new(
             class_ptr,
-            vec![],
+            Box::new([]),
             vec![Value::int(1), Value::int(2), Value::int(3)],
         )));
 
@@ -1203,7 +1367,10 @@ mod tests {
         let str_obj = tlab.alloc_string("referenced".to_string());
 
         // Allocate an array that references the string
-        let arr = tlab.alloc_array(vec![Value::object(str_obj)]);
+        let arr = tlab.alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(str_obj)],
+        );
 
         // Allocate another unreferenced string
         let _unreferenced = tlab.alloc_string("unreferenced".to_string());
@@ -1360,7 +1527,11 @@ mod tests {
         // Allocate a map that references the string
         let mut map = indexmap::IndexMap::new();
         map.insert(bex_str::BexStr::from("key"), Value::object(str_obj));
-        let map_obj = tlab.alloc_map(map);
+        let map_obj = tlab.alloc_map(
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::unknown(),
+            map,
+        );
 
         // Allocate unreferenced garbage
         let _garbage = tlab.alloc_string("garbage".to_string());
@@ -1481,13 +1652,23 @@ mod tests {
         // Create a chain: array -> map -> array -> string
         let leaf_str = tlab.alloc_string("leaf".to_string());
 
-        let inner_array = tlab.alloc_array(vec![Value::object(leaf_str)]);
+        let inner_array = tlab.alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(leaf_str)],
+        );
 
         let mut map = indexmap::IndexMap::new();
         map.insert(bex_str::BexStr::from("nested"), Value::object(inner_array));
-        let middle_map = tlab.alloc_map(map);
+        let middle_map = tlab.alloc_map(
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::unknown(),
+            map,
+        );
 
-        let outer_array = tlab.alloc_array(vec![Value::object(middle_map)]);
+        let outer_array = tlab.alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(middle_map)],
+        );
 
         // Allocate garbage between the chain objects
         let _g1 = tlab.alloc_string("garbage".to_string());
@@ -1769,6 +1950,8 @@ mod tests {
             alias: None,
             type_tag: 0,
             ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
         let inst_ptr =
@@ -2029,6 +2212,8 @@ mod tests {
             alias: None,
             type_tag: 42,
             ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2065,7 +2250,7 @@ mod tests {
     fn test_gc_leaf_type_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::RuntimeTy::Int {
+        let ptr = tlab.alloc(Object::Type(Box::new(baml_type::RealizedTy::Int {
             attr: baml_type::TyAttr::default(),
         })));
 
@@ -2073,7 +2258,7 @@ mod tests {
         let Object::Type(ty) = (unsafe { new_roots[0].get() }) else {
             panic!("not type")
         };
-        assert!(matches!(**ty, baml_type::RuntimeTy::Int { .. }));
+        assert!(matches!(**ty, baml_type::RealizedTy::Int { .. }));
     }
 
     #[test]
@@ -2081,8 +2266,12 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let arr = tlab.alloc_array(vec![]);
-        let map = tlab.alloc_map(indexmap::IndexMap::new());
+        let arr = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![]);
+        let map = tlab.alloc_map(
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::unknown(),
+            indexmap::IndexMap::new(),
+        );
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[arr, map]) };
         assert_eq!(stats.live_count, 2);
@@ -2109,9 +2298,9 @@ mod tests {
 
         // D -> C -> B -> A (leaf string wrapped in nested arrays)
         let a = tlab.alloc_string("a".to_string());
-        let b = tlab.alloc_array(vec![Value::object(a)]);
-        let c = tlab.alloc_array(vec![Value::object(b)]);
-        let d = tlab.alloc_array(vec![Value::object(c)]);
+        let b = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(a)]);
+        let c = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(b)]);
+        let d = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(c)]);
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[d]) };
         assert_eq!(stats.live_count, 4);
@@ -2149,7 +2338,7 @@ mod tests {
         let children: Vec<Value> = (0..5)
             .map(|i| Value::object(tlab.alloc_string(format!("child_{i}"))))
             .collect();
-        let parent = tlab.alloc_array(children);
+        let parent = tlab.alloc_array(baml_type::RealizedTy::unknown(), children);
 
         // Also allocate explicit garbage
         let _garbage = tlab.alloc_string("garbage".to_string());
@@ -2166,8 +2355,14 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let shared = tlab.alloc_string("shared".to_string());
-        let parent_a = tlab.alloc_array(vec![Value::object(shared)]);
-        let parent_b = tlab.alloc_array(vec![Value::object(shared)]);
+        let parent_a = tlab.alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(shared)],
+        );
+        let parent_b = tlab.alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(shared)],
+        );
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[parent_a, parent_b]) };
         // 2 parents + 1 shared child (not 4 — shared object copied only once)
@@ -2200,9 +2395,12 @@ mod tests {
 
         // root -> [B, C], B -> [D], C -> [D]
         let d = tlab.alloc_string("diamond_bottom".to_string());
-        let b = tlab.alloc_array(vec![Value::object(d)]);
-        let c = tlab.alloc_array(vec![Value::object(d)]);
-        let root = tlab.alloc_array(vec![Value::object(b), Value::object(c)]);
+        let b = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(d)]);
+        let c = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(d)]);
+        let root = tlab.alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(b), Value::object(c)],
+        );
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[root]) };
         // root + B + C + D (D is shared between B and C — copied only once)
@@ -2243,13 +2441,16 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Create A (array placeholder) and B (cell pointing to A), then patch A -> B
-        let a = tlab.alloc_array(vec![]); // placeholder, will be patched
+        let a = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![]); // placeholder, will be patched
         let b = tlab.alloc(Object::Cell(bex_vm_types::types::Cell::new(Value::object(
             a,
         ))));
         // Patch A to reference B, forming a cycle
         unsafe {
-            *a.get_mut() = Object::Array(vec![Value::object(b)].into());
+            *a.get_mut() = Object::Array(bex_vm_types::types::Array::new(
+                baml_type::RealizedTy::unknown(),
+                vec![Value::object(b)],
+            ));
         }
 
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[a]) };
@@ -2281,11 +2482,14 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Island: three mutually-referencing objects, none reachable from roots
-        let x = tlab.alloc_array(vec![]); // placeholder
-        let y = tlab.alloc_array(vec![Value::object(x)]);
-        let z = tlab.alloc_array(vec![Value::object(y)]);
+        let x = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![]); // placeholder
+        let y = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(x)]);
+        let z = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(y)]);
         unsafe {
-            *x.get_mut() = Object::Array(vec![Value::object(z)].into());
+            *x.get_mut() = Object::Array(bex_vm_types::types::Array::new(
+                baml_type::RealizedTy::unknown(),
+                vec![Value::object(z)],
+            ));
         }
 
         // Separate rooted survivor
@@ -2305,7 +2509,10 @@ mod tests {
         // Build a 100-deep chain: root -> array -> array -> ... -> leaf string
         let mut current = tlab.alloc_string("leaf".to_string());
         for _ in 0..99 {
-            current = tlab.alloc_array(vec![Value::object(current)]);
+            current = tlab.alloc_array(
+                baml_type::RealizedTy::unknown(),
+                vec![Value::object(current)],
+            );
         }
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&[current]) };
@@ -2408,12 +2615,19 @@ mod tests {
         let leaf_func = tlab.alloc_string("func_placeholder".to_string());
 
         // --- Container: Object::Array ---
-        let array_container = tlab.alloc_array(vec![Value::object(leaf_for_array)]);
+        let array_container = tlab.alloc_array(
+            baml_type::RealizedTy::unknown(),
+            vec![Value::object(leaf_for_array)],
+        );
 
         // --- Container: Object::Map ---
         let mut map_data = indexmap::IndexMap::new();
         map_data.insert(bex_str::BexStr::from("k"), Value::object(leaf_for_map));
-        let map_container = tlab.alloc_map(map_data);
+        let map_container = tlab.alloc_map(
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::unknown(),
+            map_data,
+        );
 
         // --- Container: Object::Closure ---
         let closure_container = tlab.alloc(Object::Closure(Closure {
@@ -2443,10 +2657,12 @@ mod tests {
             alias: None,
             type_tag: 0,
             ty_attr: TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         })));
         let instance_container = tlab.alloc(Object::Instance(Instance::new(
             class_ptr,
-            vec![],
+            Box::new([]),
             vec![Value::object(leaf_string)],
         )));
 

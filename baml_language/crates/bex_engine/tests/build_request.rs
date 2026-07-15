@@ -9,6 +9,10 @@
 //! option forwarding live in `sys_llm::build_request::openai::tests` and
 //! `sys_llm::build_request::mod::tests`.
 
+// The B-489 api_key-defaulting tests set `OPENAI_API_KEY` via `std::env::set_var`
+// (nextest isolates each test in its own process).
+#![allow(unsafe_code)]
+
 mod common;
 
 use std::sync::Arc;
@@ -146,6 +150,151 @@ function get_body() -> string {
                 }
             ]
         })
+    );
+}
+
+// ============================================================================
+// Named client api_key defaulting (B-489)
+//
+// A named `client<llm>` with `provider openai` and no explicit `api_key` must
+// default the key from the provider's conventional env var (`OPENAI_API_KEY`),
+// exactly as the `"openai/model"` inline shorthand does. An explicit `api_key`
+// in `options` still wins.
+//
+// These tests read the `authorization` header on the built request rather than
+// the body (auth headers are where the key lands). They rely on nextest's
+// process-per-test isolation for the `OPENAI_API_KEY` env var; both write the
+// same value so a shared-process `cargo test` run cannot observe a torn value.
+// ============================================================================
+
+const OPENAI_ENV_KEY: &str = "sk-from-env-b489";
+
+/// Read the `authorization` header off the request `F$build_request` builds.
+async fn openai_authorization_header(source: &str) -> String {
+    let full = [
+        source,
+        r##"
+function F(name: string) -> string {
+    client C
+    prompt #"Hello, {{ name }}!"#
+}
+function get_auth() -> string {
+    baml.llm.build_request(C, "F", { "name": "Alice" }).headers.get("authorization") ?? "MISSING"
+}
+"##,
+    ]
+    .join("\n");
+    let result = run_baml(&full, "get_auth").await;
+    as_string(&result).to_string()
+}
+
+#[tokio::test]
+async fn test_named_openai_client_defaults_api_key_from_env() {
+    // SAFETY: nextest runs each test in its own process; other tests in this
+    // binary set `api_key` explicitly and never read `OPENAI_API_KEY`.
+    unsafe { std::env::set_var("OPENAI_API_KEY", OPENAI_ENV_KEY) };
+
+    // Named client, provider openai, NO explicit api_key.
+    let auth = openai_authorization_header(
+        r#"
+client C {
+    provider openai
+    options { model "gpt-4o" }
+}
+"#,
+    )
+    .await;
+
+    assert_eq!(
+        auth,
+        format!("Bearer {OPENAI_ENV_KEY}"),
+        "named openai client with no api_key should default to OPENAI_API_KEY"
+    );
+}
+
+#[tokio::test]
+async fn test_named_openai_client_explicit_api_key_overrides_env() {
+    // SAFETY: see sibling test. Same value written so a shared-process run
+    // cannot race on the value.
+    unsafe { std::env::set_var("OPENAI_API_KEY", OPENAI_ENV_KEY) };
+
+    // Explicit api_key must win over the env-var default.
+    let auth = openai_authorization_header(
+        r#"
+client C {
+    provider openai
+    options { model "gpt-4o"  api_key "sk-explicit" }
+}
+"#,
+    )
+    .await;
+
+    assert_eq!(
+        auth, "Bearer sk-explicit",
+        "explicit api_key must override the OPENAI_API_KEY default"
+    );
+}
+
+// ============================================================================
+// New-mode (backtick) prompts — the render_prompt / build_request companions
+// must render through the compiled prompt closure, exactly like execution.
+// Regression: previously these went through the Jinja-only path and rendered
+// nothing for new-mode functions (empty playground preview / cURL).
+// ============================================================================
+
+// A new-mode LLM function `F` + a helper that yields its client value, so a test
+// can call the `F$render_prompt` / `F$build_request` companions exactly like the
+// host (the appended `client` param has no default applied by `call_function`).
+const NEW_MODE_FN: &str = r#"
+function F(name: string) -> string {
+    client C
+    prompt `Hello, ${name}!`
+}
+function client_value() -> baml.llm.Client { C }
+"#;
+
+#[tokio::test]
+async fn test_openai_new_mode_render_prompt_companion() {
+    let source = [OPENAI_CLIENT, NEW_MODE_FN].join("\n");
+    let client = run_baml(&source, "client_value").await;
+
+    // The playground preview calls the generated `F$render_prompt` companion.
+    let prompt = run_baml_with_args(
+        &source,
+        "F$render_prompt",
+        vec![BexExternalValue::String("Alice".into()), client],
+    )
+    .await;
+    let text = common::prompt_ast_to_string(&prompt);
+    assert!(
+        text.contains("Hello, Alice!"),
+        "new-mode render_prompt companion should render the backtick prompt, got: {text:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_openai_new_mode_build_request_companion() {
+    let source = [OPENAI_CLIENT, NEW_MODE_FN].join("\n");
+    let client = run_baml(&source, "client_value").await;
+
+    // The playground "generate cURL" calls the generated `F$build_request`
+    // companion; its body must include the rendered prompt.
+    let req = run_baml_with_args(
+        &source,
+        "F$build_request",
+        vec![BexExternalValue::String("Alice".into()), client],
+    )
+    .await;
+    let body = match &req {
+        BexExternalValue::Instance { fields, .. } => match fields.get("body") {
+            Some(BexExternalValue::String(s)) => s.to_string(),
+            other => panic!("expected Request.body string, got {other:?}"),
+        },
+        other => panic!("expected http.Request instance, got {other:?}"),
+    };
+    assert!(
+        body.contains("Hello, Alice!"),
+        "new-mode build_request companion should render the backtick prompt into the body, got: {body}"
     );
 }
 

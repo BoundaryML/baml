@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] error: this body may throw through callback `handler`, but declared throws is `never`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.
-    ╭─[ function_type_throws.baml:28:9 ]
+  [type] error: this body may throw through callback `handler`, but declared throws is `never`. The callback type does not say what it can throw. If `handler` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws.
+    ╭─[ function_type_throws.baml:28:10 ]
     │
  28 │   return (value: int) -> string { handler(value) }
-    │         ─────────────────────┬────────────────────  
-    │                              ╰────────────────────── this body may throw through callback `handler`, but declared throws is `never`. Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing.
+    │          ────────────────────┬────────────────────  
+    │                              ╰────────────────────── this body may throw through callback `handler`, but declared throws is `never`. The callback type does not say what it can throw. If `handler` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws.
     │ 
     │ Note: Error code: E0096
 ────╯
@@ -53,31 +53,31 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [hir] error: `void` can only be used as a function return type, not as a parameter type
-   ╭─[ void_type_position_errors.baml:2:22 ]
+   ╭─[ void_type_position_errors.baml:2:23 ]
    │
  2 │ function bad_param(x: void) -> int {
-   │                      ──┬──  
-   │                        ╰──── `void` not allowed here
+   │                       ──┬─  
+   │                         ╰─── `void` not allowed here
    │ 
    │ Note: Error code: E0110
 ───╯
 
   [hir] error: `void` can only be used as a function return type, not as a let binding annotation
-   ╭─[ void_type_position_errors.baml:8:9 ]
+   ╭─[ void_type_position_errors.baml:8:10 ]
    │
  8 │   let x: void = 1;
-   │         ──┬──  
-   │           ╰──── `void` not allowed here
+   │          ──┬─  
+   │            ╰─── `void` not allowed here
    │ 
    │ Note: Error code: E0110
 ───╯
 
   [hir] error: `void` can only be used as a function return type, not as a let binding annotation
-    ╭─[ void_type_position_errors.baml:10:9 ]
+    ╭─[ void_type_position_errors.baml:10:10 ]
     │
  10 │   let y: void = {
-    │         ──┬──  
-    │           ╰──── `void` not allowed here
+    │          ──┬─  
+    │            ╰─── `void` not allowed here
     │ 
     │ Note: Error code: E0110
 ────╯
@@ -93,21 +93,21 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [hir] error: `void` can only be used as a function return type, not as an optional type (`void?`)
-    ╭─[ void_type_position_errors.baml:19:27 ]
+    ╭─[ void_type_position_errors.baml:19:28 ]
     │
  19 │ function bad_optional() -> void? {
-    │                           ───┬──  
+    │                            ──┬──  
     │                              ╰──── `void` not allowed here
     │ 
     │ Note: Error code: E0110
 ────╯
 
   [hir] error: `void` can only be used as a function return type, not as a list type (`void[]`)
-    ╭─[ void_type_position_errors.baml:24:23 ]
+    ╭─[ void_type_position_errors.baml:24:24 ]
     │
  24 │ function bad_list() -> void[] {
-    │                       ───┬───  
-    │                          ╰───── `void` not allowed here
+    │                        ───┬──  
+    │                           ╰──── `void` not allowed here
     │ 
     │ Note: Error code: E0110
 ────╯

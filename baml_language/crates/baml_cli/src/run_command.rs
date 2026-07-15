@@ -7,19 +7,21 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{
-    baml_compiler_diagnostics::{Severity, render},
-    baml_compiler2_emit,
-};
+use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
-use baml_workspace::discover_baml_files;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
 // `surface_clap_error` is defined later in this file.
 // For --log-file event sink.
 use clap::Args;
 use sys_native::{CallId, SysOpsExt};
 
-use crate::{project_load::load_project_from_reporting, reporter::Reporter};
+use crate::{
+    project_load::{
+        find_project_root_from, load_project_or_default, resolve_standalone_file,
+        validate_file_from_flags,
+    },
+    reporter::Reporter,
+};
 
 // ============================================================================
 // Script expansion types
@@ -131,7 +133,7 @@ pub struct RunArgs {
 
     /// Evaluate a BAML expression. Use -e @file to read from a file, -e - for stdin.
     /// Mutually exclusive with positional `<TARGET>` and `-f`.
-    #[arg(short = 'e', long = "expression")]
+    #[arg(short = 'e', long = "expression", allow_hyphen_values = true)]
     pub expression: Option<String>,
 
     /// Standalone single-file source. Loads only this file (no project
@@ -159,9 +161,9 @@ pub struct RunArgs {
     #[arg(long, short = 'h')]
     pub help: bool,
 
-    /// Project root directory. Ignored when `--file` is set.
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Mutually exclusive with `--file`.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 
     /// Arguments passed to the target after `--`. Parsed as auto-CLI
     /// flags derived from the function signature(s). With multiple `-f`
@@ -177,87 +179,61 @@ pub use baml_exec::OutputFormat;
 // ============================================================================
 
 impl RunArgs {
-    /// Emit the "your code is unformatted" advisory above the active
-    /// spinner. Routed through the reporter (rather than a raw
-    /// `eprintln!`) so the message both takes the bold-yellow
-    /// `warning:` header — matching ariadne — *and* doesn't interleave
-    /// with the spinner ticks that would otherwise still be running.
+    /// Emit the "your code is unformatted" advisory. This is the one
+    /// user-facing warning `baml run` keeps on successful execution.
     fn emit_format_hint_if_needed(reporter: &Reporter, needs_format_hint: bool) {
         if needs_format_hint {
             reporter.warning(FORMAT_HINT);
         }
     }
 
-    /// Print a `[verbose]`-prefixed line when `--verbose` is set; no-op otherwise.
+    /// Keep execution silent even when legacy call sites still pass
+    /// diagnostics-oriented strings through `vlog`. `--verbose` only affects
+    /// explicit listing output, not successful program execution.
     fn vlog(&self, args: std::fmt::Arguments<'_>) {
-        if self.verbose {
-            eprintln!("[verbose] {args}");
-        }
+        let _ = args;
     }
 
     /// Collect diagnostics on `db` and bail with `bail_context` if any are errors.
-    /// Warnings are surfaced only in verbose mode.
-    ///
-    /// When a [`Reporter`] is active, diagnostic output is routed through
-    /// `reporter.suspend()` so the multi-line ariadne block doesn't
-    /// interleave with the spinner.
+    /// Warnings are intentionally not surfaced by `baml run`: successful
+    /// execution should print only the program output.
     fn check_project_diagnostics(
         &self,
         db: &ProjectDatabase,
         bail_context: &str,
         reporter: &Reporter,
     ) -> Result<()> {
-        let project = db
-            .get_project()
-            .ok_or_else(|| anyhow!("No project context"))?;
-        let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
+        // The honest full check: every file is re-diagnosed. Used on the
+        // no-cache path and for standalone/expression modes. The cached warm
+        // path narrows this through `collect_diagnostics_incremental`, whose
+        // merged set is byte-identical here.
+        let diagnostics = baml_project::collect_diagnostics(db);
+        self.render_and_bail_on_errors(&diagnostics, db, bail_context, reporter)
+    }
 
+    /// Filter `diagnostics` to errors and, if any, render the full ariadne block
+    /// (sources/paths for every user file plus builtins, since an error may carry
+    /// cross-file spans) and bail with `bail_context`. Warnings are intentionally
+    /// not surfaced.
+    fn render_and_bail_on_errors(
+        &self,
+        diagnostics: &[baml_db::baml_compiler_diagnostics::Diagnostic],
+        db: &ProjectDatabase,
+        bail_context: &str,
+        reporter: &Reporter,
+    ) -> Result<()> {
         let errors: Vec<_> = diagnostics
             .iter()
             .filter(|d| d.severity == Severity::Error)
+            .cloned()
             .collect();
-        let warnings: Vec<_> = diagnostics
-            .iter()
-            .filter(|d| d.severity == Severity::Warning)
-            .collect();
-
-        let needs_sources = !errors.is_empty() || (self.verbose && !warnings.is_empty());
-        let (sources, file_paths) = if needs_sources {
-            let mut sources = HashMap::new();
-            let mut file_paths = HashMap::new();
-            for sf in &source_files {
-                let file_id = sf.file_id(db);
-                sources.insert(file_id, sf.text(db).to_string());
-                file_paths.insert(file_id, sf.path(db));
-            }
-            (sources, file_paths)
-        } else {
-            (HashMap::new(), HashMap::new())
-        };
-
-        if self.verbose && !warnings.is_empty() {
-            let rendered = render::render_diagnostics(
-                &warnings.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &render::RenderConfig::cli_auto(),
-            );
-            reporter.suspend(|| eprintln!("{rendered}"));
+        if errors.is_empty() {
+            return Ok(());
         }
-
-        if !errors.is_empty() {
-            let rendered = render::render_diagnostics(
-                &errors.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &render::RenderConfig::cli_auto(),
-            );
-            reporter.abandon();
-            eprintln!("{rendered}");
-            anyhow::bail!("{bail_context}");
-        }
-        Ok(())
+        let rendered = crate::check_command::render_project_diagnostics(db, &errors);
+        reporter.abandon();
+        eprintln!("{rendered}");
+        anyhow::bail!("{bail_context}");
     }
 
     /// Compile `db` to bytecode and build a `BexEngine`.
@@ -275,8 +251,7 @@ impl RunArgs {
 
     pub fn run(&self) -> Result<crate::ExitCode> {
         // Short-circuit verb-level `--help` (no target / function /
-        // expression given) before constructing the Reporter, so the
-        // spinner doesn't briefly draw a frame above the help text.
+        // expression given) before constructing the Reporter.
         if self.help
             && self.functions.is_empty()
             && self.target.is_none()
@@ -310,17 +285,8 @@ impl RunArgs {
 
         // `--file` is the standalone-source alternative to `--from`. Both
         // pointing at sources would be ambiguous (which one wins?), so
-        // reject the combination up front. We only enforce this when
-        // `--from` is set to something other than its default `.`,
-        // because clap can't tell "user passed `.`" from "user passed
-        // nothing." If `--file` is set and `--from` was left at the
-        // default, treat that as fine.
-        if self.file.is_some() && self.from != Path::new(".") {
-            anyhow::bail!(
-                "`--file` and `--from` are mutually exclusive — `--file` already names \
-                 the single source to load."
-            );
-        }
+        // reject an explicit combination up front.
+        validate_file_from_flags(self.file.as_deref(), self.from.as_deref())?;
 
         // Expression mode short-circuits before reaching project / file
         // loading, so combining `-e` with surfaces that change *what* is
@@ -369,18 +335,20 @@ impl RunArgs {
                 "--list".to_string(),
             ];
             let (db, engine, _) = self.load_and_compile(bootstrap_argv, reporter)?;
-            let _ = db;
             // `--file` mode is hermetic — skip the project `[scripts]`
             // lookup the same way `run_single_target` does.
             let scripts = if self.file.is_some() {
                 HashMap::new()
             } else {
-                let toml_content =
-                    std::fs::read_to_string(self.from.join("baml.toml")).unwrap_or_default();
+                let (_toml_path, toml_content) = Self::project_toml(&db)?;
                 Self::parse_scripts(&toml_content)
             };
             let namespaces = collect_namespaces(&engine);
             return self.print_list(&engine, &scripts, &namespaces, &self.output_format);
+        }
+
+        if self.file.is_some() && self.target.is_none() && self.functions.is_empty() {
+            return self.run_single_target("main", reporter);
         }
 
         // No target → print help and exit non-zero. (Implicit `main` no
@@ -413,22 +381,25 @@ impl RunArgs {
     fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
         let argv = self.build_argv_for_single(target);
         let (db, mut engine, needs_format_hint) = self.load_and_compile(argv.clone(), reporter)?;
-        let _ = db;
         Self::emit_format_hint_if_needed(reporter, needs_format_hint);
+        let project_root = Self::project_root(&db)?;
 
         // `[scripts]` are a project-mode concept. In `--file` (standalone)
         // mode the project's `baml.toml` shouldn't be consulted — the
         // file is hermetic by intent — so an empty `scripts` map skips
         // both expansion and validation.
-        let (toml_content, scripts) = if self.file.is_some() {
-            (String::new(), HashMap::new())
+        let (toml_path, toml_content, scripts) = if self.file.is_some() {
+            (
+                project_root.join("baml.toml"),
+                String::new(),
+                HashMap::new(),
+            )
         } else {
-            let content = std::fs::read_to_string(self.from.join("baml.toml")).unwrap_or_default();
+            let (toml_path, content) = Self::project_toml(&db)?;
             let parsed = Self::parse_scripts(&content);
-            (content, parsed)
+            (toml_path, content, parsed)
         };
-        let namespaces = collect_namespaces(&engine);
-        self.validate_scripts(&engine, &scripts, &namespaces, &toml_content)?;
+        self.validate_scripts(&engine, &scripts, &toml_path, &toml_content)?;
 
         // Resolve to (function_name, effective_args, was_script).
         let (function_name, effective_target_args, was_script) =
@@ -453,7 +424,10 @@ impl RunArgs {
                 (target.to_string(), self.target_args.clone(), false)
             } else {
                 return Err(Self::target_not_found_error_in(
-                    &scripts, &engine, target, &self.from,
+                    &scripts,
+                    &engine,
+                    target,
+                    &project_root,
                 ));
             };
 
@@ -600,8 +574,8 @@ impl RunArgs {
         Ok((entries, lookups))
     }
 
-    /// Shared tail: spawn the runtime, run dispatch, render the
-    /// `Running` / `Finished` lines.
+    /// Shared tail: spawn the runtime and run dispatch. The program runs
+    /// silently — its own stdout is the output that matters.
     fn dispatch_and_finish(
         &self,
         engine: BexEngine,
@@ -611,7 +585,7 @@ impl RunArgs {
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
         self.vlog(format_args!("Calling {function_name}"));
-        reporter.status("Running", function_name);
+        // Preserve the old cleanup call shape before program output.
         reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
@@ -629,10 +603,7 @@ impl RunArgs {
         self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
 
         match dispatch_result {
-            Ok(baml_exec::DispatchResult::Ok) => {
-                reporter.finish("Finished", function_name);
-                Ok(crate::ExitCode::Success)
-            }
+            Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::Success),
             Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
             Ok(baml_exec::DispatchResult::Exit(code)) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
@@ -712,33 +683,122 @@ impl RunArgs {
             return self.load_and_compile_standalone(file, argv, reporter);
         }
 
-        // `load_project_from_reporting` emits one `Loading <file>`
-        // line per discovered source file (cargo-style per-unit
-        // progress) — no aggregate `Loading <project>` needed.
-        let (db, from, baml_files) = load_project_from_reporting(&self.from, reporter)?;
-        self.vlog(format_args!("Loading project from {}", from.display()));
-        if baml_files.is_empty() {
-            anyhow::bail!("No .baml files found in {}", from.display());
+        let resolved = crate::project_load::resolve_project_sources(self.from.as_deref())?;
+        self.vlog(format_args!(
+            "Loading project from {}",
+            resolved.root.display()
+        ));
+        if resolved.files.is_empty() {
+            anyhow::bail!("No .baml files found in {}", resolved.root.display());
         }
-        self.vlog(format_args!("Found {} .baml file(s)", baml_files.len()));
-        let needs_format_hint = baml_files.iter().any(|path| {
-            std::fs::read_to_string(path)
-                .map(|source| source_needs_format_hint(&source))
-                .unwrap_or(false)
-        });
+        self.vlog(format_args!("Found {} .baml file(s)", resolved.files.len()));
+        let needs_format_hint = resolved
+            .files
+            .iter()
+            .any(|(_, source)| source_needs_format_hint(source));
 
-        reporter.spin("Checking", format!("{} file(s)", baml_files.len()));
-        self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
-        // For `--list` the bytecode emit isn't preparing the program
-        // for execution — it's just there so we can call
-        // `engine.user_functions()` to enumerate signatures. Showing
-        // "Compiling" in that case is technically true but misleading
-        // ("am I about to run something?"). Use "Resolving" so the
-        // verb reflects what the user is actually waiting on.
-        let compile_verb = if self.list { "Resolving" } else { "Compiling" };
-        reporter.spin(compile_verb, format!("{} file(s)", baml_files.len()));
+        // Building the database only sets salsa inputs — the expensive work
+        // (typecheck, emit) happens lazily in the queries below, which a
+        // bytecode-cache hit skips entirely.
+        let mut db = crate::project_load::build_db_from_sources(&resolved, |_| {});
+
+        let cache =
+            crate::bytecode_cache::CacheContext::open(&resolved, /* emit_test_cases */ false);
+        if !crate::bytecode_cache::CacheContext::verify_enabled()
+            && let Some(ctx) = &cache
+            && let Some(program) = ctx.load()
+        {
+            self.vlog(format_args!("Bytecode cache hit — skipping compile"));
+            match BexEngine::new(
+                program,
+                Arc::new(sys_native::SysOps::native()),
+                argv.clone(),
+            ) {
+                Ok(engine) => return Ok((db, engine, needs_format_hint)),
+                Err(error) => crate::bytecode_cache::cache_debug(format_args!(
+                    "cached program rejected by VM; recompiling: {error:?}"
+                )),
+            }
+        }
+
+        // Seed the stdlib typed interface before the first typecheck query (a
+        // build constant, so it applies to every compile independent of the reuse
+        // plan and is gated off under verify) and prepare the per-file reuse plan
+        // — the same warm-database setup `check` and `test` run.
+        let (reuse_plan, stdlib_interface_hit) = match &cache {
+            Some(ctx) => {
+                let prep = ctx.prepare_warm_db(&mut db);
+                if let Some(plan) = &prep.reuse_plan {
+                    self.vlog(format_args!(
+                        "Per-file reuse: {} clean, {} dirty",
+                        plan.clean_files.len(),
+                        plan.dirty_files.len()
+                    ));
+                }
+                (prep.reuse_plan, prep.stdlib_interface_hit)
+            }
+            None => (None, false),
+        };
+
+        // `baml run` keeps the compile phase silent; the program's output is
+        // the point. Compile/count progress belongs to `check` and `generate`.
+        //
+        // With a cache, gate diagnostics through the incremental collector: it
+        // checks only the reuse plan's dirty files and serves clean files from
+        // their cached blobs, returning the fresh per-file blobs to persist.
+        // Without a cache, run the honest full check (no blobs to store).
+        let fresh_diagnostics = if let Some(ctx) = &cache {
+            let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+            self.render_and_bail_on_errors(
+                &incremental.merged,
+                &db,
+                "Cannot run: compilation errors found",
+                reporter,
+            )?;
+            Some(incremental.fresh_by_file)
+        } else {
+            self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
+            None
+        };
         self.vlog(format_args!("Compiling..."));
-        let engine = self.compile_to_engine(&db, argv)?;
+        let compiled = crate::bytecode_cache::compile_program_artifacts(
+            &db,
+            &baml_compiler2_emit::CompileOptions {
+                emit_test_cases: false,
+            },
+            cache.as_ref(),
+            reuse_plan.as_ref(),
+        )
+        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+        if let Some(ctx) = &cache {
+            let fresh = fresh_diagnostics
+                .as_ref()
+                .expect("a cache is present, so fresh diagnostics were computed");
+            ctx.verify_and_store(
+                &db,
+                &compiled,
+                fresh,
+                reuse_plan.as_ref(),
+                stdlib_interface_hit,
+                || crate::project_load::build_db_from_sources(&resolved, |_| {}),
+            )?;
+        }
+        // Warm-incremental evidence: with the diagnostics cache serving clean
+        // files, this counts only the dirty files' scopes; a cold compile walks
+        // every scope.
+        crate::bytecode_cache::cache_debug(format_args!(
+            "scope inferences: {} this process",
+            baml_db::baml_compiler2_tir::inference::scope_inferences()
+        ));
+        // Warm-run evidence: with the stdlib interface seeded, this is 0 (the
+        // seed served every stdlib package); a cold run reports up to 6.
+        crate::bytecode_cache::cache_debug(format_args!(
+            "stdlib interface: {} honest derivation(s) this process",
+            baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+        ));
+        let program = compiled.program;
+        let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
+            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
         self.vlog(format_args!(
             "Compiled {} user function(s)",
             engine.user_functions().len()
@@ -757,9 +817,7 @@ impl RunArgs {
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, BexEngine, bool)> {
         let display = file_path.display().to_string();
-        reporter.spin("Loading", &display);
-        let canonical = std::fs::canonicalize(file_path)
-            .with_context(|| format!("File not found: {display}"))?;
+        let canonical = resolve_standalone_file(file_path)?;
         self.vlog(format_args!(
             "Standalone mode: loading {}",
             canonical.display()
@@ -776,16 +834,13 @@ impl RunArgs {
         db.set_project_root(parent);
         db.add_or_update_file(&canonical, &content);
 
-        reporter.spin("Checking", &display);
+        // Keep standalone compilation quiet for `baml run`; diagnostics still
+        // render through the reporter when needed.
         self.check_project_diagnostics(
             &db,
             &format!("Cannot run: compilation errors in {display}"),
             reporter,
         )?;
-        // See note in `load_and_compile`: "Resolving" is the honest
-        // verb when --list is the destination, "Compiling" otherwise.
-        let compile_verb = if self.list { "Resolving" } else { "Compiling" };
-        reporter.spin(compile_verb, &display);
         let engine = self.compile_to_engine(&db, argv)?;
         self.vlog(format_args!(
             "Compiled {} function(s) from standalone file",
@@ -807,7 +862,6 @@ impl RunArgs {
     /// from inline / `@file` / stdin by the caller. We avoid re-reading
     /// because `-e -` reads stdin once.
     fn run_expression(&self, expr_body: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
-        reporter.spin("Compiling", "expression");
         self.vlog(format_args!(
             "Expression mode: evaluating {} byte(s)",
             expr_body.len()
@@ -816,51 +870,23 @@ impl RunArgs {
         // `-> unknown` lets any return type through.
         let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
 
-        // Default --from is "." (cwd) which always exists. If user passed an
-        // explicit path that can't be resolved, that's a hard error.
-        let from = match std::fs::canonicalize(&self.from) {
-            Ok(path) => Some(path),
-            Err(_) if self.from == Path::new(".") => None,
-            Err(e) => anyhow::bail!("Cannot resolve --from path `{}`: {e}", self.from.display()),
-        };
-
-        let mut db = ProjectDatabase::new();
-        // Project marker: matches `project_load::load_project_from_inner`.
-        // A directory is a project if it has *either* a `baml.toml` or a
-        // `baml_src/` — `baml.toml` is opt-in — so `baml run -e` picks up
-        // the surrounding project's definitions in the same cases every
-        // other verb now does.
-        let has_explicit_project = from
-            .as_ref()
-            .is_some_and(|f| f.join("baml.toml").exists() || f.join("baml_src").is_dir());
-
-        let project_root = if has_explicit_project {
-            let root = from.as_ref().unwrap();
-            db.set_project_root(root);
-            let src_dir = if root.join("baml_src").exists() {
-                root.join("baml_src")
-            } else {
-                root.clone()
-            };
-            let baml_files = discover_baml_files(&src_dir);
-            for file_path in &baml_files {
-                if let Ok(content) = std::fs::read_to_string(file_path) {
-                    db.add_or_update_file(file_path, &content);
-                }
-            }
+        let (mut db, project_root) = if find_project_root_from(self.from.as_deref())?.is_some() {
+            let (db_with_project, root, baml_files) =
+                load_project_or_default(self.from.as_deref())?;
             self.vlog(format_args!(
                 "Project context: loaded {} file(s)",
                 baml_files.len()
             ));
-            root.clone()
+            (db_with_project, root)
         } else {
             let tmp = std::env::temp_dir().join("baml_expr");
             std::fs::create_dir_all(&tmp).ok();
+            let mut db = ProjectDatabase::new();
             db.set_project_root(&tmp);
             self.vlog(format_args!(
                 "Project context: none (standalone expression)"
             ));
-            tmp
+            (db, tmp)
         };
 
         db.add_or_update_file(&project_root.join("__expr__.baml"), &synthetic);
@@ -875,12 +901,6 @@ impl RunArgs {
         // matches the inline case: `-e '2 + 2'` and `-e @file` (with
         // `file` containing `2 + 2`) produce the same argv.
         let engine = self.compile_to_engine(&db, self.build_argv_for_expression(expr_body))?;
-
-        // Cargo-shape `     Running …` before the program's stdout
-        // starts; then clear the spinner so the evaluated expression's
-        // output doesn't collide with a still-ticking lamb.
-        reporter.status("Running", "expression");
-        reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -911,10 +931,7 @@ impl RunArgs {
         });
 
         match result {
-            Ok(()) => {
-                reporter.finish("Finished", "expression");
-                Ok(crate::ExitCode::Success)
-            }
+            Ok(()) => Ok(crate::ExitCode::Success),
             Err(bex_engine::EngineError::Exit { code }) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
@@ -931,48 +948,24 @@ impl RunArgs {
 
     /// Parse `[scripts]` from raw `baml.toml` content.
     ///
-    /// Emits a styled `Warning:` on TOML parse failures so a typo in
-    /// `baml.toml` doesn't silently disable every script. A missing
-    /// `baml.toml` (empty content) is normal and stays quiet. Routed
-    /// through `print_warning` so the bold-yellow `Warning:` prefix
-    /// matches every other advisory the CLI emits.
+    /// Parse failures leave the scripts map empty so a typo in `baml.toml`
+    /// does not block direct function execution. `baml run` stays quiet on
+    /// successful execution; validation errors are surfaced separately.
     fn parse_scripts(content: &str) -> HashMap<String, Vec<String>> {
-        let trimmed = content.trim();
-        let table = match content.parse::<toml::Table>() {
-            Ok(t) => t,
-            Err(e) => {
-                if !trimmed.is_empty() {
-                    crate::reporter::print_warning(format_args!(
-                        "failed to parse `baml.toml` ({e}); [scripts] entries will be ignored"
-                    ));
-                }
+        let manifest = match crate::manifest::parse(content) {
+            Ok(m) => m,
+            Err(_e) => {
                 return HashMap::new();
             }
         };
-        let Some(scripts) = table.get("scripts").and_then(|v| v.as_table()) else {
-            return HashMap::new();
-        };
-        scripts
-            .iter()
-            .filter_map(|(k, v)| {
-                // String form: tokenized via split_whitespace (like Cargo aliases).
-                if let Some(s) = v.as_str() {
-                    return Some((
-                        k.clone(),
-                        s.split_whitespace().map(|t| t.to_string()).collect(),
-                    ));
-                }
-                // Array form: each element is one argument verbatim.
-                if let Some(arr) = v.as_array() {
-                    let tokens: Vec<String> = arr
-                        .iter()
-                        .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                        .collect();
-                    if !tokens.is_empty() {
-                        return Some((k.clone(), tokens));
-                    }
-                }
-                None
+        manifest
+            .scripts
+            .into_iter()
+            .filter_map(|(name, script)| {
+                let tokens = script.tokens();
+                // Empty bodies (e.g. `g = ""` or `g = []`) carry nothing to
+                // run; drop them so they don't shadow a real target.
+                (!tokens.is_empty()).then_some((name, tokens))
             })
             .collect()
     }
@@ -1001,25 +994,36 @@ impl RunArgs {
         }
     }
 
+    fn project_root(db: &ProjectDatabase) -> Result<PathBuf> {
+        db.get_project()
+            .map(|project| project.root(db).clone())
+            .ok_or_else(|| anyhow!("No project context"))
+    }
+
+    fn project_toml(db: &ProjectDatabase) -> Result<(PathBuf, String)> {
+        let toml_path = Self::project_root(db)?.join("baml.toml");
+        let content = std::fs::read_to_string(&toml_path).unwrap_or_default();
+        Ok((toml_path, content))
+    }
+
     /// Validate `[scripts]` entries at load time per BEP-027.
     fn validate_scripts(
         &self,
         engine: &BexEngine,
         scripts: &HashMap<String, Vec<String>>,
-        namespaces: &HashSet<String>,
+        toml_path: &Path,
         toml_content: &str,
     ) -> Result<()> {
         if scripts.is_empty() {
             return Ok(());
         }
 
-        let toml_path = self.from.join("baml.toml");
         let mut errors: Vec<String> = Vec::new();
 
         for (name, tokens) in scripts {
             if RESERVED_VERBS.contains(&name.as_str()) {
                 errors.push(Self::script_error(
-                    &toml_path,
+                    toml_path,
                     toml_content,
                     name,
                     "name is a reserved verb and cannot be used as a script name",
@@ -1027,22 +1031,12 @@ impl RunArgs {
                 continue;
             }
 
-            if namespaces.contains(name) {
-                let loc = Self::find_script_line(toml_content, name)
-                    .map(|l| format!("{}:{l}", toml_path.display()))
-                    .unwrap_or_else(|| toml_path.display().to_string());
-                crate::reporter::print_warning(format_args!(
-                    "{loc}: [scripts] `{name}` shadows namespace `{name}` — \
-                     the script takes precedence"
-                ));
-            }
-
             match parse_script_body(tokens) {
                 Ok(expansion) => {
                     let target_func = if let Some(func) = &expansion.function {
                         if engine.find_user_function(func).is_none() {
                             errors.push(Self::script_error(
-                                &toml_path,
+                                toml_path,
                                 toml_content,
                                 name,
                                 &format!("--function target `{func}` not found"),
@@ -1065,7 +1059,7 @@ impl RunArgs {
                         let flag_keys = extract_flag_keys(&expansion.extra_args);
                         for flag in flag_keys.iter().filter(|k| !param_names.contains(k)) {
                             errors.push(Self::script_error(
-                                &toml_path,
+                                toml_path,
                                 toml_content,
                                 name,
                                 &format!(
@@ -1079,7 +1073,7 @@ impl RunArgs {
                 }
                 Err(e) => {
                     errors.push(Self::script_error(
-                        &toml_path,
+                        toml_path,
                         toml_content,
                         name,
                         &e.to_string(),
@@ -1486,8 +1480,7 @@ impl RunArgs {
 // Reserved verbs & namespace helpers
 // ============================================================================
 
-pub(crate) const FORMAT_HINT: &str =
-    "Your code is unformatted — run `baml fmt` to format it. Continuing.";
+pub(crate) const FORMAT_HINT: &str = "Code is unformatted — run `baml fmt`.";
 
 pub(crate) fn source_needs_format_hint(source: &str) -> bool {
     let options = baml_fmt::FormatOptions::default();
@@ -1557,8 +1550,7 @@ fn looks_like_path(target: &str) -> bool {
 
 /// Render a clap error and return the matching CLI exit code.
 /// Help / version requests render to stdout and exit success; all other
-/// kinds go to stderr with a non-zero exit. The spinner is abandoned
-/// first so the multi-line clap block lands cleanly above the cursor.
+/// kinds go to stderr with a non-zero exit.
 fn surface_clap_error(reporter: &Reporter, err: clap::Error) -> Result<crate::ExitCode> {
     use baml_exec::clap_reexport::ErrorKind;
     let kind = err.kind();
@@ -1639,10 +1631,7 @@ mod tests {
     fn format_hint_text_matches_ticket() {
         // Pinned because the wording is user-facing copy: any change
         // here is a deliberate UX call, not a casual refactor.
-        assert_eq!(
-            FORMAT_HINT,
-            "Your code is unformatted — run `baml fmt` to format it. Continuing."
-        );
+        assert_eq!(FORMAT_HINT, "Code is unformatted — run `baml fmt`.");
     }
 
     // Tests that touch the filesystem build paths under $TMPDIR. Appending
@@ -1849,7 +1838,7 @@ mod tests {
             log_file: None,
             verbose: false,
             help: false,
-            from: PathBuf::from("."),
+            from: None,
             target_args: Vec::new(),
         }
     }
@@ -1944,28 +1933,20 @@ mod tests {
         let mut args = run_args();
         args.target = Some("X".into());
         args.file = Some(PathBuf::from("a.baml"));
-        args.from = PathBuf::from("./project");
+        args.from = Some(PathBuf::from("./project"));
         let err = args.run().unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(msg.contains("--file"), "got: {msg}");
     }
 
-    /// `--file` with default `--from` (i.e. `.`) is fine — we can't tell
-    /// "user passed `.`" from "user passed nothing" at the clap layer,
-    /// so the mutex only fires when `--from` is explicitly non-default.
+    /// `--file` with omitted `--from` is fine.
     #[test]
-    fn test_run_allows_file_with_default_from() {
+    fn test_run_allows_file_with_omitted_from() {
         let mut args = run_args();
         args.target = Some("X".into());
         args.file = Some(PathBuf::from("a.baml"));
-        // args.from is `PathBuf::from(".")` (the default).
-        // The validation pass shouldn't reject this; the actual file load
-        // will fail later but for a different reason.
-        // We can't call .run() here without hitting filesystem so probe
-        // the same predicate `run_with_reporter` would.
-        assert!(args.file.is_some());
-        assert_eq!(args.from, Path::new("."));
+        validate_file_from_flags(args.file.as_deref(), args.from.as_deref()).unwrap();
     }
 
     // ── Clap derive parse tests ──────────────────────────────────────

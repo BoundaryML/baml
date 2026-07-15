@@ -17,7 +17,6 @@ typescript/
 │   ├── common/            # Common utilities
 │   ├── playground-common/ # Playground shared code
 │   ├── codemirror-lang-baml/  # CodeMirror language support
-│   ├── fiddle-proxy/      # Fiddle proxy server
 │   └── nextjs-plugin/     # Next.js integration
 └── workspace-tools/       # Build and config tools
 ```

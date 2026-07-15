@@ -45,9 +45,9 @@ fn user.AskDocs(query: string, max_results: int, filter: string, client: baml.ll
     }
 
     bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 };
+        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
         _9 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _9>(copy _4, const "AskDocs", copy _8) -> [bb7];
+        _0 = call const fn baml.llm.call_llm_function<copy _9>(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {
@@ -97,8 +97,8 @@ fn user.AskDocs$build_request(query: string, max_results: int, filter: string, c
     }
 
     bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 };
-        _0 = call const fn baml.llm.build_request(copy _4, const "AskDocs", copy _8) -> [bb7];
+        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
+        _0 = call const fn baml.llm.build_request(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {
@@ -148,8 +148,8 @@ fn user.AskDocs$build_request_stream(query: string, max_results: int, filter: st
     }
 
     bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 };
-        _0 = call const fn baml.llm.build_request_stream(copy _4, const "AskDocs", copy _8) -> [bb7];
+        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
+        _0 = call const fn baml.llm.build_request_stream(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {
@@ -199,8 +199,8 @@ fn user.AskDocs$render_prompt(query: string, max_results: int, filter: string, c
     }
 
     bb6: {
-        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 };
-        _0 = call const fn baml.llm.render_prompt(copy _4, const "AskDocs", copy _8) -> [bb7];
+        _8 = { const "query": copy _1, const "max_results": copy _2, const "filter": copy _3 }: map<string, unknown>;
+        _0 = call const fn baml.llm.render_prompt(copy _4, const "AskDocs", copy _8, const <omitted>) -> [bb7];
     }
 
     bb7: {
@@ -411,7 +411,7 @@ fn user.SearchDocs(query: string, max_results: int, filter: string | null, chunk
     }
 
     bb6: {
-        _0 = [copy _1];
+        _0 = [copy _1]: string[];
         goto -> bb7;
     }
 
@@ -420,24 +420,30 @@ fn user.SearchDocs(query: string, max_results: int, filter: string | null, chunk
     }
 }
 
-fn user.TestClient$new() -> null {
+fn user.TestClient$new(lenient: bool) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<string, string>
-    let _3: map<string, string>
-    let _4: map<string, unknown>
+    let _1: bool // lenient // param
+    let _2: baml.llm.PrimitiveClientOptions
+    let _3: string | null
+    let _4: map<string, string>
+    let _5: map<string, string>
+    let _6: map<string, unknown>
 
     bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "TestClient", const "openai", copy _1 };
-        goto -> bb1;
+        _3 = sys_op const fn baml.env.get(const "OPENAI_API_KEY") -> bb1;
     }
 
     bb1: {
+        _4 = {  }: map<string, string>;
+        _5 = {  }: map<string, string>;
+        _6 = {  }: map<string, unknown>;
+        _2 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _3, const null, const null, copy _4, copy _5, copy _6 };
+        _0 = baml.llm.PrimitiveClient { const "TestClient", const "openai", copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }
@@ -512,59 +518,6 @@ fn user.UseRequiredByName() -> string[] {
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.SearchService.from_json(j: baml.json.json) -> SearchService {
-    // Locals:
-    let _0: SearchService // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: string
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "base") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(string);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.SearchService { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.SearchService.to_json(self: SearchService) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: SearchService // self // param
-    let _2: baml.json.json
-    let _3: string
-    let _4: SearchService
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(string);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "base": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

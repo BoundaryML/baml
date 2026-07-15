@@ -301,3 +301,63 @@ fn shared_concat_grandchild_survives_flatten() {
     assert_eq!(mid.as_str(), format!("{expected_leaf}|mid"));
     assert_eq!(leaf.as_str(), expected_leaf);
 }
+
+// ── Codepoint-indexed ops vs the std oracle ────────────────────────────
+//
+// `byte_offset_of_nth_codepoint` walks the bytes 8 at a time (SWAR). The fast
+// path is only exercised by strings with a full 8-byte word that *contains* a
+// multibyte char AND a target index past that word — short ASCII fixtures stay
+// in the scalar tail and never hit it. These cases all clear that bar, so they
+// pin `char_at` / `substring` against `str::chars()`, which is correct by
+// construction for valid UTF-8.
+#[test]
+fn codepoint_ops_match_std_oracle() {
+    // The std reference: the byte range of codepoints `[a, b)`, with the same
+    // clamping `substring_by_char` documents.
+    fn expected_substring(s: &str, a: usize, b: usize) -> String {
+        let chars: Vec<char> = s.chars().collect();
+        let len = chars.len();
+        let a = a.min(len);
+        let b = b.min(len).max(a);
+        chars[a..b].iter().collect()
+    }
+
+    let cases = [
+        // The dogfood repro: `é` (C3 A9) sits inside the first 8-byte word, and
+        // every index from 4 on lands past it. `char_at(10)` returned "b", and
+        // `char_at(15)` (in bounds!) panicked OOB before the fix.
+        "0123é56789abcdef",
+        "abcdefghé0123456789",       // multibyte just after the first full word
+        "配信サービスxyz0123456789", // 3-byte CJK spanning word boundaries
+        "🪙abcdefghijklmnop",        // 4-byte leading codepoint
+        "aé bé cé dé eé fé gé hé",   // many 2-byte chars across many words
+        // Long enough to be a Flat (not Inline), mixed scripts.
+        "mixed_файлов_مرحبا_🪙_padding_to_force_a_flat_allocation_here!!",
+    ];
+
+    for s in cases {
+        let bex = BexStr::from(s);
+        let count = s.chars().count();
+        assert_eq!(bex.char_count(), count, "char_count for {s:?}");
+
+        // char_at over every index, including the last (the OOB-panic boundary)
+        // and one past the end (must be None).
+        for n in 0..=count {
+            let got = bex.char_at_codepoint(n).map(|c| c.as_str().to_owned());
+            let want = s.chars().nth(n).map(|c| c.to_string());
+            assert_eq!(got, want, "char_at({n}) for {s:?}");
+        }
+
+        // substring over every codepoint range, plus past-the-end clamps.
+        for a in 0..=count + 1 {
+            for b in a..=count + 1 {
+                let got = bex.substring_by_char(a, b);
+                assert_eq!(
+                    got.as_str(),
+                    expected_substring(s, a, b),
+                    "substring_by_char({a}, {b}) for {s:?}"
+                );
+            }
+        }
+    }
+}

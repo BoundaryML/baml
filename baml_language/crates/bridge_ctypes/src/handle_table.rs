@@ -10,7 +10,7 @@ use std::{
 
 use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
 
-use crate::baml_core::cffi::BamlHandleType;
+use crate::baml_bridge::cffi::BamlHandleType;
 
 /// Newtype wrapper around opaque `$rust_type` objects
 /// (`Arc<dyn Any + Send + Sync>`) stored as a handle.
@@ -212,9 +212,10 @@ pub static HANDLE_TABLE: LazyLock<CffiHandleTable> = LazyLock::new(CffiHandleTab
 
 #[cfg(test)]
 mod tests {
-    use bex_project::BexExternalValue;
+    use bex_project::{BexExternalValue, HostValueArc, HostValueKind};
 
     use super::*;
+    use crate::{baml_bridge::cffi::baml_outbound_value::Value as BamlValueVariant, value_encode};
 
     fn make_function_ref() -> CffiHandleTableEntry {
         CffiHandleTableEntry::FunctionRef { global_index: 42 }
@@ -352,5 +353,16 @@ mod tests {
         let key3 = table.insert(make_function_ref());
         assert!(key1 < key2);
         assert!(key2 < key3);
+    }
+
+    #[test]
+    fn artifact_safe_encoding_does_not_insert_or_serialize_handle_table_key() {
+        let value = BexExternalValue::HostValue(HostValueArc::new(42, HostValueKind::Callable));
+        let encoded = value_encode::artifact_safe_external_to_outbound(&value).unwrap();
+
+        assert!(!matches!(
+            encoded.value,
+            Some(BamlValueVariant::HandleValue(_))
+        ));
     }
 }

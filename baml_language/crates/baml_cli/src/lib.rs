@@ -10,24 +10,38 @@
 )]
 
 pub(crate) mod agent_command;
+pub(crate) mod bytecode_cache;
+#[cfg(test)]
+mod cache_test_support;
 pub(crate) mod check_command;
 pub(crate) mod commands;
 pub(crate) mod describe_command;
 #[cfg(test)]
 mod describe_command_tests;
+pub(crate) mod diagnostics_cache;
+#[cfg(test)]
+mod diagnostics_cache_oracle;
+pub(crate) mod file_signature;
 pub(crate) mod format;
 pub(crate) mod generate;
 pub(crate) mod grep_command;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
 pub(crate) mod lsp;
+pub(crate) mod manifest;
 pub(crate) mod pack_command;
 pub(crate) mod pack_elf;
+pub(crate) mod paint;
+pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub mod reporter;
 pub(crate) mod run_command;
+pub(crate) mod skill_check;
+pub(crate) mod telemetry;
+pub(crate) mod telemetry_command;
 pub(crate) mod test_command;
 pub(crate) mod test_filter;
+pub(crate) mod util;
 
 // TODO: These modules are disabled for now as they depend on baml_runtime
 // pub(crate) mod api_client;

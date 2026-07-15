@@ -54,6 +54,15 @@ function UseMapTypecheck() -> int {
 //    │
 //    │ Note: Error code: E0010
 // ───╯
+// error: map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    ╭─[ maps_key_and_value_typecheck.baml:2:29 ]
+//    │
+//  2 │ function CreateMapExpr() -> map<int, string> {
+//    │                             ────────┬───────
+//    │                                     ╰───────── map keys must be `string`; got `int`. Declare the map as `map<string, V>`; convert non-string keys with `.to_string()` before `.set()` or `.get()`
+//    │
+//    │ Note: Error code: E0067
+// ───╯
 // error: type mismatch: expected map<int, string>, got "2"
 //    ╭─[ maps_key_and_value_typecheck.baml:3:16 ]
 //    │

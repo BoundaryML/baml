@@ -18,9 +18,75 @@ use baml_compiler2_hir::{
 };
 use text_size::TextRange;
 
-use crate::ty::Ty;
+use crate::ty::{QualifiedTypeName, Ty};
 
 // ── Error kinds ──────────────────────────────────────────────────────────────
+
+/// The subject an associated-type projection failed to resolve `member` on —
+/// the "container" named by [`TirTypeError::UnknownAssociatedType`].
+///
+/// A projection is nominal: `member` must be declared by an interface reachable
+/// from the subject. Each variant is a subject kind with its own reason the
+/// member can be unknown — an interface that doesn't declare it, a concrete
+/// type none of whose impls provide it, or a type variable / projected type
+/// with no interface bound to search (an unbounded subject cannot be proven to
+/// implement any interface, so no interface can declare the member).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssocContainer {
+    /// An interface subject (an existential base, a type variable's bound, or
+    /// an explicit `(base as I)` qualifier) that does not declare the member.
+    Interface(QualifiedTypeName),
+    /// A concrete class none of whose impls' interfaces declare the member.
+    Class(QualifiedTypeName),
+    /// A concrete enum none of whose impls' interfaces declare the member.
+    Enum(QualifiedTypeName),
+    /// A type variable with no interface bound in scope.
+    TypeVar(Name),
+    /// Any other subject type (a primitive, list, map, or a projected type with
+    /// no declared bound), rendered user-facing.
+    Ty(Ty),
+}
+
+impl std::fmt::Display for AssocContainer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Interface(qtn) => write!(f, "interface `{}`", qtn.render_user_facing()),
+            Self::Class(qtn) => write!(f, "class `{}`", qtn.render_user_facing()),
+            Self::Enum(qtn) => write!(f, "enum `{}`", qtn.render_user_facing()),
+            Self::TypeVar(name) => write!(f, "type variable `{name}` (no interface bound)"),
+            Self::Ty(ty) => write!(f, "type `{}`", ty.render_user_facing()),
+        }
+    }
+}
+
+/// Where a disallowed `Self` appears in a method called through an
+/// interface-existential receiver — see [`TirTypeError::InvalidSelfCallThroughInterface`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelfCallPosition {
+    /// A non-receiver parameter typed with `Self`.
+    Parameter,
+    /// `Self` nested inside an invariant constructor in the return or throws type
+    /// (e.g. `-> Self[]`, `-> Box<Self>`); a bare top-level `-> Self` is allowed.
+    NestedInReturn,
+}
+
+/// The kind of enclosing declaration whose type-level parameter a method's
+/// generic shadows — names the declaration accurately in the
+/// [`TirTypeError::TypeParamShadowed`] message ("class `X`" / "interface `X`").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShadowedParamOwner {
+    Class,
+    Interface,
+}
+
+impl fmt::Display for ShadowedParamOwner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ShadowedParamOwner::Class => write!(f, "class"),
+            ShadowedParamOwner::Interface => write!(f, "interface"),
+        }
+    }
+}
 
 /// What went wrong — no location info, just the semantic error.
 ///
@@ -37,6 +103,11 @@ pub enum TirTypeError {
     /// - Class: "Class `X` has no member `y`"
     /// - Enum: "Enum `X` has no variant `y`"
     UnresolvedMember { base_type: Ty, member: Name },
+    /// A member (method or field) accessed on a union type is not reachable because
+    /// the union's arms implement no *common* interface that declares it. Each arm may
+    /// declare it independently (via distinct interfaces), but those are different
+    /// members — the union has no single agreed-upon one.
+    UnionMemberNoCommonInterface { union: Ty, member: Name },
     /// Name could not be resolved at all.
     UnresolvedName { name: Name },
     /// Unreachable code after a diverging statement (return/break/continue).
@@ -60,6 +131,16 @@ pub enum TirTypeError {
     NotIterable { ty: Ty },
     /// Expression is not indexable (e.g. `true[0]`).
     NotIndexable { ty: Ty },
+    /// A class destructuring pattern names a field the class does not declare.
+    UnknownClassPatternField {
+        class_name: crate::ty::QualifiedTypeName,
+        field_name: Name,
+        suggestions: Vec<Name>,
+    },
+    /// A `map` type expression whose key type is not `string` (e.g. `map<int, V>`).
+    /// Map keys are strings at runtime, so the key type must denote `string` or a
+    /// subset of it.
+    InvalidMapKeyType { key: Ty },
     /// Invalid operand types for a binary operator (e.g. `true + false`).
     InvalidBinaryOp {
         op: baml_compiler2_ast::BinaryOp,
@@ -97,7 +178,37 @@ pub enum TirTypeError {
     /// A type name in a type annotation could not be resolved.
     UnresolvedType {
         name: Name,
-        suggestions: Vec<String>,
+        /// "Did you mean" candidates, each a fully qualified `root.…` path.
+        suggestions: Box<[Name]>,
+    },
+    /// An associated-type projection's explicit `as X` qualifier resolved to a
+    /// non-interface type (a class, alias, etc.). The qualifier must name an
+    /// interface; without one the projection cannot be resolved, so it must not
+    /// silently fall back to an unqualified projection.
+    NonInterfaceProjectionQualifier,
+    /// A type-inference placeholder `_` (a `TypeExprKind::Infer` wildcard) could not have its
+    /// type inferred — inference for `_` is unavailable, so the type must be written explicitly.
+    /// Lowered to `Ty::Error` so it never reaches the canonical normalizer, which treats
+    /// `Ty::Infer` as `unreachable!`.
+    CannotInferType,
+    /// An associated-type projection references `member`, but the subject it
+    /// projects through does not declare (or cannot declare) it as an
+    /// associated type.
+    ///
+    /// Interfaces do not inherit associated types through `requires` (it is a
+    /// bound, not inheritance), so a member declared on a *required* interface
+    /// must be projected through that interface directly: `(Foo as Iterator).Item`,
+    /// not `(Foo as RequiresIterator).Item`.
+    UnknownAssociatedType {
+        member: Name,
+        container: AssocContainer,
+    },
+    /// An unqualified associated-type projection `Base.member` matches more than
+    /// one interface that declares `member`; it must be disambiguated with an
+    /// explicit `(Base as Interface).member` qualifier.
+    AmbiguousAssociatedTypeProjection {
+        member: Name,
+        candidates: Vec<QualifiedTypeName>,
     },
     /// Wrong number of arguments in a function call.
     ArgumentCountMismatch { expected: usize, got: usize },
@@ -154,10 +265,12 @@ pub enum TirTypeError {
     /// A generic class destructure with fields must write its type arguments
     /// directly on the class pattern, e.g. `Box<int> { value }`.
     GenericClassDestructureRequiresTypeArgs { class_name: Name },
-    /// A rest pattern (`..`) carries a sub-pattern (`..let r`, `..[a, b]`,
-    /// `..pat: T`, etc.). Currently unsupported — only bare `..` is allowed
-    /// while we settle the rest-vs-slice typing semantics.
-    RestSubPatternNotSupported,
+    /// A rest pattern (`..`) carries a sub-pattern that is not binding-shaped.
+    /// Allowed: `..let r`, `.._`, bind chains, and a terminal `: T` ascription
+    /// link. Rejected: bare type patterns, structural destructures, and
+    /// or-patterns — see `lower_array_pat` for why each is blocked and what
+    /// expanding the set would take.
+    RestSubPatternNotBinding,
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
     RefutablePatternInLet {
@@ -177,6 +290,10 @@ pub enum TirTypeError {
     /// loop never exits via pattern failure (an unconditional infinite loop).
     /// Suggest a plain `while`/`loop` instead.
     IrrefutablePatternInWhileLet,
+    /// `return`/`break`/`continue` inside a `defer` body that would escape the
+    /// defer (BEP-042). Only `throw` may leave a defer. `keyword` is the
+    /// offending control-flow keyword.
+    DeferControlFlowEscape { keyword: &'static str },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType { type_name: String },
     /// Inferred escaping throws are not covered by the declared throws contract.
@@ -194,8 +311,23 @@ pub enum TirTypeError {
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
-    /// A method's generic type parameter shadows a class-level type parameter.
-    TypeParamShadowed { param_name: Name, class_name: Name },
+    /// A method's generic type parameter shadows a type-level parameter (generic
+    /// parameter or associated type) of the enclosing class or interface.
+    TypeParamShadowed {
+        param_name: Name,
+        type_name: Name,
+        owner: ShadowedParamOwner,
+    },
+    /// A method's generic type parameter shadows a generic parameter declared on
+    /// the enclosing `implements` block.
+    TypeParamShadowedImplParam { param_name: Name },
+    /// A generic type parameter declared more than once in the same parameter list.
+    DuplicateGenericParam { name: Name },
+    /// An associated type declared more than once on the same interface.
+    DuplicateAssociatedType { name: Name },
+    /// An associated type sharing its name with one of the interface's own
+    /// generic parameters.
+    AssociatedTypeConflictsWithGenericParam { name: Name },
     /// Wrong number of type arguments for a generic class or interface.
     WrongNumberOfTypeArgs {
         type_name: Name,
@@ -214,6 +346,11 @@ pub enum TirTypeError {
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
     TypeIsNotGeneric { type_name: Name, kind: &'static str },
+    /// A generic function was referenced as a value without specialization
+    /// (`let f = identity` where `identity<T>`). A generic function is a type
+    /// constructor — it must be specialized (`identity<int>`) or have its type
+    /// arguments inferable from context before it becomes a usable value.
+    GenericFunctionValueNotSpecialized { name: Name },
     /// A lambda parameter has no type annotation and no expected type context
     /// to infer the type from.
     CannotInferLambdaParamType { param_name: Name },
@@ -253,6 +390,23 @@ pub enum TirTypeError {
         /// The full expression text (e.g. `a.name`)
         expr: String,
     },
+    /// BEP-049 §10: a backtick template was attached to a tag that resolves to
+    /// something that isn't a function (so it can't be a tagged-string tag).
+    TaggedTagNotAFunction { name: Name },
+    /// BEP-049 §10: the tag resolves to a function, but it lacks the
+    /// `//baml:tagged_string` marker that makes it usable as a tagged-template tag.
+    TaggedTagNotMarked { name: Name },
+    /// BEP-049 §10: a `//baml:tagged_string` tag's first parameter is not a
+    /// well-formed `body: (...) -> baml.TaggedString` (missing / wrong name /
+    /// not a lambda / lambda return type isn't `baml.TaggedString`).
+    TaggedTagBadBodyParam { name: Name },
+    /// BEP-049 §11: an untagged `${expr}` interpolates a nullable value. The
+    /// implicit `.to_string()` can't run on a possibly-null value; the user
+    /// must coalesce (`${x ?? "…"}`) or unwrap first.
+    InterpolatedValueMaybeNull { ty: Ty },
+    /// BEP-049 §11: an untagged `${expr}` interpolates a value whose type has
+    /// no `to_string` method, so it can't be implicitly stringified.
+    TypeNotInterpolatable { ty: Ty },
 
     /// BEP-044 §"Method Disambiguation": an unqualified call resolves to
     /// a method declared by two or more interfaces — the receiver carries
@@ -291,15 +445,6 @@ pub enum TirTypeError {
         qualified_name: Name,
     },
 
-    /// The old `value.Interface.member` projection syntax has been replaced by
-    /// `.as<Interface>.member`.
-    DeprecatedInterfaceProjection {
-        interface_name: Name,
-        /// The `.as<...>` projection target with type args (e.g. `Container<int>`),
-        /// which may differ from the bare `interface_name` the user wrote.
-        as_target: String,
-    },
-
     /// `.as<T>` is an interface projection/upcast; the target must be an
     /// interface type.
     InvalidInterfaceUpcastTarget { target: Ty },
@@ -311,11 +456,17 @@ pub enum TirTypeError {
         member_name: Name,
     },
 
-    /// Interface-typed receivers cannot call methods with additional `Self`
-    /// parameters. The concrete implementor must be known for those arguments.
+    /// An interface-existential (or union) receiver cannot call a method that uses
+    /// `Self` outside the receiver position: a non-receiver `Self` parameter (the
+    /// concrete implementor is unknown for those arguments), or `Self` nested inside
+    /// an invariant constructor in the return/throws type (`-> Self[]`, `-> Box<Self>`
+    /// — the impl returns a concretely-tagged container that is NOT a subtype of the
+    /// existential-tagged one; containers are invariant). A bare top-level `-> Self`
+    /// is fine (it collapses covariantly to the receiver). Rust `dyn Trait` parity.
     InvalidSelfCallThroughInterface {
         interface_name: Name,
         method_name: Name,
+        position: SelfCallPosition,
     },
 
     /// BEP-044 §"default keyword scoping rules": `default.method()` on a
@@ -338,11 +489,6 @@ pub enum TirTypeError {
     /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
     /// generic bound (`T extends Bound`) is not met. Names the failed bound.
     BlanketBoundNotSatisfied { value_type: Ty, bound: Ty },
-    /// BEP-044 wf3 #18: a class provides the SAME interface instantiation via
-    /// more than one `implements` block (distinct generic blocks that collapse
-    /// under the concrete type args, e.g. `Getter<L>`+`Getter<R>` at
-    /// `Pair<int, int>`). Coercing to that interface is ambiguous.
-    AmbiguousInterfaceInstantiation { class_name: Name, interface: Ty },
     /// `$id` cannot be the target of a compound assignment (`$id += ...`):
     /// the runtime ID can only be replaced wholesale with an override from
     /// `baml.id.new()` via `$id = ...`.
@@ -353,6 +499,217 @@ pub enum TirTypeError {
     /// `$id` used as a call-site argument label (`foo($id = x)`). Overrides
     /// are set inside the callee body with `$id = ...`, not by the caller.
     RuntimeIdCallSiteArgument,
+    /// An integer literal (or a constant-folded integer expression) is outside
+    /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
+    /// magnitudes need a `bigint` literal (`n` suffix).
+    IntegerLiteralOutOfRange { value: i64 },
+    /// BEP-044: a generic parameter's bound (`<T extends X>`) resolved to a
+    /// concrete non-interface type. Generic bounds must be interfaces.
+    GenericBoundNotInterface { bound: Ty },
+    /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions):
+    /// an interface-bounded type parameter
+    /// (`<T extends I>`) was given a non-concrete type argument (a union,
+    /// interface-existential, literal, `unknown`, …). Only a concrete type has a
+    /// single run-time representation, so virtual dispatch on the parameter is
+    /// well-defined; a `T = A | B` would let `a.method(b)` dispatch on two
+    /// different concrete types at once. Names the argument and the interface bound
+    /// (a conjunction of interfaces — a non-interface bound is a separate
+    /// `GenericBoundNotInterface` error, never this one).
+    BoundedTypeArgNotConcrete {
+        arg: Ty,
+        bound: Box<[baml_type::Interface]>,
+    },
+    /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions):
+    /// an interface used as an **existential type** (a value's type — a parameter,
+    /// return, field, or annotation) must specify every associated type, like Rust's
+    /// `dyn Iterator<Item = …>` (E0191). Only associated types with a declared default
+    /// may be omitted. An unpinned existential (`Iterator` instead of
+    /// `Iterator<Item = int>`) is otherwise ill-formed: `Iterator` and
+    /// `Iterator<Item = int>` would be mutually-incomparable types and membership would
+    /// be vacuous. (Interface *bounds* — `<T extends Iterator>` — do NOT require this;
+    /// they are not existentials.) Names the interface and the unpinned associated types.
+    MissingAssociatedTypeBindings {
+        interface: crate::ty::QualifiedTypeName,
+        missing: Vec<Name>,
+    },
+    /// A *bare* interface destructure pattern (`Source { value }`, no written generic
+    /// args or associated bindings) adopts its associated-type bindings from the
+    /// scrutinee — so the scrutinee must determine them uniquely. A scrutinee admitting
+    /// two distinct realizations of the pattern's interface
+    /// (`Source<Item = int> | Source<Item = string>`) is ambiguous: the pattern must
+    /// write the bindings explicitly. (A *type* pattern never infers — it is an
+    /// ordinary type and pins everything, per [`Self::MissingAssociatedTypeBindings`].)
+    AmbiguousInterfacePatternBindings {
+        interface: crate::ty::QualifiedTypeName,
+        candidates: Vec<Ty>,
+    },
+    /// An `implements` block does not provide a body for a method the interface
+    /// declares as required (no default). Impl conformance (E0113).
+    MissingInterfaceMethod {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+    },
+    /// An interface that declares fields is implemented out-of-body
+    /// (`implement I for T`). A field-bearing interface can only be implemented in the
+    /// class body, where its fields are satisfied by the class's own fields (E0126).
+    OutOfBodyImplementsFieldInterface {
+        interface: crate::ty::QualifiedTypeName,
+    },
+    /// An `implements` block provides a method the interface neither requires nor
+    /// declares as a default — so it overrides nothing. Impl conformance (E0115).
+    UnknownInterfaceMember {
+        interface: crate::ty::QualifiedTypeName,
+        member: Name,
+    },
+    /// An interface field is not satisfied by any class field — neither a same-named
+    /// field nor an explicit `field as class_field` link. Impl conformance (E0124).
+    MissingInterfaceField {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
+    /// The class field satisfying an interface field has an incompatible type — field types
+    /// are invariant, so they must be equivalent. Impl conformance (E0116).
+    InterfaceFieldTypeMismatch {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+        /// The interface's declared field type (realized at the impl's interface args).
+        expected: Ty,
+        /// The satisfying class field's type.
+        got: Ty,
+    },
+    /// An override's signature is not a subtype of the interface's declared signature —
+    /// args/kwargs are contravariant, return/throws covariant. Impl conformance (E0120).
+    InterfaceMethodSignatureMismatch {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+        /// The interface's declared signature (realized at the impl's interface args).
+        expected: Ty,
+        /// The override's signature.
+        got: Ty,
+    },
+    /// An override declares a generic bound on one of its type parameters that the interface
+    /// method does not require — the implementation has stricter requirements than the
+    /// interface (Rust's E0276), so a caller satisfying the interface could be rejected.
+    InterfaceMethodAddsGenericBound {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+        param: Name,
+        bound: baml_type::Interface,
+    },
+    /// The impl's target type does not implement an interface the implemented interface
+    /// `requires` — implementing `I` requires also implementing each of `I`'s parents.
+    /// `required` is the *realized* obligation (generic args and associated pins included),
+    /// so a type that implements the parent at a different binding reads as what's missing
+    /// (`Parent<Item = int>`, not a bare `Parent` it does implement). Impl conformance (E0125).
+    MissingRequiredInterface {
+        interface: crate::ty::QualifiedTypeName,
+        required: baml_type::Interface,
+    },
+    /// An `implements` head names a type that is not an interface (a class, enum, or alias).
+    /// Impl header (E0119).
+    ImplTargetNotInterface { name: Name },
+    /// An out-of-body impl's `for` target is not a single concrete impl subject — a union,
+    /// optional, interface (`dyn`), literal, `unknown`, function, `Future`, … Impl header (E0138).
+    ImplTargetNotConcrete { target: Ty },
+    /// An impl declares a generic parameter that its `for` type and interface arguments do not
+    /// determine, so it can never be inferred at a use site. Impl header (E0135).
+    UnconstrainedImplTypeParam { name: Name },
+    /// An out-of-body impl of a *foreign* interface is not anchored on a local type — the
+    /// RFC-2451 covered rule (BEP-044). Impl header (E0139).
+    ImplViolatesOrphanRule {
+        interface: crate::ty::QualifiedTypeName,
+        /// The uncovered type parameter appearing before any local type, if that is the
+        /// failure; `None` when no local type appears anywhere in the impl's inputs.
+        uncovered_param: Option<Name>,
+    },
+    /// The left side of a `field as class_field` link does not name a field of the
+    /// implemented interface. Field-link well-formedness (E0128).
+    UnknownInterfaceFieldLink {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
+    /// The right side of a `field as class_field` link does not name a field of the
+    /// class. Field-link well-formedness (E0129).
+    UnknownClassFieldInInterfaceLink {
+        class: Name,
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
+    /// The same interface field is linked by more than one `field as class_field` link in
+    /// one `implements` block. Field-link well-formedness (E0130).
+    DuplicateInterfaceFieldLink {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
+    /// A `type Name = …` binding in an `implements` block names an associated type the
+    /// interface does not declare. Assoc-binding hygiene.
+    UnknownAssociatedTypeBinding {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+    },
+    /// An `implements` block binds the same associated type more than once. Assoc-binding
+    /// hygiene.
+    DuplicateAssociatedTypeBinding {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+    },
+    /// An `implements` block does not bind an associated type the interface declares with no
+    /// default, so it is left undetermined. Assoc-binding hygiene. (Distinct from
+    /// [`Self::MissingAssociatedTypeBindings`], which is the existential *value*-position rule.)
+    MissingImplAssociatedTypeBinding {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+    },
+    /// Associated type bindings were written on an `implements` *target* (`implements
+    /// I<Item = …>`) instead of inside the block (`type Item = …`). Assoc-binding hygiene.
+    AssociatedTypeBindingsOnImplementsTarget {
+        interface: crate::ty::QualifiedTypeName,
+    },
+    /// An `implements` block binds an associated type to a type that does not implement the
+    /// interface's declared bound for it (`type Item extends J`) — a bound is an *implements*
+    /// relation, like a generic bound. Assoc-binding hygiene.
+    AssociatedTypeBindingViolatesBound {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+        /// The bound type the binding fails to implement.
+        binding: Ty,
+        bound: baml_type::Interface,
+    },
+    /// `Self` appears in an interface *field* type. `Self` is only meaningful in method
+    /// signatures; a recursive field must name the interface itself. Interface-declaration well-formedness (E0136).
+    SelfInInterfaceField {
+        interface: crate::ty::QualifiedTypeName,
+        field: Name,
+    },
+    /// An interface's `requires` clause names a type that is not an interface (a class, enum, or
+    /// alias). Only interfaces can be required. Interface-declaration well-formedness (E0133).
+    InterfaceRequiresNonInterface {
+        interface: crate::ty::QualifiedTypeName,
+        target: Name,
+    },
+    /// An interface's transitive `requires` graph cycles back to itself. Interface-declaration well-formedness (E0118).
+    /// `chain` is the witnessing name path `[root, …, root]`.
+    InterfaceRequiresCycle { chain: Vec<Name> },
+    /// An interface associated type's default does not implement its declared bound (`type Item
+    /// extends J = V` where `V` does not implement `J`). Interface-declaration well-formedness.
+    AssociatedTypeDefaultViolatesBound {
+        interface: crate::ty::QualifiedTypeName,
+        name: Name,
+        /// The default type that fails to implement the bound.
+        default: Ty,
+        bound: baml_type::Interface,
+    },
+    /// An impl header contains a concrete associated-type projection (`implement I for C.Item`, or
+    /// an interface argument `I<X = C.Item>`) whose resolution enumerates this very impl set, so it
+    /// cycles. The `impl_data` cycle fallback can't carry a diagnostic, so it is re-detected and
+    /// reported here. Impl header.
+    CyclicImplHeader,
+    /// An interface method (required or default) omits its `throws` clause. Interface signatures
+    /// must declare it explicitly — it is never inferred (`TYPE_SYSTEM.md` rule 1). Interface-declaration well-formedness.
+    InterfaceMethodMissingThrows {
+        interface: crate::ty::QualifiedTypeName,
+        method: Name,
+    },
 }
 
 impl fmt::Display for TirTypeError {
@@ -367,10 +724,22 @@ impl fmt::Display for TirTypeError {
                 )
             }
             TirTypeError::UnresolvedMember { base_type, member } => {
+                if matches!(base_type, Ty::BuiltinUnknown { .. }) {
+                    write!(f, "cannot access field `{member}` on `unknown`")
+                } else {
+                    write!(
+                        f,
+                        "type `{}` has no member `{member}`",
+                        base_type.render_user_facing()
+                    )
+                }
+            }
+            TirTypeError::UnionMemberNoCommonInterface { union, member } => {
                 write!(
                     f,
-                    "type `{}` has no member `{member}`",
-                    base_type.render_user_facing()
+                    "type `{}` has no member `{member}`: its members implement no common \
+                     interface that declares `{member}`",
+                    union.render_user_facing()
                 )
             }
             TirTypeError::UnresolvedName { name } => {
@@ -417,6 +786,46 @@ impl fmt::Display for TirTypeError {
             TirTypeError::NotIndexable { ty } => {
                 write!(f, "type `{}` is not indexable", ty.render_user_facing())
             }
+            TirTypeError::UnknownClassPatternField {
+                class_name,
+                field_name,
+                suggestions,
+            } => {
+                if suggestions.is_empty() {
+                    write!(
+                        f,
+                        "class `{}` has no field `{field_name}`",
+                        class_name.render_user_facing()
+                    )
+                } else if suggestions.len() == 1 {
+                    write!(
+                        f,
+                        "class `{}` has no field `{field_name}`. Did you mean `{}`?",
+                        class_name.render_user_facing(),
+                        suggestions[0]
+                    )
+                } else {
+                    let joined = suggestions
+                        .iter()
+                        .map(std::string::ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("`, `");
+                    write!(
+                        f,
+                        "class `{}` has no field `{field_name}`. Did you mean one of these: \
+                         `{joined}`?",
+                        class_name.render_user_facing()
+                    )
+                }
+            }
+            TirTypeError::InvalidMapKeyType { key } => {
+                write!(
+                    f,
+                    "map keys must be `string`; got `{}`. Declare the map as `map<string, V>`; \
+                     convert non-string keys with `.to_string()` before `.set()` or `.get()`",
+                    key.render_user_facing()
+                )
+            }
             TirTypeError::InvalidBinaryOp { op, lhs, rhs } => {
                 write!(
                     f,
@@ -461,6 +870,30 @@ impl fmt::Display for TirTypeError {
                     operand.render_user_facing()
                 )
             }
+            TirTypeError::NonInterfaceProjectionQualifier => {
+                write!(
+                    f,
+                    "qualified associated type projection must use an interface"
+                )
+            }
+            TirTypeError::CannotInferType => {
+                write!(f, "type inference failed; write the type explicitly")
+            }
+            TirTypeError::UnknownAssociatedType { member, container } => {
+                write!(f, "unknown associated type `{member}` for {container}")
+            }
+            TirTypeError::AmbiguousAssociatedTypeProjection { member, candidates } => {
+                let names = candidates
+                    .iter()
+                    .map(|c| format!("`{}`", c.render_user_facing()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(
+                    f,
+                    "ambiguous associated type `{member}`: declared by multiple interfaces \
+                     ({names}); qualify the projection with `(... as Interface).{member}`"
+                )
+            }
             TirTypeError::UnresolvedType { name, suggestions } => {
                 if suggestions.is_empty() {
                     write!(f, "unresolved type: {name}")
@@ -471,10 +904,14 @@ impl fmt::Display for TirTypeError {
                         suggestions[0]
                     )
                 } else {
+                    let joined = suggestions
+                        .iter()
+                        .map(Name::as_str)
+                        .collect::<Vec<_>>()
+                        .join("`, `");
                     write!(
                         f,
-                        "unresolved type: {name}. Did you mean one of these: `{}`?",
-                        suggestions.join("`, `")
+                        "unresolved type: {name}. Did you mean one of these: `{joined}`?"
                     )
                 }
             }
@@ -565,9 +1002,9 @@ impl fmt::Display for TirTypeError {
                 f,
                 "generic class destructure `{class_name} {{ ... }}` must specify type arguments"
             ),
-            TirTypeError::RestSubPatternNotSupported => write!(
+            TirTypeError::RestSubPatternNotBinding => write!(
                 f,
-                "rest pattern `..` cannot carry a sub-pattern; only bare `..` is allowed"
+                "rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`"
             ),
             TirTypeError::RefutablePatternInLet { context } => write!(
                 f,
@@ -590,6 +1027,10 @@ impl fmt::Display for TirTypeError {
             TirTypeError::IrrefutablePatternInWhileLet => write!(
                 f,
                 "irrefutable `while let` pattern; the loop never exits by pattern failure — use a plain `while`/`loop` instead"
+            ),
+            TirTypeError::DeferControlFlowEscape { keyword } => write!(
+                f,
+                "`{keyword}` cannot leave a `defer` body; only `throw` may propagate out of a defer"
             ),
             TirTypeError::InvalidCatchBindingType { type_name } => write!(
                 f,
@@ -625,7 +1066,7 @@ impl fmt::Display for TirTypeError {
                 } else {
                     write!(
                         f,
-                        "Add an explicit `throws` to the callback, catch the call, or make the callback non-throwing."
+                        "The callback type does not say what it can throw. If `{callback_name}` is an infallible host callback, annotate it with `throws never`; otherwise catch the call or let the enclosing function declare/propagate the callback's throws."
                     )
                 }
             }
@@ -665,14 +1106,48 @@ impl fmt::Display for TirTypeError {
                     "{kind} `{type_name}` is not generic and cannot take type arguments"
                 )
             }
+            TirTypeError::GenericFunctionValueNotSpecialized { name } => {
+                write!(
+                    f,
+                    "generic function `{name}` must be specialized before it is used \
+                    as a value (e.g. `{name}<int>`)"
+                )
+            }
             TirTypeError::TypeParamShadowed {
                 param_name,
-                class_name,
+                type_name,
+                owner,
             } => {
                 write!(
                     f,
-                    "type parameter `{param_name}` on method shadows the same parameter on class `{class_name}`. \
+                    "type parameter `{param_name}` on method shadows the same parameter on {owner} `{type_name}`. \
                     Please use a different name for the type parameter."
+                )
+            }
+            TirTypeError::TypeParamShadowedImplParam { param_name } => {
+                write!(
+                    f,
+                    "type parameter `{param_name}` on method shadows the same parameter on the enclosing `implements` block. \
+                    Please use a different name for the type parameter."
+                )
+            }
+            TirTypeError::DuplicateGenericParam { name } => {
+                write!(
+                    f,
+                    "generic type parameter `{name}` is declared more than once"
+                )
+            }
+            TirTypeError::DuplicateAssociatedType { name } => {
+                write!(
+                    f,
+                    "associated type `{name}` is declared more than once on this interface"
+                )
+            }
+            TirTypeError::AssociatedTypeConflictsWithGenericParam { name } => {
+                write!(
+                    f,
+                    "associated type `{name}` conflicts with the interface's generic parameter of the same name. \
+                    Please use a different name for one of them."
                 )
             }
             TirTypeError::CannotInferLambdaParamType { param_name } => {
@@ -737,6 +1212,28 @@ impl fmt::Display for TirTypeError {
                     "did you mean `{suggested}`? `{expr}` does not handle the case when `{base}` is null"
                 )
             }
+            TirTypeError::TaggedTagNotAFunction { name } => write!(
+                f,
+                "`{name}` is not a function — a tagged-template tag must be a function marked `//baml:tagged_string`"
+            ),
+            TirTypeError::TaggedTagNotMarked { name } => write!(
+                f,
+                "`{name}` is not a tagged-string function — only functions marked `//baml:tagged_string` can be used as a tagged-template tag"
+            ),
+            TirTypeError::TaggedTagBadBodyParam { name } => write!(
+                f,
+                "the first parameter of tagged-string function `{name}` must be `body: (...) -> baml.TaggedString`"
+            ),
+            TirTypeError::InterpolatedValueMaybeNull { ty } => write!(
+                f,
+                "cannot interpolate a value of type `{}` — it may be null; coalesce with `?? \"…\"` or unwrap it first",
+                ty.render_user_facing()
+            ),
+            TirTypeError::TypeNotInterpolatable { ty } => write!(
+                f,
+                "cannot interpolate a value of type `{}` — it has no `to_string` method",
+                ty.render_user_facing()
+            ),
             TirTypeError::AmbiguousInterfaceMethod {
                 class_name,
                 method_name,
@@ -794,13 +1291,6 @@ impl fmt::Display for TirTypeError {
                 f,
                 "interface-qualified field `{field_name}` cannot be used in a class constructor; use class field `{qualified_name}`"
             ),
-            TirTypeError::DeprecatedInterfaceProjection {
-                interface_name,
-                as_target,
-            } => write!(
-                f,
-                "interface projection uses `.as<{as_target}>`, not `.{interface_name}`"
-            ),
             TirTypeError::InvalidInterfaceUpcastTarget { target } => {
                 write!(f, "`.as<T>` target must be an interface, got `{target}`")
             }
@@ -814,11 +1304,21 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidSelfCallThroughInterface {
                 interface_name,
                 method_name,
-            } => write!(
-                f,
-                "method `{method_name}` on interface `{interface_name}` uses `Self` in \
-                 its parameters and requires a concrete receiver"
-            ),
+                position,
+            } => {
+                let position = match position {
+                    SelfCallPosition::Parameter => "a parameter",
+                    SelfCallPosition::NestedInReturn => {
+                        "its return/throws type, nested in a container (e.g. `Self[]`)"
+                    }
+                };
+                write!(
+                    f,
+                    "method `{method_name}` on interface `{interface_name}` uses `Self` in \
+                     {position}, so it requires a concrete receiver, not an \
+                     interface-existential one"
+                )
+            }
             TirTypeError::DefaultOnRequiredMethod {
                 interface_name,
                 method_name,
@@ -848,16 +1348,6 @@ impl fmt::Display for TirTypeError {
                 value_type.render_user_facing(),
                 bound.render_user_facing()
             ),
-            TirTypeError::AmbiguousInterfaceInstantiation {
-                class_name,
-                interface,
-            } => write!(
-                f,
-                "class `{class_name}` implements `{}` through more than one `implements` block at \
-                 this instantiation (distinct generic blocks collapse to the same type); the \
-                 projection is ambiguous",
-                interface.render_user_facing()
-            ),
             TirTypeError::RuntimeIdCompoundAssignment => write!(
                 f,
                 "`$id` cannot be the target of a compound assignment; use `$id = ...` with an \
@@ -873,6 +1363,302 @@ impl fmt::Display for TirTypeError {
                 "`$id` cannot be set at the call site; assign `$id = ...` inside the function \
                  body instead"
             ),
+            TirTypeError::IntegerLiteralOutOfRange { value } => write!(
+                f,
+                "integer literal `{value}` is out of range for `int` \
+                 (which holds -4611686018427387904 to 4611686018427387903); \
+                 append `n` to write it as a `bigint`"
+            ),
+            TirTypeError::GenericBoundNotInterface { bound } => write!(
+                f,
+                "generic bound `{}` is not an interface; bounds must be interfaces",
+                bound.render_user_facing()
+            ),
+            TirTypeError::BoundedTypeArgNotConcrete { arg, bound } => {
+                let bound = bound
+                    .iter()
+                    .map(|iface| iface.to_ty().render_user_facing())
+                    .collect::<Vec<_>>()
+                    .join(" & ");
+                write!(
+                    f,
+                    "type argument `{}` is not concrete; a type parameter bounded by `{bound}` \
+                     requires a concrete type that implements it (an abstract type like a union \
+                     or interface has no single runtime type to dispatch on)",
+                    arg.render_user_facing()
+                )
+            }
+            TirTypeError::MissingAssociatedTypeBindings { interface, missing } => {
+                let missing = missing
+                    .iter()
+                    .map(|name| format!("`{name}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(
+                    f,
+                    "interface-existential type `{}` must specify its associated type(s) {missing} \
+                     (only associated types with a default may be omitted; an interface *bound* \
+                     `<T extends {}>` does not require them)",
+                    interface.render_user_facing(),
+                    interface.render_user_facing(),
+                )
+            }
+            TirTypeError::AmbiguousInterfacePatternBindings {
+                interface,
+                candidates,
+            } => {
+                let candidates = candidates
+                    .iter()
+                    .map(|ty| format!("`{}`", ty.render_user_facing()))
+                    .collect::<Vec<_>>()
+                    .join(" and ");
+                write!(
+                    f,
+                    "cannot infer the associated type bindings for the bare interface pattern \
+                     `{interface} {{ … }}`: the scrutinee admits {candidates}; write the bindings \
+                     explicitly (`{interface}<…> {{ … }}`)",
+                    interface = interface.render_user_facing(),
+                )
+            }
+            TirTypeError::MissingInterfaceMethod { interface, method } => {
+                write!(
+                    f,
+                    "missing implementation of method `{method}` required by interface `{}`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::OutOfBodyImplementsFieldInterface { interface } => {
+                write!(
+                    f,
+                    "interface `{}` declares fields and can only be implemented in the class \
+                     body, not out-of-body",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::UnknownInterfaceMember { interface, member } => {
+                write!(
+                    f,
+                    "`{member}` is not a method of interface `{}`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::MissingInterfaceField { interface, field } => {
+                write!(
+                    f,
+                    "missing field `{field}` required by interface `{}` (add a class field named \
+                     `{field}` or link one with `{field} as <class_field>`)",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceFieldTypeMismatch {
+                interface,
+                field,
+                expected,
+                got,
+            } => {
+                write!(
+                    f,
+                    "field `{field}` has type {}, but interface `{}` declares it as {}",
+                    got.render_user_facing(),
+                    interface.render_user_facing(),
+                    expected.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceMethodSignatureMismatch {
+                interface,
+                method,
+                expected,
+                got,
+            } => {
+                write!(
+                    f,
+                    "method `{method}` has signature {}, which does not conform to interface `{}`'s \
+                     declared {}",
+                    got.render_user_facing(),
+                    interface.render_user_facing(),
+                    expected.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceMethodAddsGenericBound {
+                interface,
+                method,
+                param,
+                bound,
+            } => {
+                write!(
+                    f,
+                    "method `{method}` requires `{param}: {}`, but interface `{}`'s `{method}` \
+                     declares no such bound — an implementation may not add requirements the \
+                     interface does not",
+                    bound.to_ty().render_user_facing(),
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::MissingRequiredInterface {
+                interface,
+                required,
+            } => {
+                write!(
+                    f,
+                    "implementing `{}` also requires implementing `{}`",
+                    interface.render_user_facing(),
+                    required.to_ty().render_user_facing()
+                )
+            }
+            TirTypeError::ImplTargetNotInterface { name } => {
+                write!(f, "`{name}` is not an interface and cannot be implemented")
+            }
+            TirTypeError::ImplTargetNotConcrete { target } => {
+                write!(
+                    f,
+                    "cannot implement an interface for {} — the target must be a single concrete \
+                     type",
+                    target.render_user_facing()
+                )
+            }
+            TirTypeError::UnconstrainedImplTypeParam { name } => {
+                write!(
+                    f,
+                    "generic parameter `{name}` is not constrained by the `for` type or interface \
+                     arguments, so it can never be inferred"
+                )
+            }
+            TirTypeError::ImplViolatesOrphanRule {
+                interface,
+                uncovered_param,
+            } => match uncovered_param {
+                Some(param) => write!(
+                    f,
+                    "orphan rule: implementing the foreign interface `{}` requires a local type \
+                     before the uncovered parameter `{param}`",
+                    interface.render_user_facing()
+                ),
+                None => write!(
+                    f,
+                    "orphan rule: a foreign interface `{}` can only be implemented for a local type",
+                    interface.render_user_facing()
+                ),
+            },
+            TirTypeError::UnknownInterfaceFieldLink { interface, field } => {
+                write!(
+                    f,
+                    "interface `{}` has no field `{field}` to link",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::UnknownClassFieldInInterfaceLink {
+                class,
+                interface,
+                field,
+            } => {
+                write!(
+                    f,
+                    "class `{class}` has no field `{field}` to link for interface `{}`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::DuplicateInterfaceFieldLink { interface, field } => {
+                write!(
+                    f,
+                    "field `{field}` of interface `{}` is linked more than once",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::UnknownAssociatedTypeBinding { interface, name } => {
+                write!(
+                    f,
+                    "unknown associated type `{name}` for interface `{}`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::DuplicateAssociatedTypeBinding { interface, name } => {
+                write!(
+                    f,
+                    "associated type `{name}` of interface `{}` is bound more than once",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::MissingImplAssociatedTypeBinding { interface, name } => {
+                write!(
+                    f,
+                    "missing associated type binding `{name}` for interface `{}` (add `type {name} = \
+                     …` to the implements block)",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::AssociatedTypeBindingsOnImplementsTarget { interface } => {
+                write!(
+                    f,
+                    "associated type bindings are not allowed on an `implements` target for `{}`; \
+                     bind them inside the block with `type Name = …`",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::AssociatedTypeBindingViolatesBound {
+                interface,
+                name,
+                binding,
+                bound,
+            } => {
+                write!(
+                    f,
+                    "associated type binding `{name}` = `{}` does not implement bound `{}` declared \
+                     by interface `{}`",
+                    binding.render_user_facing(),
+                    bound.to_ty().render_user_facing(),
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::SelfInInterfaceField { interface, field } => {
+                write!(
+                    f,
+                    "`Self` is not allowed in the type of interface field `{field}` on `{}`; name \
+                     the interface itself for recursion",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceRequiresNonInterface { interface, target } => {
+                write!(
+                    f,
+                    "interface `{}` cannot require `{target}`, which is not an interface",
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::InterfaceRequiresCycle { chain } => {
+                let rendered = chain
+                    .iter()
+                    .map(Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                write!(f, "interface `requires` cycle: {rendered}")
+            }
+            TirTypeError::AssociatedTypeDefaultViolatesBound {
+                interface,
+                name,
+                default,
+                bound,
+            } => {
+                write!(
+                    f,
+                    "associated type default `{name}` = `{}` does not implement bound `{}` declared \
+                     by interface `{}`",
+                    default.render_user_facing(),
+                    bound.to_ty().render_user_facing(),
+                    interface.render_user_facing()
+                )
+            }
+            TirTypeError::CyclicImplHeader => write!(
+                f,
+                "a concrete associated-type projection in an impl header is illegal here (it \
+                 resolves through this impl); name the resolved type directly"
+            ),
+            TirTypeError::InterfaceMethodMissingThrows { interface, method } => {
+                write!(
+                    f,
+                    "interface method `{method}` on `{}` must declare an explicit `throws` clause",
+                    interface.render_user_facing()
+                )
+            }
         }
     }
 }
@@ -894,6 +1680,8 @@ pub enum DiagnosticSeverity {
 pub enum RelatedLocation<'db> {
     /// Expression in the same scope's `ExprBody`.
     Expr(ExprId),
+    /// A specific segment of a multi-segment `Path` expression.
+    ExprSegment(ExprId, usize),
     /// Statement in the same scope's `ExprBody`.
     Stmt(StmtId),
     /// A function parameter (possibly in another file).
@@ -1011,6 +1799,9 @@ fn resolve_related_location<'db>(
     match location {
         RelatedLocation::Expr(id) => {
             source_map.map(|sm| (scope_file.file_id(db), sm.expr_span(*id)))
+        }
+        RelatedLocation::ExprSegment(id, seg_idx) => {
+            source_map.map(|sm| (scope_file.file_id(db), sm.path_segment_span(*id, *seg_idx)))
         }
         RelatedLocation::Stmt(id) => {
             source_map.map(|sm| (scope_file.file_id(db), sm.stmt_span(*id)))
@@ -1174,20 +1965,67 @@ impl<'db> InferContext<'db> {
         self.diagnostics.borrow_mut().diagnostics.truncate(n);
     }
 
-    pub fn remap_diagnostics_after(&self, n: usize, source_map: &AstSourceMap) {
-        let mut diagnostics = self.diagnostics.borrow_mut();
-        for diagnostic in diagnostics.diagnostics.iter_mut().skip(n) {
-            diagnostic.primary = DiagnosticLocation::Span(match diagnostic.primary {
-                DiagnosticLocation::Expr(id) => source_map.expr_span(id),
-                DiagnosticLocation::ExprMember(id) => source_map.member_access_member_span(id),
-                DiagnosticLocation::ExprSegment(id, segment_idx) => {
-                    source_map.path_segment_span(id, segment_idx)
-                }
-                DiagnosticLocation::Stmt(id) => source_map.stmt_span(id),
-                DiagnosticLocation::TypeAnnot(id) => source_map.type_annotation_span(id),
-                DiagnosticLocation::Span(range) => range,
-            });
+    /// Drop every diagnostic recorded after index `n` EXCEPT genuine
+    /// `UnresolvedName`s. Used by the untagged-backtick (`Default` template)
+    /// path: inferring the desugared `elaborated` concat synthesizes
+    /// `expr.to_string()` member calls and a `+`-fold, whose failures
+    /// (`NotCallable`/`UnresolvedMember`) are noise pointing at synthetic spans
+    /// (the strict-stringify errors are re-reported on the original `${…}` spans
+    /// by [`check_template_interps_stringable`](crate::builder)). But a bare
+    /// unresolved *name* — `${ nope }`, or `nope` on a spliced `let`'s RHS — is
+    /// never introduced by that desugaring (it emits member/call nodes and a
+    /// guaranteed-bound accumulator, never a fresh name reference), so an
+    /// `UnresolvedName` here is always genuine user code. Keeping it surfaces the
+    /// real error and prevents the unresolved `Ty::Unknown` from slipping through
+    /// to MIR, where runtime lowering of an error-recovery type ICEs.
+    pub fn retain_user_name_diagnostics(&self, n: usize) {
+        let mut diags = self.diagnostics.borrow_mut();
+        let len = diags.diagnostics.len();
+        if n >= len {
+            return;
         }
+        // Keep `[..n]` verbatim; from `[n..]` keep only `UnresolvedName`.
+        let tail: Vec<TirDiagnostic<'db>> = diags
+            .diagnostics
+            .drain(n..)
+            .filter(|d| matches!(d.error, TirTypeError::UnresolvedName { .. }))
+            .collect();
+        diags.diagnostics.extend(tail);
+    }
+
+    /// Freeze the source spans of diagnostics recorded at index `[start..]`,
+    /// resolving their arena-relative locations against `source_map` and
+    /// replacing them with absolute [`DiagnosticLocation::Span`]s.
+    ///
+    /// Used when a nested lambda body is inferred *inline* in an enclosing
+    /// scope (`infer_lambda_body`): those diagnostics carry the lambda's own
+    /// arena IDs but are recorded in the enclosing scope's diagnostic set, so
+    /// at render time they'd be resolved against the *enclosing* scope's source
+    /// map — which can't resolve a nested-arena ID, collapsing the span to
+    /// `0..0`. Resolving them here, while the lambda's source map is in hand,
+    /// makes them render correctly regardless of which scope renders them.
+    /// Already-frozen (`Span`) locations and deeper-lambda diagnostics (frozen
+    /// by their own `infer_lambda_body`) are left unchanged.
+    pub fn freeze_diagnostic_spans_from(&self, start: usize, source_map: &AstSourceMap) {
+        let mut diags = self.diagnostics.borrow_mut();
+        let len = diags.diagnostics.len();
+        for d in &mut diags.diagnostics[start.min(len)..] {
+            d.primary = Self::freeze_location(&d.primary, source_map);
+        }
+    }
+
+    fn freeze_location(loc: &DiagnosticLocation, sm: &AstSourceMap) -> DiagnosticLocation {
+        let span = match loc {
+            DiagnosticLocation::Expr(id) => sm.expr_span(*id),
+            DiagnosticLocation::ExprMember(id) => sm.member_access_member_span(*id),
+            DiagnosticLocation::ExprSegment(id, seg) => sm.path_segment_span(*id, *seg),
+            DiagnosticLocation::Stmt(id) => sm.stmt_span(*id),
+            DiagnosticLocation::TypeAnnot(id) => sm.type_annotation_span(*id),
+            // Already absolute (e.g. a deeper lambda's frozen diagnostic, or a
+            // class-field span) — leave it.
+            DiagnosticLocation::Span(r) => *r,
+        };
+        DiagnosticLocation::Span(span)
     }
 
     pub fn scope(&self) -> ScopeId<'db> {

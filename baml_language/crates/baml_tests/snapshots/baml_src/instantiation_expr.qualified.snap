@@ -3,7 +3,7 @@ source: crates/baml_tests/tests/baml_src.rs
 ---
 function instantiation_expr.qualified.q_describe() -> string {
     load_type #0
-    call baml.TypeValue.to_string
+    call baml.TypeValue.baml.ToString.to_string
     return
 }
 

@@ -10,7 +10,10 @@ use baml_lsp2_actions::{
 use baml_project::ProjectDatabase;
 use clap::Args;
 
-use crate::project_load::load_project_or_default;
+use crate::{
+    project_load::load_project_or_default,
+    util::{line_number_at_offset, relative_path},
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct GrepArgs {
@@ -32,7 +35,7 @@ pub struct GrepArgs {
     pub symbols: bool,
 
     /// Filter by symbol kind (repeatable): class, enum, function, test,
-    /// client, type_alias, template_string, retry_policy, generator, let
+    /// client, type_alias, template_string, retry_policy, let
     #[arg(long, value_delimiter = ',')]
     pub kind: Vec<String>,
 
@@ -59,9 +62,9 @@ pub struct GrepArgs {
     pub ignore_case: bool,
 
     // ── Project ─────────────────────────────────────────────────────────────
-    /// Project root directory
-    #[arg(long, default_value = ".")]
-    pub from: PathBuf,
+    /// Project search starting point. Defaults to the current directory.
+    #[arg(long, value_name = "PATH")]
+    pub from: Option<PathBuf>,
 }
 
 impl GrepArgs {
@@ -70,7 +73,7 @@ impl GrepArgs {
         // get a stdlib-only default state and an empty user-file set;
         // each grep mode already surfaces "no matches" / "no symbol found"
         // gracefully below, so there's no need to bail up front.
-        let (db, from, _baml_files) = load_project_or_default(&self.from)?;
+        let (db, from, _baml_files) = load_project_or_default(self.from.as_deref())?;
 
         let source_files = db.get_source_files();
         let kind_filter = parse_kind_filter(&self.kind)?;
@@ -376,24 +379,14 @@ pub fn parse_kind_filter(kinds: &[String]) -> Result<Vec<DefinitionKind>> {
             "type_alias" => Ok(DefinitionKind::TypeAlias),
             "template_string" => Ok(DefinitionKind::TemplateString),
             "retry_policy" => Ok(DefinitionKind::RetryPolicy),
-            "generator" => Ok(DefinitionKind::Generator),
             "let" => Ok(DefinitionKind::Let),
             "field" => Ok(DefinitionKind::Field),
             "variant" => Ok(DefinitionKind::Variant),
             other => anyhow::bail!(
-                "Unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, generator, let, field, variant"
+                "Unknown kind: {other}. Valid kinds: class, enum, function, test, client, type_alias, template_string, retry_policy, let, field, variant"
             ),
         })
         .collect()
-}
-
-fn relative_path(path: &std::path::Path, root: &std::path::Path) -> std::path::PathBuf {
-    path.strip_prefix(root).unwrap_or(path).to_path_buf()
-}
-
-fn line_number_at_offset(text: &str, offset: usize) -> usize {
-    let offset = offset.min(text.len());
-    text[..offset].chars().filter(|&c| c == '\n').count() + 1
 }
 
 /// Choose the appropriate body representation based on budget.

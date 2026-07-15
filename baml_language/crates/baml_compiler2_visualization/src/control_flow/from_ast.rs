@@ -913,6 +913,11 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         }
         ast::Expr::Throw { value } => collect_callee_names_expr(body, *value, names),
+        ast::Expr::Return { value } => {
+            if let Some(value) = value {
+                collect_callee_names_expr(body, *value, names);
+            }
+        }
         ast::Expr::Spawn {
             name,
             with_exprs,
@@ -970,6 +975,22 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
         }
         ast::Expr::OptionalChain { expr } => collect_callee_names_expr(body, *expr, names),
 
+        // Backtick template (BEP-049): walk the desugared realization, where
+        // the real calls live — `elaborated` for an untagged `` `…` ``, and the
+        // tag expression plus its closure `body` for a tagged `` tag`…` ``.
+        ast::Expr::Template { tag, .. } => match tag {
+            ast::TemplateTag::Default { elaborated } => {
+                collect_callee_names_expr(body, *elaborated, names);
+            }
+            ast::TemplateTag::Custom {
+                tag,
+                body: tag_body,
+            } => {
+                collect_callee_names_expr(body, *tag, names);
+                collect_callee_names_expr(body, *tag_body, names);
+            }
+        },
+
         // Leaves (no nested expressions in this body's arena). Lambda bodies
         // live in their own ExprBody, so they cannot be walked from here.
         ast::Expr::Literal(_)
@@ -984,6 +1005,9 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
 fn collect_callee_names_stmt(body: &ast::ExprBody, id: ast::StmtId, names: &mut Vec<String>) {
     match &body.stmts[id] {
         ast::Stmt::Expr(expr) => collect_callee_names_expr(body, *expr, names),
+        ast::Stmt::Defer { body: defer_body } => {
+            collect_callee_names_expr(body, *defer_body, names);
+        }
         ast::Stmt::Let {
             initializer,
             else_branch,
@@ -1431,14 +1455,20 @@ mod tests {
     fn match_creates_branch_group_with_arms() {
         let body = make_ast_body(|exprs, _, patterns, match_arms| {
             let scrutinee = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
-            let pat1 = patterns.alloc(ast::Pattern::Type(ast::TypeExpr::Literal {
-                value: ast::Literal::Int(1),
-                attrs: vec![],
-            }));
-            let pat2 = patterns.alloc(ast::Pattern::Type(ast::TypeExpr::Literal {
-                value: ast::Literal::Int(2),
-                attrs: vec![],
-            }));
+            let pat1 = patterns.alloc(ast::Pattern::Type(
+                ast::TypeExprKind::Literal {
+                    value: ast::Literal::Int(1),
+                    attrs: vec![],
+                }
+                .at(baml_compiler2_ast::TextRange::default()),
+            ));
+            let pat2 = patterns.alloc(ast::Pattern::Type(
+                ast::TypeExprKind::Literal {
+                    value: ast::Literal::Int(2),
+                    attrs: vec![],
+                }
+                .at(baml_compiler2_ast::TextRange::default()),
+            ));
             let body1 = exprs.alloc(ast::Expr::Null);
             let body2 = exprs.alloc(ast::Expr::Null);
             let arm1 = match_arms.alloc(ast::MatchArm {
@@ -1487,12 +1517,13 @@ mod tests {
     fn format_pattern_bind_with_ascription_renders_chain() {
         // `let x: int` is now Bind { name: x, subpat: Some(Type(int)) }.
         let body = make_ast_body(|_, _, patterns, _| {
-            let int_ty = ast::TypeExpr::Path {
+            let int_ty = ast::TypeExprKind::Path {
                 segments: vec!["int".into()],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
                 attrs: vec![],
-            };
+            }
+            .at(baml_compiler2_ast::TextRange::default());
             let inner = patterns.alloc(ast::Pattern::Type(int_ty));
             patterns.alloc(ast::Pattern::Bind {
                 name: "x".into(),
@@ -1582,7 +1613,6 @@ mod tests {
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
                 initializer: Some(if_expr),
-                is_watched: false,
                 origin: ast::LetOrigin::Source,
                 else_branch: None,
             });
@@ -1623,7 +1653,6 @@ mod tests {
             let let_stmt = stmts.alloc(ast::Stmt::Let {
                 pattern: pat,
                 initializer: Some(if_expr),
-                is_watched: false,
                 origin: ast::LetOrigin::Source,
                 else_branch: None,
             });

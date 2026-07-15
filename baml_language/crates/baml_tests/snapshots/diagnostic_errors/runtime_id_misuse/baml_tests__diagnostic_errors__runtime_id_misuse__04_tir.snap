@@ -20,7 +20,7 @@ function user.member_access() -> int throws never {
   { : unknown
     $id.len() : unknown
   }
-  !! 608..620: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
+  !! 613..620: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
 }
 function user.takes_int(x: int) -> int throws never {
   { : int
@@ -31,8 +31,8 @@ function user.call_site_label() -> int throws never {
   { : int
     takes_int($id = baml.id.new()) : int
   }
-  !! 805..819: `$id` cannot be set at the call site; assign `$id = ...` inside the function body instead
-  !! 790..820: missing required argument `x`
+  !! 859..872: `$id` cannot be set at the call site; assign `$id = ...` inside the function body instead
+  !! 843..873: missing required argument `x`
 }
 function user.shadowing_let() -> int throws never {
   { : 2
@@ -50,23 +50,17 @@ function user.setter_never(s: string) -> string throws never {
     $id = s : string
     $id : string
   }
-  !! 1280..1286: declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
+  !! 1334..1339: declared throws is `never`, but this function may also throw `baml.errors.InvalidArgument`
 }
 function user.optional_member_access() -> int | null throws never {
   { : unknown | null
     $id?.len() : unknown | null
   }
-  !! 1507..1515: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
+  !! 1560..1568: `$id` is a value, not a binding; bind it to a local before accessing `.len` (e.g. `let id = $id; id.len`)
 }
 class user.WithId {
   field_id: string
   $id: string
-}
-function user.WithId.to_json(self: user.WithId) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "field_id": baml.json.to_json(self.field_id), "$id": baml.json.to_json(self.$id) } : map<string, baml.json.json>
-}
-function user.WithId.from_json(j: baml.json.json) -> user.WithId throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  WithId { field_id: baml.json.from_json<string>(baml.json.field(j, "field_id")), $id: baml.json.from_json<string>(baml.json.field(j, "$id")) } : user.WithId
 }
 function user.shorthand_destructure(w: user.WithId) -> string throws never {
   { : "x"

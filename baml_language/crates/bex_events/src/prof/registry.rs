@@ -9,9 +9,8 @@
 //! tokio blocking-pool threads die after their idle timeout, so the
 //! orphan/pool/claim path is routine, not exotic.
 #![allow(unsafe_code)]
-// On wasm32 the consumer half of this module is compiled but unreachable —
-// profiling is forced off there (no consumer thread, no TSC clock), and the
-// designed-but-deferred cooperative drain would be its caller (v2 §6.5).
+// On wasm32 there is no background consumer thread, but the cooperative drain
+// uses the same registry sweep path when an adapter opts into profiling.
 #![cfg_attr(target_arch = "wasm32", allow(dead_code))]
 
 use std::ptr::null_mut;
@@ -154,12 +153,12 @@ impl Drop for Registry {
     }
 }
 
-#[cfg(all(not(baml_loom), test, target_arch = "wasm32"))]
+#[cfg(all(not(baml_loom), not(target_arch = "wasm32")))]
+pub(crate) use global::global_ctx;
+#[cfg(not(baml_loom))]
 pub(crate) use global::global_registry;
 #[cfg(not(baml_loom))]
 pub use global::ring_for_engine;
-#[cfg(all(not(baml_loom), not(target_arch = "wasm32")))]
-pub(crate) use global::{global_ctx, global_registry};
 
 #[cfg(not(baml_loom))]
 mod global {
@@ -227,7 +226,7 @@ mod global {
             // before the first event can pile up. No-op when profiling is
             // off (tests drive private registries as their own consumers).
             #[cfg(not(target_arch = "wasm32"))]
-            if cfg.enabled {
+            if cfg.is_enabled() {
                 crate::prof::consumer::ensure_started();
             }
             let handle = REGISTRY.acquire(global_ctx(), cfg.seg_bytes, cfg.freelist_cap, engine_id);

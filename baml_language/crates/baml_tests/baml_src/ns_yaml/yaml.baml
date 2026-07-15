@@ -12,8 +12,10 @@ class YamlUser {
 class YamlWrappedName {
     name string
 
-    function from_json(j: baml.json.json) -> YamlWrappedName throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-        YamlWrappedName { name: "wrapped:" + baml.json.from_json<string>(baml.json.field(j, "name")) }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            YamlWrappedName { name: "wrapped:" + baml.json.from_json<string>(baml.json.field(j, "name")) }
+        }
     }
 }
 

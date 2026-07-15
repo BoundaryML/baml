@@ -57,8 +57,19 @@ class PlainDateTime {
     /// Sub-second precision is supported; trailing subsecond zeros are
     /// truncated.
     ///
-    /// Throws `root.errors.InvalidArgument` if the year is outside ±9999.
-    function to_string(self) -> string throws root.errors.InvalidArgument {
+    /// Panics if the year is outside ±9999.
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => root.sys.panic("PlainDateTime.to_string: " + message),
+            }
+        }
+    }
+
+    /// Internal ISO 8601 formatter. Throws `InvalidArgument` when the year is
+    /// outside ±9999; `baml.ToString.to_string` turns that into a panic, while
+    /// `to_json` surfaces it as a `JsonSerializationError`.
+    function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
         $rust_function
     }
 
@@ -161,17 +172,21 @@ class PlainDateTime {
         $rust_function
     }
 
-    function from_json(j: baml.json.json) -> PlainDateTime throws root.json.JsonDecodeError {
-        match (j) {
-            string => PlainDateTime.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected zoneless ISO 8601 string" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => PlainDateTime.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected zoneless ISO 8601 string", path: "" }
+            }
         }
     }
-    function to_json(self) -> string throws root.json.JsonSerializationError {
-        self.to_string() catch (_) {
-            root.errors.InvalidArgument { message } => throw root.json.JsonSerializationError { message: message, path: "" },
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+            }
         }
     }
 }

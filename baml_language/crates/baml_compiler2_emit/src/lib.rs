@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 pub use analysis::OptLevel;
 use baml_base::{Name, Span};
-use baml_compiler2_ast::TypeExpr;
+use baml_compiler2_ast::{TypeExpr, parse_string_attr_value};
 use baml_compiler2_hir::{
     compiler2_all_files,
     contributions::Definition,
@@ -29,8 +29,13 @@ use baml_compiler2_mir::{
 use baml_compiler2_ppir::file_item_tree;
 use baml_type::{RuntimeTy, TyAttr};
 use bex_vm_types::{
-    Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
-    FunctionMeta, FunctionOrigin, Instruction, Object, ObjectIndex, ObjectPool, Program,
+    Bytecode, CaptureCategory, Class, ClassField, ConstValue, Enum, EnumVariant, Function,
+    FunctionCaptureProps, FunctionKind, FunctionMeta, FunctionOrigin, GlobalIndex, Instruction,
+    Object, ObjectIndex, ObjectPool, Program,
+    unit::{
+        CompilationUnit, LocalRef, ProgramImplRuleFrag, ProgramMethodImplFrag, ProgramPackageFrag,
+        Symbol, SymbolKind,
+    },
 };
 
 /// Build a per-package `ResolvedAliases` cache, keyed by package name.
@@ -49,6 +54,205 @@ fn build_alias_caches(
     caches
 }
 
+/// Build the runtime [`InterfaceDef`](bex_vm_types::types::InterfaceDef) signature
+/// — generic-param bounds, `requires`, associated-type bounds, fields, and method
+/// signatures — for one interface, from its item-tree declaration.
+///
+/// Type expressions are lowered in the interface's own scope (so its generic
+/// params resolve to `TypeVar`s) and narrowed to runtime types via
+/// [`baml_type::lower_to_runtime`] — the faithful converter that preserves type
+/// vars for reflection, NOT the value-erasing `convert_tir_ty_for_runtime`. Bound
+/// and `requires` targets become [`baml_type::RuntimeInterface`] (via
+/// `RuntimeInterface::new`, which canonicalizes associated-binding order).
+fn build_interface_def(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    iface_data: &baml_compiler2_hir::item_tree::Interface,
+    iface_tn: baml_type::TypeName,
+    resolved: &ResolvedAliases,
+) -> bex_vm_types::types::InterfaceDef {
+    use baml_compiler2_tir::{
+        lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr},
+        ty,
+    };
+    use baml_type::RuntimeInterface;
+    use bex_vm_types::types::{InterfaceDef, InterfaceMethodDef};
+
+    let item_tree = file_item_tree(db, file);
+    let pkg_info = file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let ns = &pkg_info.namespace_path;
+    let generics = &iface_data.generic_params;
+
+    // Lower a type expr in `scope` (diagnostics discarded — the declaration was
+    // validated upstream) and narrow to a runtime type. This can legitimately fail
+    // for a *valid* program: an interface method signature may mention `Self` or an
+    // associated type (`Self.Item`), which this isolated scope does not substitute
+    // (unlike the MIR's `lower_signature_runtime_ty`), so they lower to `Unknown`
+    // and are dropped. (Faithfully lowering them is future work, tracked for when a
+    // consumer actually reads the method signatures — see the interface reflection
+    // follow-up.)
+    let lower_rt = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeTy> {
+        let mut diags = Vec::new();
+        let ty = lower_type_expr(
+            expr,
+            &ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: ns,
+                generic_params: scope,
+                bounds: &TypeVarBoundsMap::default(),
+                self_ty: None,
+            },
+            &mut diags,
+        );
+        baml_type::lower_to_runtime(&ty, resolved).ok()
+    };
+    // Lower an interface bound / `requires` target to its runtime form. A
+    // non-interface bound (rejected upstream) yields `None` and is skipped, as does
+    // a bound that mentions an unsubstituted `Self`/associated type (see `lower_rt`).
+    let lower_iface = |expr: &TypeExpr, scope: &[Name]| -> Option<RuntimeInterface> {
+        let mut diags = Vec::new();
+        let ty::Ty::Interface(qtn, args, assoc, _) = lower_type_expr(
+            expr,
+            &ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: ns,
+                generic_params: scope,
+                bounds: &TypeVarBoundsMap::default(),
+                self_ty: None,
+            },
+            &mut diags,
+        ) else {
+            return None;
+        };
+        let generics = args
+            .iter()
+            .map(|a| baml_type::lower_to_runtime(a, resolved))
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
+        let associated_types = assoc
+            .iter()
+            .map(|(n, t)| baml_type::lower_to_runtime(t, resolved).map(|rt| (n.clone(), rt)))
+            .collect::<Result<Vec<_>, _>>()
+            .ok()?;
+        Some(RuntimeInterface::new(qtn, generics, associated_types))
+    };
+    // A method's runtime signature: Required params → positional `args`, optional
+    // (defaulted) params → `kwargs`; the `self` receiver is dropped; absent
+    // return/throws lower to `Void`. The method's own generics extend the scope.
+    let build_method = |name: &Name,
+                        method_generics: &[Name],
+                        params: &[baml_compiler2_hir::item_tree::FunctionParam],
+                        return_type: Option<&TypeExpr>,
+                        throws: Option<&TypeExpr>|
+     -> InterfaceMethodDef {
+        let scope: Vec<Name> = generics.iter().chain(method_generics).cloned().collect();
+        let void = || RuntimeTy::Void {
+            attr: TyAttr::default(),
+        };
+        let mut args = Vec::new();
+        let mut kwargs = Vec::new();
+        for p in params {
+            if p.name.as_str() == "self" {
+                continue;
+            }
+            let Some(ty) = p.type_expr.as_ref().and_then(|te| lower_rt(te, &scope)) else {
+                continue;
+            };
+            if p.default.is_some() {
+                kwargs.push((p.name.clone(), ty));
+            } else {
+                args.push(ty);
+            }
+        }
+        InterfaceMethodDef {
+            name: name.clone(),
+            args,
+            kwargs,
+            returns: return_type
+                .and_then(|te| lower_rt(te, &scope))
+                .unwrap_or_else(void),
+            errors: throws
+                .and_then(|te| lower_rt(te, &scope))
+                .unwrap_or_else(void),
+        }
+    };
+
+    // A generic param carries at most one bound today; lower it (or none).
+    let args = generics
+        .iter()
+        .enumerate()
+        .map(|(i, param)| {
+            let bound = iface_data
+                .generic_param_bounds
+                .get(i)
+                .and_then(Option::as_ref)
+                .and_then(|expr| lower_iface(expr, generics));
+            (param.clone(), bound.into_iter().collect())
+        })
+        .collect();
+    let requires = iface_data
+        .requires
+        .iter()
+        .filter_map(|expr| lower_iface(expr, generics))
+        .collect();
+    let assoc = iface_data
+        .associated_types
+        .iter()
+        .filter_map(|at| {
+            at.bound
+                .as_ref()
+                .and_then(|b| lower_iface(b, generics))
+                .map(|ri| (at.name.clone(), ri))
+        })
+        .collect();
+    let fields = iface_data
+        .fields
+        .iter()
+        .filter_map(|f| {
+            f.type_expr
+                .as_ref()
+                .and_then(|te| lower_rt(te, generics))
+                .map(|rt| (f.name.clone(), rt))
+        })
+        .collect();
+    let mut methods: Vec<InterfaceMethodDef> = iface_data
+        .required_methods
+        .iter()
+        .map(|m| {
+            build_method(
+                &m.name,
+                &m.generic_params,
+                &m.params,
+                m.return_type.as_ref(),
+                m.throws.as_ref(),
+            )
+        })
+        .collect();
+    methods.extend(iface_data.default_methods.iter().map(|&fid| {
+        let f = &item_tree[fid];
+        build_method(
+            &f.name,
+            &f.generic_params,
+            &f.params,
+            f.return_type.as_ref(),
+            f.throws.as_ref(),
+        )
+    }));
+
+    InterfaceDef {
+        name: iface_tn,
+        args,
+        requires,
+        assoc,
+        fields,
+        methods,
+    }
+}
+
 /// Build the program-wide interface-implementation registry for the runtime
 /// resolver.
 ///
@@ -59,17 +263,21 @@ fn build_alias_caches(
 /// selection) to dispatch an interface method — operator overloading today;
 /// reflection once unified. Built from the item tree in two parts: (a)
 /// out-of-body `implements_for` blocks; (b) methods folded onto a class.
-fn build_interface_impls(
+fn build_packages(
     db: &dyn baml_compiler2_mir::Db,
     all_files: &[baml_base::SourceFile],
     alias_caches: &HashMap<Name, ResolvedAliases>,
-) -> bex_vm_types::types::InterfaceImplsByPackage {
+    function_indices: &HashMap<String, usize>,
+    interface_indices: &HashMap<baml_type::TypeName, usize>,
+    program_packages: &mut indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+) {
     use baml_compiler2_tir::{
-        lower_type_expr::{lower_type_expr_in_ns, qualify_def},
+        lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr, qualify_def},
         ty,
     };
-    use bex_vm_types::types::{
-        InterfaceBound, InterfaceImplsByPackage, MethodImpl, RuntimeImplRule,
+    use bex_vm_types::{
+        ObjectIndex,
+        types::{InterfaceBound, ProgramImplRule, ProgramMethodImpl},
     };
 
     type IfaceParts = (
@@ -103,11 +311,25 @@ fn build_interface_impls(
         Some((qtn.clone(), arg_templates, assoc_templates))
     }
 
-    // Sort key for a deterministic registry order. `display_name` is excluded from
-    // `Eq`, so key on the module path plus the short name.
-    fn tn_sort_key(tn: &baml_type::TypeName) -> (Vec<Name>, Name) {
-        (tn.module_path(), tn.name().clone())
-    }
+    // Resolve a function FQN to its emitted object index. `function_indices` holds
+    // every function except `$compiler_intrinsic` / `$await_any` bodies, which
+    // Pass 4 does not emit as callable objects — so a `None` here means the impl/
+    // default method has such a body. The stdlib only ever uses those bodies on
+    // free functions, never interface methods, so this is currently unreachable;
+    // but that convention isn't enforced, so we drop just that method (losing a
+    // dispatch, never adding a wrong one) rather than panic, and the `debug_assert`
+    // catches any regression in the tested corpus.
+    // TODO: make this unrepresentable — reject `$compiler_intrinsic`/`$await_any`
+    // bodies on interface impl and default methods upstream (a check-time
+    // diagnostic), after which this can become a hard `expect`.
+    let resolve_fqn = |fqn: &str| -> Option<ObjectIndex> {
+        let idx = function_indices.get(fqn).copied();
+        debug_assert!(
+            idx.is_some(),
+            "impl method `{fqn}` has no emitted function object",
+        );
+        idx.map(ObjectIndex::from_raw)
+    };
 
     // Per interface, its default methods (`name → fn FQN`). An implementing rule
     // inherits these for any method it doesn't override, so each baked rule's
@@ -186,7 +408,7 @@ fn build_interface_impls(
                     .find(|(an, _)| an == name)
                     .map(|(_, t)| t.clone())
                     .unwrap_or_else(|| {
-                        baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::BuiltinUnknown {
+                        baml_type::TyTemplate::from(baml_type::RealizedTy::BuiltinUnknown {
                             attr: TyAttr::default(),
                         })
                     });
@@ -197,20 +419,24 @@ fn build_interface_impls(
     };
     // Fill a rule's method table with the interface's defaults (override winning),
     // each carrying the interface frame it is invoked with.
-    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, MethodImpl>,
+    let merge_defaults = |methods: &mut indexmap::IndexMap<Name, ProgramMethodImpl>,
                           iface_tn: &baml_type::TypeName,
                           interface_frame: &[baml_type::TyTemplate]| {
         if let Some(defaults) = iface_defaults.get(iface_tn) {
             for (name, fqn) in defaults {
-                methods.entry(name.clone()).or_insert_with(|| MethodImpl {
-                    fqn: fqn.clone(),
-                    frame: interface_frame.to_vec(),
-                });
+                let Some(fqn_idx) = resolve_fqn(fqn) else {
+                    continue;
+                };
+                methods
+                    .entry(name.clone())
+                    .or_insert_with(|| ProgramMethodImpl {
+                        fqn: fqn_idx,
+                        frame: interface_frame.to_vec(),
+                    });
             }
         }
     };
 
-    let mut interface_impls: InterfaceImplsByPackage = indexmap::IndexMap::new();
     for file in all_files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
@@ -219,10 +445,24 @@ fn build_interface_impls(
         let ns = &pkg_info.namespace_path;
         let resolved = &alias_caches[&pkg_info.package];
         // Lower a type expr in this file's namespace, discarding diagnostics
-        // (these targets were already validated upstream).
-        let lower = |expr: &TypeExpr, generics: &[Name]| -> ty::Ty {
+        // (these targets were already validated upstream). `bounds` carries the
+        // enclosing impl's/class's generic-param bounds so a bound-typevar
+        // projection in a binding value (`type SortError = T.CompareError`)
+        // determines its interface instead of erasing.
+        let lower = |expr: &TypeExpr, generics: &[Name], bounds: &TypeVarBoundsMap| -> ty::Ty {
             let mut diags = Vec::new();
-            lower_type_expr_in_ns(db, expr, pkg_items, ns, generics, &mut diags)
+            lower_type_expr(
+                expr,
+                &ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: ns,
+                    generic_params: generics,
+                    bounds,
+                    self_ty: None,
+                },
+                &mut diags,
+            )
         };
         // Each generic param's interface bound set (`T extends A & B` → {A, B};
         // a param has at most one bound today). A bound is an interface, possibly
@@ -232,21 +472,21 @@ fn build_interface_impls(
         // (`None`); dropping a rule only ever loses a dispatch, never adds a wrong
         // one.
         let bound_sets = |param_bounds: &[Option<TypeExpr>],
-                          generics: &[Name]|
+                          generics: &[Name],
+                          bounds: &TypeVarBoundsMap|
          -> Option<Vec<Vec<InterfaceBound>>> {
             param_bounds
                 .iter()
                 .map(|b| match b {
                     None => Some(Vec::new()),
-                    Some(te) => split_interface(&lower(te, generics), resolved, generics).map(
-                        |(interface, args, assoc)| {
+                    Some(te) => split_interface(&lower(te, generics, bounds), resolved, generics)
+                        .map(|(interface, args, assoc)| {
                             vec![InterfaceBound {
                                 interface,
                                 args,
                                 assoc,
                             }]
-                        },
-                    ),
+                        }),
                 })
                 .collect()
         };
@@ -255,7 +495,8 @@ fn build_interface_impls(
         // only sees the target), so lower them here to fold into the implemented
         // interface's bindings.
         let lower_assoc = |bindings: &[baml_compiler2_ast::AssociatedTypeBindingDef],
-                           generics: &[Name]|
+                           generics: &[Name],
+                           bounds: &TypeVarBoundsMap|
          -> Vec<(Name, baml_type::TyTemplate)> {
             bindings
                 .iter()
@@ -264,7 +505,7 @@ fn build_interface_impls(
                     Some((
                         b.name.clone(),
                         baml_compiler2_mir::tir2_to_template(
-                            &lower(&te.expr, generics),
+                            &lower(te, generics, bounds),
                             resolved,
                             generics,
                         ),
@@ -276,55 +517,84 @@ fn build_interface_impls(
         // (a) Out-of-body `implement<G> I for FOR { ... }`: primitives,
         // containers, generic classes, and blanket `for T`. (A non-generic
         // concrete class's out-of-body impl folds onto the class — see (b).)
-        for imp in &item_tree.implements_for {
+        for impl_id in &item_tree.free_impls {
+            let Some(block) = item_tree.impls.get(impl_id) else {
+                continue;
+            };
+            let baml_compiler2_hir::item_tree::ImplSubject::Free {
+                for_target,
+                generics,
+            } = &block.subject
+            else {
+                continue;
+            };
+            let impl_param_names: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
+            // Legacy flat single-bound form (first `&`-bound per param).
+            let impl_param_bounds: Vec<Option<baml_compiler2_ast::TypeExpr>> =
+                generics.iter().map(|g| g.bounds.first().cloned()).collect();
+            let impl_bounds = baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(
+                db,
+                baml_compiler2_hir::loc::ImplLoc::new(db, *file, *impl_id),
+            );
             let Some((iface_tn, interface_args, mut interface_assoc)) = split_interface(
-                &lower(&imp.interface_target.expr, &imp.generic_params),
+                &lower(&block.interface_target, &impl_param_names, impl_bounds),
                 resolved,
-                &imp.generic_params,
+                &impl_param_names,
             ) else {
                 continue;
             };
             interface_assoc.extend(lower_assoc(
-                &imp.associated_type_bindings,
-                &imp.generic_params,
+                &block.associated_type_bindings,
+                &impl_param_names,
+                impl_bounds,
             ));
             let for_ty_pattern = baml_compiler2_mir::tir2_to_template(
-                &lower(&imp.for_target.expr, &imp.generic_params),
+                &lower(for_target, &impl_param_names, impl_bounds),
                 resolved,
-                &imp.generic_params,
+                &impl_param_names,
             );
             let Some(generic_param_bounds) =
-                bound_sets(&imp.generic_param_bounds, &imp.generic_params)
+                bound_sets(&impl_param_bounds, &impl_param_names, impl_bounds)
             else {
                 continue;
             };
             // An impl's own method is compiled against the impl's own generics.
-            let impl_frame: Vec<baml_type::TyTemplate> =
-                (0..u32::try_from(imp.generic_params.len()).expect("generic arity fits u32"))
-                    .map(baml_type::TyTemplate::TypeArgRef)
-                    .collect();
+            let impl_frame: Vec<baml_type::TyTemplate> = (0..u32::try_from(impl_param_names.len())
+                .expect("generic arity fits u32"))
+                .map(baml_type::TyTemplate::TypeArgRef)
+                .collect();
+            let Some(interface_head) = interface_indices
+                .get(&iface_tn)
+                .copied()
+                .map(ObjectIndex::from_raw)
+            else {
+                continue;
+            };
             let mut methods = indexmap::IndexMap::new();
-            for &m in &imp.methods {
+            for &m in &block.methods {
+                let fqn = def_to_item_ref(db, Definition::Function(FunctionLoc::new(db, *file, m)))
+                    .to_string();
+                let Some(fqn) = resolve_fqn(&fqn) else {
+                    continue;
+                };
                 methods.insert(
                     item_tree[m].name.clone(),
-                    MethodImpl {
-                        fqn: def_to_item_ref(
-                            db,
-                            Definition::Function(FunctionLoc::new(db, *file, m)),
-                        )
-                        .to_string(),
+                    ProgramMethodImpl {
+                        fqn,
                         frame: impl_frame.clone(),
                     },
                 );
             }
             let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
             merge_defaults(&mut methods, &iface_tn, &iface_frame);
-            interface_impls
+            program_packages
                 .entry(pkg_info.package.clone())
                 .or_default()
-                .entry(iface_tn)
+                .impl_rules
+                .entry(interface_head)
                 .or_default()
-                .push(RuntimeImplRule {
+                .push(ProgramImplRule {
+                    interface_head,
                     for_ty_pattern,
                     generic_param_bounds,
                     interface_args,
@@ -348,6 +618,10 @@ fn build_interface_impls(
                 &class_data.name,
             );
             let generics = &class_data.generic_params;
+            let class_bounds = baml_compiler2_tir::lower_type_expr::class_generic_param_bounds(
+                db,
+                ClassLoc::new(db, *file, *class_id),
+            );
 
             // Each folded method tagged with the full interface instantiation it
             // implements (name + args). A class may implement the same interface
@@ -365,8 +639,11 @@ fn build_interface_impls(
                 .iter()
                 .filter_map(|&m| {
                     let target = item_tree.method_to_iface_target.get(&m)?;
-                    let (m_iface_tn, m_args, _m_assoc) =
-                        split_interface(&lower(&target.expr, generics), resolved, generics)?;
+                    let (m_iface_tn, m_args, _m_assoc) = split_interface(
+                        &lower(target, generics, class_bounds),
+                        resolved,
+                        generics,
+                    )?;
                     Some((
                         m_iface_tn,
                         m_args,
@@ -380,20 +657,21 @@ fn build_interface_impls(
             // The implementor pattern is the class at its own parameters; bounds
             // come from the class's generic parameters. Shared by all its blocks.
             let for_ty_pattern = if generics.is_empty() {
-                baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Class(
+                baml_type::TyTemplate::from(baml_type::RealizedTy::Class(
                     class_tn.clone(),
                     Vec::new(),
                     TyAttr::default(),
                 ))
             } else {
-                baml_type::TyTemplate::Class(
+                baml_type::TyTemplate::class(
                     class_tn.clone(),
                     (0..u32::try_from(generics.len()).expect("generic arity fits u32"))
                         .map(baml_type::TyTemplate::TypeArgRef)
                         .collect(),
                 )
             };
-            let Some(generic_param_bounds) = bound_sets(&class_data.generic_param_bounds, generics)
+            let Some(generic_param_bounds) =
+                bound_sets(&class_data.generic_param_bounds, generics, class_bounds)
             else {
                 continue;
             };
@@ -404,40 +682,55 @@ fn build_interface_impls(
                 .collect();
 
             for block in &class_data.implements {
-                let Some((iface_tn, interface_args, mut interface_assoc)) =
-                    split_interface(&lower(&block.target.expr, generics), resolved, generics)
-                else {
+                let Some((iface_tn, interface_args, mut interface_assoc)) = split_interface(
+                    &lower(&block.target, generics, class_bounds),
+                    resolved,
+                    generics,
+                ) else {
                     continue;
                 };
-                interface_assoc.extend(lower_assoc(&block.associated_type_bindings, generics));
+                interface_assoc.extend(lower_assoc(
+                    &block.associated_type_bindings,
+                    generics,
+                    class_bounds,
+                ));
                 // Match folded methods to THIS block by the full interface
                 // instantiation (name + args), not name alone — coherence makes a
                 // given `(type, Iface<Args>)` unique, so this picks exactly this
                 // block's methods even when the class implements the same
                 // interface at another instantiation.
-                let mut methods: indexmap::IndexMap<Name, MethodImpl> = class_method_impls
+                let Some(interface_head) = interface_indices
+                    .get(&iface_tn)
+                    .copied()
+                    .map(ObjectIndex::from_raw)
+                else {
+                    continue;
+                };
+                let mut methods: indexmap::IndexMap<Name, ProgramMethodImpl> = class_method_impls
                     .iter()
                     .filter(|(m_iface_tn, m_args, _, _)| {
                         *m_iface_tn == iface_tn && *m_args == interface_args
                     })
-                    .map(|(_, _, name, fqn)| {
-                        (
+                    .filter_map(|(_, _, name, fqn)| {
+                        Some((
                             name.clone(),
-                            MethodImpl {
-                                fqn: fqn.clone(),
+                            ProgramMethodImpl {
+                                fqn: resolve_fqn(fqn)?,
                                 frame: impl_frame.clone(),
                             },
-                        )
+                        ))
                     })
                     .collect();
                 let iface_frame = interface_frame(&iface_tn, &interface_args, &interface_assoc);
                 merge_defaults(&mut methods, &iface_tn, &iface_frame);
-                interface_impls
+                program_packages
                     .entry(pkg_info.package.clone())
                     .or_default()
-                    .entry(iface_tn)
+                    .impl_rules
+                    .entry(interface_head)
                     .or_default()
-                    .push(RuntimeImplRule {
+                    .push(ProgramImplRule {
+                        interface_head,
                         for_ty_pattern: for_ty_pattern.clone(),
                         generic_param_bounds: generic_param_bounds.clone(),
                         interface_args,
@@ -448,32 +741,22 @@ fn build_interface_impls(
         }
     }
 
-    // Deterministic order: files/classes iterate from unordered maps, so sort by
-    // package, then interface, then rule. Within one interface a `for_ty_pattern`
-    // is unique (overlap is a coherence error).
-    interface_impls.sort_keys();
-    for pkg_impls in interface_impls.values_mut() {
-        pkg_impls.sort_by_cached_key(|tn, _| tn_sort_key(tn));
-        for rules in pkg_impls.values_mut() {
-            // Primary key is the rendered pattern; its `Display` drops module paths,
-            // so two distinct same-short-name for-types tie. `{:?}` carries the
-            // module-qualified identity and breaks the tie deterministically (rather
-            // than falling back to unordered-map insertion order). The interface
-            // instantiation (args + associated bindings) is folded in last so the
-            // same for-type implementing one interface at several instantiations
-            // (e.g. `Converter<int>` + `Converter<float>`) orders by content rather
-            // than declaration order.
-            rules.sort_by_cached_key(|rule| {
-                (
-                    rule.for_ty_pattern.to_string(),
-                    format!("{:?}", rule.for_ty_pattern),
-                    format!("{:?}", rule.interface_args),
-                    format!("{:?}", rule.interface_assoc),
-                )
-            });
-        }
+    // Deterministic order: files/classes iterate from unordered maps. Impl rules
+    // are keyed by their interface's object index (assigned in deterministic
+    // emission order); within one interface a `for_ty_pattern` is unique (overlap
+    // is a coherence error). The primary rule key is the rendered pattern; its
+    // `Display` drops module paths, so two distinct same-short-name for-types tie.
+    // `{:?}` carries the module-qualified identity and breaks the tie (rather than
+    // falling back to unordered-map insertion order). The interface instantiation
+    // (args + associated bindings) is folded in last so the same for-type
+    // implementing one interface at several instantiations (e.g. `Converter<int>`
+    // + `Converter<float>`) orders by content rather than declaration order.
+    // Package-level ordering is finalized by the caller once every map is built.
+    for pkg in program_packages.values_mut() {
+        // Sort each package's maps into the byte-reproducible order; shared with
+        // the incremental linker so the two paths stay byte-identical.
+        pkg.sort_maps();
     }
-    interface_impls
 }
 
 pub(crate) use emit::compile_mir_function;
@@ -481,15 +764,25 @@ pub(crate) use emit::compile_mir_function;
 fn is_builtin_function_name(name: &str) -> bool {
     matches!(
         name.split('.').next(),
-        Some("baml" | "assert" | "testing" | "log" | "env")
+        Some("baml" | "boundary" | "reflect" | "assert" | "testing" | "log" | "env")
     )
+}
+
+/// Is `name` a synthesized `$init` / `$init_test` chainer (per package)? These
+/// are the functions that make up the whole-group `$init` tail (design §9 R2).
+fn is_synth_init_name(name: &str) -> bool {
+    name == "$init"
+        || name == "$init_test"
+        || name.ends_with(".$init")
+        || name.ends_with(".$init_test")
 }
 
 fn emitted_function_origin(
     fq_name: &str,
+    is_builtin_file: bool,
     origin: baml_compiler2_ast::FunctionOrigin,
 ) -> FunctionOrigin {
-    if is_builtin_function_name(fq_name) {
+    if is_builtin_file || is_builtin_function_name(fq_name) {
         FunctionOrigin::Builtin
     } else {
         match origin {
@@ -532,8 +825,16 @@ pub struct CompileOptions {
 /// Errors that can occur during bytecode generation.
 #[derive(Debug)]
 pub enum LoweringError {
-    /// A stub — no errors expected from Phase 1 stub.
+    /// An internal invariant was violated during lowering/decomposition/linking
+    /// (a compiler bug), carrying a diagnostic message.
     Internal(String),
+    /// The incremental (dirty-only) reuse path cannot reuse the cached image for
+    /// this project. Raised in two cases: a caller-clean file is missing from
+    /// `prev_units` (a corrupt / stale cached image); or a dirty top-level `let`
+    /// initializer interns a generic-function value already owned by a clean file
+    /// (the design §9 R1 tail edge). Not a compiler fault: callers silently fall
+    /// back to a full compile, which is byte-identical.
+    ReuseUnsupported(String),
     /// The project has unresolved compile errors, so bytecode generation was
     /// not attempted. Lowering an error-bearing program would feed
     /// inference-only `Unknown`/`Error` types through the runtime-conversion
@@ -546,6 +847,9 @@ impl std::fmt::Display for LoweringError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Internal(msg) => write!(f, "internal lowering error: {msg}"),
+            Self::ReuseUnsupported(msg) => {
+                write!(f, "per-file bytecode reuse unsupported: {msg}")
+            }
             Self::ProjectHasErrors { error_count } => write!(
                 f,
                 "cannot generate bytecode: project has {error_count} unresolved compile error(s)"
@@ -555,42 +859,6 @@ impl std::fmt::Display for LoweringError {
 }
 
 impl std::error::Error for LoweringError {}
-
-/// Parse a string attribute value, handling both regular strings (`"text"`)
-/// and raw strings (`#"text"#`, `##"text"##`, etc.).
-///
-/// Returns `None` if the value is not a recognized string literal.
-fn parse_string_attr_value(raw: &str) -> Option<String> {
-    // Double-quoted string: "text"
-    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
-        return Some(baml_compiler2_ast::unescape_string_literal(
-            &raw[1..raw.len() - 1],
-        ));
-    }
-    // Single-quoted string: 'text'
-    if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
-        return Some(baml_compiler2_ast::unescape_string_literal(
-            &raw[1..raw.len() - 1],
-        ));
-    }
-
-    // Raw string: #"text"#, ##"text"##, etc.
-    let hash_count = raw.bytes().take_while(|&b| b == b'#').count();
-    if hash_count == 0 {
-        return None;
-    }
-
-    let rest = &raw[hash_count..];
-    let closing = format!("\"{}", &raw[..hash_count]);
-
-    // Need at least `"` + `"` + closing hashes
-    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
-        return None;
-    }
-
-    // Raw strings: no escape processing
-    Some(rest[1..rest.len() - 1 - hash_count].to_string())
-}
 
 /// Extract `@description`, `@alias`, `@skip` from span-free HIR attributes.
 ///
@@ -604,17 +872,16 @@ fn extract_schema_attrs(
     let mut skip = false;
     for attr in attrs {
         match attr.name.as_str() {
-            "description" | "alias" => {
-                if attr.args.len() == 1 {
-                    let raw = attr.args[0].value.as_str();
-                    let value = parse_string_attr_value(raw);
-                    if attr.name.as_str() == "description" {
-                        description = value;
-                    } else {
-                        alias = value;
-                    }
+            "description" | "alias" if attr.args.len() == 1 => {
+                let raw = attr.args[0].value.as_str();
+                let value = parse_string_attr_value(raw);
+                if attr.name.as_str() == "description" {
+                    description = value;
+                } else {
+                    alias = value;
                 }
             }
+            "description" | "alias" => {}
             "skip" => {
                 skip = true;
             }
@@ -629,7 +896,7 @@ pub use bex_vm_types::Program as ProgramAlias;
 /// One entry in the emitted runtime field list for a class.
 type MergedFieldEntry = (
     String,
-    Option<baml_compiler2_ast::SpannedTypeExpr>,
+    Option<baml_compiler2_ast::TypeExpr>,
     Vec<baml_compiler2_hir::item_tree::Attribute>,
     Vec<Name>,
     Vec<Name>,
@@ -685,40 +952,1634 @@ pub fn generate_project_bytecode_with_opt(
     options: &CompileOptions,
     opt: OptLevel,
 ) -> Result<Program, LoweringError> {
-    let mut program = Program::new();
+    generate_impl(db, options, opt, None, false, None)
+}
+
+/// Compile ONLY the builtin stdlib into a standalone `Program` slice.
+///
+/// Because builtins occupy a contiguous, user-independent prefix of every
+/// index space (see `emit_file_group`), this Program is byte-identical to the
+/// stdlib prefix of any full project compile at the same `opt` — regardless
+/// of what user code the `db` holds. It is the cacheable artifact (keyed by
+/// compiler build + opt level) that `generate_project_bytecode_with_stdlib`
+/// splices into project compiles.
+pub fn generate_stdlib_program(
+    db: &dyn baml_compiler2_mir::Db,
+    opt: OptLevel,
+) -> Result<Program, LoweringError> {
+    generate_impl(
+        db,
+        &CompileOptions {
+            emit_test_cases: false,
+        },
+        opt,
+        None,
+        true,
+        None,
+    )
+}
+
+/// Generate project bytecode on top of a precompiled stdlib `Program` slice
+/// (from [`generate_stdlib_program`], same compiler build and `opt`).
+///
+/// Skips all builtin-group lowering — the dominant fixed cost of a compile —
+/// by seeding the output program and the emit tables from `base`, then
+/// emitting only the user file group on top. The result is byte-identical to
+/// a full [`generate_project_bytecode_with_opt`] run (asserted by the
+/// `emit_determinism` integration tests).
+pub fn generate_project_bytecode_with_stdlib(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+) -> Result<Program, LoweringError> {
+    generate_impl(db, options, opt, Some(base), false, None)
+}
+
+/// Incremental compile that lowers function bodies only for dirty files, reuses
+/// clean files' symbolic units from the cached image, and links.
+///
+/// Declaration/layout passes still walk the project because dirty bytecode must
+/// use the same whole-program indices as a full compile. Pass 4 skips every clean
+/// file (`take_lowered_files` reports only dirty paths); decomposition's temporary
+/// clean units are discarded in favor of `prev_units`. Whole-program products are
+/// recomputed (package fragments freshly decomposed; the `$init`/`$init_test` tail
+/// **freshly synthesized** from every file's `let`s / `test` blocks — design §9
+/// R2 — whose symbolic imports the linker re-resolves against the shifted
+/// layout).
+///
+/// `clean_files` is the caller's optimistic clean set; a file is only truly
+/// reused when its inferred transitive `throws` still match the previous compile
+/// (design §4 — the throws gate). `prev_units` must come from the same compiler
+/// build / options / stdlib base.
+///
+/// # Errors
+///
+/// Returns [`LoweringError::Internal`] if `prev_units` fail to link (a corrupt /
+/// incompatible previous units) and propagates any [`LoweringError`] from the
+/// dirty-file emit.
+pub fn generate_project_bytecode_with_reuse_units(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+) -> Result<Program, LoweringError> {
+    generate_project_bytecode_with_reuse_artifacts(db, options, opt, base, prev_units, clean_files)
+        .map(|(program, _)| program)
+}
+
+/// Reuse compile variant that also returns the already-assembled symbolic
+/// units. Cache-aware callers can persist these directly instead of decomposing
+/// the linked program a second time.
+pub fn generate_project_bytecode_with_reuse_artifacts(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: &Program,
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+) -> Result<(Program, Vec<CompilationUnit>), LoweringError> {
+    let mismatches = reuse_throws_mismatches(db, prev_units, clean_files);
+    let effective_clean;
+    let clean_files = if mismatches.is_empty() {
+        clean_files
+    } else {
+        effective_clean = clean_files
+            .iter()
+            .filter(|path| !mismatches.contains_key(path.as_str()))
+            .cloned()
+            .collect();
+        &effective_clean
+    };
+
+    // Direct per-file emit: lower ONLY the dirty files (clean files are skipped in
+    // Pass 4), producing a partial program whose dirty content decomposes into
+    // fresh units. The partial DOES synthesize the whole-project `$init`/
+    // `$init_test` tail (design §9 R2): it is rebuilt from every file's `let`s /
+    // `test` blocks (clean `let` initializers re-lowered off salsa-cached MIR),
+    // so a dirty tail-producing file no longer aborts reuse.
+    let partial = generate_impl(db, options, opt, Some(base), false, Some(clean_files))?;
+
+    let mut fresh_units = decompose_units(db, options, &partial)?;
+
+    // The freshly-synthesized (symbolic) tail: whichever fresh unit the
+    // decomposition placed it on. It reflects the *current* project's lets/tests
+    // (clean + dirty), not the previous compile's, so a changed dirty tail is
+    // captured. Its object/global imports are names, so the linker re-resolves
+    // them against this compile's shifted layout.
+    let fresh_tail = fresh_units.iter_mut().find_map(|u| u.init_tail.take());
+
+    // R1 tail edge (design §9): a dirty top-level `let` initializer can intern a
+    // generic-function VALUE into the freshly-synthesized tail. The linker dedups
+    // generic values across `code` buckets, but a tail-local copy that duplicates
+    // a *clean* file's code-owned copy is not covered — it would place both and
+    // break byte-identity. This is rare (a generic value as a top-level `let`);
+    // detect it precisely and fall back to a full compile for that case only.
+    if !clean_files.is_empty()
+        && let Some(tail) = &fresh_tail
+        && tail_generic_dupes_clean(tail, prev_units, clean_files)
+    {
+        return Err(LoweringError::ReuseUnsupported(
+            "a dirty top-level `let` initializer interns a generic-function value \
+             already owned by a clean file (design §9 R1 tail edge)"
+                .to_string(),
+        ));
+    }
+
+    // Assemble: clean files verbatim from `prev_units`, dirty files fresh. The
+    // per-package fragment is always recomputed (it reflects every file in the
+    // package), so a clean carrier unit never carries a stale fragment. The tail
+    // is placed once, below.
+    let prev_by_source: HashMap<&str, &CompilationUnit> = prev_units
+        .iter()
+        .map(|u| (u.source_file.as_str(), u))
+        .collect();
+    let mut assembled: Vec<CompilationUnit> = Vec::with_capacity(fresh_units.len());
+    for fresh in &mut fresh_units {
+        let mut unit = if clean_files.contains(&fresh.source_file) {
+            let prev = prev_by_source
+                .get(fresh.source_file.as_str())
+                .ok_or_else(|| {
+                    LoweringError::ReuseUnsupported(format!(
+                        "clean file `{}` missing from previous units",
+                        fresh.source_file
+                    ))
+                })?;
+            let mut unit = (*prev).clone();
+            unit.package_fragment = std::mem::take(&mut fresh.package_fragment);
+            unit
+        } else {
+            std::mem::take(fresh)
+        };
+        // The tail is a single whole-group product placed on one carrier below;
+        // clear any per-unit copy first (a clean carrier would otherwise carry a
+        // stale tail).
+        unit.init_tail = None;
+        assembled.push(unit);
+    }
+
+    // Place the freshly-synthesized tail on the last user unit (the linker only
+    // requires it to be on *some* unit of the user group).
+    if let Some(tail) = fresh_tail
+        && let Some(carrier) = assembled
+            .iter_mut()
+            .rev()
+            .find(|u| !u.source_file.starts_with("<builtin>/"))
+    {
+        carrier.init_tail = Some(tail);
+    }
+
+    let program = bex_vm_types::link::link(&assembled)
+        .map_err(|e| LoweringError::Internal(format!("link reused units: {e}")))?;
+    Ok((program, assembled))
+}
+
+/// Find clean files whose inferred-throws invariant no longer matches the
+/// previous units. Callers demote these files before serving diagnostics or
+/// splicing units. Previous metadata is read directly from the units, avoiding
+/// a full link solely for this comparison.
+pub fn reuse_throws_mismatches(
+    db: &dyn baml_compiler2_mir::Db,
+    prev_units: &[CompilationUnit],
+    clean_files: &HashSet<String>,
+) -> HashMap<String, String> {
+    let previous: HashMap<&str, &Option<baml_type::RuntimeTy>> = prev_units
+        .iter()
+        .flat_map(|unit| &unit.code)
+        .filter_map(|object| match object {
+            Object::Function(function) => Some((function.name.as_str(), &function.throws_type)),
+            _ => None,
+        })
+        .collect();
     let all_files = compiler2_all_files(db);
     let alias_caches = build_alias_caches(db, &all_files);
+    let mut mismatches = HashMap::new();
+
+    for file in all_files {
+        let rel = relative_source_path(db, file);
+        if !clean_files.contains(&rel) {
+            continue;
+        }
+        let pkg = file_package(db, file);
+        if let Err(detail) = spliced_throws_match(db, file, &previous, &alias_caches[&pkg.package])
+        {
+            mismatches.insert(rel, detail);
+        }
+    }
+    mismatches
+}
+
+/// B-693 Stage 2: emit every source file as a relocatable [`CompilationUnit`].
+///
+/// Runs the ordinary full compile ([`generate_project_bytecode_with_opt`]) and
+/// then *decomposes* the flat `Program` into per-file symbolic units: each
+/// unit's own compiled objects are bucketed by emit pass (classes / enums /
+/// interfaces / code), every cross-file `ObjectIndex`/`GlobalIndex` reference is
+/// rewritten to the per-unit local/import convention (§2a) captured in the
+/// unit's import table, and the whole-program `packages` map is split into
+/// per-package fragments.
+///
+/// The invariant Stage 2 gates is
+/// `borsh(link(emit_units(p))) == borsh(generate_project_bytecode(p))`: because
+/// the object *content* comes straight from the real compile, only the index
+/// remapping and the linker's reassembly order can diverge.
+///
+/// # Errors
+///
+/// Propagates any [`LoweringError`] from the underlying full compile, and
+/// returns [`LoweringError::Internal`] if the flat program contains a construct
+/// the Stage 2 decomposition does not yet handle (a `$init`/generic-function
+/// tail — see design §9 R1/R2 — or an unattributable pool object).
+pub fn emit_units(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    let program = generate_project_bytecode_with_opt(db, options, opt)?;
+    decompose_units(db, options, &program)
+}
+
+/// Per-object attribution kind, computed during the pool walk.
+enum PoolObjKind {
+    Class,
+    Enum,
+    Interface,
+    /// A named function (fully-qualified name interned in `function_indices`).
+    NamedFn(String),
+    /// A lambda / interned literal — attributed to a file by proximity, not name.
+    CodeAnon,
+}
+
+/// Decompose an already-compiled `Program` into per-file symbolic
+/// [`CompilationUnit`]s — the inverse of [`link`](bex_vm_types::link::link).
+///
+/// Used by the CLI to persist content-addressed units after a compile so the
+/// next incremental compile can reuse clean files independently.
+/// `program` must be the output of a compile over `db` with `options` (a full
+/// compile, a stdlib splice, or a reuse relink — all byte-identical), so the
+/// decomposition's file-attribution invariants hold.
+///
+/// # Errors
+///
+/// [`LoweringError::Internal`] if the program holds a pool object the
+/// decomposition cannot attribute to a source file.
+#[allow(clippy::too_many_lines)]
+pub fn decompose_units(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    program: &Program,
+) -> Result<Vec<CompilationUnit>, LoweringError> {
+    let all_files = compiler2_all_files(db);
+    let n_files = all_files.len();
+
+    // ---- Per-file identity maps ---------------------------------------------
+    let mut unit_source: Vec<String> = Vec::with_capacity(n_files);
+    let mut unit_package: Vec<Name> = Vec::with_capacity(n_files);
+    let mut rel_to_file: HashMap<String, usize> = HashMap::new();
+    for (fi, file) in all_files.iter().enumerate() {
+        let rel = relative_source_path(db, *file);
+        rel_to_file.insert(rel.clone(), fi);
+        unit_source.push(rel);
+        unit_package.push(file_package(db, *file).package);
+    }
+
+    // Ordered owners for the pass-major definition buckets: the k-th class /
+    // enum / interface object in the pool belongs to the file that defines it,
+    // in the exact iteration order Passes 2/3/3b use.
+    let mut class_owner: Vec<usize> = Vec::new();
+    let mut enum_owner: Vec<usize> = Vec::new();
+    let mut iface_owner: Vec<usize> = Vec::new();
+    // fq name -> file for named functions / lets (matches `Function::name`).
+    let mut func_name_to_file: HashMap<String, usize> = HashMap::new();
+    let mut let_name_to_file: HashMap<String, usize> = HashMap::new();
+    for (fi, file) in all_files.iter().enumerate() {
+        let item_tree = file_item_tree(db, *file);
+        for _ in item_tree.classes.values() {
+            class_owner.push(fi);
+        }
+        for _ in item_tree.enums.values() {
+            enum_owner.push(fi);
+        }
+        for _ in &item_tree.interfaces {
+            iface_owner.push(fi);
+        }
+        for local_id in item_tree.functions.keys() {
+            let func_loc = FunctionLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+            func_name_to_file.insert(fq, fi);
+        }
+        for local_id in item_tree.lets.keys() {
+            let let_loc = LetLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
+            let_name_to_file.insert(fq, fi);
+        }
+    }
+
+    // obj idx -> fq name for named functions (reverse of `function_indices`).
+    let mut fn_obj_name: HashMap<usize, String> = HashMap::new();
+    for (name, &idx) in &program.function_indices {
+        fn_obj_name.insert(idx, name.clone());
+    }
+
+    let n_obj = program.objects.len();
+
+    // ---- Locate the `$init`/`$init_test` tail (design §9 R2) ----------------
+    // Passes 4.5/4.6 append the tail after all of Pass 4's regular functions, so
+    // the tail is the contiguous suffix after the last *regular* named function
+    // (a function in `func_name_to_file`; the synthesized `$init`/`$init_test`
+    // chainers and `$init_let_*` helpers are not). Only the user group carries a
+    // tail today (builtins define no top-level `let`s), so the tail is a suffix
+    // of the whole pool.
+    // A tail exists only if the program actually synthesized `$init`/`$init_test`
+    // functions (a project with top-level `let`s or `test` blocks). Without that
+    // guard, a program whose last pool objects are trailing class/enum/interface
+    // defs (e.g. a dirty-only Stage 6 emit with no user functions) would be
+    // mis-read as having a tail.
+    let has_init_tail = program
+        .function_indices
+        .keys()
+        .any(|n| is_synth_init_name(n));
+    let mut tail_start = n_obj;
+    if has_init_tail {
+        let mut last_regular = None;
+        for idx in 0..n_obj {
+            if let Object::Function(_) = &program.objects[ObjectIndex::from_raw(idx)]
+                && let Some(name) = fn_obj_name.get(&idx)
+                && func_name_to_file.contains_key(name)
+            {
+                last_regular = Some(idx);
+            }
+        }
+        if let Some(l) = last_regular {
+            tail_start = l + 1;
+        } else {
+            // No regular functions at all (e.g. a dirty-only emit whose sole
+            // tail-producing file declares only a top-level `let`): the tail
+            // begins right after the class/enum/interface definition prefix.
+            tail_start = class_owner.len() + enum_owner.len() + iface_owner.len();
+        }
+    }
+
+    // ---- Attribute every regular pool object to a file ----------------------
+    let mut obj_owner: Vec<usize> = vec![usize::MAX; n_obj];
+    let mut obj_kind: Vec<PoolObjKind> = Vec::with_capacity(tail_start);
+    let (mut ci, mut ei, mut ii) = (0usize, 0usize, 0usize);
+    // The index drives three sequences (pool read, `obj_owner` write, `obj_kind`
+    // push), so a range loop is clearer than juggling parallel iterators.
+    #[allow(clippy::needless_range_loop)]
+    for idx in 0..tail_start {
+        let obj = &program.objects[ObjectIndex::from_raw(idx)];
+        let (owner, kind) = match obj {
+            Object::Class(_) => {
+                let o = *class_owner.get(ci).ok_or_else(|| {
+                    LoweringError::Internal(format!("class object {idx} has no owning file"))
+                })?;
+                ci += 1;
+                (o, PoolObjKind::Class)
+            }
+            Object::Enum(_) => {
+                let o = *enum_owner.get(ei).ok_or_else(|| {
+                    LoweringError::Internal(format!("enum object {idx} has no owning file"))
+                })?;
+                ei += 1;
+                (o, PoolObjKind::Enum)
+            }
+            Object::Interface(_) => {
+                let o = *iface_owner.get(ii).ok_or_else(|| {
+                    LoweringError::Internal(format!("interface object {idx} has no owning file"))
+                })?;
+                ii += 1;
+                (o, PoolObjKind::Interface)
+            }
+            Object::Function(f) => {
+                if let Some(name) = fn_obj_name.get(&idx) {
+                    // Named function: attribute by fq name. A synthesized
+                    // function ($init/$init_test) has no source file — reject
+                    // (Stage 2 does not yet reproduce the $init tail; §9 R2).
+                    let o = func_name_to_file.get(name).copied().ok_or_else(|| {
+                        LoweringError::Internal(format!(
+                            "named function `{name}` (obj {idx}) is synthesized \
+                             ($init/$init_test); Stage 2 decomposition does not \
+                             handle the $init tail yet (design §9 R2)"
+                        ))
+                    })?;
+                    (o, PoolObjKind::NamedFn(name.clone()))
+                } else {
+                    // Lambda: attribute by its (relative) source file.
+                    let o = rel_to_file
+                        .get(f.source_file.as_str())
+                        .copied()
+                        .ok_or_else(|| {
+                            LoweringError::Internal(format!(
+                                "lambda object {idx} has source_file `{}` matching no file",
+                                f.source_file
+                            ))
+                        })?;
+                    (o, PoolObjKind::CodeAnon)
+                }
+            }
+            Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::GenericFunction(_) => {
+                // Codegen-interned literal (strings/bigints/byte-arrays) or a
+                // cross-unit-interned generic-function value (§9 R1). Owner is
+                // filled by the leading-literal pass: it belongs to whichever
+                // function is compiled next.
+                (usize::MAX, PoolObjKind::CodeAnon)
+            }
+            other => {
+                return Err(LoweringError::Internal(format!(
+                    "pool object {idx} is an unexpected compiled kind: {}",
+                    obj_variant_name(other)
+                )));
+            }
+        };
+        obj_owner[idx] = owner;
+        obj_kind.push(kind);
+    }
+    // Leading-literal attribution: a literal belongs to the NEXT function object
+    // in the pool (a function's constants are interned before its own object is
+    // pushed). Scan backwards, carrying the most recent function's owner.
+    let mut next_func_owner = usize::MAX;
+    for idx in (0..tail_start).rev() {
+        match &program.objects[ObjectIndex::from_raw(idx)] {
+            Object::Function(_) => next_func_owner = obj_owner[idx],
+            Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::GenericFunction(_) => {
+                if next_func_owner == usize::MAX {
+                    return Err(LoweringError::Internal(format!(
+                        "interned literal object {idx} has no following function \
+                         to attribute it to"
+                    )));
+                }
+                obj_owner[idx] = next_func_owner;
+            }
+            _ => {}
+        }
+    }
+
+    // ---- Bucket objects into units + record local layout --------------------
+    let mut units: Vec<CompilationUnit> = (0..n_files)
+        .map(|fi| CompilationUnit {
+            source_file: unit_source[fi].clone(),
+            package: unit_package[fi].clone(),
+            ..CompilationUnit::default()
+        })
+        .collect();
+    // Per pool object: its LocalRef within its owning unit (bucket + offset).
+    let mut obj_localref: Vec<LocalRef> = Vec::with_capacity(tail_start);
+    for (idx, kind) in obj_kind.iter().enumerate() {
+        let u = obj_owner[idx];
+        let obj = program.objects[ObjectIndex::from_raw(idx)].clone();
+        let local_ref = match kind {
+            PoolObjKind::Class => {
+                let off = units[u].classes.len();
+                units[u].classes.push(obj);
+                LocalRef::Class(u32::try_from(off).expect("class offset fits u32"))
+            }
+            PoolObjKind::Enum => {
+                let off = units[u].enums.len();
+                units[u].enums.push(obj);
+                LocalRef::Enum(u32::try_from(off).expect("enum offset fits u32"))
+            }
+            PoolObjKind::Interface => {
+                let off = units[u].interfaces.len();
+                units[u].interfaces.push(obj);
+                LocalRef::Interface(u32::try_from(off).expect("interface offset fits u32"))
+            }
+            PoolObjKind::NamedFn(_) | PoolObjKind::CodeAnon => {
+                let off = units[u].code.len();
+                units[u].code.push(obj);
+                LocalRef::Code(u32::try_from(off).expect("code offset fits u32"))
+            }
+        };
+        obj_localref.push(local_ref);
+    }
+
+    // ---- Global slot -> owner + local flat index ----------------------------
+    // slot -> fq name (functions and lets).
+    let mut slot_to_name: Vec<Option<String>> = vec![None; program.globals.len()];
+    for (name, &slot) in &program.function_global_indices {
+        slot_to_name[slot] = Some(name.clone());
+    }
+    for (name, &slot) in &program.let_global_indices {
+        slot_to_name[slot] = Some(name.clone());
+    }
+    // name -> (unit, flat local global index). The local global space is
+    // [functions 0..F_u][lets F_u..]; function ordinals follow pool (= Pass 1)
+    // order, `let` ordinals follow file order.
+    let mut name_to_local_global: HashMap<String, (usize, u32)> = HashMap::new();
+    let mut func_next: Vec<u32> = vec![0; n_files];
+    for idx in 0..tail_start {
+        if let PoolObjKind::NamedFn(name) = &obj_kind[idx] {
+            // Only functions that own a global slot participate.
+            if program.function_global_indices.contains_key(name) {
+                let u = obj_owner[idx];
+                let flat = func_next[u];
+                func_next[u] += 1;
+                name_to_local_global.insert(name.clone(), (u, flat));
+            }
+        }
+    }
+    let mut local_let_count = vec![0u32; n_files];
+    for (fi, file) in all_files.iter().enumerate() {
+        let item_tree = file_item_tree(db, *file);
+        let mut let_ord = 0u32;
+        for local_id in item_tree.lets.keys() {
+            let let_loc = LetLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
+            if program.let_global_indices.contains_key(&fq) {
+                name_to_local_global.insert(fq, (fi, func_next[fi] + let_ord));
+                let_ord += 1;
+            }
+        }
+        local_let_count[fi] = let_ord;
+    }
+
+    // ---- Rewrite code operands to the symbolic convention + build imports ---
+    for (u, unit) in units.iter_mut().enumerate() {
+        let n_local_objects =
+            unit.classes.len() + unit.enums.len() + unit.interfaces.len() + unit.code.len();
+        let c = unit.classes.len();
+        let e = unit.enums.len();
+        let i = unit.interfaces.len();
+        // The unit's local global space is [functions 0..F_u][lets F_u..]; its
+        // size is where import globals start (§2a).
+        let n_local_globals = (func_next[u] + local_let_count[u]) as usize;
+        // Dedup maps for imports (fq name -> import index).
+        let mut obj_import_idx: HashMap<String, usize> = HashMap::new();
+        let mut glob_import_idx: HashMap<String, usize> = HashMap::new();
+        let mut object_imports: Vec<Symbol> = Vec::new();
+        let mut global_imports: Vec<Symbol> = Vec::new();
+
+        // Precompute this unit's flat-local index for each pool object it owns.
+        // (Captured references keep the closure `Fn`.)
+        let flat_local = |abs: usize| -> usize {
+            match obj_localref[abs] {
+                LocalRef::Class(k) => k as usize,
+                LocalRef::Enum(k) => c + k as usize,
+                LocalRef::Interface(k) => c + e + k as usize,
+                LocalRef::Code(k) => c + e + i + k as usize,
+            }
+        };
+
+        for object in &mut unit.code {
+            rewrite_pool_operands(
+                object,
+                |target| {
+                    if obj_owner[target] == u {
+                        Ok(flat_local(target))
+                    } else {
+                        let sym = object_symbol(program, target, &obj_kind, &slot_to_name)?;
+                        let import_idx = intern_import(
+                            &mut object_imports,
+                            &mut obj_import_idx,
+                            sym.fq_name.clone(),
+                            sym,
+                        );
+                        Ok(n_local_objects + import_idx)
+                    }
+                },
+                |target| {
+                    let Some(name) = slot_to_name.get(target).and_then(Option::as_ref) else {
+                        return Err(LoweringError::Internal(format!(
+                            "global slot {target} referenced by a unit object owns \
+                             no function/let name (synthesized $init slot?); \
+                             Stage 2 does not handle it yet (design §9 R2)"
+                        )));
+                    };
+                    // Local iff this unit owns the slot; otherwise an import.
+                    // A name absent from `name_to_local_global` is a reference
+                    // to a definition not lowered into this (partial) pool —
+                    // i.e. a clean file's function/let in the Stage 6 dirty-only
+                    // emit — which is likewise an import.
+                    let owned_local = name_to_local_global
+                        .get(name)
+                        .filter(|&&(owner, _)| owner == u)
+                        .map(|&(_, flat)| flat as usize);
+                    if let Some(flat) = owned_local {
+                        Ok(flat)
+                    } else {
+                        let is_let = let_name_to_file.contains_key(name);
+                        let sym = Symbol {
+                            kind: if is_let {
+                                SymbolKind::Let
+                            } else {
+                                SymbolKind::Function
+                            },
+                            fq_name: name.clone(),
+                            generic: None,
+                        };
+                        let import_idx = intern_import(
+                            &mut global_imports,
+                            &mut glob_import_idx,
+                            name.clone(),
+                            sym,
+                        );
+                        Ok(n_local_globals + import_idx)
+                    }
+                },
+            )?;
+        }
+        unit.object_imports = object_imports;
+        unit.global_imports = global_imports;
+    }
+
+    // ---- Export tables ------------------------------------------------------
+    for idx in 0..tail_start {
+        let u = obj_owner[idx];
+        match &obj_kind[idx] {
+            PoolObjKind::Class | PoolObjKind::Enum | PoolObjKind::Interface => {
+                let fq = def_object_fq(&program.objects[ObjectIndex::from_raw(idx)]);
+                units[u].exports.objects.push((fq, obj_localref[idx]));
+            }
+            PoolObjKind::NamedFn(name) => {
+                units[u]
+                    .exports
+                    .objects
+                    .push((name.clone(), obj_localref[idx]));
+            }
+            PoolObjKind::CodeAnon => {}
+        }
+    }
+    for (name, &(u, flat)) in &name_to_local_global {
+        units[u].exports.globals.push((name.clone(), flat));
+    }
+    // Deterministic export order (not load-bearing for the linked Program, which
+    // re-derives everything, but keeps the serialized unit stable).
+    for unit in &mut units {
+        unit.exports
+            .objects
+            .sort_by_key(|a| local_ref_sort_key(a.1));
+        unit.exports.globals.sort_by_key(|a| a.1);
+    }
+
+    // ---- $init / $init_test tail extraction (design §9 R2) ------------------
+    if tail_start < n_obj {
+        let tail = build_init_tail(
+            program,
+            tail_start,
+            &obj_kind,
+            &slot_to_name,
+            &let_name_to_file,
+        )?;
+        // The tail belongs to the user group; carry it on the last user unit.
+        let carrier = (0..n_files)
+            .rev()
+            .find(|&fi| !unit_source[fi].starts_with("<builtin>/"))
+            .unwrap_or(n_files.saturating_sub(1));
+        units[carrier].init_tail = Some(tail);
+    }
+
+    // ---- Package fragments --------------------------------------------------
+    // Each package's fragment is carried by the first unit (lowest file index)
+    // whose file belongs to that package; the linker's merge re-sorts, so this
+    // attribution is order-free.
+    let mut package_first_unit: HashMap<Name, usize> = HashMap::new();
+    for (u, pkg) in unit_package.iter().enumerate() {
+        package_first_unit.entry(pkg.clone()).or_insert(u);
+    }
+    for (pkg_name, pkg) in &program.packages {
+        let frag = build_package_fragment(program, pkg, &fn_obj_name)?;
+        let carrier = package_first_unit.get(pkg_name).copied().unwrap_or(0);
+        units[carrier].package_fragment = frag;
+    }
+
+    // ---- Template-string macros (Pass 5 fragment, per file) -----------------
+    for (fi, file) in all_files.iter().enumerate() {
+        let item_tree = file_item_tree(db, *file);
+        for ts_data in item_tree.template_strings.values() {
+            if let Some(macro_def) = render_template_macro(ts_data) {
+                units[fi].template_macros.push(macro_def);
+            }
+        }
+    }
+
+    // ---- Test cases (Pass 8 fragment, per file by source path) --------------
+    if options.emit_test_cases {
+        for test in &program.test_cases {
+            if let Some(&fi) = rel_to_file.get(test.source_file.as_str()) {
+                units[fi].test_cases.push(test.clone());
+            } else {
+                return Err(LoweringError::Internal(format!(
+                    "test case `{}` has source_file `{}` matching no file",
+                    test.name, test.source_file
+                )));
+            }
+        }
+    }
+
+    // ---- Interface fragments (Phase 2b, per user file) ----------------------
+    // Carry each user file's typed interface fragment (opaque borsh) beside its
+    // bytecode so a warm compile can project a `callable_throws` seed from clean
+    // files' units. Builtins (empty or `<builtin>/…` source paths) are covered
+    // by the B-694 stdlib interface blob and only user files appear in the
+    // manifest the seed reads, so they carry no fragment — matching
+    // `user_files_with_rel_paths`' predicate. The fragment holds no absolute
+    // paths (design §9 R7). Best-effort: a fragment that fails to serialize stays
+    // empty (the file is then treated as unseeded on load).
+    for (fi, file) in all_files.iter().enumerate() {
+        if units[fi].source_file.is_empty() || units[fi].source_file.starts_with("<builtin>/") {
+            continue;
+        }
+        let fragment =
+            baml_compiler2_tir::package_interface::file_callable_throws_fragment(db, *file);
+        if let Ok(bytes) = borsh::to_vec(fragment) {
+            units[fi].callable_throws_fragment = bytes;
+        }
+    }
+
+    Ok(units)
+}
+
+/// Sort key that orders `LocalRef`s by bucket then offset.
+fn local_ref_sort_key(r: LocalRef) -> (u8, u32) {
+    match r {
+        LocalRef::Class(k) => (0, k),
+        LocalRef::Enum(k) => (1, k),
+        LocalRef::Interface(k) => (2, k),
+        LocalRef::Code(k) => (3, k),
+    }
+}
+
+/// Render one template-string definition as a Jinja `{% macro %}` block, or
+/// `None` for a body-less (declaration-only) template string.
+fn render_template_macro(ts: &baml_compiler2_hir::item_tree::TemplateString) -> Option<String> {
+    let body = ts.body.as_ref()?;
+    let args = ts
+        .params
+        .iter()
+        .map(|param| param.name.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!(
+        "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
+        name = ts.name,
+    ))
+}
+
+/// Fully-qualified name of a class/enum/interface definition object.
+fn def_object_fq(obj: &Object) -> String {
+    match obj {
+        Object::Class(c) => c.name.to_string(),
+        Object::Enum(e) => e.name.to_string(),
+        Object::Interface(i) => i.name.to_string(),
+        _ => unreachable!("def_object_fq on non-definition object"),
+    }
+}
+
+/// Intern `sym` into `imports`, deduplicated by `key`, returning its import
+/// index. A repeated key reuses the first slot, so a unit's import table holds
+/// one entry per referenced symbol.
+fn intern_import(
+    imports: &mut Vec<Symbol>,
+    dedup: &mut HashMap<String, usize>,
+    key: String,
+    sym: Symbol,
+) -> usize {
+    *dedup.entry(key).or_insert_with(|| {
+        let n = imports.len();
+        imports.push(sym);
+        n
+    })
+}
+
+/// Rewrite every cross-object index operand of `object` from whole-program space
+/// into the per-unit / import-relative encoding. `resolve_object` and
+/// `resolve_global` map a raw program index to its rewritten value, or a
+/// [`LoweringError`] for an operand that cannot be attributed; the first such
+/// error stops the walk and is returned. Shared by the per-file decomposition
+/// and the `$init`-tail encoding — only the local-vs-import decision differs.
+fn rewrite_pool_operands(
+    object: &mut Object,
+    mut resolve_object: impl FnMut(usize) -> Result<usize, LoweringError>,
+    mut resolve_global: impl FnMut(usize) -> Result<usize, LoweringError>,
+) -> Result<(), LoweringError> {
+    let mut err: Option<LoweringError> = None;
+    bex_vm_types::relink::visit_object_operands(object, |operand| {
+        if err.is_some() {
+            return;
+        }
+        match operand {
+            bex_vm_types::relink::IndexOperand::Object(idx) => match resolve_object(idx.raw()) {
+                Ok(new) => *idx = ObjectIndex::from_raw(new),
+                Err(e) => err = Some(e),
+            },
+            bex_vm_types::relink::IndexOperand::Global(slot) => match resolve_global(slot.raw()) {
+                Ok(new) => *slot = GlobalIndex::from_raw(new),
+                Err(e) => err = Some(e),
+            },
+        }
+    });
+    match err {
+        Some(e) => Err(e),
+        None => Ok(()),
+    }
+}
+
+fn obj_variant_name(obj: &Object) -> &'static str {
+    match obj {
+        Object::Function(_) => "Function",
+        Object::Class(_) => "Class",
+        Object::Enum(_) => "Enum",
+        Object::Interface(_) => "Interface",
+        Object::Package(_) => "Package",
+        Object::ImplRule(_) => "ImplRule",
+        Object::String(_) => "String",
+        Object::Bigint(_) => "Bigint",
+        Object::Uint8Array(_) => "Uint8Array",
+        Object::Type(_) => "Type",
+        Object::GenericFunction(_) => "GenericFunction",
+        _ => "runtime-only",
+    }
+}
+
+/// Resolve the fully-qualified base-function name of a generic-function value in
+/// a [`CompilationUnit`]'s per-unit encoding (§2a): a local-global base resolves
+/// through the unit's export table, an imported base through its global imports.
+fn unit_generic_base_name(unit: &CompilationUnit, base_raw: usize) -> Option<String> {
+    let n_local_globals = unit.exports.globals.len();
+    if base_raw < n_local_globals {
+        unit.exports
+            .globals
+            .iter()
+            .find(|(_, flat)| *flat as usize == base_raw)
+            .map(|(name, _)| name.clone())
+    } else {
+        unit.global_imports
+            .get(base_raw - n_local_globals)
+            .map(|sym| sym.fq_name.clone())
+    }
+}
+
+/// Does the freshly-synthesized `$init`/`$init_test` tail intern a
+/// generic-function value that a *clean* file already owns in its `code` bucket
+/// (design §9 R1 tail edge)? Such a duplicate cannot be deduped by the linker's
+/// code-bucket interning, so the reuse path must fall back for it.
+fn tail_generic_dupes_clean(
+    tail: &bex_vm_types::InitTail,
+    prev_units: &[CompilationUnit],
+    effective_clean: &HashSet<String>,
+) -> bool {
+    // (base fn fq name, type args) of every generic value clean files own.
+    // `GenericFunction::type_args` is `RealizedTy` (runtime narrowing, #3998).
+    let mut clean_keys: Vec<(String, Vec<baml_type::RealizedTy>)> = Vec::new();
+    for unit in prev_units {
+        if !effective_clean.contains(&unit.source_file) {
+            continue;
+        }
+        for obj in &unit.code {
+            if let Object::GenericFunction(gf) = obj
+                && let Some(base) = unit_generic_base_name(unit, gf.function.raw())
+            {
+                clean_keys.push((base, gf.type_args.to_vec()));
+            }
+        }
+    }
+    if clean_keys.is_empty() {
+        return false;
+    }
+    // A tail generic's base is always a function, so it is a tail global import.
+    let n_tail_slots = tail.slot_objects.len();
+    for obj in &tail.objects {
+        if let Object::GenericFunction(gf) = obj {
+            let base_raw = gf.function.raw();
+            if base_raw < n_tail_slots {
+                continue; // a helper slot is never a generic base
+            }
+            let Some(sym) = tail.global_imports.get(base_raw - n_tail_slots) else {
+                continue;
+            };
+            if clean_keys.iter().any(|(name, args)| {
+                name == &sym.fq_name && args.as_slice() == gf.type_args.as_ref()
+            }) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Build the import [`Symbol`] for a cross-unit object reference by inspecting
+/// the target pool object.
+fn object_symbol(
+    program: &Program,
+    target: usize,
+    obj_kind: &[PoolObjKind],
+    slot_to_name: &[Option<String>],
+) -> Result<Symbol, LoweringError> {
+    let obj = &program.objects[ObjectIndex::from_raw(target)];
+    match obj {
+        Object::GenericFunction(gf) => {
+            // A generic-function value (`foo<int>`) interned in another unit
+            // (design §9 R1). The intern key is `(base function, type_args)`; the
+            // linker re-resolves it from the base function's name.
+            let base_slot = gf.function.raw();
+            let base_fn = slot_to_name
+                .get(base_slot)
+                .and_then(Option::clone)
+                .ok_or_else(|| {
+                    LoweringError::Internal(format!(
+                        "generic-function object {target} has base slot {base_slot} \
+                     with no function name"
+                    ))
+                })?;
+            Ok(Symbol {
+                kind: SymbolKind::GenericFn,
+                fq_name: base_fn.clone(),
+                generic: Some(bex_vm_types::GenericFnKey {
+                    base_fn,
+                    type_args: gf.type_args.to_vec(),
+                }),
+            })
+        }
+        _ => {
+            let (kind, fq_name) = match obj {
+                Object::Class(c) => (SymbolKind::Class, c.name.to_string()),
+                Object::Enum(e) => (SymbolKind::Enum, e.name.to_string()),
+                Object::Interface(i) => (SymbolKind::Interface, i.name.to_string()),
+                Object::Function(_) => match &obj_kind[target] {
+                    PoolObjKind::NamedFn(name) => (SymbolKind::Function, name.clone()),
+                    PoolObjKind::CodeAnon => {
+                        return Err(LoweringError::Internal(format!(
+                            "cross-unit reference to lambda object {target} (lambdas \
+                             are never cross-unit)"
+                        )));
+                    }
+                    _ => unreachable!("function object with non-function kind"),
+                },
+                _ => {
+                    return Err(LoweringError::Internal(format!(
+                        "cross-unit reference to a non-def object {target} \
+                         ({}); only classes/enums/interfaces/functions are importable",
+                        obj_variant_name(obj)
+                    )));
+                }
+            };
+            Ok(Symbol {
+                kind,
+                fq_name,
+                generic: None,
+            })
+        }
+    }
+}
+
+/// Convert a whole-program [`ProgramPackage`](bex_vm_types::types::ProgramPackage)
+/// into its symbolic fragment by resolving every `ObjectIndex` back to its
+/// object's fully-qualified name.
+fn build_package_fragment(
+    program: &Program,
+    pkg: &bex_vm_types::types::ProgramPackage,
+    fn_obj_name: &HashMap<usize, String>,
+) -> Result<ProgramPackageFrag, LoweringError> {
+    let obj_fq = |idx: ObjectIndex| -> Result<String, LoweringError> {
+        let raw = idx.raw();
+        // A function reference resolves by name directly — this covers both real
+        // pool functions and the placeholder indices Stage 6 assigns to skipped
+        // clean-file functions (which must never be pool-indexed).
+        if let Some(name) = fn_obj_name.get(&raw) {
+            return Ok(name.clone());
+        }
+        match &program.objects[idx] {
+            Object::Class(c) => Ok(c.name.to_string()),
+            Object::Enum(e) => Ok(e.name.to_string()),
+            Object::Interface(i) => Ok(i.name.to_string()),
+            Object::Function(_) => Err(LoweringError::Internal(format!(
+                "package refs unnamed function object {raw}"
+            ))),
+            other => Err(LoweringError::Internal(format!(
+                "package refs a non-def object {raw} ({})",
+                obj_variant_name(other)
+            ))),
+        }
+    };
+    let mut frag = ProgramPackageFrag::default();
+    for (local, &idx) in &pkg.classes {
+        frag.classes.push((local.clone(), obj_fq(idx)?));
+    }
+    for (local, &idx) in &pkg.enums {
+        frag.enums.push((local.clone(), obj_fq(idx)?));
+    }
+    for (local, &idx) in &pkg.interfaces {
+        frag.interfaces.push((local.clone(), obj_fq(idx)?));
+    }
+    for (local, ty) in &pkg.recursive_type_aliases {
+        frag.recursive_type_aliases
+            .push((local.clone(), ty.clone()));
+    }
+    for (&iface_idx, rules) in &pkg.impl_rules {
+        let iface_fq = obj_fq(iface_idx)?;
+        let mut rule_frags = Vec::with_capacity(rules.len());
+        for rule in rules {
+            let mut methods = Vec::with_capacity(rule.methods.len());
+            for (name, method) in &rule.methods {
+                methods.push((
+                    name.clone(),
+                    ProgramMethodImplFrag {
+                        fqn: obj_fq(method.fqn)?,
+                        frame: method.frame.clone(),
+                    },
+                ));
+            }
+            rule_frags.push(ProgramImplRuleFrag {
+                interface_head: obj_fq(rule.interface_head)?,
+                for_ty_pattern: rule.for_ty_pattern.clone(),
+                generic_param_bounds: rule.generic_param_bounds.clone(),
+                interface_args: rule.interface_args.clone(),
+                interface_assoc: rule.interface_assoc.clone(),
+                methods,
+            });
+        }
+        frag.impl_rules.push((iface_fq, rule_frags));
+    }
+    Ok(frag)
+}
+
+/// Extract the `$init`/`$init_test` tail (design §9 R2) from a flat `Program`:
+/// the objects in `[tail_start, program.objects.len())`, with operands rewritten
+/// to the tail-local/import convention of [`bex_vm_types::InitTail`].
+#[allow(clippy::too_many_lines)]
+fn build_init_tail(
+    program: &Program,
+    tail_start: usize,
+    obj_kind: &[PoolObjKind],
+    slot_to_name: &[Option<String>],
+    let_name_to_file: &HashMap<String, usize>,
+) -> Result<bex_vm_types::InitTail, LoweringError> {
+    let n_obj = program.objects.len();
+    let n_tail_objects = n_obj - tail_start;
+
+    // Object index -> global slot (a function/helper slot holds `Object(obj)`).
+    let mut obj_slot: HashMap<usize, usize> = HashMap::new();
+    for (s, val) in program.globals.iter().enumerate() {
+        if let ConstValue::Object(o) = val {
+            obj_slot.insert(o.raw(), s);
+        }
+    }
+    // Tail slots: those owned by a tail object. They form a dense suffix.
+    let mut tail_slots: Vec<(usize, usize)> = Vec::new(); // (abs slot, tail obj idx)
+    for tidx in tail_start..n_obj {
+        if let Some(&s) = obj_slot.get(&tidx) {
+            tail_slots.push((s, tidx));
+        }
+    }
+    tail_slots.sort_by_key(|&(s, _)| s);
+    let tail_slot_base = tail_slots
+        .first()
+        .map_or(program.globals.len(), |&(s, _)| s);
+    for (ord, &(s, _)) in tail_slots.iter().enumerate() {
+        if s != tail_slot_base + ord {
+            return Err(LoweringError::Internal(format!(
+                "$init tail slots are not a dense suffix: slot {s} at ordinal {ord} \
+                 (base {tail_slot_base})"
+            )));
+        }
+    }
+    let n_tail_slots = tail_slots.len();
+    let slot_objects: Vec<u32> = tail_slots
+        .iter()
+        .map(|&(_, tidx)| u32::try_from(tidx - tail_start).expect("tail offset fits u32"))
+        .collect();
+
+    // Named tail functions: `$init` / `$init_test` chainers (helpers are nameless).
+    // Guard against clean-file placeholder indices (injected past the real pool in
+    // a Stage 6 dirty-only emit), which are `>= n_obj` and are not tail objects.
+    let mut named: Vec<(String, u32)> = Vec::new();
+    for (name, &idx) in &program.function_indices {
+        if idx >= tail_start && idx < n_obj {
+            named.push((
+                name.clone(),
+                u32::try_from(idx - tail_start).expect("tail offset fits u32"),
+            ));
+        }
+    }
+    named.sort_by_key(|a| a.1);
+
+    // Encode each tail object's operands.
+    let mut obj_import_idx: HashMap<String, usize> = HashMap::new();
+    let mut glob_import_idx: HashMap<String, usize> = HashMap::new();
+    let mut object_imports: Vec<Symbol> = Vec::new();
+    let mut global_imports: Vec<Symbol> = Vec::new();
+    let mut objects: Vec<Object> = Vec::with_capacity(n_tail_objects);
+    for tidx in tail_start..n_obj {
+        let mut object = program.objects[ObjectIndex::from_raw(tidx)].clone();
+        rewrite_pool_operands(
+            &mut object,
+            |t| {
+                if t >= tail_start {
+                    Ok(t - tail_start)
+                } else {
+                    let sym = object_symbol(program, t, obj_kind, slot_to_name)?;
+                    let import_idx = intern_import(
+                        &mut object_imports,
+                        &mut obj_import_idx,
+                        sym.fq_name.clone(),
+                        sym,
+                    );
+                    Ok(n_tail_objects + import_idx)
+                }
+            },
+            |s| {
+                if s >= tail_slot_base {
+                    Ok(s - tail_slot_base)
+                } else {
+                    let Some(name) = slot_to_name.get(s).and_then(Option::as_ref) else {
+                        return Err(LoweringError::Internal(format!(
+                            "$init tail references unnamed non-tail slot {s}"
+                        )));
+                    };
+                    let is_let = let_name_to_file.contains_key(name);
+                    let sym = Symbol {
+                        kind: if is_let {
+                            SymbolKind::Let
+                        } else {
+                            SymbolKind::Function
+                        },
+                        fq_name: name.clone(),
+                        generic: None,
+                    };
+                    let import_idx =
+                        intern_import(&mut global_imports, &mut glob_import_idx, name.clone(), sym);
+                    Ok(n_tail_slots + import_idx)
+                }
+            },
+        )?;
+        objects.push(object);
+    }
+
+    Ok(bex_vm_types::InitTail {
+        objects,
+        object_imports,
+        global_imports,
+        slot_objects,
+        named,
+        package_init_order: program.package_init_order.clone(),
+    })
+}
+
+thread_local! {
+    /// Project-relative paths whose bodies were MIR/bytecode-lowered in Pass 4
+    /// since the last drain. B-693 Stage 6 evidence surface: after an incremental
+    /// compile only the *dirty* files appear here — clean files are never lowered.
+    static LOWERED_FILES: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Record that `rel_path`'s function bodies are being lowered in Pass 4.
+fn record_lowered_file(rel_path: &str) {
+    LOWERED_FILES.with(|f| f.borrow_mut().push(rel_path.to_string()));
+}
+
+/// Drain and return the source paths whose bodies were lowered since the last
+/// call, on the current thread (B-693 Stage 6). A full compile returns every
+/// file; an incremental reuse compile returns only the dirty files.
+pub fn take_lowered_files() -> Vec<String> {
+    LOWERED_FILES.with(|f| std::mem::take(&mut *f.borrow_mut()))
+}
+
+/// Stage 6 (`SkipClean`) phase 1: register clean (skipped) files' function/let
+/// global **slots** so the whole-program `$init` / `$init_test` tail synthesis
+/// (Passes 4.5/4.6) sees the entire project — a clean file's `$init_test_<path>`
+/// must be chained by `$init_test`, and a clean `let` owns a slot the tail may
+/// reference. Slots are the whole-project (Pass-1) values, identical to a full
+/// compile. Clean function *object* placeholders are injected separately, after
+/// the tail is emitted (see [`inject_clean_object_placeholders`]), so they land
+/// past the real pool.
+fn inject_clean_slots(
+    db: &dyn baml_compiler2_mir::Db,
+    files: &[baml_base::SourceFile],
+    clean: &HashSet<String>,
+    globals: &HashMap<String, usize>,
+    program: &mut Program,
+) {
+    for file in files {
+        let rel = relative_source_path(db, *file);
+        if !clean.contains(&rel) {
+            continue;
+        }
+        let item_tree = file_item_tree(db, *file);
+        for local_id in item_tree.functions.keys() {
+            let func_loc = FunctionLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+            // Intrinsic / await-any functions own no slot (Pass 1 skips them);
+            // the `globals` guard drops them here too.
+            if let Some(&slot) = globals.get(&fq) {
+                program.function_global_indices.insert(fq, slot);
+            }
+        }
+        for local_id in item_tree.lets.keys() {
+            let let_loc = LetLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
+            if let Some(&slot) = globals.get(&fq) {
+                program.let_global_indices.insert(fq, slot);
+            }
+        }
+    }
+}
+
+/// Stage 6 (`SkipClean`) phase 2: register clean functions' **object index
+/// placeholders** so `build_packages` (impl-rule method FQNs) and the
+/// decomposition's operand reversal can map a clean function's index back to its
+/// name. Each placeholder is past the real pool (only ever reversed to a name,
+/// never pool-indexed). Must run **after** the `$init`/`$init_test` tail is
+/// emitted so the placeholders do not collide with the tail's real objects.
+fn inject_clean_object_placeholders(
+    db: &dyn baml_compiler2_mir::Db,
+    files: &[baml_base::SourceFile],
+    clean: &HashSet<String>,
+    globals: &HashMap<String, usize>,
+    program: &mut Program,
+) {
+    let mut placeholder = program.objects.len();
+    for file in files {
+        let rel = relative_source_path(db, *file);
+        if !clean.contains(&rel) {
+            continue;
+        }
+        let item_tree = file_item_tree(db, *file);
+        for local_id in item_tree.functions.keys() {
+            let func_loc = FunctionLoc::new(db, *file, *local_id);
+            let fq = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
+            if globals.get(&fq).is_some() {
+                program.function_indices.entry(fq).or_insert_with(|| {
+                    let idx = placeholder;
+                    placeholder += 1;
+                    idx
+                });
+            }
+        }
+    }
+}
+
+/// Emit the whole project (B-693 Stage 6 core).
+///
+/// `skip_clean`, when `Some`, is the set of project-relative paths whose files
+/// are **clean** in an incremental compile: Pass 4 skips them entirely (they are
+/// neither lowered nor cloned — their units come verbatim from the cached image),
+/// and only the dirty files are lowered. Dirty functions are written to their
+/// whole-project (Pass-1) global slots so the decomposition reverses their
+/// operands to names identically to a full compile. `None` is a full compile.
+fn generate_impl(
+    db: &dyn baml_compiler2_mir::Db,
+    options: &CompileOptions,
+    opt: OptLevel,
+    base: Option<&Program>,
+    stdlib_only: bool,
+    skip_clean: Option<&HashSet<String>>,
+) -> Result<Program, LoweringError> {
+    let mut all_files = compiler2_all_files(db);
+    let builtin_count = all_files
+        .iter()
+        .take_while(|f| f.path(db).to_string_lossy().starts_with("<builtin>/"))
+        .count();
+    if stdlib_only {
+        // The builtin prefix is user-independent, so compiling "just the
+        // stdlib" is the full pipeline over the builtin files alone.
+        all_files.truncate(builtin_count);
+    }
+    let alias_caches = build_alias_caches(db, &all_files);
+
+    // Emit in two file groups — builtin stubs first, then user files — so the
+    // stdlib occupies a contiguous, user-independent prefix of the ObjectPool
+    // and the globals table (`compiler2_all_files` puts builtins first for the
+    // same reason). The precompiled-stdlib splice depends on that prefix.
+    let (builtin_files, user_files) = all_files.split_at(builtin_count.min(all_files.len()));
+    let (mut program, mut tables) = match base {
+        // Splice mode: the builtin group's output is taken wholesale from the
+        // precompiled slice; whole-program products it carries (template
+        // macros, packages) are recomputed by the trailing passes below,
+        // exactly as a full compile would.
+        Some(base) => (base.clone(), EmitTables::from_stdlib_program(base)),
+        None => (Program::new(), EmitTables::default()),
+    };
+    if base.is_none() {
+        emit_file_group(
+            db,
+            builtin_files,
+            &mut tables,
+            &mut program,
+            &alias_caches,
+            opt,
+            None,
+        )?;
+    }
+    emit_file_group(
+        db,
+        user_files,
+        &mut tables,
+        &mut program,
+        &alias_caches,
+        opt,
+        skip_clean,
+    )?;
+
+    // --- Pass 5: Template string macros ---
+    let mut template_macros = Vec::new();
+    for file in &all_files {
+        let item_tree = file_item_tree(db, *file);
+        for ts_data in item_tree.template_strings.values() {
+            if let Some(macro_def) = render_template_macro(ts_data) {
+                template_macros.push(macro_def);
+            }
+        }
+    }
+    program.template_strings_macros = template_macros.join("\n");
+
+    // --- Pass 6: Retry policies ---
+    // Retry policies are now synthesized as Item::Let bindings during CST lowering.
+    // Their values flow through the $init pipeline instead of being parsed here.
+    // Pass 6 is intentionally empty.
+
+    // Client metadata is now synthesized as Item::Let bindings during CST lowering.
+    // Client values (including sub-clients, retry policies) flow through the $init pipeline.
+    // Pass 7 is intentionally empty.
+
+    // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
+    // Mirrors the legacy pipeline: only recursive aliases are stored per package
+    // (`Package.recursive_type_aliases`); non-recursive aliases are expanded inline
+    // by `convert_tir_ty_for_runtime`. This is required for correct output_format rendering at runtime.
+    for cache in alias_caches.values() {
+        for (qtn, tir_ty) in &cache.aliases {
+            if cache.recursive.contains(qtn) {
+                let mir_ty = cache.convert(tir_ty);
+                tables
+                    .program_packages
+                    .entry(qtn.package().clone())
+                    .or_default()
+                    .recursive_type_aliases
+                    .insert(
+                        bex_vm_types::types::LocalName {
+                            namespace: qtn.namespace().clone(),
+                            name: qtn.name().clone(),
+                        },
+                        mir_ty,
+                    );
+            }
+        }
+    }
+
+    build_packages(
+        db,
+        &all_files,
+        &alias_caches,
+        &program.function_indices,
+        &tables.interface_object_indices,
+        &mut tables.program_packages,
+    );
+    tables.program_packages.sort_keys();
+    program.packages = tables.program_packages;
+
+    // --- Pass 8: Test cases (only when requested) ---
+    if options.emit_test_cases {
+        for file in &all_files {
+            let item_tree = file_item_tree(db, *file);
+            for test_data in item_tree.tests.values() {
+                let function_names: Vec<String> = test_data
+                    .function_refs
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect();
+                let args: indexmap::IndexMap<String, bex_vm_types::TestArgValue> = test_data
+                    .args
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), convert_test_arg_value(v)))
+                    .collect();
+                program.test_cases.push(bex_vm_types::TestCase {
+                    name: test_data.name.to_string(),
+                    function_names,
+                    args,
+                    source_file: relative_source_path(db, *file),
+                });
+            }
+        }
+    }
+
+    Ok(program)
+}
+
+/// Emit tables accumulated across file groups.
+///
+/// One instance is threaded through both [`emit_file_group`] calls (builtin
+/// stubs, then user files) so the user group can reference builtin classes,
+/// enums, interfaces, and globals by the indices the builtin group assigned.
+#[derive(Default)]
+struct EmitTables {
+    /// Function/let fq-name → global slot (Pass 1).
+    globals: HashMap<String, usize>,
+    /// Class fq-name → (field name → field index) (Pass 2).
+    classes: HashMap<String, HashMap<String, usize>>,
+    /// Class fq-name → `ObjectPool` index (Pass 2).
+    class_object_indices: HashMap<String, usize>,
+    /// Collision detector for content-addressed class type tags (Pass 2):
+    /// tag → fq-name of the class that claimed it. Tags are a pure function
+    /// of the class's fully-qualified name (`typetag::class_type_tag`), so
+    /// MIR agrees by construction; a 47-bit hash collision between two
+    /// distinct classes is reported as a compile error here.
+    class_type_tags: HashMap<i64, String>,
+    /// Enum fq-name → (variant name → variant index) (Pass 3).
+    enum_variants: HashMap<String, HashMap<String, usize>>,
+    /// Enum fq-name → `ObjectPool` index (Pass 3).
+    enum_object_indices: HashMap<String, usize>,
+    /// Interface type-name → `ObjectPool` index (Pass 3b).
+    interface_object_indices: HashMap<baml_type::TypeName, usize>,
+    /// Per-package structure the loader builds `Object::Package` from.
+    program_packages: indexmap::IndexMap<Name, bex_vm_types::types::ProgramPackage>,
+}
+
+impl EmitTables {
+    /// Reconstruct the emit tables the builtin group would have produced,
+    /// purely from a precompiled stdlib `Program` slice.
+    ///
+    /// Everything the user group needs to reference builtin items is
+    /// recoverable from the artifact: name→slot maps are stored on the
+    /// `Program`; class/enum/interface metadata (field order, variant order)
+    /// lives in the pool objects; class type tags are content hashes stored on
+    /// each class object. Per-package
+    /// `impl_rules` and `recursive_type_aliases` are cleared — the trailing
+    /// whole-program passes regenerate them from all files exactly as a full
+    /// compile does (keeping them would double the rule vectors).
+    fn from_stdlib_program(base: &Program) -> Self {
+        let mut tables = EmitTables::default();
+
+        for (name, &slot) in &base.function_global_indices {
+            tables.globals.insert(name.clone(), slot);
+        }
+        for (name, &slot) in &base.let_global_indices {
+            tables.globals.insert(name.clone(), slot);
+        }
+
+        for (idx, obj) in base.objects.iter().enumerate() {
+            match obj {
+                Object::Class(class) => {
+                    let fq = class.name.to_string();
+                    let field_indices = class
+                        .fields
+                        .iter()
+                        .enumerate()
+                        .map(|(i, f)| (f.name.clone(), i))
+                        .collect();
+                    tables.classes.insert(fq.clone(), field_indices);
+                    tables.class_object_indices.insert(fq.clone(), idx);
+                    tables.class_type_tags.insert(class.type_tag, fq);
+                }
+                Object::Enum(enum_def) => {
+                    let fq = enum_def.name.to_string();
+                    let variant_indices = enum_def
+                        .variants
+                        .iter()
+                        .enumerate()
+                        .map(|(i, v)| (v.name.clone(), i))
+                        .collect();
+                    tables.enum_variants.insert(fq.clone(), variant_indices);
+                    tables.enum_object_indices.insert(fq, idx);
+                }
+                Object::Interface(iface) => {
+                    tables
+                        .interface_object_indices
+                        .insert(iface.name.clone(), idx);
+                }
+                _ => {}
+            }
+        }
+
+        tables.program_packages = base
+            .packages
+            .iter()
+            .map(|(pkg_name, pkg)| {
+                let mut pkg = pkg.clone();
+                pkg.impl_rules.clear();
+                pkg.recursive_type_aliases.clear();
+                (pkg_name.clone(), pkg)
+            })
+            .collect();
+
+        tables
+    }
+}
+
+/// Dirty-set throws gate (design §4): a caller-clean file may only be reused if
+/// every one of its functions' inferred transitive `throws` still matches the
+/// previous compile.
+///
+/// `throws` is inferred from bodies, so it is interface that the
+/// body-blanked signature hash cannot see: a body edit elsewhere in the
+/// package can change a clean file's *transitive* throws — its stored
+/// `throws_type` metadata and, through catch lowering, potentially its
+/// bytecode. The package-wide throw graph is already solved on this path,
+/// so the comparison costs only map lookups; any mismatch demotes the file
+/// to a normal recompile. No fixpoint is needed: the graph is solved
+/// globally, so every affected file's own transitive set differs and each
+/// demotes independently.
+fn spliced_throws_match(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    previous: &HashMap<&str, &Option<baml_type::RuntimeTy>>,
+    cache: &ResolvedAliases,
+) -> Result<(), String> {
+    let item_tree = file_item_tree(db, file);
+    for (local_id, func_data) in &item_tree.functions {
+        // Mirror Pass 4's skip set: these never become callable objects.
+        if matches!(
+            func_data.body,
+            Some(baml_compiler2_ast::FunctionBodyDef::Builtin(
+                BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+            ))
+        ) {
+            continue;
+        }
+        let fq = def_to_item_ref(
+            db,
+            Definition::Function(FunctionLoc::new(db, file, *local_id)),
+        )
+        .to_string();
+        let Some(previous_throws) = previous.get(fq.as_str()) else {
+            return Err(format!("previous units have no function `{fq}`"));
+        };
+        let current_throws = compute_throws_type(db, file, &func_data.name, cache);
+        if **previous_throws != current_throws {
+            return Err(format!(
+                "function `{fq}` changed from {:?} to {current_throws:?}",
+                **previous_throws
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Run emit passes 1–4.6 over one file group.
+///
+/// `generate_project_bytecode_with_opt` calls this twice — builtin stubs
+/// first, then user files — so the stdlib occupies a contiguous,
+/// user-independent prefix of the `ObjectPool` and the globals table. That
+/// prefix property is what makes a precompiled stdlib `Program` slice (keyed
+/// only by the compiler build) spliceable into any project's compile.
+#[allow(clippy::too_many_arguments)]
+fn emit_file_group(
+    db: &dyn baml_compiler2_mir::Db,
+    files: &[baml_base::SourceFile],
+    tables: &mut EmitTables,
+    program: &mut Program,
+    alias_caches: &HashMap<Name, ResolvedAliases>,
+    opt: OptLevel,
+    skip_clean: Option<&HashSet<String>>,
+) -> Result<(), LoweringError> {
+    let EmitTables {
+        globals,
+        classes,
+        class_object_indices,
+        class_type_tags,
+        enum_variants,
+        enum_object_indices,
+        interface_object_indices,
+        program_packages,
+    } = tables;
 
     // --- Pass 1: Build globals map (function name -> global index) ---
     // Functions are allocated first (slots 0..N-1), then let bindings (slots N..M-1).
     // This ensures function slots match the order they're appended to program.globals
     // in Pass 4, and let binding slots don't interleave with function slots.
-    let mut globals: HashMap<String, usize> = HashMap::new();
-    let mut global_idx = 0usize;
+    // Continue after every slot earlier groups pushed (functions, lets,
+    // $init/helpers) — synthesized functions consume slots beyond the named
+    // items, so `program.globals.len()` is the only correct starting point.
+    let mut global_idx = program.globals.len();
 
     // First sub-pass: assign slots to all functions across all files.
     // Intrinsic functions are skipped: they are lowered to StatementKind::Intrinsic
     // at call sites and never appear as callable objects in the globals pool.
     // Including them here would create a mismatch between Pass-1 indices and the
     // actual program.globals array built in Pass 4 (which also skips intrinsics).
-    for file in &all_files {
+    for file in files {
         let item_tree = file_item_tree(db, *file);
-        for local_id in item_tree.functions.keys() {
+        for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
-            let mir = lower_function(db, func_loc, opt);
             // Skip intrinsic and await-any functions — they are never called via
             // a Call instruction (intrinsics lower to StatementKind::Intrinsic;
             // `__await_any` lowers to a Terminator::AwaitAny). Pass 4 skips them
             // too, so they must be skipped here as well or the Pass-1 indices
             // desync from the program.globals array (off-by-one for everything
             // after the skipped function).
+            //
+            // The kind is read straight off the item tree rather than from
+            // `lower_function(..).kind`: `lower_function` copies the item
+            // tree's `FunctionBodyDef::Builtin(kind)` into
+            // `MirFunctionKind::Builtin(kind)` verbatim, and fully MIR-lowering
+            // every function here just to inspect that one field would double
+            // the total lowering work (Pass 4 lowers every function again).
             if matches!(
-                mir.kind,
-                MirFunctionKind::Builtin(BuiltinKind::Intrinsic | BuiltinKind::AwaitAny)
+                func_data.body,
+                Some(baml_compiler2_ast::FunctionBodyDef::Builtin(
+                    BuiltinKind::Intrinsic | BuiltinKind::AwaitAny
+                ))
             ) {
                 continue;
             }
-            let fq_name = mir.item_ref.to_string();
+            let fq_name = def_to_item_ref(db, Definition::Function(func_loc)).to_string();
             globals.entry(fq_name).or_insert_with(|| {
                 let idx = global_idx;
                 global_idx += 1;
@@ -729,7 +2590,7 @@ pub fn generate_project_bytecode_with_opt(
 
     // Second sub-pass: assign slots to all let bindings across all files,
     // after all function slots have been reserved.
-    for file in &all_files {
+    for file in files {
         let item_tree = file_item_tree(db, *file);
         for local_id in item_tree.lets.keys() {
             let let_loc = LetLoc::new(db, *file, *local_id);
@@ -742,37 +2603,50 @@ pub fn generate_project_bytecode_with_opt(
         }
     }
 
+    // Stage 6 (`SkipClean`): clean files are not lowered, so their function slots
+    // would never be pushed by Pass 4. Pre-size the globals array to the full
+    // Pass-1 count so a dirty function can be *written* at its whole-project slot
+    // (clean/let slots stay `Null` holes). The decomposition reverses operand
+    // slots to names through these holes; the array values themselves are
+    // intermediate (the final image is produced by `link`).
+    if skip_clean.is_some() && program.globals.len() < global_idx {
+        program.globals.resize(global_idx, ConstValue::Null);
+    }
+
+    // The per-package program structure the loader builds `Object::Package` +
+    // `vm.packages` from. Accumulated across passes 2/3/3b (classes, enums,
+    // interfaces) and `build_packages` (impl rules); interface object indices are
+    // tracked alongside so impl rules can point at them by index.
+
     // --- Pass 2: Build classes table ---
     // Maps fully-qualified class name -> (field name -> field index).
     // Also builds class_object_indices: class fq_name -> object index in program.objects.
-    let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut class_object_indices: HashMap<String, usize> = HashMap::new();
-    let mut class_type_tag_counter = 0i64;
 
-    for file in &all_files {
+    for file in files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
         let cache = &alias_caches[&pkg_info.package];
         for class_data in item_tree.classes.values() {
-            // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
-            let fq_name = if pkg_info.namespace_path.is_empty() {
-                format!("{}.{}", pkg_info.package, class_data.name)
-            } else {
-                let ns: Vec<&str> = pkg_info
-                    .namespace_path
-                    .iter()
-                    .map(baml_base::Name::as_str)
-                    .collect();
-                format!("{}.{}.{}", pkg_info.package, ns.join("."), class_data.name)
-            };
+            // Build the fully-qualified name ("user.MyClass" / "baml.ns.MyClass")
+            // through the SAME renderer MIR uses in `build_class_type_tags`
+            // (`QualifiedTypeName::render_dotted(false)`). The class type-tag is
+            // derived from this string, so emit and MIR MUST produce
+            // byte-identical output or `Switch`/`JumpTable` dispatch silently
+            // mismatches; sharing the one renderer is what pins them together.
+            let fq_name = baml_type::QualifiedTypeName::new(
+                pkg_info.package.clone(),
+                pkg_info.namespace_path.clone(),
+                class_data.name.clone(),
+            )
+            .render_dotted(false);
 
             let mut field_indices = HashMap::new();
             let mut fields = Vec::new();
             // Class-level generic params, used to resolve `T`-references in
             // field type expressions to `TyTemplate::TypeArgRef(N)`.  When
-            // empty, `tir2_to_template` produces `TyTemplate::Concrete(...)`
+            // empty, `tir2_to_template` produces a `Concrete`-equivalent leaf
             // for every leaf and `field_template == Concrete(field_type)`.
             let class_generic_params: Vec<baml_base::Name> = class_data.generic_params.clone();
             // BEP-044: collect only the class's actual runtime fields.
@@ -793,8 +2667,19 @@ pub fn generate_project_bytecode_with_opt(
                         // erased-`Ty` (TypeVar→BuiltinUnknown) used by codegen and to
                         // the `TyTemplate` (TypeVar→TypeArgRef(N)) used by
                         // typed runtime walking.
-                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                            db, &te.expr, pkg_items, ns, gen_params, &mut diags,
+                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                            te,
+                            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                                db,
+                                package_items: pkg_items,
+                                ns_context: ns,
+                                generic_params: gen_params,
+                                bounds:
+                                    &baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default(
+                                    ),
+                                self_ty: None,
+                            },
+                            &mut diags,
                         );
                         let resolved_ty = cache.convert(&tir_ty);
                         let template = baml_compiler2_mir::tir2_to_template(
@@ -808,7 +2693,12 @@ pub fn generate_project_bytecode_with_opt(
                         let null_ty = baml_type::RuntimeTy::Null {
                             attr: baml_type::TyAttr::default(),
                         };
-                        (null_ty.clone(), baml_type::TyTemplate::Concrete(null_ty))
+                        (
+                            null_ty.clone(),
+                            baml_type::TyTemplate::from(baml_type::RealizedTy::Null {
+                                attr: baml_type::TyAttr::default(),
+                            }),
+                        )
                     }
                 };
                 let (field_desc, field_alias, field_skip) = extract_schema_attrs(attrs.as_slice());
@@ -825,8 +2715,53 @@ pub fn generate_project_bytecode_with_opt(
             let (class_desc, class_alias, _class_skip) =
                 extract_schema_attrs(&class_data.attributes);
 
-            let type_tag = bex_vm_types::type_tags::CLASS_BASE + class_type_tag_counter;
-            class_type_tag_counter += 1;
+            let type_tag = bex_vm_types::type_tags::class_type_tag(&fq_name);
+            if let Some(previous) = class_type_tags.insert(type_tag, fq_name.clone())
+                && previous != fq_name
+            {
+                return Err(LoweringError::Internal(format!(
+                    "the fully-qualified class names `{previous}` and `{fq_name}` \
+                     hash to the same 47-bit class type-tag. This is an extremely \
+                     rare hash collision between two class names, not a compiler \
+                     bug; renaming either class (or moving one to a different \
+                     namespace/package) resolves it. This is a known limitation of \
+                     content-addressed class type tags."
+                )));
+            }
+
+            // BEP-042: does this class define a magic `cleanup(self) -> void`
+            // finalizer? This MUST stay in lockstep with the canonical
+            // `cleanup_guard::has_cleanup_shape` (which validates the AST and
+            // emits E0144): same shape — one `self` param with no default, no
+            // generics, `-> void` return, and no propagating `throws` — on the lowered
+            // HIR `Function`. The `throws` part reuses the shared helper; the rest
+            // is mirrored (the two share field types but not the struct).
+            //
+            // Only DIRECT class methods count. `class_data.methods` is flattened
+            // to include `implements`-block methods (recorded in
+            // `method_to_iface_target`), but those are interface members: the AST
+            // guard injector and the `{class_fqn}.cleanup` GC resolution only
+            // cover direct methods, so an `implements`-block `cleanup` must NOT
+            // mark the class finalizable (it would set the flag for a method the
+            // GC can neither guard nor resolve).
+            let has_cleanup = class_data.methods.iter().any(|method_id| {
+                if item_tree.method_to_iface_target.contains_key(method_id) {
+                    return false;
+                }
+                let func = &item_tree[*method_id];
+                func.name.as_str() == baml_compiler2_ast::cleanup_guard::CLEANUP_METHOD
+                    && func.generic_params.is_empty()
+                    && func.params.len() == 1
+                    && func.params[0].name.as_str() == "self"
+                    && func.params[0].default.is_none()
+                    && baml_compiler2_ast::cleanup_guard::throws_is_effectively_none(
+                        func.throws.as_ref(),
+                    )
+                    && matches!(
+                        func.return_type.as_ref().map(|st| &st.kind),
+                        Some(baml_compiler2_ast::ast::TypeExprKind::Void { .. })
+                    )
+            });
 
             let class_obj_idx = program.add_object(Object::Class(Box::new(Class {
                 name: fq_to_type_name(&fq_name),
@@ -835,9 +2770,22 @@ pub fn generate_project_bytecode_with_opt(
                 alias: class_alias,
                 type_tag,
                 ty_attr: TyAttr::default(),
+                has_cleanup,
+                generic_param_count: class_data.generic_params.len(),
             })));
             // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
+            program_packages
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .classes
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: class_data.name.clone(),
+                    },
+                    ObjectIndex::from_raw(class_obj_idx),
+                );
             classes.insert(fq_name.clone(), field_indices);
             // MIR TypeName display for user-defined classes omits the `user.`
             // package prefix in diagnostics/snapshots. Register the same key
@@ -884,23 +2832,20 @@ pub fn generate_project_bytecode_with_opt(
 
     // --- Pass 3: Build enums table ---
     // Maps fully-qualified enum name -> (variant name -> variant index).
-    let mut enum_variants: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    let mut enum_object_indices: HashMap<String, usize> = HashMap::new();
 
-    for file in &all_files {
+    for file in files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
         for enum_data in item_tree.enums.values() {
-            let fq_name = if pkg_info.namespace_path.is_empty() {
-                format!("{}.{}", pkg_info.package, enum_data.name)
-            } else {
-                let ns: Vec<&str> = pkg_info
-                    .namespace_path
-                    .iter()
-                    .map(baml_base::Name::as_str)
-                    .collect();
-                format!("{}.{}.{}", pkg_info.package, ns.join("."), enum_data.name)
-            };
+            // Same single renderer as the class pass / MIR (see above): keep the
+            // fully-qualified name construction identical everywhere so the two
+            // never drift.
+            let fq_name = baml_type::QualifiedTypeName::new(
+                pkg_info.package.clone(),
+                pkg_info.namespace_path.clone(),
+                enum_data.name.clone(),
+            )
+            .render_dotted(false);
 
             let mut variant_map = HashMap::new();
             let mut variants = Vec::new();
@@ -925,15 +2870,73 @@ pub fn generate_project_bytecode_with_opt(
                 ty_attr: TyAttr::default(),
             })));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);
+            program_packages
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .enums
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: enum_data.name.clone(),
+                    },
+                    ObjectIndex::from_raw(enum_obj_idx),
+                );
             enum_variants.insert(fq_name, variant_map);
         }
     }
 
+    // --- Pass 3b: Build interface objects + start the per-package structure ---
+    // Each interface becomes an `Object::Interface` so impl rules can point at it
+    // (`interface_head`) and packages can reference it by index. The full signature
+    // (args/requires/assoc/fields/methods) is filled by `build_interface_def`.
+    // `program_packages` is the per-package structure the loader builds
+    // `Object::Package` + `vm.packages` from; `build_packages` fills in each
+    // package's impl rules below.
+    for file in files {
+        let item_tree = file_item_tree(db, *file);
+        let pkg_info = file_package(db, *file);
+        let resolved = &alias_caches[&pkg_info.package];
+        for (iface_id, iface_data) in &item_tree.interfaces {
+            let iface_tn = baml_compiler2_tir::lower_type_expr::qualify_def(
+                db,
+                Definition::Interface(InterfaceLoc::new(db, *file, *iface_id)),
+                &iface_data.name,
+            );
+            let iface_def = build_interface_def(db, *file, iface_data, iface_tn.clone(), resolved);
+            let iface_obj_idx = program.add_object(Object::Interface(Box::new(iface_def)));
+            interface_object_indices.insert(iface_tn, iface_obj_idx);
+            program_packages
+                .entry(pkg_info.package.clone())
+                .or_default()
+                .interfaces
+                .insert(
+                    bex_vm_types::types::LocalName {
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: iface_data.name.clone(),
+                    },
+                    ObjectIndex::from_raw(iface_obj_idx),
+                );
+        }
+    }
+
     // --- Pass 4: Compile each function ---
-    for file in &all_files {
+    for file in files {
+        let rel_path = relative_source_path(db, *file);
+        // A clean file (incremental compile) is not emitted here at all — its
+        // compiled unit is taken verbatim from the cached image by the caller. We
+        // never lower a clean file's bodies (the core B-693 Stage 6 invariant).
+        if let Some(clean) = skip_clean {
+            if clean.contains(&rel_path) {
+                continue;
+            }
+        }
+        // This file's bodies are about to be MIR/bytecode-lowered — record it for
+        // the Stage 6 "only dirty files are lowered" evidence counter.
+        record_lowered_file(&rel_path);
         let line_starts = build_line_starts(file.text(db));
         let item_tree = file_item_tree(db, *file);
         let pkg_info_pass4 = file_package(db, *file);
+        let is_builtin_file = file.path(db).to_string_lossy().starts_with("<builtin>/");
         let cache_pass4 = &alias_caches[&pkg_info_pass4.package];
         for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
@@ -943,7 +2946,7 @@ pub fn generate_project_bytecode_with_opt(
             let mut compiled_fn = match &mir.kind {
                 MirFunctionKind::Bytecode(body) => {
                     // Compile lambda children first, collecting their ObjectPool indices.
-                    let source_file = file.path(db).display().to_string();
+                    let source_file = relative_source_path(db, *file);
                     let empty_capture_types = Vec::new();
                     let empty_spawn_capture_indices = HashSet::new();
                     let lambda_info = compile_lambdas_flat(
@@ -953,11 +2956,11 @@ pub fn generate_project_bytecode_with_opt(
                         &empty_spawn_capture_indices,
                         &line_starts,
                         &source_file,
-                        &globals,
-                        &classes,
-                        &class_object_indices,
-                        &enum_object_indices,
-                        &enum_variants,
+                        globals,
+                        classes,
+                        class_object_indices,
+                        enum_object_indices,
+                        enum_variants,
                         &mut program.objects,
                         opt,
                     );
@@ -966,11 +2969,11 @@ pub fn generate_project_bytecode_with_opt(
                     let lambda_names_vec: Vec<String> =
                         lambda_info.iter().map(|(_, name)| name.clone()).collect();
                     let ctx = MirCodegenContext {
-                        globals: &globals,
-                        classes: &classes,
-                        class_object_indices: &class_object_indices,
-                        enum_object_indices: &enum_object_indices,
-                        enum_variants: &enum_variants,
+                        globals,
+                        classes,
+                        class_object_indices,
+                        enum_object_indices,
+                        enum_variants,
                         objects: &mut program.objects,
                         lambda_object_indices: &lambda_obj_indices,
                         lambda_names: &lambda_names_vec,
@@ -1019,6 +3022,7 @@ pub fn generate_project_bytecode_with_opt(
                         throws_type: None,
                         origin: FunctionOrigin::Builtin,
                         body_meta: None,
+                        capture: FunctionCaptureProps::disabled(),
                         function_id: 0, // assigned at engine init (interim provider)
                     }
                 }
@@ -1044,6 +3048,7 @@ pub fn generate_project_bytecode_with_opt(
                     throws_type: None,
                     origin: FunctionOrigin::Builtin,
                     body_meta: None,
+                    capture: FunctionCaptureProps::disabled(),
                     function_id: 0, // assigned at engine init (interim provider)
                 },
             };
@@ -1068,27 +3073,77 @@ pub fn generate_project_bytecode_with_opt(
 
             // Set inferred throws type from TIR throw inference
             compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name, cache_pass4);
-            compiled_fn.origin = emitted_function_origin(&fq_name, func_data.origin);
+            compiled_fn.origin =
+                emitted_function_origin(&fq_name, is_builtin_file, func_data.origin);
 
             // Set LLM-specific body_meta if this is an LLM function
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
                 &func_data.declarative_meta
             {
-                if let (Some(client), Some(prompt)) = (&llm_meta.client, &llm_meta.prompt) {
+                // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
+                // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
+                // The stream return type is now carried by the synthesized `$stream` companion's
+                // own `return_type` (see ppir's `companion_stream_return_type`), so the old
+                // emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
+                // of `ctx.output_format` should be re-verified against canary's streaming.
+                if let Some(client) = &llm_meta.client {
+                    // New-mode (BEP-049 M5) functions have no Jinja `prompt`
+                    // text — the compiled closure renders it — but they still
+                    // need a registry entry so `get_return_type` /
+                    // `get_stream_return_type` (used by `__make_stream` and the
+                    // streaming `Context`) resolve by name. The empty template
+                    // is never read for them (their `prompt_closure` is non-null,
+                    // so the Jinja `get_jinja_template` branch is skipped).
+                    let prompt_template = llm_meta
+                        .prompt
+                        .as_ref()
+                        .map(|p| p.text.clone())
+                        .unwrap_or_default();
                     compiled_fn.body_meta = Some(FunctionMeta::Llm {
-                        prompt_template: prompt.text.clone(),
+                        prompt_template,
                         client: client.to_string(),
                     });
+                    compiled_fn.capture = FunctionCaptureProps::disabled()
+                        .with_auto(CaptureCategory::Input)
+                        .with_auto(CaptureCategory::Output)
+                        .with_auto(CaptureCategory::Error);
                 }
             }
 
             let fn_obj_idx = program.add_object(Object::Function(Box::new(compiled_fn)));
             program.function_indices.insert(fq_name.clone(), fn_obj_idx);
-            program
-                .function_global_indices
-                .insert(fq_name, program.globals.len());
-            program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
+            let val = ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx));
+            if skip_clean.is_some() {
+                // Dirty-only emit: write the function value at its whole-project
+                // (Pass-1) slot rather than appending, so clean-file slot holes are
+                // preserved and every operand slot reverses to the right name.
+                let slot = globals[&fq_name];
+                program.function_global_indices.insert(fq_name, slot);
+                program.globals[slot] = val;
+            } else {
+                let slot = program.globals.len();
+                debug_assert_eq!(
+                    globals.get(&fq_name).copied(),
+                    Some(slot),
+                    "Pass-4 append slot must match the Pass-1 assignment for {fq_name}",
+                );
+                program.function_global_indices.insert(fq_name, slot);
+                program.add_global(val);
+            }
         }
+    }
+
+    // Stage 6 (`SkipClean`) / design §9 R2: the `$init` / `$init_test` tail is a
+    // whole-*group* synthesis. Rather than reuse the previous compile's tail
+    // verbatim (unsound when a dirty file is tail-producing), we synthesize it
+    // fresh from the entire project's `let`s / `test` blocks. Register clean
+    // files' function/let *slots* first so the tail passes see the whole project;
+    // clean function *object* placeholders are injected after the tail (below).
+    // Clean `let` initializers are re-lowered here (their MIR is salsa-cached);
+    // this does not count as a lowered *file* (`record_lowered_file` is Pass-4
+    // only) and is byte-identical to a full compile's tail.
+    if let Some(clean) = skip_clean {
+        inject_clean_slots(db, files, clean, globals, program);
     }
 
     // --- Pass 4.5: Populate let-binding global slots and synthesize $init ---
@@ -1096,7 +3151,7 @@ pub fn generate_project_bytecode_with_opt(
     {
         let mut pkg_lets: HashMap<String, Vec<(String, LetLoc, baml_base::SourceFile)>> =
             HashMap::new();
-        for file in &all_files {
+        for file in files {
             let item_tree = file_item_tree(db, *file);
             let pkg_info = file_package(db, *file);
             for local_id in item_tree.lets.keys() {
@@ -1141,12 +3196,12 @@ pub fn generate_project_bytecode_with_opt(
             let init_fn = compile_init_function(
                 db,
                 &sorted_bindings,
-                &globals,
-                &classes,
-                &class_object_indices,
-                &enum_object_indices,
-                &enum_variants,
-                &mut program,
+                globals,
+                classes,
+                class_object_indices,
+                enum_object_indices,
+                enum_variants,
+                &mut *program,
                 opt,
             )?;
 
@@ -1169,7 +3224,7 @@ pub fn generate_project_bytecode_with_opt(
             package_init_order.push(init_fq_name);
         }
 
-        program.package_init_order = package_init_order;
+        program.package_init_order.extend(package_init_order);
     }
 
     // --- Pass 4.6: Synthesize $init_test chainer per package ---
@@ -1184,7 +3239,7 @@ pub fn generate_project_bytecode_with_opt(
         // compiler metadata (HIR item trees), group by package.
         let mut pkg_init_tests: HashMap<String, Vec<(String, usize)>> = HashMap::new();
 
-        for file in &all_files {
+        for file in files {
             let item_tree = file_item_tree(db, *file);
             let pkg_info = file_package(db, *file);
             for local_id in item_tree.functions.keys() {
@@ -1211,7 +3266,14 @@ pub fn generate_project_bytecode_with_opt(
             }
         }
 
-        for (pkg_name, init_test_fns) in &pkg_init_tests {
+        // Deterministic package order — pkg_init_tests is a HashMap, and the
+        // chainers allocate objects/globals, so iteration order is emitted
+        // layout. (Latent nondeterminism before the group split: only one
+        // package ever carried $init_test functions.)
+        let mut chainer_pkgs: Vec<&String> = pkg_init_tests.keys().collect();
+        chainer_pkgs.sort();
+        for pkg_name in chainer_pkgs {
+            let init_test_fns = &pkg_init_tests[pkg_name];
             if init_test_fns.is_empty() {
                 continue;
             }
@@ -1269,6 +3331,7 @@ pub fn generate_project_bytecode_with_opt(
                 throws_type: None,
                 origin: FunctionOrigin::Internal,
                 body_meta: None,
+                capture: FunctionCaptureProps::disabled(),
                 function_id: 0, // assigned at engine init (interim provider)
             };
 
@@ -1290,77 +3353,14 @@ pub fn generate_project_bytecode_with_opt(
         }
     }
 
-    // --- Pass 5: Template string macros ---
-    let mut template_macros = Vec::new();
-    for file in &all_files {
-        let item_tree = file_item_tree(db, *file);
-        for ts_data in item_tree.template_strings.values() {
-            let args = ts_data
-                .params
-                .iter()
-                .map(|param| param.name.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            if let Some(body) = &ts_data.body {
-                template_macros.push(format!(
-                    "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
-                    name = ts_data.name,
-                ));
-            }
-        }
-    }
-    program.template_strings_macros = template_macros.join("\n");
-
-    // --- Pass 6: Retry policies ---
-    // Retry policies are now synthesized as Item::Let bindings during CST lowering.
-    // Their values flow through the $init pipeline instead of being parsed here.
-    // Pass 6 is intentionally empty.
-
-    // Client metadata is now synthesized as Item::Let bindings during CST lowering.
-    // Client values (including sub-clients, retry policies) flow through the $init pipeline.
-    // Pass 7 is intentionally empty.
-
-    // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
-    // Mirrors the legacy pipeline: only recursive aliases are stored in
-    // `Program.recursive_type_alias_defs`; non-recursive aliases are expanded inline
-    // by `convert_tir_ty_for_runtime`. This is required for correct output_format rendering at runtime.
-    for cache in alias_caches.values() {
-        for (qtn, tir_ty) in &cache.aliases {
-            if cache.recursive.contains(qtn) {
-                let mir_ty = cache.convert(tir_ty);
-                let type_name = qtn.clone();
-                program.recursive_type_alias_defs.insert(type_name, mir_ty);
-            }
-        }
+    // Stage 6 (`SkipClean`) phase 2: the real pool is now complete (dirty
+    // functions + the synthesized `$init`/`$init_test` tail), so register clean
+    // functions' object-index placeholders past the end for name reversal.
+    if let Some(clean) = skip_clean {
+        inject_clean_object_placeholders(db, files, clean, globals, program);
     }
 
-    program.interface_impls = build_interface_impls(db, &all_files, &alias_caches);
-
-    // --- Pass 8: Test cases (only when requested) ---
-    if options.emit_test_cases {
-        for file in &all_files {
-            let item_tree = file_item_tree(db, *file);
-            for test_data in item_tree.tests.values() {
-                let function_names: Vec<String> = test_data
-                    .function_refs
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect();
-                let args: indexmap::IndexMap<String, bex_vm_types::TestArgValue> = test_data
-                    .args
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), convert_test_arg_value(v)))
-                    .collect();
-                program.test_cases.push(bex_vm_types::TestCase {
-                    name: test_data.name.to_string(),
-                    function_names,
-                    args,
-                });
-            }
-        }
-    }
-
-    Ok(program)
+    Ok(())
 }
 
 /// Convert a compiler2 `TestArgValue` to a `bex_vm_types::TestArgValue`.
@@ -1447,7 +3447,7 @@ struct FunctionSignatureMetadata {
 }
 
 fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> TypeExpr {
-    TypeExpr::Path {
+    baml_compiler2_ast::TypeExprKind::Path {
         segments: vec![name],
         generic_args: generic_params
             .iter()
@@ -1457,6 +3457,7 @@ fn type_expr_for_name_with_generic_args(name: Name, generic_params: &[Name]) -> 
         associated_type_bindings: Vec::new(),
         attrs: Vec::new(),
     }
+    .at(baml_compiler2_ast::TextRange::default())
 }
 
 /// Extract runtime and display signature metadata from an `item_tree` Function.
@@ -1492,10 +3493,23 @@ fn compute_function_metadata_from_item_tree(
     };
 
     let item_tree = file_item_tree(db, file);
-    let enclosing_impl = item_tree
-        .implements_for
-        .iter()
-        .find(|imp| imp.methods.contains(&func_id));
+    // The out-of-body `implement … for …` block whose method list contains this
+    // function, if any (mirrors MIR's `enclosing_free_impl`). Yields the block so
+    // both its `for_target` (for `Self` substitution) and its declared
+    // generics/bounds are recoverable — replacing the removed
+    // `item_tree.implements_for`, which exposed those as flat fields.
+    let enclosing_free_impl = item_tree.free_impls.iter().find_map(|impl_id| {
+        let block = item_tree.impls.get(impl_id)?;
+        block
+            .methods
+            .contains(&func_id)
+            .then_some((*impl_id, block))
+    });
+    let enclosing_impl_for_target =
+        enclosing_free_impl.and_then(|(_, block)| match &block.subject {
+            baml_compiler2_hir::item_tree::ImplSubject::Free { for_target, .. } => Some(for_target),
+            baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => None,
+        });
     let enclosing_class = item_tree
         .classes
         .values()
@@ -1504,8 +3518,8 @@ fn compute_function_metadata_from_item_tree(
         .interfaces
         .values()
         .find(|iface_data| iface_data.default_methods.contains(&func_id));
-    let self_replacement = enclosing_impl
-        .map(|imp| imp.for_target.expr.clone())
+    let self_replacement = enclosing_impl_for_target
+        .cloned()
         .or_else(|| {
             enclosing_class.map(|class_data| {
                 type_expr_for_name_with_generic_args(
@@ -1527,11 +3541,21 @@ fn compute_function_metadata_from_item_tree(
     // params are in scope inside the method signature. Mirror
     // `MirLowerer::enclosing_generic_params`: enclosing params come first, then
     // function-level params.
-    let (scoped_generic_param_names, scoped_generic_bound_exprs) = if let Some(imp) = enclosing_impl
+    let (scoped_generic_param_names, scoped_generic_bound_exprs) = if let Some((_, block)) =
+        enclosing_free_impl
     {
-        let mut names = imp.generic_params.clone();
+        // The impl block's declared generics as `(names, each's single optional
+        // bound)` — the flat form the removed `implements_for` exposed directly
+        // (mirrors MIR's `free_impl_generics`). Only the first `&`-bound per param
+        // is kept, matching the legacy shape.
+        let (mut names, mut bounds): (Vec<Name>, Vec<Option<TypeExpr>>) = match &block.subject {
+            baml_compiler2_hir::item_tree::ImplSubject::Free { generics, .. } => (
+                generics.iter().map(|g| g.name.clone()).collect(),
+                generics.iter().map(|g| g.bounds.first().cloned()).collect(),
+            ),
+            baml_compiler2_hir::item_tree::ImplSubject::InClass { .. } => (Vec::new(), Vec::new()),
+        };
         names.extend(func_data.generic_params.iter().cloned());
-        let mut bounds = imp.generic_param_bounds.clone();
         bounds.extend(func_data.generic_param_bounds.iter().cloned());
         (names, bounds)
     } else if let Some(iface_data) = enclosing_interface {
@@ -1553,28 +3577,69 @@ fn compute_function_metadata_from_item_tree(
     };
     let enclosing_generics = scoped_generic_param_names.clone();
 
-    // A method declared inside an interface resolves its associated types
-    // (`Item`/`Error`) and `Self` against the rigid `Self` type variable, the
-    // same way the method body does (`infer_scope_types`). Build those bindings
-    // once so the signature keeps associated-type references as faithful
-    // `Self.<name>` projections; a bare `lower_type_expr_in_ns` would erase each
-    // one to `Ty::Unknown`, which then trips the runtime lowering boundary.
-    // Empty for non-interface methods (the `self_replacement` path below
-    // handles class/impl receivers).
-    let interface_signature_bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
-        match enclosing_interface.and_then(|iface_data| {
-            item_tree
-                .interfaces
+    // Every type variable in scope for this signature, keyed by name, with its
+    // interface bounds. `function_in_scope_generic_param_bounds` covers the
+    // enclosing class/interface plus the function's own params; an out-of-body
+    // impl's own generics are added on top. Threaded into every `lower_type_expr`
+    // below so a `T.member` projection resolves through `T`'s declared bound
+    // *during* lowering — the modern replacement for the removed post-hoc
+    // `AssociatedProjectionResolver::resolve_deep` pass.
+    let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, func_id);
+    let mut scope_bounds =
+        baml_compiler2_tir::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc)
+            .clone();
+    if let Some((impl_id, _)) = enclosing_free_impl {
+        let impl_loc = baml_compiler2_hir::loc::ImplLoc::new(db, file, impl_id);
+        scope_bounds.extend(
+            baml_compiler2_tir::lower_type_expr::impl_generic_param_bounds(db, impl_loc)
                 .iter()
-                .find(|(_, data)| data.default_methods.contains(&func_id))
-                .map(|(iface_id, _)| {
-                    (
-                        baml_compiler2_hir::loc::InterfaceLoc::new(db, file, *iface_id),
-                        iface_data,
-                    )
+                .map(|(name, conjunction)| (name.clone(), conjunction.clone())),
+        );
+    }
+    // Inside an interface's own method signature, `Self` is the rigid type variable
+    // bound by that interface. Resolve that declaring interface as an `Interface`
+    // constraint (its qualified name plus its own generic params as rigid type
+    // vars) once: it is both `Self`'s registered bound — so a `Self.Item` projection
+    // determines its declaring interface through `Self`'s bound closure (the same
+    // recipe as TIR's signature realization) — and the qualifier of each
+    // `Self.<assoc>` projection built below.
+    let self_declaring_interface: Option<baml_type::Interface> =
+        enclosing_interface.and_then(|iface_data| {
+            let def = pkg_items.lookup_type(&pkg_info.namespace_path, &iface_data.name)?;
+            if !matches!(
+                def,
+                baml_compiler2_hir::contributions::Definition::Interface(_)
+            ) {
+                return None;
+            }
+            let qtn = baml_compiler2_tir::lower_type_expr::qualify_def(db, def, &iface_data.name);
+            let args = iface_data
+                .generic_params
+                .iter()
+                .map(|p| {
+                    baml_compiler2_tir::ty::Ty::TypeVar(p.clone(), baml_type::TyAttr::default())
                 })
-        }) {
-            Some((iface_loc, iface_data)) => {
+                .collect();
+            Some(baml_type::Interface::new(qtn, args, Vec::new()))
+        });
+    if let Some(iface) = &self_declaring_interface {
+        scope_bounds.insert(Name::new("Self"), vec![iface.clone()]);
+    }
+
+    // A method declared inside an interface resolves its associated types
+    // (`Item`/`Error`) and `Self` against the rigid `Self` type variable, the same
+    // way the method body does. Binding each associated-type name to the projection
+    // `Self.<name>` (and `Self` to its rigid type variable) keeps a bare `Item` in a
+    // signature as a faithful `Self.Item` projection rather than an unresolved type.
+    // Empty for non-interface methods (the `self_replacement` path below handles
+    // class/impl receivers). Only the interface's own associated types are bound;
+    // names inherited through `requires` are not (that ambiguity-aware resolution
+    // lived in the removed `interface_self_projection_bindings`).
+    let self_var =
+        || baml_compiler2_tir::ty::Ty::TypeVar(Name::new("Self"), baml_type::TyAttr::default());
+    let interface_signature_bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
+        match enclosing_interface {
+            Some(iface_data) => {
                 let mut bindings: rustc_hash::FxHashMap<Name, baml_compiler2_tir::ty::Ty> =
                     enclosing_generics
                         .iter()
@@ -1588,119 +3653,98 @@ fn compute_function_metadata_from_item_tree(
                             )
                         })
                         .collect();
-                bindings.extend(
-                    baml_compiler2_tir::inference::interface_self_projection_bindings(
-                        db,
-                        iface_loc,
-                        iface_data,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                    ),
-                );
+                bindings.insert(Name::new("Self"), self_var());
+                for assoc in &iface_data.associated_types {
+                    bindings.insert(
+                        assoc.name.clone(),
+                        baml_compiler2_tir::ty::Ty::AssociatedTypeProjection {
+                            base: Box::new(self_var()),
+                            // The declaring interface resolved above; we are in the
+                            // `Some(iface_data)` arm, so it is present.
+                            interface: Box::new(self_declaring_interface.clone().unwrap_or_else(
+                                || unreachable!("interface method has a declaring interface"),
+                            )),
+                            member: assoc.name.clone(),
+                            attr: baml_type::TyAttr::default(),
+                        },
+                    );
+                }
                 bindings
             }
             None => rustc_hash::FxHashMap::default(),
         };
 
-    let lower_tir_type = |te: &TypeExpr| -> baml_compiler2_tir::ty::Ty {
-        let mut diags = Vec::new();
+    // Lower a signature type expression against this method's scope, recording any
+    // diagnostics into `diags`. For an interface method the associated-type / `Self`
+    // bindings are applied by lowering with their names in scope (so `Item` lowers
+    // to `TypeVar(Item)`) and then substituting; for every other method `Self` is
+    // first replaced by the concrete receiver type. In both cases `scope_bounds`
+    // drives projection resolution. Namespace-relative resolution (e.g. `MyLorem`
+    // in a signature under `ns_lorem/`) uses the file's namespace so a non-root-ns
+    // class does not erase to `unknown`.
+    let lower_scoped = |te: &TypeExpr,
+                        diags: &mut Vec<baml_compiler2_tir::infer_context::TirTypeError>|
+     -> baml_compiler2_tir::ty::Ty {
         if enclosing_interface.is_some() {
-            // Interface method: lower with the `Self`/associated-type bindings so
-            // `Item`/`Error`/`Self` resolve to projections and type variables
-            // rather than `Ty::Unknown`.
-            return baml_compiler2_tir::generics::lower_type_expr_with_generics(
-                db,
+            let generic_params: Vec<Name> = interface_signature_bindings.keys().cloned().collect();
+            let lowered = baml_compiler2_tir::lower_type_expr::lower_type_expr(
                 te,
-                pkg_items,
-                &pkg_info.namespace_path,
+                &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                    db,
+                    package_items: pkg_items,
+                    ns_context: &pkg_info.namespace_path,
+                    generic_params: &generic_params,
+                    bounds: &scope_bounds,
+                    self_ty: None,
+                },
+                diags,
+            );
+            return baml_compiler2_tir::generics::substitute_ty(
+                &lowered,
                 &interface_signature_bindings,
-                &mut diags,
             );
         }
-        // Use `lower_type_expr_in_ns` so unqualified references (e.g. `MyLorem`
-        // in a function signature under `ns_lorem/`) resolve against the
-        // defining file's namespace before falling back to the package root.
-        // `lower_type_expr` passes `&[]` as the ns context, which would lose
-        // parameter types to `Ty::Unknown` → runtime `unknown` for any
-        // non-root-ns class — surfacing as "expected instance, got map" in the
-        // runtime because the coercion layer can't see the declared type.
-        let resolved_te = if let Some(replacement) = &self_replacement {
-            baml_compiler2_tir::lower_type_expr::substitute_self_in(te, replacement)
-        } else {
-            te.clone()
+        let resolved_te = match &self_replacement {
+            Some(replacement) => baml_compiler2_tir::lower_type_expr::substitute_paths_in(
+                te,
+                &std::collections::HashMap::from([(Name::new("Self"), replacement.clone())]),
+            ),
+            None => te.clone(),
         };
-        baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-            db,
+        baml_compiler2_tir::lower_type_expr::lower_type_expr(
             &resolved_te,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &enclosing_generics,
-            &mut diags,
+            &baml_compiler2_tir::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: &pkg_info.namespace_path,
+                generic_params: &enclosing_generics,
+                bounds: &scope_bounds,
+                self_ty: None,
+            },
+            diags,
         )
     };
 
-    let raw_generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> =
+    // Each scoped generic parameter's bound as a displayable `Ty`, kept only when it
+    // lowers cleanly (a bound that fails to resolve is dropped rather than shown as
+    // `unknown`). Rendered into `display_type_params` below.
+    let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> =
         scoped_generic_param_names
             .iter()
             .enumerate()
             .filter_map(|(idx, name)| {
                 let bound_te = scoped_generic_bound_exprs.get(idx)?.as_ref()?;
                 let mut diags = Vec::new();
-                // Lower bounds with the same `Self`/associated-type bindings as
-                // the signature (mirroring `lower_tir_type`) so an interface
-                // default-method bound like `U extends Self.Item` resolves to a
-                // projection instead of erasing `Self` to `Ty::Unknown` — which
-                // the `diags.is_empty()` gate below would then silently drop from
-                // the emitted metadata.
-                let bound_ty = if enclosing_interface.is_some() {
-                    baml_compiler2_tir::generics::lower_type_expr_with_generics(
-                        db,
-                        bound_te,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                        &interface_signature_bindings,
-                        &mut diags,
-                    )
-                } else {
-                    let resolved_te = if let Some(replacement) = &self_replacement {
-                        baml_compiler2_tir::lower_type_expr::substitute_self_in(
-                            bound_te,
-                            replacement,
-                        )
-                    } else {
-                        bound_te.clone()
-                    };
-                    baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
-                        db,
-                        &resolved_te,
-                        pkg_items,
-                        &pkg_info.namespace_path,
-                        &enclosing_generics,
-                        &mut diags,
-                    )
-                };
+                let bound_ty = lower_scoped(bound_te, &mut diags);
                 diags.is_empty().then(|| (name.clone(), bound_ty))
             })
             .collect();
-    let raw_bound_resolver =
-        baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-            db,
-            &cache.aliases,
-            &raw_generic_param_bounds,
-        );
-    let generic_param_bounds: HashMap<Name, baml_compiler2_tir::ty::Ty> = raw_generic_param_bounds
-        .iter()
-        .map(|(name, bound)| (name.clone(), raw_bound_resolver.resolve_deep(bound)))
-        .collect();
 
+    // Projection resolution is folded into `lower_scoped` (via `scope_bounds`), so
+    // no separate resolve pass is needed.
     let resolve_display_tir = |te: &TypeExpr| -> baml_compiler2_tir::ty::Ty {
-        let tir_ty = lower_tir_type(te);
-        baml_compiler2_tir::associated_projection::AssociatedProjectionResolver::new(
-            db,
-            &cache.aliases,
-            &generic_param_bounds,
-        )
-        .resolve_deep(&tir_ty)
+        let mut diags = Vec::new();
+        lower_scoped(te, &mut diags)
     };
 
     let runtime_from_display_tir = |tir_ty: &baml_compiler2_tir::ty::Ty| -> baml_type::RuntimeTy {
@@ -1727,7 +3771,7 @@ fn compute_function_metadata_from_item_tree(
     let mut display_param_types = Vec::with_capacity(func_data.params.len());
     for param in &func_data.params {
         let resolved = if let Some(te) = &param.type_expr {
-            Some(resolve_display_tir(&te.expr))
+            Some(resolve_display_tir(te))
         } else if param.name.as_str() == "self" {
             self_replacement.as_ref().map(&resolve_display_tir)
         } else {
@@ -1742,10 +3786,7 @@ fn compute_function_metadata_from_item_tree(
         }
     }
 
-    let resolved_return_type = func_data
-        .return_type
-        .as_ref()
-        .map(|te| resolve_display_tir(&te.expr));
+    let resolved_return_type = func_data.return_type.as_ref().map(resolve_display_tir);
     let (return_type, display_return_type) = if let Some(tir_ty) = resolved_return_type {
         (
             runtime_from_display_tir(&tir_ty),
@@ -1764,6 +3805,23 @@ fn compute_function_metadata_from_item_tree(
         display_param_types,
         display_return_type,
     }
+}
+
+/// Project-root-relative display path for `file` (our `-trimpath`).
+///
+/// `Function::source_file` is display/metadata-only (backtraces, event
+/// metadata, reflection locations) — never opened from disk — so stripping
+/// the project root keeps serialized `Program`s location-independent (a
+/// cached or packed blob is byte-identical wherever the project lives) and
+/// backtraces machine-independent. Paths outside the root — `<builtin>/…`
+/// stubs, standalone files — are kept verbatim.
+fn relative_source_path(db: &dyn baml_compiler2_mir::Db, file: baml_base::SourceFile) -> String {
+    let path = file.path(db);
+    let root = db.project().root(db);
+    path.strip_prefix(&root)
+        .unwrap_or(&path)
+        .display()
+        .to_string()
 }
 
 /// Build a table of byte offsets where each line starts in the source text.
@@ -2254,7 +4312,7 @@ fn compile_init_function<'db>(
             Some((mir_body, lambdas)) => {
                 let line_starts = build_line_starts(file.text(db));
                 // Compile lambda children first and collect their object indices.
-                let source_file = file.path(db).display().to_string();
+                let source_file = relative_source_path(db, *file);
                 let empty_capture_types = Vec::new();
                 let empty_spawn_capture_indices = HashSet::new();
                 let lambda_info = compile_lambdas_flat(
@@ -2323,6 +4381,7 @@ fn compile_init_function<'db>(
                     throws_type: None,
                     origin: FunctionOrigin::Internal,
                     body_meta: None,
+                    capture: FunctionCaptureProps::disabled(),
                     function_id: 0, // assigned at engine init (interim provider)
                 }
             }
@@ -2395,6 +4454,7 @@ fn compile_init_function<'db>(
         throws_type: None,
         origin: FunctionOrigin::Internal,
         body_meta: None,
+        capture: FunctionCaptureProps::disabled(),
         function_id: 0, // assigned at engine init (interim provider)
     })
 }
@@ -2604,6 +4664,7 @@ mod tests {
             declarative_meta: None,
             origin: ast::FunctionOrigin::UserDefined,
             docstring: None,
+            is_tagged_template_tag: false,
             span: baml_base::Span::fake().range,
         };
         let parameter_defaults = baml_compiler2_hir::signature::FunctionParameterDefaults {

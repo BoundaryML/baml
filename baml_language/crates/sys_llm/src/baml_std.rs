@@ -39,8 +39,20 @@ impl PrimitiveClient {
                 provider: provider.clone(),
             })?;
 
-        // Apply provider-specific defaults for any fields the user didn't set.
-        apply_provider_defaults(llm_provider, &mut options);
+        // Provider options must be parsed before defaults are applied: a
+        // google-ai client with `enterprise = true` uses the Vertex backend,
+        // so its unset fields need Vertex defaults rather than Google AI
+        // Studio defaults.
+        let provider_options = resolve_provider_options(&options.provider_options);
+        let defaults_provider = match (&provider_options, llm_provider) {
+            (Some(ProviderOptions::GoogleAi(options)), LlmProvider::GoogleAi)
+                if options.enterprise == Some(true) =>
+            {
+                LlmProvider::VertexAi
+            }
+            _ => llm_provider,
+        };
+        apply_provider_defaults(defaults_provider, &mut options);
 
         let model = options
             .model
@@ -72,7 +84,6 @@ impl PrimitiveClient {
             }
             map
         };
-        let provider_options = resolve_provider_options(&options.provider_options);
         Ok(Self {
             name,
             provider,
@@ -107,17 +118,36 @@ impl PrimitiveClient {
 
 // Provider option structs are generated from llm_types.baml via sys_types.
 pub use sys_types::generated::owned::llm::{
-    AnthropicOptions, AzureOpenAiOptions, BedrockOptions, VertexAiOptions,
+    AnthropicOptions, AzureOpenAiOptions, BedrockOptions, GoogleAiOptions, VertexAiOptions,
 };
 
 /// Provider-specific options, matching the BAML schema union
-/// `AnthropicOptions | AzureOpenAiOptions | BedrockOptions | VertexAiOptions | null`.
+/// `AnthropicOptions | AzureOpenAiOptions | BedrockOptions | GoogleAiOptions |
+/// VertexAiOptions | null`.
 #[derive(Clone, Debug)]
 pub enum ProviderOptions {
     Anthropic(AnthropicOptions),
     AzureOpenAi(AzureOpenAiOptions),
     Bedrock(BedrockOptions),
+    GoogleAi(GoogleAiOptions),
     VertexAi(VertexAiOptions),
+}
+
+impl ProviderOptions {
+    /// View either Google provider options or native Vertex options as the
+    /// common Vertex configuration used after backend selection.
+    pub(crate) fn vertex_ai(&self) -> Option<VertexAiOptions> {
+        match self {
+            Self::GoogleAi(options) => Some(VertexAiOptions {
+                credentials: options.credentials.clone(),
+                credentials_content: options.credentials_content.clone(),
+                location: options.location.clone(),
+                project_id: options.project_id.clone(),
+            }),
+            Self::VertexAi(options) => Some(options.clone()),
+            _ => None,
+        }
+    }
 }
 
 /// Convert a `BexExternalValue` (from the VM) to a typed `ProviderOptions`.
@@ -136,6 +166,9 @@ pub fn resolve_provider_options(val: &bex_heap::BexExternalValue) -> Option<Prov
         "baml.llm.BedrockOptions" => BedrockOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::Bedrock),
+        "baml.llm.GoogleAiOptions" => GoogleAiOptions::from_external(val.clone())
+            .ok()
+            .map(ProviderOptions::GoogleAi),
         "baml.llm.VertexAiOptions" => VertexAiOptions::from_external(val.clone())
             .ok()
             .map(ProviderOptions::VertexAi),
@@ -164,11 +197,14 @@ fn apply_provider_defaults(provider: LlmProvider, options: &mut PrimitiveClientO
             LlmProvider::AiGatewayImages => Some("https://ai-gateway.vercel.sh/v4/ai".into()),
             LlmProvider::Ollama => Some("http://localhost:11434".into()),
             LlmProvider::OpenRouter => Some("https://openrouter.ai/api/v1".into()),
-            LlmProvider::GoogleAi => {
-                Some("https://generativelanguage.googleapis.com/v1beta".into())
-            }
-            // VertexAi, AwsBedrock, AzureOpenAi: base_url is constructed at
-            // request time from provider-specific fields (location, resource_name, etc.)
+            // GoogleAi and VertexAi select their provider-specific default URL
+            // at request time, after any Google AI -> Vertex routing has been
+            // applied. AwsBedrock and AzureOpenAi also construct their URLs at
+            // request time from provider-specific fields.
+            LlmProvider::GoogleAi
+            | LlmProvider::VertexAi
+            | LlmProvider::AwsBedrock
+            | LlmProvider::AzureOpenAi => None,
             _ => None,
         };
     }

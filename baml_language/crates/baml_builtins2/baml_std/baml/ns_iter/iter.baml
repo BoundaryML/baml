@@ -4,90 +4,90 @@ interface Iterable {
   type Item
   type Error = never
 
-  function iter(self) -> Iterator<Item = Item, Error = Error> throws never
+  function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never
 }
 
 interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
   type Item
   type Error = never
 
-  function next(self) -> Item | Done throws Error
+  function next(self) -> Self.Item | Done throws Self.Error
 
-  function map<R, E2>(self, fn: (Item) -> R throws E2) -> Iterator<Item = R, Error = Error | E2> throws never {
-    Map<Item, R, Error, E2> { source: self, func: fn }
+  function map<R, E2>(self, fn: (Self.Item) -> R throws E2) -> Iterator<Item = R, Error = Self.Error | E2> throws never {
+    Map<Self.Item, R, Self.Error, E2> { source: self, func: fn }
   }
 
-  function filter<E2>(self, predicate: (Item) -> bool throws E2) -> Iterator<Item = Item, Error = Error | E2> throws never {
-    Filter<Item, Error, E2> { source: self, predicate: predicate }
+  function filter<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
+    Filter<Self.Item, Self.Error, E2> { source: self, predicate: predicate }
   }
 
-  function filter_map<R, E2>(self, fn: (Item) -> R? throws E2) -> Iterator<Item = R, Error = Error | E2> throws never {
-    FilterMap<Item, R, Error, E2> { source: self, func: fn }
+  function filter_map<R, E2>(self, fn: (Self.Item) -> R? throws E2) -> Iterator<Item = R, Error = Self.Error | E2> throws never {
+    FilterMap<Self.Item, R, Self.Error, E2> { source: self, func: fn }
   }
 
-  function flat_map<R, E2, E3>(self, fn: (Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Error | E2 | E3> throws never {
-    FlatMap<Item, R, Error, E2, E3> { source: self, func: fn, inner: Done {} }
+  function flat_map<R, E2, E3>(self, fn: (Self.Item) -> Iterable<Item = R, Error = E3> throws E2) -> Iterator<Item = R, Error = Self.Error | E2 | E3> throws never {
+    FlatMap<Self.Item, R, Self.Error, E2, E3> { source: self, func: fn, inner: Done {} }
   }
 
-  function step_by(self, n: int) -> Iterator<Item = Item, Error = Error> throws never {
-    StepBy<Item, Error> { source: self, n: n, first: true }
+  function step_by(self, n: int) -> Iterator<Item = Self.Item, Error = Self.Error> throws never {
+    StepBy<Self.Item, Self.Error> { source: self, n: n, first: true }
   }
 
-  function chain<E2>(self, other: Iterable<Item = Item, Error = E2>) -> Iterator<Item = Item, Error = Error | E2> throws never {
-    Chain<Item, Error, E2> { first: self, other: other.iter(), first_done: false }
+  function chain<E2>(self, other: Iterable<Item = Self.Item, Error = E2>) -> Iterator<Item = Self.Item, Error = Self.Error | E2> throws never {
+    Chain<Self.Item, Self.Error, E2> { first: self, other: other.iter(), first_done: false }
   }
 
-  function peekable(self) -> Peekable<Item, Error> throws never {
-    Peekable<Item, Error> { source: self, buffer: Done {}, has_buffer: false }
+  function peekable(self) -> Peekable<Self.Item, Self.Error> throws never {
+    Peekable<Self.Item, Self.Error> { source: self, buffer: Done {}, has_buffer: false }
   }
 
-  function collect(self) -> Item[] throws Error {
-    let r: Item[] = [];
+  function collect(self) -> Self.Item[] throws Self.Error {
+    let r: Self.Item[] = [];
     while (true) {
       match (self.next()) {
         Done => { break; },
-        let x: Item => r.push(x),
+        let x: Self.Item => r.push(x),
       }
     }
     r
   }
 
-  function reduce<A, E2>(self, fn: (A, Item) -> A throws E2, initial: A) -> A throws Error | E2 {
+  function reduce<A, E2>(self, fn: (A, Self.Item) -> A throws E2, initial: A) -> A throws Self.Error | E2 {
     let acc: A = initial;
     while (true) {
       match (self.next()) {
         Done => { break; },
-        let x: Item => { acc = fn(acc, x); },
+        let x: Self.Item => { acc = fn(acc, x); },
       }
     }
     acc
   }
 
-  function count(self) -> int throws Error {
+  function count(self) -> int throws Self.Error {
     let n: int = 0;
     while (true) {
       match (self.next()) {
         Done => { break; },
-        let x: Item => { n += 1; },
+        let x: Self.Item => { n += 1; },
       }
     }
     n
   }
 
-  function for_each<E2>(self, fn: (Item) -> void throws E2) -> void throws Error | E2 {
+  function for_each<E2>(self, fn: (Self.Item) -> void throws E2) -> void throws Self.Error | E2 {
     while (true) {
       match (self.next()) {
         Done => { break; },
-        let x: Item => { fn(x); },
+        let x: Self.Item => { fn(x); },
       }
     }
   }
 
-  function some<E2>(self, predicate: (Item) -> bool throws E2) -> bool throws Error | E2 {
+  function some<E2>(self, predicate: (Self.Item) -> bool throws E2) -> bool throws Self.Error | E2 {
     while (true) {
       match (self.next()) {
         Done => { break; },
-        let x: Item => {
+        let x: Self.Item => {
           if (predicate(x)) {
             return true;
           }
@@ -97,11 +97,11 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     false
   }
 
-  function every<E2>(self, predicate: (Item) -> bool throws E2) -> bool throws Error | E2 {
+  function every<E2>(self, predicate: (Self.Item) -> bool throws E2) -> bool throws Self.Error | E2 {
     while (true) {
       match (self.next()) {
         Done => { break; },
-        let x: Item => {
+        let x: Self.Item => {
           if (!predicate(x)) {
             return false;
           }
@@ -111,11 +111,11 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     true
   }
 
-  function find<E2>(self, predicate: (Item) -> bool throws E2) -> Item? throws Error | E2 {
+  function find<E2>(self, predicate: (Self.Item) -> bool throws E2) -> Self.Item? throws Self.Error | E2 {
     while (true) {
       match (self.next()) {
         Done => { break; },
-        let x: Item => {
+        let x: Self.Item => {
           if (predicate(x)) {
             return x;
           }
@@ -501,5 +501,14 @@ implements<T> Iterable for T[] {
 
   function iter(self) -> Iterator<Item = T, Error = never> throws never {
     ArrayIterator.new(self)
+  }
+}
+
+implements Iterable for string {
+  type Item = string
+  type Error = never
+
+  function iter(self) -> Iterator<Item = string, Error = never> throws never {
+    self.chars().iter()
   }
 }

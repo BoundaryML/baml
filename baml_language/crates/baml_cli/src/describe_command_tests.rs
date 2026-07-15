@@ -351,6 +351,18 @@ fn render_builtin_package_listing() {
     let entries = baml_lsp2_actions::list_package_items(&db, pkg_id);
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
+    let listed_names: Vec<&str> = output
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .collect();
+    assert!(
+        listed_names.contains(&"baml.iter.Range"),
+        "expected builtin listing to include package-qualified names, got:\n{output}"
+    );
+    assert!(
+        !listed_names.contains(&"iter.Range"),
+        "builtin listing should not emit unqualified names that cannot be described directly, got:\n{output}"
+    );
     insta::assert_snapshot!(output);
 }
 
@@ -372,18 +384,6 @@ fn render_builtin_namespace_llm() {
     let db = simple_project();
     let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
     let ns_path = vec![baml_db::Name::new("llm")];
-    let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
-    assert!(!entries.is_empty());
-    let output = capture_listing(&entries);
-    insta::assert_snapshot!(output);
-}
-
-/// `baml describe baml.math` — list items in the `math` sub-namespace.
-#[test]
-fn render_builtin_namespace_math() {
-    let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, baml_db::Name::new("baml"));
-    let ns_path = vec![baml_db::Name::new("math")];
     let entries = baml_lsp2_actions::list_namespace_items(&db, pkg_id, &ns_path).unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
@@ -957,7 +957,7 @@ fn render_describe_methods_respect_budget() {
 
     // A generous budget renders every method, with no elision marker.
     for needle in [
-        "function to_json(self) -> json",
+        "function to_upper_case(self) -> string",
         "static_methods:",
         "function from_code_points(unicode: int[]) -> string",
     ] {
@@ -971,11 +971,11 @@ fn render_describe_methods_respect_budget() {
         "no elision marker expected at budget 1000:\n{full}"
     );
     assert!(
-        !tight.contains("function to_json(self) -> json"),
+        !tight.contains("function to_upper_case(self) -> string"),
         "late methods should be elided under budget 5:\n{tight}"
     );
     assert!(
-        full.contains("function to_json(self) -> json")
+        full.contains("function to_upper_case(self) -> string")
             && full.contains("function from_code_points(unicode: int[]) -> string"),
         "generous budgets should still show full method details:\n{full}"
     );
@@ -1067,6 +1067,81 @@ fn render_keyword_if() {
 fn render_keyword_spawn() {
     let output = capture_keyword("spawn");
     insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_defer() {
+    let output = capture_keyword("defer");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_cleanup() {
+    let output = capture_keyword("cleanup");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_playground() {
+    let output = capture_keyword("playground");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_baml_sdk() {
+    let output = capture_keyword("baml_sdk");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_python() {
+    let output = capture_keyword("python");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_typescript() {
+    let output = capture_keyword("typescript");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
+fn render_keyword_patterns() {
+    let output = capture_keyword("patterns");
+    insta::assert_snapshot!(output);
+}
+
+/// `defer` and `cleanup` (BEP-042) resolve to keyword topics rather than
+/// falling through to "No symbol found" (regression test for B-632).
+#[test]
+fn dispatch_defer_and_cleanup_resolve_to_keyword() {
+    let db = simple_project();
+    for name in ["defer", "cleanup"] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`{name}` should resolve to a keyword topic, not fall through to 'No symbol found'"
+        );
+    }
+}
+
+#[test]
+fn dispatch_language_topic_resolves_to_keyword() {
+    // Language/SDK + pattern topics and CLI-command topics route to keyword
+    // docs, not package resolution.
+    let db = simple_project();
+    for name in [
+        "python",
+        "typescript",
+        "baml_sdk",
+        "patterns",
+        "pattern",
+        "playground",
+    ] {
+        assert!(
+            matches!(dispatch(&db, name), Some(ResolvedTarget::Keyword(_))),
+            "`{name}` should resolve to a keyword topic"
+        );
+    }
 }
 
 #[test]
@@ -1218,6 +1293,33 @@ fn dispatch_keyword_interfaces() {
     let db = simple_project();
     let output = describe_via_dispatch(&db, "interfaces");
     insta::assert_snapshot!(output);
+}
+
+#[test]
+fn dispatch_keyword_google_ai_documents_enterprise_vertex_delegation() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "google-ai");
+    assert!(
+        output.contains("Google AI Studio API")
+            && output.contains("gemini-3.5-flash")
+            && output.contains("GOOGLE_GENAI_USE_ENTERPRISE=true")
+            && output.contains("passthrough to the `vertex-ai` backend"),
+        "google-ai documentation must explain enterprise delegation to Vertex AI:\n{output}"
+    );
+}
+
+#[test]
+fn dispatch_keyword_vertex_ai_documents_google_cloud_setup() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "vertex-ai");
+    assert!(
+        output.contains("Google Cloud Vertex AI")
+            && output.contains("gemini-3.1-pro-preview")
+            && output.contains("location \"global\"")
+            && output.contains("GOOGLE_CLOUD_PROJECT")
+            && output.contains("Application Default Credentials"),
+        "vertex-ai documentation must explain Google Cloud setup:\n{output}"
+    );
 }
 
 /// Unknown keyword should fall through to normal resolution.

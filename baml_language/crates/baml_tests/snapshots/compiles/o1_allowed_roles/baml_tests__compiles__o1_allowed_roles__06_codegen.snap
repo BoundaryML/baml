@@ -14,7 +14,16 @@ function $init() -> null {
     return
 }
 
-function user.Gpt4oClient$new() -> null {
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
+function user.Gpt4oClient$new(lenient: bool) -> null {
     load_const "Gpt4oClient"
     load_const "openai"
     load_const "gpt-4o"
@@ -29,15 +38,21 @@ function user.Gpt4oClient$new() -> null {
     load_const "sk-test"
     load_const null
     load_const null
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
     init_instance baml.llm.PrimitiveClient .name, .provider, .options
     return
 }
 
-function user.O1Client$new() -> null {
+function user.O1Client$new(lenient: bool) -> null {
     load_const "O1Client"
     load_const "openai"
     load_const "o1"
@@ -52,15 +67,21 @@ function user.O1Client$new() -> null {
     load_const "sk-test"
     load_const null
     load_const null
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
     init_instance baml.llm.PrimitiveClient .name, .provider, .options
     return
 }
 
-function user.O1MiniClient$new() -> null {
+function user.O1MiniClient$new(lenient: bool) -> null {
     load_const "O1MiniClient"
     load_const "openai"
     load_const "o1-mini"
@@ -75,15 +96,21 @@ function user.O1MiniClient$new() -> null {
     load_const "sk-test"
     load_const null
     load_const null
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
     init_instance baml.llm.PrimitiveClient .name, .provider, .options
     return
 }
 
-function user.O1WithExplicitRoles$new() -> null {
+function user.O1WithExplicitRoles$new(lenient: bool) -> null {
     load_const "O1WithExplicitRoles"
     load_const "openai"
     load_const "o1"
@@ -96,13 +123,20 @@ function user.O1WithExplicitRoles$new() -> null {
     load_const "system"
     load_const "user"
     load_const "assistant"
+    load_type string
     alloc_array 3
     load_const null
     load_const "sk-test"
     load_const null
     load_const null
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type string
     alloc_map 0
+    load_type string
+    load_type unknown
     alloc_map 0
     init_instance baml.llm.PrimitiveClientOptions .model, .base_url, .allowed_role_metadata, .finish_reason_allow_list, .finish_reason_deny_list, .supports_streaming, .default_role, .allowed_roles, .remap_roles, .api_key, .provider_options, .media_url_handler, .headers, .query_params, .request_body
     init_instance baml.llm.PrimitiveClient .name, .provider, .options

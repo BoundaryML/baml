@@ -22,7 +22,7 @@ use std::{panic::AssertUnwindSafe, sync::Arc};
 use bex_project::{Bex, BexArgs, BexExternalValue, EngineError, FunctionCallContext, RuntimeError};
 use bridge_ctypes::{
     CffiHandleTableOptions,
-    baml_core::cffi::{
+    baml_bridge::cffi::{
         BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, baml_outbound_result,
     },
     external_to_outbound,
@@ -40,6 +40,7 @@ const GENERIC_SDK_ERROR_CLASS: &str = "baml.errors.GenericSdkError";
 const INVALID_ARGUMENT_CLASS: &str = "baml.errors.InvalidArgument";
 const COMPILATION_ERROR_CLASS: &str = "baml.errors.CompilationError";
 const ACCESS_ERROR_CLASS: &str = "baml.errors.AccessError";
+const TYPE_MISMATCH_CLASS: &str = "baml.errors.TypeMismatch";
 const SDK_PANIC_CLASS: &str = "baml.panics.SdkPanic";
 const EXIT_CLASS: &str = "baml.panics.Exit";
 
@@ -49,6 +50,7 @@ fn one_field_instance(class_name: &str, field: &str, value: BexExternalValue) ->
     fields.insert(field.to_string(), value);
     BexExternalValue::Instance {
         class_name: class_name.to_string(),
+        type_args: vec![],
         fields,
     }
 }
@@ -181,6 +183,17 @@ pub fn result_to_outbound(
                     .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
             );
             thrown_arm(*value, lines, options)
+        }
+
+        // 🟥 A value/type mismatch at the call boundary is a *caller* type error,
+        // not an SDK panic — route it to a structured `baml.errors.TypeMismatch`
+        // (an `error` arm) so each host SDK can surface it as its native
+        // type-error (Python `TypeError`) rather than an opaque `SdkPanic`. This
+        // covers inbound-generics Gate-A failures (a `TypeVar` with no inference
+        // evidence that must be specified, conflicting variance occurrences) and
+        // ordinary argument-conversion mismatches alike.
+        Err(RuntimeError::Engine(EngineError::TypeMismatch { message })) => {
+            infra_error_arm(message_instance(TYPE_MISMATCH_CLASS, message), options)
         }
 
         // Every other 🟥 engine/VM-internal failure → one opaque `SdkPanic`,

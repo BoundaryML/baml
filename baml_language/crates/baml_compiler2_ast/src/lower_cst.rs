@@ -3,24 +3,24 @@
 //! One function per item kind. Type expressions are fully lowered to recursive
 //! `TypeExpr`. Expression bodies are fully lowered to `ExprBody` arenas with a
 //! parallel `AstSourceMap`. Missing names skip the item (`return None`), missing
-//! types produce `TypeExpr::Unknown`.
+//! types produce `TypeExprKind::Unknown`.
 //!
 //! No LLM function expansion, no attribute validation, no duplicate detection —
 //! all of that moves downstream.
 
 use baml_base::{Name, TypePath};
-use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, ast};
 use rowan::ast::AstNode;
 
 use crate::{
     DeclarativeMeta, LoweringDiagnostic,
     ast::{
-        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg,
-        ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef,
-        FunctionDefaults, GeneratorDef, ImplementsBlockDef, ImplementsForDef, InterfaceDef,
-        InterfaceFieldLinkDef, Interpolation, Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef,
-        Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr, TemplateStringDef,
-        TestDef, TypeAliasDef, TypeExpr, VariantDef,
+        AssociatedTypeBindingDef, AssociatedTypeDef, AstSourceMap, BuiltinKind, CallArg, EnumDef,
+        Expr, ExprBody, ExprId, FieldDef, FunctionBodyDef, FunctionDef, FunctionDefaults,
+        ImplementsBlockDef, ImplementsForDef, InterfaceDef, InterfaceFieldLinkDef, Interpolation,
+        Item, LetDef, LetOrigin, LlmBodyDef, MethodSigDef, Param, RawAttribute, RawAttributeArg,
+        RawPrompt, TemplateStringDef, TestArgValue, TestDef, TypeAliasDef, TypeExpr, TypeExprKind,
+        VariantDef,
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
@@ -133,9 +133,7 @@ pub fn lower_file_with_path(
                 }
             }
             baml_compiler_syntax::SyntaxKind::GENERATOR_DEF => {
-                if let Some(g) = lower_generator(&child, &mut diags) {
-                    items.push(Item::Generator(g));
-                }
+                diags.push(lower_generator_deprecation(&child));
             }
             baml_compiler_syntax::SyntaxKind::TEMPLATE_STRING_DEF => {
                 if let Some(ts) = lower_template_string(&child, &mut diags) {
@@ -175,8 +173,8 @@ pub fn lower_file_with_path(
             items.push(Item::ImplementsFor(imp));
             continue;
         }
-        let target_name = match &imp.for_target.expr {
-            crate::ast::TypeExpr::Path {
+        let target_name = match &imp.for_target.kind {
+            crate::ast::TypeExprKind::Path {
                 segments,
                 generic_args,
                 ..
@@ -232,7 +230,7 @@ pub fn lower_file_with_path(
     (items, diags, env_var_refs)
 }
 
-/// Check if a just-lowered type expression contains `TypeExpr::Unknown` at the root.
+/// Check if a just-lowered type expression contains `TypeExprKind::Unknown` at the root.
 /// If so, emit an `UnparseableType` diagnostic.
 fn check_unknown_type(
     type_expr: &crate::ast::TypeExpr,
@@ -240,7 +238,7 @@ fn check_unknown_type(
     span: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) {
-    if matches!(type_expr, crate::ast::TypeExpr::Unknown { .. }) {
+    if matches!(type_expr.kind, crate::ast::TypeExprKind::Unknown { .. }) {
         diags.push(LoweringDiagnostic::UnparseableType { context, span });
     }
 }
@@ -256,7 +254,7 @@ fn lower_function(
     let Some(name_token) = func.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "function",
-            span: node.text_range(),
+            span: node.span_range(),
         });
         return None;
     };
@@ -275,10 +273,14 @@ fn lower_function(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter_mut().flatten() {
+        let bspan = bound.span;
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
+    }
     let parameter_context = format!("function `{}`", name.as_str());
 
     let (mut params, mut defaults) = func
@@ -296,8 +298,8 @@ fn lower_function(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = func.return_type().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
-        let te_span = te.syntax().text_range();
+        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
         lower_type_expr::check_void_type(
@@ -307,22 +309,22 @@ fn lower_function(
             true,
             diags,
         );
-        SpannedTypeExpr {
-            expr,
-            span: te_span,
-        }
+        lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
+        expr.with_span(te_span)
     });
 
     let throws = func
         .throws_clause()
         .and_then(|tc| tc.type_expr())
-        .map(|te| SpannedTypeExpr {
-            expr: lower_type_expr::lower_type_expr_node(&te),
-            span: te.syntax().text_range(),
+        .map(|te| {
+            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let te_span = te.syntax().span_range();
+            lower_type_expr::check_throws_wildcard(&mut expr, te_span, diags);
+            expr.with_span(te_span)
         });
 
     let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
-        let llm_body_def = lower_llm_body(&llm);
+        let mut llm_body_def = lower_llm_body(&llm);
         reject_reserved_llm_client_params(&mut params, name.as_str(), diags);
         let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
         if let Some(client_name) = client_name.as_deref() {
@@ -342,16 +344,75 @@ fn lower_function(
         // BuiltinUnknown" error from the LLM client.
         let call_type_args: Vec<crate::ast::TypeExpr> = return_type
             .as_ref()
-            .map(|rt| vec![rt.expr.clone()])
+            .map(|rt| vec![rt.clone()])
             .unwrap_or_default();
-        let (expr_body, source_map) = synthesize_llm_builtin_call(
-            "call_llm_function",
-            name.as_str(),
-            &param_names,
-            client_arg_name,
-            call_type_args,
-            llm_body_def.span,
-        );
+        // New-mode (BEP-049 M5f): a backtick prompt compiles to a `prompt`…``
+        // closure passed as the 4th arg to `call_llm_function`; the orchestrator
+        // invokes it per attempt. Legacy `#"..."#` Jinja prompts keep the 3-arg
+        // path (the closure defaults to `null`, so the Jinja render runs).
+        let prompt_backtick = llm.prompt_field().and_then(|pf| pf.backtick_string());
+        let (expr_body, source_map) = if let Some(backtick) = &prompt_backtick {
+            let (body, sm, mut closure_diags, mut closure_env_refs) =
+                lower_expr_body::synthesize_llm_call_with_prompt(
+                    "call_llm_function",
+                    name.as_str(),
+                    &param_names,
+                    client_arg_name,
+                    call_type_args,
+                    backtick,
+                    llm_body_def.span,
+                );
+            diags.append(&mut closure_diags);
+            env_var_refs.append(&mut closure_env_refs);
+            // BEP-049 M5e: pre-build the streaming companion's body from the
+            // same backtick now, while the CST is in hand, and stash it for
+            // PPIR (which materializes the `$stream` companion but no longer has
+            // the CST). The closure captures this function's params, so it's a
+            // separate arena from the oneshot body above. Its prompt diagnostics
+            // / `env.X` refs duplicate the oneshot body's — drop them.
+            let (stream_body, stream_sm, _diags, _env_refs) =
+                lower_expr_body::synthesize_llm_call_with_prompt(
+                    "stream_llm_function",
+                    name.as_str(),
+                    &param_names,
+                    client_arg_name,
+                    Vec::new(),
+                    backtick,
+                    llm_body_def.span,
+                );
+            llm_body_def.stream_body = Some((stream_body, stream_sm));
+            // BEP-049 M5: pre-build the render_prompt / build_request /
+            // build_request_stream companion bodies from the same backtick, each
+            // carrying the prompt closure, so the playground preview/cURL render
+            // through the closure exactly like execution. Built here while the CST
+            // is in hand; read back by `make_llm_companion`. Their prompt diags /
+            // `env.X` refs duplicate the oneshot body's — drop them.
+            for target in ["render_prompt", "build_request", "build_request_stream"] {
+                let (c_body, c_sm, _diags, _env_refs) =
+                    lower_expr_body::synthesize_llm_call_with_prompt(
+                        target,
+                        name.as_str(),
+                        &param_names,
+                        client_arg_name,
+                        Vec::new(),
+                        backtick,
+                        llm_body_def.span,
+                    );
+                llm_body_def
+                    .companion_bodies
+                    .push((target.to_string(), (c_body, c_sm)));
+            }
+            (body, sm)
+        } else {
+            synthesize_llm_builtin_call(
+                "call_llm_function",
+                name.as_str(),
+                &param_names,
+                client_arg_name,
+                call_type_args,
+                llm_body_def.span,
+            )
+        };
         (
             Some(FunctionBodyDef::Expr(expr_body, source_map)),
             Some(DeclarativeMeta::Llm(llm_body_def)),
@@ -372,6 +433,7 @@ fn lower_function(
 
     let attributes = lower_attributes_from_node(node);
     let docstring = crate::docstring::extract_docstring(node);
+    let is_tagged_template_tag = crate::docstring::has_baml_marker(node, "tagged_string");
 
     Some(FunctionDef {
         name,
@@ -386,7 +448,8 @@ fn lower_function(
         origin: crate::ast::FunctionOrigin::UserDefined,
         attributes,
         docstring,
-        span: node.text_range(),
+        is_tagged_template_tag,
+        span: node.span_range(),
         name_span,
     })
 }
@@ -506,7 +569,7 @@ pub(crate) fn lower_param(
     let Some(name_token) = param.name() else {
         diags.push(LoweringDiagnostic::MissingParamName {
             function_name: function_name.to_string(),
-            span: param.syntax().text_range(),
+            span: param.syntax().span_range(),
         });
         return None;
     };
@@ -521,8 +584,8 @@ pub(crate) fn lower_param(
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
-            let expr = lower_type_expr::lower_type_expr_node(&te);
-            let te_span = te.syntax().text_range();
+            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
                 format!("parameter `{param_name_str}` in `{function_name}`"),
@@ -536,13 +599,11 @@ pub(crate) fn lower_param(
                 false,
                 diags,
             );
-            SpannedTypeExpr {
-                expr,
-                span: te_span,
-            }
+            lower_type_expr::check_wildcard_type(&mut expr, "a parameter type", te_span, diags);
+            expr.with_span(te_span)
         }),
         default: None,
-        span: param.syntax().text_range(),
+        span: param.syntax().span_range(),
         name_span: name_token.text_range(),
     })
 }
@@ -556,15 +617,15 @@ pub(crate) fn append_default_client_param(
     let default_expr = alloc_client_override_default_expr(defaults, client_name, span);
     params.push(Param {
         name: Name::new("client"),
-        type_expr: Some(SpannedTypeExpr {
-            expr: TypeExpr::Path {
+        type_expr: Some(
+            TypeExprKind::Path {
                 segments: vec![Name::new("baml"), Name::new("llm"), Name::new("Client")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
                 attrs: vec![],
-            },
-            span,
-        }),
+            }
+            .at(span),
+        ),
         default: Some(crate::ast::DefaultExprId::new(default_expr)),
         span,
         name_span: span,
@@ -650,7 +711,7 @@ fn alloc_client_override_default_expr(
 }
 
 fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
-    let span = llm_body.syntax().text_range();
+    let span = llm_body.syntax().span_range();
 
     let client = llm_body
         .client_field()
@@ -665,6 +726,9 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     LlmBodyDef {
         client,
         prompt,
+        // Filled in by the LLM-function branch once param names are known.
+        stream_body: None,
+        companion_bodies: Vec::new(),
         span,
     }
 }
@@ -785,14 +849,7 @@ pub fn synthesize_llm_builtin_call(
 
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     (body, source_map)
@@ -851,14 +908,7 @@ pub(crate) fn synthesize_llm_parse_call(
 
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     (body, source_map)
@@ -946,14 +996,7 @@ pub fn synthesize_llm_make_stream_call(
 
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: Arena::new(),
-        pattern_spans: Arena::new(),
-        match_arm_spans: Arena::new(),
-        type_annotation_spans: Arena::new(),
-        catch_arm_spans: Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     (body, source_map)
@@ -967,7 +1010,7 @@ fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
 
     let mut text = String::new();
     let mut interpolations = Vec::new();
-    let prompt_span = raw_string.syntax().text_range();
+    let prompt_span = raw_string.syntax().span_range();
 
     for child in raw_string.syntax().children() {
         match child.kind() {
@@ -980,7 +1023,7 @@ fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
                 if let Some(jinja_expr) = JinjaExpression::cast(child.clone()) {
                     let inner = jinja_expr.inner_text();
                     let full = jinja_expr.full_text();
-                    let span = child.text_range();
+                    let span = child.span_range();
                     interpolations.push(Interpolation {
                         content: inner,
                         span,
@@ -1013,7 +1056,7 @@ fn lower_class(
     let Some(name_token) = class.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "class",
-            span: node.text_range(),
+            span: node.span_range(),
         });
         return None;
     };
@@ -1023,10 +1066,14 @@ fn lower_class(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter_mut().flatten() {
+        let bspan = bound.span;
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
+    }
     let class_name = name_token.text().to_string();
 
     let fields = class
@@ -1035,7 +1082,7 @@ fn lower_class(
             let Some(fname) = f.name() else {
                 diags.push(LoweringDiagnostic::MissingFieldName {
                     class_name: class_name.clone(),
-                    span: f.syntax().text_range(),
+                    span: f.syntax().span_range(),
                 });
                 return None;
             };
@@ -1043,7 +1090,7 @@ fn lower_class(
             let mut hoisted_field_attrs = Vec::new();
             let type_expr = f.ty().map(|te| {
                 let mut expr = lower_type_expr::lower_type_expr_node(&te);
-                let te_span = te.syntax().text_range();
+                let te_span = te.syntax().span_range();
                 check_unknown_type(
                     &expr,
                     format!("field `{class_name}.{field_name_str}`"),
@@ -1057,6 +1104,12 @@ fn lower_class(
                     false,
                     diags,
                 );
+                lower_type_expr::check_wildcard_type(
+                    &mut expr,
+                    "a class field type",
+                    te_span,
+                    diags,
+                );
 
                 // Hoist field attrs from the outermost TypeExpr to FieldDef.
                 // Only attrs that are direct ATTRIBUTE children of the outermost
@@ -1066,7 +1119,7 @@ fn lower_class(
                     .syntax()
                     .children()
                     .filter_map(ast::Attribute::cast)
-                    .map(|a| a.syntax().text_range())
+                    .map(|a| a.syntax().span_range())
                     .collect();
 
                 let all_outer_attrs = std::mem::take(expr.attrs_mut());
@@ -1077,10 +1130,7 @@ fn lower_class(
                 *expr.attrs_mut() = keep;
                 hoisted_field_attrs = hoist;
 
-                SpannedTypeExpr {
-                    expr,
-                    span: te_span,
-                }
+                expr.with_span(te_span)
             });
             let field_docstring = crate::docstring::extract_docstring(f.syntax());
             Some(FieldDef {
@@ -1088,7 +1138,7 @@ fn lower_class(
                 type_expr,
                 attributes: hoisted_field_attrs,
                 docstring: field_docstring,
-                span: f.syntax().text_range(),
+                span: f.syntax().span_range(),
                 name_span: fname.text_range(),
             })
         })
@@ -1117,26 +1167,19 @@ fn lower_class(
         implements,
         attributes: lower_attributes_from_node(node),
         docstring: crate::docstring::extract_docstring(node),
-        span: node.text_range(),
+        span: node.span_range(),
         name_span: name_token.text_range(),
     };
 
-    // Auto-derive `to_json` / `from_json` on every user class. Skipped if the
-    // user already defined either method.
-    crate::auto_derive_json::maybe_synthesize_json_methods(&mut class_def);
+    // No per-class JSON method synthesis: `to_json` / `from_json` are not real
+    // methods. `obj.to_json()` desugars to `baml.json.from(obj)` and
+    // `Type.from_json(j)` desugars to `baml.json.to<Type>(j)` (TIR + MIR);
+    // customization is via `implements baml.ToJson` / `baml.FromJson`.
+
+    // BEP-042: wrap a magic `cleanup(self) -> void` method in its run-once guard.
+    crate::cleanup_guard::maybe_inject_cleanup_guard(&mut class_def);
 
     Some(class_def)
-}
-
-/// Extract generic type parameter names from a `GENERIC_PARAM_LIST` CST child.
-///
-/// Walks the direct children of `node` to find a `GENERIC_PARAM_LIST`, then
-/// extracts each `GENERIC_PARAM` child's `WORD` token as a `Name`.
-pub(crate) fn extract_generic_params(node: &SyntaxNode) -> Vec<Name> {
-    extract_generic_params_with_bounds(node)
-        .into_iter()
-        .map(|(n, _)| n)
-        .collect()
 }
 
 /// BEP-044 generic bounds: walk `GENERIC_PARAM_LIST` and return each
@@ -1191,12 +1234,62 @@ pub(crate) fn extract_generic_params_with_bounds(
     out
 }
 
+/// Like [`extract_generic_params_with_bounds`], but captures **every**
+/// `&`-separated bound on each generic param (`T extends A & B` → `[A, B]`)
+/// instead of just the first. Used for `implement` blocks (BEP-044), whose
+/// generic-param bounds are an interface intersection. The single-bound
+/// extractor remains for function/class/interface generic params, which do not
+/// yet carry multiple bounds.
+pub(crate) fn extract_generic_params_with_all_bounds(
+    node: &SyntaxNode,
+) -> Vec<(Name, Vec<crate::ast::TypeExpr>)> {
+    use baml_compiler_syntax::SyntaxKind;
+
+    let mut out: Vec<(Name, Vec<crate::ast::TypeExpr>)> = Vec::new();
+    for child in node.children() {
+        if child.kind() != SyntaxKind::GENERIC_PARAM_LIST {
+            continue;
+        }
+        for param_node in child.children() {
+            if param_node.kind() != SyntaxKind::GENERIC_PARAM {
+                continue;
+            }
+            let mut name: Option<Name> = None;
+            for elem in param_node.children_with_tokens() {
+                if let Some(token) = elem.as_token()
+                    && token.kind() == SyntaxKind::WORD
+                    && name.is_none()
+                {
+                    name = Some(Name::new(token.text()));
+                }
+            }
+            let bounds: Vec<crate::ast::TypeExpr> = param_node
+                .children()
+                .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
+                .map(|bounds_node| {
+                    bounds_node
+                        .children()
+                        .filter_map(|n| {
+                            let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
+                            Some(lower_type_expr::lower_type_expr_node(&te))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if let Some(n) = name {
+                out.push((n, bounds));
+            }
+        }
+    }
+    out
+}
+
 fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<EnumDef> {
     let enum_def = ast::EnumDef::cast(node.clone())?;
     let Some(name_token) = enum_def.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "enum",
-            span: node.text_range(),
+            span: node.span_range(),
         });
         return None;
     };
@@ -1208,7 +1301,7 @@ fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
             let Some(vname) = v.name() else {
                 diags.push(LoweringDiagnostic::MissingVariantName {
                     enum_name: enum_name.clone(),
-                    span: v.syntax().text_range(),
+                    span: v.syntax().span_range(),
                 });
                 return None;
             };
@@ -1217,7 +1310,7 @@ fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
                 name: Name::new(vname.text()),
                 attributes: lower_variant_attributes(&v),
                 docstring: variant_docstring,
-                span: v.syntax().text_range(),
+                span: v.syntax().span_range(),
                 name_span: vname.text_range(),
             })
         })
@@ -1228,7 +1321,7 @@ fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
         variants,
         attributes: lower_attributes_from_node(node),
         docstring: crate::docstring::extract_docstring(node),
-        span: node.text_range(),
+        span: node.span_range(),
         name_span: name_token.text_range(),
     })
 }
@@ -1242,7 +1335,7 @@ fn lower_interface(
     let Some(name_token) = iface.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "interface",
-            span: node.text_range(),
+            span: node.span_range(),
         });
         return None;
     };
@@ -1252,10 +1345,14 @@ fn lower_interface(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter_mut().flatten() {
+        let bspan = bound.span;
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
+    }
 
     let parent_type_nodes: Vec<baml_compiler_syntax::ast::TypeExpr> =
         if let Some(c) = iface.requires_clause() {
@@ -1263,21 +1360,24 @@ fn lower_interface(
         } else {
             Vec::new()
         };
-    let requires: Vec<SpannedTypeExpr> = parent_type_nodes
+    let requires: Vec<TypeExpr> = parent_type_nodes
         .into_iter()
         .map(|te| {
-            let expr = lower_type_expr::lower_type_expr_node(&te);
-            let te_span = te.syntax().text_range();
+            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let te_span = te.syntax().span_range();
             check_unknown_type(
                 &expr,
                 format!("requires clause of interface `{iface_name}`"),
                 te_span,
                 diags,
             );
-            SpannedTypeExpr {
-                expr,
-                span: te_span,
-            }
+            lower_type_expr::check_wildcard_type(
+                &mut expr,
+                "an interface `requires` clause",
+                te_span,
+                diags,
+            );
+            expr.with_span(te_span)
         })
         .collect();
 
@@ -1287,14 +1387,14 @@ fn lower_interface(
             let Some(fname) = f.name() else {
                 diags.push(LoweringDiagnostic::MissingFieldName {
                     class_name: iface_name.clone(),
-                    span: f.syntax().text_range(),
+                    span: f.syntax().span_range(),
                 });
                 return None;
             };
             let field_name_str = fname.text().to_string();
             let type_expr = f.ty().map(|te| {
-                let expr = lower_type_expr::lower_type_expr_node(&te);
-                let te_span = te.syntax().text_range();
+                let mut expr = lower_type_expr::lower_type_expr_node(&te);
+                let te_span = te.syntax().span_range();
                 check_unknown_type(
                     &expr,
                     format!("interface field `{iface_name}.{field_name_str}`"),
@@ -1308,17 +1408,20 @@ fn lower_interface(
                     false,
                     diags,
                 );
-                SpannedTypeExpr {
-                    expr,
-                    span: te_span,
-                }
+                lower_type_expr::check_wildcard_type(
+                    &mut expr,
+                    "an interface field type",
+                    te_span,
+                    diags,
+                );
+                expr.with_span(te_span)
             });
             Some(FieldDef {
                 name: Name::new(&field_name_str),
                 type_expr,
                 attributes: lower_attributes_from_node(f.syntax()),
                 docstring: crate::docstring::extract_docstring(f.syntax()),
-                span: f.syntax().text_range(),
+                span: f.syntax().span_range(),
                 name_span: fname.text_range(),
             })
         })
@@ -1350,7 +1453,7 @@ fn lower_interface(
         default_methods,
         attributes: lower_attributes_from_node(node),
         docstring: crate::docstring::extract_docstring(node),
-        span: node.text_range(),
+        span: node.span_range(),
         name_span: name_token.text_range(),
     })
 }
@@ -1362,38 +1465,38 @@ fn lower_associated_type_def(
     let Some(name_token) = decl.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "associated type",
-            span: decl.syntax().text_range(),
+            span: decl.syntax().span_range(),
         });
         return None;
     };
     let name = Name::new(name_token.text());
     let bound = decl.bound().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te);
-        let span = te.syntax().text_range();
+        let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
             format!("bound of associated type `{name}`"),
             span,
             diags,
         );
-        SpannedTypeExpr { expr, span }
+        expr.with_span(span)
     });
     let default = decl.default_or_binding().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te);
-        let span = te.syntax().text_range();
+        let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
             format!("default of associated type `{name}`"),
             span,
             diags,
         );
-        SpannedTypeExpr { expr, span }
+        expr.with_span(span)
     });
     Some(AssociatedTypeDef {
         name,
         bound,
         default,
-        span: decl.syntax().text_range(),
+        span: decl.syntax().span_range(),
         name_span: name_token.text_range(),
     })
 }
@@ -1405,26 +1508,26 @@ fn lower_associated_type_binding_def(
     let Some(name_token) = decl.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "associated type binding",
-            span: decl.syntax().text_range(),
+            span: decl.syntax().span_range(),
         });
         return None;
     };
     let name = Name::new(name_token.text());
     let type_expr = decl.default_or_binding().map(|te| {
         let expr = lower_type_expr::lower_type_expr_node(&te);
-        let span = te.syntax().text_range();
+        let span = te.syntax().span_range();
         check_unknown_type(
             &expr,
             format!("binding of associated type `{name}`"),
             span,
             diags,
         );
-        SpannedTypeExpr { expr, span }
+        expr.with_span(span)
     });
     Some(AssociatedTypeBindingDef {
         name,
         type_expr,
-        span: decl.syntax().text_range(),
+        span: decl.syntax().span_range(),
         name_span: name_token.text_range(),
     })
 }
@@ -1436,7 +1539,7 @@ fn lower_method_sig(
     let Some(name_token) = sig.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "method signature",
-            span: sig.syntax().text_range(),
+            span: sig.syntax().span_range(),
         });
         return None;
     };
@@ -1447,10 +1550,14 @@ fn lower_method_sig(
         .iter()
         .map(|(n, _)| n.clone())
         .collect();
-    let generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
+    let mut generic_param_bounds: Vec<Option<crate::ast::TypeExpr>> = generic_params_with_bounds
         .into_iter()
         .map(|(_, b)| b)
         .collect();
+    for bound in generic_param_bounds.iter_mut().flatten() {
+        let bspan = bound.span;
+        lower_type_expr::check_wildcard_type(bound, "a generic type bound", bspan, diags);
+    }
     let parameter_context = format!("method signature `{}`", name.as_str());
 
     let (params, defaults) = sig
@@ -1460,8 +1567,8 @@ fn lower_method_sig(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = sig.return_type().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te);
-        let te_span = te.syntax().text_range();
+        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let te_span = te.syntax().span_range();
         check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
         lower_type_expr::check_void_type(
             &expr,
@@ -1470,19 +1577,25 @@ fn lower_method_sig(
             true,
             diags,
         );
-        SpannedTypeExpr {
-            expr,
-            span: te_span,
-        }
+        lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
+        expr.with_span(te_span)
     });
 
-    let throws = sig
-        .throws_clause()
-        .and_then(|tc| tc.type_expr())
-        .map(|te| SpannedTypeExpr {
-            expr: lower_type_expr::lower_type_expr_node(&te),
-            span: te.syntax().text_range(),
-        });
+    let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
+        let mut expr = lower_type_expr::lower_type_expr_node(&te);
+        let te_span = te.syntax().span_range();
+        // A bodyless method signature (interface required method) has nothing to
+        // infer an open `throws … | _` from, and its declared throws is compared
+        // structurally during conformance checking — so reject ANY `_` here
+        // (unlike a function with a body, where a top-level `_` is the open slot).
+        lower_type_expr::check_wildcard_type(
+            &mut expr,
+            "a method signature `throws` clause",
+            te_span,
+            diags,
+        );
+        expr.with_span(te_span)
+    });
 
     Some(MethodSigDef {
         name,
@@ -1494,7 +1607,7 @@ fn lower_method_sig(
         throws,
         attributes: lower_attributes_from_node(sig.syntax()),
         docstring: crate::docstring::extract_docstring(sig.syntax()),
-        span: sig.syntax().text_range(),
+        span: sig.syntax().span_range(),
         name_span,
     })
 }
@@ -1506,20 +1619,17 @@ fn lower_implements_block(
 ) -> Option<ImplementsBlockDef> {
     let target_node = block.target()?;
     let target_te = target_node.type_expr()?;
-    let target_span = target_te.syntax().text_range();
-    let target = SpannedTypeExpr {
-        expr: lower_type_expr::lower_type_expr_node(&target_te),
-        span: target_span,
-    };
+    let target_span = target_te.syntax().span_range();
+    let target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
     check_unknown_type(
-        &target.expr,
+        &target,
         "interface name in `implements`".to_string(),
         target_span,
         diags,
     );
 
-    let target_label = match &target.expr {
-        crate::ast::TypeExpr::Path { segments, .. } => segments
+    let target_label = match &target.kind {
+        crate::ast::TypeExprKind::Path { segments, .. } => segments
             .last()
             .map(|n: &Name| n.to_string())
             .unwrap_or_else(|| "?".to_string()),
@@ -1535,7 +1645,7 @@ fn lower_implements_block(
             LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
                 interface_name: target_label.clone(),
                 field_name,
-                span: f.syntax().text_range(),
+                span: f.syntax().span_range(),
             },
         );
     }
@@ -1561,7 +1671,7 @@ fn lower_implements_block(
         associated_type_bindings,
         methods,
         is_out_of_body: false,
-        span: block.syntax().text_range(),
+        span: block.syntax().span_range(),
     })
 }
 
@@ -1572,18 +1682,15 @@ fn lower_implements_for(
 ) -> Option<ImplementsForDef> {
     let imp = ast::ImplementsFor::cast(node.clone())?;
 
-    let generic_params = extract_generic_params_with_bounds(node);
+    let generic_params = extract_generic_params_with_all_bounds(node);
 
     // Interface target (the `I` in `implements I for T`)
     let target_node = imp.target()?;
     let target_te = target_node.type_expr()?;
-    let target_span = target_te.syntax().text_range();
-    let interface_target = SpannedTypeExpr {
-        expr: lower_type_expr::lower_type_expr_node(&target_te),
-        span: target_span,
-    };
+    let target_span = target_te.syntax().span_range();
+    let interface_target = lower_type_expr::lower_type_expr_node(&target_te).with_span(target_span);
     check_unknown_type(
-        &interface_target.expr,
+        &interface_target,
         "interface name in `implements ... for`".to_string(),
         target_span,
         diags,
@@ -1592,20 +1699,17 @@ fn lower_implements_for(
     // For target (the `T` in `implements I for T`)
     let for_node = imp.for_target()?;
     let for_te = for_node.type_expr()?;
-    let for_span = for_te.syntax().text_range();
-    let for_target = SpannedTypeExpr {
-        expr: lower_type_expr::lower_type_expr_node(&for_te),
-        span: for_span,
-    };
+    let for_span = for_te.syntax().span_range();
+    let for_target = lower_type_expr::lower_type_expr_node(&for_te).with_span(for_span);
     check_unknown_type(
-        &for_target.expr,
+        &for_target,
         "target type in `implements ... for`".to_string(),
         for_span,
         diags,
     );
 
-    let iface_label = match &interface_target.expr {
-        crate::ast::TypeExpr::Path { segments, .. } => segments
+    let iface_label = match &interface_target.kind {
+        crate::ast::TypeExprKind::Path { segments, .. } => segments
             .last()
             .map(|n: &Name| n.to_string())
             .unwrap_or_else(|| "?".to_string()),
@@ -1621,7 +1725,7 @@ fn lower_implements_for(
             LoweringDiagnostic::InterfaceFieldDeclaredInImplementsBlock {
                 interface_name: iface_label.clone(),
                 field_name,
-                span: f.syntax().text_range(),
+                span: f.syntax().span_range(),
             },
         );
     }
@@ -1648,7 +1752,7 @@ fn lower_implements_for(
         field_links,
         associated_type_bindings,
         methods,
-        span: node.text_range(),
+        span: node.span_range(),
     })
 }
 
@@ -1659,21 +1763,21 @@ fn lower_interface_field_link(
     let Some(interface_field) = link.interface_field() else {
         diags.push(LoweringDiagnostic::MissingFieldName {
             class_name: "interface field link".to_string(),
-            span: link.syntax().text_range(),
+            span: link.syntax().span_range(),
         });
         return None;
     };
     let Some(class_field) = link.class_field() else {
         diags.push(LoweringDiagnostic::MissingFieldName {
             class_name: "interface field link".to_string(),
-            span: link.syntax().text_range(),
+            span: link.syntax().span_range(),
         });
         return None;
     };
     Some(InterfaceFieldLinkDef {
         interface_field: Name::new(interface_field.text()),
         class_field: Name::new(class_field.text()),
-        span: link.syntax().text_range(),
+        span: link.syntax().span_range(),
         interface_field_span: interface_field.text_range(),
         class_field_span: class_field.text_range(),
     })
@@ -1687,7 +1791,7 @@ fn lower_type_alias(
     let Some(name_token) = alias.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "type alias",
-            span: node.text_range(),
+            span: node.span_range(),
         });
         return None;
     };
@@ -1696,8 +1800,8 @@ fn lower_type_alias(
     Some(TypeAliasDef {
         name: Name::new(&alias_name),
         type_expr: alias.ty().map(|te| {
-            let expr = lower_type_expr::lower_type_expr_node(&te);
-            let te_span = te.syntax().text_range();
+            let mut expr = lower_type_expr::lower_type_expr_node(&te);
+            let te_span = te.syntax().span_range();
             check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
             lower_type_expr::check_void_type(
                 &expr,
@@ -1706,12 +1810,10 @@ fn lower_type_alias(
                 false,
                 diags,
             );
-            SpannedTypeExpr {
-                expr,
-                span: te_span,
-            }
+            lower_type_expr::check_wildcard_type(&mut expr, "a type alias", te_span, diags);
+            expr.with_span(te_span)
         }),
-        span: node.text_range(),
+        span: node.span_range(),
         name_span: name_token.text_range(),
     })
 }
@@ -1721,23 +1823,116 @@ fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<
     let Some(name_token) = test.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "test",
-            span: node.text_range(),
+            span: node.span_range(),
         });
         return None;
     };
 
     let test_name = name_token.text().to_string();
-    let config_items = test
-        .config_block()
-        .map(|cb| lower_config_block(&cb, "test", &test_name, diags))
+    let config_block = test.config_block();
+    if let Some(block) = &config_block {
+        for item in block.items() {
+            if item.key().is_none() {
+                diags.push(LoweringDiagnostic::MissingConfigKey {
+                    block_kind: "test",
+                    block_name: test_name.clone(),
+                    span: item.syntax().span_range(),
+                });
+            }
+        }
+    }
+    let function_refs = test
+        .function_reference_names()
+        .into_iter()
+        .map(Name::new)
+        .collect();
+    let args = config_block
+        .as_ref()
+        .and_then(|block| block.items().find(|item| item.matches_key("args")))
+        .and_then(|item| item.nested_block())
+        .map(|block| lower_test_arg_map(&block))
         .unwrap_or_default();
 
     Some(TestDef {
         name: Name::new(&test_name),
-        config_items,
-        span: node.text_range(),
+        function_refs,
+        args,
+        span: node.span_range(),
         name_span: name_token.text_range(),
     })
+}
+
+fn lower_test_arg_map(block: &ast::ConfigBlock) -> Vec<(Name, TestArgValue)> {
+    block
+        .items()
+        .filter_map(|item| {
+            let key = item.key()?;
+            Some((Name::new(key.text()), lower_test_arg_item(&item)))
+        })
+        .collect()
+}
+
+fn lower_test_arg_map_as_value(block: &ast::ConfigBlock) -> TestArgValue {
+    TestArgValue::Map(
+        lower_test_arg_map(block)
+            .into_iter()
+            .map(|(key, value)| (key.to_string(), value))
+            .collect(),
+    )
+}
+
+fn lower_test_arg_item(item: &ast::ConfigItem) -> TestArgValue {
+    if let Some(block) = item.nested_block() {
+        return lower_test_arg_map_as_value(&block);
+    }
+
+    item.config_value_node()
+        .map(|value| lower_test_arg_config_value(&value))
+        .unwrap_or(TestArgValue::Null)
+}
+
+fn lower_test_arg_config_value(value: &SyntaxNode) -> TestArgValue {
+    if let Some(array) = value
+        .children()
+        .find(|child| child.kind() == SyntaxKind::ARRAY_LITERAL)
+    {
+        return TestArgValue::Array(
+            array
+                .children()
+                .filter_map(|element| match element.kind() {
+                    SyntaxKind::CONFIG_VALUE => Some(lower_test_arg_config_value(&element)),
+                    SyntaxKind::CONFIG_BLOCK => ast::ConfigBlock::cast(element)
+                        .map(|block| lower_test_arg_map_as_value(&block)),
+                    _ => None,
+                })
+                .collect(),
+        );
+    }
+
+    let raw = value.text().to_string();
+    if let Some(string) = crate::parse_string_attr_value(raw.trim()) {
+        return TestArgValue::String(string);
+    }
+
+    let text = ast::ConfigValue::cast(value.clone())
+        .and_then(|config_value| config_value.scalar_text())
+        .unwrap_or_default();
+
+    match text.as_str() {
+        "null" => return TestArgValue::Null,
+        "true" => return TestArgValue::Bool(true),
+        "false" => return TestArgValue::Bool(false),
+        _ => {}
+    }
+
+    if let Ok(value) = text.parse::<i64>() {
+        return TestArgValue::Int(value);
+    }
+    if let Ok(value) = text.parse::<f64>() {
+        return TestArgValue::float(value);
+    }
+
+    TestArgValue::String(text)
 }
 
 /// Extract the name expression element from a `TEST_EXPR_DEF` or `TESTSET_DEF` node.
@@ -1928,15 +2123,15 @@ fn synthesize_init_test_function(
     // The single parameter: `registry: testing.TestCollector`
     let registry_param = Param {
         name: Name::new("registry"),
-        type_expr: Some(SpannedTypeExpr {
-            expr: crate::ast::TypeExpr::Path {
+        type_expr: Some(
+            crate::ast::TypeExprKind::Path {
                 segments: vec![Name::new("testing"), Name::new("TestCollector")],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
                 attrs: vec![],
-            },
-            span,
-        }),
+            }
+            .at(span),
+        ),
         default: None,
         span,
         name_span: span,
@@ -1955,6 +2150,7 @@ fn synthesize_init_test_function(
         origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
         docstring: None,
+        is_tagged_template_tag: false,
         span,
         name_span: span,
     }
@@ -1987,16 +2183,14 @@ fn synthesize_register_call(
                 generic_param_bounds: vec![],
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(SpannedTypeExpr {
-                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
-                    span,
-                }),
+                return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
                 body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
                 declarative_meta: None,
                 origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
                 docstring: None,
+                is_tagged_template_tag: false,
                 span,
                 name_span: span,
             };
@@ -2017,7 +2211,7 @@ fn synthesize_register_call(
             // the local would fall back to a null placeholder). The range is
             // unique per test block, so distinct lambda scopes stay
             // distinguishable. Mirrors the testset collector lambda below.
-            let lambda_span = body_node.text_range();
+            let lambda_span = body_node.span_range();
             let lambda_arg = ctx.alloc_expr(Expr::Lambda(Box::new(lambda_def)), lambda_span);
             let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
 
@@ -2052,15 +2246,15 @@ fn synthesize_register_call(
             // Collector lambda parameter: `testset`
             let testset_param = Param {
                 name: Name::new("testset"),
-                type_expr: Some(SpannedTypeExpr {
-                    expr: crate::ast::TypeExpr::Path {
+                type_expr: Some(
+                    crate::ast::TypeExprKind::Path {
                         segments: vec![Name::new("testing"), Name::new("TestCollector")],
                         generic_args: vec![],
                         associated_type_bindings: vec![],
                         attrs: vec![],
-                    },
-                    span,
-                }),
+                    }
+                    .at(span),
+                ),
                 default: None,
                 span,
                 name_span: span,
@@ -2072,16 +2266,14 @@ fn synthesize_register_call(
                 generic_param_bounds: vec![],
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(SpannedTypeExpr {
-                    expr: crate::ast::TypeExpr::Void { attrs: vec![] },
-                    span,
-                }),
+                return_type: Some(crate::ast::TypeExprKind::Void { attrs: vec![] }.at(span)),
                 throws: None,
                 body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
                 declarative_meta: None,
                 origin: crate::ast::FunctionOrigin::Internal,
                 attributes: vec![],
                 docstring: None,
+                is_tagged_template_tag: false,
                 span,
                 name_span: span,
             };
@@ -2096,7 +2288,7 @@ fn synthesize_register_call(
             let name_arg = lower_expr_body::lower_runner_element(ctx, name_element);
             // Use the testset body's real CST range so HIR scope lookup works
             // correctly for name resolution inside the collector lambda body.
-            let collector_lambda_span = body_node.text_range();
+            let collector_lambda_span = body_node.span_range();
             let collector_arg =
                 ctx.alloc_expr(Expr::Lambda(Box::new(collector_def)), collector_lambda_span);
             let runner_arg = lower_runner_element(runner_element.as_ref(), ctx, span);
@@ -2132,28 +2324,37 @@ fn lower_runner_element(
     }
 }
 
-fn lower_generator(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<GeneratorDef> {
-    let generator = ast::GeneratorDef::cast(node.clone())?;
-    let Some(name_token) = generator.name() else {
-        diags.push(LoweringDiagnostic::MissingItemName {
-            item_kind: "generator",
-            span: node.text_range(),
-        });
-        return None;
+/// Build the migration warning for a deprecated top-level `generator { … }`
+/// block. The block is otherwise ignored — generators are configured in
+/// `baml.toml` now (see `baml_cli`'s `discover_generators`).
+fn lower_generator_deprecation(node: &SyntaxNode) -> LoweringDiagnostic {
+    // Point the diagnostic at the `generator <name>` header, not the whole
+    // node — the node's `text_range()` would swallow leading trivia and the
+    // entire opaque body, producing an ugly multi-line caret.
+    let mut kw_range = None;
+    let mut name = None;
+    let mut name_range = None;
+    for token in node
+        .children_with_tokens()
+        .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
+    {
+        match token.kind() {
+            SyntaxKind::KW_GENERATOR => kw_range = Some(token.text_range()),
+            SyntaxKind::WORD if name.is_none() => {
+                name = Some(token.text().to_string());
+                name_range = Some(token.text_range());
+            }
+            // Stop before the opaque `{ … }` body.
+            SyntaxKind::L_BRACE => break,
+            _ => {}
+        }
+    }
+    let span = match (kw_range, name_range) {
+        (Some(kw), Some(nm)) => text_size::TextRange::new(kw.start(), nm.end()),
+        (Some(kw), None) => kw,
+        _ => node.span_range(),
     };
-
-    let gen_name = name_token.text().to_string();
-    let config_items = generator
-        .config_block()
-        .map(|cb| lower_config_block(&cb, "generator", &gen_name, diags))
-        .unwrap_or_default();
-
-    Some(GeneratorDef {
-        name: Name::new(&gen_name),
-        config_items,
-        span: node.text_range(),
-        name_span: name_token.text_range(),
-    })
+    LoweringDiagnostic::GeneratorBlockInBaml { name, span }
 }
 
 fn lower_template_string(
@@ -2164,7 +2365,7 @@ fn lower_template_string(
     let Some(name_token) = ts.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "template_string",
-            span: node.text_range(),
+            span: node.span_range(),
         });
         return None;
     };
@@ -2182,7 +2383,7 @@ fn lower_template_string(
         name: Name::new(name_token.text()),
         params,
         body,
-        span: node.text_range(),
+        span: node.span_range(),
         name_span: name_token.text_range(),
     })
 }
@@ -2202,11 +2403,11 @@ fn synthesize_retry_policy_let(
     let Some(name_token) = rp.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "retry_policy",
-            span: node.text_range(),
+            span: node.span_range(),
         });
         return None;
     };
-    let span = node.text_range();
+    let span = node.span_range();
     let rp_name = name_token.text().to_string();
     let Some(config_block) = rp.config_block() else {
         diags.push(LoweringDiagnostic::MissingConfigBlock {
@@ -2233,7 +2434,7 @@ fn synthesize_retry_policy_let(
                 diags.push(LoweringDiagnostic::MissingConfigKey {
                     block_kind: "retry_policy",
                     block_name: rp_name.clone(),
-                    span: item.syntax().text_range(),
+                    span: item.syntax().span_range(),
                 });
                 return None;
             };
@@ -2241,6 +2442,7 @@ fn synthesize_retry_policy_let(
                 &item,
                 &mut alloc,
                 env_var_refs,
+                crate::lower_config_item::EnvReadMode::Strict,
             );
             Some((Name::new(key.text()), value))
         })
@@ -2264,14 +2466,7 @@ fn synthesize_retry_policy_let(
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: la_arena::Arena::new(),
-        pattern_spans: la_arena::Arena::new(),
-        match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
-        catch_arm_spans: la_arena::Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     Some(Item::Let(LetDef {
@@ -2298,12 +2493,12 @@ fn synthesize_client_items(
     let Some(name_token) = client.name() else {
         diags.push(LoweringDiagnostic::MissingItemName {
             item_kind: "client",
-            span: node.text_range(),
+            span: node.span_range(),
         });
         return None;
     };
     let client_name = name_token.text().to_string();
-    let span = node.text_range();
+    let span = node.span_range();
     let Some(config_block) = client.config_block() else {
         diags.push(LoweringDiagnostic::MissingConfigBlock {
             block_kind: "client",
@@ -2509,14 +2704,7 @@ fn synthesize_client_let(
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: la_arena::Arena::new(),
-        pattern_spans: la_arena::Arena::new(),
-        match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
-        catch_arm_spans: la_arena::Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     Item::Let(LetDef {
@@ -2558,6 +2746,13 @@ fn synthesize_client_new_companion(
     env_var_refs: &mut Vec<crate::EnvVarRef>,
 ) -> FunctionDef {
     use baml_base::Literal;
+
+    // The constructor's `lenient: bool` parameter. `env.X` option reads are
+    // lowered to `baml.env.get_or_panic_lenient("X", lenient)` so the offline
+    // `render_prompt` path (which calls the constructor with `lenient = true`)
+    // can build the client for its metadata without a credential env var set,
+    // while the network paths keep `lenient = false` and still panic if unset.
+    let lenient_param_name = Name::new("lenient");
 
     let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
     let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
@@ -2614,10 +2809,13 @@ fn synthesize_client_new_companion(
     let options_span = config_block
         .items()
         .find(|item| item.matches_key("options"))
-        .map(|item| item.syntax().text_range())
+        .map(|item| item.syntax().span_range())
         .unwrap_or(span);
 
     let mut has_base_url = false;
+    // Whether the user wrote an `api_key` option (even `api_key null`). If so,
+    // the provider env-var default below is suppressed so user config wins.
+    let mut api_key_set_by_user = false;
     let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
     // Track which provider fields have been set to non-null values by the user.
     // No compile-time defaults, so this starts empty.
@@ -2638,8 +2836,13 @@ fn synthesize_client_new_companion(
                     &opt_item,
                     &mut alloc,
                     env_var_refs,
+                    crate::lower_config_item::EnvReadMode::Lenient(&lenient_param_name),
                 );
                 let is_null = opt_item.value_str().as_deref() == Some("null");
+
+                if k == "api_key" {
+                    api_key_set_by_user = true;
+                }
 
                 if values.contains_key(k) || provider_field_set.contains(k) {
                     // Known field. Provider fields skip null to preserve defaults.
@@ -2659,6 +2862,45 @@ fn synthesize_client_new_companion(
                 }
             }
         }
+    }
+
+    // ── 2b. Default api_key from the provider env var (B-489) ───
+    //
+    // A named `client<llm>` with no explicit `api_key` mirrors the inline
+    // `"openai/model"` shorthand (see `from_shorthand` in the `sys_ops` crate):
+    // default the key to the provider's conventional env var. The read is soft
+    // — `baml.env.get` yields `null` when the var is unset rather than panicking
+    // — exactly like the shorthand, which leaves `api_key` unset when the var is
+    // absent (the request then goes out unauthenticated, as before). This keeps
+    // the offline `render_prompt` path working without the var set (B-626) and
+    // never eagerly *requires* the key. An explicit `api_key` (including
+    // `api_key null`) suppresses this default so user config always wins.
+    if !api_key_set_by_user
+        && let Some(env_var) = provider
+            .map(String::as_str)
+            .and_then(default_api_key_env_var)
+    {
+        let arg = alloc(Expr::Literal(Literal::String(env_var.to_string())));
+        let callee = alloc(Expr::Path(vec![
+            Name::new("baml"),
+            Name::new("env"),
+            Name::new("get"),
+        ]));
+        let call = alloc(Expr::Call {
+            callee,
+            type_args: vec![],
+            args: vec![CallArg::positional(arg)],
+        });
+        values.insert("api_key".to_string(), call);
+        // Surface the synthesized dependency to LSP env-var tooling
+        // (`file_env_var_refs`, which feeds the playground's env panel), the
+        // same as an explicit `env.X` read. There is no user-written token to
+        // point at, so anchor the reference at the `options` block where an
+        // explicit `api_key` would otherwise go.
+        env_var_refs.push(crate::EnvVarRef {
+            name: env_var.to_string(),
+            range: options_span,
+        });
     }
 
     // ── 3. Validate ─────────────────────────────────────────────
@@ -2771,22 +3013,22 @@ fn synthesize_client_new_companion(
     };
     let source_map = AstSourceMap {
         expr_spans,
-        stmt_spans: la_arena::Arena::new(),
-        pattern_spans: la_arena::Arena::new(),
-        match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
-        catch_arm_spans: la_arena::Arena::new(),
-        member_access_member_spans: std::collections::HashMap::new(),
-        path_segment_spans: std::collections::HashMap::new(),
-        call_arg_label_spans: std::collections::HashMap::new(),
+        ..Default::default()
     };
 
     let func_name = format!("{client_name}$new");
+    let lenient_param = Param {
+        name: lenient_param_name,
+        type_expr: Some((TypeExprKind::Bool { attrs: vec![] }).at(span)),
+        default: None,
+        span,
+        name_span: name_token.text_range(),
+    };
     FunctionDef {
         name: Name::new(&func_name),
         generic_params: vec![],
         generic_param_bounds: vec![],
-        params: vec![],
+        params: vec![lenient_param],
         defaults: FunctionDefaults::empty(),
         return_type: None,
         throws: None,
@@ -2795,6 +3037,7 @@ fn synthesize_client_new_companion(
         origin: crate::ast::FunctionOrigin::Internal,
         attributes: vec![],
         docstring: None,
+        is_tagged_template_tag: false,
         span,
         name_span: name_token.text_range(),
     }
@@ -2832,6 +3075,20 @@ fn is_valid_provider(provider: &str) -> bool {
         .any(|c| c.providers.contains(&provider))
 }
 
+/// Conventional `api_key` env var for a provider, or `None` if the provider
+/// needs explicit credentials.
+///
+/// Mirrors the mapping the inline `"openai/model"` shorthand applies in
+/// `sys_ops` (`from_shorthand`): only the two providers whose env-var
+/// convention is ubiquitous enough to assume default their key here.
+fn default_api_key_env_var(provider: &str) -> Option<&'static str> {
+    match provider {
+        "openai" | "openai-responses" => Some("OPENAI_API_KEY"),
+        "anthropic" => Some("ANTHROPIC_API_KEY"),
+        _ => None,
+    }
+}
+
 /// Validate provider-specific option constraints at compile time.
 fn validate_client_options(
     provider: &str,
@@ -2862,40 +3119,11 @@ fn validate_client_options(
         });
     }
 
-    if provider == "vertex-ai" && !has_base_url && !has_prov("location") {
-        diags.push(LoweringDiagnostic::MissingClientOptions {
-            client_name: client_name.to_string(),
-            message: "vertex-ai requires either base_url or location (e.g. us-central1) in options"
-                .to_string(),
-            span,
-        });
-    }
-}
-
-fn lower_config_block(
-    cb: &ast::ConfigBlock,
-    block_kind: &'static str,
-    block_name: &str,
-    diags: &mut Vec<LoweringDiagnostic>,
-) -> Vec<ConfigItemDef> {
-    cb.items()
-        .filter_map(|item| {
-            let Some(key_token) = item.key() else {
-                diags.push(LoweringDiagnostic::MissingConfigKey {
-                    block_kind,
-                    block_name: block_name.to_string(),
-                    span: item.syntax().text_range(),
-                });
-                return None;
-            };
-            let value = item.value_str().unwrap_or_default();
-            Some(ConfigItemDef {
-                key: Name::new(key_token.text()),
-                value,
-                span: item.syntax().text_range(),
-            })
-        })
-        .collect()
+    // vertex-ai deliberately has no compile-time location requirement:
+    // `location` (like `project_id`) can come from the GOOGLE_CLOUD_LOCATION
+    // env var at request time, which the compiler cannot see. A client with
+    // neither base_url, location, nor the env var fails at $build_request
+    // with an actionable error (see sys_llm auth_request/vertex.rs).
 }
 
 /// Lower variant-level attributes from an `EnumVariant` node.
@@ -2920,7 +3148,7 @@ pub(crate) fn lower_attribute(attr: &ast::Attribute) -> Option<RawAttribute> {
     let attr_name = attr
         .full_name()
         .unwrap_or_else(|| name_token.text().to_string());
-    let span = attr.syntax().text_range();
+    let span = attr.syntax().span_range();
 
     let args = lower_attribute_args_from_node(attr.syntax());
 
@@ -2937,7 +3165,7 @@ fn lower_block_attribute(attr: &ast::BlockAttribute) -> Option<RawAttribute> {
     let attr_name = attr
         .full_name()
         .unwrap_or_else(|| name_token.text().to_string());
-    let span = attr.syntax().text_range();
+    let span = attr.syntax().span_range();
 
     let args = lower_attribute_args_from_node(attr.syntax());
 
@@ -2956,7 +3184,7 @@ fn lower_attribute_args_from_node(node: &SyntaxNode) -> Vec<RawAttributeArg> {
         .flat_map(|args_node| {
             args_node.children().map(|arg_node| {
                 let text = arg_node.text().to_string();
-                let span = arg_node.text_range();
+                let span = arg_node.span_range();
                 RawAttributeArg {
                     key: None,
                     value: text.trim().to_string(),

@@ -58,6 +58,7 @@ function toml.toml_item_to_json_array() -> string {
     load_const "2020-01-01T00:00:00Z"
     call baml.time.ZonedDateTime.parse
     load_const 7
+    load_type baml.toml.Item
     alloc_array 2
     call baml.toml.item_to_json
     call baml.json.stringify

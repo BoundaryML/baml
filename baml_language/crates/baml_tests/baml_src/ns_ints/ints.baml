@@ -579,3 +579,47 @@ test "int_count_zeros_plus_count_ones_equals_64" {
     // 51966 = 0xCAFE — arbitrary mixed bit pattern
     assert.is_true(baml.deep_equals(count_zeros_plus_ones(51966), 64))
 }
+
+// ─── Operator overflow & boundary arithmetic ────────────────────────────────
+//
+// `+`, `-`, `*` and unary `-` throw a catchable `baml.panics.IntegerOverflow`
+// when the result leaves the i63 range (catch tests live in ns_exceptions).
+// Valid arithmetic right up to the boundary must NOT spuriously throw. Helpers
+// take runtime args so the ops aren't constant-folded — they run through the
+// VM's checked AddInt/SubInt/MulInt opcodes.
+function int_add_(a: int, b: int) -> int { a + b }
+function int_sub_(a: int, b: int) -> int { a - b }
+function int_mul_(a: int, b: int) -> int { a * b }
+
+test "int_add_at_max_boundary_no_overflow" {
+    // (MAX - 1) + 1 == MAX
+    assert.is_true(baml.deep_equals(int_add_(int.max_value() - 1, 1), int.max_value()))
+}
+
+test "int_sub_at_min_boundary_no_overflow" {
+    // (MIN + 1) - 1 == MIN
+    assert.is_true(baml.deep_equals(int_sub_(int.min_value() + 1, 1), int.min_value()))
+}
+
+test "int_mul_max_by_one_no_overflow" {
+    assert.is_true(baml.deep_equals(int_mul_(int.max_value(), 1), int.max_value()))
+}
+
+test "int_mul_min_by_one_no_overflow" {
+    assert.is_true(baml.deep_equals(int_mul_(int.min_value(), 1), int.min_value()))
+}
+
+// ─── regression: bare-literal method receiver (B-614) ─────────────────────────
+//
+// A method called directly on a bare integer literal (no wrapping parens) used
+// to lower its receiver to a Missing expr: `.abs()` failed to type-check and
+// `.to_string()` panicked at runtime with "parse error". The receiver must be
+// the literal itself. Kept at the end of the file so the test registry stays
+// append-only.
+test "int_abs_bare_literal" {
+    assert.is_true(baml.deep_equals(3.abs(), 3))
+}
+
+test "int_to_string_bare_literal" {
+    assert.is_true(baml.deep_equals(7.to_string(), "7"))
+}

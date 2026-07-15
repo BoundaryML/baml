@@ -65,6 +65,7 @@ export const getAllBepsForExport = query({
             title: p.title,
             content: p.content,
             order: p.order,
+            parentSlug: p.parentSlug,
           })),
         };
       })

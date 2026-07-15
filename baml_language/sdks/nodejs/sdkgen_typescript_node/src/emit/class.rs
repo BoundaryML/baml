@@ -3,7 +3,7 @@
 //! Covers user-code classes, stdlib classes (`baml.http.Response`, …),
 //! and `$stream` companion classes. Emits `export class` (with fields and a
 //! field-object constructor); the five runtime-owned stdlib types
-//! (media + stream) instead re-export from `@boundaryml/baml-core-node`.
+//! (media + stream) instead re-export from `@boundaryml/baml-bridge`.
 
 use baml_codegen_types::{Name, Ty};
 

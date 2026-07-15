@@ -34,5 +34,5 @@ function DoExit(code: int) -> never {
 
 // cancellation arm: a sleep long enough to abort mid-flight.
 function SleepMs(ms: int) -> null throws baml.errors.Io {
-  baml.sys.sleep(ms)
+  baml.sys.sleep(baml.time.Duration.from_nanoseconds(ms * 1000000n))
 }

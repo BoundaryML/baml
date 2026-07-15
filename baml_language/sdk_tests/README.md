@@ -46,7 +46,7 @@ Each SDK is implemented in two parts: an FFI to provide core runtime bindings an
 `sdk_test_python_pydantic2` provides coverage for
 
   - `sdks/python/rust/bridge_python`
-  - `sdks/python/src/baml_core`
+  - `sdks/python/src/baml_bridge`
   - `sdks/python/rust/sdkgen_python_pydantic2`
 
 `sdk_test_typescript_node` provides coverage for

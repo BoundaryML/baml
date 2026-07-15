@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
     render_async_client, render_runtime, render_source_files, render_sync_client, render_type_map,
@@ -7,7 +9,8 @@ use generated_types::render_py_types;
 use crate::{
     functions::{render_config, render_globals, render_init, render_parser, render_tracing},
     generated_types::{
-        render_py_stream_types_utils, render_py_type_builder, render_py_types_utils,
+        render_py_model_rebuilds, render_py_stream_types_utils, render_py_type_builder,
+        render_py_types_utils,
     },
 };
 
@@ -126,11 +129,21 @@ impl LanguageFeatures for PyLanguageFeatures {
             render_py_type_builder(&py_classes, &enums)?,
         )?;
 
+        // Classes in a dependency cycle must not be eagerly rebuilt (Pydantic
+        // resolves them lazily; an eager model_rebuild() can hit RecursionError).
+        let recursive = recursive_class_names(ir.as_ref());
+
         pkg.set("baml_client.types");
         collector.add_file("types.py", render_py_types_utils(&pkg)?)?;
         collector.append_to_file("types.py", &render_py_types(&enums, &pkg)?)?;
         collector.append_to_file("types.py", &render_py_types(&py_classes, &pkg)?)?;
         collector.append_to_file("types.py", &render_py_types(&py_type_aliases, &pkg)?)?;
+        // Rebuild non-recursive models after all are defined so string forward
+        // references resolve regardless of class declaration order (issue #793).
+        collector.append_to_file(
+            "types.py",
+            &render_py_model_rebuilds(&py_classes, &recursive, &pkg)?,
+        )?;
 
         let mut py_stream_type_aliases = type_aliases
             .iter()
@@ -150,9 +163,77 @@ impl LanguageFeatures for PyLanguageFeatures {
             "stream_types.py",
             &render_py_types(&py_stream_type_aliases, &pkg)?,
         )?;
+        // Same forward-reference fix for the streaming models (issue #793).
+        collector.append_to_file(
+            "stream_types.py",
+            &render_py_model_rebuilds(&py_classes, &recursive, &pkg)?,
+        )?;
 
         Ok(())
     }
+}
+
+/// Class names that participate in a dependency cycle, so the generated
+/// `model_rebuild()` block can skip them. Pydantic resolves recursive models
+/// lazily and an eager rebuild of one can hit `RecursionError` (issue #793).
+///
+/// A class is recursive if it is part of a finite recursive class cycle, or if
+/// its field types transitively reach such a cycle or a structural recursive
+/// type alias (e.g. `value: "JsonValue"`). Reuses the IR's existing cycle
+/// detection (`finite_recursive_cycles` + `structural_recursive_alias_cycles`).
+fn recursive_class_names(ir: &IntermediateRepr) -> HashSet<String> {
+    // Seed: recursive class cycles + names of recursive structural aliases.
+    let mut seed: HashSet<String> = HashSet::new();
+    for cycle in ir.finite_recursive_cycles() {
+        seed.extend(cycle.iter().cloned());
+    }
+    for cycle in ir.structural_recursive_alias_cycles() {
+        seed.extend(cycle.keys().cloned());
+    }
+
+    // Immediate type-dependency edges for every class and type alias.
+    let mut deps: HashMap<String, HashSet<String>> = HashMap::new();
+    for c in ir.walk_classes() {
+        let mut class_deps = HashSet::new();
+        for field in c.item.elem.static_fields.iter() {
+            class_deps.extend(field.elem.r#type.elem.dependencies());
+        }
+        deps.insert(c.item.elem.name.clone(), class_deps);
+    }
+    for a in ir.walk_type_aliases() {
+        deps.insert(
+            a.item.elem.name.clone(),
+            a.item.elem.r#type.elem.dependencies(),
+        );
+    }
+
+    ir.walk_classes()
+        .map(|c| c.item.elem.name.clone())
+        .filter(|name| reaches_seed(name, &deps, &seed))
+        .collect()
+}
+
+/// Whether `start` is in `seed` or can transitively reach a `seed` member by
+/// following type dependencies.
+fn reaches_seed(
+    start: &str,
+    deps: &HashMap<String, HashSet<String>>,
+    seed: &HashSet<String>,
+) -> bool {
+    let mut visited: HashSet<String> = HashSet::new();
+    let mut stack = vec![start.to_string()];
+    while let Some(name) = stack.pop() {
+        if seed.contains(&name) {
+            return true;
+        }
+        if !visited.insert(name.clone()) {
+            continue;
+        }
+        if let Some(next) = deps.get(&name) {
+            stack.extend(next.iter().cloned());
+        }
+    }
+    false
 }
 
 #[cfg(test)]

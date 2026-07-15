@@ -9,7 +9,6 @@ instances:
         branch: canary
 
 title: Boundary Documentation
-js: ./custom.js
 ai-chat:
   system-prompt: |
     You will be answering questions about BAML (Basically, a Made-up Language) -- an AI framework to write LLM prompts as functions. Here is some background:
@@ -1006,9 +1005,10 @@ colors:
     light: "#ffffff"
     dark: "#0b0d0e"
 logo:
-  light: assets/favicon.ico
-  dark: assets/favicon.ico
-  height: 40
+  light: assets/boundary-black-big.svg
+  dark: assets/boundary-white.svg
+  height: 28
+  href: https://boundaryml.com
 favicon: assets/favicon.ico
 css: assets/styles.css
 layout:

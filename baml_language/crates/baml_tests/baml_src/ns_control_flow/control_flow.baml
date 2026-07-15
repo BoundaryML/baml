@@ -9,10 +9,14 @@
 
 // ─── shared declarations ──────────────────────────────────────────────────────
 
-class Ok { value string }
+// A shared member accessed on a union (`(Ok | Warn).value`) is reachable only
+// through an interface both arms implement — a bare class field is not enough.
+interface HasValue { value string }
+
+class Ok { value string  implements HasValue {} }
 class Err { message string }
 class Empty {}
-class Warn { value string }
+class Warn { value string  implements HasValue {} }
 class User { name string, age int }
 class Admin { handle string }
 class Wrapper { payload string }

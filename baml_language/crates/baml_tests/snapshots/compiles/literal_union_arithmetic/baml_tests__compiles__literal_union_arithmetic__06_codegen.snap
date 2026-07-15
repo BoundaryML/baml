@@ -1,6 +1,15 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
 function user.bothSidesUnion() -> int {
     load_const true
     pop_jump_if_false L0

@@ -3,11 +3,14 @@
 import { Plus, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { buildBepPath, MAIN_CONTENT_ID } from "@/lib/bep-routes";
+import { useEffect, useRef, type MouseEvent } from "react";
 
 interface Section {
   id: string;
   title: string;
   hasContent: boolean;
+  parentSlug?: string;
 }
 
 type PageStatus = "modified" | "new" | "deleted";
@@ -16,21 +19,62 @@ interface BepNavProps {
   sections: Section[];
   activeSection: string;
   onSectionClick: (id: string) => void;
+  bepNumber: number;
+  versionNumber?: number | null;
   commentCounts?: Record<string, number>;
   totalCommentCount?: number;
   openIssueCount?: number;
   decisionCount?: number;
-  hideMetaSections?: boolean; // Hide issues, decisions (for historical viewing)
-  // Edit mode props
+  hideMetaSections?: boolean;
   isEditMode?: boolean;
-  pageStatuses?: Record<string, PageStatus>; // Maps section id to status
+  pageStatuses?: Record<string, PageStatus>;
   onAddPage?: () => void;
+}
+
+function sectionHref(
+  sectionId: string,
+  bepNumber: number,
+  versionNumber?: number | null
+): string {
+  if (sectionId === MAIN_CONTENT_ID) {
+    return buildBepPath({ bepNumber, section: "readme", versionNumber });
+  }
+  if (sectionId === "issues") {
+    return buildBepPath({ bepNumber, section: "issues" });
+  }
+  if (sectionId === "decisions") {
+    return buildBepPath({ bepNumber, section: "decisions" });
+  }
+  if (sectionId === "ai") {
+    return buildBepPath({ bepNumber, section: "ai" });
+  }
+  if (sectionId === "comments") {
+    return buildBepPath({ bepNumber, section: "comments" });
+  }
+  return buildBepPath({
+    bepNumber,
+    section: "page",
+    pageSlug: sectionId,
+    versionNumber,
+  });
+}
+
+function handleNavClick(
+  e: MouseEvent,
+  sectionId: string,
+  onSectionClick: (id: string) => void
+) {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+  e.preventDefault();
+  onSectionClick(sectionId);
 }
 
 export function BepNav({
   sections,
   activeSection,
   onSectionClick,
+  bepNumber,
+  versionNumber,
   commentCounts = {},
   totalCommentCount = 0,
   openIssueCount = 0,
@@ -40,31 +84,79 @@ export function BepNav({
   pageStatuses = {},
   onAddPage,
 }: BepNavProps) {
+  // Arrange sections as a tree: children (parentSlug) render under their
+  // parent, indented. Children whose parent isn't visible stay at top level.
+  const visibleSections = sections.filter(
+    (s) => s.hasContent || pageStatuses[s.id] === "new"
+  );
+  const visibleIds = new Set(visibleSections.map((s) => s.id));
+  const orderedSections: Array<Section & { depth: number }> = [];
+  for (const section of visibleSections) {
+    // Self-referential pages (parentSlug === own id) render at top level
+    if (
+      section.parentSlug &&
+      section.parentSlug !== section.id &&
+      visibleIds.has(section.parentSlug)
+    ) {
+      continue;
+    }
+    orderedSections.push({ ...section, depth: 0 });
+    for (const child of visibleSections) {
+      if (child.id !== section.id && child.parentSlug === section.id) {
+        orderedSections.push({ ...child, depth: 1 });
+      }
+    }
+  }
+
+  // Keep the active item visible inside the sidebar's own scroll container
+  // without touching window scroll (scrollIntoView would also scroll
+  // ancestors, which is exactly the jarring jump we're avoiding).
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!active) return;
+    // The scrollable ancestor is the sticky wrapper around this nav
+    const container = nav.parentElement;
+    if (!container || container.scrollHeight <= container.clientHeight) return;
+    const containerTop = container.getBoundingClientRect().top;
+    const activeRect = active.getBoundingClientRect();
+    const top = activeRect.top - containerTop + container.scrollTop;
+    const bottom = top + activeRect.height;
+    if (top < container.scrollTop) {
+      container.scrollTop = top - 8;
+    } else if (bottom > container.scrollTop + container.clientHeight) {
+      container.scrollTop = bottom - container.clientHeight + 8;
+    }
+  }, [activeSection]);
+
   return (
-    <nav className="space-y-1">
-      {sections
-        .filter((s) => s.hasContent || pageStatuses[s.id] === "new")
+    <nav ref={navRef} className="space-y-1">
+      {orderedSections
         .map((section) => {
           const status = pageStatuses[section.id];
           const isDeleted = status === "deleted";
 
           return (
-            <button
+            <a
               key={section.id}
-              onClick={() => onSectionClick(section.id)}
+              href={sectionHref(section.id, bepNumber, versionNumber)}
+              onClick={(e) => handleNavClick(e, section.id, onSectionClick)}
+              aria-current={activeSection === section.id ? "page" : undefined}
               className={cn(
-                "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+                "block w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
                 "hover:bg-accent hover:text-accent-foreground",
                 activeSection === section.id
                   ? "bg-accent text-accent-foreground font-medium"
                   : "text-muted-foreground",
-                isDeleted && "opacity-50 line-through"
+                isDeleted && "opacity-50 line-through",
+                section.depth > 0 && "ml-4 border-l pl-3"
               )}
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="truncate">{section.title}</span>
                 <span className="flex items-center gap-1 shrink-0">
-                  {/* Edit mode status badge */}
                   {isEditMode && status && (
                     <span
                       className={cn(
@@ -76,7 +168,6 @@ export function BepNav({
                       title={status}
                     />
                   )}
-                  {/* Comment count (only in view mode) */}
                   {!isEditMode && (commentCounts[section.id] ?? 0) > 0 && (
                     <span className="text-xs bg-muted px-1.5 py-0.5 rounded">
                       {commentCounts[section.id]}
@@ -84,11 +175,10 @@ export function BepNav({
                   )}
                 </span>
               </span>
-            </button>
+            </a>
           );
         })}
 
-      {/* Add page button (only in edit mode) */}
       {isEditMode && onAddPage && (
         <Button
           variant="ghost"
@@ -105,10 +195,11 @@ export function BepNav({
         <>
           <div className="border-t my-3" />
 
-          <button
-            onClick={() => onSectionClick("issues")}
+          <a
+            href={sectionHref("issues", bepNumber)}
+            onClick={(e) => handleNavClick(e, "issues", onSectionClick)}
             className={cn(
-              "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+              "block w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
               "hover:bg-accent hover:text-accent-foreground",
               activeSection === "issues"
                 ? "bg-accent text-accent-foreground font-medium"
@@ -123,12 +214,13 @@ export function BepNav({
                 </span>
               )}
             </span>
-          </button>
+          </a>
 
-          <button
-            onClick={() => onSectionClick("decisions")}
+          <a
+            href={sectionHref("decisions", bepNumber)}
+            onClick={(e) => handleNavClick(e, "decisions", onSectionClick)}
             className={cn(
-              "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+              "block w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
               "hover:bg-accent hover:text-accent-foreground",
               activeSection === "decisions"
                 ? "bg-accent text-accent-foreground font-medium"
@@ -143,12 +235,13 @@ export function BepNav({
                 </span>
               )}
             </span>
-          </button>
+          </a>
 
-          <button
-            onClick={() => onSectionClick("comments")}
+          <a
+            href={sectionHref("comments", bepNumber)}
+            onClick={(e) => handleNavClick(e, "comments", onSectionClick)}
             className={cn(
-              "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+              "block w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
               "hover:bg-accent hover:text-accent-foreground",
               activeSection === "comments"
                 ? "bg-accent text-accent-foreground font-medium"
@@ -166,28 +259,28 @@ export function BepNav({
                 </span>
               )}
             </span>
-          </button>
+          </a>
 
           <div className="border-t mb-3" />
 
-          <button
-            onClick={() => onSectionClick("ai")}
+          <a
+            href={sectionHref("ai", bepNumber)}
+            onClick={(e) => handleNavClick(e, "ai", onSectionClick)}
             className={cn(
-              "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
+              "block w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
               "hover:bg-accent hover:text-accent-foreground",
               activeSection === "ai"
                 ? "bg-accent text-accent-foreground font-medium"
                 : "text-muted-foreground"
             )}
           >
-
             <span className="flex items-center justify-between">
               AI Assistant
               <span className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">
                 Beta
               </span>
             </span>
-          </button>
+          </a>
         </>
       )}
     </nav>

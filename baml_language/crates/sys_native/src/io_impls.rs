@@ -646,12 +646,70 @@ impl io::IoNamespaceFs for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::async_op(async move {
-            tokio::fs::remove_file(&path)
+            match tokio::fs::remove_file(&path).await {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    // `remove_file` rejects directories, but the raw OS error is
+                    // opaque and platform-specific (EISDIR / "Is a directory" on
+                    // Linux, EPERM / "Operation not permitted" on macOS). When
+                    // the target is actually a directory, surface a message that
+                    // points at the directory-removal API instead. `symlink_metadata`
+                    // does not follow the final component, so a symlink (which
+                    // `remove_file` deletes fine) is never misreported here.
+                    if tokio::fs::symlink_metadata(&path)
+                        .await
+                        .is_ok_and(|m| m.is_dir())
+                    {
+                        return Err(VmBamlError::Io {
+                            message: format!(
+                                "Failed to remove '{path}': it is a directory; use baml.fs.remove_dir or baml.fs.remove_dir_all to delete directories"
+                            ),
+                        }
+                        .into());
+                    }
+                    Err(VmBamlError::Io {
+                        message: format!("Failed to remove file '{path}': {e}"),
+                    }
+                    .into())
+                }
+            }
+        })
+    }
+
+    fn remove_dir(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            tokio::fs::remove_dir(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to remove file '{path}': {e}"),
+                    message: format!("Failed to remove directory '{path}': {e}"),
                 })
                 .map_err(VmRustFnError::from)
+        })
+    }
+
+    fn remove_dir_all(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::async_op(async move {
+            match tokio::fs::remove_dir_all(&path).await {
+                Ok(()) => Ok(()),
+                // `force: true` semantics: a missing path is not an error.
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(VmBamlError::Io {
+                    message: format!("Failed to remove directory '{path}': {e}"),
+                }
+                .into()),
+            }
         })
     }
 
@@ -1116,15 +1174,50 @@ impl io::IoNamespaceSys for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        ms: i64,
+        delay: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        #[allow(clippy::cast_sign_loss)]
-        let millis = ms.max(0) as u64;
+        let nanos = match sleep_nanos_from_delay(delay) {
+            Ok(nanos) => nanos,
+            Err(err) => return SysOpOutput::err(err),
+        };
         SysOpOutput::async_op(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+            tokio::time::sleep(std::time::Duration::from_nanos(nanos)).await;
             Ok(())
         })
+    }
+}
+
+fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {
+    match delay {
+        BexExternalValue::Instance {
+            class_name,
+            mut fields,
+            ..
+        } if class_name == "baml.time.Duration" => {
+            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
+                }));
+            };
+            let BexExternalValue::Bigint(nanos) = nanos else {
+                return Err(VmRustFnError::from(VmBamlError::Io {
+                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
+                }));
+            };
+            if nanos.sign() == num_bigint::Sign::Plus {
+                Ok(u64::try_from(&nanos).unwrap_or(u64::MAX))
+            } else {
+                Ok(0)
+            }
+        }
+        BexExternalValue::Union { value, .. } => sleep_nanos_from_delay(*value),
+        other => Err(VmRustFnError::from(VmBamlError::Io {
+            message: format!(
+                "sleep delay must be baml.time.Duration, got {}",
+                other.type_name()
+            ),
+        })),
     }
 }
 

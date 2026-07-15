@@ -2,7 +2,7 @@
 // `speak(self) -> string`.
 
 interface Animal {
-  function speak(self) -> string
+  function speak(self) -> string throws never
 }
 
 class Robot {
@@ -15,12 +15,14 @@ class Robot {
 
 //----
 //- diagnostics
-// error: method `speak` in class `Robot` does not match interface `Animal`: expected `() -> string`, found `() -> int`
-//     ╭─[ interface_method_signature_mismatch.baml:10:14 ]
+// error: method `speak` has signature (self: Robot) -> int throws never, which does not conform to interface `Animal`'s declared (self: Robot) -> string throws never
+//     ╭─[ interface_method_signature_mismatch.baml:10:5 ]
 //     │
-//  10 │     function speak(self) -> int {
-//     │              ──┬──  
-//     │                ╰──── signature mismatch
-//     │ 
-//     │ Note: Error code: E0120
+//  10 │ ╭─▶     function speak(self) -> int {
+//     ┆ ┆
+//  12 │ ├─▶     }
+//     │ │
+//     │ ╰─────────── method `speak` has signature (self: Robot) -> int throws never, which does not conform to interface `Animal`'s declared (self: Robot) -> string throws never
+//     │
+//     │     Note: Error code: E0120
 // ────╯

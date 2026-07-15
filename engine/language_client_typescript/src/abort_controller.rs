@@ -7,10 +7,10 @@ use napi::{
     Env, Unknown,
 };
 use once_cell::sync::Lazy;
-use stream_cancel::Trigger;
+use tokio_util::sync::CancellationToken;
 
-// Track active operations with their cancellation triggers
-static OPERATION_TRIGGERS: Lazy<DashMap<u32, Trigger>> = Lazy::new(DashMap::new);
+// Track active operations with their cancellation tokens
+static OPERATION_TRIGGERS: Lazy<DashMap<u32, CancellationToken>> = Lazy::new(DashMap::new);
 
 // Counter for unique operation IDs
 static OPERATION_ID_COUNTER: Lazy<std::sync::atomic::AtomicU32> =
@@ -29,10 +29,10 @@ pub fn js_abort_signal_to_rust_tripwire(
     // Generate a unique operation ID
     let operation_id = OPERATION_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-    // Create the trigger and tripwire
-    let (trigger, tripwire) = stream_cancel::Tripwire::new();
+    // Create the cancellation token
+    let token = CancellationToken::new();
     let tripwire = TripWire::new_with_on_drop(
-        Some(tripwire),
+        Some(token.clone()),
         Box::new(move || {
             OPERATION_TRIGGERS.remove(&operation_id);
         }),
@@ -41,10 +41,10 @@ pub fn js_abort_signal_to_rust_tripwire(
     // Check if already aborted
     let aborted: bool = signal.get_named_property("aborted")?;
     if aborted {
-        trigger.cancel();
+        token.cancel();
         return Ok(tripwire);
     } else {
-        OPERATION_TRIGGERS.insert(operation_id, trigger);
+        OPERATION_TRIGGERS.insert(operation_id, token);
     }
 
     // Store the trigger for potential cancellation
@@ -53,8 +53,8 @@ pub fn js_abort_signal_to_rust_tripwire(
     let callback: Function<(), ()> =
         env.create_function_from_closure("abort_handler", move |_| {
             // Cancel the operation when abort is triggered
-            if let Some((_, trigger)) = OPERATION_TRIGGERS.remove(&operation_id) {
-                trigger.cancel();
+            if let Some((_, token)) = OPERATION_TRIGGERS.remove(&operation_id) {
+                token.cancel();
             }
             Ok(())
         })?;

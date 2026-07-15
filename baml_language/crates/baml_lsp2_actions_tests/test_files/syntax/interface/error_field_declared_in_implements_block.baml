@@ -15,23 +15,20 @@ class Server {
 //----
 //- diagnostics
 // error: field `port` cannot be declared inside `implements Config`
-//     ╭─[ interface_error_field_declared_in_implements_block.baml:10:22 ]
+//     ╭─[ interface_error_field_declared_in_implements_block.baml:11:5 ]
 //     │
-//  10 │ ╭─▶   implements Config {
-//  11 │ ├─▶     port: string
-//     │ │                      
-//     │ ╰────────────────────── add a class field, or link it with `field as class_field`
-//     │     
-//     │     Note: Error code: E0127
+//  11 │     port: string
+//     │     ──────┬─────
+//     │           ╰─────── add a class field, or link it with `field as class_field`
+//     │
+//     │ Note: Error code: E0127
 // ────╯
-// error: class `Server` does not provide field `port` required by interface `Config`
-//     ╭─[ interface_error_field_declared_in_implements_block.baml:9:15 ]
+// error: missing field `port` required by interface `Config` (add a class field named `port` or link one with `port as <class_field>`)
+//     ╭─[ interface_error_field_declared_in_implements_block.baml:10:14 ]
 //     │
-//   9 │ ╭─▶ class Server {
-//     ┆ ┆   
-//  12 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── add class field `port`, or link it with `port as class_field`
-//     │     
-//     │     Note: Error code: E0124
+//  10 │   implements Config {
+//     │              ───┬──
+//     │                 ╰──── missing field `port` required by interface `Config` (add a class field named `port` or link one with `port as <class_field>`)
+//     │
+//     │ Note: Error code: E0124
 // ────╯

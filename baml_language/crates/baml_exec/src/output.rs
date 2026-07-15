@@ -74,7 +74,10 @@ async fn serialize_via_baml_json(
             "baml.json.serialize",
             vec![value],
             FunctionCallContextBuilder::new(CallId::next())
-                .with_type_args(vec![return_type.clone()])
+                .with_type_args(indexmap::IndexMap::from([(
+                    "T".to_string(),
+                    return_type.clone(),
+                )]))
                 .build(),
             true,
         )
@@ -89,45 +92,10 @@ async fn serialize_via_baml_json(
 }
 
 /// Human-readable formatting for `BexExternalValue`.
+///
+/// Thin wrapper over [`BexExternalValue::render_readable`] — the canonical
+/// structural renderer, shared with the engine's uncaught-throw rendering so
+/// `baml run` output and a leaked `throw` render identically.
 pub fn format_value(value: &BexExternalValue) -> String {
-    match value {
-        BexExternalValue::Null => "null".to_string(),
-        BexExternalValue::Int(i) => i.to_string(),
-        BexExternalValue::Float(f) => {
-            let s = f.to_string();
-            if s.contains('.') || !f.is_finite() {
-                s
-            } else {
-                format!("{s}.0")
-            }
-        }
-        BexExternalValue::Bool(b) => b.to_string(),
-        BexExternalValue::String(s) => format!("{s:?}"),
-        BexExternalValue::Array { items, .. } => {
-            let inner: Vec<String> = items.iter().map(format_value).collect();
-            format!("[{}]", inner.join(", "))
-        }
-        BexExternalValue::Map { entries, .. } => {
-            let inner: Vec<String> = entries
-                .iter()
-                .map(|(k, v)| format!("{k:?}: {}", format_value(v)))
-                .collect();
-            format!("{{{}}}", inner.join(", "))
-        }
-        BexExternalValue::Instance { class_name, fields } => {
-            let inner: Vec<String> = fields
-                .iter()
-                .map(|(k, v)| format!("{k}: {}", format_value(v)))
-                .collect();
-            if class_name.is_empty() {
-                format!("{{{}}}", inner.join(", "))
-            } else {
-                format!("{class_name} {{{}}}", inner.join(", "))
-            }
-        }
-        BexExternalValue::Variant { variant_name, .. } => variant_name.clone(),
-        BexExternalValue::Union { value, .. } => format_value(value),
-        BexExternalValue::Uint8Array(bytes) => format!("<bytes:{}>", bytes.len()),
-        _ => format!("{value:?}"),
-    }
+    value.render_readable()
 }

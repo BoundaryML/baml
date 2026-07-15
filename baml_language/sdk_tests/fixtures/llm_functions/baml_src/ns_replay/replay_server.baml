@@ -38,7 +38,7 @@ class ReplayHandler {
         for (let event in body.split("\n\n")) {
           if (event.length() > 0) {
             resp.write((event + "\n\n").to_utf8());
-            baml.sys.sleep(10);
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(10n));
           }
         }
         resp.end();
@@ -64,9 +64,9 @@ function replay_serve_until_shutdown(recording_path: string, addr_file: string) 
   let task = spawn { server.serve(handler.handle) };
   baml.fs.write(addr_file, server.addr);
   while (!handler.stop.is_cancelled()) {
-    baml.sys.sleep(25);
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
   }
-  baml.sys.sleep(50);  // let the shutdown response flush before killing serve
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));  // let the shutdown response flush before killing serve
   task.cancel();
   server.addr
 }
@@ -83,9 +83,9 @@ function replay_serve_detached(recording_path: string) -> string {
   // Reaper: also detached; tears the serve down once shutdown fires.
   spawn with baml.spawn.options(detach = true) {
     while (!handler.stop.is_cancelled()) {
-      baml.sys.sleep(25);
+      baml.sys.sleep(baml.time.Duration.from_milliseconds(25n));
     }
-    baml.sys.sleep(50);
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
     task.cancel();
     null
   };

@@ -45,13 +45,13 @@ use std::{
 use sdkgen_typescript_node::NamingConvention;
 
 use crate::{
-    BuildDiagnostics, copy_customizable, discover_fixtures, fixtures_root_from_manifest,
-    load_fixture, watch_dir,
+    BuildDiagnostics, copy_customizable, discover_fixtures, emit_cargo_line,
+    fixtures_root_from_manifest, load_fixture, watch_dir,
 };
 
 /// Per-fixture package.json. `__PACKAGE_NAME__` is substituted per
 /// fixture. The dev toolchain (vitest + typescript + types)
-/// plus the BAML runtime dep on `@boundaryml/baml-core-node` (which
+/// plus the BAML runtime dep on `@boundaryml/baml-bridge` (which
 /// `file:`-points at the bridge_nodejs source tree five levels up:
 /// `crates/typescript_node/<F>/generated/` →
 /// `crates/typescript_node/<F>/` → `crates/typescript_node/` →
@@ -120,7 +120,7 @@ pub fn run_all() {
     write_fixtures_tests_rs(&out_dir, &fixture_tests);
     diagnostics.finalize();
 
-    println!("cargo:rerun-if-changed=build.rs");
+    emit_cargo_line(format_args!("cargo:rerun-if-changed=build.rs"));
     watch_dir(&fixtures_root);
     for fixture in &fixtures {
         watch_dir(&manifest_dir.join(fixture).join("customizable"));

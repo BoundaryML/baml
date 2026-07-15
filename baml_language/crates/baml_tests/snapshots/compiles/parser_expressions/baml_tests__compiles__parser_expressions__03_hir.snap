@@ -20,24 +20,6 @@ class user.User {
 function user.FieldAccess(user: user.User) -> string  [expr] {
   { let name = user.name; let bio = user.profile.bio; let theme = user.profile.settings.theme; let firstTag = user.tags[0]; return theme }
 }
-function user.from_json(j: baml.json.json) -> user.User  [expr] {
-  user.User { name: baml.json.from_json(baml.json.field(j, "name")), profile: baml.json.from_json(baml.json.field(j, "profile")), tags: baml.json.from_json(baml.json.field(j, "tags")) }
-}
-function user.from_json(j: baml.json.json) -> user.Settings  [expr] {
-  user.Settings { theme: baml.json.from_json(baml.json.field(j, "theme")) }
-}
-function user.from_json(j: baml.json.json) -> user.Profile  [expr] {
-  user.Profile { bio: baml.json.from_json(baml.json.field(j, "bio")), settings: baml.json.from_json(baml.json.field(j, "settings")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "bio": baml.json.to_json(self.bio), "settings": baml.json.to_json(self.settings) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "profile": baml.json.to_json(self.profile), "tags": baml.json.to_json(self.tags) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "theme": baml.json.to_json(self.theme) }
-}
 class user.IndexUser {
   name: string
   age: int
@@ -45,12 +27,6 @@ class user.IndexUser {
 }
 function user.IndexAccess(users: user.IndexUser[]) -> string  [expr] {
   { let first = users[0]; let idx = 1; let second = users[idx]; let firstName = users[0].name; let tag = users[0].tags[0]; return firstName }
-}
-function user.from_json(j: baml.json.json) -> user.IndexUser  [expr] {
-  user.IndexUser { name: baml.json.from_json(baml.json.field(j, "name")), age: baml.json.from_json(baml.json.field(j, "age")), tags: baml.json.from_json(baml.json.field(j, "tags")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "name": baml.json.to_json(self.name), "age": baml.json.to_json(self.age), "tags": baml.json.to_json(self.tags) }
 }
 function user.TestPrecedence() -> bool  [expr] {
   { let a = 2 Add 3 Mul 4; let c = 2 Mul 3 Add 4; let b = a Gt 10 Add 2; let d = true Or false And false; return d }

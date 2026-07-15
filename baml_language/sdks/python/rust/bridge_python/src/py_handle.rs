@@ -108,7 +108,7 @@ impl Drop for BamlPyHandle {
         // variants; the owners drop them through their own release path.
         // Mirrors `bridge_wasm/src/handle.rs`'s `Drop` for the same
         // reason.
-        use bridge_ctypes::baml_core::cffi::BamlHandleType;
+        use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
         let ht_i32 = i32::try_from(self.handle_type).unwrap_or(-1);
         let is_host_value = ht_i32 == BamlHandleType::HostValueCallable as i32
             || ht_i32 == BamlHandleType::HostValueOpaque as i32;

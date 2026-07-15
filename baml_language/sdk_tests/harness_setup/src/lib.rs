@@ -27,7 +27,7 @@
 //! ```
 
 use std::{
-    fmt::Display,
+    fmt::{self, Display},
     fs,
     path::{Path, PathBuf},
 };
@@ -38,6 +38,13 @@ use baml_project::ProjectDatabase;
 
 pub mod python_pydantic2;
 pub mod typescript_node;
+
+/// Emit one Cargo build-script line. Cargo consumes directives and
+/// warnings from stdout, so this intentionally writes there.
+#[allow(clippy::print_stdout)]
+pub(crate) fn emit_cargo_line(args: fmt::Arguments<'_>) {
+    println!("{args}");
+}
 
 /// Build-script-side soft-failure recorder. The two generator
 /// `run_all` entry points use this to capture env-dependent failures
@@ -76,9 +83,9 @@ impl BuildDiagnostics {
     pub fn record(&mut self, stage: &str, fixture: &str, msg: impl Display) {
         self.records
             .push(format!("stage: {stage}\nfixture: {fixture}\n{msg}"));
-        println!(
+        emit_cargo_line(format_args!(
             "cargo:warning=sdk-test build recorded a `{stage}` failure for fixture `{fixture}` — see `cargo test build_diagnostics`"
-        );
+        ));
     }
 
     /// Write `$OUT_DIR/build_diagnostics.txt`. Always called from
@@ -184,9 +191,8 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
         db.add_or_update_file(file_path, &content);
     }
 
-    let project = db.get_project().expect("no project context");
     let source_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+    let diagnostics = baml_project::collect_diagnostics(&db);
     let errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == Severity::Error)
@@ -304,7 +310,7 @@ pub fn symlink_customizable(customizable_dir: &Path, dst_dir: &Path) {
 /// recursively. Safe to call on a path that doesn't exist (no-op).
 pub fn watch_dir(dir: &Path) {
     for path in walk_files(dir) {
-        println!("cargo:rerun-if-changed={}", path.display());
+        emit_cargo_line(format_args!("cargo:rerun-if-changed={}", path.display()));
     }
 }
 

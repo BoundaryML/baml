@@ -20,33 +20,33 @@
 //     yield `inf` / `NaN` rather than panicking.
 
 /// `self + rhs`
-interface Add<Rhs extends root.Concrete> {
+interface Add<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete = Self;
-    function add(self, rhs: Rhs) -> Output throws never
+    function add(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self - rhs`
-interface Subtract<Rhs extends root.Concrete> {
+interface Subtract<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete = Self;
-    function sub(self, rhs: Rhs) -> Output throws never
+    function sub(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self * rhs`
-interface Multiply<Rhs extends root.Concrete> {
+interface Multiply<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete = Self;
-    function mul(self, rhs: Rhs) -> Output throws never
+    function mul(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self / rhs`
-interface Divide<Rhs extends root.Concrete> {
+interface Divide<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete = Self;
-    function div(self, rhs: Rhs) -> Output throws never
+    function div(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `self % rhs`
-interface Remainder<Rhs extends root.Concrete> {
+interface Remainder<Rhs extends root.Concrete> requires root.Concrete {
     type Output extends root.Concrete = Self;
-    function rem(self, rhs: Rhs) -> Output throws never
+    function rem(self, rhs: Rhs) -> Self.Output throws never
 }
 
 /// `-self`

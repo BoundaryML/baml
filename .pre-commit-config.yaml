@@ -41,6 +41,14 @@ repos:
       # 1: Formatters and validators (fmt, stow) - format/validate generated code
       # 2: Linters (clippy) - final checks on formatted code
 
+      - id: grammar-single-source
+        name: tmLanguage grammar single-source check
+        entry: bash -c 'node typescript2/pkg-grammar/scripts/sync.mjs --check'
+        language: system
+        pass_filenames: false
+        files: ^typescript2/(pkg-grammar/(.*\.tmLanguage\.json|language-configuration\.json)|app-vscode-ext/(syntaxes/.*\.tmLanguage\.json|language-configuration\.json))$
+        priority: 0
+
       - id: cargo-fmt
         name: cargo fmt
         entry: bash -c 'cd baml_language && mise run fmt'

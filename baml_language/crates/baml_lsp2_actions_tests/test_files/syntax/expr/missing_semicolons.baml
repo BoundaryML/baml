@@ -165,13 +165,13 @@ function MissingReturnExpression() -> int {
 //----
 //- diagnostics
 // error: missing return value of type int
-//      ╭─[ expr_missing_semicolons.baml:160:42 ]
+//      ╭─[ expr_missing_semicolons.baml:160:43 ]
 //      │
 //  160 │ ╭─▶ function MissingReturnExpression() -> int {
-//      ┆ ┆   
+//      ┆ ┆
 //  163 │ ├─▶ }
-//      │ │      
+//      │ │
 //      │ ╰────── missing return value of type int
-//      │     
+//      │
 //      │     Note: Error code: E0029
 // ─────╯

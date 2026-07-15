@@ -75,16 +75,26 @@ pub trait Db: baml_workspace::Db {
 /// compiler2-owned builtin stdlib is present, so there is only one builtin
 /// source of truth in the compiler2 package graph.
 pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
+    // Builtin stubs come FIRST: everything assigned by whole-project
+    // iteration order downstream (emit's `GlobalIndex`/`ObjectIndex` slots,
+    // MIR's `class_type_tags`) then gives the stdlib a stable prefix of every
+    // index space, independent of user code. That stability is what lets a
+    // precompiled stdlib `Program` slice (keyed only by compiler build) be
+    // spliced into any project's compile. User edits only ever shift *user*
+    // indices. Within each group the order is unchanged (sorted project
+    // files; fixed stub order), and no package receives contributions from
+    // both groups, so HIR per-package merge order is unaffected.
     let mut files: Vec<baml_base::SourceFile> = db
-        .project()
-        .files(db)
-        .iter()
-        .copied()
-        .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/"))
-        .collect();
-    if let Some(extra) = db.compiler2_extra_files() {
-        files.extend_from_slice(extra.files(db));
-    }
+        .compiler2_extra_files()
+        .map(|extra| extra.files(db).clone())
+        .unwrap_or_default();
+    files.extend(
+        db.project()
+            .files(db)
+            .iter()
+            .copied()
+            .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/")),
+    );
     files
 }
 

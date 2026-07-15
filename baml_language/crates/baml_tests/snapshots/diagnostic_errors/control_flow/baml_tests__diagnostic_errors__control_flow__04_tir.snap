@@ -15,9 +15,9 @@ function user.Headers() -> string throws never {
     let y = 2 : 2 -> int
     // [1] Processing
     let z = x + y : int
-    z.to_string() : unknown
+    z.to_string_BAML_NOT_A_METHOD() : unknown
   }
-  !! 319..335: type `int` has no member `to_string`
+  !! 688..717: type `int` has no member `to_string_BAML_NOT_A_METHOD`
 }
 function user.IfElseWithHeaders(flag: bool) -> string throws never {
   { : "yes" | "no"
@@ -118,8 +118,8 @@ function user.NestedControlFlow(x: int) -> string throws never {
       }
   }
 }
-function user.TestClient$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
+function user.TestClient$new(lenient: bool) -> ? throws never {
+  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : baml.llm.PrimitiveClient
 }
 function user.LlmFunction(input: string, client: baml.llm.Client = TestClient) -> string throws never {
   baml.llm.call_llm_function<T>(client, "LlmFunction", map { "input": input }) : string

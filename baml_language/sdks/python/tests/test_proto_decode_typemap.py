@@ -10,10 +10,10 @@ from __future__ import annotations
 import pydantic
 import pytest
 
-from baml_core import BamlError
-from baml_core.typemap import BamlTypeMap
-from baml_core.proto import decode_value
-from baml_core.cffi.v1 import baml_outbound_pb2
+from baml_bridge import BamlError
+from baml_bridge.typemap import BamlTypeMap
+from baml_bridge.proto import decode_value
+from baml_bridge.cffi.v1 import baml_outbound_pb2
 
 
 class _Resume(pydantic.BaseModel):
@@ -23,7 +23,7 @@ class _Resume(pydantic.BaseModel):
 def test_decode_value_class_uses_typemap_get_class():
     holder = baml_outbound_pb2.BamlOutboundValue()
     cv = holder.class_value
-    cv.name.name = "user.lorem.Resume"
+    cv.name = "user.lorem.Resume"
     f = cv.fields.add()
     f.key = "name"
     f.value.string_value = "Alice"
@@ -42,7 +42,7 @@ def test_decode_value_class_uses_typemap_get_class():
 def test_decode_value_class_unregistered_fqn_raises():
     holder = baml_outbound_pb2.BamlOutboundValue()
     cv = holder.class_value
-    cv.name.name = "user.lorem.Mystery"
+    cv.name = "user.lorem.Mystery"
     tm = BamlTypeMap()
 
     with pytest.raises(BamlError, match="Unknown class FQN"):

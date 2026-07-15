@@ -7,15 +7,14 @@
 //! - `int` — `BamlClassInt` (abs, min, max, clamp, bit ops, ...)
 //! - `string` — `BamlClassString` (length, trim, split, ...)
 //! - `map` — `BamlClassMap` (length, has, keys, values, ...)
-//! - `math` — `BamlNamespaceMath` (trunc)
 //! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - `ops` — `BamlClassOps*` (`Equals`/`Compare` for primitives + containers)
 //! - `ops_math` — `BamlClassOps*` (`Add`/`Subtract`/`Multiply`/`Divide`/
 //!   `Remainder`/`Negate` for the numeric primitives)
-//! - `unstable` — `BamlNamespaceUnstable` (string)
-//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, and the
-//!   `Sortable.sort` shims `_compare_shim` / `_is_primitive_array` /
-//!   `_rust_sort` / `_float_total_cmp`)
+//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`, the numeric-array
+//!   reductions `_sum_int` / `_sum_float` / `_mean_float` / `_median_float`,
+//!   the saturating `_trunc_to_int`, and the `Sortable.sort` shims
+//!   `_compare_shim` / `_is_primitive_array` / `_rust_sort` / `_float_total_cmp`)
 //!
 //! # Adding a new builtin
 //!
@@ -25,19 +24,18 @@
 mod array;
 pub(crate) mod bigint;
 mod csv;
+mod error_context;
 mod float;
 mod future;
-mod id;
+pub(crate) mod id;
 mod int;
 pub mod json;
 mod map;
-mod math;
 mod media;
 mod ops;
 mod ops_math;
-mod primitives;
 mod resolve;
-pub(crate) use resolve::{realize_frame, resolve_implements_rule};
+pub(crate) use resolve::{realize_frame, resolve_implements_rule, type_implements};
 mod root;
 mod spawn;
 mod stack_trace;
@@ -47,7 +45,6 @@ mod time;
 mod toml;
 mod type_class;
 mod uint8array;
-mod unstable;
 mod yaml;
 
 use std::collections::HashMap;
@@ -89,7 +86,7 @@ pub enum NativeCallResult {
     YieldToCall {
         callee: HeapPtr,
         args: Vec<Value>,
-        type_args: Vec<baml_type::RuntimeTy>,
+        type_args: Vec<baml_type::RealizedTy>,
         continuation: Box<dyn Continuation>,
     },
 }
@@ -120,6 +117,65 @@ pub trait Continuation: Send {
     fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>);
 }
 
+/// Returns the dispatched callee's result unchanged. Shared by the single-call
+/// shims (`_compare_shim`, `string.to<T>`'s `from_string` dispatch) whose only
+/// job is to dispatch one call and surface its value.
+pub(super) struct PassThroughContinuation;
+
+impl Continuation for PassThroughContinuation {
+    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
+        NativeCallResult::Done(value)
+    }
+    fn gc_roots(&self) -> Vec<HeapPtr> {
+        Vec::new()
+    }
+    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
+}
+
+/// A typed view of an array receiver: its declared element type alongside the
+/// backing slice.
+///
+/// Mirrors the generated class `view::` structs — the element type rides *with*
+/// the receiver so a builtin that preserves it (`filter`, …) can tag its result
+/// array without a side channel. Derefs to `[Value]`, so slice-only array
+/// builtins take it in place of `&[Value]` with no body changes.
+pub struct ArrayView<'a> {
+    /// The receiver array's declared element type (`T` of `T[]`).
+    pub ty: &'a baml_type::RealizedTy,
+    /// The receiver array's elements.
+    pub data: &'a [Value],
+}
+
+impl std::ops::Deref for ArrayView<'_> {
+    type Target = [Value];
+    fn deref(&self) -> &[Value] {
+        self.data
+    }
+}
+
+/// A typed view of a map receiver: its declared key/value types alongside the
+/// backing `IndexMap`.
+///
+/// The map analogue of [`ArrayView`] — the key and value types ride *with* the
+/// receiver so a builtin that preserves them can tag its result map without a
+/// side channel. Derefs to the underlying `IndexMap`, so map-only builtins take
+/// it in place of `&IndexMap<BexStr, Value>` with no body changes.
+pub struct MapView<'a> {
+    /// The receiver map's declared key type (`K` of `map<K, V>`).
+    pub key_ty: &'a baml_type::RealizedTy,
+    /// The receiver map's declared value type (`V` of `map<K, V>`).
+    pub value_ty: &'a baml_type::RealizedTy,
+    /// The receiver map's entries.
+    pub data: &'a indexmap::IndexMap<bex_str::BexStr, Value>,
+}
+
+impl std::ops::Deref for MapView<'_> {
+    type Target = indexmap::IndexMap<bex_str::BexStr, Value>;
+    fn deref(&self) -> &indexmap::IndexMap<bex_str::BexStr, Value> {
+        self.data
+    }
+}
+
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.
 // `unsafe_code` is intentional: float-boxed Object reads use `ptr.get()`
 // which is unsafe; the surrounding accessors uphold the heap-permit
@@ -136,6 +192,7 @@ pub trait Continuation: Send {
     clippy::pub_underscore_fields,
     clippy::used_underscore_binding,
     clippy::elidable_lifetime_names,
+    clippy::get_first,
     clippy::iter_not_returning_iterator,
     clippy::needless_lifetimes,
     clippy::redundant_closure_call,
@@ -154,75 +211,6 @@ pub use generated::*;
 
 /// The VM's native function implementations.
 pub struct PackageBamlImpl;
-
-// =============================================================================
-// Shared helper: resolve `to_json` callee for a given value
-// =============================================================================
-
-/// For a given value `v`, look up the appropriate `to_json` function in the VM
-/// globals, create a `BoundMethod { function: to_json_fn_ptr, receiver: v }`,
-/// and return the `HeapPtr` to the bound method.
-///
-/// The bound method has `receiver = v` baked in; the VM inserts the receiver
-/// as `self` when the bound method is dispatched, so `YieldToCall { args: [] }`
-/// is correct (no extra arguments beyond self).
-///
-/// Used by both `Array.to_json` (in `array.rs`) and `Map.to_json` (in `map.rs`).
-pub(super) fn make_to_json_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, VmRustFnError> {
-    use bex_vm_types::ValueKind;
-    let fn_name: String = match v.kind() {
-        ValueKind::Null => "baml.Null.to_json".to_string(),
-        ValueKind::Bool(_) => "baml.Bool.to_json".to_string(),
-        ValueKind::Int(_) => "baml.Int.to_json".to_string(),
-        ValueKind::OmittedArg => {
-            return Err(VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "omitted argument cannot be converted to json".to_string(),
-            }));
-        }
-        ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::Float(_) => "baml.Float.to_json".to_string(),
-            Object::String(_) => "baml.String.to_json".to_string(),
-            Object::Array(_) => "baml.Array.to_json".to_string(),
-            Object::Map(_) => "baml.Map.to_json".to_string(),
-            Object::Instance(inst) => {
-                let class_ptr = inst.class;
-                let fqn = match vm.get_object(class_ptr) {
-                    // Dispatch key must be the fully-qualified name (keeping the
-                    // package), matching how functions are registered — not the
-                    // user-facing `display_name` that elides `user`.
-                    Object::Class(c) => c.name.render_dotted(false),
-                    _ => {
-                        return Err(VmRustFnError::InternalError(
-                            VmInternalError::MissingNativeFunction {
-                                name: "to_json dispatch: instance.class is not a Class".to_string(),
-                            },
-                        ));
-                    }
-                };
-                format!("{fqn}.to_json")
-            }
-            _ => {
-                return Err(VmRustFnError::InternalError(
-                    VmInternalError::MissingNativeFunction {
-                        name: "to_json dispatch: no to_json for this value type".to_string(),
-                    },
-                ));
-            }
-        },
-    };
-
-    let fn_ptr = vm.find_function_by_name(&fn_name).ok_or_else(|| {
-        VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-            name: format!("to_json dispatch: function '{fn_name}' not found in globals"),
-        })
-    })?;
-
-    // Allocate a BoundMethod with the value as receiver.
-    Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
-        function: fn_ptr,
-        receiver: v,
-    }))
-}
 
 /// For a value `v` whose type implements `baml.Comparable`, look up the
 /// matching `compare` function and return a `BoundMethod { compare, receiver: v }`.
@@ -280,10 +268,108 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
         })
     })?;
 
+    let type_args = vm.bound_method_curried_type_args(v);
     Ok(vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: fn_ptr,
         receiver: v,
+        // A stdlib-dispatched `compare` on `v`'s concrete class; curry its class
+        // type args (→ `Self`) from the receiver, matching a `MakeBoundMethod`.
+        type_args,
     }))
+}
+
+/// For a value `v` whose runtime class implements `baml.ToString` with an
+/// in-body override, resolve that `to_string` and return a
+/// `BoundMethod { to_string, receiver: v }`. Returns `Ok(None)` when the
+/// runtime class has no in-body override (e.g. an `implements baml.ToString {}`
+/// block inheriting the structural default body, or a non-instance value) — the
+/// caller then renders `v` with the structural default.
+///
+/// User in-body impls register as `{class_fqn}.baml.ToString.to_string`,
+/// matching `make_compare_callee`'s `{class_fqn}.baml.Comparable.compare`. Used
+/// by the native `baml._to_string_shim` (`root.rs`) backing `string.from`.
+pub(super) fn make_to_string_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr> {
+    let fn_name = to_string_override_fn_name(vm, v)?;
+    let fn_ptr = vm.find_function_by_name(&fn_name)?;
+
+    let type_args = vm.bound_method_curried_type_args(v);
+    Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        function: fn_ptr,
+        receiver: v,
+        // A stdlib-dispatched `to_string` override on `v`'s concrete class; curry
+        // its class type args (→ `Self`) from the receiver.
+        type_args,
+    }))
+}
+
+/// The `{class_fqn}.baml.ToString.to_string` function name for `v`'s runtime
+/// class, for the value kinds that can carry an in-body `baml.ToString` override.
+/// Returns `None` for kinds that never implement `baml.ToString` (primitives,
+/// arrays, maps) — `string.from` renders those structurally.
+///
+/// Covers `Object::Instance` (user/builtin classes) plus the two builtin
+/// non-instance implementors, `type` (`baml.TypeValue`) and `uint8array`
+/// (`baml.Uint8Array`); without them `string.from(v)` would diverge from
+/// `v.to_string()` (e.g. a `type` rendering structurally instead of as its type
+/// name, or bytes as `[1, 2]` instead of their UTF-8 text). Allocation-free
+/// w.r.t. the VM heap (only builds a Rust `String`), so it is safe to call during
+/// the GC-sensitive override-collection pass.
+pub(super) fn to_string_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
+    use bex_vm_types::ValueKind;
+    let fqn = match v.kind() {
+        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+            Object::Instance(inst) => match vm.get_object(inst.class) {
+                Object::Class(c) => c.name.render_dotted(false),
+                _ => return None,
+            },
+            Object::Type(_) => "baml.TypeValue".to_string(),
+            Object::Uint8Array(_) => "baml.Uint8Array".to_string(),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(format!("{fqn}.baml.ToString.to_string"))
+}
+
+/// For a value `v` whose runtime class implements `baml.ToJson` with an in-body
+/// override, resolve that `to_json` and return a `BoundMethod { to_json,
+/// receiver: v }`. Returns `None` when the runtime class has no in-body override
+/// (an `implements baml.ToJson {}` block inheriting the structural default body,
+/// or a non-implementing / non-instance value) — the caller then renders `v`
+/// with the structural default. The json analog of [`make_to_string_callee`].
+pub(super) fn make_to_json_override_callee(vm: &mut BexVm, v: Value) -> Option<HeapPtr> {
+    let fn_name = to_json_override_fn_name(vm, v)?;
+    let fn_ptr = vm.find_function_by_name(&fn_name)?;
+    let type_args = vm.bound_method_curried_type_args(v);
+    Some(vm.alloc_bound_method(bex_vm_types::BoundMethod {
+        function: fn_ptr,
+        receiver: v,
+        // A stdlib-dispatched `to_json` override on `v`'s concrete class; curry
+        // its class type args (→ `Self`) from the receiver.
+        type_args,
+    }))
+}
+
+/// The `{class_fqn}.baml.ToJson.to_json` function name for `v`'s runtime class,
+/// for the value kinds that can carry an in-body `baml.ToJson` override. Returns
+/// `None` for kinds that never implement `baml.ToJson` (primitives, arrays, maps,
+/// enums) — `baml.json.from` renders those structurally. Allocation-free w.r.t.
+/// the VM heap (only builds a Rust `String`), so it is safe to call during the
+/// GC-sensitive override-collection pass. The json analog of
+/// [`to_string_override_fn_name`].
+pub(super) fn to_json_override_fn_name(vm: &BexVm, v: Value) -> Option<String> {
+    use bex_vm_types::ValueKind;
+    let fqn = match v.kind() {
+        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+            Object::Instance(inst) => match vm.get_object(inst.class) {
+                Object::Class(c) => c.name.render_dotted(false),
+                _ => return None,
+            },
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(format!("{fqn}.baml.ToJson.to_json"))
 }
 
 // =============================================================================
@@ -295,10 +381,10 @@ pub(super) fn make_compare_callee(vm: &mut BexVm, v: Value) -> Result<HeapPtr, V
 
 /// Resolves native function pointers for unresolved native functions in objects.
 ///
-/// Only functions in the `baml.*` namespace are resolved here. Functions from
-/// other packages (e.g. `assert.*`, `testing.*`) are left as `NativeUnresolved`
-/// so they can be wired up by future package implementations. They will only
-/// fail at runtime if actually called.
+/// Only functions in VM-owned native namespaces are resolved here. Functions
+/// from other packages (e.g. `assert.*`, `testing.*`) are left as
+/// `NativeUnresolved` so they can be wired up by future package implementations.
+/// They will only fail at runtime if actually called.
 pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
     Ok(match object {
         Object::Function(function) => {
@@ -306,19 +392,27 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
                 bex_vm_types::FunctionKind::SysOp(op) => bex_vm_types::FunctionKind::SysOp(op),
                 bex_vm_types::FunctionKind::NativeUnresolved => {
-                    // Only attempt resolution for the `baml.*` package. Functions
+                    // Only attempt resolution for VM-owned native packages. Functions
                     // from other stdlib packages (assert, testing, …) are deferred.
-                    if !function.name.starts_with("baml.") {
-                        bex_vm_types::FunctionKind::NativeUnresolved
+                    let native_function = if function.name.starts_with("baml.") {
+                        PackageBamlImpl::get_native_fn(function.name.as_str())
+                    } else if function.name.starts_with("boundary.") {
+                        crate::package_boundary::get_native_fn(function.name.as_str())
                     } else {
-                        let Some(native_function) =
-                            PackageBamlImpl::get_native_fn(function.name.as_str())
-                        else {
+                        None
+                    };
+                    match native_function {
+                        Some(native_function) => {
+                            bex_vm_types::FunctionKind::Native(native_function as *const ())
+                        }
+                        None if function.name.starts_with("baml.")
+                            || function.name.starts_with("boundary.") =>
+                        {
                             return Err(VmInternalError::MissingNativeFunction {
                                 name: function.name.clone(),
                             });
-                        };
-                        bex_vm_types::FunctionKind::Native(native_function as *const ())
+                        }
+                        None => bex_vm_types::FunctionKind::NativeUnresolved,
                     }
                 }
                 bex_vm_types::FunctionKind::Native(ptr) => bex_vm_types::FunctionKind::Native(ptr),
@@ -343,6 +437,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 throws_type: function.throws_type,
                 origin: function.origin,
                 body_meta: function.body_meta,
+                capture: function.capture,
                 function_id: 0, // synthetic; not in the profiling function table
             }))
         }

@@ -4,12 +4,12 @@ source: crates/baml_tests/src/generated_tests.rs
 === SYNTAX TREE ===
 SOURCE_FILE
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "type"
     TYPE_EXPR "Foo"
       WORD "Foo"
   TYPE_ALIAS_DEF
-    WORD "type"
+    KW_TYPE "type"
     WORD "Bar"
     EQUALS "="
     TYPE_EXPR
@@ -29,8 +29,8 @@ error: Expected type, found EOF
     ╭─[ type_malformed.baml:10:11 ]
     │
  10 │ type Bar =
-    │           ┬  
-    │           ╰── Expected type, found EOF
+    │           │ 
+    │           ╰─ Expected type, found EOF
     │ 
     │ Note: Error code: E0010
 ────╯

@@ -46,7 +46,10 @@ fn extract_steps(result: &BexExternalValue) -> Vec<(&str, i64)> {
     items
         .iter()
         .map(|step| {
-            let BexExternalValue::Instance { class_name, fields } = step else {
+            let BexExternalValue::Instance {
+                class_name, fields, ..
+            } = step
+            else {
                 panic!("expected OrchestrationStep Instance, got {step:?}");
             };
             assert_eq!(
@@ -63,6 +66,7 @@ fn extract_steps(result: &BexExternalValue) -> Vec<(&str, i64)> {
                 Some(BexExternalValue::Instance {
                     class_name: pc_class,
                     fields: pc_fields,
+                    ..
                 }) => {
                     assert_eq!(
                         pc_class, "baml.llm.PrimitiveClient",
@@ -818,4 +822,130 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
     assert_eq!(steps[3], ("C", 200));
     // RR should have rotated
     assert_ne!(steps[0].0, steps[2].0, "retry should rotate the RR child");
+}
+
+// ============================================================================
+// Regression (B-488): retry_policy must not crash the retry-delay math
+// ============================================================================
+//
+// A `retry_policy` may omit the delay fields (`initial_delay_ms`, `multiplier`,
+// `max_delay_ms`) — e.g. by giving only `max_retries`, or a `strategy { ... }`
+// sub-block the config lowering does not yet expand into those fields. The
+// omitted fields arrive as `null` at runtime, and the retry-delay math in
+// `Client.execute_oneshot` used to evaluate `null + 0.0`, aborting every call
+// with `VM internal error: cannot apply binary operation: any + float` before
+// any HTTP request. `RetryPolicy.{initial_delay,multiplier,max_delay}_or_default`
+// now substitute defaults, keeping the arithmetic well-typed.
+//
+// Driven fully offline: each client reads its `api_key` from a deliberately
+// unset env var, so the call deterministically throws `env var not found` while
+// *constructing* the primitive client — which is only reached once the
+// retry-delay math (evaluated earlier in `execute_oneshot`) has run to
+// completion. Pre-fix, the call never got that far.
+
+/// Assert that driving the `drive()` entry (which calls the LLM function with
+/// its default client) survives the retry-delay math: it must fail with the
+/// offline client-construction error (`env var not found`), never with the
+/// pre-fix VM binary-operation crash on `null`/`any`.
+async fn assert_retry_survives_delay_math(source: &str) {
+    let err = run(source, "drive")
+        .await
+        .expect_err("keyless client should error, not succeed");
+    let msg = err.to_string();
+    assert!(
+        !msg.contains("cannot apply binary operation"),
+        "retry-delay math regressed to a VM type error (B-488): {msg}"
+    );
+    assert!(
+        msg.contains("env var not found"),
+        "expected the offline client-construction error, proving the retry-delay \
+         math ran to completion; got: {msg}"
+    );
+}
+
+/// A `retry_policy` with only `max_retries` (delay fields default) must not crash.
+#[tokio::test]
+async fn retry_policy_bare_max_retries_does_not_crash() {
+    let source = r##"
+retry_policy P {
+    max_retries 3
+}
+
+client<llm> C {
+    provider openai
+    retry_policy P
+    options { model "gpt-4o-mini"  api_key env.BAML_B488_UNSET_KEY }
+}
+
+function f(x: string) -> string {
+    client C
+    prompt #"hi {{ x }} {{ ctx.output_format }}"#
+}
+
+// Plain wrapper so the test can drive `f` with its default client bound (the
+// engine boundary does not auto-bind an LLM function's appended client param).
+function drive() -> string {
+    f("x")
+}
+"##;
+    assert_retry_survives_delay_math(source).await;
+}
+
+/// A `constant_delay` strategy must not crash (its fields never reach the
+/// class, so all delay fields default).
+#[tokio::test]
+async fn retry_policy_constant_delay_strategy_does_not_crash() {
+    let source = r##"
+retry_policy P {
+    max_retries 1
+    strategy { type constant_delay delay_ms 100 }
+}
+
+client<llm> C {
+    provider openai
+    retry_policy P
+    options { model "gpt-4o-mini"  api_key env.BAML_B488_UNSET_KEY }
+}
+
+function f(x: string) -> string {
+    client C
+    prompt #"hi {{ x }} {{ ctx.output_format }}"#
+}
+
+// Plain wrapper so the test can drive `f` with its default client bound (the
+// engine boundary does not auto-bind an LLM function's appended client param).
+function drive() -> string {
+    f("x")
+}
+"##;
+    assert_retry_survives_delay_math(source).await;
+}
+
+/// An `exponential_backoff` strategy must not crash.
+#[tokio::test]
+async fn retry_policy_exponential_backoff_strategy_does_not_crash() {
+    let source = r##"
+retry_policy P {
+    max_retries 2
+    strategy { type exponential_backoff delay_ms 100 multiplier 2.0 max_delay_ms 500 }
+}
+
+client<llm> C {
+    provider openai
+    retry_policy P
+    options { model "gpt-4o-mini"  api_key env.BAML_B488_UNSET_KEY }
+}
+
+function f(x: string) -> string {
+    client C
+    prompt #"hi {{ x }} {{ ctx.output_format }}"#
+}
+
+// Plain wrapper so the test can drive `f` with its default client bound (the
+// engine boundary does not auto-bind an LLM function's appended client param).
+function drive() -> string {
+    f("x")
+}
+"##;
+    assert_retry_survives_delay_math(source).await;
 }

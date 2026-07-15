@@ -32,12 +32,13 @@ import traceback
 import pytest
 
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
-from baml_core import BamlCallContext, BamlCancelledError, call_function, get_runtime
+from baml_bridge import BamlCallContext, BamlCancelledError, call_function, get_runtime
 from baml_sdk import hello_world
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument
 from baml_sdk.baml.json import JsonParseError
 from baml_sdk.baml.panics import UserPanic
+from baml_sdk.raises_test import LoadDoc, ParseError, Reparse
 from baml_sdk.throws_test import MyError, ParseJson, SleepMs, ThrowMyError
 
 # stdlib native builtins (`baml.json.parse`, `baml.sys.*`) can't be called as
@@ -62,6 +63,28 @@ def test_user_throw_surfaces_declared_instance():
     with pytest.raises(BamlError) as exc_info:
         ThrowMyError()
     assert isinstance(exc_info.value.value, MyError)
+
+
+def test_union_throws_preserves_class_name():
+    """A throw escaping a *multi-member* `throws` union must carry the thrown
+    value's class FQN in `class_name`, exactly like a single-member throws.
+
+    Regression for the bridge-dogfood bug: the engine wraps a thrown value in
+    `union_variant_value` for a multi-member `throws`, and the FQN reader only
+    unwrapped a top-level `class_value` — so `class_name` came back `None` for
+    union throws while the value still decoded fine. `Reparse` declares
+    `throws ParseError` (single) and `LoadDoc` declares
+    `throws ParseError | TimeoutError` (union); both throw `ParseError`, so
+    their `class_name` must agree.
+    """
+    with pytest.raises(BamlError) as single:
+        Reparse("x")
+    with pytest.raises(BamlError) as union:
+        LoadDoc("x")
+
+    assert single.value.class_name == "user.raises_test.ParseError"
+    assert union.value.class_name == single.value.class_name
+    assert isinstance(union.value.value, ParseError)
 
 
 def test_host_invalid_argument_wraps_baml_errors_invalid_argument():

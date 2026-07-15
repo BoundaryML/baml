@@ -1,15 +1,20 @@
-/// A 64-bit signed integer (i64). Range: -2^63 to 2^63-1.
+/// A 63-bit signed integer. Range: -2^62 to 2^62-1
+/// (`-4_611_686_018_427_387_904` to `4_611_686_018_427_387_903`).
+///
+/// The value is stored in a 64-bit machine word with one bit reserved for the
+/// runtime's pointer/value tag, so the usable range is 63-bit, not 64-bit. Use
+/// `bigint` for arbitrary-precision integers.
+///
+/// Arithmetic (`+`, `-`, `*`, `/`, unary `-`) that would leave this range
+/// throws a catchable `baml.panics.IntegerOverflow` rather than wrapping or
+/// crashing; `/` and `%` by zero throw `baml.panics.DivisionByZero`.
 class Int {
-  /// Serializes this integer to a JSON number.
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
   // ─── Comparisons / clamping ───────────────────────────────────────────────
 
   /// Returns the absolute value of `self`.
   ///
   /// Throws `InvalidArgument` for `int.min_value()` because its absolute value
-  /// (`2^63`) does not fit in an `int`.
+  /// (`2^62`) does not fit in an `int`.
   ///
   /// # Examples
   /// ```
@@ -123,8 +128,11 @@ class Int {
 
   // ─── Bit operations ───────────────────────────────────────────────────────
   //
-  // All bit operations interpret `int` as a 64-bit two's-complement value
-  // (`int` in BAML is backed by `i64`).
+  // All bit operations interpret `int` as a 64-bit two's-complement value:
+  // although `int`'s value range is 63-bit, it is stored sign-extended in a
+  // 64-bit machine word, and these operations expose all 64 bits of that word
+  // (e.g. `count_zeros` of a small positive value counts the high tag/sign
+  // bits too).
 
   /// Returns the number of leading zero bits in the 64-bit two's-complement
   /// representation of `self`.
@@ -207,7 +215,7 @@ class Int {
   ///
   /// Accepts an optional leading `+` or `-` sign followed by one or more
   /// ASCII digits. No surrounding whitespace, no underscores, no other
-  /// numeric formats. The result must fit in an `int` (`i64`).
+  /// numeric formats. The result must fit in the `int` range (63-bit signed).
   ///
   /// Throws `ParseError` if `text` is empty, contains a non-digit character,
   /// or represents a value outside the `int` range.

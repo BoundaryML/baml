@@ -143,14 +143,14 @@ implement Equals for uint8array {
 // element-wise with the broad `==` (`baml.ops.equals_equals`) rather than the
 // element `Equals.eq`. This is sound because `==` is total — it always produces a
 // result for operands of the same type — and `self`/`other` are the same container
-// type here. It also lets `T[]`/`map<K, V>` satisfy `Equals` bounds for any `T`/`V`.
+// type here. It also lets `T[]`/`map<string, V>` satisfy `Equals` bounds for any `T`/`V`.
 implement<T> Equals for T[] {
     function eq(self, other: Self) -> bool throws never {
         baml.ops.equals_equals(self, other)
     }
 }
 
-implement<K, V> Equals for map<K, V> {
+implement<V> Equals for map<string, V> {
     function eq(self, other: Self) -> bool throws never {
         baml.ops.equals_equals(self, other)
     }

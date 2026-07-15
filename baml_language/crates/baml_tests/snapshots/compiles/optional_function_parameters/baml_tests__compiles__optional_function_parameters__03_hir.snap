@@ -37,8 +37,8 @@ function user.Search(query: string, max_results: int = 10, filter: string = "non
 function user.SearchDocs(query: string, max_results: int = 10, filter: string? = null, chunk_size: int = query.length()) -> string[]  [expr] {
   {  } [query]
 }
-function user.TestClient$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+function user.TestClient$new(lenient: bool) -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get("OPENAI_API_KEY"), provider_options: null, media_url_handler: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.UseMixedArgs() -> int  [expr] {
   {  } Search("dogs", max_results = 3, filter = "all")
@@ -51,10 +51,4 @@ function user.UseOptionalDropping() -> string[]  [expr] {
 }
 function user.UseRequiredByName() -> string[]  [expr] {
   {  } SearchDocs(query = "birds")
-}
-function user.from_json(j: baml.json.json) -> user.SearchService  [expr] {
-  user.SearchService { base: baml.json.from_json(baml.json.field(j, "base")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "base": baml.json.to_json(self.base) }
 }

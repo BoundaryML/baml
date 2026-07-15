@@ -4,7 +4,7 @@
 //! settle on per-target rules. New backends or policies extend the enums
 //! here and the dispatch in `baml-cli generate`.
 
-/// Code-generation target. Surfaces as `output_type "python/pydantic"`.
+/// Code-generation target. Surfaces as `output_type = "python/pydantic"`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display)]
 pub enum OutputType {
     /// Python with Pydantic v2 models.
@@ -13,7 +13,7 @@ pub enum OutputType {
     /// Python with Pydantic v1 models.
     #[strum(serialize = "python/pydantic/v1")]
     PythonPydanticV1,
-    /// TypeScript + Node.js SDK (`@boundaryml/baml-core-node` runtime).
+    /// TypeScript + Node.js SDK (`@boundaryml/baml-bridge` runtime).
     #[strum(serialize = "typescript/node")]
     TypescriptNode,
 }

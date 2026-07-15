@@ -26,6 +26,11 @@ describe("roundtrip forward_refs", () => {
     expect(round_trip_rec_list_with_other(1)).toBe(1);
     expect(round_trip_rec_list_with_other([1, 2])).toEqual([1, 2]);
   });
+  // `GNode<int>` is a generic class passed directly as an argument. The TS
+  // encoder now sends it as a FQN-tagged `class_value` with the value-level
+  // class type-args channel (`class_ty`), so the engine decodes it to an
+  // `Instance` and accepts it into the generic class slot. (No `$types` is
+  // passed, so the arg lowers to the unknown/top wildcard.)
   it("round_trip_g_node_int", () => {
     // Leaf node carries children=[] — exercises the empty-list round trip.
     const g = new GNode<number>({ children: [new GNode<number>({ children: [] })] });

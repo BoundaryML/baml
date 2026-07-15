@@ -3,8 +3,9 @@
 //! through `SysOp::BamlHostCallHostValue` when BAML code invokes it.
 //!
 //! The tests stand up a fake host dispatcher that:
-//! 1. Decodes the engine-side `BamlOutboundValue` args (a list of typed
-//!    `BamlOutboundValue`s, per `host_impls::call_host_value`).
+//! 1. Decodes the engine-side `BamlToHostCall` (the resolved, declared-order
+//!    supplied args, per `host_impls::call_host_value`) and flattens it back to
+//!    a positional list.
 //! 2. Looks up the per-key behaviour registered by the test.
 //! 3. Calls `sys_native::host_dispatch::complete_with_value` (or
 //!    `complete_with_error`) directly with a `BexExternalValue`. This
@@ -32,7 +33,7 @@ use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
 };
 use bex_resource_types::{HostValueArc, HostValueKind};
-use bridge_ctypes::baml_core::cffi::{BamlOutboundValue, baml_outbound_value};
+use bridge_ctypes::baml_bridge::cffi::{BamlOutboundValue, BamlToHostCall, baml_outbound_value};
 use common::compile_for_engine;
 use indexmap::IndexMap;
 use prost::Message;
@@ -202,25 +203,23 @@ extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8
         unsafe { std::slice::from_raw_parts(args, length) }.to_vec()
     };
 
-    let outbound = match BamlOutboundValue::decode(bytes.as_slice()) {
+    // The engine sends a `BamlToHostCall` it already resolved against the
+    // callable's declared params (omitted optionals dropped), with `args` in
+    // declared order. Real bridges apply their calling convention (TS `$opts`,
+    // Python kwargs); these tests invoke positionally, so we take every arg's
+    // value in order. The callables exercised here have no optional params.
+    let to_host_call = match BamlToHostCall::decode(bytes.as_slice()) {
         Ok(v) => v,
         Err(e) => {
             complete_with_test_error(call_id, "DecodeError", &format!("decode failure: {e}"));
             return;
         }
     };
-
-    let items: Vec<BamlOutboundValue> = match outbound.value {
-        Some(baml_outbound_value::Value::ListValue(list)) => list.items,
-        other => {
-            complete_with_test_error(
-                call_id,
-                "ProtocolError",
-                &format!("expected ListValue in dispatch args, got {other:?}"),
-            );
-            return;
-        }
-    };
+    let items: Vec<BamlOutboundValue> = to_host_call
+        .args
+        .into_iter()
+        .filter_map(|arg| arg.value)
+        .collect();
 
     // Clone the behaviour out and drop the lock before invoking it; keep the
     // entry so the same key can be dispatched again (reusable callable).
@@ -301,6 +300,7 @@ fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
         call_id,
         BexExternalValue::Instance {
             class_name: "baml.errors.HostCallable".to_string(),
+            type_args: vec![],
             fields,
         },
     );
@@ -452,9 +452,9 @@ async fn host_callable_invoked_from_native_map_continuation() {
 
 // ============================================================================
 // Operand-layout pin: the VM hand-builds the `SysOp::BamlHostCallHostValue`
-//        args as `[handle, args_array, ret_ty, throws_ty]` to match the
+//        args as `[handle, args_pack, ret_ty, throws_ty]` to match the
 //        codegen-generated glue (`sys_ops/.../io_generated.rs` extracts `__arg0`
-//        as the handle via `as_owned_but_very_slow`, `__arg1` as the args list,
+//        as the handle via `as_owned_but_very_slow`, `__arg1` as the args pack,
 //        and `__arg2`/`type_arg_0` + `__arg3`/`type_arg_1` via
 //        `as_baml_type_owned`). Nothing else pins this contract,
 //        so a future codegen change to the type-arg operand position (or a swap
@@ -465,13 +465,15 @@ async fn host_callable_invoked_from_native_map_continuation() {
 //     registered key (the behaviour table lookup by `host_value_key` succeeds);
 //     if `args[0]` were not the handle, `as_owned_but_very_slow` would not yield
 //     a `HostValue` and the sys-op would fail with a `TypeError` before dispatch.
-//   * `args[1]` (args array) — asserted to decode to exactly the user args, in
-//     order: `[Int(7), Int(8)]`. If `args[1]` carried the ret_ty `Object::Type`
-//     instead, the glue's `BexExternalValue::Array` extraction would fail.
+//   * `args[1]` (args pack) — the `[positional_array, optional_map]` pair the VM
+//     builds; the dispatch decodes the `BamlToHostCall` args and asserts the
+//     values are exactly the user args, in order: `[Int(7), Int(8)]`. If
+//     `args[1]` carried the ret_ty `Object::Type` instead, the glue's
+//     `BexExternalValue::Array` extraction would fail.
 //   * `args[2]` (ret_ty) — proven to carry the declared return `RuntimeTy` (`int`):
 //     the host returns the sum (an `Int`), which only passes return-type
 //     validation if `type_arg_0` decoded to `int`. If `args[2]` carried the
-//     args array instead, `as_baml_type_owned` would fail and the call would
+//     args pack instead, `as_baml_type_owned` would fail and the call would
 //     error before reaching the host.
 //   * `args[3]` (throws_ty) — packed by codegen and consumed by the
 //     engine's host-throw injection site (`lib.rs::execute_sys_op` →
@@ -582,7 +584,9 @@ async fn host_callable_wrong_return_type_panics_as_host_contract_violation() {
 
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(
                     class_name, "baml.panics.HostContractViolation",
                     "expected baml.panics.HostContractViolation instance, got {class_name}"
@@ -657,7 +661,9 @@ async fn host_callable_wrong_return_with_declared_throws_keeps_return_diagnostic
 
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(
                     class_name, "baml.panics.HostContractViolation",
                     "expected baml.panics.HostContractViolation, got {class_name}"
@@ -698,7 +704,9 @@ async fn host_callable_wrong_return_with_declared_throws_keeps_return_diagnostic
 fn assert_host_callable_throw(result: &Result<BexExternalValue, EngineError>) {
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(
                     class_name, "baml.errors.HostCallable",
                     "expected baml.errors.HostCallable instance, got {class_name}"
@@ -727,7 +735,9 @@ fn assert_host_callable_throw(result: &Result<BexExternalValue, EngineError>) {
 fn assert_host_contract_violation_panic(result: &Result<BexExternalValue, EngineError>) {
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(
                     class_name, "baml.panics.HostContractViolation",
                     "expected baml.panics.HostContractViolation instance, got {class_name}"
@@ -778,6 +788,7 @@ async fn host_callable_wrong_class_field_type_panics_as_host_contract_violation(
         fields.insert("y".to_string(), BexExternalValue::Int(2));
         FakeReturn::Ok(BexExternalValue::Instance {
             class_name: "Point".to_string(),
+            type_args: vec![],
             fields,
         })
     });
@@ -828,6 +839,7 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
         );
         FakeReturn::Ok(BexExternalValue::Instance {
             class_name: "Box".to_string(),
+            type_args: vec![],
             fields,
         })
     });
@@ -1279,7 +1291,9 @@ async fn host_callable_returning_a_callable_is_rejected() {
     // `baml.panics.HostContractViolation` rather than a raw `CannotConvert`.
     match result {
         Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
-            BexExternalValue::Instance { class_name, fields } => {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
                 assert_eq!(class_name, "baml.panics.HostContractViolation");
                 match fields.get("message") {
                     Some(BexExternalValue::String(m)) => assert!(
@@ -1466,14 +1480,16 @@ async fn host_callable_with_generic_return_is_rejected() {
                 BexExternalValue::HostValue(Arc::clone(&arc)),
                 BexExternalValue::Int(1),
             ],
-            FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_type_args(vec![baml_type::RuntimeTy::int()])
-                .build(),
+            // No `_types=` bindings: `T` is left unbound. The generic return
+            // can't be validated, so the call is rejected before the host
+            // callable is bound (full-binding enforcement, lib.rs).
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
         .await;
 
-    // Bind-time rejection: the generic/erased return type can't be validated.
+    // Rejection: an unbound generic (its erased return can't be validated)
+    // fails up front.
     assert!(
         matches!(result, Err(EngineError::TypeMismatch { .. })),
         "a generic-return host callable must be rejected at bind, got {result:?}"

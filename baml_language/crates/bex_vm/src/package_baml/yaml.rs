@@ -47,7 +47,10 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
                 .into_iter()
                 .map(|v| convert_yaml_value(vm, v))
                 .collect::<Result<Vec<Value>, VmRustFnError>>()?;
-            Ok(Value::object(vm.alloc_array(values)))
+            // YAML is parsed into the `baml.json.json` value algebra.
+            Ok(Value::object(
+                vm.alloc_array(super::json::json_alias_ty(), values),
+            ))
         }
         serde_yaml::Value::Mapping(map) => {
             let mut entries = IndexMap::with_capacity(map.len());
@@ -61,7 +64,12 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
                 let value = convert_yaml_value(vm, value)?;
                 entries.insert(bex_str::BexStr::from(key), value);
             }
-            Ok(Value::object(vm.alloc_map(entries)))
+            // `baml.json.json` maps: string keys, `json` values.
+            Ok(Value::object(vm.alloc_map(
+                baml_type::RealizedTy::string(),
+                super::json::json_alias_ty(),
+                entries,
+            )))
         }
         serde_yaml::Value::Tagged(_) => Err(VmRustFnError::Thrown(make_yaml_parse_error(
             vm,

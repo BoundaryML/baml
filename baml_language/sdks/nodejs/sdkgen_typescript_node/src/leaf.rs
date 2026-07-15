@@ -5,7 +5,7 @@
 //! directory: runtime/cross-leaf imports, child-namespace re-exports, and
 //! real TS bodies for every top — classes, enums, type aliases, and
 //! `defineFunction(...)` / `defineInstanceFunction(...)` bindings. The five
-//! runtime-owned stdlib types re-export from `@boundaryml/baml-core-node` instead
+//! runtime-owned stdlib types re-export from `@boundaryml/baml-bridge` instead
 //! of getting a generated body.
 //!
 //! Codegen emits only `index.ts` — no sibling `index.d.ts`. The generated
@@ -35,12 +35,27 @@ use crate::{
     translate_ty::{TranslateCtx, TranslatedType, translate_ty},
 };
 
-const RUNTIME_PKG: &str = "@boundaryml/baml-core-node";
+const RUNTIME_PKG: &str = "@boundaryml/baml-bridge";
 
 /// All symbols that land in one leaf's body, in final render order.
 pub(crate) struct LeafBody {
     pub(crate) leaf: LeafPath,
     pub(crate) symbols: Vec<(EmittedSymbol, SortKey)>,
+}
+
+impl LeafBody {
+    fn callable_child_aliases(&self, kids: &BTreeSet<String>) -> BTreeMap<String, String> {
+        let mut out = BTreeMap::new();
+        for (sym, _) in &self.symbols {
+            let EmittedSymbol::Function(f) = sym else {
+                continue;
+            };
+            if f.mode == SyncAsync::Sync && kids.contains(&f.name) {
+                out.insert(f.name.clone(), child_namespace_alias(&f.name));
+            }
+        }
+        out
+    }
 }
 
 pub(crate) fn group_and_sort(
@@ -158,6 +173,10 @@ fn is_js_reserved(name: &str) -> bool {
 
 /// State accumulated while rendering a leaf's symbol bodies, used to build
 /// the file's import preamble.
+// Each flag tracks a distinct runtime import the leaf may need; they're
+// independent presence bits, not a state enum, so the bool-count lint
+// (`struct_excessive_bools`) doesn't apply cleanly here.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Default)]
 struct RenderState {
     /// Cross-leaf references, as routed `LeafPath`s (root-relative).
@@ -167,6 +186,9 @@ struct RenderState {
     /// Set when any rendered type expression references the runtime opaque
     /// handle token `_BamlHandle` (`Ty::RustType`).
     uses_baml_handle: bool,
+    /// Set when a generic class emits a `$types` field, which references the
+    /// runtime `BamlType` token type.
+    uses_baml_type: bool,
 }
 
 impl RenderState {
@@ -284,7 +306,7 @@ fn generic_decl(params: &[String]) -> String {
 /// but it must be a legal identifier. Append `_` to reserved words so
 /// `(default: V)` becomes `(default_: V)`. The real BAML name still travels in
 /// the `defineFunction` `paramNames` array for marshalling.
-fn safe_param_name(name: &str) -> String {
+pub(crate) fn safe_param_name(name: &str) -> String {
     if is_js_reserved(name) {
         format!("{name}_")
     } else {
@@ -292,7 +314,7 @@ fn safe_param_name(name: &str) -> String {
     }
 }
 
-fn option_field_name(name: &str) -> String {
+pub(crate) fn option_field_name(name: &str) -> String {
     if is_ts_property_identifier(name) {
         name.to_string()
     } else {
@@ -355,6 +377,7 @@ pub(crate) fn render_index_ts(body: &LeafBody, kids: &BTreeSet<String>, is_root:
         current_leaf: body.leaf.clone(),
     };
     let mut state = RenderState::default();
+    let callable_child_aliases = body.callable_child_aliases(kids);
 
     // Render symbol bodies first so the import preamble can be computed.
     let mut body_str = String::new();
@@ -363,13 +386,26 @@ pub(crate) fn render_index_ts(body: &LeafBody, kids: &BTreeSet<String>, is_root:
         if prev.is_some() {
             body_str.push('\n');
         }
-        render_symbol_ts(&mut body_str, sym, &ctx, &mut state);
+        render_symbol_ts(
+            &mut body_str,
+            sym,
+            &ctx,
+            &mut state,
+            &callable_child_aliases,
+        );
         prev = Some(key);
     }
 
     state.uses_baml_handle = body_str.contains("_BamlHandle");
     let mut out = String::new();
-    write_preamble_ts(&mut out, &state, body, kids, is_root);
+    write_preamble_ts(
+        &mut out,
+        &state,
+        body,
+        kids,
+        &callable_child_aliases,
+        is_root,
+    );
     if !body_str.is_empty() {
         if !out.is_empty() {
             out.push('\n');
@@ -438,10 +474,20 @@ fn leaf_module_specifier(from: &LeafPath, to: &LeafPath) -> String {
 /// segment (including `void`), but a reserved word like `default` is not a
 /// legal `export * as` alias — bind a mangled local and re-export under the
 /// reserved name (legal as an export name).
-fn write_child_reexports(out: &mut String, kids: &BTreeSet<String>) {
+fn child_namespace_alias(kid: &str) -> String {
+    format!("__ns_{kid}")
+}
+
+fn write_child_reexports(
+    out: &mut String,
+    kids: &BTreeSet<String>,
+    callable_child_aliases: &BTreeMap<String, String>,
+) {
     for kid in kids {
         let child_path = format!("./{kid}/index.js");
-        if is_js_reserved(kid) {
+        if let Some(local) = callable_child_aliases.get(kid) {
+            let _ = writeln!(out, "import * as {local} from \"{child_path}\";");
+        } else if is_js_reserved(kid) {
             let local = format!("__ns_{kid}");
             let _ = writeln!(out, "import * as {local} from \"{child_path}\";");
             let _ = writeln!(out, "export {{ {local} as {kid} }};");
@@ -460,6 +506,12 @@ fn runtime_import_line(state: &RenderState, extra: &[&str]) -> String {
     if state.uses_define_instance {
         names.push("defineInstanceFunction");
     }
+    // Type-only import (inline `type` modifier) for the generic `$types` field
+    // token. Sorted alongside the value imports; TS accepts a mixed
+    // value/type-only named import.
+    if state.uses_baml_type {
+        names.push("type BamlType");
+    }
     if names.is_empty() {
         return String::new();
     }
@@ -475,6 +527,7 @@ fn write_preamble_ts(
     state: &RenderState,
     body: &LeafBody,
     kids: &BTreeSet<String>,
+    callable_child_aliases: &BTreeMap<String, String>,
     is_root: bool,
 ) {
     if state.uses_baml_handle {
@@ -496,12 +549,12 @@ fn write_preamble_ts(
         out.push_str("setTypeMap(_TYPE_MAP);\n");
         if !kids.is_empty() {
             out.push('\n');
-            write_child_reexports(out, kids);
+            write_child_reexports(out, kids, callable_child_aliases);
         }
     } else {
         out.push_str(&runtime_import_line(state, &[]));
         out.push_str(&cross_leaf_imports(state, &body.leaf));
-        write_child_reexports(out, kids);
+        write_child_reexports(out, kids, callable_child_aliases);
     }
 }
 
@@ -512,6 +565,7 @@ fn render_symbol_ts(
     sym: &EmittedSymbol,
     ctx: &TranslateCtx,
     state: &mut RenderState,
+    callable_child_aliases: &BTreeMap<String, String>,
 ) {
     match sym {
         EmittedSymbol::Class(c) => {
@@ -523,7 +577,13 @@ fn render_symbol_ts(
         }
         EmittedSymbol::Enum(e) => render_enum(out, e),
         EmittedSymbol::TypeAlias(a) => render_type_alias(out, a, ctx, state),
-        EmittedSymbol::Function(f) => render_function_ts(out, f, ctx, state),
+        EmittedSymbol::Function(f) => render_function_ts(
+            out,
+            f,
+            ctx,
+            state,
+            callable_child_aliases.get(&f.name).map(String::as_str),
+        ),
     }
 }
 
@@ -577,22 +637,57 @@ fn render_class_ts(out: &mut String, c: &NodeClass, ctx: &TranslateCtx, state: &
         })
         .collect();
 
+    // A generic class carries its concrete TypeVar bindings in an optional
+    // `$types` field — the value-level type channel the inbound encoder reads to
+    // build `class_ty` (TS erases generics, so the metadata Python recovers from
+    // Pydantic must be spelled explicitly here). It is optional: an absent
+    // binding lowers to the unknown/top type at encode time.
+    let is_generic = !c.generic_params.is_empty();
+    let types_field = is_generic.then(|| {
+        let fields = c
+            .generic_params
+            .iter()
+            .map(|p| format!("{p}?: BamlType"))
+            .collect::<Vec<_>>()
+            .join("; ");
+        format!("{{ {fields} }}")
+    });
+
     let _ = writeln!(out, "export class {}{generics} {{", c.name);
     for (name, t) in &props {
         // `!` definite-assignment assertion: fields are populated via the
         // constructor's `Object.assign`, which tsc's flow analysis can't see.
         let _ = writeln!(out, "  {name}!: {};", t.expr);
     }
+    if let Some(types_ty) = &types_field {
+        state.uses_baml_type = true;
+        let _ = writeln!(out, "  $types?: {types_ty};");
+    }
 
     // Constructor.
-    if props.is_empty() {
+    if props.is_empty() && types_field.is_none() {
         out.push_str("  constructor(init: {}) {\n    Object.assign(this, init);\n  }\n");
     } else {
         out.push_str("  constructor(init: {\n");
         for (name, t) in &props {
             let _ = writeln!(out, "    {name}: {};", t.expr);
         }
+        if let Some(types_ty) = &types_field {
+            let _ = writeln!(out, "    $types?: {types_ty};");
+        }
         out.push_str("  }) {\n    Object.assign(this, init);\n  }\n");
+    }
+
+    // Static `$generic`: the TypeVar names in declaration order, read back by
+    // the inbound encoder to position the `$types` bindings as `class_ty` args.
+    if is_generic {
+        let params = c
+            .generic_params
+            .iter()
+            .map(|p| crate::ts_string(p))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(out, "  static readonly $generic = [{params}] as const;");
     }
 
     // Static + instance method bindings, as class fields.
@@ -681,13 +776,22 @@ fn render_method_binding_ts(
     let required_params = m.runtime_required_names();
     let optional_params = m.optional_names();
     let required_params_lit = param_names_literal(&required_params);
-    let optional_params_arg = optional_param_names_arg(&optional_params);
+    let optional_arg = optional_param_names_arg(&optional_params);
+    // A static method binds only its own `<...>` params (a generic static never
+    // re-binds the class params — the compiler forbids that ambiguity); an
+    // instance method also binds the enclosing class's params, recovered from
+    // the `self` receiver. Mirrors the Python SDK's `class_type_params` rule.
+    let class_type_params: &[String] = match m.kind {
+        MethodKind::Static => &[],
+        MethodKind::Instance => class_generics,
+    };
+    let tail = factory_tail(&optional_arg, &m.generic_params, class_type_params);
     match m.kind {
         MethodKind::Static => {
             state.uses_define_function = true;
             let _ = writeln!(
                 out,
-                "  static {} = defineFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}) as {sig};",
+                "  static {} = defineFunction(\"{}\", \"{}\", {required_params_lit}{tail}) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -697,7 +801,7 @@ fn render_method_binding_ts(
             state.uses_define_instance = true;
             let _ = writeln!(
                 out,
-                "  {} = defineInstanceFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}).bind(this) as {sig};",
+                "  {} = defineInstanceFunction(\"{}\", \"{}\", {required_params_lit}{tail}).bind(this) as {sig};",
                 m.name,
                 m.baml_fqn,
                 mode_str(m.mode),
@@ -711,6 +815,7 @@ fn render_function_ts(
     f: &NodeFunction,
     ctx: &TranslateCtx,
     state: &mut RenderState,
+    child_namespace_alias: Option<&str>,
 ) {
     write_doc_with_raises(out, f.docstring.as_deref(), &f.raises_names);
     state.uses_define_function = true;
@@ -737,12 +842,17 @@ fn render_function_ts(
     );
     let (required_params, optional_params) = split_param_names(&f.param_names, &f.arg_defaults, 0);
     let required_params_lit = param_names_literal(&required_params);
-    let optional_params_arg = optional_param_names_arg(&optional_params);
-    let factory = format!(
-        "defineFunction(\"{}\", \"{}\", {required_params_lit}{optional_params_arg}) as {sig}",
+    let optional_arg = optional_param_names_arg(&optional_params);
+    // Free functions bind only their own `<...>` params (no generic receiver).
+    let tail = factory_tail(&optional_arg, &f.generic_params, &[]);
+    let mut factory = format!(
+        "defineFunction(\"{}\", \"{}\", {required_params_lit}{tail}) as {sig}",
         f.baml_fqn,
         mode_str(f.mode),
     );
+    if let Some(alias) = child_namespace_alias {
+        factory = format!("Object.assign({factory}, {alias})");
+    }
     if is_js_reserved(&f.name) {
         // `export const new = …` is a syntax error; bind a mangled local
         // and re-export under the reserved name.
@@ -764,6 +874,52 @@ fn optional_param_names_arg(names: &[String]) -> String {
         String::new()
     } else {
         format!(", {}", param_names_literal(names))
+    }
+}
+
+/// The `{ typeParams, classTypeParams }` literal passed to the runtime factory
+/// to turn on host-side `TypeVar` binding. `type_params` are the callee's own
+/// `<...>` params (bound via the caller's `$types` option); `class_type_params`
+/// are the enclosing generic class's params (bound from the `self` receiver).
+/// `None` when the callee binds nothing (the non-generic fast path). Mirrors
+/// the Python SDK's `render_generic_kwargs`.
+fn generics_object_literal(type_params: &[String], class_type_params: &[String]) -> Option<String> {
+    if type_params.is_empty() && class_type_params.is_empty() {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if !type_params.is_empty() {
+        parts.push(format!("typeParams: {}", param_names_literal(type_params)));
+    }
+    if !class_type_params.is_empty() {
+        parts.push(format!(
+            "classTypeParams: {}",
+            param_names_literal(class_type_params)
+        ));
+    }
+    Some(format!("{{ {} }}", parts.join(", ")))
+}
+
+/// The trailing factory arguments after the required-param-names list: the
+/// optional-param-names list (if any) followed by the generics object (if the
+/// callee is generic). When a callee is generic but has no optional params, the
+/// optional slot is filled with `undefined` so the generics object lands in the
+/// correct positional slot.
+fn factory_tail(
+    optional_arg: &str,
+    type_params: &[String],
+    class_type_params: &[String],
+) -> String {
+    match generics_object_literal(type_params, class_type_params) {
+        None => optional_arg.to_string(),
+        Some(generics) => {
+            let optional = if optional_arg.is_empty() {
+                ", undefined"
+            } else {
+                optional_arg
+            };
+            format!("{optional}, {generics}")
+        }
     }
 }
 
@@ -944,7 +1100,7 @@ mod tests {
             ],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
-        assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-core-node\";"));
+        assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-bridge\";"));
         assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string) => number;"));
         assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string) => Promise<number>;"));
     }
@@ -1010,7 +1166,7 @@ mod tests {
             )],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
-        assert!(ts.contains("import { BamlImage as Image } from \"@boundaryml/baml-core-node\";"));
+        assert!(ts.contains("import { BamlImage as Image } from \"@boundaryml/baml-bridge\";"));
         assert!(ts.contains("export { Image };"));
         // The class binding already provides the type; no separate `export type`.
         assert!(!ts.contains("export type Image"));
@@ -1024,6 +1180,43 @@ mod tests {
         let ts = render_index_ts(&b, &kids, false);
         assert!(ts.contains("export * as aws from \"./aws/index.js\";"));
         assert!(!ts.contains("export const"));
+    }
+
+    #[test]
+    fn callable_child_collision_composes_function_with_namespace() {
+        let b = body(
+            &["vendor", "boundary"],
+            vec![
+                func_sym(
+                    "id",
+                    "boundary.id",
+                    SyncAsync::Sync,
+                    vec![],
+                    Ty::Class(name("boundary", &[], "LocalId"), vec![]),
+                ),
+                func_sym(
+                    "id_async",
+                    "boundary.id",
+                    SyncAsync::Async,
+                    vec![],
+                    Ty::Class(name("boundary", &[], "LocalId"), vec![]),
+                ),
+                class_sym("LocalId", name("boundary", &[], "LocalId"), vec![]),
+            ],
+        );
+        let mut kids = BTreeSet::new();
+        kids.insert("id".to_string());
+        let ts = render_index_ts(&b, &kids, false);
+        assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
+        assert!(!ts.contains("export * as id from \"./id/index.js\";"));
+        assert!(ts.contains(
+            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as () => LocalId, __ns_id);"
+        ));
+        assert!(
+            ts.contains(
+                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as () => Promise<LocalId>;"
+            )
+        );
     }
 
     #[test]
@@ -1045,6 +1238,6 @@ mod tests {
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap } from \"@boundaryml/baml-core-node\";"));
+        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap } from \"@boundaryml/baml-bridge\";"));
     }
 }

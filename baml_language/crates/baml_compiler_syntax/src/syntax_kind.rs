@@ -40,16 +40,23 @@ pub enum SyntaxKind {
     KW_MATCH,
     KW_CATCH,
     KW_CATCH_ALL,
+    KW_CATCH_ALL_PANICS,
     KW_THROWS,
     KW_SPAWN,
     KW_AWAIT,
+    KW_DEFER,
 
     // Other keywords
-    KW_WATCH,
     KW_INSTANCEOF,
     KW_IS,
     KW_DYNAMIC,
     KW_WITH,
+    // Contextual keywords re-lexed from a `Word` at parse time (no lexer token).
+    KW_AS,    // `.as<T>` cast / `(T as I)` / `field as field`
+    KW_TYPE,  // associated-type / type-alias `type Name ...`
+    KW_TRUE,  // `true` boolean literal
+    KW_FALSE, // `false` boolean literal
+    KW_NULL,  // `null` literal
 
     // Literals
     WORD,            // Any word (non-keyword identifier)
@@ -58,8 +65,9 @@ pub enum SyntaxKind {
     FLOAT_LITERAL,   // 123.45
 
     // String delimiters (parser assembles strings)
-    QUOTE, // "
-    HASH,  // # (for raw strings)
+    QUOTE,    // "
+    HASH,     // # (for raw strings)
+    BACKTICK, // ` (for BEP-049 interpolated strings)
 
     // Brackets
     L_BRACE,   // {
@@ -226,6 +234,11 @@ pub enum SyntaxKind {
     UNARY_EXPR,
     CALL_EXPR,
     INDEX_EXPR,
+    /// Tagged template literal: a tag identifier immediately followed by
+    /// a backtick string literal (BEP-049 §10). Structure: tag-expr child
+    /// plus `BACKTICK_STRING_LITERAL` child. Lowered to a call where the
+    /// body becomes a lambda producing a `TaggedString` value.
+    TAGGED_TEMPLATE_EXPR,
     /// Optional call: `func?.(args)` — short-circuits to null if callee is null.
     OPTIONAL_CALL_EXPR,
     /// Optional index: `obj?.[expr]` — short-circuits to null if base is null.
@@ -330,6 +343,22 @@ pub enum SyntaxKind {
     /// `BINDING_PATTERN` so downstream code doesn't have to text-match `_`.
     WILDCARD_PATTERN,
     THROW_EXPR,
+    /// `return expr?` in expression position — a diverging expression of type
+    /// `never` (mirrors `THROW_EXPR`). Lets `return` appear as a `catch`/`match`
+    /// arm value (e.g. `_ => return 0`) without the statement-only restriction.
+    /// Statement-position `return` still parses as `RETURN_STMT`.
+    RETURN_EXPR,
+    /// `break` in expression position — a diverging expression of type `never`
+    /// (mirrors `RETURN_EXPR`). Lets `break` appear as a `catch`/`match` arm
+    /// value (e.g. `0 => break`) without the statement-only restriction.
+    /// Statement-position `break` still parses as `BREAK_STMT`.
+    BREAK_EXPR,
+    /// `continue` in expression position — a diverging expression of type
+    /// `never` (mirrors `RETURN_EXPR`). Lets `continue` appear as a
+    /// `catch`/`match` arm value (e.g. `0 => continue`) without the
+    /// statement-only restriction. Statement-position `continue` still parses
+    /// as `CONTINUE_STMT`.
+    CONTINUE_EXPR,
     /// `spawn name_expr? block` — BEP-034 spawn expression.
     /// Structure: `KW_SPAWN [expr] BLOCK_EXPR`.
     SPAWN_EXPR,
@@ -355,11 +384,13 @@ pub enum SyntaxKind {
     WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
-    WATCH_LET,
     BREAK_STMT,
     CONTINUE_STMT,
     RETURN_STMT,
     THROW_STMT,
+    /// `defer { BODY }` — BEP-042. Runs BODY on every exit of the enclosing
+    /// block. Structure: `KW_DEFER BLOCK_EXPR`.
+    DEFER_STMT,
 
     // Expression components
     CALL_ARGS,
@@ -384,6 +415,22 @@ pub enum SyntaxKind {
     RAW_STRING_LITERAL,
     BYTE_STRING_LITERAL,
     UNQUOTED_STRING,
+
+    // Backtick interpolated string (BEP-049)
+    BACKTICK_STRING_LITERAL, // `...` or ``...`` etc.
+    BACKTICK_TEXT,           // Plain text segment between interpolations
+    BACKTICK_INTERPOLATION,  // ${ expr } inside a backtick string
+
+    // BEP-049 §5 block-tag forms inside `${...}`. The parser emits these as
+    // flat siblings of BACKTICK_INTERPOLATION inside a BACKTICK_STRING_LITERAL;
+    // segments() lifts matched open/close pairs into hierarchical For/If
+    // structures.
+    BACKTICK_FOR_OPEN, // ${for (let x in xs)}
+    BACKTICK_ENDFOR,   // ${endfor}
+    BACKTICK_IF_OPEN,  // ${if (cond)}
+    BACKTICK_ELSE_IF,  // ${else if (cond)}
+    BACKTICK_ELSE,     // ${else}
+    BACKTICK_ENDIF,    // ${endif}
 
     // Template components (inside raw strings)
     TEMPLATE_CONTENT,       // Plain text (deprecated, use PROMPT_TEXT)
@@ -435,6 +482,7 @@ impl SyntaxKind {
                 | SyntaxKind::STRING_LITERAL
                 | SyntaxKind::RAW_STRING_LITERAL
                 | SyntaxKind::BYTE_STRING_LITERAL
+                | SyntaxKind::BACKTICK_STRING_LITERAL
         )
     }
 
@@ -503,6 +551,7 @@ impl SyntaxKind {
                 | Self::KW_LET
                 | Self::KW_CONST
                 | Self::KW_IN
+                | Self::KW_IS
                 | Self::KW_BREAK
                 | Self::KW_CONTINUE
                 | Self::KW_RETURN
@@ -510,12 +559,16 @@ impl SyntaxKind {
                 | Self::KW_MATCH
                 | Self::KW_CATCH
                 | Self::KW_CATCH_ALL
+                | Self::KW_CATCH_ALL_PANICS
                 | Self::KW_THROWS
                 | Self::KW_SPAWN
                 | Self::KW_AWAIT
-                | Self::KW_WATCH
+                | Self::KW_DEFER
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC
+                | Self::KW_WITH
+                | Self::KW_AS
+                | Self::KW_TYPE
         )
     }
 }

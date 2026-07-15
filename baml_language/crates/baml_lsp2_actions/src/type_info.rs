@@ -479,15 +479,6 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             }
         }
 
-        Definition::Generator(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
-            let data = &item_tree[loc.id(db)];
-            TypeInfo::OtherItem {
-                name: data.name.as_str().to_string(),
-                kind: "generator",
-            }
-        }
-
         Definition::Test(loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
@@ -512,7 +503,7 @@ pub fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let kind = match data.origin {
                 baml_compiler2_ast::ast::LetOrigin::Client => "client",
                 baml_compiler2_ast::ast::LetOrigin::RetryPolicy => "retry_policy",
-                _ => "let",
+                baml_compiler2_ast::ast::LetOrigin::Source => "let",
             };
             TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
@@ -536,20 +527,20 @@ fn render_implements_block(block: &baml_compiler2_hir::item_tree::ImplementsBloc
         let ty = binding
             .type_expr
             .as_ref()
-            .map(|type_expr| type_expr.expr.to_string())
+            .map(std::string::ToString::to_string)
             .unwrap_or_else(|| "unknown".to_string());
         format!("type {} = {}", binding.name.as_str(), ty)
     }));
 
     if members.is_empty() {
-        format!("implements {} {{}}", block.target.expr)
+        format!("implements {} {{}}", block.target)
     } else {
         let members = members
             .into_iter()
             .map(|member| format!("    {member}"))
             .collect::<Vec<_>>()
             .join("\n");
-        format!("implements {} {{\n{members}\n}}", block.target.expr)
+        format!("implements {} {{\n{members}\n}}", block.target)
     }
 }
 
@@ -710,11 +701,19 @@ fn local_type_info(
             })
         }
 
-        DefinitionSite::PatternBinding(_) => {
-            // Pattern bindings — report as local variable with unknown type for now.
+        DefinitionSite::PatternBinding(pat_id) | DefinitionSite::CatchBinding(pat_id) => {
+            // Resolve the binding type from inference (matching completions) so
+            // hover agrees with completion type info instead of reporting
+            // "unknown". `PatId` is body-local, so walk the use-site's scope
+            // chain (collision-safe) rather than probing the enclosing function
+            // body first, which could match a same-index binding in another body
+            // for pattern/catch bindings inside closures or nested blocks.
+            let ty_str = find_binding_ty_in_scopes(db, index, scope_id, pat_id)
+                .map(|ty| display_local_binding_ty(db, file, &ty))
+                .unwrap_or_else(|| "unknown".to_string());
             Some(TypeInfo::LocalVar {
                 name: name.as_str().to_string(),
-                ty: "unknown".to_string(),
+                ty: ty_str,
             })
         }
     }
@@ -733,6 +732,15 @@ fn body_stmt_to_pat_id(
         return None;
     };
 
+    // `stmt_id` is arena-local to the body it was created in. When the use-site's
+    // definition resolves into a *different* ExprBody than `body` (e.g. a binding
+    // declared inside a nested testset / lambda), this body's `stmts` arena may
+    // not contain that index — indexing it would panic, and a panic aborts the
+    // whole wasm runtime. Bounds-check and bail instead.
+    let raw = stmt_id.into_raw().into_u32() as usize;
+    if raw >= expr_body.stmts.len() {
+        return None;
+    }
     let stmt = &expr_body.stmts[stmt_id];
     match stmt {
         baml_compiler2_ast::Stmt::Let { pattern, .. }

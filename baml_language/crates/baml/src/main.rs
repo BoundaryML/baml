@@ -17,6 +17,9 @@ const CONFIG_FILE: &str = "config.toml";
 const STATE_FILE: &str = "state.toml";
 const CHANNEL_CACHE_TTL: Duration = Duration::from_hours(24);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+/// Short timeout for the passive background freshness checks that run before
+/// normal commands, so an unreachable network can't stall the actual work.
+const AUTO_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Config {
@@ -41,13 +44,27 @@ impl Default for DefaultConfig {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct UpdateConfig {
-    auto_check: bool,
+    /// Whether normal commands may refresh the channel-manifest freshness
+    /// cache over the network once per TTL window. Defaults to on; set
+    /// `[update] auto_check = false` to opt out. The same setting governs the
+    /// toolchain binary's agent-skill freshness check.
+    auto_check: Option<bool>,
+}
+
+impl UpdateConfig {
+    fn auto_check_enabled(&self) -> bool {
+        self.auto_check.unwrap_or(true)
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct State {
     #[serde(default)]
     channels: BTreeMap<String, ChannelState>,
+    /// Sections owned by other writers (e.g. `[skills]`, written by
+    /// `baml agent install`), preserved verbatim across wrapper writes.
+    #[serde(flatten)]
+    rest: BTreeMap<String, toml::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -175,7 +192,10 @@ fn print_version() {
     let version = match concrete_version_for_selector(&selector) {
         Ok(version) => version,
         Err(_) if is_channel(&selector.selector) => {
-            println!("baml toolchain not installed");
+            println!(
+                "baml toolchain not installed{}",
+                selector_annotation(&selector)
+            );
             println!("Run: baml toolchain use {}", selector.selector);
             return;
         }
@@ -186,7 +206,10 @@ fn print_version() {
         }
     };
     if !toolchain_cli_path(&version).exists() {
-        println!("baml toolchain not installed ({version})");
+        println!(
+            "baml toolchain not installed ({version}){}",
+            selector_annotation(&selector)
+        );
         if is_channel(&selector.selector) {
             println!("Run: baml toolchain use {}", selector.selector);
         } else {
@@ -195,7 +218,7 @@ fn print_version() {
         return;
     }
     match verify_toolchain_version_file(&version) {
-        Ok(()) => println!("baml toolchain {version}"),
+        Ok(()) => println!("baml toolchain {version}{}", selector_annotation(&selector)),
         Err(_) => {
             println!("baml toolchain corrupt ({version})");
             println!("Run: baml toolchain install {version} --force");
@@ -203,16 +226,33 @@ fn print_version() {
     }
 }
 
+/// Where the active selector was resolved from, as a trailing parenthetical
+/// suffix for the `baml toolchain <version>` line (rustup-style, e.g. cargo's
+/// "(overridden by ...)"). Returns `None` for the global default and the
+/// built-in fallback, which need no annotation.
+fn selector_origin(source: &SelectorSource) -> Option<String> {
+    match source {
+        SelectorSource::Env => Some("from $BAML_VERSION".to_string()),
+        SelectorSource::Project(path) => Some(format!("from {}", path.display())),
+        SelectorSource::Config | SelectorSource::Fallback => None,
+    }
+}
+
+/// Build the `(channel, from <source>)` suffix shown after a resolved toolchain
+/// version. The channel name is included only for channel selectors (canary /
+/// nightly), since an exact-version selector already equals the printed version.
+fn selector_annotation(selector: &ResolvedSelector) -> String {
+    let channel = is_channel(&selector.selector).then_some(selector.selector.as_str());
+    match (channel, selector_origin(&selector.source)) {
+        (Some(channel), Some(origin)) => format!(" ({channel}, {origin})"),
+        (Some(channel), None) => format!(" ({channel})"),
+        (None, Some(origin)) => format!(" ({origin})"),
+        (None, None) => String::new(),
+    }
+}
+
 fn baml_home() -> PathBuf {
-    env::var_os("BAML_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            env::var_os("HOME")
-                .map(PathBuf::from)
-                .or_else(|| env::var_os("USERPROFILE").map(PathBuf::from))
-                .map(|home| home.join(".baml"))
-        })
-        .unwrap_or_else(|| PathBuf::from(".baml"))
+    baml_release::baml_home()
 }
 
 fn config_path() -> PathBuf {
@@ -341,22 +381,45 @@ fn pass_through(args: Vec<String>) -> Result<i32> {
     }
     verify_toolchain_version_file(&version)?;
 
+    // Warnings from the existing caches print immediately (no network). The
+    // agent-skill warning is NOT printed here: it lives in the toolchain
+    // binary (which ships nightly, unlike the wrapper), so printing it here
+    // too would double it up.
+    let channel_warned = warn_if_channel_outdated(&selector, &version);
+    // A cache refresh (due at most once per TTL window) runs in the
+    // background while the command itself runs, instead of stalling it.
+    let refresh = start_lazy_refresh(&selector);
+
     let mut command = Command::new(cli);
     command.args(args);
     command.env("BAML_WRAPPER_EXEC", "1");
     command.env("BAML_WRAPPER_RESOLVED_TOOLCHAIN", &version);
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        let err = command.exec();
-        Err(anyhow!("failed to exec baml-cli: {err}"))
+    let Some(refresh) = refresh else {
+        // Common case: nothing to refresh, so the wrapper can hand the
+        // process over entirely.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            let err = command.exec();
+            return Err(anyhow!("failed to exec baml-cli: {err}"));
+        }
+        #[cfg(not(unix))]
+        {
+            let status = command.status().context("failed to run baml-cli")?;
+            return Ok(status.code().unwrap_or(1));
+        }
+    };
+
+    // Refresh in flight: run the command as a child (exec would kill the
+    // refresh thread), then give the refresh whatever remains of its budget
+    // and surface any warnings the fresh caches newly justify.
+    let status = command.status().context("failed to run baml-cli")?;
+    refresh.wait();
+    if !channel_warned {
+        warn_if_channel_outdated(&selector, &version);
     }
-    #[cfg(not(unix))]
-    {
-        let status = command.status().context("failed to run baml-cli")?;
-        Ok(status.code().unwrap_or(1))
-    }
+    Ok(status.code().unwrap_or(1))
 }
 
 fn active_selector() -> Result<ResolvedSelector> {
@@ -504,6 +567,139 @@ fn is_channel(selector: &str) -> bool {
     selector == "canary" || selector == "nightly"
 }
 
+/// Bold-yellow lowercase `warning` prefix, matching the styled diagnostics the
+/// toolchain CLI emits (see `baml_exec::diag_print`). Color is dropped
+/// automatically when stderr is not a TTY.
+fn warning_prefix() -> impl std::fmt::Display {
+    console::Style::new()
+        .yellow()
+        .bold()
+        .for_stderr()
+        .apply_to("warning")
+}
+
+/// An in-flight background refresh of the channel-manifest freshness cache.
+/// Started before the main command runs and joined after it finishes, so the
+/// network latency hides behind the command's own runtime instead of stalling
+/// it up front. (The agent-skill freshness cache is refreshed by the
+/// toolchain binary, which runs its own equivalent of this.)
+struct LazyRefresh {
+    done: std::sync::mpsc::Receiver<()>,
+    deadline: std::time::Instant,
+}
+
+impl LazyRefresh {
+    /// Wait for the refresh to finish, but never past the shared
+    /// [`AUTO_CHECK_TIMEOUT`] deadline (anchored at refresh start, so a
+    /// command that ran 3s only waits up to 2s more). On timeout the thread
+    /// is abandoned; cache writes are atomic, so dying mid-write is safe.
+    fn wait(self) {
+        let remaining = self
+            .deadline
+            .saturating_duration_since(std::time::Instant::now());
+        let _ = self.done.recv_timeout(remaining);
+    }
+}
+
+/// Kick off a background refresh of any freshness cache older than the TTL,
+/// at most one attempt per TTL window (failures are silent; the marker in
+/// [`should_attempt_refresh`] throttles retries). Returns `None` when
+/// nothing is due or `[update] auto_check = false` — the common case, which
+/// costs only a few mtime checks and lets the caller keep the exec fast path.
+fn start_lazy_refresh(selector: &ResolvedSelector) -> Option<LazyRefresh> {
+    if !read_config().update.auto_check_enabled() {
+        return None;
+    }
+
+    let manifest_due = is_channel(&selector.selector)
+        && should_attempt_refresh(
+            &manifest_cache_dir(&baml_release::manifest_base_url())
+                .join(format!("{}.json", selector.selector)),
+        );
+    if !manifest_due {
+        return None;
+    }
+
+    let deadline = std::time::Instant::now() + AUTO_CHECK_TIMEOUT;
+    let channel = selector.selector.clone();
+    let (sender, done) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = fetch_manifest_with_timeout(
+            &channel,
+            None,
+            FetchPolicy::ForceRemote,
+            AUTO_CHECK_TIMEOUT,
+        );
+        let _ = sender.send(());
+    });
+    Some(LazyRefresh { done, deadline })
+}
+
+/// A cache file is due for a refresh attempt when both the file itself and
+/// its attempt marker are older than the TTL. The marker is touched before
+/// every attempt (success or failure) so an unreachable network is retried at
+/// most once per TTL window instead of on every command.
+fn should_attempt_refresh(cache_path: &Path) -> bool {
+    let marker = refresh_marker_path(cache_path);
+    if !file_older_than(cache_path, CHANNEL_CACHE_TTL)
+        || !file_older_than(&marker, CHANNEL_CACHE_TTL)
+    {
+        return false;
+    }
+    if let Some(parent) = marker.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    fs::write(&marker, "").is_ok()
+}
+
+fn refresh_marker_path(cache_path: &Path) -> PathBuf {
+    let mut path = cache_path.as_os_str().to_owned();
+    path.push(".last-check");
+    PathBuf::from(path)
+}
+
+/// True when the file is missing or its mtime is older than `ttl`.
+fn file_older_than(path: &Path, ttl: Duration) -> bool {
+    path.metadata()
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+        .is_none_or(|age| age > ttl)
+}
+
+/// Passive freshness check for channel selectors, run on every pass-through
+/// invocation. Reads only the locally cached channel manifest (written by
+/// explicit toolchain commands and the background auto-refresh); it never
+/// touches the network, and stays silent if no cache exists yet. Returns
+/// whether it printed, so a post-refresh re-check can avoid duplicating the
+/// warning within one invocation.
+fn warn_if_channel_outdated(selector: &ResolvedSelector, active_version: &str) -> bool {
+    if !is_channel(&selector.selector) {
+        return false;
+    }
+    let cache_path = manifest_cache_dir(&baml_release::manifest_base_url())
+        .join(format!("{}.json", selector.selector));
+    if !cached_manifest_is_newer(&cache_path, active_version) {
+        return false;
+    }
+    eprintln!(
+        "{}: Your version of baml for toolchain: {} is outdated. Update it with baml toolchain update.",
+        warning_prefix(),
+        selector.selector
+    );
+    true
+}
+
+fn cached_manifest_is_newer(cache_path: &Path, active_version: &str) -> bool {
+    let Ok(text) = fs::read_to_string(cache_path) else {
+        return false;
+    };
+    let Ok(manifest) = toml_or_json::<ToolchainManifest>(&text) else {
+        return false;
+    };
+    manifest.version != active_version
+}
+
 fn manifest_base_url(override_url: Option<&str>) -> String {
     override_url
         .map(|value| value.trim_end_matches('/').to_string())
@@ -514,6 +710,15 @@ fn fetch_manifest(
     selector: &str,
     override_url: Option<&str>,
     policy: FetchPolicy,
+) -> Result<ToolchainManifest> {
+    fetch_manifest_with_timeout(selector, override_url, policy, HTTP_TIMEOUT)
+}
+
+fn fetch_manifest_with_timeout(
+    selector: &str,
+    override_url: Option<&str>,
+    policy: FetchPolicy,
+    timeout: Duration,
 ) -> Result<ToolchainManifest> {
     let base = manifest_base_url(override_url);
     let url = if is_channel(selector) {
@@ -539,7 +744,7 @@ fn fetch_manifest(
         Some(text) => text,
         None => {
             fetched_remote = true;
-            let client = http_client()?;
+            let client = http_client_with_timeout(timeout)?;
             client
                 .get(&url)
                 .send()
@@ -697,7 +902,8 @@ fn update_toolchain(override_url: Option<&str>) -> Result<()> {
             "failed to refresh {} from the remote manifest; the active installed toolchain was left unchanged",
             config.default.selector
         )
-    })
+    })?;
+    Ok(())
 }
 
 fn status_toolchain(override_url: Option<&str>) -> Result<()> {
@@ -876,8 +1082,13 @@ fn fetch_wrapper_manifest() -> Result<WrapperManifest> {
 }
 
 fn http_client() -> Result<reqwest::blocking::Client> {
+    http_client_with_timeout(HTTP_TIMEOUT)
+}
+
+fn http_client_with_timeout(timeout: Duration) -> Result<reqwest::blocking::Client> {
     reqwest::blocking::Client::builder()
-        .timeout(HTTP_TIMEOUT)
+        .connect_timeout(timeout.min(Duration::from_secs(10)))
+        .timeout(timeout)
         .build()
         .context("failed to build HTTP client")
 }
@@ -966,5 +1177,135 @@ mod tests {
             missing,
             FetchPolicy::CacheAllowed
         ));
+    }
+
+    fn resolved(selector: &str, source: SelectorSource) -> ResolvedSelector {
+        ResolvedSelector {
+            selector: selector.to_string(),
+            source,
+        }
+    }
+
+    #[test]
+    fn annotation_shows_channel_and_project_source() {
+        let path = PathBuf::from("/work/demo/baml.toml");
+        assert_eq!(
+            selector_annotation(&resolved("canary", SelectorSource::Project(path))),
+            " (canary, from /work/demo/baml.toml)"
+        );
+    }
+
+    #[test]
+    fn annotation_shows_channel_for_default_source_without_origin() {
+        assert_eq!(
+            selector_annotation(&resolved("canary", SelectorSource::Config)),
+            " (canary)"
+        );
+        assert_eq!(
+            selector_annotation(&resolved("nightly", SelectorSource::Fallback)),
+            " (nightly)"
+        );
+    }
+
+    #[test]
+    fn annotation_omits_channel_for_exact_version() {
+        assert_eq!(
+            selector_annotation(&resolved("0.11.0", SelectorSource::Config)),
+            ""
+        );
+        assert_eq!(
+            selector_annotation(&resolved(
+                "0.11.0",
+                SelectorSource::Project(PathBuf::from("/work/demo/baml.toml"))
+            )),
+            " (from /work/demo/baml.toml)"
+        );
+    }
+
+    #[test]
+    fn annotation_reports_env_override() {
+        assert_eq!(
+            selector_annotation(&resolved("nightly", SelectorSource::Env)),
+            " (nightly, from $BAML_VERSION)"
+        );
+    }
+
+    fn write_cached_manifest(version: &str) -> tempfile::NamedTempFile {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        fs::write(
+            tmp.path(),
+            format!(
+                r#"{{"schema":1,"version":"{version}","channel":"canary","released_at":"2026-07-10T00:00:00Z","artifacts":{{}}}}"#
+            ),
+        )
+        .unwrap();
+        tmp
+    }
+
+    #[test]
+    fn cached_manifest_newer_than_active_version_is_detected() {
+        let tmp = write_cached_manifest("0.12.0");
+        assert!(cached_manifest_is_newer(tmp.path(), "0.11.0"));
+    }
+
+    #[test]
+    fn cached_manifest_matching_active_version_is_not_outdated() {
+        let tmp = write_cached_manifest("0.11.0");
+        assert!(!cached_manifest_is_newer(tmp.path(), "0.11.0"));
+    }
+
+    #[test]
+    fn missing_manifest_cache_stays_silent() {
+        let missing = Path::new("/tmp/definitely-missing-baml-manifest.json");
+        assert!(!cached_manifest_is_newer(missing, "0.11.0"));
+    }
+
+    #[test]
+    fn unparseable_manifest_cache_stays_silent() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        fs::write(tmp.path(), "not json").unwrap();
+        assert!(!cached_manifest_is_newer(tmp.path(), "0.11.0"));
+    }
+
+    #[test]
+    fn missing_file_counts_as_older_than_ttl() {
+        let missing = Path::new("/tmp/definitely-missing-baml-freshness-file");
+        assert!(file_older_than(missing, CHANNEL_CACHE_TTL));
+    }
+
+    #[test]
+    fn fresh_file_is_not_older_than_ttl() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        assert!(!file_older_than(tmp.path(), CHANNEL_CACHE_TTL));
+    }
+
+    #[test]
+    fn refresh_attempt_is_throttled_by_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = tmp.path().join("latest-commit.json");
+        // Cache missing and no marker: attempt allowed, marker gets created.
+        assert!(should_attempt_refresh(&cache));
+        assert!(refresh_marker_path(&cache).exists());
+        // Fresh marker: no retry within the TTL window.
+        assert!(!should_attempt_refresh(&cache));
+    }
+
+    #[test]
+    fn state_write_preserves_foreign_sections() {
+        let text = "[channels.canary]\nactive_version = \"0.11.0\"\nresolved_at = \"x\"\nmanifest_path = \"y\"\n\n[skills]\ninstalled_commit = \"abc\"\ninstalled_at = \"2026-07-10T00:00:00Z\"\n";
+        let state: State = toml::from_str(text).unwrap();
+        let out = toml::to_string_pretty(&state).unwrap();
+        assert!(out.contains("[skills]"), "{out}");
+        assert!(out.contains("installed_commit = \"abc\""), "{out}");
+        assert!(out.contains("[channels.canary]"), "{out}");
+    }
+
+    #[test]
+    fn auto_check_defaults_on_and_respects_optout() {
+        assert!(UpdateConfig::default().auto_check_enabled());
+        let config: Config = toml::from_str("[update]\nauto_check = false\n").unwrap();
+        assert!(!config.update.auto_check_enabled());
+        let config: Config = toml::from_str("[update]\nauto_check = true\n").unwrap();
+        assert!(config.update.auto_check_enabled());
     }
 }

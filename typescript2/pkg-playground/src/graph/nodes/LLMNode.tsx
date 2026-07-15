@@ -1,12 +1,9 @@
 import { type NodeProps } from '@xyflow/react';
 import { Sparkles } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
-import {
-  nodeBackground,
-  nodeShadow,
-  selectionRing,
-  stateColors,
-} from '../constants';
+import { getChrome, nodeBackground, nodeShadow, stateStyle } from '../constants';
+import { depthScale } from '../lod';
+import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
 import { NodeOutputPreview } from './NodeOutputPreview';
@@ -15,13 +12,23 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
   const isRunning = d.executionState === 'running';
+  const theme = useGraphThemeContext();
+  const chrome = getChrome(theme);
+  const llm = chrome.llm;
+  // Deeper nodes render smaller (semantic-zoom hierarchy) — but not when a
+  // preview is shown, so the content matches the (unshrunk) layout box.
+  const hasPreview =
+    (d.valuePreviews?.length ?? 0) > 0 || !!d.errorMessage || !!d.hasResult;
+  const s = hasPreview
+    ? 1
+    : depthScale(typeof d.depth === 'number' ? d.depth : 0);
   // LLM nodes use a violet accent regardless of state — domain signal first,
   // execution state communicated through the gradient + border tint.
-  const base = stateColors[d.executionState] ?? stateColors['not-started'];
+  const base = stateStyle(theme, d.executionState);
   const colors = {
     ...base,
-    accent: '#6D28D9',
-    border: isHighlighted ? selectionRing.color : 'rgba(109,40,217,0.40)',
+    accent: llm.accent,
+    border: isHighlighted ? chrome.selectionRing.color : llm.border,
   };
 
   return (
@@ -31,12 +38,12 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 4,
-          padding: '7px 11px 8px 9px',
+          gap: 4 * s,
+          padding: `${7 * s}px ${11 * s}px ${8 * s}px ${9 * s}px`,
           borderRadius: 8,
-          background: nodeBackground(colors),
+          background: nodeBackground(colors, theme),
           border: `1px solid ${colors.border}`,
-          boxShadow: nodeShadow(colors, !!isHighlighted),
+          boxShadow: nodeShadow(colors, !!isHighlighted, theme),
           width: '100%',
           height: '100%',
           boxSizing: 'border-box',
@@ -46,24 +53,24 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
           transition: 'box-shadow 120ms ease, border-color 120ms ease',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 * s }}>
           <span
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
-              padding: '2px 6px 2px 5px',
+              gap: 4 * s,
+              padding: `${2 * s}px ${6 * s}px ${2 * s}px ${5 * s}px`,
               borderRadius: 5,
-              fontSize: 9,
+              fontSize: 9 * s,
               fontWeight: 700,
               letterSpacing: '0.06em',
-              background: 'rgba(109,40,217,0.10)',
-              color: '#6D28D9',
-              boxShadow: 'inset 0 0 0 1px rgba(109,40,217,0.30)',
+              background: llm.chipBg,
+              color: llm.chipText,
+              boxShadow: `inset 0 0 0 1px ${llm.chipRing}`,
             }}
           >
             <Sparkles
-              size={9}
+              size={9 * s}
               strokeWidth={2.5}
               style={
                 isRunning
@@ -75,7 +82,7 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
           </span>
           <span
             style={{
-              fontSize: 12,
+              fontSize: 12 * s,
               fontWeight: 600,
               color: colors.text,
               overflow: 'hidden',
@@ -91,7 +98,7 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
         {d.llmClient && (
           <div
             style={{
-              fontSize: 9,
+              fontSize: 9 * s,
               color: colors.textMuted,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -107,7 +114,7 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data }) => {
         <NodeOutputPreview
           result={d.result}
           hasResult={d.hasResult}
-          images={d.imageOutputs}
+          valuePreviews={d.valuePreviews}
           errorMessage={d.errorMessage}
           customRenderers={d.customRenderers}
         />

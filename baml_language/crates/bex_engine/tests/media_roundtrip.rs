@@ -40,6 +40,7 @@ fn pdf_instance(arc: Arc<MediaValue>) -> BexExternalValue {
     );
     BexExternalValue::Instance {
         class_name: "baml.media.Pdf".to_string(),
+        type_args: vec![],
         fields,
     }
 }
@@ -69,6 +70,7 @@ class Holder {
     holder_fields.insert("inner".to_string(), pdf_instance(Arc::clone(&original)));
     let holder_arg = BexExternalValue::Instance {
         class_name: "user.Holder".to_string(),
+        type_args: vec![],
         fields: holder_fields,
     };
 
@@ -87,7 +89,9 @@ class Holder {
     // `_data` field carries the `Arc<MediaValue>` back out as
     // `Adt(Media(_))`.
     match result {
-        BexExternalValue::Instance { class_name, fields } => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } => {
             assert!(
                 class_name == "baml.media.Pdf" || class_name == "Pdf",
                 "expected pdf class name, got {class_name:?}"

@@ -10,7 +10,12 @@ import type {
   RmOptions,
   CpOptions,
 } from "just-bash/browser";
-import type { WasmVfsDirEntry } from "@b/bridge_wasm";
+
+type WasmVfsDirEntry = {
+  name: string;
+  file_type: string;
+  is_symlink: boolean;
+};
 
 /**
  * The wasmVfs property shape exposed by BamlVfs.

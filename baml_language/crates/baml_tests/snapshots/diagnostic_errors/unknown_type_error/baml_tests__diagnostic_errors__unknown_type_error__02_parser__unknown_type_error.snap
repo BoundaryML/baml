@@ -55,7 +55,7 @@ SOURCE_FILE
   null
 }"
         L_BRACE "{"
-        WORD "null"
+        KW_NULL "null"
         R_BRACE "}"
   ENUM_DEF
     KW_ENUM "enum"
@@ -88,6 +88,67 @@ SOURCE_FILE
 }"
         L_BRACE "{"
         INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "UnknownFieldAccess"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "raw"
+        COLON ":"
+        TYPE_EXPR "unknown"
+          WORD "unknown"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "raw.email.to_lower_case"
+            WORD "raw"
+            DOT "."
+            WORD "email"
+            DOT "."
+            WORD "to_lower_case"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Envelope"
+    L_BRACE "{"
+    FIELD
+      WORD "payload"
+      TYPE_EXPR "unknown"
+        WORD "unknown"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "UnknownNestedFieldAccess"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "envelope"
+        COLON ":"
+        TYPE_EXPR "Envelope"
+          WORD "Envelope"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        PATH_EXPR "envelope.payload.email"
+          WORD "envelope"
+          DOT "."
+          WORD "payload"
+          DOT "."
+          WORD "email"
         R_BRACE "}"
 
 === ERRORS ===

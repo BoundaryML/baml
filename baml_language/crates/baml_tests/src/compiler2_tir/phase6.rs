@@ -677,15 +677,9 @@ function f(u: MaybeUser) -> string? {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.User {
       name: string
-    }
-    function user.User.to_json(self: user.User) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-    }
-    function user.User.from_json(j: baml.json.json) -> user.User throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      User { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.User
     }
     type user.MaybeUser = user.User | null
     function user.f(u: user.MaybeUser) -> string | null throws never {
@@ -697,7 +691,7 @@ function f(u: MaybeUser) -> string? {
       name: string | null
     }
     type user.MaybeUser$stream = user.User$stream | null
-    "#);
+    ");
 }
 
 #[test]
@@ -842,7 +836,7 @@ function f() -> null {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> null throws never {
       { : never
-        let xs = [] : never[] -> int[] (evolving)
+        let xs = [] : _[] -> int[] (evolving)
         xs?.push?.(1) : int | null
         xs.push("a") : int
         return null : null
@@ -851,6 +845,162 @@ function f() -> null {
       !! 70..73: type mismatch: expected int, got string
     }
     "#);
+}
+
+#[test]
+fn empty_array_reassignment_keeps_declared_element_type() {
+    // Regression: `x = []` must not drop `x`'s declared `int[]`. The assigned
+    // empty would otherwise become an adoptable evolving-never local, and a
+    // later `push` would establish a wrong element type under the declared one
+    // (unsound). `push("hello")` must be rejected against the retained `int[]`.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let x: int[] = [1]
+    x = []
+    x.push("hello")
+    return null
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("type mismatch: expected int, got string"),
+        "expected `x.push(\"hello\")` to be rejected after `x = []`; got:\n{tir}"
+    );
+}
+
+#[test]
+fn generic_construction_cannot_infer_param_from_empty_field() {
+    // Regression (F6): constructing a generic class whose parameter no field
+    // determines — here `T` from `Box { items: [] }` — must report `cannot infer
+    // type parameter`, not silently produce an unspecialized `Box`. The
+    // unspecialized form would otherwise reach MIR lowering carrying a bare type
+    // variable and trip `tir2_to_template`'s `unreachable!`; the diagnostic keeps
+    // the program out of lowering (which only runs error-free).
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Box<T> {
+    items: T[]
+}
+function f() -> int {
+    let b = Box { items: [] }
+    0
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("cannot infer type parameter `T`"),
+        "expected `Box {{ items: [] }}` to report an uninferrable `T`; got:\n{tir}"
+    );
+}
+
+#[test]
+fn container_param_default_element_error_reported_once() {
+    // Regression (H1): a container-literal param default with a mismatched
+    // element must report the element error exactly once. The default was
+    // previously typed twice (infer then check), duplicating the diagnostic.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Money { cents: bigint }
+function pay(items: Money[] = [Money { cents: 1 }]) -> int { 0 }
+"#,
+    );
+    let tir = render_tir(&db, file);
+    let count = tir.matches("expected bigint, got 1").count();
+    assert_eq!(
+        count, 1,
+        "param-default element mismatch must be reported once; got {count}:\n{tir}"
+    );
+}
+
+#[test]
+fn generic_construction_does_not_report_phantom_param() {
+    // Regression (M3): a class type parameter used by no field is a phantom that
+    // construction cannot determine — it must NOT be reported as
+    // `CannotInferTypeParameter` (only a field-constrained param is).
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Pair<T, U> {
+    first: T[]
+}
+function f() -> int {
+    let p = Pair { first: [1] }
+    0
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("cannot infer type parameter `U`"),
+        "phantom param `U` (used by no field) must not be reported; got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("cannot infer type parameter `T`"),
+        "field-determined `T` must infer from `first: [1]`; got:\n{tir}"
+    );
+}
+
+#[test]
+fn assignment_nested_empty_container_adopts_declared_type() {
+    // Regression (M2): reassigning a nested empty literal to a declared
+    // nested-container local adopts the declared element types *recursively* —
+    // the inner `[]` must not leak `EvolvingList(Never)` under `int[][]`.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function f() -> null {
+    let x: int[][] = [[1]]
+    x = [[]]
+    return null
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    // The outer renders `int[][]` only if the inner `[]` adopted `int[]`;
+    // without recursive adoption it would render the evolving-never `_[][]`.
+    assert!(
+        tir.contains("x = [[]] : int[][]"),
+        "`x = [[]]` should adopt the declared `int[][]` recursively; got:\n{tir}"
+    );
+}
+
+#[test]
+fn catch_handler_empty_array_adopts_expected_type() {
+    // Regression (M1): in a checking position a catch handler body adopts the
+    // expected type — an empty `[]` handler becomes the declared element type,
+    // not `unknown`/`EvolvingList(Never)`.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+enum Err { Boom }
+function risky(x: int) -> int[] throws Err {
+    if x == 0 { throw Err.Boom }
+    return [1]
+}
+function f() -> int[] {
+    return risky(0) catch (e) {
+        Err.Boom => []
+    }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("[] : int[]"),
+        "catch handler `[]` should adopt `int[]`; got:\n{tir}"
+    );
 }
 
 #[test]
@@ -870,7 +1020,7 @@ function f() -> null {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> null throws never {
       { : never
-        let xs = [] : never[] -> int[] (evolving)
+        let xs = [] : _[] -> int[] (evolving)
         xs?.push(1) : int | null
         xs.push("a") : int
         return null : null
@@ -926,7 +1076,7 @@ function f() -> null {
     }
     function user.f() -> null throws never {
       { : never
-        let callbacks = [] : never[] -> (() -> int throws never)[] (evolving)
+        let callbacks = [] : _[] -> (() -> int throws never)[] (evolving)
         callbacks.push(cb) : int
         return null : null
       }
@@ -1320,14 +1470,14 @@ function f(xs: int[]) -> string {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(xs: int[]) -> string throws never {
       { : never
         return xs.push(1) : int
       }
-      !! 45..56: type mismatch: expected string, got int
+      !! 46..56: type mismatch: expected string, got int
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -1346,7 +1496,7 @@ function f(xs: int[]?) -> string {
       { : never
         return xs?.push?.(1) : int | null
       }
-      !! 46..60: type mismatch: expected string, got int | null
+      !! 47..60: type mismatch: expected string, got int | null
     }
     ");
 }
@@ -1520,7 +1670,7 @@ function f() -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("let xs = [] : never[] -> int[] (evolving)"),
+        output.contains("let xs = [] : _[] -> int[] (evolving)"),
         "expected indexed assignment to sync the let binding type, got:\n{output}"
     );
     assert!(
@@ -1550,7 +1700,7 @@ function f() -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("let xs = [] : never[] -> int[] (evolving)"),
+        output.contains("let xs = [] : _[] -> int[] (evolving)"),
         "expected parent xs binding to be established by parent push, got:\n{output}"
     );
     assert!(
@@ -1578,122 +1728,12 @@ function f() -> int {
     let output = render_tir(&db, file);
 
     assert!(
-        output.contains("let xs = [] : never[] -> string[] (evolving)"),
+        output.contains("let xs = [] : _[] -> string[] (evolving)"),
         "expected xs to be established by the first push in the loop body, got:\n{output}"
     );
     assert!(
         output.contains("type mismatch: expected string, got int"),
         "post-loop push should be checked against the loop-established element type, got:\n{output}"
-    );
-}
-
-#[test]
-fn array_rest_binding_annotation_must_be_array_type() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f() -> int {
-    let [..let rest: int] = [1, 2]
-    return 0
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("rest pattern `..` cannot carry a sub-pattern"),
-        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
-    );
-}
-
-#[test]
-fn array_rest_binding_array_annotation_is_valid() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f() -> int {
-    let [..let rest: int[]] = [1, 2]
-    return rest[0]
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("let [..rest: int[]] = [1, 2] : int[]"),
-        "rest pattern annotation should be checked against the rest slice type, got:\n{output}"
-    );
-    assert!(
-        !output.contains("type mismatch"),
-        "array rest annotation should be valid, got:\n{output}"
-    );
-}
-
-#[test]
-fn array_rest_cannot_use_class_destructure_for_rest_slice() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-class Box {
-    value int
-}
-
-function f(boxes: Box[]) -> int {
-    let [..Box { value }] = boxes
-    return value
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("rest pattern `..` cannot carry a sub-pattern"),
-        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
-    );
-}
-
-#[test]
-fn array_nested_rest_annotation_must_match_rest_slice() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: int[]) -> int {
-    match (xs) {
-        [..[let x]: int] => x,
-        _ => 0
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("rest pattern `..` cannot carry a sub-pattern"),
-        "rest with sub-pattern should be rejected (only bare `..` allowed), got:\n{output}"
-    );
-}
-
-#[test]
-fn nested_refutable_array_under_rest_is_rejected_in_let() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: int[]) -> int {
-    let [..[let x]] = xs
-    return x
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        output.contains("refutable pattern in let binding"),
-        "nested exact array under rest should still make the let refutable, got:\n{output}"
     );
 }
 
@@ -1746,6 +1786,139 @@ function f(value: A | B) -> int {
     assert!(
         output.contains("Or-pattern alternatives bind `x` with conflicting types"),
         "same or-pattern binding name with incompatible types should be rejected, got:\n{output}"
+    );
+}
+
+#[test]
+fn class_destructure_unknown_field_in_let_reports_field_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Point {
+    value int
+}
+
+function f() -> int {
+    let Point { valeu } = Point { value: 1 }
+    valeu
+    return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `Point` has no field `valeu`"),
+        "unknown field in let-pattern should be diagnosed at the pattern, got:\n{output}"
+    );
+    assert!(
+        output.contains("Did you mean `value`?"),
+        "unknown let-pattern field should include typo suggestion, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unresolved name: valeu"),
+        "unknown field pattern should not cascade into unresolved binding errors, got:\n{output}"
+    );
+}
+
+#[test]
+fn class_destructure_unknown_field_in_match_does_not_make_next_arm_unreachable() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Point {
+    x int
+    y int
+}
+
+function f(p: Point) -> string {
+    match (p) {
+        Point { xx: 5 } => "a",
+        Point { x, y } => "b",
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `Point` has no field `xx`"),
+        "unknown field in match-pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unreachable arm"),
+        "unknown class field should not collapse the arm into an irrefutable class pattern, got:\n{output}"
+    );
+}
+
+/// Ensures an unknown-field arm still counts for exhaustiveness coverage.
+#[test]
+fn class_destructure_unknown_field_arm_does_not_emit_non_exhaustive_match() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class A {
+    value int
+}
+
+class B {
+    value int
+}
+
+function f(v: A | B) -> string {
+    match (v) {
+        A { valeu: 1 } => "a",
+        B { value } => "b",
+    }
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `A` has no field `valeu`"),
+        "unknown field in match-pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        !output.contains("non-exhaustive match"),
+        "invalid match arms should still participate in coverage to avoid duplicate non-exhaustive diagnostics, got:\n{output}"
+    );
+}
+
+#[test]
+fn class_destructure_unknown_field_in_for_binding_reports_field_error() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Item {
+    value int
+}
+
+function f(items: Item[]) -> int {
+    for (let Item { valeu } in items) {
+        valeu
+    }
+    return 0
+}
+"#,
+    );
+    let output = render_tir(&db, file);
+
+    assert!(
+        output.contains("class `Item` has no field `valeu`"),
+        "unknown field in for-binding pattern should be diagnosed, got:\n{output}"
+    );
+    assert!(
+        output.contains("Did you mean `value`?"),
+        "unknown for-binding field should include typo suggestion, got:\n{output}"
+    );
+    assert!(
+        !output.contains("unresolved name: valeu"),
+        "for-binding unknown fields should not cascade into unresolved-name diagnostics, got:\n{output}"
     );
 }
 

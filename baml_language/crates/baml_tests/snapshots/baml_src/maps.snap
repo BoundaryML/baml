@@ -165,6 +165,8 @@ function maps.$init_test_ns_maps_maps(registry: testing.TestCollector) -> null {
 function maps.create_map_helper() -> map<string, string> {
     load_const "world"
     load_const "hello"
+    load_type string
+    load_type string
     alloc_map 1
     return
 }
@@ -172,6 +174,8 @@ function maps.create_map_helper() -> map<string, string> {
 function maps.edit_map_key_helper() -> int {
     load_const 123
     load_const "hi"
+    load_type string
+    load_type int
     alloc_map 1
     store_var map
     load_var map
@@ -195,6 +199,8 @@ function maps.edit_map_key_helper() -> int {
 }
 
 function maps.map_clear_already_empty_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -208,6 +214,8 @@ function maps.map_clear_already_empty_main() -> int {
 }
 
 function maps.map_clear_makes_get_return_null_main() -> int | null {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -231,6 +239,8 @@ function maps.map_clear_makes_get_return_null_main() -> int | null {
 }
 
 function maps.map_clear_removes_all_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -258,6 +268,8 @@ function maps.map_clear_removes_all_main() -> int {
 }
 
 function maps.map_clear_then_reuse_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -303,6 +315,8 @@ function maps.map_clear_then_reuse_main() -> int {
 function maps.map_delete_absent_main() -> int | null {
     load_type string
     load_type int
+    load_type string
+    load_type int
     alloc_map 0
     load_const "missing"
     call baml.Map.delete
@@ -310,6 +324,8 @@ function maps.map_delete_absent_main() -> int | null {
 }
 
 function maps.map_delete_already_deleted_main() -> int | null {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -334,6 +350,8 @@ function maps.map_delete_already_deleted_main() -> int | null {
 }
 
 function maps.map_delete_does_not_affect_other_keys_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -378,6 +396,8 @@ function maps.map_delete_does_not_affect_other_keys_main() -> int {
 }
 
 function maps.map_delete_returns_previous_main() -> int | null {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -396,6 +416,8 @@ function maps.map_delete_returns_previous_main() -> int | null {
 }
 
 function maps.map_delete_shrinks_length_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -424,6 +446,8 @@ function maps.map_delete_shrinks_length_main() -> int {
 }
 
 function maps.map_get_or_insert_does_not_overwrite_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -462,6 +486,8 @@ function maps.map_get_or_insert_does_not_overwrite_main() -> int {
 }
 
 function maps.map_get_or_insert_grows_length_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -486,6 +512,8 @@ function maps.map_get_or_insert_grows_length_main() -> int {
 function maps.map_get_or_insert_inserts_when_absent_main() -> int {
     load_type string
     load_type int
+    load_type string
+    load_type int
     alloc_map 0
     load_const "k"
     load_const 10
@@ -494,6 +522,8 @@ function maps.map_get_or_insert_inserts_when_absent_main() -> int {
 }
 
 function maps.map_get_or_insert_persists_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -525,6 +555,8 @@ function maps.map_get_or_insert_persists_main() -> int {
 }
 
 function maps.map_get_or_insert_returns_existing_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -544,6 +576,8 @@ function maps.map_get_or_insert_returns_existing_main() -> int {
 }
 
 function maps.map_has_after_delete_main() -> bool {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -568,6 +602,8 @@ function maps.map_has_after_delete_main() -> bool {
 }
 
 function maps.map_has_after_get_or_insert_main() -> bool {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -590,12 +626,16 @@ function maps.map_len_helper() -> int {
     load_const 456
     load_const "hi"
     load_const "it_works"
+    load_type string
+    load_type int
     alloc_map 2
     container_len
     return
 }
 
 function maps.map_set_first_insert_main() -> int | null {
+    load_type string
+    load_type int
     load_type string
     load_type int
     alloc_map 0
@@ -606,6 +646,8 @@ function maps.map_set_first_insert_main() -> int | null {
 }
 
 function maps.map_set_grows_length_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -635,6 +677,8 @@ function maps.map_set_grows_length_main() -> int {
 }
 
 function maps.map_set_replace_preserves_length_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -664,6 +708,8 @@ function maps.map_set_replace_preserves_length_main() -> int {
 }
 
 function maps.map_set_replace_returns_previous_main() -> int | null {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -683,6 +729,8 @@ function maps.map_set_replace_returns_previous_main() -> int | null {
 }
 
 function maps.map_set_then_get_main() -> int {
+    load_type string
+    load_type int
     alloc_map 0
     store_var m
     load_type string
@@ -723,6 +771,8 @@ function maps.map_set_then_get_main() -> int {
 function maps.use_map_contains_helper() -> string {
     load_const "world"
     load_const "hello"
+    load_type string
+    load_type string
     alloc_map 1
     store_var map
     load_type string

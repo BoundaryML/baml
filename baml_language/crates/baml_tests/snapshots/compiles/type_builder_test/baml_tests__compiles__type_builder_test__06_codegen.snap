@@ -1,6 +1,15 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function boundary.LocalId.capture(self: boundary.LocalId, inputs: bool | null, output: bool | null, error: bool | null) -> boundary.LocalId {
+}
+
+function boundary.id() -> boundary.LocalId {
+}
+
+function boundary.id.current() -> string {
+}
+
 function user.Fn(client: baml.llm.Client) -> string {
     load_var client
     load_const <omitted>
@@ -9,6 +18,7 @@ function user.Fn(client: baml.llm.Client) -> string {
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -19,7 +29,10 @@ function user.Fn(client: baml.llm.Client) -> string {
     load_type string
     load_var client
     load_const "Fn"
+    load_type string
+    load_type unknown
     alloc_map 0
+    load_const <omitted>
     call baml.llm.call_llm_function
     return
 }
@@ -32,6 +45,7 @@ function user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -41,7 +55,10 @@ function user.Fn$build_request(client: baml.llm.Client) -> baml.http.Request {
   L0:
     load_var client
     load_const "Fn"
+    load_type string
+    load_type unknown
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request
     return
 }
@@ -54,6 +71,7 @@ function user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Requ
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -63,7 +81,10 @@ function user.Fn$build_request_stream(client: baml.llm.Client) -> baml.http.Requ
   L0:
     load_var client
     load_const "Fn"
+    load_type string
+    load_type unknown
     alloc_map 0
+    load_const <omitted>
     call baml.llm.build_request_stream
     return
 }
@@ -76,6 +97,7 @@ function user.Fn$parse(json: string, client: baml.llm.Client) -> string {
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -98,6 +120,7 @@ function user.Fn$parse_stream(sse: baml.http.SseStream, client: baml.llm.Client)
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -120,6 +143,7 @@ function user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -129,7 +153,10 @@ function user.Fn$render_prompt(client: baml.llm.Client) -> baml.llm.PromptAst {
   L0:
     load_var client
     load_const "Fn"
+    load_type string
+    load_type unknown
     alloc_map 0
+    load_const <omitted>
     call baml.llm.render_prompt
     return
 }
@@ -142,6 +169,7 @@ function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | nul
     load_const "openai/gpt-4o"
     load_const baml.llm.ClientType.Primitive
     alloc_variant baml.llm.ClientType
+    load_type baml.llm.Client
     alloc_array 0
     load_const null
     load_const 0
@@ -153,29 +181,10 @@ function user.Fn$stream(client: baml.llm.Client) -> baml.llm.Stream<string | nul
     load_type string
     load_var client
     load_const "Fn"
+    load_type string
+    load_type unknown
     alloc_map 0
+    load_const <omitted>
     call baml.llm.stream_llm_function
-    return
-}
-
-function user.TopLevelClass.from_json(j: baml.json.json) -> TopLevelClass {
-    load_var j
-    load_const "a"
-    call baml.json.field
-    store_var _3
-    load_type string
-    load_var _3
-    call baml.json.from_json
-    init_instance user.TopLevelClass .a
-    return
-}
-
-function user.TopLevelClass.to_json(self: TopLevelClass) -> baml.json.json {
-    load_type string
-    load_var self
-    load_field .a
-    call baml.json.to_json
-    load_const "a"
-    alloc_map 1
     return
 }

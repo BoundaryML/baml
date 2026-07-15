@@ -11,26 +11,10 @@ class testing.TestRegistration {
   body: testing.TestBody
   runner: testing.TestRunner | null
 }
-function testing.TestRegistration.to_json(self: testing.TestRegistration) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  { : baml.json.json
-    baml.json.parse(baml.json.to_string<TestRegistration>(self)) : baml.json.json
-  }
-}
-function testing.TestRegistration.from_json(j: baml.json.json) -> testing.TestRegistration throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TestRegistration { name: baml.json.from_json<string>(baml.json.field(j, "name")), body: baml.json.from_json<TestBody>(baml.json.field(j, "body")), runner: baml.json.from_json<TestRunner?>(baml.json.field(j, "runner")) } : testing.TestRegistration
-}
 class testing.TestSetRegistration {
   name: string
   collector: testing.TestSetBody
   runner: testing.TestSetRunner | null
-}
-function testing.TestSetRegistration.to_json(self: testing.TestSetRegistration) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  { : baml.json.json
-    baml.json.parse(baml.json.to_string<TestSetRegistration>(self)) : baml.json.json
-  }
-}
-function testing.TestSetRegistration.from_json(j: baml.json.json) -> testing.TestSetRegistration throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TestSetRegistration { name: baml.json.from_json<string>(baml.json.field(j, "name")), collector: baml.json.from_json<TestSetBody>(baml.json.field(j, "collector")), runner: baml.json.from_json<TestSetRunner?>(baml.json.field(j, "runner")) } : testing.TestSetRegistration
 }
 class testing.TestCollector {
   prefix: string
@@ -69,7 +53,7 @@ function testing.TestCollector.register_test(self: testing.TestCollector, name: 
     let final_name = : string
       if (count > 0 : bool) : string
         { : string
-          full_name + "#" + baml.unstable.string(count + 1) : string
+          full_name + "#" + string.from(count + 1) : string
         }
       else
         { : string
@@ -105,7 +89,7 @@ function testing.TestCollector.register_test_set(self: testing.TestCollector, na
     let final_name = : string
       if (count > 0 : bool) : string
         { : string
-          full_name + "#" + baml.unstable.string(count + 1) : string
+          full_name + "#" + string.from(count + 1) : string
         }
       else
         { : string
@@ -126,11 +110,17 @@ function testing.TestCollector.find_testset(self: testing.TestCollector, name: s
     throw "TestSet not found: " + name : string
   }
 }
-function testing.TestCollector.to_json(self: testing.TestCollector) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "prefix": baml.json.to_json(self.prefix), "tests": baml.json.to_json(self.tests), "testsets": baml.json.to_json(self.testsets) } : map<string, baml.json.json>
-}
-function testing.TestCollector.from_json(j: baml.json.json) -> testing.TestCollector throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TestCollector { prefix: baml.json.from_json<string>(baml.json.field(j, "prefix")), tests: baml.json.from_json<TestRegistration[]>(baml.json.field(j, "tests")), testsets: baml.json.from_json<TestSetRegistration[]>(baml.json.field(j, "testsets")) } : testing.TestCollector
+function testing.TestCollector.find_test(self: testing.TestCollector, name: string) -> testing.TestRegistration throws never {
+  { : never
+    for t in self.tests
+      { : void
+        if (t.name == name : bool) : void
+          { : never
+            return t : testing.TestRegistration
+          }
+      }
+    throw "Test not found: " + name : string
+  }
 }
 function testing.$invoke_collector(collector: testing.TestSetBody, c: testing.TestCollector) -> void throws never {
   { : void
@@ -141,22 +131,10 @@ class testing.SerializedTest {
   type: string
   name: string
 }
-function testing.SerializedTest.to_json(self: testing.SerializedTest) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "type": baml.json.to_json(self.type), "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-}
-function testing.SerializedTest.from_json(j: baml.json.json) -> testing.SerializedTest throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SerializedTest { type: baml.json.from_json<string>(baml.json.field(j, "type")), name: baml.json.from_json<string>(baml.json.field(j, "name")) } : testing.SerializedTest
-}
 class testing.SerializedTestSet {
   name: string
   items: testing.SerializedTestDef[]
   loadingTimeMs: int
-}
-function testing.SerializedTestSet.to_json(self: testing.SerializedTestSet) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "name": baml.json.to_json(self.name), "items": baml.json.to_json(self.items), "loadingTimeMs": baml.json.to_json(self.loadingTimeMs) } : map<string, baml.json.json>
-}
-function testing.SerializedTestSet.from_json(j: baml.json.json) -> testing.SerializedTestSet throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  SerializedTestSet { name: baml.json.from_json<string>(baml.json.field(j, "name")), items: baml.json.from_json<SerializedTestDef[]>(baml.json.field(j, "items")), loadingTimeMs: baml.json.from_json<int>(baml.json.field(j, "loadingTimeMs")) } : testing.SerializedTestSet
 }
 type testing.SerializedTestDef = testing.SerializedTest | testing.SerializedTestSet
 class testing.TestRegistry {
@@ -212,18 +190,62 @@ function testing.TestRegistry.run_test(self: testing.TestRegistry, name: string)
     throw "Test not found: " + name : string
   }
 }
+function testing.TestRegistry.run_testset(self: testing.TestRegistry, name: string) -> testing.TestSetReport throws never {
+  { : never
+    for ts in self.collector.testsets
+      { : void
+        if (ts.name == name : bool) : void
+          { : never
+            return root.run_testset(root.testset_children(self.expand_testset_registry(ts)), ts.runner) : testing.TestSetReport
+          }
+      }
+    for k in self.expansions.keys()
+      { : void
+        let sub = self.expansions[k] : testing.TestRegistry
+        if (name.starts_with(k + "/") : bool) : void
+          { : never
+            return sub.run_testset(name) : testing.TestSetReport
+          }
+      }
+    throw "TestSet not found: " + name : string
+  }
+}
+function testing.TestRegistry.run_all(self: testing.TestRegistry) -> testing.TestSetReport throws never {
+  { : testing.TestSetReport
+    root.run_testset(root.testset_children(self), null) : testing.TestSetReport
+  }
+}
+function testing.TestRegistry.run_selected(self: testing.TestRegistry, names: string[]) -> testing.TestSetReport throws never {
+  { : testing.TestSetReport
+    root.run_testset(root.testset_children_selected(self, names), null) : testing.TestSetReport
+  }
+}
+function testing.TestRegistry.run_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> testing.FlatTestReport throws never {
+  { : testing.FlatTestReport
+    let report = : testing.TestSetReport
+      if (include.length() == 0 && exclude.length() == 0 : bool) : testing.TestSetReport
+        { : testing.TestSetReport
+          self.run_all() : testing.TestSetReport
+        }
+      else
+        { : testing.TestSetReport
+          self.run_selected(root.select_names(self, include, exclude)) : testing.TestSetReport
+        }
+    root.flatten_with_tolerated(report) : testing.FlatTestReport
+  }
+}
+function testing.TestRegistry.list_filtered(self: testing.TestRegistry, include: string[], exclude: string[]) -> string[] throws never {
+  { : string[]
+    root.select_names(self, include, exclude) : string[]
+  }
+}
 function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: string) -> testing.SerializedTestDef[] throws never {
   { : never
     for ts in self.collector.testsets
       { : void
         if (ts.name == name : bool) : void
           { : never
-            let start = baml.sys.now_ms() : int
-            let sub_collector = TestCollector { prefix: name, tests: [], testsets: [] } : testing.TestCollector
-            ts.collector(sub_collector) : void
-            let elapsed = baml.sys.now_ms() - start : int
-            let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
-            self.expansions.set(name, sub_registry) : testing.TestRegistry | null
+            self.expand_testset_registry(ts) : testing.TestRegistry
             return self.serialize() : testing.SerializedTestDef[]
           }
       }
@@ -238,11 +260,203 @@ function testing.TestRegistry.expand_set(self: testing.TestRegistry, name: strin
     throw "TestSet not found..." + name : string
   }
 }
-function testing.TestRegistry.to_json(self: testing.TestRegistry) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "collector": baml.json.to_json(self.collector), "expansions": baml.json.to_json(self.expansions), "loading_time_ms": baml.json.to_json(self.loading_time_ms) } : map<string, baml.json.json>
+function testing.TestRegistry.expand_testset_registry(self: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestRegistry throws never {
+  { : testing.TestRegistry
+    match (self.expansions.get(ts.name) : testing.TestRegistry | null) : testing.TestRegistry
+      existing: TestRegistry =>
+        existing : testing.TestRegistry
+      null =>
+        { : testing.TestRegistry
+          let start = baml.sys.now_ms() : int
+          let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] } : testing.TestCollector
+          ts.collector(sub_collector) : void
+          let elapsed = baml.sys.now_ms() - start : int
+          let sub_registry = TestRegistry { collector: sub_collector, expansions: map {  }, loading_time_ms: elapsed } : testing.TestRegistry
+          self.expansions.set(ts.name, sub_registry) : testing.TestRegistry | null
+          sub_registry : testing.TestRegistry
+        }
+  }
 }
-function testing.TestRegistry.from_json(j: baml.json.json) -> testing.TestRegistry throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TestRegistry { collector: baml.json.from_json<TestCollector>(baml.json.field(j, "collector")), expansions: baml.json.from_json<map<string, TestRegistry>>(baml.json.field(j, "expansions")), loading_time_ms: baml.json.from_json<int>(baml.json.field(j, "loading_time_ms")) } : testing.TestRegistry
+function testing.testset_children(registry: testing.TestRegistry) -> testing.TestSetChild[] throws never {
+  { : testing.TestSetChild[]
+    let children: TestSetChild[] = [] : testing.TestSetChild[]
+    for t in registry.collector.tests
+      { : int
+        children.push(root.test_child(t.name, t.body, t.runner)) : int
+      }
+    for ts in registry.collector.testsets
+      { : int
+        children.push(root.testset_child(registry, ts)) : int
+      }
+    children : testing.TestSetChild[]
+  }
+}
+function testing.testset_children_selected(registry: testing.TestRegistry, names: string[]) -> testing.TestSetChild[] throws never {
+  { : testing.TestSetChild[]
+    let children: TestSetChild[] = [] : testing.TestSetChild[]
+    for t in registry.collector.tests
+      { : int | null
+        if (root._name_selected(t.name, names) : bool) : int | null
+          { : int
+            children.push(root.test_child(t.name, t.body, t.runner)) : int
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    for ts in registry.collector.testsets
+      { : int | null
+        if (root._has_selected_descendant(ts.name, names) : bool) : int | null
+          { : int
+            children.push(root.testset_child_selected(registry, ts, names)) : int
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    children : testing.TestSetChild[]
+  }
+}
+function testing.test_child(name: string, body: testing.TestBody, runner: testing.TestRunner | null) -> testing.TestSetChild throws never {
+  { : testing.TestSetChild
+    TestSetChild { name: name, run: () -> ChildReport { ... } } : testing.TestSetChild
+  }
+}
+lambda testing.test_child {
+}
+function testing.testset_child(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> testing.TestSetChild throws never {
+  { : testing.TestSetChild
+    TestSetChild { name: ts.name, run: () -> ChildReport { ... } } : testing.TestSetChild
+  }
+}
+lambda testing.testset_child {
+}
+function testing.testset_child_selected(registry: testing.TestRegistry, ts: testing.TestSetRegistration, names: string[]) -> testing.TestSetChild throws never {
+  { : testing.TestSetChild
+    TestSetChild { name: ts.name, run: () -> ChildReport { ... } } : testing.TestSetChild
+  }
+}
+lambda testing.testset_child_selected {
+}
+function testing._name_selected(name: string, names: string[]) -> bool throws never {
+  { : false
+    for selected in names
+      { : null
+        if (selected == name : bool) : null
+          { : never
+            return true : true
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    false : false
+  }
+}
+function testing._has_selected_descendant(prefix: string, names: string[]) -> bool throws never {
+  { : false
+    let descendant_prefix = prefix + "/" : string
+    for selected in names
+      { : null
+        if (selected.starts_with(descendant_prefix) : bool) : null
+          { : never
+            return true : true
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    false : false
+  }
+}
+function testing.aggregate_reports(named_results: testing.NamedChildReport[]) -> testing.TestSetReport throws never {
+  { : testing.TestSetReport
+    let passed = 0 : 0 -> int
+    let failed = 0 : 0 -> int
+    let has_error = false : false -> bool
+    let failed_names: string[] = [] : string[]
+    let results: ChildReport[] = [] : testing.ChildReport[]
+    for named_result in named_results
+      { : void
+        let result = named_result.report : testing.ChildReport
+        results.push(result) : int
+        let outcome = : testing.Outcome
+          match (result : testing.ChildReport) : testing.Outcome
+            report: TestReport =>
+              report.outcome : testing.Outcome
+            report: TestSetReport =>
+              report.outcome : testing.Outcome
+        if (outcome == "pass" : bool) : void
+          { : void
+            passed Add= 1 : int
+          }
+        else
+          { : void
+            failed Add= 1 : int
+            let child_failed_names = : string[]
+              match (result : testing.ChildReport) : string[]
+                report: TestReport =>
+                  [named_result.name] : string[]
+                report: TestSetReport =>
+                  if (report.failed_names.length() > 0 : bool) : string[]
+                    { : string[]
+                      report.failed_names : string[]
+                    }
+                  else
+                    { : string[]
+                      [named_result.name] : string[]
+                    }
+            for name in child_failed_names
+              { : int
+                failed_names.push(name) : int
+              }
+            if (outcome == "error" : bool) : void
+              { : void
+                has_error = true : true
+              }
+            else
+              { : null
+                null : null
+              }
+          }
+      }
+    let outcome: Outcome = : "error" | "pass" | "fail" -> "pass" | "fail" | "error"
+      if (has_error : bool) : "error" | "pass" | "fail"
+        { : "error"
+          "error" : "error"
+        }
+      else
+        if (failed == 0 : bool) : "pass" | "fail"
+          { : "pass"
+            "pass" : "pass"
+          }
+        else
+          { : "fail"
+            "fail" : "fail"
+          }
+    TestSetReport { outcome: outcome, passed: passed, failed: failed, total: results.length(), failed_names: failed_names, results: results } : testing.TestSetReport
+  }
+}
+function testing.run_children_parallel(children: testing.TestSetChild[]) -> testing.TestSetReport throws never {
+  { : testing.TestSetReport
+    let futures: baml.future.Future<NamedChildReport, null>[] = [] : Future<testing.NamedChildReport, null>[]
+    for child in children
+      { : int
+        futures.push(spawn { () -> { ... } }) : int
+      }
+    let named_results = : testing.NamedChildReport[]
+      catch (await baml.future.all_complete(futures) : testing.NamedChildReport[]) : testing.NamedChildReport[]
+        catch_all (e)
+          _ =>
+            baml.sys.panic("unexpected test c...") : never
+    root.aggregate_reports(named_results) : testing.TestSetReport
+  }
+}
+lambda testing.run_children_parallel {
 }
 function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | null) -> testing.TestReport throws never {
   { : testing.TestReport
@@ -251,8 +465,8 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | n
         {
           let start = baml.sys.now_ms()
           let result = ...
-            { 1 stmts + tail } catch_all (e) { _ => { 0 stmts + tail } }
-          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start }] }
+            { 1 stmts + tail } catch_all (e) { p: baml.panics.UserPanic => { 0 stmts + tail }, p: baml.panics.AssertionFailed => { 0 stmts + tail }, baml.panics.Panic => { 0 stmts + tail }, _ => { 0 stmts + tail } }
+          TestReport { outcome: result.outcome, runs: [RunReport { outcome: result.outcome, duration_ms: baml.sys.now_ms() - start, message: result.message }] }
         }
     match (runner : testing.TestRunner | null) : testing.TestReport
       null =>
@@ -266,16 +480,261 @@ function testing.run_test(body: testing.TestBody, runner: testing.TestRunner | n
 }
 lambda testing.run_test {
 }
-function testing.run_testset(run_children: testing.TestSetReportThunk, runner: testing.TestSetRunner | null) -> testing.TestSetReport throws never {
+function testing.run_testset(children: testing.TestSetChild[], runner: testing.TestSetRunner | null) -> testing.TestSetReport throws never {
   { : testing.TestSetReport
     match (runner : testing.TestSetRunner | null) : testing.TestSetReport
       null =>
-        run_children() : testing.TestSetReport
+        root.run_children_parallel(children) : testing.TestSetReport
       r: TestSetRunner =>
-        { : testing.TestSetReport
-          let wrapped: TestSetReportThunk = r(run_children) : testing.TestSetReportThunk -> () -> testing.TestSetReport throws never
-          wrapped() : testing.TestSetReport
+        r(children) : testing.TestSetReport
+  }
+}
+function testing.expansion_error_report(name: string) -> testing.TestSetReport throws never {
+  { : testing.TestSetReport
+    TestSetReport { outcome: "error", passed: 0, failed: 1, total: 1, failed_names: [name + "/(testset error)"], results: [] } : testing.TestSetReport
+  }
+}
+class testing.FilterPat {
+  func_pat: string
+  test_pat: string
+}
+class testing.NameSplit {
+  head: string
+  tail: string
+}
+function testing.split_top(path: string) -> testing.NameSplit throws never {
+  { : testing.NameSplit
+    if let <pat> = path.index_of("/") { 0 stmts + tail } else { 0 stmts + tail } : testing.NameSplit
+  }
+}
+function testing.parse_filter_patterns(raw: string[]) -> testing.FilterPat[] throws never {
+  { : testing.FilterPat[]
+    let out: FilterPat[] = [] : testing.FilterPat[]
+    for s in raw
+      { : int
+        if let <pat> = s.index_of("::") { 0 stmts + tail } else { 1 stmts + tail } : int
+      }
+    out : testing.FilterPat[]
+  }
+}
+function testing.glob_match(subject: string, pattern: string) -> bool throws never {
+  { : true
+    let parts = pattern.split("*") : string[]
+    let n = parts.length() : int
+    if (n == 1 : bool) : void
+      { : never
+        return subject == pattern : bool
+      }
+    let first = parts[0] : string
+    let last = parts[n - 1] : string
+    if (Not subject.starts_with(first) : bool) : void
+      { : never
+        return false : false
+      }
+    if (Not subject.ends_with(last) : bool) : void
+      { : never
+        return false : false
+      }
+    let start = first.length() : int
+    let end_limit = subject.length() - last.length() : int
+    if (start > end_limit : bool) : void
+      { : never
+        return false : false
+      }
+    let pos = start : int
+    { : void
+      let i = 1 : 1 -> int
+      while i < n - 1
+        { : void
+          let part = parts[i] : string
+          if (part != "" : bool) : void
+            { : void
+              if let <pat> = subject.substring(pos, end_limit).index_of(part) { 1 stmts } else { 1 stmts } : void
+            }
         }
+    }
+    true : true
+  }
+}
+function testing.filter_match(expr: string, subject: string) -> bool throws never {
+  { : true | bool
+    if (expr == "" : bool) : true | bool
+      { : true
+        true : true
+      }
+    else
+      { : bool
+        root.glob_match(subject, expr) : bool
+      }
+  }
+}
+function testing.any_pattern_matches(pats: testing.FilterPat[], function_name: string, test_name: string) -> bool throws never {
+  { : false
+    for p in pats
+      { : void
+        if (root.filter_match(p.func_pat, function_name) && root.filter_match(p.test_pat, test_name) : bool) : void
+          { : never
+            return true : true
+          }
+      }
+    false : false
+  }
+}
+function testing.leaf_selected(name: string, include: testing.FilterPat[], exclude: testing.FilterPat[]) -> bool throws never {
+  { : bool
+    let split = root.split_top(name) : testing.NameSplit
+    if (root.any_pattern_matches(exclude, split.head, split.tail) : bool) : void
+      { : never
+        return false : false
+      }
+    if (include.length() == 0 : bool) : void
+      { : never
+        return true : true
+      }
+    root.any_pattern_matches(include, split.head, split.tail) : bool
+  }
+}
+function testing.select_names(registry: testing.TestRegistry, include: string[], exclude: string[]) -> string[] throws never {
+  { : string[]
+    let inc = root.parse_filter_patterns(include) : testing.FilterPat[]
+    let exc = root.parse_filter_patterns(exclude) : testing.FilterPat[]
+    let out: string[] = [] : string[]
+    for name in root.collect_leaf_names(registry)
+      { : void
+        if (root.leaf_selected(name, inc, exc) : bool) : void
+          { : void
+            out.push(name) : int
+          }
+      }
+    out : string[]
+  }
+}
+function testing.collect_leaf_names(registry: testing.TestRegistry) -> string[] throws never {
+  { : string[]
+    let out: string[] = [] : string[]
+    for t in registry.collector.tests
+      { : void
+        out.push(t.name) : int
+      }
+    for ts in registry.collector.testsets
+      { : void
+        for name in root.collect_subtree_names(registry, ts)
+          { : void
+            out.push(name) : int
+          }
+      }
+    out : string[]
+  }
+}
+function testing.collect_subtree_names(registry: testing.TestRegistry, ts: testing.TestSetRegistration) -> string[] throws never {
+  { : string[]
+    catch (root.collect_leaf_names(registry.expand_testset_registry(ts)) : string[]) : string[]
+      catch_all (e)
+        baml.panics.Panic =>
+          [ts.name + "/(failed to expand)"] : string[]
+        _ =>
+          [ts.name + "/(failed to expand)"] : string[]
+  }
+}
+class testing.LeafCounts {
+  passed: int
+  failed: int
+  tolerated: int
+  total: int
+}
+function testing.count_leaves(results: testing.ChildReport[], tolerated_by_parent: bool) -> testing.LeafCounts throws never {
+  { : testing.LeafCounts
+    let passed = 0 : 0 -> int
+    let failed = 0 : 0 -> int
+    let tolerated = 0 : 0 -> int
+    let total = 0 : 0 -> int
+    for r in results
+      { : void
+        let delta = : testing.LeafCounts
+          match (r : testing.ChildReport) : testing.LeafCounts
+            tr: TestReport =>
+              { : testing.LeafCounts
+                if (tr.outcome == "pass" : bool) : testing.LeafCounts
+                  { : testing.LeafCounts
+                    LeafCounts { passed: 1, failed: 0, tolerated: 0, total: 1 } : testing.LeafCounts
+                  }
+                else
+                  if (tolerated_by_parent : bool) : testing.LeafCounts
+                    { : testing.LeafCounts
+                      LeafCounts { passed: 0, failed: 0, tolerated: 1, total: 1 } : testing.LeafCounts
+                    }
+                  else
+                    { : testing.LeafCounts
+                      LeafCounts { passed: 0, failed: 1, tolerated: 0, total: 1 } : testing.LeafCounts
+                    }
+              }
+            tsr: TestSetReport =>
+              { : testing.LeafCounts
+                let ft = tolerated_by_parent || tsr.outcome == "pass" : bool
+                if (tsr.results.length() > 0 : bool) : testing.LeafCounts
+                  { : testing.LeafCounts
+                    root.count_leaves(tsr.results, ft) : testing.LeafCounts
+                  }
+                else
+                  if (ft : bool) : testing.LeafCounts
+                    { : testing.LeafCounts
+                      LeafCounts { passed: tsr.passed, failed: 0, tolerated: tsr.failed, total: tsr.total } : testing.LeafCounts
+                    }
+                  else
+                    { : testing.LeafCounts
+                      LeafCounts { passed: tsr.passed, failed: tsr.failed, tolerated: 0, total: tsr.total } : testing.LeafCounts
+                    }
+              }
+        passed Add= delta.passed : int
+        failed Add= delta.failed : int
+        tolerated Add= delta.tolerated : int
+        total Add= delta.total : int
+      }
+    LeafCounts { passed: passed, failed: failed, tolerated: tolerated, total: total } : testing.LeafCounts
+  }
+}
+function testing.flatten_with_tolerated(report: testing.TestSetReport) -> testing.FlatTestReport throws never {
+  { : testing.FlatTestReport
+    let top_tolerated = report.outcome == "pass" : bool
+    let counts = : testing.LeafCounts
+      if (report.results.length() > 0 : bool) : testing.LeafCounts
+        { : testing.LeafCounts
+          root.count_leaves(report.results, top_tolerated) : testing.LeafCounts
+        }
+      else
+        if (top_tolerated : bool) : testing.LeafCounts
+          { : testing.LeafCounts
+            LeafCounts { passed: report.passed, failed: 0, tolerated: report.failed, total: report.total } : testing.LeafCounts
+          }
+        else
+          { : testing.LeafCounts
+            LeafCounts { passed: report.passed, failed: report.failed, tolerated: 0, total: report.total } : testing.LeafCounts
+          }
+    let messages: string[] = [] : string[]
+    root.collect_leaf_messages(report.results, messages) : void
+    FlatTestReport { outcome: report.outcome, passed: counts.passed, failed: counts.failed, tolerated: counts.tolerated, total: counts.total, failed_names: report.failed_names, messages: messages } : testing.FlatTestReport
+  }
+}
+function testing.collect_leaf_messages(results: testing.ChildReport[], out: string[]) -> void throws never {
+  { : void
+    for r in results
+      { : void
+        match (r : testing.ChildReport) : void
+          tr: TestReport =>
+            { : void
+              for run in tr.runs
+                { : void
+                  if (run.outcome != "pass" : bool) : void
+                    { : void
+                      if let <pat> = run.message { 1 stmts } : void
+                    }
+                }
+            }
+          tsr: TestSetReport =>
+            { : void
+              root.collect_leaf_messages(tsr.results, out) : void
+            }
+      }
   }
 }
 class testing.TestRegistration$stream {
@@ -308,53 +767,273 @@ class testing.TestRegistry$stream {
   expansions: map<string, testing.TestRegistry$stream>
   loading_time_ms: int | null
 }
+class testing.FilterPat$stream {
+  func_pat: string | null
+  test_pat: string | null
+}
+class testing.NameSplit$stream {
+  head: string | null
+  tail: string | null
+}
+class testing.LeafCounts$stream {
+  passed: int | null
+  failed: int | null
+  tolerated: int | null
+  total: int | null
+}
+
+--- <builtin>/testing/runners.baml ---
+function testing.Quorum(n: int, m: int) -> testing.TestRunner throws never {
+  { : never
+    if (n <= 0 : bool) : null
+      { : never
+        baml.sys.panic("testing.Quorum re...") : never
+      }
+    else
+      if (m < 0 || m > n : bool) : null
+        { : never
+          baml.sys.panic("testing.Quorum re...") : never
+        }
+      else
+        { : null
+          null : null
+        }
+    return : (run_once: testing.TestReportThunk) -> testing.TestReportThunk throws never
+      (run_once) -> TestReportThunk { ... } : (run_once: testing.TestReportThunk) -> testing.TestReportThunk throws never
+        {
+          () -> TestReport { ... }
+            {
+              let runs: RunReport[] = []
+              let passes = 0
+              {
+                let i = 0
+                while (i < n)
+                  {
+                    let report = run_once()
+                    for run in report.runs
+                      {
+                        runs.push(run)
+                      }
+                    if (report.outcome == "pass")
+                      {
+                        passes Add= 1
+                      }
+                    else
+                      {
+                        null
+                      }
+                  }
+              }
+              let outcome: Outcome = ...
+                if (passes >= m)
+                  {
+                    "pass"
+                  }
+                else
+                  {
+                    "fail"
+                  }
+              TestReport { outcome: outcome, runs: runs }
+            }
+        }
+  }
+}
+lambda testing.Quorum {
+}
+lambda testing.Quorum {
+}
+function testing.Retry(max_attempts: int) -> testing.TestRunner throws never {
+  { : never
+    if (max_attempts <= 0 : bool) : null
+      { : never
+        baml.sys.panic("testing.Retry req...") : never
+      }
+    else
+      { : null
+        null : null
+      }
+    return : (run_once: testing.TestReportThunk) -> testing.TestReportThunk throws never
+      (run_once) -> TestReportThunk { ... } : (run_once: testing.TestReportThunk) -> testing.TestReportThunk throws never
+        {
+          () -> TestReport { ... }
+            {
+              let runs: RunReport[] = []
+              let passed = false
+              let attempts = 0
+              while (attempts < max_attempts && Not passed)
+                {
+                  let report = run_once()
+                  attempts Add= 1
+                  for run in report.runs
+                    {
+                      runs.push(run)
+                    }
+                  if (report.outcome == "pass")
+                    {
+                      passed = true
+                    }
+                  else
+                    {
+                      null
+                    }
+                }
+              let outcome: Outcome = ...
+                if (passed)
+                  {
+                    "pass"
+                  }
+                else
+                  {
+                    "fail"
+                  }
+              TestReport { outcome: outcome, runs: runs }
+            }
+        }
+  }
+}
+lambda testing.Retry {
+}
+lambda testing.Retry {
+}
+function testing.PassRate(threshold: float) -> testing.TestSetRunner throws never {
+  { : never
+    if (threshold < 0.0 || threshold > 1.0 : bool) : null
+      { : never
+        baml.sys.panic("testing.PassRate ...") : never
+      }
+    else
+      { : null
+        null : null
+      }
+    return : (children: testing.TestSetChild[]) -> testing.TestSetReport throws never
+      (children) -> TestSetReport { ... } : (children: testing.TestSetChild[]) -> testing.TestSetReport throws never
+        {
+          let report = root.run_children_parallel(children)
+          let outcome: Outcome = ...
+            if (report.total == 0)
+              {
+                "pass"
+              }
+            else
+              if (root._int_to_float(report.passed) / root._int_to_float(report.total) >= threshold)
+                {
+                  "pass"
+                }
+              else
+                {
+                  "fail"
+                }
+          TestSetReport { outcome: outcome, passed: report.passed, failed: report.failed, total: report.total, failed_names: report.failed_names, results: report.results }
+        }
+  }
+}
+lambda testing.PassRate {
+}
+function testing.Sequential() -> testing.TestSetRunner throws never {
+  { : never
+    return : (children: testing.TestSetChild[]) -> testing.TestSetReport throws never
+      (children) -> TestSetReport { ... } : (children: testing.TestSetChild[]) -> testing.TestSetReport throws never
+        {
+          root.run_children_sequential(children, false)
+        }
+  }
+}
+lambda testing.Sequential {
+}
+function testing.FailFast() -> testing.TestSetRunner throws never {
+  { : never
+    return : (children: testing.TestSetChild[]) -> testing.TestSetReport throws never
+      (children) -> TestSetReport { ... } : (children: testing.TestSetChild[]) -> testing.TestSetReport throws never
+        {
+          root.run_children_sequential(children, true)
+        }
+  }
+}
+lambda testing.FailFast {
+}
+function testing.run_children_sequential(children: testing.TestSetChild[], fail_fast: bool) -> testing.TestSetReport throws never {
+  { : testing.TestSetReport
+    let named_results: NamedChildReport[] = [] : testing.NamedChildReport[]
+    for child in children
+      { : null
+        let report = child.run() : testing.ChildReport
+        named_results.push(NamedChildReport { name: child.name, report: report }) : int
+        let outcome = : testing.Outcome
+          match (report : testing.ChildReport) : testing.Outcome
+            r: TestReport =>
+              r.outcome : testing.Outcome
+            r: TestSetReport =>
+              r.outcome : testing.Outcome
+        if (fail_fast && outcome != "pass" : bool) : null
+          { : never
+            return root.aggregate_reports(named_results) : testing.TestSetReport
+          }
+        else
+          { : null
+            null : null
+          }
+      }
+    root.aggregate_reports(named_results) : testing.TestSetReport
+  }
+}
+function testing._int_to_float(value: int) -> float throws never {
+  { : float
+    catch (float.parse(string.from(value)) : float) : float
+      catch_all (e)
+        _ =>
+          baml.sys.panic("failed to convert...") : never
+  }
+}
 
 --- <builtin>/testing/types.baml ---
 type testing.Outcome = "pass" | "fail" | "error"
 class testing.RunReport {
   outcome: testing.Outcome
   duration_ms: int
-}
-function testing.RunReport.to_json(self: testing.RunReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "outcome": baml.json.to_json(self.outcome), "duration_ms": baml.json.to_json(self.duration_ms) } : map<string, baml.json.json>
-}
-function testing.RunReport.from_json(j: baml.json.json) -> testing.RunReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  RunReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), duration_ms: baml.json.from_json<int>(baml.json.field(j, "duration_ms")) } : testing.RunReport
+  message: string | null
 }
 class testing.TestReport {
   outcome: testing.Outcome
   runs: testing.RunReport[]
-}
-function testing.TestReport.to_json(self: testing.TestReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "outcome": baml.json.to_json(self.outcome), "runs": baml.json.to_json(self.runs) } : map<string, baml.json.json>
-}
-function testing.TestReport.from_json(j: baml.json.json) -> testing.TestReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TestReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), runs: baml.json.from_json<RunReport[]>(baml.json.field(j, "runs")) } : testing.TestReport
 }
 class testing.TestSetReport {
   outcome: testing.Outcome
   passed: int
   failed: int
   total: int
+  failed_names: string[]
   results: testing.ChildReport[]
 }
-function testing.TestSetReport.to_json(self: testing.TestSetReport) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "outcome": baml.json.to_json(self.outcome), "passed": baml.json.to_json(self.passed), "failed": baml.json.to_json(self.failed), "total": baml.json.to_json(self.total), "results": baml.json.to_json(self.results) } : map<string, baml.json.json>
-}
-function testing.TestSetReport.from_json(j: baml.json.json) -> testing.TestSetReport throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  TestSetReport { outcome: baml.json.from_json<Outcome>(baml.json.field(j, "outcome")), passed: baml.json.from_json<int>(baml.json.field(j, "passed")), failed: baml.json.from_json<int>(baml.json.field(j, "failed")), total: baml.json.from_json<int>(baml.json.field(j, "total")), results: baml.json.from_json<ChildReport[]>(baml.json.field(j, "results")) } : testing.TestSetReport
-}
 type testing.ChildReport = testing.TestReport | testing.TestSetReport
+class testing.NamedChildReport {
+  name: string
+  report: testing.ChildReport
+}
 type testing.TestBody = () -> void throws unknown
 type testing.TestSetBody = (testing.TestCollector) -> void throws unknown
 type testing.TestReportThunk = () -> testing.TestReport throws never
 type testing.TestSetReportThunk = () -> testing.TestSetReport throws never
+type testing.ChildReportThunk = () -> testing.ChildReport throws never
 type testing.TestRunner = (testing.TestReportThunk) -> testing.TestReportThunk throws never
-type testing.TestSetRunner = (testing.TestSetReportThunk) -> testing.TestSetReportThunk throws never
+class testing.TestSetChild {
+  name: string
+  run: testing.ChildReportThunk
+}
+type testing.TestSetRunner = (testing.TestSetChild[]) -> testing.TestSetReport throws never
+class testing.FlatTestReport {
+  outcome: testing.Outcome
+  passed: int
+  failed: int
+  tolerated: int
+  total: int
+  failed_names: string[]
+  messages: string[]
+}
 type testing.Outcome$stream = "pass" | "fail" | "error"
 class testing.RunReport$stream {
   outcome: testing.Outcome$stream | null
   duration_ms: int | null
+  message: string | null
 }
 class testing.TestReport$stream {
   outcome: testing.Outcome$stream | null
@@ -365,12 +1044,31 @@ class testing.TestSetReport$stream {
   passed: int | null
   failed: int | null
   total: int | null
+  failed_names: string[]
   results: testing.ChildReport$stream[]
 }
 type testing.ChildReport$stream = testing.TestReport$stream | testing.TestSetReport$stream
+class testing.NamedChildReport$stream {
+  name: string | null
+  report: testing.ChildReport$stream | null
+}
 type testing.TestBody$stream = unknown
 type testing.TestSetBody$stream = unknown
 type testing.TestReportThunk$stream = unknown
 type testing.TestSetReportThunk$stream = unknown
+type testing.ChildReportThunk$stream = unknown
 type testing.TestRunner$stream = unknown
+class testing.TestSetChild$stream {
+  name: string | null
+  run: testing.ChildReportThunk$stream | null
+}
 type testing.TestSetRunner$stream = unknown
+class testing.FlatTestReport$stream {
+  outcome: testing.Outcome$stream | null
+  passed: int | null
+  failed: int | null
+  tolerated: int | null
+  total: int | null
+  failed_names: string[]
+  messages: string[]
+}

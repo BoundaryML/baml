@@ -2,18 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [hir] error: vertex-ai requires either base_url or location (e.g. us-central1) in options
-   ╭─[ test.baml:6:23 ]
-   │
- 6 │ ╭─▶     provider vertex-ai
-   ┆ ┆   
- 9 │ ├─▶     }
-   │ │           
-   │ ╰─────────── missing options
-   │     
-   │     Note: Error code: E0101
-───╯
-
   [parse] error: Expected config key, found '.'
    ╭─[ test.baml:8:23 ]
    │

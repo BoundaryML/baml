@@ -49,6 +49,8 @@ impl BuiltinFile {
 
 /// Package name for the main std package (baml types and namespaces).
 pub const PACKAGE_BAML: &str = "baml";
+/// Package name for boundary identity and capture helpers.
+pub const PACKAGE_BOUNDARY: &str = "boundary";
 /// Package name for the testing package.
 pub const PACKAGE_TESTING: &str = "testing";
 /// Package name for the assert package.
@@ -83,6 +85,7 @@ pub const ALL: &[BuiltinFile] = &[
     // --- Root namespace (no ns_* prefix) ---
     builtin!("baml", "containers.baml"),
     builtin!("baml", "comparable.baml"),
+    builtin!("baml", "conversions.baml"),
     builtin!("baml", "core.baml"),
     builtin!("baml", "int.baml"),
     builtin!("baml", "bigint.baml"),
@@ -95,6 +98,7 @@ pub const ALL: &[BuiltinFile] = &[
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
     builtin!("baml", "ns_errors/stack_trace.baml"),
+    builtin!("baml", "ns_errors/error_context.baml"),
     builtin!("baml", "ns_panics/panics.baml"),
     builtin!("baml", "ns_env/env.baml"),
     builtin!("baml", "ns_io/io.baml"),
@@ -102,7 +106,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_http/server.baml"),
     builtin!("baml", "ns_events/events.baml"),
     builtin!("baml", "ns_id/id.baml"),
-    builtin!("baml", "ns_math/math.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
     builtin!("baml", "ns_fs/fs.baml"),
     builtin!("baml", "ns_glob/glob.baml"),
@@ -112,7 +115,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
-    builtin!("baml", "ns_unstable/unstable.baml"),
     builtin!("baml", "ns_llm/llm_types.baml"),
     builtin!("baml", "ns_llm/llm.baml"),
     builtin!("baml", "ns_stream/stream.baml"),
@@ -129,16 +131,48 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/zoneddatetime.baml"),
     builtin!("baml", "ns_ops/comparison.baml"),
     builtin!("baml", "ns_ops/math.baml"),
+    // --- boundary package ---
+    builtin!("boundary", "core.baml"),
+    builtin!("boundary", "ns_id/id.baml"),
     // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
     builtin!("reflect", "reflect.baml"),
     // --- testing package ---
-    builtin!("testing", "registry.baml"),
     builtin!("testing", "types.baml"),
+    builtin!("testing", "registry.baml"),
+    builtin!("testing", "runners.baml"),
     // --- assert package ---
     builtin!("assert", "assert.baml"),
     // --- log package ---
     builtin!("log", "log.baml"),
 ];
+
+/// The distinct standard-library / builtin package names, derived from the
+/// embedded manifest [`ALL`] in first-appearance order.
+///
+/// This is the single authoritative answer to "which packages ship as
+/// builtins": a package is a stdlib package iff it contributes at least one
+/// file to `ALL` (i.e. it has a `<builtin>/<package>/…` source). There is no
+/// hand-maintained parallel list to keep in sync — adding a package to `ALL`
+/// automatically enrolls it here.
+///
+/// Every such package is a compiler-build constant (no user file can contribute
+/// to it), so each one's typed `PackageInterface` is a pure function of stdlib
+/// source + compiler code — the soundness foundation for caching it under the
+/// compiler fingerprint and seeding it back (B-694). Callers that serialize
+/// per-package data key it in a sorted map, so the first-appearance iteration
+/// order here never leaks into stored bytes.
+pub fn stdlib_package_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut names = Vec::new();
+        for file in ALL {
+            if !names.contains(&file.package) {
+                names.push(file.package);
+            }
+        }
+        names
+    })
+}
 
 mod adt;
 mod media;

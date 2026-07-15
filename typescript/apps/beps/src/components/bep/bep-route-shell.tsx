@@ -36,7 +36,7 @@ import { AIAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Check, Copy, Edit, History, Maximize2, Minimize2, Pencil } from "lucide-react";
+import { ArrowLeft, Check, Copy, Edit, History, LogIn, Maximize2, Minimize2, Pencil } from "lucide-react";
 import {
   MAIN_CONTENT_ID,
   RESERVED_PAGE_SLUGS,
@@ -58,6 +58,10 @@ function withQueryParam(path: string, key: string, value: string): string {
   const nextQuery = params.toString();
   return `${pathname}${nextQuery ? `?${nextQuery}` : ""}${hash ? `#${hash}` : ""}`;
 }
+
+// Sidebar scroll offsets per BEP, so the nav keeps its place when the shell
+// remounts (e.g. loading skeleton → content). Module-level on purpose.
+const navScrollPositions = new Map<number, number>();
 
 function highlightElement(target: Element) {
   target.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -182,11 +186,6 @@ const [copied, setCopied] = useState(false);
       : "skip"
   );
 
-  useEffect(() => {
-    if (!userLoading && !userId) {
-      router.push("/login");
-    }
-  }, [userLoading, userId, router]);
 
   useEffect(() => {
     if (!hasValidBepNumber) {
@@ -445,6 +444,17 @@ const [copied, setCopied] = useState(false);
     navigateToSection(section);
   };
 
+  // Restore the sidebar's scroll offset when its container (re)mounts, so
+  // navigating doesn't visibly reset a long page list back to the top.
+  const restoreNavScroll = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (!el) return;
+      const saved = navScrollPositions.get(bepNumber);
+      if (saved) el.scrollTop = saved;
+    },
+    [bepNumber]
+  );
+
   const handleNavigateToComment = (
     commentId: Id<"comments">,
     pageId?: Id<"bepPages"> | null,
@@ -653,7 +663,7 @@ const [copied, setCopied] = useState(false);
     }
   };
 
-  if (userLoading || bep === undefined) {
+  if (bep === undefined) {
     return (
       <div className="min-h-screen bg-background">
         <header className="border-b">
@@ -677,9 +687,7 @@ const [copied, setCopied] = useState(false);
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  const isLoggedIn = !!user;
 
   if (!hasValidBepNumber) {
     return null;
@@ -723,6 +731,7 @@ const [copied, setCopied] = useState(false);
           id: p.slug,
           title: p.title,
           hasContent: !!p.content,
+          parentSlug: p.parentSlug,
         })),
       ]
     : [
@@ -736,6 +745,7 @@ const [copied, setCopied] = useState(false);
           id: p.slug,
           title: p.title,
           hasContent: !!p.content,
+          parentSlug: p.parentSlug,
         })),
         ...newPages.map((p) => ({
           id: p.slug,
@@ -806,7 +816,7 @@ const [copied, setCopied] = useState(false);
               )}
             </Button>
             <BepExportDialog bepId={bep._id} bepNumber={bep.number} />
-            <BepImportDialog bepId={bep._id} bepNumber={bep.number} />
+            {isLoggedIn && <BepImportDialog bepId={bep._id} bepNumber={bep.number} />}
             <BepVersionSelect
               versions={bep.versions}
               currentVersionNumber={
@@ -814,7 +824,7 @@ const [copied, setCopied] = useState(false);
               }
               onVersionChange={handleVersionRouteChange}
             />
-            {!isViewingHistorical && (
+            {!isViewingHistorical && isLoggedIn && (
               <Button
                 variant={isEditMode ? "default" : "outline"}
                 size="sm"
@@ -832,6 +842,14 @@ const [copied, setCopied] = useState(false);
                   </>
                 )}
               </Button>
+            )}
+            {!isLoggedIn && (
+              <Link href="/login">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <LogIn className="h-4 w-4" />
+                  Sign In
+                </Button>
+              </Link>
             )}
           </div>
         </div>
@@ -879,7 +897,7 @@ const [copied, setCopied] = useState(false);
                   )}
                 </Button>
               )}
-              {!isViewingHistorical && (
+              {!isViewingHistorical && isLoggedIn && (
                 <>
                   <BepGoodReferenceToggle
                     bepId={bep._id}
@@ -908,7 +926,7 @@ const [copied, setCopied] = useState(false);
                 bepId={bep._id}
                 versionId={currentVersionId}
                 versionNumber={latestVersionNumber ?? 1}
-                readOnly={isViewingHistorical}
+                readOnly={isViewingHistorical || !isLoggedIn}
               />
             )}
           </div>
@@ -916,19 +934,32 @@ const [copied, setCopied] = useState(false);
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <aside className="lg:col-span-1">
-            <div className="sticky top-8">
+            {/* max-h + overflow so a long page list stays reachable while stuck */}
+            <div
+              ref={restoreNavScroll}
+              onScroll={(e) =>
+                navScrollPositions.set(bepNumber, e.currentTarget.scrollTop)
+              }
+              className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain pr-1"
+            >
               <BepNav
                 sections={allSections}
                 activeSection={activeSection}
                 onSectionClick={handleSectionChange}
+                bepNumber={bepNumber}
+                versionNumber={
+                  isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
+                    ? routeInfo.versionNumber
+                    : null
+                }
                 commentCounts={commentCounts ?? {}}
                 totalCommentCount={isViewingHistorical ? 0 : totalCommentCount}
                 openIssueCount={isViewingHistorical ? 0 : openIssueCount}
                 decisionCount={isViewingHistorical ? 0 : bep.decisions.length}
                 hideMetaSections={isViewingHistorical}
-                isEditMode={isEditMode}
+                isEditMode={isEditMode && isLoggedIn}
                 pageStatuses={pageStatuses}
-                onAddPage={() => setShowAddPageModal(true)}
+                onAddPage={isLoggedIn ? () => setShowAddPageModal(true) : undefined}
               />
             </div>
           </aside>
@@ -1016,7 +1047,7 @@ const [copied, setCopied] = useState(false);
                               bepId={bep._id}
                               versionId={effectiveVersionId}
                               pageId={currentPageId}
-                              readOnly={isViewingHistorical}
+                              readOnly={isViewingHistorical || !isLoggedIn}
                               comments={(pageComments ?? [])
                                 .filter((c) => c.anchor)
                                 .map((c) => ({
@@ -1048,7 +1079,7 @@ const [copied, setCopied] = useState(false);
                       versionId={effectiveVersionId}
                       pageId={currentPageId}
                       viewingVersionId={viewingVersionId ?? undefined}
-                      readOnly={isViewingHistorical}
+                      readOnly={isViewingHistorical || !isLoggedIn}
                       linkContext={{
                         bepNumber,
                         isHistorical: isViewingHistorical,

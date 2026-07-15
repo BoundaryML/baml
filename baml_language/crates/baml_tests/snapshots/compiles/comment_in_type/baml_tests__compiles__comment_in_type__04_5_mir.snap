@@ -21,9 +21,9 @@ fn user.CommentAfterArrow(client: baml.llm.Client) -> string {
     }
 
     bb2: {
-        _3 = {  };
+        _3 = {  }: map<string, unknown>;
         _4 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "CommentAfterArrow", copy _3) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _4>(copy _1, const "CommentAfterArrow", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -49,8 +49,8 @@ fn user.CommentAfterArrow$build_request(client: baml.llm.Client) -> baml.http.Re
     }
 
     bb2: {
-        _3 = {  };
-        _0 = call const fn baml.llm.build_request(copy _1, const "CommentAfterArrow", copy _3) -> [bb3];
+        _3 = {  }: map<string, unknown>;
+        _0 = call const fn baml.llm.build_request(copy _1, const "CommentAfterArrow", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -76,8 +76,8 @@ fn user.CommentAfterArrow$build_request_stream(client: baml.llm.Client) -> baml.
     }
 
     bb2: {
-        _3 = {  };
-        _0 = call const fn baml.llm.build_request_stream(copy _1, const "CommentAfterArrow", copy _3) -> [bb3];
+        _3 = {  }: map<string, unknown>;
+        _0 = call const fn baml.llm.build_request_stream(copy _1, const "CommentAfterArrow", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -103,8 +103,8 @@ fn user.CommentAfterArrow$render_prompt(client: baml.llm.Client) -> baml.llm.Pro
     }
 
     bb2: {
-        _3 = {  };
-        _0 = call const fn baml.llm.render_prompt(copy _1, const "CommentAfterArrow", copy _3) -> [bb3];
+        _3 = {  }: map<string, unknown>;
+        _0 = call const fn baml.llm.render_prompt(copy _1, const "CommentAfterArrow", copy _3, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -133,9 +133,9 @@ fn user.FunctionWithComments(a: string, b: int, client: baml.llm.Client) -> stri
     }
 
     bb2: {
-        _5 = { const "a": copy _1, const "b": copy _2 };
+        _5 = { const "a": copy _1, const "b": copy _2 }: map<string, unknown>;
         _6 = load_type(string);
-        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "FunctionWithComments", copy _5) -> [bb3];
+        _0 = call const fn baml.llm.call_llm_function<copy _6>(copy _3, const "FunctionWithComments", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -163,8 +163,8 @@ fn user.FunctionWithComments$build_request(a: string, b: int, client: baml.llm.C
     }
 
     bb2: {
-        _5 = { const "a": copy _1, const "b": copy _2 };
-        _0 = call const fn baml.llm.build_request(copy _3, const "FunctionWithComments", copy _5) -> [bb3];
+        _5 = { const "a": copy _1, const "b": copy _2 }: map<string, unknown>;
+        _0 = call const fn baml.llm.build_request(copy _3, const "FunctionWithComments", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -192,8 +192,8 @@ fn user.FunctionWithComments$build_request_stream(a: string, b: int, client: bam
     }
 
     bb2: {
-        _5 = { const "a": copy _1, const "b": copy _2 };
-        _0 = call const fn baml.llm.build_request_stream(copy _3, const "FunctionWithComments", copy _5) -> [bb3];
+        _5 = { const "a": copy _1, const "b": copy _2 }: map<string, unknown>;
+        _0 = call const fn baml.llm.build_request_stream(copy _3, const "FunctionWithComments", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -221,8 +221,8 @@ fn user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.C
     }
 
     bb2: {
-        _5 = { const "a": copy _1, const "b": copy _2 };
-        _0 = call const fn baml.llm.render_prompt(copy _3, const "FunctionWithComments", copy _5) -> [bb3];
+        _5 = { const "a": copy _1, const "b": copy _2 }: map<string, unknown>;
+        _0 = call const fn baml.llm.render_prompt(copy _3, const "FunctionWithComments", copy _5, const <omitted>) -> [bb3];
     }
 
     bb3: {
@@ -230,24 +230,30 @@ fn user.FunctionWithComments$render_prompt(a: string, b: int, client: baml.llm.C
     }
 }
 
-fn user.TestClient$new() -> null {
+fn user.TestClient$new(lenient: bool) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<string, string>
-    let _3: map<string, string>
-    let _4: map<string, unknown>
+    let _1: bool // lenient // param
+    let _2: baml.llm.PrimitiveClientOptions
+    let _3: string | null
+    let _4: map<string, string>
+    let _5: map<string, string>
+    let _6: map<string, unknown>
 
     bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "TestClient", const "openai", copy _1 };
-        goto -> bb1;
+        _3 = sys_op const fn baml.env.get(const "OPENAI_API_KEY") -> bb1;
     }
 
     bb1: {
+        _4 = {  }: map<string, string>;
+        _5 = {  }: map<string, string>;
+        _6 = {  }: map<string, unknown>;
+        _2 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _3, const null, const null, copy _4, copy _5, copy _6 };
+        _0 = baml.llm.PrimitiveClient { const "TestClient", const "openai", copy _2 };
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }

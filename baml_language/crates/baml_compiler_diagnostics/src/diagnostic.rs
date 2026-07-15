@@ -5,6 +5,7 @@
 //! This enables centralized rendering and consistent error handling.
 
 use baml_base::{FileId, Span};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 // ============================================================================
 // DiagnosticPhase - Tracks which compiler phase produced a diagnostic
@@ -14,7 +15,11 @@ use baml_base::{FileId, Span};
 ///
 /// This enables grouping diagnostics by phase for display purposes
 /// (e.g., in `tools_onionskin` TUI or `baml_tests` snapshots).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+///
+/// The Borsh derives serialize the variant as a declaration-order
+/// discriminant for the per-file diagnostics cache; reordering variants is a
+/// wire-format break gated by the cache's `FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, BorshSerialize, BorshDeserialize)]
 pub enum DiagnosticPhase {
     /// Parsing phase errors (syntax errors from the parser)
     #[default]
@@ -40,7 +45,11 @@ impl DiagnosticPhase {
 }
 
 /// Unique identifier for a diagnostic category.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// The Borsh derives serialize the variant as a declaration-order
+/// discriminant for the per-file diagnostics cache; reordering variants is a
+/// wire-format break gated by the cache's `FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum DiagnosticId {
     // Parse errors (E0009, E0010)
     UnexpectedEof,
@@ -82,7 +91,9 @@ pub enum DiagnosticId {
     DuplicateAttribute,
     UnknownAttribute,
     InvalidAttributeContext,
-    UnknownGeneratorProperty,
+    /// A `generator { … }` block was found in `.baml`; code generators are
+    /// now configured in `baml.toml` under `[generator.<name>]`.
+    GeneratorBlockUnsupported,
     MissingGeneratorProperty,
     InvalidGeneratorPropertyValue,
     ReservedFieldName,
@@ -120,8 +131,9 @@ pub enum DiagnosticId {
     NonExhaustiveCatch,
     UnreachableCatchArm,
     UnknownEnumVariant,
-    WatchOnNonVariable,
-    WatchOnUnwatchedVariable,
+
+    // Control-flow diagnostics (E0146)
+    UnreachableCode,
 
     // Syntax errors (E0028-E0031)
     MissingSemicolon,
@@ -140,6 +152,9 @@ pub enum DiagnosticId {
 
     // Type literal errors (E0033)
     UnsupportedFloatLiteral,
+
+    // Integer literal out of `int` (i63) range (E0139)
+    IntegerLiteralOutOfRange,
 
     // Map type errors (E0039)
     InvalidMapArity,
@@ -215,6 +230,9 @@ pub enum DiagnosticId {
     // Void type position errors (E0110)
     VoidInNonReturnPosition,
 
+    // Wildcard `_` type in a non-inferable position (E0147)
+    WildcardTypeNotAllowed,
+
     // Interface diagnostics (BEP-044; E0112-E0120)
     /// `implements I {}` references an interface that does not exist.
     UnknownInterface,
@@ -256,6 +274,9 @@ pub enum DiagnosticId {
     /// only be implemented for a concrete type (or a concrete type constructor
     /// such as `T[]` / `map<K, V>`, or a blanket type parameter).
     ImplTargetNotConcrete,
+    /// `return`/`break`/`continue` inside a `defer` body that would escape the
+    /// defer (BEP-042). Only `throw` may leave a defer.
+    DeferControlFlowEscape,
     /// An out-of-body `implement<P..> I<args..> for T` violates the orphan rule
     /// (BEP-044, Rust's RFC 2451 "covered" rule): the interface is foreign and no
     /// type local to this package appears in `[T, args..]` before any uncovered
@@ -283,6 +304,36 @@ pub enum DiagnosticId {
     OverlappingImplements,
     /// An interface `requires` a type that is not an interface (e.g. a class or enum).
     InterfaceRequiresNonInterface,
+    /// A generic parameter's bound (`T extends X`) is not an interface. Bounds
+    /// must be interfaces (BEP-044).
+    GenericBoundNotInterface,
+    /// A class declares a `to_string` method directly; it must be provided by
+    /// implementing the `baml.ToString` interface instead.
+    ToStringMustImplementInterface,
+    /// A class declares a `to_json` method directly; it must be provided by
+    /// implementing the `baml.ToJson` interface instead.
+    ToJsonMustImplementInterface,
+    /// A class declares a `from_json` method directly; it must be provided by
+    /// implementing the `baml.FromJson` interface instead.
+    FromJsonMustImplementInterface,
+    /// A class declares a `cleanup` method whose signature is not the reserved
+    /// magic-finalizer shape `cleanup(self) -> void` (BEP-042).
+    CleanupMagicMethodSignature,
+
+    // Aliasing lints (E0148)
+    /// `baml.Array.filled(n, value)` was called with a mutable literal (`[]`,
+    /// `{}`, or a class-instance literal). Every slot aliases the *same* object
+    /// reference, so mutating one slot mutates all of them (Linear B-548). This
+    /// is a lint (warning), not a type error.
+    ArrayFilledAliasing,
+
+    // Serialized-key collision (E0149)
+    /// Two or more fields of a class serialize to the same JSON key — either two
+    /// fields share an `@alias`, or one field's name equals another field's
+    /// `@alias`. Such a schema is unsatisfiable: an aliased field's real name is
+    /// never matched, so `ctx.output_format` renders duplicate keys and a
+    /// required shadowed field can never be parsed (Linear B-615).
+    DuplicateFieldAlias,
 }
 
 impl DiagnosticId {
@@ -321,7 +372,7 @@ impl DiagnosticId {
             DiagnosticId::DuplicateAttribute => "E0014",
             DiagnosticId::UnknownAttribute => "E0015",
             DiagnosticId::InvalidAttributeContext => "E0016",
-            DiagnosticId::UnknownGeneratorProperty => "E0017",
+            DiagnosticId::GeneratorBlockUnsupported => "E0017",
             DiagnosticId::MissingGeneratorProperty => "E0018",
             DiagnosticId::InvalidGeneratorPropertyValue => "E0019",
             DiagnosticId::ReservedFieldName => "E0020",
@@ -349,8 +400,9 @@ impl DiagnosticId {
             DiagnosticId::NonExhaustiveCatch => "E0094",
             DiagnosticId::UnreachableCatchArm => "E0095",
             DiagnosticId::UnknownEnumVariant => "E0064",
-            DiagnosticId::WatchOnNonVariable => "E0065",
-            DiagnosticId::WatchOnUnwatchedVariable => "E0066",
+
+            // Control-flow diagnostics
+            DiagnosticId::UnreachableCode => "E0146",
 
             // Syntax errors
             DiagnosticId::MissingSemicolon => "E0028",
@@ -369,6 +421,9 @@ impl DiagnosticId {
 
             // Type literal errors
             DiagnosticId::UnsupportedFloatLiteral => "E0033",
+            // E0139 is the orphan-rule code (`ImplViolatesOrphanRule`, BEP-044); this
+            // literal error previously collided with it — moved to the next free code.
+            DiagnosticId::IntegerLiteralOutOfRange => "E0150",
 
             // Map type errors
             DiagnosticId::InvalidMapArity => "E0039",
@@ -442,6 +497,7 @@ impl DiagnosticId {
 
             // Void type position errors
             DiagnosticId::VoidInNonReturnPosition => "E0110",
+            DiagnosticId::WildcardTypeNotAllowed => "E0147",
 
             // Interface diagnostics
             DiagnosticId::UnknownInterface => "E0112",
@@ -472,12 +528,28 @@ impl DiagnosticId {
             // E0137 is taken by `IrrefutablePatternInWhileLet`; use the next free code.
             DiagnosticId::ImplTargetNotConcrete => "E0138",
             DiagnosticId::ImplViolatesOrphanRule => "E0139",
+            DiagnosticId::ToStringMustImplementInterface => "E0140",
+            DiagnosticId::DeferControlFlowEscape => "E0141",
+            DiagnosticId::ToJsonMustImplementInterface => "E0142",
+            DiagnosticId::FromJsonMustImplementInterface => "E0143",
+            DiagnosticId::CleanupMagicMethodSignature => "E0144",
+            DiagnosticId::GenericBoundNotInterface => "E0145",
+
+            // Aliasing lints
+            DiagnosticId::ArrayFilledAliasing => "E0148",
+
+            // Serialized-key collision
+            DiagnosticId::DuplicateFieldAlias => "E0149",
         }
     }
 }
 
 /// Severity level of a diagnostic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// The Borsh derives serialize the variant as a declaration-order
+/// discriminant for the per-file diagnostics cache; reordering variants is a
+/// wire-format break gated by the cache's `FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum Severity {
     /// An error that prevents compilation.
     Error,
@@ -741,6 +813,33 @@ mod tests {
         for id in ids {
             let code = id.code();
             assert!(code.starts_with('E'), "Code should start with E: {code}");
+        }
+    }
+
+    #[test]
+    fn borsh_discriminants_are_stable() {
+        // The per-file diagnostics cache serializes these fieldless enums as a
+        // declaration-order discriminant. A snapshot of the first few variants
+        // guards against a silent reorder (which must instead bump the cache's
+        // `FORMAT_VERSION`). Borsh writes enum discriminants as a single byte.
+        assert_eq!(
+            borsh::to_vec(&DiagnosticId::UnexpectedEof).unwrap(),
+            vec![0]
+        );
+        assert_eq!(borsh::to_vec(&DiagnosticId::TypeMismatch).unwrap(), vec![3]);
+        assert_eq!(borsh::to_vec(&Severity::Error).unwrap(), vec![0]);
+        assert_eq!(borsh::to_vec(&Severity::Warning).unwrap(), vec![1]);
+        assert_eq!(borsh::to_vec(&DiagnosticPhase::Parse).unwrap(), vec![0]);
+        assert_eq!(borsh::to_vec(&DiagnosticPhase::Type).unwrap(), vec![3]);
+
+        // Round-trip every representative id to prove deserialize is the inverse.
+        for id in [
+            DiagnosticId::TypeMismatch,
+            DiagnosticId::DuplicateFieldAlias,
+            DiagnosticId::OverlappingImplements,
+        ] {
+            let bytes = borsh::to_vec(&id).unwrap();
+            assert_eq!(borsh::from_slice::<DiagnosticId>(&bytes).unwrap(), id);
         }
     }
 }

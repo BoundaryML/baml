@@ -5,23 +5,31 @@
 //!
 //! ## Credential resolution order
 //!
-//! 1. `options.credentials_content` -- inline service account JSON
-//! 2. `options.credentials` -- inline JSON or file path
-//! 3. `GOOGLE_APPLICATION_CREDENTIALS` env var -- inline JSON (file paths
-//!    are deferred to ADC)
-//! 4. `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` env var (BAML-specific)
-//! 5. Application Default Credentials -- ADC config file,
-//!    `GOOGLE_APPLICATION_CREDENTIALS` file paths, or the GCE metadata server
-//! 6. `gcloud` CLI
+//! 1. `options.credentials` -- a credential JSON **file path** (service
+//!    account, authorized user, workload identity federation, or impersonated
+//!    service account -- the same documents `GOOGLE_APPLICATION_CREDENTIALS`
+//!    accepts)
+//! 2. `options.credentials_content` -- an inline credential JSON string
+//! 3. Application Default Credentials -- the `GOOGLE_APPLICATION_CREDENTIALS`
+//!    file, the well-known ADC config file, then the GCE metadata server
 //!
-//! All token minting (service-account RS256 JWT, ADC authorized-user refresh,
-//! GCE metadata) runs through the slim `google-cloud-auth` fork, whose IO is
-//! routed through BAML's [`RuntimeIo`] by [`BamlTokenIo`]. Signing is pure Rust
-//! (`rsa` + `sha2`), so a single code path works on native and wasm; only the
-//! `gcloud` CLI fallback is effectively native-only (it shells out).
+//! An explicitly-set option is used as-is: a broken value is an error, never
+//! a silent cascade to the next source.
+//!
+//! This mirrors `google-auth` (Python/Node), with `credentials_content` as the
+//! one BAML extra for inline credentials. Deliberately NOT supported:
+//! inline JSON in `credentials` or in env vars (`GOOGLE_APPLICATION_CREDENTIALS`
+//! is a file path, period) and `gcloud` CLI shell-outs.
+//!
+//! All token minting runs through the slim `google-cloud-auth` fork, whose IO
+//! is routed through BAML's [`RuntimeIo`] by [`BamlTokenIo`]. Signing is pure
+//! Rust (`rsa` + `sha2`), so a single code path works on native and wasm. The
+//! fork caches tokens process-wide until shortly before expiry and also
+//! resolves `project_id` and the quota project (`x-goog-user-project`).
 
 use std::sync::Arc;
 
+use google_cloud_auth::TokenIo;
 use indexmap::IndexMap;
 use sys_types::{BexExternalValue, runtime_io::RuntimeIo};
 
@@ -36,8 +44,10 @@ use crate::{
 
 /// Add Google Cloud `OAuth2` auth headers to a Vertex AI request.
 ///
-/// Also resolves `project_id` in the URL if it contains the placeholder
-/// (i.e. `project_id` was not known at URL construction time).
+/// Also resolves the `location` and `project_id` placeholders in the URL if
+/// present (i.e. they were not known at URL construction time): `location`
+/// from the `GOOGLE_CLOUD_LOCATION` env var, `project_id` from the credential
+/// / `GOOGLE_CLOUD_PROJECT` chain.
 ///
 /// Credentials are resolved once, then used for both token and `project_id`
 /// (matching the old engine's single-source principle).
@@ -46,30 +56,69 @@ pub(crate) async fn auth_vertex(
     client: &PrimitiveClient,
     io: Arc<dyn RuntimeIo>,
 ) -> Result<(), BuildRequestError> {
-    let vertex_opts = match &client.provider_options {
-        Some(ProviderOptions::VertexAi(opts)) => Some(opts.clone()),
-        _ => None,
-    };
+    let vertex_opts = client
+        .provider_options
+        .as_ref()
+        .and_then(ProviderOptions::vertex_ai);
 
     // If an API key is provided as a query param, skip token-based auth
-    // but still resolve the project-id placeholder in the URL.
+    // but still resolve the location / project-id placeholders in the URL.
     let api_key_auth = client.options.query_params.contains_key("key");
+    let needs_location = request
+        .url
+        .contains(crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER);
     let needs_project_id = request
         .url
         .contains(crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER);
 
-    // With API-key auth and no project-id placeholder, no credentials needed.
-    if api_key_auth && !needs_project_id {
+    // With API-key auth and no placeholders, no credentials needed.
+    if api_key_auth && !needs_project_id && !needs_location {
         return Ok(());
     }
 
+    let adapter = BamlTokenIo { io: io.clone() };
+
+    // Resolve the location placeholder from GOOGLE_CLOUD_LOCATION if needed
+    // (options.location was unset at URL construction time).
+    if needs_location {
+        let location = match adapter.env("GOOGLE_CLOUD_LOCATION").await {
+            Some(v) => v.trim().to_string(),
+            // Enterprise mode defaults an unset location to the global endpoint,
+            // matching google-genai; plain Vertex still requires an explicit one.
+            None if crate::build_request::google_use_enterprise(client, &*io).await => {
+                "global".to_string()
+            }
+            None => {
+                return Err(BuildRequestError::Other(
+                    "Could not resolve location for Vertex AI. Set options.location \
+                     (e.g. us-central1) or the GOOGLE_CLOUD_LOCATION env var."
+                        .to_string(),
+                ));
+            }
+        };
+        // "global" uses the region-less endpoint host.
+        if location == "global" {
+            request.url = request.url.replace(
+                &format!(
+                    "{}-aiplatform.googleapis.com",
+                    crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER
+                ),
+                "aiplatform.googleapis.com",
+            );
+        }
+        request.url = request.url.replace(
+            crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER,
+            &location,
+        );
+    }
+
     // Resolve credentials once (needed for both project-id and token).
-    let creds = resolve_credentials(vertex_opts.as_ref(), io.clone()).await?;
+    let creds = resolve_credentials(vertex_opts.as_ref());
 
     // Resolve project_id placeholder in the URL if needed.
     if needs_project_id {
-        let project_id = project_id_from_credentials(&creds, &*io)
-            .await
+        let project_id = project_id_from_credentials(&creds, &adapter)
+            .await?
             .ok_or_else(|| {
                 BuildRequestError::Other(
                     "Could not resolve project_id for Vertex AI. Set options.project_id, \
@@ -89,11 +138,21 @@ pub(crate) async fn auth_vertex(
         return Ok(());
     }
 
-    let token = token_from_credentials(&creds, io).await?;
+    let token = token_from_credentials(&creds, &adapter, &*io).await?;
 
     request
         .headers
         .insert("authorization".to_string(), format!("Bearer {token}"));
+
+    // google-auth parity (`Credentials.apply`): attribute quota/billing to the
+    // configured quota project when the credentials carry one.
+    if !request.headers.contains_key("x-goog-user-project") {
+        if let Some(quota_project) = quota_project_from_credentials(&creds, &adapter).await {
+            request
+                .headers
+                .insert("x-goog-user-project".to_string(), quota_project);
+        }
+    }
 
     Ok(())
 }
@@ -109,7 +168,7 @@ struct BamlTokenIo {
 }
 
 #[async_trait::async_trait]
-impl google_cloud_auth::TokenIo for BamlTokenIo {
+impl TokenIo for BamlTokenIo {
     async fn env(&self, key: &str) -> Option<String> {
         self.io.env_get(key.to_string()).await.ok().flatten()
     }
@@ -162,121 +221,37 @@ impl google_cloud_auth::TokenIo for BamlTokenIo {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Unwrap double-quoted JSON strings (e.g. from Vercel `env pull`).
-///
-/// Some environments store JSON credentials as a JSON string value with escaped
-/// inner quotes: `"{\"type\":\"service_account\",...}"`. This function detects
-/// that and unwraps to the inner JSON object string.
-fn try_unwrap_quoted_json(s: String) -> String {
-    if s.starts_with('"') {
-        if let Ok(serde_json::Value::String(inner)) = serde_json::from_str::<serde_json::Value>(&s)
-        {
-            return inner;
-        }
-    }
-    s
-}
-
-/// Extract `project_id` from a JSON string (service account credentials).
-fn extract_project_id_from_json(json_str: &str) -> Option<String> {
-    serde_json::from_str::<serde_json::Value>(json_str)
-        .ok()
-        .and_then(|v| v.get("project_id")?.as_str().map(String::from))
-}
-
 // ---------------------------------------------------------------------------
 // Credential resolution (single source for both token and project_id)
 // ---------------------------------------------------------------------------
 
 /// The resolved credential source.
 ///
-/// Matches the old engine's auth strategy: one source is selected, then
-/// used for both token and `project_id`.
+/// One source is selected, then used for both token and `project_id`.
 enum ResolvedCredentials {
-    /// Service account JSON (inline or read from file/env var).
-    ServiceAccountJson(String),
-    /// Application Default Credentials -- ADC config file,
-    /// `GOOGLE_APPLICATION_CREDENTIALS`, or the GCE metadata server.
+    /// `options.credentials` -- a credential JSON file path.
+    CredentialsFile(String),
+    /// `options.credentials_content` -- inline credential JSON, serialized.
+    CredentialsJson(String),
+    /// Application Default Credentials -- `GOOGLE_APPLICATION_CREDENTIALS`,
+    /// the well-known ADC config file, or the GCE metadata server.
     Adc,
-    /// gcloud CLI fallback.
-    GcloudCli,
 }
 
-/// Resolve which credential source to use.
+/// Resolve which credential source to use: the explicit `credentials` option
+/// (a file path), then `credentials_content` (inline JSON), else Application
+/// Default Credentials.
 ///
-/// Resolution order:
-/// 1. `credentials_content` option
-/// 2. `credentials` option (inline JSON or file path)
-/// 3. `GOOGLE_APPLICATION_CREDENTIALS` env var (inline JSON; file paths deferred to ADC)
-/// 4. `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` env var (BAML-specific)
-/// 5. Application Default Credentials
-/// 6. `gcloud` CLI
-async fn resolve_credentials(
-    vertex_opts: Option<&VertexAiOptions>,
-    io: Arc<dyn RuntimeIo>,
-) -> Result<ResolvedCredentials, BuildRequestError> {
-    // 1. credentials_content: always inline JSON.
-    if let Some(json_str) = vertex_opts.and_then(|o| o.credentials_content.as_ref()) {
-        return Ok(ResolvedCredentials::ServiceAccountJson(json_str.clone()));
+/// An explicitly-set option is used as-is -- a broken value errors instead of
+/// cascading to the next source.
+fn resolve_credentials(vertex_opts: Option<&VertexAiOptions>) -> ResolvedCredentials {
+    if let Some(path) = vertex_opts.and_then(|o| o.credentials.as_ref()) {
+        return ResolvedCredentials::CredentialsFile(path.clone());
     }
-
-    // 2. credentials: inline JSON or file path.
-    if let Some(creds) = vertex_opts.and_then(|o| o.credentials.as_ref()) {
-        if serde_json::from_str::<serde_json::Value>(creds).is_ok() {
-            return Ok(ResolvedCredentials::ServiceAccountJson(creds.clone()));
-        }
-        let json_str = read_credentials_file(creds, &*io).await?;
-        return Ok(ResolvedCredentials::ServiceAccountJson(json_str));
+    if let Some(content) = vertex_opts.and_then(|o| o.credentials_content.as_ref()) {
+        return ResolvedCredentials::CredentialsJson(content.clone());
     }
-
-    // 3. GOOGLE_APPLICATION_CREDENTIALS env var.
-    // Inline JSON is handled here; file paths are deferred to ADC (step 5).
-    if let Ok(Some(val)) = io
-        .env_get("GOOGLE_APPLICATION_CREDENTIALS".to_string())
-        .await
-    {
-        let val = try_unwrap_quoted_json(val);
-        if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
-            return Ok(ResolvedCredentials::ServiceAccountJson(val));
-        }
-    }
-
-    // 4. GOOGLE_APPLICATION_CREDENTIALS_CONTENT env var (BAML-specific).
-    if let Ok(Some(val)) = io
-        .env_get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT".to_string())
-        .await
-    {
-        let val = try_unwrap_quoted_json(val);
-        if !val.is_empty() && serde_json::from_str::<serde_json::Value>(&val).is_ok() {
-            return Ok(ResolvedCredentials::ServiceAccountJson(val));
-        }
-    }
-
-    // 5. Application Default Credentials (config file or GCE metadata).
-    {
-        let adapter = BamlTokenIo { io: io.clone() };
-        if google_cloud_auth::adc_available(&adapter).await {
-            return Ok(ResolvedCredentials::Adc);
-        }
-    }
-
-    // 6. gcloud CLI.
-    if io
-        .sys_shell(
-            "gcloud auth print-access-token --quiet 2>/dev/null".to_string(),
-            None,
-        )
-        .await
-        .is_ok_and(|out| !String::from_utf8_lossy(&out.stdout).trim().is_empty())
-    {
-        return Ok(ResolvedCredentials::GcloudCli);
-    }
-
-    // 7. ADC metadata fallback. `adc_available` intentionally avoids network
-    // IO, so no-file metadata environments (GCE/Cloud Run/GKE) reach this point
-    // and are resolved by `token_from_adc` rather than failing before metadata
-    // can be queried.
-    Ok(ResolvedCredentials::Adc)
+    ResolvedCredentials::Adc
 }
 
 // ---------------------------------------------------------------------------
@@ -285,181 +260,95 @@ async fn resolve_credentials(
 
 async fn token_from_credentials(
     creds: &ResolvedCredentials,
-    io: Arc<dyn RuntimeIo>,
+    adapter: &BamlTokenIo,
+    io: &dyn RuntimeIo,
 ) -> Result<String, BuildRequestError> {
     match creds {
-        ResolvedCredentials::ServiceAccountJson(json_str) => {
-            let adapter = BamlTokenIo { io };
-            google_cloud_auth::token_from_service_account_json(
-                &adapter,
+        ResolvedCredentials::CredentialsJson(json_str) => {
+            google_cloud_auth::token_from_credentials_json(
+                adapter,
                 json_str,
                 google_cloud_auth::CLOUD_PLATFORM_SCOPE,
             )
             .await
             .map_err(|e| BuildRequestError::AuthorizationFailed(e.to_string()))
         }
+        ResolvedCredentials::CredentialsFile(path) => {
+            let json_str = read_credentials_file(path, io).await?;
+            google_cloud_auth::token_from_credentials_json(
+                adapter,
+                &json_str,
+                google_cloud_auth::CLOUD_PLATFORM_SCOPE,
+            )
+            .await
+            .map_err(|e| BuildRequestError::AuthorizationFailed(e.to_string()))
+        }
         ResolvedCredentials::Adc => {
-            let adapter = BamlTokenIo { io };
-            google_cloud_auth::token_from_adc(&adapter, google_cloud_auth::CLOUD_PLATFORM_SCOPE)
+            google_cloud_auth::token_from_adc(adapter, google_cloud_auth::CLOUD_PLATFORM_SCOPE)
                 .await
                 .map_err(|e| BuildRequestError::AuthorizationFailed(e.to_string()))
         }
-        ResolvedCredentials::GcloudCli => {
-            let output = io
-                .sys_shell("gcloud auth print-access-token --quiet".to_string(), None)
-                .await
-                .map_err(|e| {
-                    BuildRequestError::AuthorizationFailed(format!(
-                        "Google Cloud: gcloud auth print-access-token failed: {e}"
-                    ))
-                })?;
-            let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if token.is_empty() {
-                Err(BuildRequestError::AuthorizationFailed(
-                    "Google Cloud: gcloud auth print-access-token returned empty".into(),
-                ))
-            } else {
-                Ok(token)
-            }
-        }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Project ID from resolved credentials
+// Project ID / quota project from resolved credentials
 // ---------------------------------------------------------------------------
 
-/// Get `project_id` from the resolved credential source, with fallbacks.
+/// Get `project_id` from the resolved credential source, falling back to the
+/// fork's google-auth-style chain (env vars, credential files, the gcloud
+/// config file, the GCE metadata server).
+///
+/// An unreadable `options.credentials` file is an error, not a fallthrough:
+/// on paths that only need the project id (e.g. express-mode API-key auth),
+/// silently continuing to the ADC chain would mask the misconfiguration.
 async fn project_id_from_credentials(
     creds: &ResolvedCredentials,
-    io: &dyn RuntimeIo,
-) -> Option<String> {
-    // Try the credential source itself first.
+    adapter: &BamlTokenIo,
+) -> Result<Option<String>, BuildRequestError> {
     match creds {
-        ResolvedCredentials::ServiceAccountJson(json_str) => {
-            if let Some(pid) = extract_project_id_from_json(json_str) {
-                return Some(pid);
+        ResolvedCredentials::CredentialsJson(json_str) => {
+            if let Some(pid) = google_cloud_auth::project_id_from_json(json_str) {
+                return Ok(Some(pid));
             }
         }
-        ResolvedCredentials::GcloudCli => {
-            if let Ok(output) = io
-                .sys_shell(
-                    "gcloud config get-value project 2>/dev/null".to_string(),
-                    None,
-                )
-                .await
-            {
-                let pid = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !pid.is_empty() {
-                    return Some(pid);
-                }
+        ResolvedCredentials::CredentialsFile(path) => {
+            let contents = read_credentials_file(path, &*adapter.io).await?;
+            if let Some(pid) = google_cloud_auth::project_id_from_json(&contents) {
+                return Ok(Some(pid));
             }
         }
-        ResolvedCredentials::Adc => {
-            // ADC doesn't expose project_id directly. Try reading the
-            // credentials file the GOOGLE_APPLICATION_CREDENTIALS env points to.
-            if let Ok(Some(val)) = io
-                .env_get("GOOGLE_APPLICATION_CREDENTIALS".to_string())
-                .await
-            {
-                if !val.is_empty() {
-                    // Inline JSON?
-                    if let Some(pid) = extract_project_id_from_json(&val) {
-                        return Some(pid);
-                    }
-                    // File path? Read and extract.
-                    if let Ok(handle) = io.fs_open(val, BexExternalValue::String("r".into())).await
-                    {
-                        if let Ok(contents) = io.fs_file_text(&handle).await {
-                            if let Some(pid) = extract_project_id_from_json(&contents) {
-                                return Some(pid);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        ResolvedCredentials::Adc => {}
     }
-
-    // Fallback chain for when the credential source didn't have project_id.
-
-    // GOOGLE_CLOUD_PROJECT env var.
-    if let Ok(Some(val)) = io.env_get("GOOGLE_CLOUD_PROJECT".to_string()).await {
-        if !val.is_empty() && !val.starts_with('$') {
-            return Some(val);
-        }
-    }
-
-    // ADC config file -> quota_project_id.
-    if let Some(pid) = project_id_from_adc_config(io).await {
-        return Some(pid);
-    }
-
-    // GCE metadata server.
-    let req = sys_types::generated::owned::http::Request {
-        method: "GET".to_string(),
-        url: "http://metadata.google.internal/computeMetadata/v1/project/project-id".to_string(),
-        headers: indexmap::indexmap! {
-            "Metadata-Flavor".to_string() => "Google".to_string(),
-        },
-        body: String::new(),
-    };
-    if let Ok(resp) = io
-        .http__send(req, std::sync::Arc::new(num_bigint::BigInt::from(0i64)))
-        .await
-    {
-        if resp.status_code == 200 {
-            if let Ok(body) = io.http_response_text(&resp).await {
-                let pid = body.trim().to_string();
-                if !pid.is_empty() {
-                    return Some(pid);
-                }
-            }
-        }
-    }
-
-    // gcloud CLI (if we haven't already tried it).
-    if !matches!(creds, ResolvedCredentials::GcloudCli) {
-        if let Ok(output) = io
-            .sys_shell(
-                "gcloud config get-value project 2>/dev/null".to_string(),
-                None,
-            )
-            .await
-        {
-            let pid = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !pid.is_empty() {
-                return Some(pid);
-            }
-        }
-    }
-
-    None
+    Ok(google_cloud_auth::project_id(adapter).await)
 }
 
-/// Read the ADC config file and extract `quota_project_id` (or `project_id`).
-async fn project_id_from_adc_config(io: &dyn RuntimeIo) -> Option<String> {
-    let config_dir = match io.env_get("CLOUDSDK_CONFIG".to_string()).await {
-        Ok(Some(dir)) if !dir.is_empty() => dir,
-        _ => {
-            let home = io.env_get("HOME".to_string()).await.ok()??;
-            format!("{home}/.config/gcloud")
+/// Get the quota project for the resolved credential source
+/// (`GOOGLE_CLOUD_QUOTA_PROJECT` always wins, matching google-auth).
+async fn quota_project_from_credentials(
+    creds: &ResolvedCredentials,
+    adapter: &BamlTokenIo,
+) -> Option<String> {
+    match creds {
+        ResolvedCredentials::CredentialsJson(json_str) => {
+            // Set-but-empty is honored, matching the fork: a misconfigured
+            // env var should be visible, not silently skipped.
+            if let Some(val) = adapter.env("GOOGLE_CLOUD_QUOTA_PROJECT").await {
+                return Some(val.trim().to_string());
+            }
+            google_cloud_auth::quota_project_id_from_json(json_str)
         }
-    };
-    let adc_path = format!("{config_dir}/application_default_credentials.json");
-
-    let handle = io
-        .fs_open(adc_path, BexExternalValue::String("r".into()))
-        .await
-        .ok()?;
-    let contents = io.fs_file_text(&handle).await.ok()?;
-    let parsed: serde_json::Value = serde_json::from_str(&contents).ok()?;
-
-    parsed
-        .get("quota_project_id")
-        .or_else(|| parsed.get("project_id"))
-        .and_then(|v| v.as_str())
-        .map(String::from)
+        ResolvedCredentials::CredentialsFile(path) => {
+            // Set-but-empty is honored, matching the fork: a misconfigured
+            // env var should be visible, not silently skipped.
+            if let Some(val) = adapter.env("GOOGLE_CLOUD_QUOTA_PROJECT").await {
+                return Some(val.trim().to_string());
+            }
+            let contents = adapter.read_file(path).await?;
+            google_cloud_auth::quota_project_id_from_json(&contents)
+        }
+        ResolvedCredentials::Adc => google_cloud_auth::quota_project_id(adapter).await,
+    }
 }
 
 /// Read a credentials file via `RuntimeIo`.
@@ -831,6 +720,9 @@ mod tests {
             .to_string()
     }
 
+    /// NOTE: generates a fresh RSA key per call, so every test's credential
+    /// material is unique and the fork's process-wide token cache can never
+    /// serve one test's token to another.
     fn test_service_account_json() -> String {
         let pem = gen_test_private_key_pem();
         serde_json::json!({
@@ -967,7 +859,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn credentials_content_inline_json() {
+    async fn credentials_content_inline_json_string() {
         let client = make_client_with_vertex_opts(VertexAiOptions {
             credentials_content: Some(test_service_account_json()),
             credentials: None,
@@ -981,17 +873,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn credentials_inline_json() {
+    async fn credentials_file_beats_content_and_never_cascades() {
+        // `credentials` wins over `credentials_content`, and an explicitly-set
+        // (but unreadable) file errors instead of cascading to the inline JSON.
         let client = make_client_with_vertex_opts(VertexAiOptions {
-            credentials: Some(test_service_account_json()),
-            credentials_content: None,
+            credentials: Some("/unreadable/service-account.json".to_string()),
+            credentials_content: Some(test_service_account_json()),
             location: None,
             project_id: None,
         });
-        let io = StubIo::with_token("ya29.from-service-account");
+        let io = StubIo::with_token("ya29.should-not-mint");
         let mut req = fake_request();
-        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
-        assert_bearer_token(&req);
+        let err = auth_vertex(&mut req, &client, Arc::new(io))
+            .await
+            .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("failed to open credentials file"),
+            "must fail on the file, not fall back to credentials_content: {msg}"
+        );
     }
 
     #[tokio::test]
@@ -1016,20 +916,65 @@ mod tests {
         let mut req = fake_request();
         auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
         assert_bearer_token(&req);
+        // A plain service account has no quota project.
+        assert!(!req.headers.contains_key("x-goog-user-project"));
     }
 
     #[tokio::test]
-    async fn credentials_content_takes_precedence() {
+    async fn credentials_file_dispatches_all_adc_types_not_just_service_accounts() {
+        // An `authorized_user` document through options.credentials proves the
+        // consumer routes through the fork's full type dispatch.
+        let user_json = serde_json::json!({
+            "type": "authorized_user",
+            "client_id": "vertex-file-cid",
+            "client_secret": "vertex-file-secret",
+            "refresh_token": "vertex-file-refresh",
+        })
+        .to_string();
         let client = make_client_with_vertex_opts(VertexAiOptions {
-            credentials_content: Some(test_service_account_json()),
-            credentials: Some("/should/not/be/read.json".to_string()),
+            credentials: Some("/fake/authorized-user.json".to_string()),
+            credentials_content: None,
             location: None,
             project_id: None,
         });
-        let io = StubIo::with_token("ya29.from-service-account");
+        let io = FsIo {
+            expected_path: "/fake/authorized-user.json".to_string(),
+            file_contents: user_json,
+            token_body: serde_json::json!({
+                "access_token": "ya29.from-authorized-user",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            })
+            .to_string(),
+        };
         let mut req = fake_request();
         auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
-        assert_bearer_token(&req);
+        assert_eq!(
+            req.headers.get("authorization").unwrap(),
+            "Bearer ya29.from-authorized-user",
+        );
+    }
+
+    #[tokio::test]
+    async fn credentials_option_rejects_inline_json() {
+        // Inline JSON is deliberately unsupported: `credentials` is a file
+        // path, exactly like GOOGLE_APPLICATION_CREDENTIALS in google-auth.
+        let client = make_client_with_vertex_opts(VertexAiOptions {
+            credentials: Some(test_service_account_json()),
+            credentials_content: None,
+            location: None,
+            project_id: None,
+        });
+        let io = StubIo::with_token("ya29.should-not-mint");
+        let mut req = fake_request();
+        let err = auth_vertex(&mut req, &client, Arc::new(io))
+            .await
+            .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("failed to open credentials file"),
+            "inline JSON must be treated as an (unreadable) path, got: {msg}"
+        );
     }
 
     #[tokio::test]
@@ -1064,7 +1009,7 @@ mod tests {
         let adc_json = serde_json::json!({
             "client_id": "test-client-id",
             "client_secret": "test-client-secret",
-            "refresh_token": "test-refresh-token",
+            "refresh_token": "vertex-adc-refresh-token",
             "type": "authorized_user",
             "token_uri": "https://fake-oauth.example.com/token",
         })
@@ -1093,6 +1038,224 @@ mod tests {
         assert_eq!(
             req.headers.get("authorization").unwrap(),
             "Bearer ya29.fake-test-token",
+        );
+    }
+
+    /// google-auth parity: ADC credentials carrying a quota project must
+    /// stamp `x-goog-user-project` (`Credentials.apply`).
+    #[tokio::test]
+    async fn quota_project_header_set_from_adc_file() {
+        let adc_json = serde_json::json!({
+            "client_id": "quota-client-id",
+            "client_secret": "quota-client-secret",
+            "refresh_token": "vertex-quota-refresh-token",
+            "type": "authorized_user",
+            "quota_project_id": "my-quota-project",
+            "token_uri": "https://fake-oauth.example.com/token",
+        })
+        .to_string();
+
+        let io = AdcIo {
+            http_call_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            env_vars: std::collections::HashMap::from([(
+                "GOOGLE_APPLICATION_CREDENTIALS".to_string(),
+                "/fake/quota-adc.json".to_string(),
+            )]),
+            files: std::collections::HashMap::from([(
+                "/fake/quota-adc.json".to_string(),
+                adc_json,
+            )]),
+            token_body: serde_json::json!({
+                "access_token": "ya29.quota-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            })
+            .to_string(),
+        };
+
+        let client = make_client("vertex-ai");
+        let mut req = fake_request();
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
+
+        assert_eq!(
+            req.headers.get("x-goog-user-project").unwrap(),
+            "my-quota-project",
+        );
+    }
+
+    /// An unreadable `options.credentials` file must fail project-id
+    /// resolution too — on the express-mode (API-key) path no token is ever
+    /// minted, so falling through to the env/ADC project chain would silently
+    /// mask the broken file.
+    #[tokio::test]
+    async fn broken_credentials_file_fails_project_resolution_not_masked() {
+        use bex_external_types::AsBexExternalValue;
+        let client = PrimitiveClient::new(
+            "test-google".to_string(),
+            "vertex-ai".to_string(),
+            PrimitiveClientOptions {
+                model: Some("gemini-pro".to_string()),
+                query_params: indexmap::IndexMap::from([(
+                    "key".to_string(),
+                    "my-api-key".to_string(),
+                )]),
+                provider_options: VertexAiOptions {
+                    credentials: Some("/missing/creds.json".to_string()),
+                    credentials_content: None,
+                    location: None,
+                    project_id: None,
+                }
+                .into_bex_external_value(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        // GOOGLE_CLOUD_PROJECT is set: the fallback COULD resolve a project,
+        // which is exactly the masking this test forbids.
+        let io = AdcIo {
+            http_call_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            env_vars: std::collections::HashMap::from([
+                (
+                    "GOOGLE_CLOUD_PROJECT".to_string(),
+                    "env-project".to_string(),
+                ),
+                (
+                    "GOOGLE_CLOUD_LOCATION".to_string(),
+                    "us-central1".to_string(),
+                ),
+            ]),
+            files: std::collections::HashMap::new(),
+            token_body: String::new(),
+        };
+
+        let mut req = fake_request();
+        req.url = format!(
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/{}/locations/us-central1/publishers/google/models/gemini-pro:generateContent",
+            crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER
+        );
+        let err = auth_vertex(&mut req, &client, Arc::new(io))
+            .await
+            .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("failed to open credentials file"),
+            "broken credentials must not be masked by the project fallback: {msg}"
+        );
+    }
+
+    /// The location placeholder is filled from `GOOGLE_CLOUD_LOCATION` when
+    /// `options.location` was not set at URL construction time.
+    #[tokio::test]
+    async fn location_placeholder_resolved_from_env() {
+        let adc_json = serde_json::json!({
+            "client_id": "loc-client-id",
+            "client_secret": "loc-client-secret",
+            "refresh_token": "vertex-location-refresh-token",
+            "type": "authorized_user",
+            "token_uri": "https://fake-oauth.example.com/token",
+        })
+        .to_string();
+
+        let io = AdcIo {
+            http_call_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            env_vars: std::collections::HashMap::from([
+                (
+                    "GOOGLE_APPLICATION_CREDENTIALS".to_string(),
+                    "/fake/loc-adc.json".to_string(),
+                ),
+                (
+                    "GOOGLE_CLOUD_LOCATION".to_string(),
+                    "europe-west4".to_string(),
+                ),
+            ]),
+            files: std::collections::HashMap::from([("/fake/loc-adc.json".to_string(), adc_json)]),
+            token_body: serde_json::json!({
+                "access_token": "ya29.location-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            })
+            .to_string(),
+        };
+
+        let client = make_client("vertex-ai");
+        let mut req = fake_request();
+        req.url = format!(
+            "https://{p}-aiplatform.googleapis.com/v1/projects/test/locations/{p}/publishers/google/models/gemini-pro:generateContent",
+            p = crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER
+        );
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
+
+        assert_eq!(
+            req.url,
+            "https://europe-west4-aiplatform.googleapis.com/v1/projects/test/locations/europe-west4/publishers/google/models/gemini-pro:generateContent",
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_location_is_an_actionable_error() {
+        let client = make_client("vertex-ai");
+        let mut req = fake_request();
+        req.url = format!(
+            "https://{p}-aiplatform.googleapis.com/v1/projects/test/locations/{p}/publishers/google/models/gemini-pro:generateContent",
+            p = crate::build_request::google::VERTEX_LOCATION_PLACEHOLDER
+        );
+        let err = auth_vertex(&mut req, &client, Arc::new(NoCredsIo))
+            .await
+            .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("Could not resolve location") && msg.contains("GOOGLE_CLOUD_LOCATION"),
+            "got: {msg}"
+        );
+    }
+
+    /// The URL placeholder is filled from the google-auth project chain
+    /// (here: the `GOOGLE_CLOUD_PROJECT` env var).
+    #[tokio::test]
+    async fn project_id_placeholder_resolved_from_env() {
+        let adc_json = serde_json::json!({
+            "client_id": "proj-client-id",
+            "client_secret": "proj-client-secret",
+            "refresh_token": "vertex-project-refresh-token",
+            "type": "authorized_user",
+            "token_uri": "https://fake-oauth.example.com/token",
+        })
+        .to_string();
+
+        let io = AdcIo {
+            http_call_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            env_vars: std::collections::HashMap::from([
+                (
+                    "GOOGLE_APPLICATION_CREDENTIALS".to_string(),
+                    "/fake/proj-adc.json".to_string(),
+                ),
+                (
+                    "GOOGLE_CLOUD_PROJECT".to_string(),
+                    "env-project".to_string(),
+                ),
+            ]),
+            files: std::collections::HashMap::from([("/fake/proj-adc.json".to_string(), adc_json)]),
+            token_body: serde_json::json!({
+                "access_token": "ya29.project-token",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+            })
+            .to_string(),
+        };
+
+        let client = make_client("vertex-ai");
+        let mut req = fake_request();
+        req.url = format!(
+            "https://us-central1-aiplatform.googleapis.com/v1/projects/{}/locations/us-central1/publishers/google/models/gemini-pro:generateContent",
+            crate::build_request::google::VERTEX_PROJECT_ID_PLACEHOLDER
+        );
+        auth_vertex(&mut req, &client, Arc::new(io)).await.unwrap();
+
+        assert!(
+            req.url.contains("/projects/env-project/"),
+            "placeholder must be replaced, got: {}",
+            req.url
         );
     }
 }

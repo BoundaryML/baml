@@ -4,10 +4,10 @@ use baml_base::Name;
 use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
 use baml_compiler2_tir::{
     inference::infer_scope_types,
-    interfaces::{package_implements_registry, type_implements_with_deps},
     package_interface::{ExportedType, package_interface, package_resolution_context},
     resolve::{ResolvedName, resolve_name_at_in_scope},
     ty::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr},
+    type_context::GlobalTypeContext,
 };
 use text_size::TextSize;
 
@@ -107,15 +107,9 @@ fn class_field_access() {
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.name; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       name: string
-    }
-    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-    }
-    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
     function user.f(x: user.Foo) -> string throws never {
       { : never
@@ -125,7 +119,7 @@ fn class_field_access() {
     class user.Foo$stream {
       name: string | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -149,26 +143,20 @@ fn unresolved_field() {
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.missing; }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       name: string
-    }
-    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-    }
-    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Foo { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Foo
     }
     function user.f(x: user.Foo) -> string throws never {
       { : never
         return x.missing : unknown
       }
-      !! 66..73: type `Foo` has no member `missing`
+      !! 64..73: type `Foo` has no member `missing`
     }
     class user.Foo$stream {
       name: string | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -186,26 +174,20 @@ function f(data: Data) -> string {
   return data.inner.foo;
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Data {
       name: string
-    }
-    function user.Data.to_json(self: user.Data) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "name": baml.json.to_json(self.name) } : map<string, baml.json.json>
-    }
-    function user.Data.from_json(j: baml.json.json) -> user.Data throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Data { name: baml.json.from_json<string>(baml.json.field(j, "name")) } : user.Data
     }
     function user.f(data: user.Data) -> string throws never {
       { : never
         return data.inner.foo : unknown
       }
-      !! 78..83: type `Data` has no member `inner`
+      !! 73..87: type `Data` has no member `inner`
     }
     class user.Data$stream {
       name: string | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -223,26 +205,65 @@ function f(s: Sentiment) -> string {
   return s.feelin;
 }",
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Sentiment {
       feeling: string
-    }
-    function user.Sentiment.to_json(self: user.Sentiment) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "feeling": baml.json.to_json(self.feeling) } : map<string, baml.json.json>
-    }
-    function user.Sentiment.from_json(j: baml.json.json) -> user.Sentiment throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Sentiment { feeling: baml.json.from_json<string>(baml.json.field(j, "feeling")) } : user.Sentiment
     }
     function user.f(s: user.Sentiment) -> string throws never {
       { : never
         return s.feelin : unknown
       }
-      !! 85..91: type `Sentiment` has no member `feelin`
+      !! 83..91: type `Sentiment` has no member `feelin`
     }
     class user.Sentiment$stream {
       feeling: string | null
     }
-    "#);
+    ");
+}
+
+#[test]
+fn unresolved_dotted_root_span_should_narrow_to_root() {
+    // B-539 regression: when the root of a dotted access (`o.value`) is an
+    // unresolved name, the diagnostic should underline only `o`, not the whole
+    // `o.value` expression.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "\
+function f() -> string {
+  return o.value;
+}",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f() -> string throws never {
+      { : never
+        return o.value : unknown
+      }
+      !! 34..35: unresolved name: o
+    }
+    ");
+}
+
+#[test]
+fn unknown_field_access_uses_narrowing_diagnostic() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "\
+function load(raw: unknown) -> string {
+  return raw.email.to_lower_case();
+}",
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("cannot access field `email` on `unknown`"),
+        "expected unknown-specific field access diagnostic, got:\n{output}"
+    );
+    assert!(
+        !output.contains("type `unknown` has no member `email`"),
+        "unknown field access should not use the generic missing-member wording:\n{output}"
+    );
 }
 
 #[test]
@@ -306,24 +327,18 @@ fn enum_variant_resolution() {
 fn resolve_class_fields_query() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "class Point { x int\ny float\nlabel string }");
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Point {
       x: int
       y: float
       label: string
-    }
-    function user.Point.to_json(self: user.Point) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "x": baml.json.to_json(self.x), "y": baml.json.to_json(self.y), "label": baml.json.to_json(self.label) } : map<string, baml.json.json>
-    }
-    function user.Point.from_json(j: baml.json.json) -> user.Point throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Point { x: baml.json.from_json<int>(baml.json.field(j, "x")), y: baml.json.from_json<float>(baml.json.field(j, "y")), label: baml.json.from_json<string>(baml.json.field(j, "label")) } : user.Point
     }
     class user.Point$stream {
       x: int | null
       y: float | null
       label: string | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -344,20 +359,14 @@ fn class_field_bigint() {
     // wires up the bigint.to_json() method.
     let mut db = make_db();
     let file = db.add_file("test.baml", "class Foo { x bigint }");
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       x: bigint
-    }
-    function user.Foo.to_json(self: user.Foo) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-      map { "x": baml.json.to_json(self.x) } : map<string, baml.json.json>
-    }
-    function user.Foo.from_json(j: baml.json.json) -> user.Foo throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-      Foo { x: baml.json.from_json<bigint>(baml.json.field(j, "x")) } : user.Foo
     }
     class user.Foo$stream {
       x: bigint | null
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -504,7 +513,7 @@ class Dog {
         "impl.baml",
         r#"
 interface ToJson {
-    function to_json(self) -> string
+    function to_json(self) -> string throws never
 }
 
 implements ToJson for Dog {
@@ -517,9 +526,9 @@ implements ToJson for Dog {
 
     let item_tree = baml_compiler2_hir::file_item_tree(&db, impl_file);
     assert_eq!(
-        item_tree.implements_for.len(),
+        item_tree.free_impls.len(),
         1,
-        "cross-file class target must remain a first-class ImplementsFor record"
+        "cross-file class target must remain a first-class out-of-body impl record"
     );
 
     let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
@@ -528,11 +537,31 @@ implements ToJson for Dog {
         "cross-file class target should not produce diagnostics: {diagnostics:#?}"
     );
 
-    let registry = package_implements_registry(&db, PackageId::new(&db, Name::new("user")));
-    let dog = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog"));
-    let to_json = QualifiedTypeName::new(Name::new("user"), vec![], Name::new("ToJson"));
+    // Membership goes through the canonical L1 seam (GlobalTypeContext's
+    // `TypeContext::implements_interface`); no type aliases are involved here.
+    use baml_type::normalize::TypeContext;
+    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let res_ctx = package_resolution_context(&db, pkg_id);
+    let aliases = std::collections::HashMap::new();
+    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
+    let ctx = GlobalTypeContext {
+        db: &db,
+        res_ctx,
+        aliases: &aliases,
+        bounds: &bounds,
+    };
+    let dog = Ty::Class(
+        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog")),
+        vec![],
+        TyAttr::default(),
+    );
+    let to_json = baml_type::Interface::new(
+        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("ToJson")),
+        vec![],
+        vec![],
+    );
     assert!(
-        registry.implements(&dog, &to_json),
+        ctx.implements_interface(&dog, &to_json),
         "out-of-body implementation in another file should register Dog <: ToJson"
     );
 }
@@ -543,20 +572,30 @@ implements ToJson for Dog {
 /// per-package lookup would miss them).
 #[test]
 fn builtin_equals_compare_visible_from_user_package() {
+    use baml_type::normalize::TypeContext;
+
     let mut db = make_db();
     // A user file so the `user` package exists; `Bare` implements nothing.
     db.add_file("main.baml", "class Bare { x: int }");
     let user_pkg = PackageId::new(&db, Name::new("user"));
 
-    let equals = QualifiedTypeName::new(
-        Name::new("baml"),
-        vec![Name::new("ops")],
-        Name::new("Equals"),
+    let equals = baml_type::Interface::new(
+        QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("ops")],
+            Name::new("Equals"),
+        ),
+        vec![],
+        vec![],
     );
-    let compare = QualifiedTypeName::new(
-        Name::new("baml"),
-        vec![Name::new("ops")],
-        Name::new("Compare"),
+    let compare = baml_type::Interface::new(
+        QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("ops")],
+            Name::new("Compare"),
+        ),
+        vec![],
+        vec![],
     );
     let int_ty = Ty::int();
     let u8_ty = Ty::uint8array();
@@ -566,15 +605,27 @@ fn builtin_equals_compare_visible_from_user_package() {
         TyAttr::default(),
     );
 
+    // The membership query walks the interface's package (`baml`) via the orphan
+    // rule, so the builtin primitive impls are visible from the user package.
+    let res_ctx = package_resolution_context(&db, user_pkg);
+    let aliases = std::collections::HashMap::new();
+    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
+    let ctx = GlobalTypeContext {
+        db: &db,
+        res_ctx,
+        aliases: &aliases,
+        bounds: &bounds,
+    };
+
     // int implements both Equals and Compare (impls in `baml`).
-    assert!(type_implements_with_deps(&db, user_pkg, &int_ty, &equals));
-    assert!(type_implements_with_deps(&db, user_pkg, &int_ty, &compare));
+    assert!(ctx.implements_interface(&int_ty, &equals));
+    assert!(ctx.implements_interface(&int_ty, &compare));
     // uint8array implements Equals but not Compare.
-    assert!(type_implements_with_deps(&db, user_pkg, &u8_ty, &equals));
-    assert!(!type_implements_with_deps(&db, user_pkg, &u8_ty, &compare));
+    assert!(ctx.implements_interface(&u8_ty, &equals));
+    assert!(!ctx.implements_interface(&u8_ty, &compare));
     // A class with no `implements` satisfies neither.
-    assert!(!type_implements_with_deps(&db, user_pkg, &bare, &equals));
-    assert!(!type_implements_with_deps(&db, user_pkg, &bare, &compare));
+    assert!(!ctx.implements_interface(&bare, &equals));
+    assert!(!ctx.implements_interface(&bare, &compare));
 }
 
 #[test]

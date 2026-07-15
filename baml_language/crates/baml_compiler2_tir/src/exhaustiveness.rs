@@ -289,10 +289,8 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
         } => {
             out.push_str("Assoc<");
             write_ty_identity(out, base);
-            if let Some(interface) = interface {
-                out.push_str(" as ");
-                write_ty_identity(out, interface);
-            }
+            out.push_str(" as ");
+            write_ty_identity(out, &interface.to_ty());
             let _ = write!(out, ".{member}>");
         }
         Ty::Int { .. } => out.push_str("P:Int"),
@@ -339,6 +337,7 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
         Ty::BuiltinUnknown { .. } => out.push_str("BUnk"),
         Ty::Unknown { .. } => out.push_str("Unk"),
         Ty::Error { .. } => out.push_str("Err"),
+        Ty::Infer { .. } => out.push_str("Inf"),
         Ty::RustType { .. } => out.push_str("Rust"),
         Ty::Type { .. } => out.push_str("Type"),
         Ty::Function {
@@ -366,15 +365,11 @@ fn write_ty_identity(out: &mut String, ty: &Ty) {
             write_ty_identity(out, error);
             out.push('>');
         }
-        // `Resource`/`PromptAst`/`WatchAccessor` are never produced by TIR; the
+        // `Resource`/`PromptAst` are never produced by TIR; the
         // arms exist only so the match stays exhaustive over the shared
         // `baml_type::Ty`.
         Ty::Resource { .. } => out.push_str("Res"),
         Ty::PromptAst { .. } => out.push_str("PAst"),
-        Ty::WatchAccessor(inner, _) => {
-            out.push_str("Watch:");
-            write_ty_identity(out, inner);
-        }
     }
 }
 

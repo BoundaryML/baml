@@ -87,6 +87,8 @@ function http_server.Greeter.handle(self: http_server.Greeter, req: baml.http.Re
     call baml.String.to_utf8
     store_var _4
     load_const 200
+    load_type string
+    load_type string
     alloc_map 0
     load_var _4
     sys_op baml.http.Response.new
@@ -138,6 +140,8 @@ function http_server.server_bound_method_handler() -> string {
     bin_op +
     load_const "/"
     bin_op +
+    load_type string
+    load_type string
     alloc_map 0
     load_const "there"
     init_instance baml.http.Request .method, .url, .headers, .body
@@ -172,6 +176,8 @@ function http_server.server_custom_config() -> int {
     bin_op +
     load_const "/"
     bin_op +
+    load_type string
+    load_type string
     alloc_map 0
     load_const ""
     init_instance baml.http.Request .method, .url, .headers, .body
@@ -255,6 +261,8 @@ function http_server.server_rejects_oversized_body() -> int {
     bin_op +
     load_const "/"
     bin_op +
+    load_type string
+    load_type string
     alloc_map 0
     load_const "this body is much longer than eight bytes"
     init_instance baml.http.Request .method, .url, .headers, .body
@@ -295,7 +303,8 @@ function http_server.server_reserve_after_cancel() -> string {
     load_var _4
     call baml.future.Future.cancel
     pop 1
-    load_const 100
+    load_const 100n
+    call baml.time.Duration.from_milliseconds
     sys_op baml.sys.sleep
     pop 1
     load_var server
@@ -303,7 +312,7 @@ function http_server.server_reserve_after_cancel() -> string {
     load_const null
     load_const null
     spawn
-    store_var _14
+    store_var _15
     load_const "http://"
     load_deref ?1
     load_field .addr
@@ -314,7 +323,7 @@ function http_server.server_reserve_after_cancel() -> string {
     call baml.http.fetch
     sys_op baml.http.Response.text
     store_var served_again
-    load_var _14
+    load_var _15
     call baml.future.Future.cancel
     pop 1
     load_var served
@@ -384,6 +393,8 @@ function http_server.server_roundtrip() -> string {
     bin_op +
     load_const "/echo"
     bin_op +
+    load_type string
+    load_type string
     alloc_map 0
     load_const "ping"
     init_instance baml.http.Request .method, .url, .headers, .body

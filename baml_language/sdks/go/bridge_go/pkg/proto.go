@@ -2,11 +2,13 @@ package pkg
 
 import (
 	"fmt"
+	"math/big"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 
-	pb "bridge_go/cffi/proto/baml_core/cffi/v1"
+	pb "bridge_go/cffi/proto/baml_bridge/cffi/v1"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -217,7 +219,7 @@ func thrownError(kind string, value *pb.BamlOutboundValue, trace []string) error
 	className := ""
 	message := ""
 	if cv := value.GetClassValue(); cv != nil {
-		className = cv.GetName().GetName()
+		className = cv.GetName()
 		for _, f := range cv.GetFields() {
 			if f.GetKey() == "message" {
 				message = f.GetValue().GetStringValue()
@@ -258,16 +260,10 @@ func outboundToGo(val *pb.BamlOutboundValue) (any, error) {
 	case *pb.BamlOutboundValue_Uint8ArrayValue:
 		return v.Uint8ArrayValue, nil
 	case *pb.BamlOutboundValue_EnumValue:
-		name := ""
-		if v.EnumValue.Name != nil {
-			name = v.EnumValue.Name.Name
-		}
+		name := v.EnumValue.GetName()
 		return DynamicEnum{Name: name, Value: v.EnumValue.Value}, nil
 	case *pb.BamlOutboundValue_ClassValue:
-		name := ""
-		if v.ClassValue.Name != nil {
-			name = v.ClassValue.Name.Name
-		}
+		name := v.ClassValue.GetName()
 		fields := make(map[string]any)
 		for _, f := range v.ClassValue.Fields {
 			fv, err := outboundToGo(f.Value)
@@ -311,12 +307,27 @@ func outboundToGo(val *pb.BamlOutboundValue) (any, error) {
 	case *pb.BamlOutboundValue_LiteralValue:
 		lit := v.LiteralValue
 		switch l := lit.Literal.(type) {
-		case *pb.BamlTyLiteral_StringLiteral:
-			return l.StringLiteral.Value, nil
-		case *pb.BamlTyLiteral_IntLiteral:
-			return l.IntLiteral.Value, nil
-		case *pb.BamlTyLiteral_BoolLiteral:
-			return l.BoolLiteral.Value, nil
+		case *pb.BamlLiteralValue_StringValue:
+			return l.StringValue, nil
+		case *pb.BamlLiteralValue_IntValue:
+			return l.IntValue, nil
+		case *pb.BamlLiteralValue_BoolValue:
+			return l.BoolValue, nil
+		case *pb.BamlLiteralValue_BigintValue:
+			// Hex / base sixteen on the wire (optional leading minus, no `0x`
+			// prefix), matching `bigint_value`.
+			bi, ok := new(big.Int).SetString(l.BigintValue, 16)
+			if !ok {
+				return nil, fmt.Errorf("invalid bigint literal: %q", l.BigintValue)
+			}
+			return bi, nil
+		case *pb.BamlLiteralValue_FloatValue:
+			// Source text on the wire (mirrors `BamlTyLiteral.float_value`).
+			f, err := strconv.ParseFloat(l.FloatValue, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid float literal: %q", l.FloatValue)
+			}
+			return f, nil
 		default:
 			return nil, fmt.Errorf("unknown literal type: %T", lit.Literal)
 		}

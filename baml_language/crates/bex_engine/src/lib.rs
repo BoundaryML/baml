@@ -72,6 +72,9 @@ mod conversion;
 mod function_call_context;
 mod future;
 mod thread;
+pub mod trace_heap;
+mod trace_value_encode;
+pub mod value_capture;
 use std::{
     collections::HashMap,
     sync::{
@@ -82,10 +85,7 @@ use std::{
 
 use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
-use ::bex_vm_types::{
-    RootHaver,
-    types::{FutureId, InterfaceImplsByPackage},
-};
+use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 pub use bex_events::{
@@ -99,19 +99,26 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
-use bex_vm::{BexVm, VmExecState};
+use bex_vm::{
+    BexVm, VmCallCaptureKind, VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask,
+    VmEventSourceLocation, VmExecState,
+};
 use bex_vm_types::{
     FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, Object, SharedGlobals, SysOp,
-    TaskGroupInner, Value, VmGlobals,
+    TaskGroupInner, Value, ValueKind, VmGlobals,
 };
 pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
-pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
+pub use function_call_context::{
+    BoundaryContext, BoundaryStorageContext, CaptureDefaults, FunctionCallContext,
+    FunctionCallContextBuilder,
+};
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 pub use tokio_util::sync::CancellationToken;
 
+use crate::value_capture::{CaptureKind, TraceCaptureProducer, TraceLogMetadata};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
     thread::{BexThread, ChildErrorQueue},
@@ -232,6 +239,61 @@ pub struct UserFunctionInfo {
     /// `baml run --list` can annotate LLM functions inline without
     /// reaching back into the heap to inspect `body_meta`.
     pub is_llm: bool,
+}
+
+pub struct BexCallResult {
+    pub value: Result<BexExternalValue, EngineError>,
+    pub entry_call_ref: CallRef,
+}
+
+#[derive(Clone)]
+struct RootValueCaptureContext {
+    boundary_id: bex_events::ids::BoundaryId,
+    call: bex_events::run::TraceCallKey,
+    producer: TraceCaptureProducer,
+}
+
+#[derive(Clone)]
+struct LogCaptureContext {
+    boundary_id: bex_events::ids::BoundaryId,
+    producer: TraceCaptureProducer,
+}
+
+#[derive(Clone)]
+struct CallValueCaptureContext {
+    boundary_id: bex_events::ids::BoundaryId,
+    producer: TraceCaptureProducer,
+}
+
+impl CallValueCaptureContext {
+    fn input_capture_hook(&self) -> Arc<dyn VmCallInputCaptureHook> {
+        Arc::new(EngineCallInputCaptureHook {
+            boundary_id: self.boundary_id,
+            producer: self.producer.clone(),
+        })
+    }
+}
+
+struct EngineCallInputCaptureHook {
+    boundary_id: bex_events::ids::BoundaryId,
+    producer: TraceCaptureProducer,
+}
+
+impl VmCallInputCaptureHook for EngineCallInputCaptureHook {
+    fn capture_call_input(&self, capture: VmCallInputCapture<'_>) {
+        let _ = self.producer.capture_with(
+            self.boundary_id,
+            capture.call,
+            CaptureKind::CallInput,
+            |trace_heap| {
+                trace_heap.copy_named_values_from_bex_heap(
+                    capture.heap,
+                    capture.permit,
+                    capture.entries,
+                )
+            },
+        );
+    }
 }
 
 /// Internal call argument after host binding has distinguished omission from
@@ -444,7 +506,7 @@ fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]
             loc.function_name.as_str(),
         )
     }));
-    write!(out, "uncaught throw: {value:?}").unwrap();
+    write!(out, "uncaught throw: {}", value.render_readable()).unwrap();
     out
 }
 
@@ -487,6 +549,7 @@ pub fn cancelled_unhandled_throw() -> EngineError {
     EngineError::UnhandledThrow {
         value: Box::new(BexExternalValue::Instance {
             class_name: CANCELLED_PANIC_CLASS.to_string(),
+            type_args: vec![],
             fields,
         }),
         trace: Vec::new(),
@@ -620,16 +683,30 @@ pub struct BexEngine {
 
     futures: FutureManager,
 
-    /// Per-program interface-impl registry (BEP-044), kept here so every spawned
-    /// VM (including post-`$init` workers) sees the same map without cloning the
-    /// underlying `IndexMap`. Drives the interface-method resolver and `type`
-    /// reflection.
-    interface_impls: Arc<InterfaceImplsByPackage>,
+    /// Loaded packages (name → `Object::Package` pointer), shared with every VM
+    /// so spawned workers see the same index. The source of truth for interface
+    /// dispatch, recursive aliases, and named-item lookup.
+    packages: Arc<indexmap::IndexMap<baml_type::Name, bex_vm_types::HeapPtr>>,
+
+    /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
+    /// from `packages` and shared with every spawned VM (each `BexVm` would
+    /// otherwise re-resolve them from `packages` on construction).
+    error_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
+    panic_class_ptrs: Arc<[bex_vm_types::HeapPtr]>,
 
     /// Snapshot of the `BAML_PROFILE` master switch, taken once at
     /// construction (the config is read-once per process). Gates every
     /// profiling emission and the per-resume ring refresh.
     prof_enabled: bool,
+
+    /// Whether this engine's profiling lifecycle has been activated
+    /// (metadata registered with the profiling consumer). Engines built via
+    /// [`BexEngine::new`] activate at construction. Candidate engines built
+    /// via [`BexEngine::new_with_deferred_profiling`] stay inactive until a
+    /// winning conditional commit calls [`BexEngine::activate_profiling`];
+    /// a superseded candidate therefore drops without registering metadata
+    /// or emitting an `engine_closed` tombstone.
+    prof_activated: AtomicBool,
 }
 
 impl Drop for BexEngine {
@@ -639,25 +716,24 @@ impl Drop for BexEngine {
     /// closes its `.bamlprof`, and frees its metadata. Without this,
     /// long-lived engine-churning hosts (LSP recompiles) accumulate open
     /// files and heartbeat work for dead engines.
+    ///
+    /// An engine whose profiling lifecycle was never activated (a discarded
+    /// candidate) drops quietly: it registered no metadata, so it must not
+    /// emit a close notification or leave a closed-engine tombstone.
     fn drop(&mut self) {
-        if self.prof_enabled {
+        if self.prof_enabled && self.prof_activated.load(Ordering::Acquire) {
             bex_events::prof::engine_closed(self.engine_id.0);
         }
     }
 }
 
 /// Maps the M0 [`ProgramMetadata`] (the canonical per-run function table)
-/// into the `.bamlprof` header rows. The thin proto row is a subset of the
-/// rich table for now; extending the proto with display names / definition
-/// keys is a follow-up.
+/// into the `.bamlprof` header rows.
 fn prof_engine_metadata(meta: &ProgramMetadata) -> bex_events::prof::EngineProfileMetadata {
-    use std::fmt::Write as _;
-    let mut program_id = String::with_capacity(32);
-    for byte in meta.program_id.0 {
-        let _ = write!(program_id, "{byte:02x}");
-    }
     bex_events::prof::EngineProfileMetadata {
-        program_id,
+        program_id: hex_bytes(&meta.program_id.0),
+        source_snapshot_id: meta.source_snapshot_id.as_ref().map(|id| hex_bytes(&id.0)),
+        revision_id: meta.revision_id.as_ref().map(|id| id.0.clone()),
         functions: meta
             .function_table
             .functions
@@ -674,9 +750,24 @@ fn prof_engine_metadata(meta: &ProgramMetadata) -> bex_events::prof::EngineProfi
                     bex_events::RuntimeFunctionKind::Native
                     | bex_events::RuntimeFunctionKind::NativeUnresolved => "native".to_string(),
                 },
+                definition_key: f.definition_key.as_ref().map(|key| key.0.clone()),
+                owner_type: f.owner_type.as_ref().map(|key| key.0.clone()),
+                parent_function: f.parent_function.as_ref().map(|key| key.0.clone()),
+                lambda_path: f.lambda_path.clone(),
+                package_name: f.package_name.clone(),
+                namespace: f.namespace.clone(),
             })
             .collect(),
     }
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        let _ = write!(encoded, "{byte:02x}");
+    }
+    encoded
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -695,6 +786,27 @@ fn _default_round_robin_start() -> usize {
     {
         nanos as usize
     }
+}
+
+fn epoch_ms() -> u64 {
+    use web_time::{SystemTime, UNIX_EPOCH};
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_millis());
+    u64::try_from(millis).unwrap_or(u64::MAX)
+}
+
+fn truncate_preview(mut value: String, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value;
+    }
+    let cut = value
+        .char_indices()
+        .nth(max_chars)
+        .map_or(value.len(), |(idx, _)| idx);
+    value.truncate(cut);
+    value.push_str("...");
+    value
 }
 
 /// Extract an owned `RuntimeTy` from a `SysOp::BamlHostCallHostValue` type-arg operand
@@ -731,7 +843,8 @@ fn host_call_type_arg(
     // the await a moving GC may relocate/collect this `Object::Type` and the raw
     // pointer would dangle. The caller clones the `RuntimeTy` out before awaiting.
     match unsafe { ptr.get() } {
-        Object::Type(ty) => Ok((**ty).clone()),
+        // `Object::Type` stores a realized type; widen it to the boundary `RuntimeTy`.
+        Object::Type(ty) => Ok((**ty).clone().into()),
         _ => Err(bad_slot()),
     }
 }
@@ -875,7 +988,11 @@ fn value_runtime_baml_ty(value: Value, _proof: bex_heap::PermitProof<'_>) -> Opt
                     };
                     Some(RuntimeTy::Class(
                         class.name.clone(),
-                        instance.class_type_args.clone(),
+                        instance
+                            .class_type_args
+                            .iter()
+                            .map(baml_type::RuntimeTy::from)
+                            .collect(),
                         TyAttr::default(),
                     ))
                 }
@@ -976,6 +1093,69 @@ fn derive_lambda_metadata(fqn: &str) -> (Option<bex_events::DefinitionKey>, Opti
         (!parent.is_empty()).then(|| bex_events::DefinitionKey(format!("function:{parent}")));
     let lambda_path = Some(fqn[lambda_start..].to_string());
     (parent_function, lambda_path)
+}
+
+// ── Friendly generic-inference errors ───────────────────────────────────────
+//
+// Inbound generic-call failures are surfaced to host callers, so their messages
+// must read for someone with no type-theory background. Two distinct shapes:
+//
+//   - *must-specify* — BAML found no evidence to infer `var` (a return-/body-only
+//     var, or a value position that came up empty). The fix is for the caller to
+//     name the type, so the message shows how.
+//   - *conflict* — the arguments demand mutually incompatible types for `var`;
+//     naming a type would not help (the args still wouldn't match), so the
+//     message explains the clash instead of suggesting a binding.
+//
+// Host call syntax is Python for now (subscript `f[int](...)` / `_types=`); a
+// per-host renderer is future work (see `03c-impl-guide`).
+
+/// The bare name the host caller used (e.g. `one_type_arg`), stripped of the
+/// engine's namespace/package qualification (`user.generic_tests.one_type_arg`)
+/// so the call examples in an error message match what the user actually typed.
+fn host_display_name(function_name: &str) -> &str {
+    function_name.rsplit('.').next().unwrap_or(function_name)
+}
+
+/// A generic call whose `var` could not be inferred from the arguments — tell the
+/// caller to specify it, with the Python subscript and `_types=` forms.
+fn friendly_must_specify(function_name: &str, generic_params: &[String], var: &str) -> String {
+    let name = host_display_name(function_name);
+    let placeholders = if generic_params.is_empty() {
+        "int".to_string()
+    } else {
+        generic_params
+            .iter()
+            .map(|_| "int")
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    format!(
+        "`{name}` is a generic BAML function, and BAML could not infer a type for its type \
+         parameter `{var}` from the call arguments. Python callers must specify it explicitly \
+         as a subscript — e.g. `{name}[{placeholders}](...)`."
+    )
+}
+
+/// A generic call whose arguments demand incompatible types for some `TypeVar`.
+/// `detail` is the plain-language clash from the unifier; we only add the call
+/// frame.
+fn friendly_inference_conflict(function_name: &str, detail: &str) -> String {
+    let name = host_display_name(function_name);
+    format!("`{name}` was called with arguments whose types can't be reconciled. {detail}")
+}
+
+/// A generic call whose argument value doesn't inhabit its (now concrete)
+/// declared parameter type — e.g. a caller-specified `T=int` contradicted by a
+/// `string` actual (03b C4). `detail` is the structural clash from
+/// [`crate::conversion::check_generic_arg`]; we add the call frame and the
+/// 1-based argument position.
+fn friendly_arg_type_mismatch(function_name: &str, arg_index: usize, detail: &str) -> String {
+    let name = host_display_name(function_name);
+    format!(
+        "`{name}` was called with a value that doesn't match its type: argument {} {detail}.",
+        arg_index + 1
+    )
 }
 
 impl BexEngine {
@@ -1113,6 +1293,25 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_ops::SysOps>,
         argv: Vec<String>,
     ) -> Result<Self, EngineError> {
+        let engine = Self::new_with_deferred_profiling(bytecode_program, sys_ops, argv)?;
+        engine.activate_profiling();
+        Ok(engine)
+    }
+
+    /// Like [`BexEngine::new`], but keeps the profiling lifecycle inactive.
+    ///
+    /// Used for *candidate* engines that may be discarded before ever
+    /// becoming the installed engine (LSP conditional commit): construction —
+    /// including `$init` — runs normally, but no profiling metadata is
+    /// registered and dropping the candidate emits no `engine_closed`
+    /// notification. The winning commit calls
+    /// [`BexEngine::activate_profiling`] immediately before making the
+    /// engine reachable.
+    pub fn new_with_deferred_profiling(
+        bytecode_program: bex_vm_types::Program,
+        sys_ops: std::sync::Arc<sys_ops::SysOps>,
+        argv: Vec<String>,
+    ) -> Result<Self, EngineError> {
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
@@ -1121,7 +1320,7 @@ impl BexEngine {
         // BEX profiling event stream: snapshot the master switch once
         // (plan §2.2). The engine id minted above demuxes both the host
         // event identity and this engine's `.bamlprof`.
-        let prof_enabled = bex_events::prof::ProfConfig::global().enabled;
+        let prof_enabled = bex_events::prof::ProfConfig::global().is_enabled();
 
         // Extract package_init_order before consuming bytecode_program.
         let package_init_order = bytecode_program.package_init_order.clone();
@@ -1169,15 +1368,9 @@ impl BexEngine {
                 obj
             })
             .collect();
-        if prof_enabled {
-            // The .bamlprof header consumes the M0 metadata table (its ids
-            // match the ids stamped on each Function above — same walk
-            // order, same 1-based sequence).
-            bex_events::prof::register_engine_metadata(
-                engine_id.0,
-                prof_engine_metadata(&program_metadata),
-            );
-        }
+        // Profiling metadata registration is deferred to
+        // `activate_profiling()` so discarded candidate engines never leave
+        // consumer-side state (`BexEngine::new` activates immediately).
 
         // Pre-compute class and enum indices before moving objects to heap.
         // This is used for allocating instances/variants from sys-op results.
@@ -1205,8 +1398,20 @@ impl BexEngine {
             })
             .collect();
 
-        // Create the unified heap with compile-time objects
-        let heap = BexHeap::new(compile_time_objects);
+        // Create the unified heap with compile-time objects, additionally
+        // allocating the per-package `Object::Package` / `Object::ImplRule`
+        // objects and the `vm.packages` index.
+        let (heap, vm_packages) = bex_vm::package_load::build_heap_with_packages(
+            compile_time_objects,
+            &bytecode.packages,
+        );
+        // Shared with every VM so spawned workers see the same package index
+        // without re-resolving it.
+        let packages = Arc::new(vm_packages);
+        // Resolve the builtin error/panic class pointers once; shared with every
+        // spawned VM rather than re-resolved per `BexVm::new`.
+        let error_class_ptrs = bex_vm::vm::resolve_error_class_ptrs(&packages);
+        let panic_class_ptrs = bex_vm::vm::resolve_panic_class_ptrs(&packages);
 
         // Convert ObjectIndex -> HeapPtr for function lookup table.
         // Now that the heap exists, we can get stable pointers to compile-time objects.
@@ -1259,9 +1464,6 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
-        let interface_impls: Arc<InterfaceImplsByPackage> =
-            Arc::new(bytecode.interface_impls.clone());
-
         // Run $init for each package in dependency order.
         // $init evaluates top-level let-binding initializers and stores their
         // results into the global slots via StoreGlobal instructions.
@@ -1271,20 +1473,16 @@ impl BexEngine {
                 let mut vm = BexVm::new(
                     Arc::clone(&heap),
                     VmGlobals::Owned(globals_pool.clone()),
-                    resolved_class_names
-                        .iter()
-                        .chain(resolved_enum_names.iter())
-                        .map(|(k, v)| (k.clone(), *v))
-                        .collect(),
                     #[cfg(not(target_arch = "wasm32"))]
                     Arc::clone(&park_requested),
                     Arc::clone(&argv),
-                    Arc::clone(&interface_impls),
+                    Arc::clone(&packages),
+                    Arc::clone(&error_class_ptrs),
+                    Arc::clone(&panic_class_ptrs),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
-                // bytecode (no async ops), but we loop to handle any intermediate
-                // notifications gracefully.
+                // bytecode, but events and GC safepoints may still yield.
                 loop {
                     match vm.exec() {
                         Ok(VmExecState::Complete(_)) => {
@@ -1297,10 +1495,6 @@ impl BexEngine {
                                 }
                             };
                             break;
-                        }
-                        Ok(VmExecState::Notify(_)) => {
-                            // Ignore watch notifications during init.
-                            continue;
                         }
                         Ok(VmExecState::Event { .. }) => {
                             // Handle events during $init: push null and continue.
@@ -1381,7 +1575,9 @@ impl BexEngine {
             template_strings_macros: Arc::new(bytecode.template_strings_macros),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
-            type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
+            type_alias_definitions: Arc::new(bex_vm::package_load::all_recursive_type_aliases(
+                &packages,
+            )),
             runtime_io,
         };
 
@@ -1406,9 +1602,35 @@ impl BexEngine {
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
             futures: FutureManager::new(futures_permit),
-            interface_impls,
+            packages,
+            error_class_ptrs,
+            panic_class_ptrs,
             prof_enabled,
+            prof_activated: AtomicBool::new(false),
         })
+    }
+
+    /// Activate this engine's profiling lifecycle: register the `.bamlprof`
+    /// header metadata with the profiling consumer. Idempotent; a no-op when
+    /// the `BAML_PROFILE` master switch is off.
+    ///
+    /// The .bamlprof header consumes the M0 metadata table (its ids match
+    /// the ids stamped on each Function during construction — same walk
+    /// order, same 1-based sequence).
+    pub fn activate_profiling(&self) {
+        if !self.prof_enabled {
+            return;
+        }
+        if self
+            .prof_activated
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            bex_events::prof::register_engine_metadata(
+                self.engine_id.0,
+                prof_engine_metadata(&self.program_metadata),
+            );
+        }
     }
 
     #[must_use]
@@ -1462,7 +1684,7 @@ impl BexEngine {
     /// re-entry that can emit — `set_entry_point`, the loop-head exec, and
     /// `inject_sysop_throw`'s unwind all push through this snapshot.
     fn prof_refresh_vm_ring(&self, vm: &mut bex_vm::BexVm) {
-        vm.prof_ring = if self.prof_enabled {
+        vm.prof_ring = if self.prof_enabled && !vm.prof_suppressed {
             Some(bex_events::prof::ring_for_engine(self.engine_id.0).ring())
         } else {
             None
@@ -1477,8 +1699,13 @@ impl BexEngine {
         &self,
         vm: &mut bex_vm::BexVm,
         status: bex_events::prof::record::FunctionEndStatus,
-    ) {
-        if let Some(call_id) = vm.pending_sysop_call_id.take() {
+    ) -> Option<u64> {
+        let call_id = vm.pending_sysop_call_id.take();
+        vm.pending_sysop_capture_mask = VmCaptureMask::disabled();
+        if vm.prof_ring.is_none() {
+            return call_id;
+        }
+        if let Some(call_id) = call_id {
             self.prof_emit(&bex_events::prof::record::RawRecord::EndFunction {
                 status,
                 thread_id: BexThreadId(vm.prof_thread_id),
@@ -1486,6 +1713,7 @@ impl BexEngine {
                 ts_ticks: bex_events::prof::clock::now_ticks(),
             });
         }
+        call_id
     }
 
     /// §7 decision 2: terminated threads never strand open calls. Closes
@@ -1504,11 +1732,13 @@ impl BexEngine {
         status: bex_events::prof::record::FunctionEndStatus,
     ) {
         use bex_events::prof::record::RawRecord;
-        if !self.prof_enabled {
+        let thread_id = BexThreadId(vm.prof_thread_id);
+        let pending_sysop_call_id = vm.pending_sysop_call_id.take();
+        vm.pending_sysop_capture_mask = VmCaptureMask::disabled();
+        if vm.prof_ring.is_none() {
             return;
         }
-        let thread_id = BexThreadId(vm.prof_thread_id);
-        if let Some(call_id) = vm.pending_sysop_call_id.take() {
+        if let Some(call_id) = pending_sysop_call_id {
             self.prof_emit(&RawRecord::EndFunction {
                 status,
                 thread_id,
@@ -1696,7 +1926,10 @@ impl BexEngine {
     /// # Returns
     ///
     /// Statistics about the collection (live count, collected count, etc.)
-    pub async fn collect_garbage(&self, level: bex_heap::CollectionLevel) -> bex_heap::GcStats {
+    pub async fn collect_garbage(
+        self: &Arc<Self>,
+        level: bex_heap::CollectionLevel,
+    ) -> bex_heap::GcStats {
         #[cfg(not(target_arch = "wasm32"))]
         self.park_requested.store(true, Ordering::Relaxed);
         let mut heap_guard = self.heap_permit_manager.request_park().await;
@@ -1774,6 +2007,14 @@ impl BexEngine {
         // sites release their permit before calling.)
         bex_external_types::host_value::host_release_dispatch::drain();
 
+        // BEP-042: run the `cleanup` finalizer for every instance this
+        // collection kept alive. The `heap_guard` is dropped (so `call_function`
+        // can acquire a permit), the queued pointers are valid (drained at this
+        // same safepoint, before any other collection), and a caller that holds
+        // `checking_gc` (the engine GC paths) blocks a nested collection from
+        // moving them mid-drain.
+        self.drain_finalizers().await;
+
         tracing::debug!(
             "GC completed: {} live, {} collected",
             stats.live_count,
@@ -1804,23 +2045,41 @@ impl BexEngine {
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexExternalValue>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        self.call_function_with_trace(function_name, args, call_ctx, copy_objects)
+            .await
+            .and_then(|result| result.value)
+    }
+
+    pub async fn call_function_with_trace(
+        self: &Arc<Self>,
+        function_name: &str,
+        args: Vec<BexExternalValue>,
         FunctionCallContext {
-            call_id,
+            host_call_id,
+            boundary,
+            value_capture,
             cancel,
+            profile_enabled,
             type_args,
         }: FunctionCallContext,
         copy_objects: bool,
-    ) -> Result<BexExternalValue, EngineError> {
+    ) -> Result<BexCallResult, EngineError> {
         let args = args
             .into_iter()
             .map(|arg| BexCallArg::Provided(Box::new(arg)))
             .collect();
-        self.call_function_bound_args(
+        self.call_function_bound_args_with_trace(
             function_name,
             args,
             FunctionCallContext {
-                call_id,
+                host_call_id,
+                boundary,
+                value_capture,
                 cancel,
+                profile_enabled,
                 type_args,
             },
             copy_objects,
@@ -1828,22 +2087,52 @@ impl BexEngine {
         .await
     }
 
+    /// Run-vocabulary alias for the traced function entry path. The
+    /// `FunctionCallContext` still carries host-call plumbing; `RunStore` owns
+    /// the public `BoundaryId` outside the engine.
+    pub async fn start_run(
+        self: &Arc<Self>,
+        function_name: &str,
+        args: Vec<BexExternalValue>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexCallResult, EngineError> {
+        self.call_function_with_trace(function_name, args, call_ctx, copy_objects)
+            .await
+    }
+
     pub async fn call_function_bound_args(
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexCallArg>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        self.call_function_bound_args_with_trace(function_name, args, call_ctx, copy_objects)
+            .await
+            .and_then(|result| result.value)
+    }
+
+    pub async fn call_function_bound_args_with_trace(
+        self: &Arc<Self>,
+        function_name: &str,
+        args: Vec<BexCallArg>,
         FunctionCallContext {
-            call_id,
+            host_call_id,
+            boundary,
+            value_capture,
             cancel,
+            profile_enabled,
             type_args,
         }: FunctionCallContext,
         copy_objects: bool,
-    ) -> Result<BexExternalValue, EngineError> {
-        // Register this call so `cancel_function_call(call_id)` can target
-        // it. The RAII guard removes the entry on drop (including panic
-        // unwind). Insertion and guard construction are atomic, so a panic
-        // here cannot leak registry entries.
-        let (_call_guard, cancel) = ActiveCallGuard::register(Arc::clone(self), call_id, cancel)?;
+    ) -> Result<BexCallResult, EngineError> {
+        // Register this host call so `cancel_function_call(host_call_id)` can
+        // target it. The RAII guard removes the entry on drop (including
+        // panic unwind). Insertion and guard construction are atomic, so a
+        // panic here cannot leak registry entries.
+        let (_call_guard, cancel) =
+            ActiveCallGuard::register(Arc::clone(self), host_call_id, cancel)?;
 
         // Fail fast if already cancelled — guarantees pre-cancelled IDs
         // always produce a `baml.panics.Cancelled` panic regardless of
@@ -1867,41 +2156,242 @@ impl BexEngine {
             });
         let throws_type = self.function_throws_type(function_name);
 
+        // Declared parameter types (TypeVars unsubstituted).
+        let params = self.function_params(function_name)?;
+        let declared_param_types: Vec<RuntimeTy> =
+            params.iter().map(|(_, ty, _)| (*ty).clone()).collect();
+
+        // `type_args` is the unified `TypeVar -> concrete` binding map for a
+        // generic call (01pt3). It already holds the host's explicit `_types=`
+        // bindings (source (b)); fold in source (a): class type args recovered
+        // from a generic `self` receiver (instance methods). A generic instance
+        // method called by name leaves its declared types with the class's type
+        // vars unsubstituted (e.g. `Stream.next`'s `TStream | StreamFinished`);
+        // the inbound `self` handle carries them concretely, so zipping the
+        // declared `self` against the actual recovers the bindings. See
+        // bridge-generics/streaming/04. `collect_type_var_bindings` only fills
+        // keys not already bound, so the explicit `_types=` bindings win on
+        // conflict.
+        // Whether the *caller* specified any explicit type binding (subscript /
+        // `_types=`). In explicit/partial mode the wire must be fully bound — an
+        // under-specified (argless) generic instance is a host bug and Gate B
+        // rejects it. In pure-inference mode (no caller bindings) BAML instead
+        // recovers an unbound instance's args from its field values (03b G1), so
+        // Gate B is lenient about its missing wire args. Captured before the
+        // self-receiver / inference sources mutate `type_args`.
+        let caller_specified_types = !type_args.is_empty();
+        let mut type_args = type_args;
+        if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
+            (declared_param_types.first(), args.first())
+        {
+            if let Some(self_actual) = crate::conversion::tagged_handle_runtime_ty(self_value) {
+                crate::conversion::collect_type_var_bindings(
+                    self_declared,
+                    self_actual,
+                    &mut type_args,
+                );
+            }
+        }
+        // A call is generic iff the callee declares any generic params, OR a
+        // TypeVar appears in a parameter / the return type. The declared-params
+        // list also catches type params used only in the body (e.g.
+        // `one_type_arg<T>()` reflecting `T`), which a signature scan misses.
+        // Non-generic calls bypass all type-var work and keep the existing
+        // permissive coercion path untouched (no regression, zero extra cost).
+        // Computed here (before the `type_args` freeze) because the inference
+        // step below mutates `type_args` and is gated on this flag. The
+        // (unsubstituted) `return_type` is used; self-receiver substitution does
+        // not change whether the callee is generic.
+        let declared_generic_params = self.function_generic_params(function_name);
+        let callee_is_generic = !declared_generic_params.is_empty()
+            || declared_param_types
+                .iter()
+                .chain(std::iter::once(&return_type))
+                .any(crate::conversion::contains_type_var);
+
+        // ── TYPEVAR BINDING POLICY (inbound value-inference 01a/01b +
+        // `03c-impl-guide`). For each `TypeVar` `T`, after applying explicit
+        // (`_types=` / subscript) bindings:
+        //
+        //   1. Explicit wins. If the caller specified `T`, use it. (This is also
+        //      what satisfies the must-specify cases below.)
+        //   2. Closure poison ⇒ must-specify. If `T` occurs *anywhere inside a
+        //      closure/lambda-typed parameter's signature* (its param types or
+        //      return type, at any nesting depth), `T` MUST be explicitly
+        //      specified; unspecified ⇒ the call ERRORS. This OVERRIDES any
+        //      value-position evidence `T` might also have — a closure occurrence
+        //      poisons `T` globally.
+        //   3. No value position ⇒ must-specify. If `T`'s only occurrences are
+        //      return-only or body-only (no value position anywhere), `T`
+        //      likewise MUST be explicitly specified; errors if not.
+        //   4. Value position, no leaf ⇒ `RustType`. If `T` has ≥1 value
+        //      position, NO closure occurrence, and value-inference still
+        //      produced no concrete leaf (empty collection, `null` actual,
+        //      unbound generic under a non-recursing formal), default
+        //      `T = RustType` and let it ride opaquely as `RustData`.
+        //
+        // The normal path (a value position that *did* yield a leaf) is
+        // unchanged. Steps 2–3 are detectable from the *signature alone*, so the
+        // error is eager, at the call site (Gate A below) — not deferred into the
+        // body.
+        //
+        // Mechanically: inference only ever *adds* bindings — synthesize each
+        // provided arg's concrete `RuntimeTy`, unify against the declared param
+        // type, and fold in with `or_insert` so explicit (source b) and
+        // self-receiver (source a) bindings already in `type_args` WIN.
+        if callee_is_generic {
+            // Synthesize each provided arg's `RuntimeTy` and pair it with its
+            // declared formal, then solve every var across all arguments at once
+            // with variance tracking (`02d`/`02e`): a `TypeVar` used at
+            // conflicting variances — contravariant function params, invariant
+            // container/class args — has no consistent binding and is rejected
+            // here rather than fabricated into an unsound union.
+            let pairs: Vec<(RuntimeTy, RuntimeTy)> = args
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, arg)| match (declared_param_types.get(idx), arg) {
+                    (Some(declared), BexCallArg::Provided(value)) => {
+                        // Formal-aware: a forcing generic-class formal recovers an
+                        // unbound instance's args from its fields (03b G1); every
+                        // other value synthesizes from the value alone.
+                        let actual = self.synth_inference_actual(declared, value);
+                        Some((declared.clone(), actual))
+                    }
+                    _ => None,
+                })
+                .collect();
+            let inferred =
+                crate::conversion::infer_bindings_runtime_checked(&pairs).map_err(|detail| {
+                    EngineError::TypeMismatch {
+                        message: friendly_inference_conflict(function_name, &detail),
+                    }
+                })?;
+
+            // Classify where each TypeVar occurs across the parameter types to
+            // drive rules 2 and 4 above.
+            let positions = crate::conversion::classify_param_var_positions(&declared_param_types);
+
+            for (name, ty) in inferred {
+                // Rule 2 (closure poison): drop any value-inferred binding so the
+                // var is required explicitly — even when another argument would
+                // otherwise pin it (`apply<T,R>(f: (T)->R, x: T)` — `x` must NOT
+                // bind `T`).
+                if positions.closure.contains(&name) {
+                    continue;
+                }
+                type_args.entry(name).or_insert(ty);
+            }
+
+            // Rule 4 (RustType default): a var with ≥1 value position, no closure
+            // occurrence, still unbound after inference defaults to `rust_type` and
+            // rides opaquely. Vars with no value position (return/body-only, rule 3)
+            // and closure-poisoned vars (rule 2) are left unbound for Gate A's
+            // must-specify error.
+            for var in &positions.value_position {
+                if positions.closure.contains(var) || positions.ambiguous_union.contains(var) {
+                    continue;
+                }
+                type_args
+                    .entry(var.clone())
+                    .or_insert_with(|| RuntimeTy::RustType {
+                        attr: baml_type::TyAttr::default(),
+                    });
+            }
+        }
+
+        let type_args = type_args;
+
+        // Always fold the recovered bindings into the return type. This is the
+        // pre-existing streaming fix (a generic `self` method's return type
+        // carries the class's type vars; the receiver binds them concretely),
+        // now also applying any inferred bindings, and is a no-op when
+        // `type_args` is empty.
+        return_type = crate::conversion::substitute_type_vars(&return_type, &type_args);
+
+        // Strict generic handling — substitution + full-binding enforcement
+        // (Gate A) + per-arg structural check (Gate B) — applies to *every*
+        // generic call: free functions, instance methods, and static methods
+        // alike. The host is required to fully bind every call: a free
+        // function's/static's TypeVars arrive by name through `type_args`, and
+        // a generic instance method's class TypeVars arrive on the receiver
+        // (sent by the host as the instance's wire class args, or recovered
+        // from a generic `self` handle above). If a receiver can't supply its
+        // class type args, that's a host/SDK bug to fix at the source — the
+        // engine does not paper over it with a runtime-`unknown` fallback.
+        // Non-generic calls bypass all of this and keep the existing permissive
+        // coercion path untouched.
+        let param_types: Vec<RuntimeTy> = if callee_is_generic {
+            // Substitute the explicit/recovered bindings into every declared
+            // parameter so coercion and validation see concrete types instead
+            // of bare TypeVars.
+            let substituted: Vec<RuntimeTy> = declared_param_types
+                .iter()
+                .map(|t| crate::conversion::substitute_type_vars(t, &type_args))
+                .collect();
+
+            // ── Gate A — full-binding enforcement. The wire must be fully
+            // bound. Two checks:
+            //   (1) every declared generic param has a binding — catches
+            //       body-only type params (`one_type_arg<T>()`) that never reach
+            //       the signature. Scoped to *free functions*: a class method's
+            //       `display_type_params` include the enclosing class params,
+            //       which a static never binds and an instance method carries on
+            //       the receiver — demanding them *by name* would be wrong, so
+            //       for class methods this check is skipped and the method's own
+            //       params fall to check (2) (they're in the signature).
+            //   (2) no TypeVar survives substitution in the params/return —
+            //       catches a param/return type var the bindings didn't cover,
+            //       including an instance method whose receiver failed to supply
+            //       its class type args.
+            let missing_declared = if self.is_class_method(function_name) {
+                // Demand the method's OWN generic params (the suffix after the
+                // class prefix). Inherited class params ride on the receiver (an
+                // instance method) or are phantom (a static), so they're never
+                // bound by name and must not be demanded. The method's own params
+                // ARE demanded — so rule 3 (no value position ⇒ must-specify)
+                // fires for a method's body-only own var (`reflect_t<T>()`), which
+                // check (2)'s signature scan misses.
+                let class_prefix = self.enclosing_class_generic_param_count(function_name);
+                declared_generic_params
+                    .iter()
+                    .skip(class_prefix)
+                    .find(|p| !type_args.contains_key(p.as_str()))
+                    .cloned()
+            } else {
+                declared_generic_params
+                    .iter()
+                    .find(|p| !type_args.contains_key(p.as_str()))
+                    .cloned()
+            };
+            let unbound = missing_declared.or_else(|| {
+                substituted
+                    .iter()
+                    .chain(std::iter::once(&return_type))
+                    .find_map(crate::conversion::first_unbound_type_var)
+            });
+            if let Some(name) = unbound {
+                return Err(EngineError::TypeMismatch {
+                    message: friendly_must_specify(
+                        function_name,
+                        &declared_generic_params,
+                        name.as_str(),
+                    ),
+                });
+            }
+            substituted
+        } else {
+            declared_param_types
+        };
+
         // Type-directed coercion for each provided arg: lets host SDKs send
         // `int(42)` to a `bigint` slot (and vice versa) without re-encoding,
         // and rewrites the engine-registered class FQN onto incoming
         // `Map`/`Instance`/`Variant` values. Idempotent for already-matching
         // values, so callers that already coerced (e.g. `BexProject::Bex`
-        // kwargs entry) aren't double-charged.
-        let param_types: Vec<RuntimeTy> = self
-            .function_params(function_name)?
-            .into_iter()
-            .map(|(_, ty, _)| ty.clone())
-            .collect();
-
-        // Substitute the declared return type's class type variables from the
-        // receiver's concrete `self`. A generic instance method (`Stream.next`,
-        // `Stream.final`, ...) called by name from the host leaves its return
-        // type with the class's type vars unsubstituted (e.g. `Stream.next`'s
-        // `TStream | StreamFinished`), because the named-entry path seeds no
-        // class type args. The inbound `self` handle carries them concretely, so
-        // zipping the declared `self` type against the actual one recovers the
-        // bindings — without this, a concrete partial (`null | string`, a
-        // `$stream` class) matches no union member and host-return conversion
-        // panics. See bridge-generics/streaming/04.
-        if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
-            (param_types.first(), args.first())
-        {
-            if let Some(self_actual) = crate::conversion::tagged_handle_runtime_ty(self_value) {
-                let mut bindings = std::collections::HashMap::new();
-                crate::conversion::collect_type_var_bindings(
-                    self_declared,
-                    self_actual,
-                    &mut bindings,
-                );
-                return_type = crate::conversion::substitute_type_vars(&return_type, &bindings);
-            }
-        }
+        // kwargs entry) aren't double-charged. For a generic call, the now-
+        // concrete `param_types` also drive Gate B — a structural check that
+        // hard-fails a wire value that doesn't inhabit its expected type
+        // (01pt3 item 5).
         let args: Vec<BexCallArg> = args
             .into_iter()
             .enumerate()
@@ -1909,25 +2399,33 @@ impl BexEngine {
                 BexCallArg::Provided(value) => {
                     let coerced =
                         crate::conversion::coerce_arg_to_declared_type(*value, &param_types[idx])?;
+                    if callee_is_generic {
+                        crate::conversion::check_generic_arg(
+                            &coerced,
+                            &param_types[idx],
+                            caller_specified_types,
+                        )
+                        .map_err(|detail| EngineError::TypeMismatch {
+                            message: friendly_arg_type_mismatch(function_name, idx, &detail),
+                        })?;
+                    }
                     Ok(BexCallArg::Provided(Box::new(coerced)))
                 }
                 BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
             })
             .collect::<Result<_, EngineError>>()?;
 
-        // Create the root thread (shared heap, own TLAB) and acquire its permit.
-        let mut thread = self.new_root_thread(cancel.clone()).await;
+        // Create the root thread (shared heap, own TLAB) and acquire its
+        // permit. This named-entry path is the genuine top-level root run.
+        let mut thread = self
+            .new_root_thread(cancel.clone(), profile_enabled, true)
+            .await;
 
-        // Snapshot the declared parameter types so we can thread the
-        // expected `RuntimeTy` into per-arg conversion. Binding a `HostValue` to an
+        // Reuse the (substituted) `param_types` to thread the expected
+        // `RuntimeTy` into per-arg VM conversion. Binding a `HostValue` to an
         // `Object::HostClosure` needs it: the closure carries the declared
-        // `RuntimeTy::Function`'s arity and return type, extracted from the parameter
-        // type.
-        let param_types: Vec<RuntimeTy> = self
-            .function_params(function_name)?
-            .into_iter()
-            .map(|(_, ty, _)| ty.clone())
-            .collect();
+        // `RuntimeTy::Function`'s arity and return type, extracted from the
+        // parameter type.
         let vm_args: Vec<Value> = args
             .into_iter()
             .enumerate()
@@ -1940,10 +2438,15 @@ impl BexEngine {
                 BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let root_input_values = params
+            .iter()
+            .zip(vm_args.iter())
+            .map(|((name, _, _), value)| ((*name).to_string(), *value))
+            .collect::<Vec<_>>();
 
-        // `function_index` is the entry function's `HeapPtr`; `type_args` are the
-        // explicit BEP-039 type args from the host (closures/bound methods instead
-        // seed their captured/class type args — see `call_callable`).
+        // `function_index` is the entry function's `HeapPtr`. The call's named
+        // `type_args` are lowered to positional De Bruijn slots against the
+        // callee's generic params inside `set_entry_point_with_type_args`.
         self.run_entry_point(
             thread,
             function_index,
@@ -1951,7 +2454,10 @@ impl BexEngine {
             type_args,
             return_type,
             throws_type,
-            call_id,
+            host_call_id,
+            boundary,
+            value_capture,
+            Some(root_input_values),
             cancel,
             copy_objects,
         )
@@ -1960,30 +2466,34 @@ impl BexEngine {
 
     /// Build a fresh root [`BexThread`] over the shared heap and acquire its
     /// heap permit. Shared by the named-entry (`call_function_bound_args`) and
-    /// callable-entry (`call_callable`) paths.
+    /// callable-entry (`call_callable`) paths. `is_top_level_root` marks the
+    /// genuine top-level entry run so only it runs the B-650 end-of-run wait —
+    /// the named-entry path passes `true`, the callable-entry path (nested
+    /// host-invoked callables such as HTTP handlers) passes `false`. See
+    /// [`BexThread::is_top_level_root`].
     async fn new_root_thread(
         self: &Arc<Self>,
         cancel: CancellationToken,
+        profile_enabled: bool,
+        is_top_level_root: bool,
     ) -> ActiveHeapPermit<BexThread> {
         // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
         let vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_impls),
+            Arc::clone(&self.packages),
+            Arc::clone(&self.error_class_ptrs),
+            Arc::clone(&self.panic_class_ptrs),
         );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
         vm.prof_thread_id = self.next_prof_thread_id();
+        vm.prof_suppressed = !profile_enabled;
         // Identity seed for the `$id` surface (baml.id.*): unconditional —
         // `$id` works with profiling off, and the ids it exposes are the
         // VM-minted ids the event stream records.
@@ -1997,7 +2507,7 @@ impl BexEngine {
         // straight-line into run_thread_event_loop, whose every exit path
         // emits the EndThread), and the snapshot at the same spot plus each
         // loop-head resume.
-        let root_thread = BexThread::new_root(vm, cancel);
+        let root_thread = BexThread::new_root(vm, cancel, is_top_level_root);
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
     }
@@ -2012,13 +2522,16 @@ impl BexEngine {
         mut thread: ActiveHeapPermit<BexThread>,
         entry_ptr: HeapPtr,
         vm_args: Vec<Value>,
-        type_args: Vec<RuntimeTy>,
+        type_args: indexmap::IndexMap<String, RuntimeTy>,
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,
-        call_id: CallId,
+        host_call_id: CallId,
+        boundary: BoundaryContext,
+        value_capture: TraceCaptureProducer,
+        root_input_values: Option<Vec<(String, Value)>>,
         cancel: CancellationToken,
         copy_objects: bool,
-    ) -> Result<BexExternalValue, EngineError> {
+    ) -> Result<BexCallResult, EngineError> {
         // D5a: the entry-frame CallFunction below pushes into the snapshot;
         // take it on THIS thread, after the last await before the push.
         self.prof_refresh_vm_ring(&mut thread.vm);
@@ -2030,7 +2543,7 @@ impl BexEngine {
         // exit path; no early return / `?` may be introduced between this
         // emission and the run_thread_event_loop call below, or an error
         // path would leak an unclosed StartThread.
-        if self.prof_enabled {
+        if thread.vm.prof_ring.is_some() {
             self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
                 flags: 0,
                 thread_id: BexThreadId(thread.vm.prof_thread_id),
@@ -2042,7 +2555,84 @@ impl BexEngine {
         }
         thread
             .vm
+            .set_value_capture_auto_enabled(boundary.capture_defaults.values_enabled);
+        // The call's named type args are lowered to positional De Bruijn slots
+        // against the callee's generic params. An empty map seeds nothing
+        // (non-generic callee) or all-unbound slots (generic callee with no
+        // bindings).
+        // The runtime frame holds realized type args; narrow the host-supplied
+        // bindings at this FFI boundary, rejecting a non-realized binding rather
+        // than erasing it.
+        let type_args = type_args
+            .into_iter()
+            .map(|(name, ty)| match baml_type::RealizedTy::try_from(&ty) {
+                Ok(realized) => Ok((name, realized)),
+                Err(e) => Err(EngineError::VmInternalError(
+                    bex_vm::errors::VmInternalError::TypeSubstitution {
+                        message: format!(
+                            "host entry-point type argument `{name}` is not realized: {e}"
+                        ),
+                    },
+                )),
+            })
+            .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
+        thread
+            .vm
             .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
+        thread
+            .vm
+            .install_boundary_id_for_current_call(boundary.boundary_id);
+        let entry_call_ref = CallRef {
+            process_euid: self.process_euid,
+            engine_id: self.engine_id,
+            thread_id: BexThreadId(thread.vm.prof_thread_id),
+            call_id: BexCallId(thread.vm.current_call_id()),
+        };
+        let root_capture =
+            boundary
+                .capture_defaults
+                .values_enabled
+                .then(|| RootValueCaptureContext {
+                    boundary_id: boundary.boundary_id,
+                    call: bex_events::run::TraceCallKey {
+                        process_euid: entry_call_ref.process_euid,
+                        engine_id: entry_call_ref.engine_id,
+                        thread_id: entry_call_ref.thread_id,
+                        call_id: entry_call_ref.call_id,
+                    },
+                    producer: value_capture.clone(),
+                });
+        let log_capture = boundary
+            .capture_defaults
+            .logs_enabled
+            .then(|| LogCaptureContext {
+                boundary_id: boundary.boundary_id,
+                producer: value_capture.clone(),
+            });
+        let call_capture =
+            boundary
+                .capture_defaults
+                .values_enabled
+                .then(|| CallValueCaptureContext {
+                    boundary_id: boundary.boundary_id,
+                    producer: value_capture.clone(),
+                });
+        thread.vm.set_call_input_capture_hook(
+            call_capture
+                .as_ref()
+                .map(CallValueCaptureContext::input_capture_hook),
+        );
+        if let (Some(capture), Some(entries)) = (root_capture.as_ref(), root_input_values.as_ref())
+        {
+            let _ = capture.producer.capture_with(
+                capture.boundary_id,
+                capture.call,
+                CaptureKind::RootInput,
+                |trace_heap| {
+                    trace_heap.copy_named_values_from_bex_heap(&self.heap, thread.proof(), entries)
+                },
+            );
+        }
 
         // Run the event loop.
         let result = self
@@ -2050,7 +2640,10 @@ impl BexEngine {
                 return_type,
                 throws_type,
                 thread,
-                call_id,
+                host_call_id,
+                root_capture.clone(),
+                call_capture,
+                log_capture,
                 &cancel,
                 copy_objects,
             )
@@ -2071,15 +2664,22 @@ impl BexEngine {
         // opcode, or synthesized by engine safepoints (see
         // `cancelled_unhandled_throw`).
         match result {
-            Ok(ThreadOutcome::RootValue(value)) => Ok(value),
-            Ok(ThreadOutcome::SettledChild(_)) => {
+            Ok(ThreadOutcome::RootValue(value)) => Ok(BexCallResult {
+                value: Ok(value),
+                entry_call_ref,
+            }),
+            Ok(ThreadOutcome::SettledChild(_)) => Ok(BexCallResult {
                 // Root threads should never produce SettledChild; treat as an
                 // engine invariant violation rather than silently returning Null.
-                Err(EngineError::Other(
+                value: Err(EngineError::Other(
                     "BEP-034: root thread terminated as SettledChild".to_string(),
-                ))
-            }
-            Err(err) => Err(err),
+                )),
+                entry_call_ref,
+            }),
+            Err(err) => Ok(BexCallResult {
+                value: Err(err),
+                entry_call_ref,
+            }),
         }
     }
 
@@ -2096,19 +2696,43 @@ impl BexEngine {
         self: &Arc<Self>,
         handle: bex_external_types::Handle,
         args: Vec<BexExternalValue>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexExternalValue, EngineError> {
+        self.call_callable_with_trace(handle, args, call_ctx, copy_objects)
+            .await
+            .and_then(|result| result.value)
+    }
+
+    pub async fn call_callable_with_trace(
+        self: &Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: Vec<BexExternalValue>,
         FunctionCallContext {
-            call_id,
+            host_call_id,
+            boundary,
+            value_capture,
             cancel,
+            profile_enabled,
             type_args: _,
         }: FunctionCallContext,
         copy_objects: bool,
-    ) -> Result<BexExternalValue, EngineError> {
+    ) -> Result<BexCallResult, EngineError> {
+        let (_call_guard, cancel) =
+            ActiveCallGuard::register(Arc::clone(self), host_call_id, cancel)?;
         if cancel.is_cancelled() {
             return Err(cancelled_unhandled_throw());
         }
-
-        let _call_guard = ActiveCallGuard::register(Arc::clone(self), call_id, cancel.clone())?;
-        let mut thread = self.new_root_thread(cancel.clone()).await;
+        // A by-value callable invocation is a NESTED host-invoked run (an HTTP
+        // request handler dispatched via `spawn_with_callable`, or any host
+        // callback), never the genuine top-level entry — even though it, like
+        // the real root, has `settles_future == None`. Marking it non-root keeps
+        // it from running the B-650 end-of-run wait, which would park forever on
+        // the outer run's still-`Pending` `serve` spawn (B-650 `baml test`
+        // hang).
+        let mut thread = self
+            .new_root_thread(cancel.clone(), profile_enabled, false)
+            .await;
 
         // Resolve the handle to the live heap object. The handle keeps it rooted.
         let entry_ptr = self
@@ -2135,7 +2759,7 @@ impl BexEngine {
                 let class_type_args = receiver
                     .as_object_ptr()
                     .and_then(|ptr| match thread.vm.get_object(ptr) {
-                        Object::Instance(inst) => Some(inst.class_type_args.clone()),
+                        Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
                         _ => None,
                     })
                     .unwrap_or_default();
@@ -2152,7 +2776,7 @@ impl BexEngine {
         // parameter types (including `self` for methods) for type-directed
         // coercion; lambdas leave it empty (types inferred, not stored), so the
         // real arity comes from `arity` and coercion is best-effort.
-        let (mut return_type, throws_type, arity, param_types) =
+        let (mut return_type, throws_type, arity, param_types, generic_param_names) =
             match thread.vm.get_object(func_ptr) {
                 Object::Function(func) => {
                     // A value referencing an unresolved native builtin can't be an
@@ -2163,11 +2787,21 @@ impl BexEngine {
                             kind: format!("{:?}", func.kind),
                         });
                     }
+                    // De Bruijn-ordered generic-param names (enclosing class
+                    // params first, then the function's own), bounds stripped to
+                    // the bare TypeVar — used to lower the positional `seed_type_args`
+                    // onto the named `type_args` channel below.
+                    let generic_param_names: Vec<String> = func
+                        .display_type_params
+                        .iter()
+                        .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
+                        .collect();
                     (
                         func.return_type.clone(),
                         func.throws_type.clone(),
                         func.arity,
                         func.param_types.clone(),
+                        generic_param_names,
                     )
                 }
                 _ => {
@@ -2185,9 +2819,13 @@ impl BexEngine {
         // panics on a concrete value. See bridge-generics/streaming/04.
         if receiver.is_some() {
             if let Some(RuntimeTy::Class(_, declared_args, _)) = param_types.first() {
-                let mut bindings = std::collections::HashMap::new();
+                let mut bindings = indexmap::IndexMap::new();
                 for (declared, concrete) in declared_args.iter().zip(seed_type_args.iter()) {
-                    crate::conversion::collect_type_var_bindings(declared, concrete, &mut bindings);
+                    crate::conversion::collect_type_var_bindings(
+                        declared,
+                        concrete.as_runtime_ty(),
+                        &mut bindings,
+                    );
                 }
                 return_type = crate::conversion::substitute_type_vars(&return_type, &bindings);
             }
@@ -2237,6 +2875,28 @@ impl BexEngine {
         // resolves to the actual function's metadata row. (The .bamlprof
         // root `CallFunction` id is stamped independently by the VM in
         // `prof_enter_call` from `Function.function_id`.)
+        // Lower the closure's captured / bound-method's class type args (held
+        // positionally in De Bruijn order) onto the named `type_args` channel by
+        // pairing each with the callee's generic-param name. A lambda has no
+        // declared param names, so fall back to the index as a key; the named
+        // lowering then emits the unnamed bindings in order.
+        // The seed args are realized (a value's captured/class type args); widen
+        // them into the `RuntimeTy` the host `type_args` channel carries. They are
+        // re-narrowed to `RealizedTy` at the `set_entry_point_with_type_args`
+        // boundary inside `run_entry_point`.
+        let seed_type_args: indexmap::IndexMap<String, RuntimeTy> = seed_type_args
+            .into_iter()
+            .enumerate()
+            .map(|(i, ty)| {
+                (
+                    generic_param_names
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_else(|| i.to_string()),
+                    RuntimeTy::from(ty),
+                )
+            })
+            .collect();
         self.run_entry_point(
             thread,
             entry,
@@ -2244,7 +2904,10 @@ impl BexEngine {
             seed_type_args,
             return_type,
             throws_type,
-            call_id,
+            host_call_id,
+            boundary,
+            value_capture,
+            None,
             cancel,
             copy_objects,
         )
@@ -2259,6 +2922,12 @@ impl BexEngine {
     pub fn cancel_function_call(&self, call_id: CallId) -> Result<(), EngineError> {
         ActiveCallGuard::reserve_cancelled(self, call_id);
         Ok(())
+    }
+
+    /// Run-vocabulary alias for host-call cancellation. The parameter is the
+    /// adapter-owned host call id backing value, not a `BoundaryId`.
+    pub fn cancel_run(&self, host_call_id: CallId) -> Result<(), EngineError> {
+        self.cancel_function_call(host_call_id)
     }
 
     fn validate_bound_args(
@@ -2396,6 +3065,94 @@ impl BexEngine {
         }
     }
 
+    /// The callee's declared generic-param names (bare, bounds stripped), in
+    /// declaration order. Empty for a non-generic function. Sourced from the
+    /// `Function`'s `display_type_params`, so it includes type params that
+    /// appear only in the body (e.g. `one_type_arg<T>()` whose `T` shows up
+    /// solely via `reflect.type_of<T>()`), which a signature-only scan misses.
+    fn function_generic_params(&self, name: &str) -> Vec<String> {
+        let Some(resolved) = self.resolve_function_name(name) else {
+            return vec![];
+        };
+        let Some((ptr, _kind)) = self.resolved_function_names.get(resolved) else {
+            return vec![];
+        };
+        // SAFETY: ptr is from resolved_function_names, a compile-time object.
+        match unsafe { ptr.get() } {
+            Object::Function(func) => func
+                .display_type_params
+                .iter()
+                // `display_type_params` may render bounds ("T extends Foo"); the
+                // bare TypeVar name is the leading whitespace-free token.
+                .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
+                .collect(),
+            _ => vec![],
+        }
+    }
+
+    /// Whether `function_name` resolves to a method on a class (its FQN's parent
+    /// segment names a registered class), as opposed to a free function. Used to
+    /// scope Gate A's declared-param completeness check (1): a method's
+    /// `display_type_params` are De Bruijn-ordered as *class params first, then
+    /// the method's own*, and those leading class params are never bound *by
+    /// name* in `type_args` — a static never binds them, and an instance
+    /// method's ride on the receiver (the wire instance's class args, or a
+    /// generic `self` handle), not the named channel. Demanding each appear in
+    /// `type_args` would wrongly reject, so check (1) is skipped for class
+    /// methods; their own params still fall to check (2), which scans the
+    /// signature (and catches a class param the receiver failed to supply).
+    /// Free functions have no such prefix.
+    fn is_class_method(&self, function_name: &str) -> bool {
+        let Some(resolved) = self.resolve_function_name(function_name) else {
+            return false;
+        };
+        let Some(idx) = resolved.rfind('.') else {
+            return false;
+        };
+        let parent = &resolved[..idx];
+        self.resolved_class_names.contains_key(parent)
+            || self
+                .resolved_class_names
+                .contains_key(&format!("user.{parent}"))
+            || parent
+                .strip_prefix("user.")
+                .is_some_and(|p| self.resolved_class_names.contains_key(p))
+    }
+
+    /// Number of generic params declared by the class that *encloses*
+    /// `function_name` — the De Bruijn class-prefix length on a method's
+    /// `display_type_params` (`GenericBox<T>.new` ⇒ 1, `Helper.reflect_t` ⇒ 0).
+    /// `0` for free functions or when the parent isn't a registered class. Gate A
+    /// uses it to split a method's *own* generic params (which it must demand —
+    /// rule 3) from inherited class params (which ride on the receiver / are
+    /// phantom on a static, so are never bound by name).
+    fn enclosing_class_generic_param_count(&self, function_name: &str) -> usize {
+        let Some(resolved) = self.resolve_function_name(function_name) else {
+            return 0;
+        };
+        let Some(idx) = resolved.rfind('.') else {
+            return 0;
+        };
+        let parent = &resolved[..idx];
+        let class_ptr = self
+            .resolved_class_names
+            .get(parent)
+            .or_else(|| self.resolved_class_names.get(&format!("user.{parent}")))
+            .or_else(|| {
+                parent
+                    .strip_prefix("user.")
+                    .and_then(|p| self.resolved_class_names.get(p))
+            });
+        let Some(ptr) = class_ptr else {
+            return 0;
+        };
+        // SAFETY: ptr is from resolved_class_names, a compile-time object.
+        match unsafe { ptr.get() } {
+            Object::Class(class) => class.generic_param_count,
+            _ => 0,
+        }
+    }
+
     /// Check if a function exists by name (tries exact then "user." prefix).
     pub fn function_exists(&self, name: &str) -> bool {
         self.resolve_function_name(name).is_some()
@@ -2530,6 +3287,7 @@ impl BexEngine {
         let ctx = || {
             FunctionCallContextBuilder::new(call_id)
                 .with_cancel_token(cancel.clone())
+                .with_profile_enabled(false)
                 .build()
         };
 
@@ -2572,7 +3330,7 @@ impl BexEngine {
     /// collection level (Minor or Major) based on live object counts and
     /// allocation pressure.
     async fn gc_safepoint<T: RootHaver>(
-        &self,
+        self: &Arc<Self>,
         mut permit: ActiveHeapPermit<T>,
     ) -> ActiveHeapPermit<T> {
         let i_am_checking = self
@@ -2599,7 +3357,7 @@ impl BexEngine {
     /// permit-released state (e.g., the engine's `Await` branch waiting on
     /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
     /// extra release-and-reacquire pair around the heuristic for nothing.
-    async fn maybe_collect_garbage(&self) {
+    async fn maybe_collect_garbage(self: &Arc<Self>) {
         let i_am_checking = self
             .checking_gc
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -2613,6 +3371,54 @@ impl BexEngine {
         // If we are not the checker, the actual checker (some other VM) is
         // either already waiting in `request_park` or about to. Our caller
         // is permit-released, so they're not blocking that wait.
+    }
+
+    /// BEP-042: run the `cleanup` finalizer for each instance the GC kept alive
+    /// during the collection that just completed.
+    ///
+    /// Called immediately after a collection (the GC copied each pending instance
+    /// into the survivor space, so it is alive). The queued instances are rooted
+    /// into handles before the first `await` (see the body), so they stay valid
+    /// across any nested or concurrent collection — `collect_garbage` is `pub` and
+    /// can be called directly, where the `checking_gc` guard is NOT held, so we do
+    /// not rely on it. Each `cleanup` runs as an ordinary function call on the
+    /// real instance (passed by handle, never copied), so it sets the instance's
+    /// run-once latch; a `cleanup` racing on another fiber via an explicit call
+    /// or `defer` is deduped by that latch.
+    ///
+    /// A throwing `cleanup` is logged and swallowed — there is no caller to
+    /// propagate to on the GC path, and a bad finalizer must not break the GC
+    /// (BEP-042; matches Python's `__del__`).
+    async fn drain_finalizers(self: &Arc<Self>) {
+        // Root the entire queue into handles BEFORE the first `await`. The queued
+        // pointers are raw `HeapPtr`s; if a `cleanup` body yields and a nested or
+        // concurrent collection runs (possible when `collect_garbage` is called
+        // directly, where `checking_gc` is not held), the not-yet-processed
+        // pointers would be moved. Handles are GC roots and are fixed up across a
+        // collection, so converting up front keeps every pending instance valid.
+        let pending: Vec<_> = self
+            .heap
+            .take_pending_finalizers()
+            .into_iter()
+            .map(|(ptr, cleanup_fn)| (self.heap.create_handle(ptr), cleanup_fn))
+            .collect();
+        for (handle, cleanup_fn) in pending {
+            let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_profile_enabled(false)
+                .build();
+            // `Box::pin` breaks the async-recursion cycle: a `cleanup` body can
+            // allocate and trigger another collection, which re-enters this
+            // drain — boxing erases the otherwise-infinite future size.
+            let call = Box::pin(self.call_function(
+                &cleanup_fn,
+                vec![BexExternalValue::Handle(handle)],
+                ctx,
+                /* copy_objects = */ false,
+            ));
+            if let Err(e) = call.await {
+                tracing::warn!("BEP-042 cleanup finalizer `{cleanup_fn}` failed: {e}");
+            }
+        }
     }
 
     /// Transition the child future settled by `thread` to `Cancelled`
@@ -2644,8 +3450,25 @@ impl BexEngine {
         value: Value,
     ) -> Result<(), EngineError> {
         let child_cancel = thread.vm_thread_cancel().clone();
-        let mut guard = self.futures.acquire(thread.proof()).await;
-        let settled_ptr = guard.future_heap_ptr(future_id);
+        let settled_ptr = {
+            let guard = self.futures.acquire(thread.proof()).await;
+            guard.future_heap_ptr(future_id)
+        };
+        // B-650: enqueue the parent-queue entry BEFORE deferring the error.
+        // `defer_error` fires the future's `ready` wake, and the end-of-run
+        // wait (`wait_for_outstanding_child_futures`) parks on that wake. The
+        // wake is set (Release) after this enqueue in program order on this
+        // child thread, and the joiner re-acquires the heap permit (Acquire)
+        // after its wait returns — so the queue entry is guaranteed visible to
+        // the joiner's post-wait drain. Enqueuing AFTER the wake (the previous
+        // order) left a window where the racing waiter saw an empty queue and
+        // dropped the error — the whole point of B-650. This is safe for the
+        // ordinary awaiter path too: the queue entry is only ever *consumed*
+        // (via `future_ready` / `remove_matching`), so its earlier presence
+        // changes nothing.
+        if let Some(ptr) = settled_ptr {
+            thread.vm_thread_notify_parent_of_error(future_id, ptr);
+        }
         // BEP-034 fire-and-forget: DEFER the error instead of settling the
         // heap `Future` to `Error` here. The future stays `Pending` (wake
         // signal fired), so any awaiter — including a sibling task — observes
@@ -2655,13 +3478,150 @@ impl BexEngine {
         // eagerly instead would let a sibling's `await`+`catch` run entirely
         // inside the VM (invisible to the engine), leaving the queue entry to
         // re-surface an already-handled error at the spawner.
-        guard.defer_error(future_id, value)?;
-        drop(guard);
-        child_cancel.cancel();
-        if let Some(ptr) = settled_ptr {
-            thread.vm_thread_notify_parent_of_error(future_id, ptr);
+        {
+            let mut guard = self.futures.acquire(thread.proof()).await;
+            guard.defer_error(future_id, value)?;
         }
+        child_cancel.cancel();
         Ok(())
+    }
+
+    fn capture_root_value(
+        &self,
+        thread: &ActiveHeapPermit<BexThread>,
+        capture: &RootValueCaptureContext,
+        kind: CaptureKind,
+        value: Value,
+    ) {
+        let _ =
+            capture
+                .producer
+                .capture_with(capture.boundary_id, capture.call, kind, |trace_heap| {
+                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), value)
+                });
+    }
+
+    fn drain_vm_call_captures(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        capture: Option<&CallValueCaptureContext>,
+    ) {
+        let events = thread.vm.drain_call_capture_events();
+        let Some(capture) = capture else {
+            return;
+        };
+        for event in events {
+            let kind = match event.kind {
+                VmCallCaptureKind::Output => CaptureKind::CallOutput,
+                VmCallCaptureKind::Error => CaptureKind::CallError,
+            };
+            let call = bex_events::run::TraceCallKey {
+                process_euid: self.process_euid,
+                engine_id: self.engine_id,
+                thread_id: BexThreadId(event.thread_id),
+                call_id: BexCallId(event.call_id),
+            };
+            let _ = capture
+                .producer
+                .capture_with(capture.boundary_id, call, kind, |trace_heap| {
+                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), event.value)
+                });
+        }
+    }
+
+    fn capture_baml_log_event(
+        &self,
+        thread: &ActiveHeapPermit<BexThread>,
+        capture: Option<&LogCaptureContext>,
+        data: Value,
+        source_location: Option<VmEventSourceLocation>,
+    ) {
+        let Some(capture) = capture else {
+            return;
+        };
+        let call = bex_events::run::TraceCallKey {
+            process_euid: self.process_euid,
+            engine_id: self.engine_id,
+            thread_id: BexThreadId(thread.vm.prof_thread_id),
+            call_id: BexCallId(thread.vm.current_call_id()),
+        };
+        let _ = capture
+            .producer
+            .capture_log_with(capture.boundary_id, call, |trace_heap| {
+                let (level, body) = Self::extract_baml_log_payload(data);
+                let metadata = TraceLogMetadata {
+                    level,
+                    source: Self::source_location_from_event(source_location),
+                    timestamp_ms: epoch_ms(),
+                    message_preview: Self::log_message_preview(body),
+                };
+                let snapshot =
+                    trace_heap.copy_value_from_bex_heap(&self.heap, thread.proof(), body);
+                (metadata, snapshot)
+            });
+    }
+
+    fn extract_baml_log_payload(data: Value) -> (Option<String>, Value) {
+        let Some(ptr) = data.as_object_ptr() else {
+            return (None, data);
+        };
+        let Object::Map(map) = (unsafe { ptr.get() }) else {
+            return (None, data);
+        };
+        let mut level = None;
+        let mut body = None;
+        for (key, value) in map.to_index_map() {
+            match key.to_string().as_str() {
+                "level" => {
+                    if let Some(ptr) = value.as_object_ptr()
+                        && let Object::String(level_value) = unsafe { ptr.get() }
+                    {
+                        level = Some(level_value.to_string());
+                    }
+                }
+                "data" => body = Some(value),
+                _ => {}
+            }
+        }
+        (level, body.unwrap_or(data))
+    }
+
+    fn source_location_from_event(
+        source_location: Option<VmEventSourceLocation>,
+    ) -> Option<bex_events::run::SourceLocation> {
+        let VmEventSourceLocation {
+            file_id,
+            line,
+            column,
+            start_offset,
+            end_offset,
+        } = source_location?;
+        Some(bex_events::run::SourceLocation {
+            file_path: None,
+            file_id: Some(u64::from(file_id)),
+            line,
+            column,
+            end_line: None,
+            end_column: None,
+            start_offset: Some(start_offset),
+            end_offset: Some(end_offset),
+        })
+    }
+
+    fn log_message_preview(value: Value) -> Option<String> {
+        let preview = match value.kind() {
+            ValueKind::Null => "null".to_string(),
+            ValueKind::Bool(value) => value.to_string(),
+            ValueKind::Int(value) => value.to_string(),
+            ValueKind::OmittedArg => "<omitted argument>".to_string(),
+            ValueKind::Object(ptr) => match unsafe { ptr.get() } {
+                Object::String(value) => value.to_string(),
+                Object::Bigint(value) => value.to_string(),
+                Object::Float(value) => value.to_string(),
+                _ => return None,
+            },
+        };
+        Some(truncate_preview(preview, 160))
     }
 
     /// Route an unhandled VM throw value through the embedder's terminal
@@ -2679,6 +3639,7 @@ impl BexEngine {
         value: Value,
         trace: Vec<bex_vm::StackFrame>,
         throws_type: Option<&RuntimeTy>,
+        root_capture: Option<&RootValueCaptureContext>,
     ) -> Result<ThreadOutcome, EngineError> {
         if let Some(future_id) = thread.vm_thread_settles_future() {
             let is_cancel_panic =
@@ -2694,16 +3655,31 @@ impl BexEngine {
             let _ = trace;
             return Ok(ThreadOutcome::SettledChild(ChildSettleKind::Errored));
         }
-        let external = if let Some(ty) = throws_type {
-            self.convert_vm_value_to_external_with_type(value, ty, thread.proof())?
-        } else {
-            self.vm_value_to_owned(thread.proof(), value)
+        // A panic escaping all in-BAML catches to the host is an
+        // engine-level failure mode, not a value the function opted into
+        // via `throws` — so it must bypass the declared-throws re-typing and
+        // route through `vm_value_to_owned` (the same branch used when there
+        // is no `throws` clause). Re-typing it against a 2+-member throws
+        // union would call `find_matching_member`, which never matches a
+        // `baml.panics.*` instance and would surface an internal
+        // `TypeMismatch` leak instead of the clean panic. This mirrors the
+        // panic bypass in [`enforce_host_throw_contract`].
+        let value_is_panic = value_runtime_baml_ty(value, thread.proof())
+            .is_some_and(|rt| matches!(&rt, RuntimeTy::Class(name, _, _) if name.is_panic_type()));
+        let external = match throws_type {
+            Some(ty) if !value_is_panic => {
+                self.convert_vm_value_to_external_with_type(value, ty, thread.proof())?
+            }
+            _ => self.vm_value_to_owned(thread.proof(), value),
         };
         // `baml.panics.Exit { code }` escaping all handlers is the clean-
         // termination path — surface as Exit so the host maps it to a
         // process exit code.
         if let Some(code) = extract_exit_code(&external) {
             return Err(EngineError::Exit { code });
+        }
+        if let Some(capture) = root_capture {
+            self.capture_root_value(thread, capture, CaptureKind::RootError, value);
         }
         Err(EngineError::UnhandledThrow {
             value: Box::new(external),
@@ -2750,6 +3726,10 @@ impl BexEngine {
     /// `route_unhandled_vm_throw` re-typing when the throw escapes all
     /// in-BAML catches. For non-host-callable sysops (which never produce
     /// `HostThrown` payloads), pass `None` for the throws contract.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "The unwind bridge keeps capture, contract, and thread state explicit."
+    )]
     async fn inject_sysop_throw(
         self: &Arc<Self>,
         thread: &mut ActiveHeapPermit<BexThread>,
@@ -2757,6 +3737,9 @@ impl BexEngine {
         op_err: OpError,
         throws_type: Option<&RuntimeTy>,
         host_callable_throws_contract: Option<&RuntimeTy>,
+        root_capture: Option<&RootValueCaptureContext>,
+        call_capture: Option<&CallValueCaptureContext>,
+        origin_call_capture: Option<(u64, VmCaptureMask)>,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
         let materialized = match op_err.payload {
             sys_types::OpErrorPayload::HostThrown(thrown) => {
@@ -2770,21 +3753,41 @@ impl BexEngine {
         } else {
             materialized
         };
-        match thread.vm.try_handle_external_exception(vm_value) {
-            // A handler caught the injected exception. `crossed` cannot be
-            // true here: this entry point runs from the engine's sysop arm,
-            // never inside a watch-filter mini-runner.
-            Ok(_crossed) => Ok(None),
+        if let Some((call_id, mask)) = origin_call_capture {
+            thread
+                .vm
+                .queue_engine_call_error_origin_capture(call_id, mask, vm_value);
+            self.drain_vm_call_captures(thread, call_capture);
+        }
+        let unwind_result = thread.vm.try_handle_external_exception(vm_value);
+        self.drain_vm_call_captures(thread, call_capture);
+        match unwind_result {
+            // A handler caught the injected exception.
+            Ok(()) => Ok(None),
             Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => Ok(Some(
-                self.route_unhandled_vm_throw(thread, call_id, value, trace, throws_type)
-                    .await?,
+                self.route_unhandled_vm_throw(
+                    thread,
+                    call_id,
+                    value,
+                    trace,
+                    throws_type,
+                    root_capture,
+                )
+                .await?,
             )),
             // Degenerate frame stack (e.g. all-Native at root): mirror the
             // existing `VmError::Thrown` arm by routing with no trace and no
             // `throws_type`-driven re-typing.
             Err(bex_vm::errors::VmError::Thrown(value)) => Ok(Some(
-                self.route_unhandled_vm_throw(thread, call_id, value, Vec::new(), None)
-                    .await?,
+                self.route_unhandled_vm_throw(
+                    thread,
+                    call_id,
+                    value,
+                    Vec::new(),
+                    None,
+                    root_capture,
+                )
+                .await?,
             )),
             Err(bex_vm::errors::VmError::InternalError(err)) => {
                 Err(EngineError::VmInternalError(err))
@@ -2903,6 +3906,9 @@ impl BexEngine {
         call_id: CallId,
         future_id: FutureId,
         prof_thread_id: u64,
+        prof_suppressed: bool,
+        call_capture: Option<CallValueCaptureContext>,
+        log_capture: Option<LogCaptureContext>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), EngineError>> + Send + 'static>,
     > {
@@ -2917,6 +3923,9 @@ impl BexEngine {
             call_id,
             future_id,
             prof_thread_id,
+            prof_suppressed,
+            call_capture,
+            log_capture,
         ))
     }
 
@@ -2942,6 +3951,9 @@ impl BexEngine {
         call_id: CallId,
         future_id: FutureId,
         prof_thread_id: u64,
+        prof_suppressed: bool,
+        call_capture: Option<CallValueCaptureContext>,
+        log_capture: Option<LogCaptureContext>,
     ) -> Result<(), EngineError> {
         // BEP-034 spawn options: link a user-provided `CancelToken`
         // (`with baml.spawn.options(cancel = ...)`) into this spawn's effective
@@ -2977,18 +3989,22 @@ impl BexEngine {
         let mut child_vm = BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
-            self.resolved_class_names
-                .iter()
-                .chain(self.resolved_enum_names.iter())
-                .map(|(k, v)| (k.clone(), *v))
-                .collect(),
             #[cfg(not(target_arch = "wasm32"))]
             Arc::clone(&self.park_requested),
             Arc::clone(&self.argv),
-            Arc::clone(&self.interface_impls),
+            Arc::clone(&self.packages),
+            Arc::clone(&self.error_class_ptrs),
+            Arc::clone(&self.panic_class_ptrs),
         );
         child_vm.prof_thread_id = prof_thread_id;
+        child_vm.prof_suppressed = prof_suppressed;
         child_vm.bex_ref_seed = Some((self.process_euid, self.engine_id));
+        child_vm.set_value_capture_auto_enabled(call_capture.is_some());
+        child_vm.set_call_input_capture_hook(
+            call_capture
+                .as_ref()
+                .map(CallValueCaptureContext::input_capture_hook),
+        );
         // Snapshot on the spawning thread, immediately before the entry
         // frame's CallFunction lands (no await in between); the loop-head
         // refresh re-snapshots on the child task's own thread later. The
@@ -2997,6 +4013,7 @@ impl BexEngine {
         self.prof_refresh_vm_ring(&mut child_vm);
         child_vm.set_entry_point(closure, &[]);
         let child_entry_call_id = BexCallId(child_vm.current_call_id());
+        let child_profile_enabled = child_vm.prof_ring.is_some();
 
         // Register a new (inactive) permit for the child. `new_permit` only
         // takes the holders mutex — it does NOT acquire a semaphore permit —
@@ -3026,7 +4043,7 @@ impl BexEngine {
                 engine: Arc::clone(&engine),
                 prof_thread_id,
                 entry_call_id: child_entry_call_id,
-                armed: true,
+                armed: child_profile_enabled,
             };
             // BEP-034 rate limiting: if this spawn joined a `TaskGroup`, park
             // here — WITHOUT the heap permit, so a queued task doesn't block GC
@@ -3065,7 +4082,17 @@ impl BexEngine {
             // wrapper on every exit path from here on.
             prof_closer.defuse();
             match engine
-                .run_thread_event_loop(return_type, None, permit, call_id, &child_cancel, true)
+                .run_thread_event_loop(
+                    return_type,
+                    None,
+                    permit,
+                    call_id,
+                    None,
+                    call_capture,
+                    log_capture,
+                    &child_cancel,
+                    true,
+                )
                 .await
             {
                 Ok(ThreadOutcome::SettledChild(_)) => {}
@@ -3084,6 +4111,28 @@ impl BexEngine {
                         ?future_id,
                         "spawn thread terminated with engine error"
                     );
+                    // The event loop settles the future itself on the VM-error
+                    // paths (`InternalError` / `TracedInternalError` /
+                    // unhandled-throw arms), but an `EngineError` escaping
+                    // through any other `?` in the loop arrives here with the
+                    // future still `Pending` — and an unsettled future parks
+                    // every awaiter forever (the parent, its parent, …). This
+                    // arm is the single choke point that restores the
+                    // propagation chain: settle the future with the engine
+                    // error so the awaiter re-raises it, *its* terminal path
+                    // settles the next future up, and the root surfaces the
+                    // original error to the host. The thread's own permit died
+                    // with the event loop, so settle under a fresh rootless
+                    // permit (`()` roots nothing; the future entry itself
+                    // roots the heap object).
+                    let admin = engine.heap_permit_manager.new_permit(()).await;
+                    let active = admin.acquire().await;
+                    engine
+                        .futures
+                        .acquire(active.proof())
+                        .await
+                        .settle_spawn_engine_error(future_id, err);
+                    child_cancel.cancel();
                 }
             }
         };
@@ -3120,20 +4169,104 @@ impl BexEngine {
         }
     }
 
+    /// B-650: end-of-run wait. Before the root finalizes, WAIT for every
+    /// outstanding spawned child future to run to completion, so a *racing*
+    /// unhandled error — a `spawn { throw ... }` whose tokio task had not been
+    /// polled yet when the root reached `Complete` — is deterministically
+    /// enqueued before the caller's [`Self::drain_one_pending_child_error`].
+    /// Without this the child's error was silently dropped when the root exited
+    /// 0 (B-612 fixed only the case where the child had ALREADY thrown by the
+    /// time the root completed).
+    ///
+    /// **Scope: non-detached spawns only.** A `detach = true` spawn is
+    /// contractually decoupled from its spawner and outlives the run that
+    /// created it ("behaves like a top-level task"); its unhandled error routes
+    /// to the root and is logged if the root is already gone. Waiting on a
+    /// detached spawn here contradicts that contract and deadlocks any
+    /// long-lived detached task designed to span calls — notably the SDK's
+    /// `replay_serve_detached`, whose detached `serve` is only torn down by a
+    /// *later*, separate bridge call and so can never settle while this call is
+    /// still parked on it (the sdk-test hang). Detached spawns are therefore
+    /// excluded by [`FutureManagerGuard::pending_join_handles`]; a
+    /// non-detached fire-and-forget spawn remains this run's in-flight work and
+    /// IS waited-for, so its racing/delayed throw still surfaces.
+    ///
+    /// **WAIT, do not cancel** (for the non-detached spawns we do wait on) —
+    /// the Node.js "run until there is no pending work" model (BEP-034
+    /// end-of-run amendment). We fire no cancel token: a prototype that
+    /// cancelled outstanding work at shutdown was rejected because it injected
+    /// `Cancelled` into legitimate background work (an `all_complete` loser
+    /// whose side effects must finish) and broke the `baml test` harness. A
+    /// non-detached spawn that never settles (never awaited, never cancelled)
+    /// blocks the process at exit; that is the amendment's deliberate red flag
+    /// for a concurrency bug (locate it with tracing), not a case we paper over
+    /// by cancelling. This also preserves the "returning futures is safe"
+    /// guarantee — nothing outstanding is torn down on normal exit.
+    ///
+    /// Loops until no strictly-`Pending` future remains, re-snapshotting to
+    /// catch grandchildren spawned while we waited.
+    ///
+    /// Deadlock-free: the heap permit is released before parking on the settles
+    /// (the wait is a safepoint), mirroring the `Await` arm, so a child task can
+    /// acquire a permit to write the heap and settle its future while we park.
+    /// No lock or permit the children need to make progress is held across the
+    /// wait — the `FutureManager` guard is dropped after the snapshot, and the
+    /// cloned `Arc<SetOnce>` wake handles survive any GC relocation of their
+    /// heap `Future`s (the moved copy shares the same `Arc`).
+    async fn wait_for_outstanding_child_futures(
+        self: &Arc<Self>,
+        mut thread: ActiveHeapPermit<BexThread>,
+    ) -> Result<ActiveHeapPermit<BexThread>, EngineError> {
+        // Scope the wait to THIS run's own spawns: the `FutureManager` is shared
+        // across every concurrent run on the engine, so we must not park on a
+        // different run's outstanding future. Stable for the life of the thread.
+        let run_id = thread.vm_thread_run_id();
+        loop {
+            let handles = {
+                let guard = self.futures.acquire(thread.proof()).await;
+                guard.pending_join_handles(run_id)
+            };
+            if handles.is_empty() {
+                return Ok(thread);
+            }
+            // Release the heap permit before parking — the wait is the
+            // safepoint (mirrors the `Await` arm). Opportunistically collect
+            // while parked; no permit dance is needed since we're released.
+            let inactive = thread.release();
+            self.maybe_collect_garbage().await;
+            for ready in handles {
+                // `ready` fires on every terminal transition AND on a deferred
+                // (fire-and-forget) error; we only need to know the future
+                // settled, so the payload (an internal-error box surfaced by
+                // the drain / a later `Await`) is discarded here.
+                let _ = ready.wait().await;
+            }
+            thread = inactive.acquire().await;
+        }
+    }
+
     /// Runs a thread's event loop (see [`Self::run_thread_event_loop_inner`])
     /// and closes its profiling lifecycle: one `EndThread` per `StartThread`,
     /// on every exit path (the inner loop has many early returns; thread
     /// join at shutdown makes the final commits visible to the consumer per
     /// plan §1).
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "The thread wrapper forwards lifecycle, capture, and cancellation state explicitly."
+    )]
     async fn run_thread_event_loop(
         self: &Arc<Self>,
         return_type: RuntimeTy,
         throws_type: Option<RuntimeTy>,
         thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
+        root_capture: Option<RootValueCaptureContext>,
+        call_capture: Option<CallValueCaptureContext>,
+        log_capture: Option<LogCaptureContext>,
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
+        let profile_thread = thread.vm.prof_ring.is_some();
         let prof_thread_id = thread.vm.prof_thread_id;
         // StartThread was already emitted before this function: roots in
         // run_entry_point (right before `set_entry_point`, §7 decision 7 —
@@ -3147,11 +4280,14 @@ impl BexEngine {
                 throws_type,
                 thread,
                 call_id,
+                root_capture,
+                call_capture,
+                log_capture,
                 cancel,
                 copy_objects,
             )
             .await;
-        if self.prof_enabled {
+        if profile_thread {
             let status = match &result {
                 Ok(ThreadOutcome::SettledChild(ChildSettleKind::Cancelled)) => {
                     bex_events::prof::record::ThreadEndStatus::Cancelled
@@ -3201,6 +4337,9 @@ impl BexEngine {
         throws_type: Option<RuntimeTy>,
         mut thread: ActiveHeapPermit<BexThread>,
         call_id: CallId,
+        root_capture: Option<RootValueCaptureContext>,
+        call_capture: Option<CallValueCaptureContext>,
+        log_capture: Option<LogCaptureContext>,
         cancel: &CancellationToken,
         copy_objects: bool,
     ) -> Result<ThreadOutcome, EngineError> {
@@ -3213,7 +4352,10 @@ impl BexEngine {
             // model must be revisited).
             self.prof_refresh_vm_ring(&mut thread.vm);
 
-            let exec_result = match thread.vm.exec() {
+            let vm_exec_result = thread.vm.exec();
+            self.drain_vm_call_captures(&mut thread, call_capture.as_ref());
+
+            let exec_result = match vm_exec_result {
                 Ok(state) => state,
                 Err(bex_vm::errors::VmError::ThrownUnhandled { value, trace }) => {
                     return self
@@ -3223,6 +4365,7 @@ impl BexEngine {
                             value,
                             trace,
                             throws_type.as_ref(),
+                            root_capture.as_ref(),
                         )
                         .await;
                 }
@@ -3254,6 +4397,9 @@ impl BexEngine {
                     let external = self.vm_value_to_owned(thread.proof(), value);
                     if let Some(code) = extract_exit_code(&external) {
                         return Err(EngineError::Exit { code });
+                    }
+                    if let Some(capture) = root_capture.as_ref() {
+                        self.capture_root_value(&thread, capture, CaptureKind::RootError, value);
                     }
                     return Err(EngineError::UnhandledThrow {
                         value: Box::new(external),
@@ -3299,6 +4445,73 @@ impl BexEngine {
                     // completed VM step, report a cancellation panic rather
                     // than returning a success value.
                     let cancelled = cancel.is_cancelled();
+
+                    if cancelled {
+                        return Err(cancelled_unhandled_throw());
+                    }
+
+                    // B-650: end-of-run wait. The root is finalizing; WAIT for
+                    // this run's still-outstanding NON-detached spawned child
+                    // futures to run to completion FIRST, so a racing
+                    // `spawn { throw ... }` whose task had not been polled yet
+                    // deterministically parks its error before the drain below.
+                    // Without this, only children that had ALREADY thrown by the
+                    // time the root completed surfaced (B-612); the fully-racing
+                    // case exited 0. We WAIT, never cancel; the wait is scoped to
+                    // this run and skips detached spawns (see
+                    // `wait_for_outstanding_child_futures` /
+                    // `FutureManagerGuard::pending_join_handles`).
+                    //
+                    // Gate on the GENUINE top-level root, NOT on
+                    // `settles_future.is_none()`: a nested host-invoked callable
+                    // (an HTTP request handler running on its own BAML thread via
+                    // `spawn_with_callable` → `call_callable`) is also a
+                    // `settles_future == None` root, so `settles_future.is_none()`
+                    // alone misclassifies it as the finalizing root. It would then
+                    // run this wait during the outer run — and, before per-run
+                    // scoping, park forever on the outer run's still-`Pending`
+                    // `serve` spawn (B-650 `baml test` hang). The shared
+                    // `FutureManager` sees every run's pending futures, so the
+                    // wait must be gated on the true root AND scoped by run id.
+                    if thread.vm_thread_is_top_level_root() {
+                        thread = self.wait_for_outstanding_child_futures(thread).await?;
+                    }
+
+                    // End-of-run drain: the root task is finalizing without
+                    // ever having awaited. Fire-and-forget child errors
+                    // (default spawns whose spawner never awaited, and
+                    // `detach = true` spawns that route their unhandled
+                    // errors to the root task) are parked on this thread's
+                    // `pending_child_errors` queue, which is otherwise drained
+                    // ONLY at `Await` opcodes. Without this, a root that
+                    // completes normally drops the parked error at teardown
+                    // and exits 0, silently swallowing the throw and violating
+                    // the documented `spawn`/`detach` routing contract.
+                    //
+                    // Surface the first still-unobserved child error as an
+                    // `UnhandledThrow` — the exact variant `await f` produces,
+                    // which the host maps to a diagnostic + exit 1.
+                    // `drain_one_pending_child_error` skips errors an awaiter
+                    // already consumed (via the `deferred_errors` stash), so a
+                    // root that DID await (and possibly `catch`) its children
+                    // does not re-surface a handled error. The value is used
+                    // synchronously while the heap permit is still held (same
+                    // safety envelope as the `Await`-arm drain above), so
+                    // there is no GC-rooting concern. This branch is only
+                    // reached on the root path: children settle their future
+                    // and return early above, so `thread` here never settles a
+                    // future.
+                    if let Some(value) = self.drain_one_pending_child_error(&mut thread).await? {
+                        let external = self.vm_value_to_owned(thread.proof(), value);
+                        return Err(EngineError::UnhandledThrow {
+                            value: Box::new(external),
+                            trace: Vec::new(),
+                        });
+                    }
+
+                    if let Some(capture) = root_capture.as_ref() {
+                        self.capture_root_value(&thread, capture, CaptureKind::RootOutput, value);
+                    }
 
                     let (return_value, _event_result) = if !copy_objects {
                         if let Some(ptr) = value.as_object_ptr() {
@@ -3351,10 +4564,6 @@ impl BexEngine {
                         )?;
                         (external.clone(), external)
                     };
-
-                    if cancelled {
-                        return Err(cancelled_unhandled_throw());
-                    }
 
                     return Ok(ThreadOutcome::RootValue(return_value));
                 }
@@ -3483,13 +4692,16 @@ impl BexEngine {
                     // op (CompletionHandle dropped → cancel-classed payload,
                     // no token fired) closes Cancelled, matching the
                     // Cancelled frames its injected throw then unwinds.
-                    self.prof_end_sysop(
+                    let sysop_capture_mask = thread.vm.pending_sysop_capture_mask;
+                    let sysop_capture_call = self.prof_end_sysop(
                         &mut thread.vm,
                         match &outcome {
                             Ok(_) => bex_events::prof::record::FunctionEndStatus::Ok,
                             Err(op_err) => Self::prof_sysop_error_status(op_err),
                         },
                     );
+                    let sysop_origin_capture =
+                        sysop_capture_call.map(|call_id| (call_id, sysop_capture_mask));
 
                     match outcome {
                         Ok(external) => {
@@ -3531,6 +4743,9 @@ impl BexEngine {
                                         op_err,
                                         throws_type.as_ref(),
                                         host_throws_ty.as_ref(),
+                                        root_capture.as_ref(),
+                                        call_capture.as_ref(),
+                                        sysop_origin_capture,
                                     )
                                     .await?
                                 {
@@ -3552,6 +4767,12 @@ impl BexEngine {
                                 // expression expected — no implicit await.
                                 let value =
                                     self.convert_external_to_vm_value(&mut thread, external)?;
+                                if let Some((call_id, mask)) = sysop_origin_capture {
+                                    thread
+                                        .vm
+                                        .queue_engine_call_output_capture(call_id, mask, value);
+                                    self.drain_vm_call_captures(&mut thread, call_capture.as_ref());
+                                }
                                 thread.vm.stack.push(value);
                             }
                         }
@@ -3573,6 +4794,9 @@ impl BexEngine {
                                     op_err,
                                     throws_type.as_ref(),
                                     host_throws_ty.as_ref(),
+                                    root_capture.as_ref(),
+                                    call_capture.as_ref(),
+                                    sysop_origin_capture,
                                 )
                                 .await?
                             {
@@ -3658,7 +4882,7 @@ impl BexEngine {
                     // the parent thread id, the spawning call id, and the
                     // child's name are all in hand (plan §2.2).
                     let child_prof_thread_id = self.next_prof_thread_id();
-                    if self.prof_enabled {
+                    if thread.vm.prof_ring.is_some() {
                         let name = spawn_name.as_deref().unwrap_or("");
                         self.prof_emit(&bex_events::prof::record::RawRecord::StartThread {
                             flags: 0,
@@ -3672,7 +4896,16 @@ impl BexEngine {
 
                     let future_ptr = {
                         let mut guard = self.futures.acquire(thread.proof()).await;
-                        let (future_id, future_ptr) = guard.new_future(child_cancel.clone());
+                        // Tag the future with `detach` and this run's id so the
+                        // B-650 end-of-run wait can (a) skip detached spawns
+                        // (decoupled, they outlive this run) and (b) scope to a
+                        // single run's own spawns on the shared `FutureManager`
+                        // (see `FutureManagerGuard::pending_join_handles`).
+                        let (future_id, future_ptr) = guard.new_future(
+                            child_cancel.clone(),
+                            detach,
+                            thread.vm_thread_run_id(),
+                        );
                         drop(guard);
                         Arc::clone(self)
                             .spawn_thread(
@@ -3686,6 +4919,9 @@ impl BexEngine {
                                 call_id,
                                 future_id,
                                 child_prof_thread_id,
+                                thread.vm.prof_suppressed,
+                                call_capture.clone(),
+                                log_capture.clone(),
                             )
                             .await?;
                         future_ptr
@@ -3909,19 +5145,23 @@ impl BexEngine {
                 }
 
                 VmExecState::Event {
-                    event_name: _,
-                    data: _,
-                    source_location: _,
+                    event_name,
+                    data,
+                    source_location,
                 } => {
-                    // Tracing removed: `baml.events.send()` is a no-op. It still
-                    // returns null — the SendEvent instruction pops its two
+                    if event_name == "$baml_log" {
+                        self.capture_baml_log_event(
+                            &thread,
+                            log_capture.as_ref(),
+                            data,
+                            source_location,
+                        );
+                    }
+                    // Only reserved `$baml_log` events are currently produced
+                    // by the standard library. `SendEvent` pops its two
                     // arguments but does not push a return value, so push null
                     // before the VM resumes at the next instruction.
                     thread.vm.stack.push(Value::NULL);
-                }
-
-                VmExecState::Notify(_notification) => {
-                    // Ignore watch notifications for now
                 }
 
                 VmExecState::EarlyYield => {

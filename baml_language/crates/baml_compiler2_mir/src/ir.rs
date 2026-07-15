@@ -7,7 +7,7 @@ use std::fmt;
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
-use baml_type::{RuntimeTy, TyTemplate};
+use baml_type::{RealizedTy, RuntimeTy, TyTemplate};
 
 // ============================================================================
 // Optimization Level
@@ -44,6 +44,14 @@ pub struct CatchRegion {
     pub body_entry: BlockId,
     /// Handler block that receives the exception.
     pub handler: BlockId,
+    /// All blocks making up the handler body (the arms). BEP-042 cause-chain: a
+    /// throw whose PC lies in any of these blocks is "during handling of"
+    /// `error_local`, so that error's `ErrorContext` becomes the new error's
+    /// cause. Captured as the blocks created while lowering the arms (plus the
+    /// handler block itself); empty means "never chains" (e.g. a defer pad).
+    /// Layout can fragment these across non-contiguous PCs, so the emitter must
+    /// take their union rather than a single `[handler, join)` span.
+    pub handler_body: Vec<BlockId>,
     /// Frame-local slot for the caught error value.
     pub error_local: Local,
     /// Frame-local slot for the stack trace value, if the catch clause
@@ -166,8 +174,6 @@ pub struct LocalDecl {
     /// This is debugger metadata used to resolve in-scope variables from
     /// source locations.
     pub scope_span: Option<Span>,
-    /// Whether this local is being watched for changes.
-    pub is_watched: bool,
     /// Whether this local is captured by a nested closure.
     ///
     /// When `true`, the local's stack slot holds an `Object::Cell` rather than
@@ -249,38 +255,13 @@ pub enum IntrinsicOp {
 
 /// The kind of a MIR statement.
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum StatementKind {
     /// Assign a value to a place: `_1 = <rvalue>`
     Assign { destination: Place, value: Rvalue },
 
     /// Drop a value (run destructor if any).
     Drop(Place),
-
-    /// Unwatch a local variable (unregister from watch tracking).
-    /// Emitted when a watched variable goes out of scope.
-    Unwatch(Local),
-
-    /// Block notification: `//# name`
-    /// Emits a block notification when executed.
-    NotifyBlock {
-        /// The name of the block annotation
-        name: Name,
-        /// The header level (number of # symbols)
-        level: usize,
-    },
-
-    /// Set watch options for a watched variable.
-    /// Emitted for `var.$watch.options(filter)`.
-    WatchOptions {
-        /// The watched local variable
-        local: Local,
-        /// The new filter (function, "manual", "never", etc.)
-        filter: Operand,
-    },
-
-    /// Manually trigger notification for a watched variable.
-    /// Emitted for `var.$watch.notify()`.
-    WatchNotify(Local),
 
     /// Enter a visualization node.
     /// Emitted at the start of control flow structures (if, while, etc.).
@@ -362,6 +343,11 @@ pub enum Terminator {
         /// calls to generic functions where at least one type argument is
         /// threaded at the call site (explicit `<T>` or type-arg forwarding).
         ntypeargs: usize,
+        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
+        ///
+        /// This is not part of ordinary call arity. Emitters push it above the
+        /// normal call payload and use an ID-aware bytecode call form.
+        runtime_id: Option<Operand>,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after call returns normally.
@@ -397,6 +383,8 @@ pub enum Terminator {
         /// Number of leading `args` entries that are method-level type arguments.
         /// Zero for a non-generic method.
         ntypeargs: usize,
+        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
+        runtime_id: Option<Operand>,
         /// Where to store the result.
         destination: Place,
         /// Block to jump to after the call returns normally.
@@ -422,6 +410,8 @@ pub enum Terminator {
         callee: Operand,
         /// Arguments to the sys-op.
         args: Vec<Operand>,
+        /// Hidden `boundary.LocalId` operand from call-site `$id = ...`.
+        runtime_id: Option<Operand>,
         /// Where to store the sys-op's return value.
         destination: Place,
         /// Block to resume at after the sys-op returns.
@@ -496,6 +486,12 @@ pub enum Terminator {
         value: Operand,
     },
 
+    /// Re-throw a caught error value, preserving its original trace origin.
+    Rethrow {
+        /// The caught error value to rethrow.
+        value: Operand,
+    },
+
     /// If the value is a panic instance (`baml.panics.*`), throw it.
     /// Otherwise continue to `otherwise` block.
     ///
@@ -553,7 +549,7 @@ impl Terminator {
                 }
                 succs
             }
-            Terminator::Throw { .. } => vec![],
+            Terminator::Throw { .. } | Terminator::Rethrow { .. } => vec![],
             Terminator::ThrowIfPanic { otherwise, .. } => vec![*otherwise],
             Terminator::ShortCircuit { eval_rhs, join, .. } => vec![*eval_rhs, *join],
         }
@@ -668,15 +664,20 @@ pub enum Rvalue {
     /// Unary operation: `!_1`, `-_1`
     UnaryOp { op: UnaryOp, operand: Operand },
 
-    /// Create an array: `[_1, _2, _3]`
-    Array(Vec<Operand>),
+    /// Create an array: `[_1, _2, _3]`. The first field is the static element
+    /// type (a [`TyTemplate`] so a generic `T[]` resolves against the frame's
+    /// type args at runtime), carried so the heap array records its declared
+    /// element type.
+    Array(TyTemplate, Vec<Operand>),
 
     /// Create a byte array from a literal: `b"hello"`
     Uint8Array(Vec<u8>),
 
-    /// Create a map: `{ key1: value1, key2: value2, ... }`
-    /// Each entry is a (key, value) pair.
-    Map(Vec<(Operand, Operand)>),
+    /// Create a map: `{ key1: value1, key2: value2, ... }`. Each entry is a
+    /// (key, value) pair. The first two fields are the static key and value
+    /// types (as [`TyTemplate`]s), carried so the heap map records its declared
+    /// key/value types.
+    Map(TyTemplate, TyTemplate, Vec<(Operand, Operand)>),
 
     /// Create an aggregate (class instance, enum variant): `ClassName { _1, _2 }`
     Aggregate {
@@ -702,9 +703,9 @@ pub enum Rvalue {
     ///
     /// The type is stored as a `TyTemplate` so that generic class checks like
     /// `value is Foo<T>` (where `T` is a type parameter in scope) resolve
-    /// correctly at runtime via `TypeArgRef` substitution.  For fully-concrete
-    /// types the template is `TyTemplate::Concrete(ty)`, which the emitter
-    /// handles on the same fast path as before.
+    /// correctly at runtime via `TypeArgRef` substitution.  A fully-realized
+    /// template narrows to a `RealizedTy`, which the emitter handles on the
+    /// same tag / class-identity fast path as before.
     IsType {
         operand: Operand,
         ty_template: TyTemplate,
@@ -733,6 +734,27 @@ pub enum Rvalue {
     MakeBoundMethod {
         item_ref: ItemRef,
         receiver: Operand,
+    },
+
+    /// Create a bound method value for an *interface* method whose impl is
+    /// unknown statically — the value analogue of [`Terminator::VirtualCall`]
+    /// (`let f = x.eq` on an existential / bounded-type-var receiver). The VM
+    /// resolves the receiver's concrete `Self` to its impl at bind time and
+    /// produces a `BoundMethod` over the resolved method, carrying the impl's
+    /// realized frame type args.
+    MakeVirtualBoundMethod {
+        /// The interface to resolve against, as a template the emitter pushes
+        /// with `LoadType` (like [`Terminator::VirtualCall`]'s `iface`).
+        iface: TyTemplate,
+        /// The interface method's name.
+        method: String,
+        /// The receiver whose runtime concrete type is the `Self` to resolve on.
+        receiver: Operand,
+        /// Method-level type-argument templates from the reference site (a
+        /// generic interface method's own generics, when specialized there).
+        /// Appended to the resolved impl frame by the VM — dropping them would
+        /// lose the method's own generics.
+        type_args: Vec<TyTemplate>,
     },
 
     /// Create a generic-function value (`foo<T>`) whose type arguments depend on
@@ -765,9 +787,9 @@ pub enum Rvalue {
 
     /// Materialize a `Ty` from a `TyTemplate`.
     ///
-    /// For concrete templates (`TyTemplate::Concrete`), the `Ty` is baked in
-    /// at compile time. For templates containing `TypeArgRef(N)`, the VM
-    /// substitutes `frame.type_args[N]` at execution time.
+    /// For a fully-realized template, the `Ty` is baked in at compile time.
+    /// For templates containing `TypeArgRef(N)`, the VM substitutes
+    /// `frame.type_args[N]` at execution time.
     ///
     /// Emitted by the `reflect.type_of<T>()` intrinsic.
     /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.
@@ -858,8 +880,9 @@ pub enum Constant {
     GenericFunction {
         /// The base generic function.
         item: ItemRef,
-        /// The concrete type arguments (fully resolved, no type parameters).
-        type_args: Vec<RuntimeTy>,
+        /// The concrete type arguments — fully realized (no type parameters),
+        /// exactly what the runtime `Object::GenericFunction` carries.
+        type_args: Vec<RealizedTy>,
     },
     /// An enum variant value.
     EnumVariant {

@@ -66,22 +66,37 @@ class Instant {
     /// assert.equal(t.to_string(), "1970-01-01T00:00:00Z")
     /// ```
     ///
-    /// ## Errors
-    /// - If the year would be more than 4 digits.
-    function to_string(self) -> string throws root.errors.InvalidArgument {
-        $rust_function
-    }
-    function from_json(j: baml.json.json) -> Instant throws root.json.JsonDecodeError {
-        match (j) {
-            string => Instant.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected timestamp string" }
+    /// ## Panics
+    /// - If the year would be more than 4 digits (outside the RFC 3339 range).
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => root.sys.panic("Instant.to_string: " + message),
+            }
         }
     }
-    function to_json(self) -> string throws root.json.JsonSerializationError {
-        self.to_string() catch (_) {
-            root.errors.InvalidArgument { message } => throw root.json.JsonSerializationError { message: message, path: "" },
+
+    /// Internal RFC 3339 formatter. Throws `InvalidArgument` when the year is
+    /// outside the 4-digit RFC 3339 range; `baml.ToString.to_string` turns that
+    /// into a panic, while `to_json` surfaces it as a `JsonSerializationError`.
+    function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
+        $rust_function
+    }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => Instant.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected timestamp string", path: "" }
+            }
+        }
+    }
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+            }
         }
     }
 

@@ -18,7 +18,7 @@
 //! and bridge_cffi → sys_native is the one-way dependency direction.
 
 use bex_project::{BexExternalValue, HostReleaseFn, host_release_dispatch};
-use bridge_ctypes::{HANDLE_TABLE, baml_core::cffi::InboundValue, inbound_to_external};
+use bridge_ctypes::{HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external};
 use prost::Message;
 use sys_native::host_dispatch;
 /// Signature for invocation requests from BAML to the host.
@@ -305,8 +305,8 @@ mod tests {
     /// pin the wire-side decode + delivery.
     #[tokio::test]
     async fn complete_host_call_throw_payload_delivers_external_value() {
-        use bridge_ctypes::baml_core::cffi::{
-            InboundClassValue, InboundMapEntry, InboundValue,
+        use bridge_ctypes::baml_bridge::cffi::{
+            BamlTyClass, InboundClassValue, InboundMapEntry, InboundValue,
             inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
         };
         use prost::Message;
@@ -323,8 +323,11 @@ mod tests {
         };
         let inbound = InboundValue {
             value: Some(InboundValueVariant::ClassValue(InboundClassValue {
-                name: "baml.errors.HostCallable".to_string(),
                 fields: vec![message_entry],
+                class_ty: Some(BamlTyClass {
+                    name: "baml.errors.HostCallable".to_string(),
+                    type_args: vec![],
+                }),
             })),
         };
         let encoded = inbound.encode_to_vec();
@@ -346,7 +349,9 @@ mod tests {
                     other => panic!("expected HostThrown payload, got {other:?}"),
                 };
                 match thrown {
-                    BexExternalValue::Instance { class_name, fields } => {
+                    BexExternalValue::Instance {
+                        class_name, fields, ..
+                    } => {
                         assert_eq!(class_name, "baml.errors.HostCallable");
                         match fields.get("message") {
                             Some(BexExternalValue::String(s)) => {

@@ -2,7 +2,7 @@
   "name": "baml-language",
   "displayName": "BAML",
   "description": "BAML language support — syntax highlighting, hover, completions, diagnostics, go-to-definition",
-  "version": "0.12.1",
+  "version": "0.15.0",
   "publisher": "Boundary",
   "private": true,
   "type": "commonjs",
@@ -23,27 +23,13 @@
         "aliases": ["BAML", "baml"],
         "extensions": [".baml"],
         "configuration": "./language-configuration.json"
-      },
-      {
-        "id": "baml-jinja",
-        "aliases": ["Jinja baml"],
-        "extensions": [".baml.jinja"]
       }
     ],
     "grammars": [
       {
         "language": "baml",
         "scopeName": "source.baml",
-        "path": "./syntaxes/baml.tmLanguage.json",
-        "embeddedLanguages": {
-          "source.baml-jinja": "baml-jinja",
-          "string.quoted.block.baml.prompt": "baml-jinja"
-        }
-      },
-      {
-        "language": "baml-jinja",
-        "scopeName": "source.baml-jinja",
-        "path": "./syntaxes/jinja.tmLanguage.json"
+        "path": "./syntaxes/baml.tmLanguage.json"
       }
     ],
     "commands": [
@@ -94,7 +80,10 @@
     }
   },
   "scripts": {
+    "sync:grammar": "pnpm --filter @b/pkg-grammar build",
+    "predev": "pnpm run sync:grammar",
     "dev": "tsup --watch --sourcemap",
+    "prebuild": "pnpm run sync:grammar",
     "build": "pnpm run typecheck && tsup",
     "build:cli": "cargo build -p baml_cli --manifest-path ../../baml_language/Cargo.toml",
     "typecheck": "tsc --noEmit",
@@ -105,6 +94,7 @@
     "vscode-languageclient": "^9.0.0"
   },
   "devDependencies": {
+    "@b/pkg-grammar": "workspace:*",
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.63.0",
     "tsup": "^8.0.0",

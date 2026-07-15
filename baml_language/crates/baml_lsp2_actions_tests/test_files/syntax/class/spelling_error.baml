@@ -22,20 +22,20 @@ class InterfaceOne {
 //----
 //- diagnostics
 // error: unresolved type: strin
-//    ╭─[ class_spelling_error.baml:2:12 ]
+//    ╭─[ class_spelling_error.baml:2:13 ]
 //    │
 //  2 │   interface strin
-//    │            ───┬──  
+//    │             ──┬──
 //    │               ╰──── unresolved type: strin
-//    │ 
+//    │
 //    │ Note: Error code: E0002
 // ───╯
 // error: unresolved type: InterfaceT
-//    ╭─[ class_spelling_error.baml:6:7 ]
+//    ╭─[ class_spelling_error.baml:6:8 ]
 //    │
 //  6 │   uses InterfaceT
-//    │       ─────┬─────  
-//    │            ╰─────── unresolved type: InterfaceT
-//    │ 
+//    │        ─────┬────
+//    │             ╰────── unresolved type: InterfaceT
+//    │
 //    │ Note: Error code: E0002
 // ───╯

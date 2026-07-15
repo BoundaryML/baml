@@ -1,9 +1,12 @@
 import { type NodeProps } from '@xyflow/react';
 import { Repeat } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
-import { selectionRing, stateColors } from '../constants';
+import { getChrome, stateStyle } from '../constants';
+import { depthScale } from '../lod';
+import { useGraphThemeContext } from '../theme';
 import type { WorkflowNodeData } from '../types';
 import { NodeHandles } from './NodeHandles';
+import { NodeOutputPreview } from './NodeOutputPreview';
 
 /**
  * Visual frame for a subgraph (function root, branch arm, loop body, scope).
@@ -17,17 +20,23 @@ import { NodeHandles } from './NodeHandles';
 export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
   const d = data as WorkflowNodeData;
   const isHighlighted = d.selected;
-  const stateStyle =
-    stateColors[d.executionState] ?? stateColors['not-started'];
-  const stateAccent = stateStyle.accent;
+  // Set by the level-of-detail pass when the user expanded this container.
+  const expandable = d.expanded === true;
+  // Deeper containers get a smaller label chip (semantic-zoom hierarchy).
+  const s = depthScale(typeof d.depth === 'number' ? d.depth : 0);
+  const theme = useGraphThemeContext();
+  const chrome = getChrome(theme);
+  const style = stateStyle(theme, d.executionState);
+  const stateAccent = style.accent;
   const isStateful =
     d.executionState !== 'not-started' && d.executionState !== 'skipped';
+  const hasValuePreviews = (d.valuePreviews?.length ?? 0) > 0;
 
   const borderColor = isHighlighted
-    ? selectionRing.color
+    ? chrome.selectionRing.color
     : isStateful
-      ? stateStyle.border
-      : 'rgba(26,22,18,0.28)';
+      ? style.border
+      : chrome.groupBorderIdle;
 
   return (
     <div
@@ -42,7 +51,7 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
         background: 'transparent',
         border: `1.5px ${isStateful || isHighlighted ? 'solid' : 'dashed'} ${borderColor}`,
         boxShadow: isHighlighted
-          ? `0 0 0 1px ${selectionRing.glow}`
+          ? `0 0 0 1px ${chrome.selectionRing.glow}`
           : undefined,
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
       }}
@@ -58,25 +67,29 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           transform: 'translateY(-50%)',
           zIndex: 5,
           pointerEvents: 'auto',
+          // Manually-expanded containers collapse on click of this chip.
+          cursor: expandable ? 'zoom-out' : 'pointer',
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
           whiteSpace: 'nowrap',
-          padding: '3px 10px',
+          padding: `${3 * s}px ${10 * s}px`,
           borderRadius: 999,
           fontWeight: 600,
-          fontSize: 11,
+          fontSize: 11 * s,
           letterSpacing: '-0.005em',
-          color: isHighlighted ? '#1D4ED8' : '#1A1612',
+          color: isHighlighted
+            ? chrome.groupLabelTextSelected
+            : chrome.groupLabelText,
           background: isHighlighted
-            ? 'rgba(234,241,254,0.94)'
-            : 'rgba(255,253,246,0.94)',
-          border: `1px solid ${isHighlighted ? selectionRing.color : '#D8CFBD'}`,
+            ? chrome.groupLabelBgSelected
+            : chrome.groupLabelBg,
+          border: `1px solid ${isHighlighted ? chrome.selectionRing.color : chrome.groupLabelBorder}`,
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           boxShadow: isHighlighted
-            ? `0 0 0 2px ${selectionRing.glow}, 0 1px 2px rgba(26,22,18,0.15)`
-            : '0 1px 2px rgba(26,22,18,0.12)',
+            ? `0 0 0 2px ${chrome.selectionRing.glow}, ${chrome.groupLabelShadow}`
+            : chrome.groupLabelShadow,
           transition: 'all 150ms ease',
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -96,6 +109,27 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           />
         )}
         <span>{d.label || id}</span>
+        {expandable && (
+          <span
+            aria-hidden
+            title="Click to collapse"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              fontSize: 13,
+              lineHeight: 1,
+              fontWeight: 700,
+              color: chrome.groupLabelText,
+              border: `1px solid ${chrome.groupLabelBorder}`,
+            }}
+          >
+            {'−'}
+          </span>
+        )}
         {(d.iterationCount ?? 0) > 0 && (
           <span
             style={{
@@ -105,12 +139,12 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
               marginLeft: 2,
               padding: '1px 6px',
               borderRadius: 999,
-              background: 'rgba(37,99,235,0.10)',
-              color: '#1D4ED8',
+              background: chrome.iterationBg,
+              color: chrome.iterationText,
               fontSize: 10,
               fontWeight: 600,
               fontVariantNumeric: 'tabular-nums',
-              border: '1px solid rgba(59,130,246,0.30)',
+              border: `1px solid ${chrome.iterationBorder}`,
             }}
           >
             <Repeat size={9} strokeWidth={2.5} />
@@ -118,6 +152,22 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           </span>
         )}
       </div>
+      {hasValuePreviews ? (
+        <div
+          style={{
+            position: 'absolute',
+            top: 16,
+            left: 14,
+            zIndex: 4,
+            pointerEvents: 'auto',
+          }}
+        >
+          <NodeOutputPreview
+            valuePreviews={d.valuePreviews}
+            customRenderers={d.customRenderers}
+          />
+        </div>
+      ) : null}
     </div>
   );
 });

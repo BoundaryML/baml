@@ -32,7 +32,7 @@ pub mod host_spans;
 mod panic;
 
 pub use baml_to_host::{call_and_encode, error_to_outbound, result_to_outbound};
-pub use bridge_ctypes::baml_core;
+pub use bridge_ctypes::baml_bridge;
 pub use buffer::Buffer;
 pub use error::BridgeError;
 pub use ffi::{
@@ -163,7 +163,7 @@ fn call_function_inner(
     length: usize,
     id: u32,
 ) -> Result<(), BridgeError> {
-    use bridge_ctypes::baml_core::cffi::CallFunctionArgs;
+    use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
 
     let runtime = get_runtime()?;
 
@@ -181,9 +181,10 @@ fn call_function_inner(
         unsafe { CallFunctionArgs::from_c_buffer(encoded_args, length) }?
     };
     let call_id = decoded_call_id(args.call_id)?;
+    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
-    let call_ctx = function_call_context_builder(call_id);
+    let call_ctx = function_call_context_builder(call_id).with_type_args(type_args);
 
     get_tokio_runtime()?.spawn(async move {
         // `call_and_encode` already wraps the engine call in its own

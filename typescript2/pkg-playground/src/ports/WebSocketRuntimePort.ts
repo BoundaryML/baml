@@ -3,10 +3,17 @@
  *
  * Used in the VS Code webview where the Rust LSP server runs the BAML runtime.
  * Communicates over ws://localhost:{port}/api/ws with JSON messages.
- * Proto bytes (argsProto / result) are base64-encoded for transit.
+ * Argument/result bytes are base64-encoded for transit.
  *
  * Features:
- *   - Queues outgoing messages while WebSocket is connecting
+ *   - Fail-closed handshake: nothing is processed or sent (except the
+ *     catalog-only `requestState`) until the server `hello` proves protocol
+ *     compatibility
+ *   - Bounded queue for commands issued before the FIRST handshake; once a
+ *     session existed, session-scoped commands are never queued across a
+ *     disconnect — they fail fast and the client resyncs after reconnect
+ *   - The project-runtime lease (`ensureProjectRuntime`) is standing intent:
+ *     the latest lease is re-asserted after every successful hello
  *   - Buffers incoming messages until a handler is registered (avoids race)
  *   - Auto-reconnects on close/error with exponential backoff
  */
@@ -15,134 +22,42 @@ import type { RuntimePort } from '../runtime-port';
 import type {
   WorkerOutMessage,
   WorkerInMessage,
-  PlaygroundNotification,
-  LogLevel,
-  LogDecoration,
+  WebSocketInMessage,
+  WebSocketOutMessage,
 } from '../worker-protocol';
-import { decodeCallResult, RuntimeEvent } from '@b/pkg-proto';
-import { truncateMessage, normalizeLogLevel } from '../shared/log-decorations';
-import { formatValue } from '../shared/format-value';
-import { deserializeRuntimeEvent } from '../shared/deserialize-event';
 import { isPlaygroundProtocolCompatible } from '../protocol';
 
-/** Server → Client message shapes (must match playground_ws.rs WsOutMessage) */
-type WsOutMessage =
-  | {
-      type: 'hello';
-      toolchainVersion: string;
-      playgroundProtocol: number;
-      minClientPlaygroundProtocol: number;
-      capabilities: string[];
-    }
-  | { type: 'ready' }
-  | { type: 'playgroundNotification'; notification: PlaygroundNotification }
-  | { type: 'callFunctionResult'; id: number; result: string }
-  | {
-      type: 'callFunctionError';
-      id: number;
-      error: string;
-      cancelled?: boolean;
-    }
-  | { type: 'nextFunctionCallResult'; id: number; callId: number }
-  | { type: 'nextFunctionCallError'; id: number; error: string }
-  | { type: 'envVarRequest'; id: number; variable: string }
-  | { type: 'processEnvVars'; vars: Record<string, string> }
-  | { type: 'envVarFromShell'; variable: string; value: string }
-  | { type: 'knownEnvVarNames'; names: string[] }
-  | {
-      type: 'inputRequest';
-      id: number;
-      prompt: string | undefined;
-      callId: number;
-    }
-  | { type: 'inputResolved'; id: number; callId: number }
-  | {
-      type: 'fetchLogNew';
-      callId: number;
-      id: number;
-      method: string;
-      url: string;
-      requestHeaders: Record<string, string>;
-      requestBody: string;
-    }
-  | {
-      type: 'fetchLogUpdate';
-      callId: number;
-      logId: number;
-      status?: number;
-      durationMs?: number;
-      responseBody?: string;
-      error?: string;
-      responseHeaders?: Record<string, string>;
-    }
-  | {
-      type: 'controlFlowGraphResult';
-      functionName: string;
-      graph: unknown | null;
-    }
-  | { type: 'cursorContext'; context: unknown }
-  | { type: 'runtimeEvent'; data: string; callId: number };
-
-/** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
-type WsInMessage =
-  | { type: 'nextFunctionCall'; id: number }
-  | {
-      type: 'callFunction';
-      id: number;
-      project: string;
-      name: string;
-      argsProto: string;
-    }
-  | { type: 'cancelCall'; id: number; project: string }
-  | {
-      type: 'callTestFunction';
-      id: number;
-      project: string;
-      generation: number;
-      testName: string;
-    }
-  | {
-      type: 'expandTestSet';
-      project: string;
-      generation: number;
-      testsetName: string;
-    }
-  | {
-      type: 'envVarResponse';
-      id: number;
-      value: string | undefined;
-      variable?: string;
-    }
-  | { type: 'inputResponse'; id: number; value: string; callId: number }
-  | { type: 'setEnvVar'; key: string; value: string }
-  | { type: 'deleteEnvVar'; key: string }
-  | { type: 'requestState' }
-  | { type: 'requestCollectTests'; project: string }
-  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
-  | { type: 'cursorPosition'; file: string; line: number; column: number };
-
 const MAX_RECONNECT_DELAY = 5000;
+
+/** Upper bound on commands held while waiting for the first handshake. */
+const MAX_PRE_SESSION_QUEUE = 64;
+
+/** Synthetic command-error code for commands dropped by the transport. */
+export const PORT_DISCONNECTED_ERROR_CODE = 'disconnected';
 
 export class WebSocketRuntimePort implements RuntimePort {
   private url: string;
   private ws: WebSocket | null = null;
   private handlers = new Set<(msg: WorkerOutMessage) => void>();
-  private outQueue: string[] = [];
+  /** Commands held until the first compatible hello (never across sessions). */
+  private outQueue: WebSocketInMessage[] = [];
   private inBuffer: WorkerOutMessage[] = [];
   private disposed = false;
   private reconnectDelay = 500;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private decorationsByLine = new Map<
-    number,
-    { level: LogLevel; message: string; count: number }
-  >();
-  private textEncoder = new TextEncoder();
-  private playgroundCompatible = true;
-  private nextFunctionCallRequestId = 1;
-  private pendingNextFunctionCalls = new Map<
-    number,
-    { resolve: (callId: number) => void; reject: (error: Error) => void }
-  >();
+  /** Fail closed: assume incompatible until a hello proves otherwise. */
+  private playgroundCompatible = false;
+  private handshakeComplete = false;
+  /** True once any hello completed; after that, disconnected commands are
+   *  dropped instead of queued so they can never replay into a new session. */
+  private everHadSession = false;
+  /** The one selected-project runtime lease this client wants to hold. This is
+   *  desired state, not a one-shot command: it survives reconnects and is
+   *  re-sent after every successful hello. */
+  private desiredRuntimeLease: Extract<
+    WorkerInMessage,
+    { type: 'ensureProjectRuntime' }
+  > | null = null;
 
   constructor(url: string) {
     this.url = url;
@@ -152,63 +67,59 @@ export class WebSocketRuntimePort implements RuntimePort {
   private connect(): void {
     if (this.disposed) return;
 
+    // A reconnect performs a fresh handshake; do not retain trust from the
+    // previous server instance while waiting for its replacement.
+    this.handshakeComplete = false;
+    this.playgroundCompatible = false;
+
+    let socket: WebSocket;
     try {
-      this.ws = new WebSocket(this.url);
+      socket = new WebSocket(this.url);
+      this.ws = socket;
     } catch {
       this.scheduleReconnect();
       return;
     }
 
-    this.ws.onopen = () => {
+    socket.onopen = () => {
+      if (this.ws !== socket) return;
       this.reconnectDelay = 500; // reset backoff
-      // Flush queued outgoing messages.
-      for (const msg of this.outQueue) {
-        this.ws!.send(msg);
-      }
-      this.outQueue = [];
+      // The catalog-only state request is the sole pre-handshake frame; the
+      // full resync it triggers arrives after the server's hello, which is
+      // what re-establishes the session.
+      socket.send(JSON.stringify({ type: 'requestState' }));
     };
 
-    this.ws.onmessage = (event: MessageEvent) => {
+    socket.onmessage = (event: MessageEvent) => {
+      if (this.ws !== socket) return;
       try {
-        const raw: WsOutMessage = JSON.parse(event.data as string);
+        const raw: WebSocketOutMessage = JSON.parse(event.data as string);
         const msg = this.fromServer(raw);
         if (!msg) return;
-
-        if (msg.type === 'nextFunctionCallResult') {
-          const pending = this.pendingNextFunctionCalls.get(msg.id);
-          if (pending) {
-            this.pendingNextFunctionCalls.delete(msg.id);
-            pending.resolve(msg.callId);
-          }
-          return;
-        }
-        if (msg.type === 'nextFunctionCallError') {
-          const pending = this.pendingNextFunctionCalls.get(msg.id);
-          if (pending) {
-            this.pendingNextFunctionCalls.delete(msg.id);
-            pending.reject(new Error(msg.error));
-          }
-          return;
-        }
-
-        if (this.handlers.size === 0) {
-          // No handler registered yet — buffer the message.
-          this.inBuffer.push(msg);
-        } else {
-          for (const h of this.handlers) h(msg);
-        }
+        this.deliver(msg);
       } catch (e) {
         console.warn('WebSocketRuntimePort: failed to parse message', e);
       }
     };
 
-    this.ws.onclose = () => {
+    socket.onclose = () => {
+      if (this.ws !== socket) return;
+      // Tombstone this socket immediately. A queued callback from the closed
+      // connection must not be mistaken for output from the reconnect that
+      // will be installed after the backoff.
+      this.ws = null;
+      this.handshakeComplete = false;
+      this.playgroundCompatible = false;
+      if (this.everHadSession) {
+        // Session-scoped commands must not replay into the next session.
+        this.dropQueuedCommands('connection closed');
+      }
       if (!this.disposed) {
         this.scheduleReconnect();
       }
     };
 
-    this.ws.onerror = () => {
+    socket.onerror = () => {
       // onclose will fire after onerror, which triggers reconnect.
     };
   }
@@ -225,27 +136,96 @@ export class WebSocketRuntimePort implements RuntimePort {
     );
   }
 
+  private get sendable(): boolean {
+    return (
+      this.ws !== null &&
+      this.ws.readyState === WebSocket.OPEN &&
+      this.handshakeComplete &&
+      this.playgroundCompatible
+    );
+  }
+
   postMessage(msg: WorkerInMessage): void {
+    // Track the standing lease regardless of connection state; `hello`
+    // replays the latest lease into every new session.
+    if (msg.type === 'ensureProjectRuntime') {
+      this.desiredRuntimeLease = msg;
+    } else if (
+      msg.type === 'releaseProjectRuntime' &&
+      this.desiredRuntimeLease?.project === msg.project &&
+      this.desiredRuntimeLease.incarnation === msg.incarnation
+    ) {
+      this.desiredRuntimeLease = null;
+    }
+
+    // Every successful open issues one state request, so pre-open callers do
+    // not need to accumulate duplicate requestState frames in the queue.
+    if (
+      msg.type === 'requestState' &&
+      (!this.ws || this.ws.readyState !== WebSocket.OPEN)
+    ) {
+      return;
+    }
+
     const serverMsg = this.toServer(msg);
     if (!serverMsg) return;
-    this.sendServerMessage(serverMsg);
-  }
 
-  nextFunctionCall(): Promise<number> {
-    const id = this.nextFunctionCallRequestId++;
-    return new Promise((resolve, reject) => {
-      this.pendingNextFunctionCalls.set(id, { resolve, reject });
-      this.sendServerMessage({ type: 'nextFunctionCall', id });
-    });
-  }
-
-  private sendServerMessage(serverMsg: WsInMessage): void {
-    const raw = JSON.stringify(serverMsg);
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(raw);
-    } else {
-      this.outQueue.push(raw);
+    // Lease controls describe desired session state; stale transitions must
+    // never sit in the generic queue. The hello handler restores exactly the
+    // latest lease.
+    if (
+      (msg.type === 'ensureProjectRuntime' ||
+        msg.type === 'releaseProjectRuntime') &&
+      !this.sendable
+    ) {
+      return;
     }
+
+    if (this.sendable) {
+      this.ws!.send(JSON.stringify(serverMsg));
+      return;
+    }
+
+    if (!this.everHadSession && !this.handshakeComplete) {
+      // No session has existed yet — hold startup commands (bounded) until
+      // the first compatible hello, so early callers are not lost while the
+      // socket connects.
+      this.outQueue.push(serverMsg);
+      if (this.outQueue.length > MAX_PRE_SESSION_QUEUE) {
+        const dropped = this.outQueue.shift()!;
+        this.synthesizeDropError(
+          dropped,
+          'queue overflow before the first playground handshake',
+        );
+      }
+      return;
+    }
+
+    // Session-scoped command while disconnected, mid-handshake on a
+    // reconnect, or against an incompatible server: fail fast instead of
+    // replaying it into a session it was not issued against.
+    this.synthesizeDropError(serverMsg, 'playground connection unavailable');
+  }
+
+  /** Clear the pre-session queue, failing any queued request/response pairs. */
+  private dropQueuedCommands(reason: string): void {
+    const dropped = this.outQueue.splice(0);
+    for (const msg of dropped) {
+      this.synthesizeDropError(msg, reason);
+    }
+  }
+
+  /** Locally reject a dropped command so pending promises fail instead of
+   *  hanging. Fire-and-forget frames (no requestId) are dropped silently. */
+  private synthesizeDropError(msg: WebSocketInMessage, reason: string): void {
+    const requestId = (msg as { requestId?: unknown }).requestId;
+    if (typeof requestId !== 'number') return;
+    this.deliver({
+      type: 'commandError',
+      requestId,
+      code: PORT_DISCONNECTED_ERROR_CODE,
+      message: `Playground command dropped: ${reason}.`,
+    });
   }
 
   onMessage(handler: (msg: WorkerOutMessage) => void): () => void {
@@ -280,33 +260,93 @@ export class WebSocketRuntimePort implements RuntimePort {
       this.ws = null;
     }
     this.handlers.clear();
-    for (const pending of this.pendingNextFunctionCalls.values()) {
-      pending.reject(new Error('Runtime port disposed'));
-    }
-    this.pendingNextFunctionCalls.clear();
     this.outQueue = [];
     this.inBuffer = [];
+    this.desiredRuntimeLease = null;
   }
 
   // ---------------------------------------------------------------------------
-  // Convert WorkerInMessage → WsInMessage (base64-encode argsProto)
+  // Convert WorkerInMessage → WsInMessage (base64-encode argsBytes)
   // ---------------------------------------------------------------------------
 
-  private toServer(msg: WorkerInMessage): WsInMessage | null {
+  private toServer(msg: WorkerInMessage): WebSocketInMessage | null {
     switch (msg.type) {
-      case 'nextFunctionCall':
-        return { type: 'nextFunctionCall', id: msg.id };
-      case 'callFunction':
+      case 'startRun':
         this.clearLogDecorations();
         return {
-          type: 'callFunction',
-          id: msg.id,
+          type: 'startRun',
+          requestId: msg.requestId,
           project: msg.project,
-          name: msg.name,
-          argsProto: uint8ArrayToBase64(msg.argsProto),
+          functionName: msg.functionName,
+          argsBytes: uint8ArrayToBase64(msg.argsBytes),
         };
-      case 'cancelCall':
-        return { type: 'cancelCall', id: msg.id, project: msg.project };
+      case 'startPreviewRun':
+        this.clearLogDecorations();
+        return {
+          type: 'startPreviewRun',
+          requestId: msg.requestId,
+          project: msg.project,
+          parentFunctionName: msg.parentFunctionName,
+          helper: msg.helper,
+          functionName: msg.functionName,
+          argsBytes: uint8ArrayToBase64(msg.argsBytes),
+        };
+      case 'startTestRun':
+        this.clearLogDecorations();
+        return {
+          type: 'startTestRun',
+          requestId: msg.requestId,
+          project: msg.project,
+          generation: msg.generation,
+          testName: msg.testName,
+        };
+      case 'cancelRun':
+        return { type: 'cancelRun', requestId: msg.requestId, boundaryId: msg.boundaryId };
+      case 'respondToInput':
+        return {
+          type: 'respondToInput',
+          requestId: msg.requestId,
+          boundaryId: msg.boundaryId,
+          inputRequestId: msg.inputRequestId,
+          value: msg.value,
+        };
+      case 'respondToEnv':
+        return {
+          type: 'respondToEnv',
+          requestId: msg.requestId,
+          boundaryId: msg.boundaryId,
+          envRequestId: msg.envRequestId,
+          value: msg.value,
+        };
+      case 'listRuns':
+        return { type: 'listRuns', requestId: msg.requestId, filter: msg.filter };
+      case 'listHistory':
+        return { type: 'listHistory', requestId: msg.requestId, filter: msg.filter };
+      case 'openHistory':
+        return { type: 'openHistory', requestId: msg.requestId, boundaryId: msg.boundaryId };
+      case 'snapshot':
+        return { type: 'snapshot', requestId: msg.requestId, boundaryId: msg.boundaryId };
+      case 'readValue':
+        return {
+          type: 'readValue',
+          requestId: msg.requestId,
+          boundaryId: msg.boundaryId,
+          valueRef: msg.valueRef,
+        };
+      case 'subscribe':
+        return {
+          type: 'subscribe',
+          requestId: msg.requestId,
+          subscriptionId: msg.subscriptionId,
+          boundaryId: msg.boundaryId,
+          afterCursor: msg.afterCursor,
+        };
+      case 'unsubscribe':
+        return {
+          type: 'unsubscribe',
+          requestId: msg.requestId,
+          subscriptionId: msg.subscriptionId,
+        };
       case 'envVarResponse':
         return {
           type: 'envVarResponse',
@@ -324,6 +364,20 @@ export class WebSocketRuntimePort implements RuntimePort {
         return null; // handled locally, not sent to server
       case 'requestState':
         return { type: 'requestState' };
+      case 'ensureProjectRuntime':
+        return {
+          type: 'ensureProjectRuntime',
+          requestId: msg.requestId,
+          project: msg.project,
+          incarnation: msg.incarnation,
+        };
+      case 'releaseProjectRuntime':
+        return {
+          type: 'releaseProjectRuntime',
+          requestId: msg.requestId,
+          project: msg.project,
+          incarnation: msg.incarnation,
+        };
       case 'requestControlFlowGraph':
         return {
           type: 'requestControlFlowGraph',
@@ -339,15 +393,6 @@ export class WebSocketRuntimePort implements RuntimePort {
         };
       case 'requestCollectTests':
         return { type: 'requestCollectTests', project: msg.project };
-      case 'callTestFunction':
-        this.clearLogDecorations();
-        return {
-          type: 'callTestFunction',
-          id: msg.id,
-          project: msg.project,
-          generation: msg.generation,
-          testName: msg.testName,
-        };
       case 'expandTestSet':
         return {
           type: 'expandTestSet',
@@ -362,8 +407,6 @@ export class WebSocketRuntimePort implements RuntimePort {
           value: msg.value,
           callId: msg.callId,
         };
-      case 'clearHandles':
-        return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':
         return null; // worker-only; no server equivalent
     }
@@ -372,68 +415,105 @@ export class WebSocketRuntimePort implements RuntimePort {
   }
 
   // ---------------------------------------------------------------------------
-  // Convert WsOutMessage → WorkerOutMessage (base64-decode resultProto)
+  // Convert WebSocketOutMessage → WorkerOutMessage.
   // ---------------------------------------------------------------------------
 
-  private fromServer(raw: WsOutMessage): WorkerOutMessage | null {
-    switch (raw.type) {
-      case 'hello':
-        this.playgroundCompatible = isPlaygroundProtocolCompatible(
-          raw.playgroundProtocol,
-          raw.minClientPlaygroundProtocol,
+  private fromServer(raw: WebSocketOutMessage): WorkerOutMessage | null {
+    if (raw.type === 'hello') {
+      this.playgroundCompatible = isPlaygroundProtocolCompatible(
+        raw.playgroundProtocol,
+        raw.minClientPlaygroundProtocol,
+      );
+      this.handshakeComplete = true;
+      if (this.everHadSession) {
+        // A replacement session: input buffered for the old session must not
+        // replay to a late-registering handler.
+        this.inBuffer = [];
+      }
+      this.everHadSession = true;
+      if (!this.playgroundCompatible) {
+        console.warn(
+          `BAML playground protocol ${raw.playgroundProtocol} from toolchain ${raw.toolchainVersion} is incompatible with this extension.`,
         );
-        if (!this.playgroundCompatible) {
-          return {
-            type: 'runtimeEventError',
-            error: `BAML playground protocol ${raw.playgroundProtocol} from toolchain ${raw.toolchainVersion} is incompatible with this extension.`,
-          };
-        }
+        this.dropQueuedCommands('playground protocol is incompatible');
         return null;
+      }
+      // Re-assert the standing project-runtime lease on EVERY hello. It is
+      // desired state, not a one-shot command; the replacement server session
+      // starts without it. (Deliberately not cleared here — dropping the
+      // saved lease after hello would lose it across reconnects.)
+      if (this.desiredRuntimeLease) {
+        const lease = this.toServer(this.desiredRuntimeLease);
+        if (lease) this.ws?.send(JSON.stringify(lease));
+      }
+      // Flush commands held from before the first handshake.
+      const queued = this.outQueue.splice(0);
+      for (const pending of queued) {
+        this.ws?.send(JSON.stringify(pending));
+      }
+      return null;
+    }
+
+    // Fail closed until a compatible hello establishes this connection.
+    if (!this.handshakeComplete || !this.playgroundCompatible) return null;
+
+    switch (raw.type) {
       case 'ready':
-        if (!this.playgroundCompatible) {
-          return null;
-        }
         return { type: 'ready' };
       case 'playgroundNotification':
         return {
           type: 'playgroundNotification',
           notification: raw.notification,
         };
-      case 'callFunctionResult': {
-        try {
-          const bytes = base64ToUint8Array(raw.result);
-          const decoded = decodeCallResult(
-            bytes,
-            (key, handleType, typeName) => ({
-              handle_key: key,
-              handle_type: handleType,
-              type_name: typeName,
-            }),
-          );
-          return {
-            type: 'callFunctionResult',
-            id: raw.id,
-            result: decoded,
-          };
-        } catch (e) {
-          return {
-            type: 'callFunctionError',
-            id: raw.id,
-            error: `Failed to decode result: ${e instanceof Error ? e.message : String(e)}`,
-          };
-        }
-      }
-      case 'callFunctionError':
+      case 'runStarted':
         return {
-          type: 'callFunctionError',
-          id: raw.id,
-          error: raw.error,
-          cancelled: raw.cancelled,
+          type: 'runStarted',
+          requestId: raw.requestId,
+          run: raw.run,
         };
-      case 'nextFunctionCallResult':
-        return { type: 'nextFunctionCallResult', id: raw.id, callId: raw.callId };
-      case 'nextFunctionCallError':
-        return { type: 'nextFunctionCallError', id: raw.id, error: raw.error };
+      case 'runPatch':
+        return { type: 'runPatch', patch: raw.patch };
+      case 'commandAck':
+        return {
+          type: 'commandAck',
+          requestId: raw.requestId,
+          outcome: raw.outcome,
+        };
+      case 'commandError':
+        return {
+          type: 'commandError',
+          requestId: raw.requestId,
+          code: raw.code,
+          message: raw.message,
+        };
+      case 'runList':
+        return { type: 'runList', requestId: raw.requestId, runs: raw.runs };
+      case 'runSnapshot':
+        return {
+          type: 'runSnapshot',
+          requestId: raw.requestId,
+          boundaryId: raw.boundaryId,
+          snapshot: raw.snapshot,
+        };
+      case 'valueBody':
+        return {
+          type: 'valueBody',
+          requestId: raw.requestId,
+          boundaryId: raw.boundaryId,
+          valueRefId: raw.valueRefId,
+          codec: raw.codec,
+          availability: raw.availability,
+          bodyBase64: raw.bodyBase64,
+          diagnostic: raw.diagnostic,
+        };
+      case 'runCursorExpired':
+        return {
+          type: 'runCursorExpired',
+          requestId: raw.requestId,
+          subscriptionId: raw.subscriptionId,
+          boundaryId: raw.boundaryId,
+          reason: raw.reason,
+        };
       case 'envVarRequest':
         return { type: 'envVarRequest', id: raw.id, variable: raw.variable };
       case 'processEnvVars':
@@ -458,9 +538,9 @@ export class WebSocketRuntimePort implements RuntimePort {
       case 'fetchLogNew':
         return {
           type: 'fetchLogNew',
+          callId: raw.callId,
           entry: {
             id: raw.id,
-            callId: raw.callId,
             timestamp: Date.now(),
             method: raw.method,
             url: raw.url,
@@ -504,49 +584,6 @@ export class WebSocketRuntimePort implements RuntimePort {
           type: 'cursorContext',
           context: raw.context as import('../worker-protocol').CursorContext,
         };
-      case 'runtimeEvent': {
-        try {
-          const bytes = base64ToUint8Array(raw.data);
-          const event = RuntimeEvent.decode(bytes);
-          const deserialized = deserializeRuntimeEvent(event);
-          // Forward the decoded event via the buffer-or-dispatch path
-          this.deliver({
-            type: 'runtimeEventNew',
-            event: deserialized,
-            callId: raw.callId ?? null,
-          });
-
-          // Extract log decorations (same logic as baml-lsp-worker.ts)
-          const kind = deserialized.event;
-          if (kind?.$case === 'log' && kind.log.source) {
-            const source = kind.log.source;
-            const line = source.line;
-            const level = normalizeLogLevel(kind.log.level);
-            const message = formatValue(kind.log.data, 'inline-hint');
-            const sourceSpanLength = source.endOffset - source.startOffset;
-            // Compare UTF-8 byte lengths since source offsets are byte offsets from Rust
-            const messageByteLen = this.textEncoder.encode(message).length;
-            const isLikelyVariable = messageByteLen > sourceSpanLength + 5;
-            if (isLikelyVariable) {
-              const existing = this.decorationsByLine.get(line);
-              if (existing) {
-                existing.message = message;
-                existing.level = level;
-                existing.count += 1;
-              } else {
-                this.decorationsByLine.set(line, { level, message, count: 1 });
-              }
-              this.emitLogDecorations();
-            }
-          }
-          return null; // already dispatched via handlers above
-        } catch (e) {
-          return {
-            type: 'runtimeEventError' as const,
-            error: `Failed to decode runtime event: ${e instanceof Error ? e.message : String(e)}`,
-          } as WorkerOutMessage;
-        }
-      }
       default:
         return null;
     }
@@ -561,21 +598,7 @@ export class WebSocketRuntimePort implements RuntimePort {
     }
   }
 
-  private emitLogDecorations(): void {
-    const decorations: LogDecoration[] = [];
-    for (const [line, entry] of this.decorationsByLine) {
-      decorations.push({
-        line,
-        level: entry.level,
-        message: truncateMessage(entry.message),
-        count: entry.count,
-      });
-    }
-    this.deliver({ type: 'logDecorations', decorations });
-  }
-
   private clearLogDecorations(): void {
-    this.decorationsByLine.clear();
     this.deliver({ type: 'clearLogDecorations' });
   }
 }
@@ -590,13 +613,4 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i]!);
   }
   return btoa(binary);
-}
-
-function base64ToUint8Array(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }

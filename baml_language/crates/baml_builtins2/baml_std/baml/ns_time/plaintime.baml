@@ -42,7 +42,13 @@ class PlainTime {
     }
     /// Serializes to an ISO 8601 time-of-day: `07:32:00`. Sub-second
     /// precision is supported; trailing subsecond zeros are truncated.
-    function to_string(self) -> string throws never {
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self._to_string_impl()
+        }
+    }
+
+    function _to_string_impl(self) -> string throws never {
         $rust_function
     }
 
@@ -68,15 +74,23 @@ class PlainTime {
         self._nanoseconds / 1000000 % 1000
     }
 
-    function from_json(j: baml.json.json) -> PlainTime throws root.json.JsonDecodeError {
-        match (j) {
-            string => PlainTime.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected ISO 8601 time string" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => PlainTime.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected ISO 8601 time string", path: "" }
+            }
         }
     }
-    function to_json(self) -> string throws never {
-        self.to_string()
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            // Route through `baml.json.from` so the body can throw the
+            // `JsonSerializationError` the interface declares (a `string`-returning
+            // `to_string()` is `throws never`, which would trip the extraneous-throws
+            // check on a BAML-bodied impl). The string flows into `json` unchanged.
+            baml.json.from(self.to_string())
+        }
     }
 }

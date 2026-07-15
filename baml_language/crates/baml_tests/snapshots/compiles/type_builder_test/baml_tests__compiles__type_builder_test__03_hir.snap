@@ -18,9 +18,3 @@ function user.Fn$build_request_stream(client: baml.llm.Client = ...) -> baml.htt
 function user.Fn$render_prompt(client: baml.llm.Client = ...) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(client, "Fn", map {  })
 }
-function user.from_json(j: baml.json.json) -> user.TopLevelClass  [expr] {
-  user.TopLevelClass { a: baml.json.from_json(baml.json.field(j, "a")) }
-}
-function user.to_json(self: ?) -> baml.json.json  [expr] {
-  map { "a": baml.json.to_json(self.a) }
-}

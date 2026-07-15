@@ -171,6 +171,28 @@ pub struct BexHeap {
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
 
+    /// BEP-042: instances whose `cleanup` finalizer must run after the current
+    /// collection. Populated during a collection (`copy_collection` /
+    /// `copy_collection_minor`) when a dead-but-not-yet-cleaned instance of a
+    /// `has_cleanup` class is discovered and kept alive; the pointers are the
+    /// **new** (post-copy) locations. Drained by the engine via
+    /// [`take_pending_finalizers`](Self::take_pending_finalizers) at the same
+    /// safepoint, before any other collection runs, so the pointers stay valid.
+    ///
+    /// Each entry pairs the instance's post-copy `HeapPtr` with its resolved
+    /// `cleanup` function name (`{class_fqn}.cleanup`), computed by the GC while
+    /// it still has the class in hand — so the engine drain needs no heap read
+    /// to dispatch.
+    pending_finalizers: Mutex<Vec<(HeapPtr, String)>>,
+
+    /// BEP-042 fast path: `true` iff at least one compile-time `Class` opts into
+    /// a `cleanup` finalizer (`has_cleanup`). Classes are fixed at compile time,
+    /// so this is computed once at construction. When `false`, the per-collection
+    /// finalizer scan ([`scan_dead_finalizers`](Self::scan_dead_finalizers)) is
+    /// skipped entirely — programs that define no `cleanup` (the common case) pay
+    /// no per-GC scan cost.
+    pub(crate) has_finalizable_classes: bool,
+
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
 
@@ -268,15 +290,39 @@ impl BexHeap {
 
     /// Create a new heap with explicit debug configuration.
     pub fn with_tlab_size_and_debug(
-        mut compile_time_objects: Vec<Object>,
+        compile_time_objects: Vec<Object>,
         tlab_size: usize,
         debug: HeapDebuggerConfig,
     ) -> Arc<Self> {
-        // Resolve bytecode constants for all Function objects before wrapping in Arc.
+        Self::build_unsealed(compile_time_objects, tlab_size, debug).seal()
+    }
+
+    /// Build the heap but **don't** seal it behind the shared `Arc` yet.
+    ///
+    /// The compile-time objects are laid out at their final, stable addresses, so
+    /// [`Self::compile_time_ptr`] already returns valid pointers — but they can
+    /// still be overwritten with [`Self::set_compile_time_object`]. This is how
+    /// cross-referencing compile-time objects (packages and impl rules) are built:
+    /// their `HeapPtr` fields are only knowable once the compile-time `Vec` exists,
+    /// yet the objects themselves must live inside it. The caller appends
+    /// placeholder slots, builds unsealed, fills each slot using
+    /// `compile_time_ptr`, then calls [`Self::seal`].
+    pub fn build_unsealed(
+        mut compile_time_objects: Vec<Object>,
+        tlab_size: usize,
+        debug: HeapDebuggerConfig,
+    ) -> Self {
+        // Resolve bytecode constants for all Function objects before sealing.
         // This converts ConstValue (with ObjectIndex) to Value (with HeapPtr).
         Self::resolve_function_constants(&mut compile_time_objects);
 
-        Arc::new(Self {
+        // BEP-042: precompute whether any class opts into a `cleanup` finalizer,
+        // so the per-collection finalizer scan can be skipped when none do.
+        let has_finalizable_classes = compile_time_objects
+            .iter()
+            .any(|o| matches!(o, Object::Class(c) if c.has_cleanup));
+
+        Self {
             compile_time: compile_time_objects,
             gen0: UnsafeCell::new(ChunkedVec::new()),
             gen1: UnsafeCell::new(ChunkedVec::new()),
@@ -286,6 +332,8 @@ impl BexHeap {
             gen2_cards: UnsafeCell::new(CardTable::new()),
             handles: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
+            pending_finalizers: Mutex::new(Vec::new()),
+            has_finalizable_classes,
             tlab_size,
             growth_lock: Mutex::new(()),
             allocs_since_gc: AtomicUsize::new(0),
@@ -294,7 +342,37 @@ impl BexHeap {
             gen1_collection_threshold: AtomicUsize::new(GEN1_FLOOR),
             gen2_collection_threshold: AtomicUsize::new(GEN2_FLOOR),
             debug_state: HeapDebuggerState::new(debug),
-        })
+        }
+    }
+
+    /// [`Self::build_unsealed`] with the default TLAB size and env-derived debug
+    /// config (the same defaults [`Self::new`] uses).
+    pub fn build_unsealed_default(compile_time_objects: Vec<Object>) -> Self {
+        Self::build_unsealed(
+            compile_time_objects,
+            DEFAULT_TLAB_SIZE,
+            HeapDebuggerConfig::from_env(),
+        )
+    }
+
+    /// Freeze the heap behind the shared `Arc`. After this the compile-time
+    /// objects are immutable. See [`Self::build_unsealed`].
+    pub fn seal(self) -> Arc<Self> {
+        Arc::new(self)
+    }
+
+    /// Overwrite a compile-time object before the heap is [sealed](Self::seal).
+    ///
+    /// The compile-time `Vec` is not resized, so every pointer already handed out
+    /// by [`Self::compile_time_ptr`] stays valid — this only rewrites the slot's
+    /// contents. Used to fill placeholder package / impl-rule slots with their
+    /// resolved cross-references.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds.
+    pub fn set_compile_time_object(&mut self, index: usize, object: Object) {
+        self.compile_time[index] = object;
     }
 
     /// Resolve bytecode constants for all Function objects.
@@ -971,6 +1049,29 @@ impl BexHeap {
         for ptr in handles.values_mut() {
             *ptr = forwarding[ptr];
         }
+    }
+
+    /// BEP-042: record an instance (by its post-copy `HeapPtr`) and its resolved
+    /// `cleanup` function name, to be finalized after the current collection.
+    /// Called by the GC when it discovers and keeps alive a dead, not-yet-cleaned
+    /// instance of a `has_cleanup` class.
+    pub(crate) fn push_pending_finalizer(&self, ptr: HeapPtr, cleanup_fn: String) {
+        self.pending_finalizers
+            .lock()
+            .expect("pending_finalizers lock poisoned")
+            .push((ptr, cleanup_fn));
+    }
+
+    /// BEP-042: take and clear the queue of instances awaiting `cleanup`. The
+    /// engine drains this right after a collection (still at the GC safepoint,
+    /// before resuming normal execution) and invokes each instance's `cleanup`.
+    pub fn take_pending_finalizers(&self) -> Vec<(HeapPtr, String)> {
+        std::mem::take(
+            &mut *self
+                .pending_finalizers
+                .lock()
+                .expect("pending_finalizers lock poisoned"),
+        )
     }
 
     /// Create a handle to an object.

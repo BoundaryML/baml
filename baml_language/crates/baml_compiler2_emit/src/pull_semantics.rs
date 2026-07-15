@@ -36,9 +36,14 @@ pub(crate) trait PullSink {
     fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error>;
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
 
-    fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error>;
+    fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
     fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
-    fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error>;
+    fn alloc_map(
+        &mut self,
+        key_ty: &TyTemplate,
+        value_ty: &TyTemplate,
+        len: usize,
+    ) -> Result<(), Self::Error>;
 
     fn alloc_class_instance(&mut self, class_name: &str, ntypeargs: u16)
     -> Result<(), Self::Error>;
@@ -116,13 +121,6 @@ pub(crate) trait StackEffectSink: PullSink {
     /// Store a value into a captured variable (via the closure's captures array).
     /// Emits `StoreCapture(idx)` in the bytecode emitter.
     fn store_capture_value(&mut self, idx: usize) -> Result<(), Self::Error>;
-
-    fn push_watch_channel(
-        &mut self,
-        local: Local,
-        channel_name: Option<&str>,
-    ) -> Result<(), Self::Error>;
-    fn watch_local(&mut self, local: Local) -> Result<(), Self::Error>;
 }
 
 /// How a local assignment statement should be emitted/evaluated.
@@ -214,18 +212,6 @@ pub(crate) fn walk_drop_statement<S: StackEffectSink>(
 ) -> Result<(), S::Error> {
     walk_place_pull(sink, place)?;
     sink.pop_values(1)
-}
-
-/// Shared evaluation for `WatchOptions`.
-pub(crate) fn walk_watch_options_statement<S: StackEffectSink>(
-    sink: &mut S,
-    local: Local,
-    channel_name: Option<&str>,
-    filter: &Operand,
-) -> Result<(), S::Error> {
-    sink.push_watch_channel(local, channel_name)?;
-    walk_operand_pull(sink, filter)?;
-    sink.watch_local(local)
 }
 
 /// Shared pull order for direct calls: each arg only.
@@ -367,14 +353,14 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             walk_operand_pull(sink, operand)?;
             sink.unary_op(*op)
         }
-        Rvalue::Array(elements) => {
+        Rvalue::Array(element_ty, elements) => {
             for element in elements {
                 walk_operand_pull(sink, element)?;
             }
-            sink.alloc_array(elements.len())
+            sink.alloc_array(element_ty, elements.len())
         }
         Rvalue::Uint8Array(bytes) => sink.alloc_uint8array(bytes),
-        Rvalue::Map(entries) => {
+        Rvalue::Map(key_ty, value_ty, entries) => {
             // VM `AllocMap` expects stack layout:
             // [..., v1, v2, ..., k1, k2, ...] for {(k1, v1), (k2, v2), ...}.
             for (_key, value) in entries {
@@ -383,14 +369,20 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             for (key, _value) in entries {
                 walk_operand_pull(sink, key)?;
             }
-            sink.alloc_map(entries.len())
+            sink.alloc_map(key_ty, value_ty, entries.len())
         }
         Rvalue::Aggregate { kind, fields } => match kind {
             AggregateKind::Array => {
                 for field in fields {
                     walk_operand_pull(sink, field)?;
                 }
-                sink.alloc_array(fields.len())
+                // `AggregateKind::Array` carries no element type and is not
+                // produced by the array-literal lowering (which emits the typed
+                // `Rvalue::Array`); this arm is a defensive fallback.
+                sink.alloc_array(
+                    &TyTemplate::from(baml_type::RealizedTy::unknown()),
+                    fields.len(),
+                )
             }
             AggregateKind::Class {
                 name: class_name,
@@ -452,6 +444,10 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
         Rvalue::MakeBoundMethod { .. } => {
             // Handled specially in emit_rvalue_pull before this function is called.
             unreachable!("MakeBoundMethod must be handled in emit_rvalue_pull")
+        }
+        Rvalue::MakeVirtualBoundMethod { .. } => {
+            // Handled specially in emit_rvalue_pull before this function is called.
+            unreachable!("MakeVirtualBoundMethod must be handled in emit_rvalue_pull")
         }
         Rvalue::MakeGenericFunction {
             item,

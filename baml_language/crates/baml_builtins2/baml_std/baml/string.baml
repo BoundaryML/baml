@@ -3,10 +3,41 @@
 /// String literals use double quotes: `"hello"`. Multiline strings use the `#"..."#` syntax.
 /// All methods returning a new string do not mutate `self` unless noted otherwise.
 class String {
-  /// Serializes this string to a JSON value.
-  //baml:mut_vm
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
+  /// Renders any value as a human-readable string.
+  ///
+  /// If `value`'s runtime type implements `baml.ToString`, its `to_string`
+  /// override is used; otherwise a default structural rendering is produced.
+  /// Never throws.
+  ///
+  /// ```
+  /// string.from(42)            // "42"
+  /// string.from(true)          // "true"
+  /// string.from([1, 2, 3])     // "[1, 2, 3]"
+  /// ```
+  ///
+  /// Ideally this would read:
+  ///
+  /// ```
+  /// if (value is baml.ToString) { value.to_string() }
+  /// else { root._to_string_default(value) }
+  /// ```
+  ///
+  /// but that does not work from the stdlib today. `is <interface>` and
+  /// interface method dispatch are resolved at *compile time* by expanding the
+  /// interface to its known implementor classes, and that implementor set is
+  /// per-package: it is built from the package's dependencies + itself, never
+  /// its dependents. `string.from` lives in the `baml` package, which a user's
+  /// `implements baml.ToString` sits *above*, so from here the implementor set
+  /// for `baml.ToString` is empty — the `is` test folds to constant `false` and
+  /// the override never dispatches. (Same boundary `Sortable.sort`'s
+  /// `_compare_shim` and `baml.json.to_json` work around.)
+  ///
+  /// So dispatch is resolved on `value`'s *runtime* class via
+  /// `baml._to_string_shim` instead. TODO: once Kai's TIR rework lands (it moves
+  /// interface conformance checks to runtime), replace this with the literal
+  /// `is baml.ToString` form above and drop `_to_string_shim`.
+  function from<T>(value: T) -> string throws never {
+    root._to_string_shim(value)
   }
 
   /// Returns the number of **Unicode code points** (characters) in the string.
@@ -122,6 +153,18 @@ class String {
     $rust_function
   }
 
+  /// Returns the string's Unicode code points as one-character strings.
+  ///
+  /// # Examples
+  /// ```
+  /// "hello".chars()  // ["h", "e", "l", "l", "o"]
+  /// "é😀".chars()    // ["é", "😀"]
+  /// "".chars()       // []
+  /// ```
+  function chars(self) -> string[] throws never {
+    $rust_function
+  }
+
   /// Splits the string into lines, recognizing both `\n` and `\r\n` as line
   /// terminators. The terminator is **not** included in the returned strings.
   /// A final terminator does not produce a trailing empty string.
@@ -163,16 +206,16 @@ class String {
   }
 
   /// Returns the **character index** of the first occurrence of `search`, or
-  /// `-1` if not found.
+  /// `null` if not found.
   ///
   /// # Examples
   /// ```
   /// "hello world".index_of("world")  // 6
   /// "héllo".index_of("l")            // 2
   /// "😀hello".index_of("h")          // 1
-  /// "abc".index_of("z")              // -1
+  /// "abc".index_of("z")              // null
   /// ```
-  function index_of(self, search: string) -> int throws never {
+  function index_of(self, search: string) -> int? throws never {
     $rust_function
   }
 
@@ -193,6 +236,31 @@ class String {
   /// ```
   //baml:fallible
   function char_at(self, index: int) -> string throws never {
+    $rust_function
+  }
+
+  /// Returns the **Unicode code point** of the character at the given codepoint
+  /// index, as an `int`.
+  ///
+  /// This is the numeric counterpart of `char_at`, which returns the character
+  /// as a one-character string. Negative indices count from the end: `-1` is the last
+  /// character. Raises `IndexOutOfBounds` when the index is out of range after
+  /// counting from the end, mirroring `char_at` and array subscripting.
+  ///
+  /// The returned value is always in `[0, 0x10FFFF]`, so it round-trips through
+  /// `string.from_code_points([cp])`.
+  ///
+  /// # Examples
+  /// ```
+  /// "A".code_point_at(0)        // 65
+  /// "é".code_point_at(0)        // 233
+  /// "🐑".code_point_at(0)       // 128017
+  /// "hello".code_point_at(-1)   // 111 ("o")
+  /// "😀hello".code_point_at(1)  // 104 ("h", not a UTF-16 unit)
+  /// "hi".code_point_at(99)      // raises IndexOutOfBounds
+  /// ```
+  //baml:fallible
+  function code_point_at(self, index: int) -> int throws never {
     $rust_function
   }
 
@@ -454,6 +522,28 @@ class String {
   /// string.from_utf8(b"\xFF")              // throws — 0xFF is invalid UTF-8
   /// ```
   function from_utf8(utf8: uint8array) -> string throws root.errors.InvalidArgument {
+    $rust_function
+  }
+
+  /// Returns the string's Unicode code points as an array of `int`s.
+  ///
+  /// This is the exact inverse of `string.from_code_points`: for any string
+  /// `s`, `string.from_code_points(s.to_code_points())` equals `s`. The result
+  /// has one element per character (`self.length()` elements), each in
+  /// `[0, 0x10FFFF]`. Never throws.
+  ///
+  /// Use this for char → integer mappings (checksums, base-N encoding, hashing,
+  /// character classification) instead of indexing into a literal alphabet
+  /// string.
+  ///
+  /// # Examples
+  /// ```
+  /// "hi".to_code_points()    // [104, 105]
+  /// "é".to_code_points()     // [233]
+  /// "🐑".to_code_points()    // [128017]
+  /// "".to_code_points()      // []
+  /// ```
+  function to_code_points(self) -> int[] throws never {
     $rust_function
   }
 

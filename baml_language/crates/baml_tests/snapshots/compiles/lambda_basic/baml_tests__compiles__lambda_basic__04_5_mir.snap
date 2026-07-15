@@ -72,41 +72,6 @@ fn .<lambda(test_capture, 0)>(x: int) -> null {
     }
 }
 
-fn user.test_generic_lambda() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: (T) -> T throws never // identity
-    let _2: (T) -> T throws never
-    let _3: type
-
-    bb0: {
-        _1 = make_closure lambda[0]();
-        _2 = copy _1;
-        _3 = load_type(int);
-        _0 = call copy _2<copy _3>(const 42_i64) -> [bb1];
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-// lambda[0]
-fn .<lambda(test_generic_lambda, 0)>(x: T) -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: T // x // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.test_inferred_return() -> int {
     // Locals:
     let _0: int // _0 // return
@@ -150,7 +115,7 @@ fn user.test_map_inferred() -> int[] {
     let _5: type
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _1 = [const 1_i64, const 2_i64, const 3_i64]: int[];
         _2 = make_closure lambda[0]();
         _3 = load_type(int);
         _4 = load_type(never);

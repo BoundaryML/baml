@@ -21,7 +21,7 @@ fn user.BigintLiteralArray() -> bigint[] {
     let _0: bigint[] // _0 // return
 
     bb0: {
-        _0 = [const 1n, const 2n];
+        _0 = [const 1n, const 2n]: bigint[];
         goto -> bb1;
     }
 
@@ -35,7 +35,7 @@ fn user.BigintMapLiteral() -> map<string, bigint> {
     let _0: map<string, bigint> // _0 // return
 
     bb0: {
-        _0 = { const "a": const 1n };
+        _0 = { const "a": const 1n }: map<string, bigint>;
         goto -> bb1;
     }
 
@@ -49,7 +49,7 @@ fn user.EmptyBigintArray() -> bigint[] {
     let _0: bigint[] // _0 // return
 
     bb0: {
-        _0 = [];
+        _0 = []: bigint[];
         goto -> bb1;
     }
 
@@ -64,7 +64,7 @@ fn user.EvolvingRetype() -> bigint[] {
     let _1: bigint[] // a
 
     bb0: {
-        _1 = [];
+        _1 = []: never[];
         _0 = copy _1;
         goto -> bb1;
     }
@@ -80,65 +80,12 @@ fn user.IntArrayIdentity() -> int[] {
     let _1: int[] // a
 
     bb0: {
-        _1 = [const 1_i64, const 2_i64];
+        _1 = [const 1_i64, const 2_i64]: int[];
         _0 = copy _1;
         goto -> bb1;
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.BigintCounter.from_json(j: baml.json.json) -> BigintCounter {
-    // Locals:
-    let _0: BigintCounter // _0 // return
-    let _1: baml.json.json // j // param
-    let _2: bigint
-    let _3: baml.json.json
-    let _4: type
-
-    bb0: {
-        _3 = call const fn baml.json.field(copy _1, const "count") -> [bb1];
-    }
-
-    bb1: {
-        _4 = load_type(bigint);
-        _2 = call const fn baml.json.from_json<copy _4>(copy _3) -> [bb2];
-    }
-
-    bb2: {
-        _0 = user.BigintCounter { copy _2 };
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.BigintCounter.to_json(self: BigintCounter) -> baml.json.json {
-    // Locals:
-    let _0: baml.json.json // _0 // return
-    let _1: BigintCounter // self // param
-    let _2: baml.json.json
-    let _3: bigint
-    let _4: BigintCounter
-    let _5: type
-
-    bb0: {
-        _4 = copy _1;
-        _3 = copy _4.0;
-        _5 = load_type(bigint);
-        _2 = call const fn baml.json.to_json<copy _5>(copy _3) -> [bb1];
-    }
-
-    bb1: {
-        _0 = { const "count": copy _2 };
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

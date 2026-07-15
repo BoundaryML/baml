@@ -19,10 +19,10 @@ use crate::{
     diagnostic::{Hir2Diagnostic, MemberSite},
     file_package::file_package,
     ids::{FunctionMarker, LocalItemId},
-    item_tree::ItemTree,
+    item_tree::{GenericParam, ImplBlock, ImplSubject, InterfaceFieldLink, ItemTree},
     loc::{
-        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, InterfaceLoc, LetLoc,
-        RetryPolicyLoc, TemplateStringLoc, TestLoc, TypeAliasLoc,
+        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
+        TemplateStringLoc, TestLoc, TypeAliasLoc,
     },
     scope::{FileScopeId, Scope, ScopeId, ScopeKind},
     semantic_index::{
@@ -37,6 +37,21 @@ struct PathRootReference {
     use_scope: FileScopeId,
     use_offset: TextSize,
     owner_lambda: Option<FileScopeId>,
+}
+
+/// The head name used to seed an impl's stable `ImplId` from a target
+/// `TypeExpr`: the last path segment (interface/class name), or a coarse shape
+/// tag for non-path for-targets (primitives, list/map/union). This only needs
+/// to be position-independent and reasonably collision-distributed — the
+/// `LocalItemId` collision index disambiguates anything that shares a head.
+fn impl_head_name(te: &ast::TypeExpr) -> Name {
+    match &te.kind {
+        ast::TypeExprKind::Path { segments, .. } => segments
+            .last()
+            .cloned()
+            .unwrap_or_else(|| Name::new("#path")),
+        _ => Name::new("#nonpath"),
+    }
 }
 
 pub struct SemanticIndexBuilder<'db> {
@@ -199,6 +214,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             name,
             range,
             descendants: id.next()..id.next(), // empty initially; filled on pop
+            is_template_body: false,
         });
         self.scope_bindings.push(ScopeBindings::new());
         self.scope_stack.push(id);
@@ -458,6 +474,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.walk_expr(*target, body, source_map, true);
                 self.walk_expr(*value, body, source_map, true);
             }
+            ast::Stmt::Defer { body: defer_body } => {
+                // The defer body is an inline `Expr::Block` in this same
+                // `ExprBody`; walk it so its references/bindings are recorded.
+                // The block's own push_scope/pop_scope contains inner bindings.
+                self.walk_expr(*defer_body, body, source_map, true);
+            }
             ast::Stmt::Break
             | ast::Stmt::Continue
             | ast::Stmt::Missing
@@ -541,6 +563,11 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Throw { value } => {
                 self.walk_expr(*value, body, source_map, true);
             }
+            ast::Expr::Return { value } => {
+                if let Some(value) = value {
+                    self.walk_expr(*value, body, source_map, true);
+                }
+            }
             ast::Expr::Spawn {
                 name,
                 with_exprs,
@@ -561,6 +588,28 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.walk_expr(*lhs, body, source_map, true);
                 self.walk_expr(*rhs, body, source_map, true);
             }
+            ast::Expr::Template { tag, .. } => match tag {
+                // Tagged (`Custom`): the tag is an ordinary value reference in
+                // the ENCLOSING scope, and the template body is its own lambda
+                // scope so references to enclosing locals inside `${...}` are
+                // computed as captures (BEP-049 §10 — MIR hand-rolls the body
+                // closure off these captures).
+                ast::TemplateTag::Custom {
+                    tag,
+                    body: flatten_body,
+                } => {
+                    self.walk_expr(*tag, body, source_map, true);
+                    self.walk_template_lambda_body(expr_id, *flatten_body, body, source_map);
+                }
+                // Untagged (`Default`): no closure. The template is realized by
+                // the desugared `elaborated` concat in the ENCLOSING scope, so
+                // we walk that directly — it contains the same `${…}` exprs and
+                // any `${for}` bindings (in normal loop scopes), with no capture
+                // boundary. The structured `segments` are diagnostics-only.
+                ast::TemplateTag::Default { elaborated } => {
+                    self.walk_expr(*elaborated, body, source_map, true);
+                }
+            },
             ast::Expr::Unary { expr, .. } | ast::Expr::OptionalChain { expr } => {
                 self.walk_expr(*expr, body, source_map, true);
             }
@@ -623,6 +672,82 @@ impl<'db> SemanticIndexBuilder<'db> {
             | ast::Expr::Lambda(_)
             | ast::Expr::Missing => {}
         }
+    }
+
+    /// Walk a *tagged* template's segments inside a fresh `ScopeKind::Lambda`
+    /// scope spanning the whole template expression (BEP-049 §10). This makes
+    /// the body a capture boundary: interpolation references to enclosing
+    /// locals are recorded as captures (consumed by MIR when it hand-rolls the
+    /// body closure). Untagged templates do NOT use this — they walk segments
+    /// inline (no closure, no captures).
+    ///
+    /// The lambda's parameters (the tag's `body: (...) -> baml.TaggedString`
+    /// params) are NOT registered here: the tag is a cross-file item whose
+    /// signature cannot be resolved during the semantic-index walk (it would
+    /// cycle `file_semantic_index` -> `package_items`), so MIR (and TIR) inject
+    /// the params instead. `${for}` bindings still nest in their own block
+    /// scopes via `walk_template_segment`.
+    fn walk_template_lambda_body(
+        &mut self,
+        expr_id: ast::ExprId,
+        flatten_body: ast::ExprId,
+        body: &ast::ExprBody,
+        source_map: &ast::AstSourceMap,
+    ) {
+        // The enclosing real lambda (if any) — captured BEFORE we push the
+        // template's synthetic lambda. See the transitive-capture propagation
+        // at the end of this function.
+        let enclosing_lambda = self.lambda_stack.last().copied();
+
+        self.push_scope(ScopeKind::Lambda, None, source_map.expr_span(expr_id));
+        let scope_id = self.current_scope_id();
+        // Mark this as a synthetic template body: it is a Lambda scope for
+        // capture-analysis purposes, but TIR types its body inline in the
+        // enclosing scope, so `inference_owner_scope` must climb past it.
+        self.scopes[scope_id.index() as usize].is_template_body = true;
+        self.lambda_stack.push(scope_id);
+        // Walk the desugared flatten block's CONTENTS inline in THIS synthetic
+        // Lambda scope: its `${…}` exprs referencing enclosing locals become
+        // captures, its synthetic accumulator `let`s register as lambda-locals,
+        // and any `${for}` binding nests in a child block scope. The Lambda scope
+        // range stays == the template-expr span, which MIR matches to find these
+        // captures.
+        //
+        // `push_block_scope = false` keeps a block body's contents in this scope
+        // (no child block scope) while still recording the block's own `ExprId`
+        // in `expr_scopes`, so MIR/TIR scope lookups for the synthetic body
+        // resolve. For a non-block body this matches the old `walk_expr(.., true)`
+        // — `push_block_scope` is consulted only for `Expr::Block`.
+        self.walk_expr(flatten_body, body, source_map, false);
+        self.analyze_lambda_captures(scope_id, body, source_map);
+
+        // BEP-049 §10 — transitive capture through a *synthetic* lambda. When a
+        // tagged template sits inside a user lambda `f`, every var the template
+        // body captures from *beyond* `f` must also be captured BY `f`: TIR types
+        // the template body inline in `f`'s scope, and MIR forwards the template
+        // closure's captures up through `f`. A real nested lambda gets this for
+        // free (its references attribute to it AND its captures thread up); the
+        // template's references attribute only to *this* synthetic lambda, so we
+        // re-record each capture as a reference owned by `f`. Without this, `f`
+        // never learns it must capture the var → TIR reports it unresolved
+        // (`[E0003]`) and MIR cannot forward it.
+        if let Some(enclosing) = enclosing_lambda {
+            let at = source_map.expr_span(expr_id).start();
+            let captures = self.scope_bindings[scope_id.index() as usize]
+                .captures
+                .clone();
+            for (name, _binding) in captures {
+                self.path_root_references.push(PathRootReference {
+                    name,
+                    use_scope: enclosing,
+                    use_offset: at,
+                    owner_lambda: Some(enclosing),
+                });
+            }
+        }
+
+        self.lambda_stack.pop();
+        self.pop_scope();
     }
 
     fn register_local_pattern(
@@ -835,7 +960,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let binding_visible_from = source_map.pattern_span(clause.binding).start();
         self.register_local_pattern(
             clause.binding,
-            DefinitionSite::PatternBinding(clause.binding),
+            DefinitionSite::CatchBinding(clause.binding),
             body,
             source_map,
             binding_visible_from,
@@ -844,7 +969,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             let st_visible_from = source_map.pattern_span(st_pat).start();
             self.register_local_pattern(
                 st_pat,
-                DefinitionSite::PatternBinding(st_pat),
+                DefinitionSite::CatchBinding(st_pat),
                 body,
                 source_map,
                 st_visible_from,
@@ -1038,7 +1163,6 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::TypeAlias(ta) => self.lower_type_alias(ta),
             ast::Item::Client(c) => self.lower_client(c),
             ast::Item::Test(t) => self.lower_test(t),
-            ast::Item::Generator(g) => self.lower_generator(g),
             ast::Item::TemplateString(ts) => self.lower_template_string(ts),
             ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
             ast::Item::Let(l) => self.lower_let(l),
@@ -1119,6 +1243,48 @@ impl<'db> SemanticIndexBuilder<'db> {
                 });
         }
         for method in &c.methods {
+            // `to_string` / `to_json` are not magic methods: each must be provided
+            // by implementing `baml.ToString` / `baml.ToJson`, never declared
+            // directly on the class. (Methods inside `implements I { ... }` blocks
+            // live in `c.implements`, not `c.methods`, so an interface impl is fine.)
+            if method.name.as_str() == "to_string" {
+                self.diagnostics
+                    .push(Hir2Diagnostic::ToStringMustImplementInterface {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
+            if method.name.as_str() == "to_json" {
+                self.diagnostics
+                    .push(Hir2Diagnostic::ToJsonMustImplementInterface {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
+            // `from_json` likewise belongs to `baml.FromJson`. The auto-derived
+            // structural-default delegate (origin `AutoDerive`) is exempt — it is
+            // synthesized, not user-written, and is `baml.FromJson`'s default.
+            if method.name.as_str() == "from_json"
+                && method.origin != ast::FunctionOrigin::AutoDerive
+            {
+                self.diagnostics
+                    .push(Hir2Diagnostic::FromJsonMustImplementInterface {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
+            // BEP-042: `cleanup` is a reserved magic finalizer name. A method
+            // named `cleanup` whose signature isn't `cleanup(self) -> void` is
+            // malformed (the magic guard only fires for the exact shape).
+            if method.name.as_str() == ast::cleanup_guard::CLEANUP_METHOD
+                && !ast::cleanup_guard::has_cleanup_shape(method)
+            {
+                self.diagnostics
+                    .push(Hir2Diagnostic::CleanupMagicMethodSignature {
+                        class_name: c.name.clone(),
+                        span: method.name_span,
+                    });
+            }
             seen.entry(method.name.clone())
                 .or_default()
                 .push(MemberSite {
@@ -1138,6 +1304,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.class_depth += 1;
         let mut method_ids: Vec<_> = c.methods.iter().map(|m| self.lower_function(m)).collect();
         for impl_block in &c.implements {
+            let mut block_method_ids = Vec::new();
             for m in &impl_block.methods {
                 let fid = self.lower_function(m);
                 // BEP-044: remember which interface this method came from so
@@ -1149,8 +1316,29 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.item_tree
                     .method_to_iface_associated_type_bindings
                     .insert(fid, impl_block.associated_type_bindings.clone());
-                method_ids.push(fid);
+                block_method_ids.push(fid);
             }
+            // Dual-write: also record this in-body impl under a stable `ImplId`.
+            // An in-body `implements I {}` (and a simple `implement I for C`
+            // merged onto the class) is `InClass`; its for-type is the class.
+            let iface_head = impl_head_name(&impl_block.target);
+            let block = ImplBlock {
+                subject: ImplSubject::InClass {
+                    class: local_id,
+                    out_of_body: impl_block.is_out_of_body,
+                },
+                interface_target: impl_block.target.clone(),
+                field_links: impl_block
+                    .field_links
+                    .iter()
+                    .map(InterfaceFieldLink::from_ast)
+                    .collect(),
+                associated_type_bindings: impl_block.associated_type_bindings.clone(),
+                methods: block_method_ids.clone(),
+                span: impl_block.span,
+            };
+            self.item_tree.alloc_impl(&iface_head, &c.name, block);
+            method_ids.extend(block_method_ids);
         }
         self.class_depth -= 1;
 
@@ -1166,8 +1354,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         if has_generic_params {
             // Derive a synthetic scope name from the for_target for `self` resolution.
             // Use the for_target's root name (e.g. "Container" from "Container<T>").
-            let scope_name = match &imp.for_target.expr {
-                baml_compiler2_ast::TypeExpr::Path { segments, .. } => segments.first().cloned(),
+            let scope_name = match &imp.for_target.kind {
+                baml_compiler2_ast::TypeExprKind::Path { segments, .. } => {
+                    segments.first().cloned()
+                }
                 _ => None,
             };
             self.push_scope(ScopeKind::Class, scope_name, imp.span);
@@ -1187,7 +1377,33 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.pop_scope();
         }
         self.class_depth -= 1;
-        self.item_tree.add_implements_for(imp, method_ids);
+        // Record this out-of-body impl under a stable `ImplId` in the unified `impls` store.
+        let iface_head = impl_head_name(&imp.interface_target);
+        let for_head = impl_head_name(&imp.for_target);
+        let generics = imp
+            .generic_params
+            .iter()
+            .map(|(name, bounds)| GenericParam {
+                name: name.clone(),
+                bounds: bounds.clone(),
+            })
+            .collect();
+        let block = ImplBlock {
+            subject: ImplSubject::Free {
+                for_target: imp.for_target.clone(),
+                generics,
+            },
+            interface_target: imp.interface_target.clone(),
+            field_links: imp
+                .field_links
+                .iter()
+                .map(InterfaceFieldLink::from_ast)
+                .collect(),
+            associated_type_bindings: imp.associated_type_bindings.clone(),
+            methods: method_ids,
+            span: imp.span,
+        };
+        self.item_tree.alloc_impl(&iface_head, &for_head, block);
     }
 
     /// Lower an `interface I { ... }` declaration (BEP-044).
@@ -1219,6 +1435,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.class_depth -= 1;
 
         let local_id = self.item_tree.alloc_interface(i, default_method_ids);
+        ItemTree::collect_interface_spans(&mut self.item_tree_source_map, local_id, i);
         let loc = InterfaceLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             i.name.clone(),
@@ -1338,22 +1555,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.pop_scope();
     }
 
-    fn lower_generator(&mut self, g: &ast::GeneratorDef) {
-        let local_id = self.item_tree.alloc_generator(g);
-        ItemTree::collect_generator_spans(&mut self.item_tree_source_map, local_id, g);
-        let loc = GeneratorLoc::new(self.db, self.file, local_id);
-        self.value_contributions.push((
-            g.name.clone(),
-            Contribution {
-                name_span: g.name_span,
-                definition: Definition::Generator(loc),
-            },
-        ));
-
-        self.push_scope(ScopeKind::Item, Some(g.name.clone()), g.span);
-        self.pop_scope();
-    }
-
     fn lower_template_string(&mut self, ts: &ast::TemplateStringDef) {
         let local_id = self.item_tree.alloc_template_string(ts);
         let loc = TemplateStringLoc::new(self.db, self.file, local_id);
@@ -1428,11 +1629,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.validate_schema_attributes(&class.attributes);
                 for field in &class.fields {
                     if let Some(type_expr) = &field.type_expr {
-                        self.validate_type_expr_phase1(
-                            &type_expr.expr,
-                            type_expr.span,
-                            is_builtin_file,
-                        );
+                        self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                     }
                     self.validate_internal_attributes(
                         &field.attributes,
@@ -1442,6 +1639,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                     );
                     self.validate_schema_attributes(&field.attributes);
                 }
+                self.validate_alias_collisions(
+                    class
+                        .fields
+                        .iter()
+                        .map(|f| (&f.name, f.name_span, f.attributes.as_slice())),
+                    "class",
+                    is_builtin_file,
+                );
                 for method in &class.methods {
                     self.validate_function_phase1(method, is_builtin_file, "method");
                 }
@@ -1451,14 +1656,17 @@ impl<'db> SemanticIndexBuilder<'db> {
                 for variant in &enm.variants {
                     self.validate_schema_attributes(&variant.attributes);
                 }
+                self.validate_alias_collisions(
+                    enm.variants
+                        .iter()
+                        .map(|v| (&v.name, v.name_span, v.attributes.as_slice())),
+                    "enum",
+                    is_builtin_file,
+                );
             }
             ast::Item::TypeAlias(alias) => {
                 if let Some(type_expr) = &alias.type_expr {
-                    self.validate_type_expr_phase1(
-                        &type_expr.expr,
-                        type_expr.span,
-                        is_builtin_file,
-                    );
+                    self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                 }
             }
             _ => {}
@@ -1481,14 +1689,14 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         for param in &function.params {
             if let Some(type_expr) = &param.type_expr {
-                self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+                self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
             }
         }
         if let Some(type_expr) = &function.return_type {
-            self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+            self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
         }
         if let Some(type_expr) = &function.throws {
-            self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+            self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
         }
 
         if let Some(ast::FunctionBodyDef::Builtin(kind)) = function.body {
@@ -1509,7 +1717,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             if let Some(throws) = &function.throws {
                 let mut invalid = Vec::new();
                 Self::collect_invalid_builtin_throw_types(
-                    &throws.expr,
+                    throws,
                     &function.generic_params,
                     &mut invalid,
                 );
@@ -1640,6 +1848,35 @@ impl<'db> SemanticIndexBuilder<'db> {
     ///
     /// Unknown attributes are silently passed through (e.g. `@stream.*` for PPIR).
     fn validate_schema_attributes(&mut self, attributes: &[ast::RawAttribute]) {
+        // E0014: reject the same single-valued schema attribute appearing more
+        // than once on one declaration. `@alias`, `@description`, and `@skip`
+        // each take effect at most once — for valued attrs the last write
+        // silently wins and the earlier ones are dropped (Linear B-648) — so a
+        // repeat is always a mistake. Only these known single-valued attributes
+        // are checked; repeatable / pass-through attributes (`@stream.*`, etc.)
+        // are intentionally left alone. Occurrences are gathered in first-seen
+        // order so the emitted diagnostics are deterministic.
+        let mut occurrences: Vec<(&str, Vec<TextRange>)> = Vec::new();
+        for attr in attributes {
+            let name = attr.name.as_str();
+            if !matches!(name, "description" | "alias" | "skip") {
+                continue;
+            }
+            if let Some(entry) = occurrences.iter_mut().find(|(n, _)| *n == name) {
+                entry.1.push(attr.span);
+            } else {
+                occurrences.push((name, vec![attr.span]));
+            }
+        }
+        for (name, sites) in occurrences {
+            if sites.len() >= 2 {
+                self.diagnostics.push(Hir2Diagnostic::DuplicateAttribute {
+                    attr_name: name.to_string(),
+                    sites,
+                });
+            }
+        }
+
         for attr in attributes {
             match attr.name.as_str() {
                 "description" | "alias" => {
@@ -1674,6 +1911,86 @@ impl<'db> SemanticIndexBuilder<'db> {
                 _ => {
                     // Unknown attributes passed through silently (e.g. @stream.*)
                 }
+            }
+        }
+    }
+
+    /// Reject a class or enum whose members don't all serialize to distinct
+    /// JSON keys.
+    ///
+    /// A member's *effective serialized key* is its `@alias` value if it carries
+    /// one, otherwise its declared name. When an `@alias` is present the real
+    /// member name is never used for matching (see `bex_sap`'s
+    /// `AnnotatedField::key_matches`), so two members with the same effective key
+    /// are indistinguishable in the serialized schema: `ctx.output_format`
+    /// renders duplicate keys and only the first can ever be satisfied. This
+    /// catches both `a @alias("x")` + `b @alias("x")` and a plain member `x`
+    /// colliding with another member's `@alias("x")`.
+    ///
+    /// Applies uniformly to class fields (an unsatisfiable output schema — a
+    /// required shadowed field can never be parsed) and enum variants (two
+    /// variants rendered under one label — the model's choice can't be resolved
+    /// back to a unique variant).
+    ///
+    /// Members marked `@skip` are excluded from the schema entirely and so
+    /// cannot collide. A pure duplicate *member name* (no aliasing involved) is
+    /// left to the existing `DuplicateField` / duplicate-variant (E0012) checks
+    /// to avoid double-reporting; this rule only fires when at least two
+    /// *distinct* member names share a key. `container` is `"class"` or `"enum"`
+    /// and is used only for the diagnostic message.
+    fn validate_alias_collisions<'a>(
+        &mut self,
+        members: impl Iterator<Item = (&'a Name, TextRange, &'a [ast::RawAttribute])>,
+        container: &'static str,
+        is_builtin_file: bool,
+    ) {
+        // Builtin stdlib declarations carry no `@alias`, and type-level
+        // validation already skips them — stay consistent and avoid surprising
+        // the stdlib.
+        if is_builtin_file {
+            return;
+        }
+
+        let mut buckets: FxHashMap<String, Vec<(Name, TextRange)>> = FxHashMap::default();
+        for (name, name_span, attributes) in members {
+            let mut alias: Option<String> = None;
+            let mut skip = false;
+            for attr in attributes {
+                match attr.name.as_str() {
+                    "alias" if attr.args.len() == 1 => {
+                        // Last `@alias` wins, mirroring emit's `extract_schema_attrs`.
+                        if let Some(value) =
+                            ast::parse_string_attr_value(attr.args[0].value.as_str())
+                        {
+                            alias = Some(value);
+                        }
+                    }
+                    "skip" => skip = true,
+                    _ => {}
+                }
+            }
+            if skip {
+                continue;
+            }
+            let key = alias.unwrap_or_else(|| name.as_str().to_string());
+            buckets
+                .entry(key)
+                .or_default()
+                .push((name.clone(), name_span));
+        }
+
+        for (key, members) in buckets {
+            // Only a collision between two *distinct* member names is a new
+            // error; repeated identical names are already reported by the
+            // duplicate-definition checks.
+            let distinct = members.iter().any(|(name, _)| name != &members[0].0);
+            if members.len() >= 2 && distinct {
+                let sites = members.into_iter().map(|(_, span)| span).collect();
+                self.diagnostics.push(Hir2Diagnostic::DuplicateFieldAlias {
+                    key,
+                    sites,
+                    container,
+                });
             }
         }
     }
@@ -1717,20 +2034,20 @@ impl<'db> SemanticIndexBuilder<'db> {
             }
         }
 
-        match type_expr {
-            ast::TypeExpr::Optional { inner, .. } | ast::TypeExpr::List { inner, .. } => {
+        match &type_expr.kind {
+            ast::TypeExprKind::Optional { inner, .. } | ast::TypeExprKind::List { inner, .. } => {
                 Self::collect_unknown_type_attrs(inner, diagnostics);
             }
-            ast::TypeExpr::Map { key, value, .. } => {
+            ast::TypeExprKind::Map { key, value, .. } => {
                 Self::collect_unknown_type_attrs(key, diagnostics);
                 Self::collect_unknown_type_attrs(value, diagnostics);
             }
-            ast::TypeExpr::Union { variants, .. } => {
+            ast::TypeExprKind::Union { variants, .. } => {
                 for v in variants {
                     Self::collect_unknown_type_attrs(v, diagnostics);
                 }
             }
-            ast::TypeExpr::Function {
+            ast::TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -1744,23 +2061,43 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::collect_unknown_type_attrs(throws, diagnostics);
                 }
             }
+            ast::TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                for arg in generic_args {
+                    Self::collect_unknown_type_attrs(arg, diagnostics);
+                }
+                for binding in associated_type_bindings {
+                    Self::collect_unknown_type_attrs(&binding.ty, diagnostics);
+                }
+            }
+            ast::TypeExprKind::AssociatedTypeProjection {
+                base, interface, ..
+            } => {
+                Self::collect_unknown_type_attrs(base, diagnostics);
+                if let Some(interface) = interface {
+                    Self::collect_unknown_type_attrs(interface, diagnostics);
+                }
+            }
             _ => {}
         }
     }
 
     fn type_expr_contains_rust(type_expr: &ast::TypeExpr) -> bool {
-        match type_expr {
-            ast::TypeExpr::Rust { .. } => true,
-            ast::TypeExpr::Optional { inner, .. } | ast::TypeExpr::List { inner, .. } => {
+        match &type_expr.kind {
+            ast::TypeExprKind::Rust { .. } => true,
+            ast::TypeExprKind::Optional { inner, .. } | ast::TypeExprKind::List { inner, .. } => {
                 Self::type_expr_contains_rust(inner)
             }
-            ast::TypeExpr::Map { key, value, .. } => {
+            ast::TypeExprKind::Map { key, value, .. } => {
                 Self::type_expr_contains_rust(key) || Self::type_expr_contains_rust(value)
             }
-            ast::TypeExpr::Union { variants, .. } => {
+            ast::TypeExprKind::Union { variants, .. } => {
                 variants.iter().any(Self::type_expr_contains_rust)
             }
-            ast::TypeExpr::Function {
+            ast::TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -1774,13 +2111,23 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .as_ref()
                         .is_some_and(|throws| Self::type_expr_contains_rust(throws))
             }
-            ast::TypeExpr::AssociatedTypeProjection {
+            ast::TypeExprKind::AssociatedTypeProjection {
                 base, interface, ..
             } => {
                 Self::type_expr_contains_rust(base)
                     || interface
                         .as_ref()
                         .is_some_and(|interface| Self::type_expr_contains_rust(interface))
+            }
+            ast::TypeExprKind::Path {
+                generic_args,
+                associated_type_bindings,
+                ..
+            } => {
+                generic_args.iter().any(Self::type_expr_contains_rust)
+                    || associated_type_bindings
+                        .iter()
+                        .any(|binding| Self::type_expr_contains_rust(&binding.ty))
             }
             _ => false,
         }
@@ -1791,8 +2138,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         allowed_generic_params: &[Name],
         invalid: &mut Vec<String>,
     ) {
-        match type_expr {
-            ast::TypeExpr::Path {
+        match &type_expr.kind {
+            ast::TypeExprKind::Path {
                 segments,
                 generic_args,
                 ..
@@ -1843,7 +2190,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }
-            ast::TypeExpr::Union { variants, .. } => {
+            ast::TypeExprKind::Union { variants, .. } => {
                 for ty in variants {
                     Self::collect_invalid_builtin_throw_types(ty, allowed_generic_params, invalid);
                 }
@@ -1855,52 +2202,54 @@ impl<'db> SemanticIndexBuilder<'db> {
             // declared `throws` is erased for builtins), so this is sound. Lets
             // `_compare_shim` declare `throws T.CompareError` rather than an
             // unconstrained error param that call sites cannot pin.
-            ast::TypeExpr::AssociatedTypeProjection { base, .. }
+            ast::TypeExprKind::AssociatedTypeProjection { base, .. }
                 if matches!(
-                    base.as_ref(),
-                    ast::TypeExpr::Path { segments, generic_args, .. }
+                    &base.kind,
+                    ast::TypeExprKind::Path { segments, generic_args, .. }
                         if generic_args.is_empty()
                             && segments.len() == 1
                             && allowed_generic_params.iter().any(|name| name == &segments[0])
                 ) => {}
             // `throws never` is the explicit "infallible" marker — always valid.
-            ast::TypeExpr::Never { .. } => {}
+            ast::TypeExprKind::Never { .. } => {}
             _ => invalid.push(Self::render_type_expr(type_expr)),
         }
     }
 
     fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
-        match type_expr {
-            ast::TypeExpr::Path { segments, .. } => segments
+        match &type_expr.kind {
+            ast::TypeExprKind::Path { segments, .. } => segments
                 .iter()
                 .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
-            ast::TypeExpr::AssociatedTypeProjection { .. } => type_expr.to_string(),
-            ast::TypeExpr::Int { .. } => "int".to_string(),
-            ast::TypeExpr::Bigint { .. } => "bigint".to_string(),
-            ast::TypeExpr::Float { .. } => "float".to_string(),
-            ast::TypeExpr::String { .. } => "string".to_string(),
-            ast::TypeExpr::Bool { .. } => "bool".to_string(),
-            ast::TypeExpr::Null { .. } => "null".to_string(),
-            ast::TypeExpr::Never { .. } => "never".to_string(),
-            ast::TypeExpr::Void { .. } => "void".to_string(),
-            ast::TypeExpr::Uint8Array { .. } => "uint8array".to_string(),
-            ast::TypeExpr::Media { kind, .. } => kind.to_string(),
-            ast::TypeExpr::Optional { inner, .. } => format!("{}?", Self::render_type_expr(inner)),
-            ast::TypeExpr::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),
-            ast::TypeExpr::Map { key, value, .. } => format!(
+            ast::TypeExprKind::AssociatedTypeProjection { .. } => type_expr.to_string(),
+            ast::TypeExprKind::Int { .. } => "int".to_string(),
+            ast::TypeExprKind::Bigint { .. } => "bigint".to_string(),
+            ast::TypeExprKind::Float { .. } => "float".to_string(),
+            ast::TypeExprKind::String { .. } => "string".to_string(),
+            ast::TypeExprKind::Bool { .. } => "bool".to_string(),
+            ast::TypeExprKind::Null { .. } => "null".to_string(),
+            ast::TypeExprKind::Never { .. } => "never".to_string(),
+            ast::TypeExprKind::Void { .. } => "void".to_string(),
+            ast::TypeExprKind::Uint8Array { .. } => "uint8array".to_string(),
+            ast::TypeExprKind::Media { kind, .. } => kind.to_string(),
+            ast::TypeExprKind::Optional { inner, .. } => {
+                format!("{}?", Self::render_type_expr(inner))
+            }
+            ast::TypeExprKind::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),
+            ast::TypeExprKind::Map { key, value, .. } => format!(
                 "map<{}, {}>",
                 Self::render_type_expr(key),
                 Self::render_type_expr(value)
             ),
-            ast::TypeExpr::Union { variants, .. } => variants
+            ast::TypeExprKind::Union { variants, .. } => variants
                 .iter()
                 .map(Self::render_type_expr)
                 .collect::<Vec<_>>()
                 .join(" | "),
-            ast::TypeExpr::Literal { value, .. } => value.to_string(),
-            ast::TypeExpr::Function {
+            ast::TypeExprKind::Literal { value, .. } => value.to_string(),
+            ast::TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -1927,11 +2276,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                     throws
                 )
             }
-            ast::TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
-            ast::TypeExpr::Type { .. } => "type".to_string(),
-            ast::TypeExpr::Rust { .. } => "$rust_type".to_string(),
-            ast::TypeExpr::Error { .. } => "<error>".to_string(),
-            ast::TypeExpr::Unknown { .. } => "<unknown>".to_string(),
+            ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".to_string(),
+            ast::TypeExprKind::Type { .. } => "type".to_string(),
+            ast::TypeExprKind::Rust { .. } => "$rust_type".to_string(),
+            ast::TypeExprKind::Error { .. } => "<error>".to_string(),
+            ast::TypeExprKind::Unknown { .. } => "<unknown>".to_string(),
+            ast::TypeExprKind::Infer { .. } => "_".to_string(),
         }
     }
 }

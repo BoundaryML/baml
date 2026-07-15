@@ -4,9 +4,9 @@ import type {
   BamlValueMedia,
   BamlValuePromptAst,
   BamlValuePromptAstSimple,
-} from './generated/baml_core/cffi/v1/baml_outbound';
-import { BamlOutboundValue, MediaTypeEnum } from './generated/baml_core/cffi/v1/baml_outbound';
-import { BamlHandleType } from './generated/baml_core/cffi/v1/baml_inbound';
+} from './generated/baml_bridge/cffi/v1/baml_outbound';
+import { BamlOutboundValue, MediaTypeEnum } from './generated/baml_bridge/cffi/v1/baml_outbound';
+import { BamlHandleType } from './generated/baml_bridge/cffi/v1/baml_handle';
 import type { BamlJsValue, BamlJsClass, BamlJsHandle, BamlJsMedia, BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage } from './types';
 
 const HANDLE_TYPE_NAMES: Record<number, string> = {
@@ -180,7 +180,7 @@ function deserializeValue<T>(
       const cls = holder.value.classValue;
       const fields = deserializeMapEntries(cls.fields, wrapHandle);
       return {
-        $baml: { type: cls.name?.name ?? '' },
+        $baml: { type: cls.name ?? '' },
         ...fields,
       } as BamlJsClass<T>;
     }
@@ -198,14 +198,16 @@ function deserializeValue<T>(
       const lit = holder.value.literalValue;
       if (!lit.literal) return null;
       switch (lit.literal.$case) {
-        case 'stringLiteral':
-          return lit.literal.stringLiteral.value;
-        case 'intLiteral':
-          return lit.literal.intLiteral.value;
-        case 'boolLiteral':
-          return lit.literal.boolLiteral.value;
-        case 'bigintLiteral':
-          return hexToBigInt(lit.literal.bigintLiteral.value);
+        case 'stringValue':
+          return lit.literal.stringValue;
+        case 'intValue':
+          return lit.literal.intValue;
+        case 'boolValue':
+          return lit.literal.boolValue;
+        case 'bigintValue':
+          return hexToBigInt(lit.literal.bigintValue);
+        case 'floatValue':
+          return Number(lit.literal.floatValue);
         default: {
           const _exhaustive: never = lit.literal;
           return null;

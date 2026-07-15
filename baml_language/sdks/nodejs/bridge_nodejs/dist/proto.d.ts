@@ -1,4 +1,12 @@
 /**
+ * THIS FILE IS AUTO-GENERATED — DO NOT EDIT BY HAND.
+ *
+ * Source: baml_language/crates/bridge_nodejs/typescript_src/
+ * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
+ * Build:  cd baml_language/crates/bridge_nodejs && pnpm build:debug
+ */
+import { baml_bridge } from './proto/baml_cffi.js';
+/**
  * Error thrown when a host callable (a JS `function`) is passed to the
  * *synchronous* call path. See {@link encodeCallArgs} for why this can't work.
  */
@@ -8,6 +16,14 @@ export declare class HostCallableSyncError extends Error {
 export interface EncodeCallArgsOptions {
     callId: bigint;
     syncMode?: boolean;
+    /**
+     * Call-level TypeVar bindings for a generic function/method, as
+     * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
+     * first, then the callee's own `<...>` params). Encoded into
+     * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
+     * `type_args` argument. Omitted/empty for non-generic calls.
+     */
+    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy]>;
 }
 /**
  * Encode kwargs into `CallFunctionArgs` bytes.

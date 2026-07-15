@@ -628,6 +628,14 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("throw ".into()));
             spans.extend(expr_desc_spans(*value, body, inference));
         }
+        Expr::Return { value } => {
+            if let Some(value) = value {
+                spans.push(DetailSpan::Code("return ".into()));
+                spans.extend(expr_desc_spans(*value, body, inference));
+            } else {
+                spans.push(DetailSpan::Code("return".into()));
+            }
+        }
         Expr::ByteStringLiteral(bytes) => {
             spans.push(DetailSpan::Code(format!("b\"<{} bytes>\"", bytes.len())));
         }
@@ -654,6 +662,12 @@ fn expr_desc_spans<'db>(
         Expr::Await { future } => {
             spans.push(DetailSpan::Code("await ".into()));
             spans.extend(expr_desc_spans(*future, body, inference));
+        }
+        Expr::Template { tag, .. } => {
+            if let baml_compiler2_ast::TemplateTag::Custom { tag, .. } = tag {
+                spans.extend(expr_desc_spans(*tag, body, inference));
+            }
+            spans.push(DetailSpan::Code("`…`".into()));
         }
         Expr::GenericApply { base, .. } => {
             spans.extend(expr_desc_spans(*base, body, inference));
@@ -1156,7 +1170,6 @@ impl CompilerRunner {
                 + item_tree.type_aliases.len()
                 + item_tree.clients.len()
                 + item_tree.tests.len()
-                + item_tree.generators.len()
                 + item_tree.template_strings.len()
                 + item_tree.retry_policies.len();
 
@@ -1177,7 +1190,7 @@ impl CompilerRunner {
                                     format!(
                                         "{}: {}",
                                         p.name.as_str(),
-                                        hir2_type_expr_to_string(&te.expr)
+                                        hir2_type_expr_to_string(&te)
                                     )
                                 })
                                 .unwrap_or_else(|| p.name.as_str().to_string())
@@ -1186,7 +1199,7 @@ impl CompilerRunner {
                     let return_str = func
                         .return_type
                         .as_ref()
-                        .map(|te| hir2_type_expr_to_string(&te.expr))
+                        .map(|te| hir2_type_expr_to_string(&te))
                         .unwrap_or_else(|| "?".to_string());
 
                     match &func.body {
@@ -1270,7 +1283,7 @@ impl CompilerRunner {
                         let ty_str = field
                             .type_expr
                             .as_ref()
-                            .map(|te| hir2_type_expr_to_string(&te.expr))
+                            .map(|te| hir2_type_expr_to_string(&te))
                             .unwrap_or_else(|| "?".to_string());
                         let field_str = format!("  {}: {}", field.name, ty_str);
                         writeln!(output, "{field_str}").ok();
@@ -1298,7 +1311,7 @@ impl CompilerRunner {
                     let ty_str = alias
                         .type_expr
                         .as_ref()
-                        .map(|te| hir2_type_expr_to_string(&te.expr))
+                        .map(|te| hir2_type_expr_to_string(&te))
                         .unwrap_or_else(|| "?".to_string());
                     let line = format!("type {} = {}", alias.name, ty_str);
                     writeln!(output, "{line}").ok();
@@ -1322,14 +1335,6 @@ impl CompilerRunner {
 
                 for (_, test) in &item_tree.tests {
                     let line = format!("test {}", test.name);
-                    writeln!(output, "{line}").ok();
-                    output_annotated.push((line, status));
-                    writeln!(output).ok();
-                    output_annotated.push((String::new(), LineStatus::Unknown));
-                }
-
-                for (_, generator) in &item_tree.generators {
-                    let line = format!("generator {}", generator.name);
                     writeln!(output, "{line}").ok();
                     output_annotated.push((line, status));
                     writeln!(output).ok();
@@ -1522,9 +1527,6 @@ impl CompilerRunner {
                 if items.tests.len() > 0 {
                     parts.push(format!("{} test", items.tests.len()));
                 }
-                if items.generators.len() > 0 {
-                    parts.push(format!("{} gen", items.generators.len()));
-                }
                 if items.template_strings.len() > 0 {
                     parts.push(format!("{} tmpl", items.template_strings.len()));
                 }
@@ -1666,7 +1668,7 @@ impl CompilerRunner {
                                         format!(
                                             "{}: {}",
                                             p.name.as_str(),
-                                            hir2_type_expr_to_string(&te.expr)
+                                            hir2_type_expr_to_string(&te)
                                         )
                                     })
                                     .unwrap_or_else(|| p.name.as_str().to_string())
@@ -1675,7 +1677,7 @@ impl CompilerRunner {
                         let ret_str = f
                             .return_type
                             .as_ref()
-                            .map(|te| hir2_type_expr_to_string(&te.expr))
+                            .map(|te| hir2_type_expr_to_string(&te))
                             .unwrap_or_else(|| "?".to_string());
                         let body_kind = match &f.body {
                             Some(FunctionBodyDef::Expr(_, _)) => "expr",
@@ -1694,7 +1696,7 @@ impl CompilerRunner {
                                 detail.push(format!(
                                     "  param {}: {}",
                                     p.name,
-                                    hir2_type_expr_to_string(&te.expr)
+                                    hir2_type_expr_to_string(&te)
                                 ));
                             }
                         }
@@ -1796,7 +1798,7 @@ impl CompilerRunner {
                             let ty_str = field
                                 .type_expr
                                 .as_ref()
-                                .map(|te| hir2_type_expr_to_string(&te.expr))
+                                .map(|te| hir2_type_expr_to_string(&te))
                                 .unwrap_or_else(|| "?".to_string());
                             detail.push(format!("    {}: {}", field.name, ty_str));
                         }
@@ -1853,7 +1855,7 @@ impl CompilerRunner {
                     let ty_str = ta
                         .type_expr
                         .as_ref()
-                        .map(|te| hir2_type_expr_to_string(&te.expr))
+                        .map(|te| hir2_type_expr_to_string(&te))
                         .unwrap_or_else(|| "?".to_string());
                     let mut detail = vec![format!("type {}", ta.name), format!("  = {}", ty_str)];
                     let errors = item_errors(ta.name.as_str());
@@ -2074,6 +2076,10 @@ impl CompilerRunner {
                 }
                 Expr::Catch { .. } => "catch ...".into(),
                 Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
+                Expr::Return { value } => match value {
+                    Some(value) => format!("return {}", expr_desc(*value, body)),
+                    None => "return".into(),
+                },
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),
                 Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
                 Expr::Call { callee, args, .. } => {
@@ -2119,6 +2125,12 @@ impl CompilerRunner {
                     format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
                 }
                 Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
+                Expr::Template { tag, .. } => match tag {
+                    baml_compiler2_ast::TemplateTag::Custom { tag, .. } => {
+                        format!("{}`…`", expr_desc(*tag, body))
+                    }
+                    baml_compiler2_ast::TemplateTag::Default { .. } => "`…`".into(),
+                },
                 Expr::GenericApply { base, .. } => format!("{}<...>", expr_desc(*base, body)),
                 Expr::Missing => "<missing>".into(),
             }
@@ -2633,6 +2645,20 @@ impl CompilerRunner {
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
                         }
+                        Stmt::Defer { body: defer_body } => {
+                            let line = format!("{pad}defer");
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            render_expr(
+                                *defer_body,
+                                body,
+                                inference,
+                                indent + 2,
+                                output,
+                                output_annotated,
+                                status,
+                            );
+                        }
                         Stmt::For {
                             binding,
                             collection,
@@ -3061,7 +3087,7 @@ impl CompilerRunner {
                         let raw = ta
                             .type_expr
                             .as_ref()
-                            .map(|te| hir2_type_expr_to_string(&te.expr))
+                            .map(|te| hir2_type_expr_to_string(&te))
                             .unwrap_or_else(|| "?".to_string());
                         detail.push(plain(format!("  = {raw} (unresolved)")));
                         format!("= {raw}")
@@ -3320,6 +3346,16 @@ impl CompilerRunner {
                         Stmt::Continue => {
                             lines.push(plain(format!("{pad}  continue")));
                         }
+                        Stmt::Defer { body: defer_body } => {
+                            lines.push(plain(format!("{pad}  defer")));
+                            Self::render_expr_to_lines(
+                                *defer_body,
+                                body,
+                                inference,
+                                indent + 2,
+                                lines,
+                            );
+                        }
                         Stmt::For {
                             binding,
                             collection,
@@ -3534,8 +3570,7 @@ impl CompilerRunner {
         let mut output_annotated = Vec::new();
 
         // Collect all diagnostics using the unified collect_diagnostics function
-        let source_files: Vec<_> = self.source_files.values().copied().collect();
-        self.diagnostics = collect_diagnostics(&self.db, self.project_root, &source_files);
+        self.diagnostics = collect_diagnostics(&self.db);
 
         // Build sources and file_paths maps for rendering
         let mut sources: HashMap<FileId, String> = HashMap::new();
@@ -4015,13 +4050,6 @@ impl CompilerRunner {
                 Ok(VmExecState::SysOp { .. }) => {
                     self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
                         "Function invoked a sys-op (not supported in VM Runner)".to_string(),
-                    ));
-                    break;
-                }
-                Ok(VmExecState::Notify(_)) => {
-                    self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                        "Function sent a watch notification (not supported in VM Runner)"
-                            .to_string(),
                     ));
                     break;
                 }
@@ -5268,6 +5296,9 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                     }
                 }
                 Object::Function(f) => format!("<fn {}>", f.name),
+                Object::Interface(i) => format!("<interface {}>", i.name),
+                Object::Package(_) => "<package>".to_string(),
+                Object::ImplRule(_) => "<impl_rule>".to_string(),
                 Object::Class(c) => format!("<class {}>", c.name),
                 Object::Enum(e) => format!("<enum {}>", e.name),
                 Object::Future(_) => "<future>".to_string(),

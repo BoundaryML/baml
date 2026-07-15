@@ -1,15 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 13481
 ---
 === TIR2 ===
 class user.Wrapper {
   data: baml.json.json
-}
-function user.Wrapper.to_json(self: user.Wrapper) -> baml.json.json throws baml.json.JsonSerializationError | baml.json.JsonParseError {
-  map { "data": baml.json.to_json(self.data) } : map<string, baml.json.json>
-}
-function user.Wrapper.from_json(j: baml.json.json) -> user.Wrapper throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-  Wrapper { data: baml.json.from_json<baml.json.json>(baml.json.field(j, "data")) } : user.Wrapper
 }
 function user.MakeWrapper() -> user.Wrapper throws never {
   { : user.Wrapper
@@ -42,13 +37,13 @@ function user.ReturnString() -> baml.json.json throws never {
   }
 }
 function user.ReturnArray() -> baml.json.json throws never {
-  { : int[]
-    [1, 2, 3] : int[]
+  { : baml.json.json[]
+    [1, 2, 3] : baml.json.json[]
   }
 }
 function user.ReturnMap() -> baml.json.json throws never {
-  { : map<string, string>
-    map { "key": "value" } : map<string, string>
+  { : map<string, baml.json.json>
+    map { "key": "value" } : map<string, baml.json.json>
   }
 }
 function user.MatchJson(j: baml.json.json) -> string throws never {

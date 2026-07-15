@@ -6,44 +6,6 @@
  * gives exhaustive switch narrowing.
  */
 
-import type {
-  BamlJsValue,
-  PlainHandleDescriptor,
-  SourceLocation,
-  TagEntry,
-} from '@b/pkg-proto';
-
-/** Runtime event with BamlOutboundValue fields deserialized to BamlJsValue. */
-export interface DeserializedRuntimeEvent {
-  spanId: string;
-  parentSpanId?: string;
-  rootSpanId: string;
-  timestampMs: number;
-  callStack: string[];
-  event: DeserializedEventKind | undefined;
-}
-
-export type DeserializedEventKind =
-  | {
-      $case: 'functionStart';
-      functionStart: { name: string; args: BamlJsValue[] };
-    }
-  | {
-      $case: 'functionEnd';
-      functionEnd: {
-        name: string;
-        durationMs: number;
-        result: BamlJsValue | null;
-        error?: string | null;
-      };
-    }
-  | {
-      $case: 'log';
-      log: { data: BamlJsValue | null; level: string; source?: SourceLocation };
-    }
-  | { $case: 'custom'; custom: { name: string; data: BamlJsValue | null } }
-  | { $case: 'setTags'; setTags: { tags: TagEntry[] } };
-
 // ---------------------------------------------------------------------------
 // Log decoration types (inline log display like ErrorLens)
 // ---------------------------------------------------------------------------
@@ -85,35 +47,110 @@ export interface DiagnosticEntry {
 }
 
 export type FunctionKind = 'llm' | 'expr';
-export type FunctionOrigin = 'userDefined' | 'companion' | 'internal';
+export type FunctionOrigin =
+  | 'userDefined'
+  | 'companion'
+  | 'internal'
+  | 'autoDerive';
 
 export interface LlmCapabilities {
-  /** Whether render_prompt sub-function exists. Call via `callFunction("${name}$render_prompt", args)`. */
+  /** Whether render_prompt preview is available through `startPreviewRun`. */
   renderPrompt: boolean;
-  /** Whether build_request sub-function exists. Call via `callFunction("${name}$build_request", args)`. */
+  /** Whether build_request preview is available through `startPreviewRun`. */
   buildRequest: boolean;
   /** The LLM client name (e.g., "MyClient"). */
   clientName?: string;
 }
 
+/** Schema for one function parameter (mirrors `baml_project::ParamSchema`). */
+export interface ParamSchema {
+  name: string;
+  /** The parameter has a default value and may be omitted entirely. Distinct
+   *  from a nullable type, which appears as `{ type: 'optional' }` in
+   *  `schema`. */
+  hasDefault: boolean;
+  schema: FieldSchema;
+}
+
+/** One class field; optionality is folded into `schema` as
+ *  `{ type: 'optional' }`, not a flag here. */
+export interface FieldSchemaField {
+  name: string;
+  schema: FieldSchema;
+}
+
+/** Recursive type schema for the args form (mirrors
+ *  `baml_project::FieldSchema`). Named types are `ref`s into
+ *  `ProjectUpdate.types`; `name`s are the canonical dotted FQN the engine
+ *  registers (`user.shapes.Foo`), usable verbatim in `$baml` markers. */
+export type FieldSchema =
+  | { type: 'string' }
+  | { type: 'int' }
+  | { type: 'float' }
+  | { type: 'bool' }
+  | { type: 'null' }
+  | { type: 'bigint' }
+  | { type: 'media'; kind: string }
+  | { type: 'literal'; value: unknown }
+  /** Reference to a named type in `ProjectUpdate.types`; a dangling name
+   *  (mid-edit inconsistency) degrades to the raw-JSON fallback. */
+  | { type: 'ref'; name: string }
+  /** A specific-variant param type (`s: Status.Active`) — self-contained so
+   *  the form can emit the enum wire marker without a table entry. */
+  | { type: 'enumVariant'; name: string; value: string }
+  | { type: 'list'; item: FieldSchema }
+  | { type: 'map'; key: FieldSchema; value: FieldSchema }
+  | { type: 'optional'; inner: FieldSchema }
+  | { type: 'union'; variants: FieldSchema[] }
+  | { type: 'unsupported'; display: string };
+
+/** A named type's definition in the per-project table (mirrors
+ *  `baml_project::TypeSchema`), keyed by canonical dotted FQN. */
+export type TypeSchema =
+  | { kind: 'class'; fields: FieldSchemaField[] }
+  | { kind: 'enum'; values: string[] }
+  | { kind: 'alias'; schema: FieldSchema };
+
 /** Metadata about a BAML function exposed to the playground.
  *
  *  Sub-functions (render_prompt, build_request) are not separate entries —
- *  they are represented as capabilities on the parent function.
- *  To call them, use the naming convention with `callFunction`:
- *  - `callFunction("${fn.name}$render_prompt", args)` → PromptAst
- *  - `callFunction("${fn.name}$build_request", args)` → HTTP Request
+ *  they are represented as capabilities on the parent function and executed
+ *  through `startPreviewRun`.
  */
 export interface FunctionInfo {
   name: string;
   kind: FunctionKind;
   origin: FunctionOrigin;
   capabilities?: LlmCapabilities;
+  /** Parameter schemas for the args form. `undefined` = no schema available
+   *  (old WASM binary or extraction skipped) → raw-JSON-only mode; `[]` = the
+   *  function takes no arguments. */
+  params?: ParamSchema[];
+}
+
+/** A statically declared legacy test that can seed function previews. */
+export interface TestInfo {
+  name: string;
+  functionName: string;
+  argsJson: string;
+}
+
+/** Stable identity shared by preview selection state and sidebar rows. */
+export function previewTestKey(
+  test: Pick<TestInfo, 'functionName' | 'name'>,
+): string {
+  return `${test.functionName}\u0000${test.name}`;
 }
 
 export interface ProjectUpdate {
   isBexCurrent: boolean;
   functions: FunctionInfo[];
+  /** Omitted by older runtimes; the UI treats that as no previewable tests. */
+  tests?: TestInfo[];
+  /** Shared type table for `FunctionInfo.params` refs. `undefined` = binary
+   *  predates the args form (refs, if any, degrade to raw JSON); may be an
+   *  empty object when no function references named types. */
+  types?: Record<string, TypeSchema>;
   diagnostics: DiagnosticEntry[];
 }
 
@@ -141,7 +178,23 @@ export type PlaygroundNotification =
       data: number[];
       expandError?: { testsetName: string; message: string };
     }
-  | { type: 'runtimeEvent'; data: number[]; callId?: number };
+  | {
+      type: 'profileArtifactChunk';
+      boundaryId?: BoundaryId;
+      engineId: number;
+      processId: string;
+      bytesBase64: string;
+      retainedBytes: number;
+      maxBytes?: number;
+      droppedBytes: number;
+      droppedChunks: number;
+    }
+  | ({ type: 'valueBody' } & ValueBodyResponse);
+
+export type ProfileArtifactChunkMessage = Extract<
+  PlaygroundNotification,
+  { type: 'profileArtifactChunk' }
+>;
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
@@ -212,7 +265,6 @@ export interface CursorContext {
 
 export interface FetchLogEntry {
   id: number;
-  callId: number;
   timestamp: number;
   method: string;
   url: string;
@@ -230,21 +282,484 @@ export interface EnvVarRequest {
   variable: string;
 }
 
-/** A single function invocation with its associated logs and result. */
-export interface RunEntry {
-  id: number;
-  functionName: string;
-  argsJson: string;
-  testName?: string;
-  fetchLogs: FetchLogEntry[];
-  /** Runtime events (log.info, baml.events.send, etc.) emitted during this run. */
-  runtimeEvents: DeserializedRuntimeEvent[];
-  result: BamlJsValue | null;
-  error: string | null;
-  status: 'running' | 'success' | 'error' | 'cancelled';
-  startTime: number;
-  durationMs: number | null;
+// ---------------------------------------------------------------------------
+// RunStore snapshot protocol
+// ---------------------------------------------------------------------------
+
+export type BoundaryId = string;
+export type RunCursor = number;
+
+export type ValueCodec = 'bamlOutboundValue';
+export type ValueAvailability =
+  | 'pending'
+  | 'available'
+  | 'missing'
+  | 'omitted'
+  | 'lost';
+
+export interface ValueRef {
+  id: string;
+  codec: ValueCodec;
+  availability: ValueAvailability;
+  originalSizeBytes: number | null;
+  retainedSizeBytes: number | null;
+  diagnostic: string | null;
 }
+
+export interface ValueBodyResponse {
+  requestId: number;
+  boundaryId: BoundaryId;
+  valueRefId: string;
+  codec: ValueCodec;
+  availability: ValueAvailability;
+  bodyBase64?: string;
+  diagnostic?: string;
+}
+
+export type RunStatus =
+  | 'pending'
+  | 'running'
+  | 'waitingForInput'
+  | 'waitingForEnv'
+  | 'cancelling'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'panicked';
+
+export type RunTarget =
+  | { kind: 'function'; functionName: string }
+  | { kind: 'test'; generation: number; testName: string }
+  | { kind: 'preview'; parentFunctionName: string; helper: string }
+  | { kind: 'companion'; parentBoundaryId: BoundaryId | null; functionName: string }
+  | { kind: 'internal'; name: string };
+
+export type RunVisibility =
+  | { kind: 'history' }
+  | { kind: 'scoped'; scopeId: string }
+  | { kind: 'hidden' }
+  | { kind: 'debugOnly' };
+
+export interface RunRequestSummary {
+  projectId: string;
+  projectGeneration: number;
+  target: RunTarget;
+  argsSummary: string | null;
+  optionsSummary: string | null;
+}
+
+export interface RunResult {
+  valueRef: ValueRef | null;
+  /** Compatibility for older runtimes during local development. */
+  value?: string | null;
+  rendererHint: string | null;
+  supportingPayloadIds: string[];
+}
+
+export interface RunError {
+  class: string;
+  message: string;
+  details: string | null;
+  valueRef: ValueRef | null;
+}
+
+export interface RunCancellation {
+  requestedAtMs: number;
+  completedAtMs: number | null;
+  reason: string | null;
+}
+
+export interface RunDiagnostic {
+  severity: 'error' | 'warning' | 'info';
+  code: string | null;
+  message: string;
+  callNodeId: string | null;
+  payloadId: string | null;
+}
+
+export interface ThreadNode {
+  id: string;
+  parentThreadId: string | null;
+  parentCallNodeId: string | null;
+  name: string | null;
+  startedAtNs: string | null;
+  endedAtNs: string | null;
+  status: 'running' | 'completed' | 'cancelled' | 'errored';
+  callNodeIds: string[];
+}
+
+export interface CallNode {
+  id: string;
+  threadId: string;
+  parentId: string | null;
+  functionId: number;
+  functionName: string | null;
+  functionOrigin: 'user' | 'builtin' | 'companion' | 'internal' | 'unknown' | null;
+  calleeSource: RunSourceLocation | null;
+  callSiteSource: RunSourceLocation | null;
+  startedAtNs: string | null;
+  endedAtNs: string | null;
+  status: 'running' | 'ok' | 'errored' | 'cancelled' | 'exited';
+  payloadIds: string[];
+}
+
+export interface RunSourceLocation {
+  filePath?: string | null;
+  fileId?: number | null;
+  line: number;
+  column: number;
+  endLine?: number | null;
+  endColumn?: number | null;
+  startOffset?: number | null;
+  endOffset?: number | null;
+}
+
+export type RunRequestState =
+  | 'pending'
+  | 'resolved'
+  | 'cancelled'
+  | 'expired'
+  | 'runTerminal';
+
+export interface PayloadBody {
+  state:
+    | { kind: 'inlineBytes' }
+    | { kind: 'inlineJson' }
+    | { kind: 'retainedByRef'; id: string }
+    | { kind: 'truncated' }
+    | { kind: 'compacted' }
+    | { kind: 'omittedByPolicy' };
+  contentType: string | null;
+  originalSizeBytes: number | null;
+  retainedSizeBytes: number | null;
+}
+
+export interface PayloadEvent {
+  id: string;
+  callNodeId: string | null;
+  timestampMs: number;
+  kind:
+    | {
+        type: 'fetchStarted';
+        fetchId: string;
+        method: string;
+        url: string;
+        requestHeaders: Array<{
+          name: string;
+          valueRedacted: boolean;
+          value?: string | null;
+        }>;
+      }
+    | {
+        type: 'fetchUpdated';
+        fetchId: string;
+        status: number | null;
+        durationMs: number | null;
+        responseHeaders: Array<{
+          name: string;
+          valueRedacted: boolean;
+          value?: string | null;
+        }>;
+        error: string | null;
+      }
+    | {
+        type: 'inputRequested';
+        requestId: string;
+        prompt: string | null;
+        state: RunRequestState;
+      }
+    | { type: 'inputResolved'; requestId: string; state: RunRequestState }
+    | {
+        type: 'envRequested';
+        requestId: string;
+        key: string;
+        state: RunRequestState;
+        waiterCount: number;
+      }
+    | {
+        type: 'envResolved';
+        requestId: string;
+        key: string;
+        status:
+          | 'resolvedFromOverride'
+          | 'resolvedFromProcess'
+          | 'resolvedFromUser'
+          | 'declinedMissing';
+        state: RunRequestState;
+        valueRedacted: boolean;
+        displayValue: string | null;
+      }
+    | {
+        type: 'log';
+        level: string | null;
+        message: string;
+        source: RunSourceLocation | null;
+        valueRef: ValueRef | null;
+      }
+    | {
+        type: 'capturedValue';
+        role: 'rootInput' | 'callInput' | 'callOutput' | 'callError';
+        label: string | null;
+        valueRef: ValueRef | null;
+      };
+  redaction: {
+    valueRedacted: boolean;
+    displaySafe: boolean;
+    reason: string | null;
+    policyId: string | null;
+  };
+  body: PayloadBody | null;
+}
+
+export interface Run {
+  boundaryId: BoundaryId;
+  target: RunTarget;
+  visibility: RunVisibility;
+  status: RunStatus;
+  createdAtMs: number;
+  startedAtMs: number | null;
+  completedAtMs: number | null;
+  timeAnchor: { epochCreatedAtMs: number; traceZeroNs: string };
+  request: RunRequestSummary;
+  result: RunResult | null;
+  error: RunError | null;
+  cancellation: RunCancellation | null;
+  rootCallNodeId: string | null;
+  graphRuntimeOverlay: GraphRuntimeOverlay | null;
+  calls: CallNode[];
+  threads: ThreadNode[];
+  payloads: PayloadEvent[];
+  diagnostics: RunDiagnostic[];
+  cursor: RunCursor;
+}
+
+export interface GraphRuntimeOverlay {
+  boundaryId: BoundaryId;
+  projectGeneration: number;
+  entries: GraphRuntimeOverlayEntry[];
+  unattachedCallNodeIds: string[];
+  diagnostics: RunDiagnostic[];
+}
+
+export interface GraphRuntimeOverlayEntry {
+  cfgNodeId: number;
+  callNodeIds: string[];
+}
+
+export interface RunSummary {
+  boundaryId: BoundaryId;
+  target: RunTarget;
+  visibility: RunVisibility;
+  status: RunStatus;
+  request: RunRequestSummary;
+  touchedFunctions: string[];
+  createdAtMs: number;
+  completedAtMs: number | null;
+  retention: string;
+}
+
+export interface RunListFilter {
+  projectId?: string;
+  projectGeneration?: number;
+  kinds?: RunTarget['kind'][];
+  callTreeContainsFunction?: string;
+  visibility?: 'historyOnly' | 'includeHidden' | 'allForDebug';
+}
+
+export type RunPatchChange =
+  | { type: 'upsertCallNode'; call: CallNode }
+  | { type: 'upsertThreadNode'; thread: ThreadNode }
+  | { type: 'upsertPayload'; payload: PayloadEvent }
+  | { type: 'upsertDiagnostic'; diagnostic: RunDiagnostic }
+  | { type: 'setRootCallNode'; callNodeId: string | null }
+  | { type: 'setGraphRuntimeOverlay'; overlay: GraphRuntimeOverlay }
+  | { type: 'setStatus'; status: RunStatus }
+  | {
+      type: 'complete';
+      outcome:
+        | { status: 'succeeded'; result: RunResult }
+        | { status: 'failed'; error: RunError }
+        | { status: 'cancelled'; cancellation: RunCancellation }
+        | { status: 'panicked'; error: RunError };
+    };
+
+export interface RunPatch {
+  boundaryId: BoundaryId;
+  cursor: RunCursor;
+  changes: RunPatchChange[];
+}
+
+export type RequestCommandOutcome =
+  | 'accepted'
+  | 'alreadyResolved'
+  | 'rejectedStale'
+  | 'cancelled'
+  | 'missing'
+  | 'alreadyTerminal';
+
+export type RunCursorExpiredReason =
+  | 'expired'
+  | 'compacted'
+  | 'unknown'
+  | 'future'
+  | 'unavailable';
+
+// ---------------------------------------------------------------------------
+// WebSocket transport messages
+// ---------------------------------------------------------------------------
+
+/** Server -> client messages sent by `playground_ws.rs` over `/api/ws`. */
+export type WebSocketOutMessage =
+  | {
+      type: 'hello';
+      toolchainVersion: string;
+      playgroundProtocol: number;
+      minClientPlaygroundProtocol: number;
+      capabilities: string[];
+    }
+  | { type: 'ready' }
+  | { type: 'playgroundNotification'; notification: PlaygroundNotification }
+  | { type: 'runStarted'; requestId?: number; run: Run }
+  | { type: 'runPatch'; patch: RunPatch }
+  | { type: 'commandAck'; requestId: number; outcome: string }
+  | { type: 'commandError'; requestId: number; code: string; message: string }
+  | { type: 'runList'; requestId: number; runs: RunSummary[] }
+  | { type: 'historyList'; requestId: number; runs: RunSummary[] }
+  | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
+  | ({ type: 'valueBody' } & ValueBodyResponse)
+  | {
+      type: 'runCursorExpired';
+      requestId?: number;
+      subscriptionId?: string;
+      boundaryId: BoundaryId;
+      reason: RunCursorExpiredReason;
+    }
+  | { type: 'envVarRequest'; id: number; variable: string }
+  | { type: 'processEnvVars'; vars: Record<string, string> }
+  | { type: 'envVarFromShell'; variable: string; value: string }
+  | { type: 'knownEnvVarNames'; names: string[] }
+  | {
+      type: 'inputRequest';
+      id: number;
+      prompt: string | undefined;
+      callId: number;
+    }
+  | { type: 'inputResolved'; id: number; callId: number }
+  | {
+      type: 'fetchLogNew';
+      callId: number;
+      id: number;
+      method: string;
+      url: string;
+      requestHeaders: Record<string, string>;
+      requestBody: string;
+    }
+  | {
+      type: 'fetchLogUpdate';
+      callId: number;
+      logId: number;
+      status?: number;
+      durationMs?: number;
+      responseBody?: string;
+      error?: string;
+      responseHeaders?: Record<string, string>;
+    }
+  | {
+      type: 'controlFlowGraphResult';
+      functionName: string;
+      graph: ControlFlowGraph | null;
+    }
+  | { type: 'cursorContext'; context: CursorContext };
+
+/** Client -> server messages sent by `WebSocketRuntimePort` over `/api/ws`. */
+export type WebSocketInMessage =
+  | {
+      type: 'startRun';
+      requestId: number;
+      project: string;
+      functionName: string;
+      argsBytes: string;
+    }
+  | {
+      type: 'startPreviewRun';
+      requestId: number;
+      project: string;
+      parentFunctionName: string;
+      helper: string;
+      functionName: string;
+      argsBytes: string;
+    }
+  | {
+      type: 'startTestRun';
+      requestId: number;
+      project: string;
+      generation: number;
+      testName: string;
+    }
+  | { type: 'cancelRun'; requestId: number; boundaryId: BoundaryId }
+  | {
+      type: 'respondToInput';
+      requestId: number;
+      boundaryId: BoundaryId;
+      inputRequestId: string;
+      value: string;
+    }
+  | {
+      type: 'respondToEnv';
+      requestId: number;
+      boundaryId: BoundaryId;
+      envRequestId: string;
+      value?: string;
+    }
+  | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
+  | { type: 'listHistory'; requestId: number; filter?: RunListFilter }
+  | { type: 'openHistory'; requestId: number; boundaryId: BoundaryId }
+  | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
+  | {
+      type: 'readValue';
+      requestId: number;
+      boundaryId: BoundaryId;
+      valueRef: ValueRef;
+    }
+  | {
+      type: 'subscribe';
+      requestId: number;
+      subscriptionId: string;
+      boundaryId: BoundaryId;
+      afterCursor?: RunCursor;
+    }
+  | { type: 'unsubscribe'; requestId: number; subscriptionId: string }
+  | {
+      type: 'expandTestSet';
+      project: string;
+      generation: number;
+      testsetName: string;
+    }
+  | {
+      type: 'envVarResponse';
+      id: number;
+      value: string | undefined;
+      variable?: string;
+    }
+  | { type: 'inputResponse'; id: number; value: string; callId: number }
+  | { type: 'setEnvVar'; key: string; value: string }
+  | { type: 'deleteEnvVar'; key: string }
+  | { type: 'requestState' }
+  | {
+      type: 'ensureProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'releaseProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | { type: 'requestCollectTests'; project: string }
+  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | { type: 'cursorPosition'; file: string; line: number; column: number };
 
 // ---------------------------------------------------------------------------
 // Worker → Main thread messages
@@ -253,28 +768,29 @@ export interface RunEntry {
 export type WorkerOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
+  | ProfileArtifactChunkMessage
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
+  | { type: 'runStarted'; requestId?: number; run: Run }
+  | { type: 'runPatch'; patch: RunPatch }
   | {
-      type: 'callFunctionResult';
-      id: number;
-      result: BamlJsValue<PlainHandleDescriptor>;
+      type: 'commandAck';
+      requestId: number;
+      outcome: RequestCommandOutcome | string;
     }
+  | { type: 'commandError'; requestId: number; code: string; message: string }
+  | { type: 'runList'; requestId: number; runs: RunSummary[] }
+  | { type: 'historyList'; requestId: number; runs: RunSummary[] }
+  | { type: 'runSnapshot'; requestId?: number; boundaryId: BoundaryId; snapshot: Run }
+  | ({ type: 'valueBody' } & ValueBodyResponse)
   | {
-      type: 'callFunctionError';
-      id: number;
-      error: string;
-      cancelled?: boolean;
+      type: 'runCursorExpired';
+      requestId?: number;
+      subscriptionId?: string;
+      boundaryId: BoundaryId;
+      reason: RunCursorExpiredReason;
     }
-  | { type: 'nextFunctionCallResult'; id: number; callId: number }
-  | { type: 'nextFunctionCallError'; id: number; error: string }
-  | { type: 'fetchLogNew'; entry: FetchLogEntry }
+  | { type: 'fetchLogNew'; callId: number; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
-  | {
-      type: 'runtimeEventNew';
-      event: DeserializedRuntimeEvent;
-      callId: number | null;
-    }
-  | { type: 'runtimeEventError'; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'processEnvVars'; vars: Record<string, string> }
   | { type: 'envVarFromShell'; variable: string; value: string }
@@ -304,16 +820,62 @@ export type WorkerOutMessage =
 // ---------------------------------------------------------------------------
 
 export type WorkerInMessage =
-  | { type: 'nextFunctionCall'; id: number }
   | {
-      type: 'callFunction';
-      id: number;
-      name: string;
-      argsProto: Uint8Array;
+      type: 'startRun';
+      requestId: number;
       project: string;
+      functionName: string;
+      argsBytes: Uint8Array;
     }
-  | { type: 'cancelCall'; id: number; project: string }
-  | { type: 'clearHandles'; runIds: number[] }
+  | {
+      type: 'startPreviewRun';
+      requestId: number;
+      project: string;
+      parentFunctionName: string;
+      helper: string;
+      functionName: string;
+      argsBytes: Uint8Array;
+    }
+  | {
+      type: 'startTestRun';
+      requestId: number;
+      project: string;
+      generation: number;
+      testName: string;
+    }
+  | { type: 'cancelRun'; requestId: number; boundaryId: BoundaryId }
+  | {
+      type: 'respondToInput';
+      requestId: number;
+      boundaryId: BoundaryId;
+      inputRequestId: string;
+      value: string;
+    }
+  | {
+      type: 'respondToEnv';
+      requestId: number;
+      boundaryId: BoundaryId;
+      envRequestId: string;
+      value?: string;
+    }
+  | { type: 'listRuns'; requestId: number; filter?: RunListFilter }
+  | { type: 'listHistory'; requestId: number; filter?: RunListFilter }
+  | { type: 'openHistory'; requestId: number; boundaryId: BoundaryId }
+  | { type: 'snapshot'; requestId: number; boundaryId: BoundaryId }
+  | {
+      type: 'readValue';
+      requestId: number;
+      boundaryId: BoundaryId;
+      valueRef: ValueRef;
+    }
+  | {
+      type: 'subscribe';
+      requestId: number;
+      subscriptionId: string;
+      boundaryId: BoundaryId;
+      afterCursor?: RunCursor;
+    }
+  | { type: 'unsubscribe'; requestId: number; subscriptionId: string }
   | {
       type: 'envVarResponse';
       id: number;
@@ -325,16 +887,24 @@ export type WorkerInMessage =
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'selectProject'; root: string }
   | { type: 'requestState' }
+  /** Standing intent: the client wants a live runtime for this project.
+   *  Unlike run commands this is not session-scoped — transports must
+   *  re-assert the latest lease after every reconnect handshake. */
+  | {
+      type: 'ensureProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
+  | {
+      type: 'releaseProjectRuntime';
+      requestId: number;
+      project: string;
+      incarnation?: number;
+    }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'cursorPosition'; file: string; line: number; column: number }
   | { type: 'requestCollectTests'; project: string }
-  | {
-      type: 'callTestFunction';
-      id: number;
-      project: string;
-      generation: number;
-      testName: string;
-    }
   | {
       type: 'expandTestSet';
       project: string;

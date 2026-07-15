@@ -6,7 +6,7 @@
 //! CST `Option` handling in one layer so everything downstream gets clean
 //! typed data and can be constructed directly in tests without parsing.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
 use la_arena::{Arena, Idx};
@@ -37,7 +37,7 @@ pub struct RawAttributeArg {
 /// in the AST layer (before any name resolution). CST → `TypeExpr` conversion
 /// happens once during `lower_file` and is never repeated.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeExpr {
+pub enum TypeExprKind {
     /// Named type path: `User`, `baml.http.Request`, `Stream<T>`
     Path {
         segments: Vec<Name>,
@@ -115,10 +115,10 @@ pub enum TypeExpr {
         value: baml_base::Literal,
         attrs: Vec<RawAttribute>,
     },
-    /// Function type: (params) -> return
+    /// Function type: `(params) -> return throws E`. Function *values* are
+    /// realized, so a function type carries no generic parameters of its own —
+    /// it may only reference type variables from the enclosing context.
     Function {
-        generic_params: Vec<Name>,
-        generic_param_bounds: Vec<Option<TypeExpr>>,
         params: Vec<FunctionTypeParam>,
         ret: Box<TypeExpr>,
         throws: Option<Box<TypeExpr>>,
@@ -144,9 +144,75 @@ pub enum TypeExpr {
     Unknown {
         attrs: Vec<RawAttribute>,
     },
+    /// The wildcard `_` — an inference hole. Valid only where the type at this
+    /// slot can be inferred from context (a generic type argument whose binding
+    /// is fixed by an initializer, or a `throws`-clause member). Lowered to
+    /// `Ty::Infer` and filled during TIR checking.
+    Infer {
+        attrs: Vec<RawAttribute>,
+    },
+}
+
+/// A type expression node paired with its source span. Every node in the tree
+/// is spanned (recursively, via the `Box<TypeExpr>`/`Vec<TypeExpr>` children of
+/// [`TypeExprKind`]), so a diagnostic about any sub-type (e.g. an unresolved
+/// member of a union/map) can point exactly at it.
+///
+/// Equality and hashing are **structural** — they ignore `span`. Two occurrences
+/// of the same type compare equal regardless of source position; `span` is
+/// diagnostic metadata, not part of type identity (this matches the pre-spanning
+/// behavior and keeps Salsa early-cutoff / dedup position-insensitive).
+#[derive(Debug, Clone)]
+pub struct TypeExpr {
+    pub kind: TypeExprKind,
+    pub span: TextRange,
+}
+
+impl PartialEq for TypeExpr {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
+}
+
+impl Eq for TypeExpr {}
+
+impl std::hash::Hash for TypeExpr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.kind.hash(state);
+    }
+}
+
+impl std::ops::Deref for TypeExpr {
+    type Target = TypeExprKind;
+    fn deref(&self) -> &TypeExprKind {
+        &self.kind
+    }
+}
+
+impl std::ops::DerefMut for TypeExpr {
+    fn deref_mut(&mut self) -> &mut TypeExprKind {
+        &mut self.kind
+    }
+}
+
+impl TypeExprKind {
+    /// Pair this node with its source span. `TypeExprKind::Int { .. }.at(span)`.
+    pub fn at(self, span: TextRange) -> TypeExpr {
+        TypeExpr { kind: self, span }
+    }
 }
 
 impl TypeExpr {
+    /// Override this node's top-level span (its children keep their own spans).
+    /// Used where an item carries a separate annotation span for the whole type.
+    #[must_use]
+    pub fn with_span(mut self, span: TextRange) -> Self {
+        self.span = span;
+        self
+    }
+}
+
+impl TypeExprKind {
     /// Access the type-level attributes on this type expression.
     pub fn attrs(&self) -> &[RawAttribute] {
         match self {
@@ -172,7 +238,8 @@ impl TypeExpr {
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs } => attrs,
+            | Self::Unknown { attrs }
+            | Self::Infer { attrs } => attrs,
         }
     }
 
@@ -201,15 +268,25 @@ impl TypeExpr {
             | Self::Type { attrs }
             | Self::Rust { attrs }
             | Self::Error { attrs }
-            | Self::Unknown { attrs } => attrs,
+            | Self::Unknown { attrs }
+            | Self::Infer { attrs } => attrs,
         }
     }
 }
 
 impl std::fmt::Display for TypeExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
+impl std::fmt::Display for TypeExprKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         fn needs_parens(ty: &TypeExpr) -> bool {
-            matches!(ty, TypeExpr::Union { .. } | TypeExpr::Function { .. })
+            matches!(
+                ty.kind,
+                TypeExprKind::Union { .. } | TypeExprKind::Function { .. }
+            )
         }
 
         fn write_postfix_base(f: &mut std::fmt::Formatter<'_>, ty: &TypeExpr) -> std::fmt::Result {
@@ -221,7 +298,7 @@ impl std::fmt::Display for TypeExpr {
         }
 
         match self {
-            TypeExpr::Path {
+            TypeExprKind::Path {
                 segments,
                 generic_args,
                 associated_type_bindings,
@@ -254,7 +331,7 @@ impl std::fmt::Display for TypeExpr {
                 }
                 Ok(())
             }
-            TypeExpr::AssociatedTypeProjection {
+            TypeExprKind::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
@@ -267,31 +344,31 @@ impl std::fmt::Display for TypeExpr {
                     write!(f, ".{member}")
                 }
             }
-            TypeExpr::Int { .. } => write!(f, "int"),
-            TypeExpr::Bigint { .. } => write!(f, "bigint"),
-            TypeExpr::Float { .. } => write!(f, "float"),
-            TypeExpr::String { .. } => write!(f, "string"),
-            TypeExpr::Bool { .. } => write!(f, "bool"),
-            TypeExpr::Null { .. } => write!(f, "null"),
-            TypeExpr::Never { .. } => write!(f, "never"),
-            TypeExpr::Void { .. } => write!(f, "void"),
-            TypeExpr::Uint8Array { .. } => write!(f, "uint8array"),
-            TypeExpr::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
-            TypeExpr::Optional { inner, .. } => {
+            TypeExprKind::Int { .. } => write!(f, "int"),
+            TypeExprKind::Bigint { .. } => write!(f, "bigint"),
+            TypeExprKind::Float { .. } => write!(f, "float"),
+            TypeExprKind::String { .. } => write!(f, "string"),
+            TypeExprKind::Bool { .. } => write!(f, "bool"),
+            TypeExprKind::Null { .. } => write!(f, "null"),
+            TypeExprKind::Never { .. } => write!(f, "never"),
+            TypeExprKind::Void { .. } => write!(f, "void"),
+            TypeExprKind::Uint8Array { .. } => write!(f, "uint8array"),
+            TypeExprKind::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
+            TypeExprKind::Optional { inner, .. } => {
                 write_postfix_base(f, inner)?;
                 write!(f, "?")
             }
-            TypeExpr::List { inner, .. } => {
+            TypeExprKind::List { inner, .. } => {
                 write_postfix_base(f, inner)?;
                 write!(f, "[]")
             }
-            TypeExpr::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
-            TypeExpr::Union { variants, .. } => {
+            TypeExprKind::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
+            TypeExprKind::Union { variants, .. } => {
                 for (i, v) in variants.iter().enumerate() {
                     if i > 0 {
                         write!(f, " | ")?;
                     }
-                    if matches!(v, TypeExpr::Function { .. }) {
+                    if matches!(v.kind, TypeExprKind::Function { .. }) {
                         write!(f, "({v})")?;
                     } else {
                         write!(f, "{v}")?;
@@ -299,28 +376,13 @@ impl std::fmt::Display for TypeExpr {
                 }
                 Ok(())
             }
-            TypeExpr::Literal { value, .. } => write!(f, "{value}"),
-            TypeExpr::Function {
-                generic_params,
-                generic_param_bounds,
+            TypeExprKind::Literal { value, .. } => write!(f, "{value}"),
+            TypeExprKind::Function {
                 params,
                 ret,
                 throws,
                 ..
             } => {
-                if !generic_params.is_empty() {
-                    write!(f, "<")?;
-                    for (i, param) in generic_params.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
-                        }
-                        write!(f, "{}", param.as_str())?;
-                        if let Some(bound) = generic_param_bounds.get(i).and_then(Option::as_ref) {
-                            write!(f, " extends {bound}")?;
-                        }
-                    }
-                    write!(f, ">")?;
-                }
                 write!(f, "(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
@@ -334,7 +396,7 @@ impl std::fmt::Display for TypeExpr {
                     }
                 }
                 write!(f, ") -> ")?;
-                if matches!(**ret, TypeExpr::Function { .. }) {
+                if matches!(ret.kind, TypeExprKind::Function { .. }) {
                     write!(f, "({ret})")?;
                 } else {
                     write!(f, "{ret}")?;
@@ -344,11 +406,12 @@ impl std::fmt::Display for TypeExpr {
                 }
                 Ok(())
             }
-            TypeExpr::BuiltinUnknown { .. } => write!(f, "unknown"),
-            TypeExpr::Type { .. } => write!(f, "type"),
-            TypeExpr::Rust { .. } => write!(f, "$rust_type"),
-            TypeExpr::Error { .. } => write!(f, "error"),
-            TypeExpr::Unknown { .. } => write!(f, "?"),
+            TypeExprKind::BuiltinUnknown { .. } => write!(f, "unknown"),
+            TypeExprKind::Type { .. } => write!(f, "type"),
+            TypeExprKind::Rust { .. } => write!(f, "$rust_type"),
+            TypeExprKind::Error { .. } => write!(f, "error"),
+            TypeExprKind::Unknown { .. } => write!(f, "?"),
+            TypeExprKind::Infer { .. } => write!(f, "_"),
         }
     }
 }
@@ -367,14 +430,6 @@ pub struct FunctionTypeParam {
 pub struct AssociatedTypeBinding {
     pub name: Name,
     pub ty: Box<TypeExpr>,
-}
-
-/// A type expression with its source span — used in item definitions
-/// where we need both the type data and the source location.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SpannedTypeExpr {
-    pub expr: TypeExpr,
-    pub span: TextRange,
 }
 
 // ── Expression Bodies ───────────────────────────────────────────
@@ -517,6 +572,16 @@ impl ExprBody {
                 )
             }
             Expr::OptionalChain { expr } => self.display_expr_inner(*expr, depth + 1),
+            Expr::Block {
+                tail_expr: Some(tail),
+                ..
+            } => self.display_expr_inner(*tail, depth + 1),
+            Expr::Template { tag, .. } => match tag {
+                TemplateTag::Default { .. } => "`…`".to_string(),
+                TemplateTag::Custom { tag, .. } => {
+                    format!("{}`…`", self.display_expr_inner(*tag, depth + 1))
+                }
+            },
             Expr::Literal(lit) => lit.to_string(),
             Expr::Null => "null".to_string(),
             _ => "...".to_string(),
@@ -543,6 +608,19 @@ pub struct AstSourceMap {
     /// For labeled call arguments, the span of the label name keyed by
     /// `(call_expr_id, argument_expr_id)`.
     pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
+
+    /// Ids of compiler-synthesized nodes — desugarings that have no
+    /// user-written source of their own (e.g. the `string.from(${…})` wrapper
+    /// and the concat accumulator that backtick interpolation lowers to). Their
+    /// spans still point at the originating source (the `${…}` template) so
+    /// diagnostics land sensibly, but consumers like inlay hints use these sets
+    /// to tell "the user wrote this" from "the compiler generated it" — a
+    /// uniform replacement for fragile structural heuristics (e.g. comparing a
+    /// call's span to its callee's). Populated at the `alloc_*` chokepoints
+    /// during lowering, via a scoped "synthesizing" flag.
+    pub synthetic_exprs: HashSet<ExprId>,
+    pub synthetic_stmts: HashSet<StmtId>,
+    pub synthetic_patterns: HashSet<PatId>,
 }
 
 impl AstSourceMap {
@@ -557,7 +635,25 @@ impl AstSourceMap {
             member_access_member_spans: HashMap::new(),
             path_segment_spans: HashMap::new(),
             call_arg_label_spans: HashMap::new(),
+            synthetic_exprs: HashSet::new(),
+            synthetic_stmts: HashSet::new(),
+            synthetic_patterns: HashSet::new(),
         }
+    }
+
+    /// Whether `id` names a compiler-synthesized expression (see `synthetic_exprs`).
+    pub fn is_synthetic_expr(&self, id: ExprId) -> bool {
+        self.synthetic_exprs.contains(&id)
+    }
+
+    /// Whether `id` names a compiler-synthesized statement (see `synthetic_stmts`).
+    pub fn is_synthetic_stmt(&self, id: StmtId) -> bool {
+        self.synthetic_stmts.contains(&id)
+    }
+
+    /// Whether `id` names a compiler-synthesized pattern (see `synthetic_patterns`).
+    pub fn is_synthetic_pattern(&self, id: PatId) -> bool {
+        self.synthetic_patterns.contains(&id)
     }
 
     /// Look up the source span of a statement by its `StmtId`.
@@ -716,6 +812,14 @@ pub enum Expr {
     Throw {
         value: ExprId,
     },
+    /// `return expr?` in expression position — a diverging expression of type
+    /// `never`, mirroring [`Expr::Throw`]. Lets `return` be a `catch`/`match`
+    /// arm value. The value is optional (`None` for a bare `return`), matching
+    /// [`Stmt::Return`]. Control transfer is to the enclosing function's exit,
+    /// not the surrounding `catch`.
+    Return {
+        value: Option<ExprId>,
+    },
     /// BEP-034 `spawn name_expr? (with expr (, expr)*)? { body }`. The body is
     /// always a block expression that runs on a freshly-spawned green thread;
     /// the optional `name` is any expression that evaluates to a string and
@@ -816,7 +920,105 @@ pub enum Expr {
     OptionalChain {
         expr: ExprId,
     },
+    /// Backtick template literal site (BEP-049). Held as a first-class HIR
+    /// node through TIR so type checking applies template-aware rules with
+    /// errors pointing at the original `${…}` spans, and MIR owns the
+    /// lowering. The `tag` discriminates the two BEP forms:
+    ///
+    /// - [`TemplateTag::Default`] — an untagged `` `…` `` literal (§11):
+    ///   each `${expr}` is implicitly `.to_string()`-coerced (strict — a
+    ///   nullable / non-stringable value is a compile error), and the whole
+    ///   template evaluates to `string`. MIR lowers it to a concat chain.
+    /// - [`TemplateTag::Custom`] — a tagged `` tag`…` `` literal (§10): the
+    ///   tag's body parameter brings extra bindings into scope, values are
+    ///   passed to the tag *verbatim* with their original types, and the
+    ///   result is the tag fn's return type. MIR lowers it to
+    ///   `tag(body = (...) -> TaggedString { TaggedString { parts, values } })`.
+    Template {
+        /// Which BEP form this is — see [`TemplateTag`].
+        tag: TemplateTag,
+        /// Structured template body. Mirrors `BacktickSegment` from the
+        /// CST but each interp/condition/collection is already a lowered
+        /// `ExprId`, and for-bindings are lowered `PatId`s. Lets TIR walk
+        /// the tree without re-touching the CST. Interp payloads are the
+        /// *raw* inner expressions (no `.to_string()` wrapping); coercion
+        /// is MIR's job for the `Default` form.
+        segments: Vec<TemplateSegment>,
+    },
     Missing,
+}
+
+/// Which BEP-049 backtick form an [`Expr::Template`] is, plus the per-form
+/// payload needed to realize it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TemplateTag {
+    /// Untagged `` `…` `` (BEP §11): implicit per-value `.to_string()`,
+    /// result type `string`.
+    ///
+    /// `elaborated` is the desugared realization — a left-folded `+` concat
+    /// of the segments (text literals, `${expr}.to_string()`, `${for}`
+    /// accumulator blocks, `${if}` chains), built from the *same* lowered
+    /// `ExprId`s the `segments` hold. TIR types this for codegen and HIR/MIR
+    /// consume it directly; the structured `segments` exist only so TIR can
+    /// emit per-`${…}` strict-stringify diagnostics (BEP §11) on the original
+    /// spans rather than on the synthetic `.to_string()` calls.
+    Default { elaborated: ExprId },
+    /// Tagged `` tag`…` `` (BEP §10): `tag` is the tag expression — usually a
+    /// bare identifier referring to a fn marked `//baml:tagged_string`. Stored
+    /// as an `ExprId` so paths and future curry forms compose without grammar
+    /// changes. Values pass to the tag verbatim with their original types.
+    ///
+    /// `body` is the desugared closure body the tag is invoked with — a block
+    /// that flattens the segments into `baml.TaggedString { parts, values }`
+    /// (text runs concatenated into `parts`, each `${expr}` pushed raw into
+    /// `values`, with `${for}`/`${if}` driving runtime array growth). Built
+    /// from the *same* lowered `ExprId`s the `segments` hold. TIR types it (so
+    /// MIR has the `push`/aggregate resolutions) and MIR lowers it as the
+    /// hand-rolled `body` closure — except when the template is purely static
+    /// (text + interp, no `${for}`/`${if}`), where MIR keeps a fixed-array
+    /// fast-path off `segments` instead.
+    Custom { tag: ExprId, body: ExprId },
+}
+
+/// One segment of an [`Expr::Template`] body. Parallel to `BacktickSegment`
+/// in the CST layer, but every sub-expression is already lowered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TemplateSegment {
+    /// Literal text between interpolations / block tags.
+    Text(std::string::String),
+    /// A `${expr}` interpolation. The wrapped `ExprId` is the lowered
+    /// inner expression (already a block expression per BEP §4).
+    Interp(ExprId),
+    /// A `${for (let p in c)}...${endfor}` block (iterator form).
+    For {
+        binding: PatId,
+        collection: ExprId,
+        body: Vec<TemplateSegment>,
+    },
+    /// A C-style `${for (let i = 0; cond; step)}...${endfor}` block (BEP §4 —
+    /// the host `for` headers are reused verbatim, so the template form accepts
+    /// the C-style header too). `init` declares the loop variable (a
+    /// `Stmt::Let`); `step` is the per-iteration update (an assignment stmt),
+    /// absent only for `for (init; cond; )`. Elaborates to the same
+    /// `{ init; while cond { body } after { step } }` shape the host C-style
+    /// `for` lowers to (`lower_c_style_for`).
+    CStyleFor {
+        init: StmtId,
+        cond: ExprId,
+        step: Option<StmtId>,
+        body: Vec<TemplateSegment>,
+    },
+    /// A `${if (c)}...${else if (c)}...${else}...${endif}` chain.
+    If {
+        branches: Vec<TemplateIfBranch>,
+        else_body: Option<Vec<TemplateSegment>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateIfBranch {
+    pub condition: ExprId,
+    pub body: Vec<TemplateSegment>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -848,7 +1050,6 @@ pub enum Stmt {
         /// `Stmt::Let` — see [`Pattern::Bind`].
         pattern: PatId,
         initializer: Option<ExprId>,
-        is_watched: bool,
         origin: LetOrigin,
         /// `let PATTERN = init else { … };` — refutable binding with a
         /// diverging else clause. `Some` activates let-else semantics:
@@ -899,6 +1100,15 @@ pub enum Stmt {
     },
     Break,
     Continue,
+    /// `defer { BODY }` (BEP-042). Schedules `body` (an [`Expr::Block`]) to run
+    /// on every exit of the enclosing block — normal completion, `return`,
+    /// `break`/`continue`, and error unwinding — in LIFO order. Block-scoped.
+    /// The body reads the live enclosing scope at exit (it is NOT a closure
+    /// capturing values at the `defer` site). `return`/`break`/`continue` that
+    /// would escape the body are rejected in TIR; `throw` is allowed.
+    Defer {
+        body: ExprId,
+    },
     Assign {
         target: ExprId,
         value: ExprId,
@@ -1118,7 +1328,6 @@ pub type Literal = baml_base::Literal;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LetOrigin {
     Source,
-    Compiler,
     Client,
     RetryPolicy,
 }
@@ -1235,7 +1444,6 @@ pub enum Item {
     TypeAlias(TypeAliasDef),
     Client(ClientDef),
     Test(TestDef),
-    Generator(GeneratorDef),
     TemplateString(TemplateStringDef),
     RetryPolicy(RetryPolicyDef),
     Let(LetDef),
@@ -1262,14 +1470,19 @@ pub struct FunctionDef {
     pub generic_param_bounds: Vec<Option<TypeExpr>>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
-    pub return_type: Option<SpannedTypeExpr>,
-    pub throws: Option<SpannedTypeExpr>,
+    pub return_type: Option<TypeExpr>,
+    pub throws: Option<TypeExpr>,
     pub body: Option<FunctionBodyDef>,
     pub declarative_meta: Option<DeclarativeMeta>,
     pub origin: FunctionOrigin,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
+    /// True when this fn is preceded by a `//baml:tagged_string` marker
+    /// comment. BEP-049 §10: such fns are callable as tagged template
+    /// tags (a tag name immediately followed by a backtick literal), and
+    /// their first parameter must be `body: (...) -> TaggedString`.
+    pub is_tagged_template_tag: bool,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1302,7 +1515,7 @@ pub enum FunctionBodyDef {
 }
 
 /// What kind of builtin a function is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum BuiltinKind {
     /// VM instruction — fast, synchronous, no I/O.
     Vm,
@@ -1322,6 +1535,25 @@ pub enum BuiltinKind {
 pub struct LlmBodyDef {
     pub client: Option<Name>,
     pub prompt: Option<RawPrompt>,
+    /// BEP-049 M5e: for a new-mode (backtick) prompt, the pre-lowered body of
+    /// the `$stream` companion — a `stream_llm_function(...)` call whose 4th
+    /// argument is the synthesized prompt closure. Built in `lower_cst` while
+    /// the CST backtick literal is still in hand (the AST must stay CST-free for
+    /// Salsa: a rowan node is `!Send`), and consumed by PPIR when it
+    /// materializes the `$stream` companion. The closure must capture the
+    /// companion's params, so it can't be shared with the oneshot body by
+    /// `ExprId` — it's a fully independent arena. `None` for legacy Jinja
+    /// `#"..."#` prompts (their `$stream` companion uses the 3-arg Jinja path).
+    pub stream_body: Option<(ExprBody, AstSourceMap)>,
+    /// BEP-049 M5: for a new-mode (backtick) prompt, the pre-lowered bodies of
+    /// the `render_prompt` / `build_request` / `build_request_stream` companions,
+    /// keyed by target name. Each is a `<target>(client, fn, args,
+    /// prompt_closure=…)` call carrying the same synthesized prompt closure, so
+    /// the static preview/cURL render through the closure exactly like execution.
+    /// Built in `lower_cst` while the CST backtick is in hand (same reason as
+    /// `stream_body`) and read back by `make_llm_companion`. Empty for legacy
+    /// Jinja `#"..."#` prompts (their companions use the 3-arg Jinja path).
+    pub companion_bodies: Vec<(std::string::String, (ExprBody, AstSourceMap))>,
     pub span: TextRange,
 }
 
@@ -1343,7 +1575,7 @@ pub struct Interpolation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Param {
     pub name: Name,
-    pub type_expr: Option<SpannedTypeExpr>,
+    pub type_expr: Option<TypeExpr>,
     pub default: Option<DefaultExprId>,
     pub span: TextRange,
     pub name_span: TextRange,
@@ -1397,7 +1629,7 @@ pub struct InterfaceDef {
     pub generic_param_bounds: Vec<Option<TypeExpr>>,
     /// Required interfaces from `requires I1, I2, ...`. Each is parsed as a
     /// `TypeExpr` so we can accept generic requirements like `Container<int>`.
-    pub requires: Vec<SpannedTypeExpr>,
+    pub requires: Vec<TypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values — see BEP-044 §"Interface Fields".
     pub fields: Vec<FieldDef>,
@@ -1423,8 +1655,8 @@ pub struct MethodSigDef {
     pub generic_param_bounds: Vec<Option<TypeExpr>>,
     pub params: Vec<Param>,
     pub defaults: FunctionDefaults,
-    pub return_type: Option<SpannedTypeExpr>,
-    pub throws: Option<SpannedTypeExpr>,
+    pub return_type: Option<TypeExpr>,
+    pub throws: Option<TypeExpr>,
     pub attributes: Vec<RawAttribute>,
     pub docstring: Option<std::string::String>,
     pub span: TextRange,
@@ -1437,7 +1669,7 @@ pub struct ImplementsBlockDef {
     /// The target interface, captured as a `TypeExpr` so we can accept generic
     /// parameterization like `implements Container<int>`. The path's first
     /// segment is the interface name.
-    pub target: SpannedTypeExpr,
+    pub target: TypeExpr,
     /// Explicit mappings from interface fields to class fields:
     /// `interface_field as class_field`.
     pub field_links: Vec<InterfaceFieldLinkDef>,
@@ -1454,8 +1686,8 @@ impl ImplementsBlockDef {
     /// Convenience: the interface's simple name (last path segment), used for
     /// diagnostics. Returns `None` if the target is not a simple path.
     pub fn interface_name(&self) -> Option<&Name> {
-        match &self.target.expr {
-            TypeExpr::Path { segments, .. } => segments.last(),
+        match &self.target.kind {
+            TypeExprKind::Path { segments, .. } => segments.last(),
             _ => None,
         }
     }
@@ -1473,12 +1705,14 @@ pub struct InterfaceFieldLinkDef {
 /// Top-level `implements I for T { ... }` block (BEP-044).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsForDef {
-    /// Generic type parameters on the implements block (e.g. `<T>` or `<T extends Named>`).
-    pub generic_params: Vec<(Name, Option<TypeExpr>)>,
+    /// Generic type parameters on the implements block, each with its set of
+    /// `&`-separated interface bounds (`<T>` → `(T, [])`; `<T extends A & B>` →
+    /// `(T, [A, B])`). Empty bound list = unbounded.
+    pub generic_params: Vec<(Name, Vec<TypeExpr>)>,
     /// The interface being implemented.
-    pub interface_target: SpannedTypeExpr,
+    pub interface_target: TypeExpr,
     /// The type the interface is being implemented for.
-    pub for_target: SpannedTypeExpr,
+    pub for_target: TypeExpr,
     /// Explicit mappings from interface fields to class fields.
     pub field_links: Vec<InterfaceFieldLinkDef>,
     /// Associated type bindings, e.g. `type Item = int`.
@@ -1491,8 +1725,8 @@ pub struct ImplementsForDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssociatedTypeDef {
     pub name: Name,
-    pub bound: Option<SpannedTypeExpr>,
-    pub default: Option<SpannedTypeExpr>,
+    pub bound: Option<TypeExpr>,
+    pub default: Option<TypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1500,7 +1734,7 @@ pub struct AssociatedTypeDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssociatedTypeBindingDef {
     pub name: Name,
-    pub type_expr: Option<SpannedTypeExpr>,
+    pub type_expr: Option<TypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1508,7 +1742,7 @@ pub struct AssociatedTypeBindingDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldDef {
     pub name: Name,
-    pub type_expr: Option<SpannedTypeExpr>,
+    pub type_expr: Option<TypeExpr>,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
@@ -1540,7 +1774,7 @@ pub struct VariantDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeAliasDef {
     pub name: Name,
-    pub type_expr: Option<SpannedTypeExpr>,
+    pub type_expr: Option<TypeExpr>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
@@ -1563,17 +1797,40 @@ pub struct ConfigItemDef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestDef {
     pub name: Name,
-    pub config_items: Vec<ConfigItemDef>,
+    /// Functions targeted by this legacy config-block test.
+    pub function_refs: Vec<Name>,
+    /// Statically declared test arguments.
+    pub args: Vec<(Name, TestArgValue)>,
     pub span: TextRange,
     pub name_span: TextRange,
 }
 
+/// A JSON-compatible value declared in a legacy test's `args` block.
+///
+/// Floats are stored as bit patterns so the AST remains `Eq`, which is
+/// required by the incremental compiler's early-cutoff comparisons.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GeneratorDef {
-    pub name: Name,
-    pub config_items: Vec<ConfigItemDef>,
-    pub span: TextRange,
-    pub name_span: TextRange,
+pub enum TestArgValue {
+    Null,
+    Int(i64),
+    FloatBits(u64),
+    Bool(bool),
+    String(std::string::String),
+    Array(Vec<TestArgValue>),
+    Map(Vec<(std::string::String, TestArgValue)>),
+}
+
+impl TestArgValue {
+    pub fn float(value: f64) -> Self {
+        Self::FloatBits(value.to_bits())
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Self::FloatBits(bits) => Some(f64::from_bits(*bits)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

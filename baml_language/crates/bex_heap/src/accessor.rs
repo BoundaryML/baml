@@ -399,7 +399,9 @@ impl<'a> BexValue<'a> {
         expected_class_name: &'static str,
     ) -> Result<BexClass<'a>, AccessError> {
         match self {
-            BexValue::ExternalValue(BexExternalValue::Instance { class_name, fields }) => {
+            BexValue::ExternalValue(BexExternalValue::Instance {
+                class_name, fields, ..
+            }) => {
                 if class_name != expected_class_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_class_name,
@@ -570,7 +572,8 @@ impl<'a> BexValue<'a> {
                     actual: obj.to_string(),
                 });
             };
-            Ok((**ty).clone())
+            // `Object::Type` stores a realized type; widen it into `RuntimeTy`.
+            Ok((**ty).clone().into())
         }
 
         match self {
@@ -684,8 +687,13 @@ fn owned_inner(
                     })
                     .collect::<Result<_, _>>()?,
             }),
-            BexExternalValue::Instance { class_name, fields } => Ok(BexExternalValue::Instance {
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                fields,
+            } => Ok(BexExternalValue::Instance {
                 class_name: class_name.clone(),
+                type_args: type_args.clone(),
                 fields: fields
                     .iter()
                     .map(|(k, v)| {
@@ -759,6 +767,9 @@ fn convert_object(
     let obj = unsafe { heap_ptr.get() };
     match obj {
         Object::Function(..) => unconvertible("function"),
+        Object::Interface(..) => unconvertible("interface"),
+        Object::Package(..) => unconvertible("package"),
+        Object::ImplRule(..) => unconvertible("impl_rule"),
         Object::Class(..) => unconvertible("class"),
         Object::Enum(..) => unconvertible("enum"),
         Object::Future(..) => unconvertible("future"),
@@ -816,6 +827,13 @@ fn convert_object(
                 .collect::<Result<_, _>>()?;
             Ok(BexExternalValue::Instance {
                 class_name: class.name.to_string(),
+                // Instances store realized class type args; widen them into the
+                // `RuntimeTy` the external boundary carries.
+                type_args: instance
+                    .class_type_args
+                    .iter()
+                    .map(baml_type::RuntimeTy::from)
+                    .collect(),
                 fields,
             })
         }
@@ -840,7 +858,9 @@ fn convert_object(
             })
         }
         Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
-        Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type((**ty).clone()))),
+        Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(
+            (**ty).clone().into(),
+        ))),
         Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
         Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
@@ -866,4 +886,59 @@ fn convert_object(
 
 pub trait BuiltinClass<'a>: Sized + From<BexClass<'a>> {
     fn name() -> &'static str;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use bex_external_types::BexExternalValue;
+    use bex_str::BexStr;
+    use bex_vm_types::RootHaver;
+
+    use crate::{BexHeap, BexValue, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
+
+    struct EmptyRoots {
+        tlab: Tlab,
+    }
+
+    impl RootHaver for EmptyRoots {
+        fn collect_roots(&self, _roots: &mut Vec<bex_vm_types::HeapPtr>) {}
+
+        fn forward_roots(
+            &mut self,
+            _forward: &HashMap<bex_vm_types::HeapPtr, bex_vm_types::HeapPtr>,
+        ) {
+        }
+    }
+
+    impl TlabHolder for EmptyRoots {
+        fn tlab(&self) -> &Tlab {
+            &self.tlab
+        }
+
+        fn tlab_mut(&mut self) -> &mut Tlab {
+            &mut self.tlab
+        }
+    }
+
+    #[tokio::test]
+    async fn trace_owned_function_refs_become_string_placeholders() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let value = BexExternalValue::FunctionRef { global_index: 7 };
+
+        let owned = BexValue::ExternalValue(&value)
+            .as_owned_for_trace(&heap, permit.proof())
+            .unwrap();
+
+        assert_eq!(owned, BexExternalValue::String(BexStr::from("<function>")));
+    }
 }

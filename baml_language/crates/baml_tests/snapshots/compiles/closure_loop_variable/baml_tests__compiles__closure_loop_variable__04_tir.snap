@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.sum_array(arr: int[]) -> int throws never {
   { : int
     let sum = 0 : 0 -> int
-    let total = [] : never[] -> (() -> void throws never)[] (evolving)
+    let total = [] : _[] -> (() -> void throws never)[] (evolving)
     for i in arr
       { : int
         total.push(() -> { ... }) : int

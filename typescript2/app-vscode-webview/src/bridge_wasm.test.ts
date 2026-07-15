@@ -139,7 +139,9 @@ describe('BamlWasmRuntime', () => {
 
       expect(runtime).toBeDefined();
       expect(typeof runtime.requestPlaygroundState).toBe('function');
-      expect(typeof runtime.callFunction).toBe('function');
+      expect(typeof runtime.startRun).toBe('function');
+      expect(typeof runtime.cancelRun).toBe('function');
+      expect(typeof runtime.snapshot).toBe('function');
       runtime.requestPlaygroundState();
     });
 

@@ -1,15 +1,18 @@
 /// A 64-bit IEEE 754 floating-point number (f64).
+///
+/// Note: division by zero (`x / 0.0`) does not follow raw IEEE — it throws a
+/// catchable `baml.panics.DivisionByZero` rather than yielding `±inf`/`NaN`,
+/// matching integer division. `inf` and `NaN` still arise from `float.inf()` /
+/// `float.nan()`, from overflow (e.g. `1e308 * 10.0` → `inf`), and from other
+/// invalid operations (e.g. `(-1.0).sqrt()` → `NaN`).
 class Float {
   /// Serializes this float to a JSON number. NaN and Infinity are serialized as null.
   // mut_vm: Float values are heap-boxed (Object::Float); construction needs a TLAB.
-  //baml:mut_vm
-  function to_json(self) -> baml.json.json throws never {
-    $rust_function
-  }
   // ─── Predicates ───────────────────────────────────────────────────────────
 
   /// Returns `true` if `self` is NaN (a "not a number" sentinel produced by
-  /// invalid operations such as `0.0 / 0.0` or `(-1.0).sqrt()`).
+  /// invalid operations such as `(-1.0).sqrt()` or `float.inf() - float.inf()`).
+  /// Note `0.0 / 0.0` throws `DivisionByZero` rather than producing NaN.
   ///
   /// NaN is the only float value that is not equal to itself (`x != x` iff
   /// `x.is_nan()`), so this predicate is the only correct way to test for NaN.
@@ -444,4 +447,17 @@ class Float {
   function inf() -> float throws never {
     $rust_function
   }
+}
+
+// ─── Internal (private) native helpers ────────────────────────────────────────
+
+/// Truncates `value` toward zero and returns the integer part, **saturating**
+/// to the `int` range and mapping NaN to `0` — it never throws.
+///
+/// Private helper (leading `_`; formerly the public `baml.math.trunc`) backing
+/// internal retry-delay math in `baml.llm`. User code should prefer the
+/// range-checked, throwing `float.itrunc()` (or the float-returning
+/// `float.trunc()`); this saturating form is intentionally not public surface.
+function _trunc_to_int(value: float) -> int throws never {
+  $rust_function
 }

@@ -36,16 +36,16 @@ env:
   CARGO_TERM_COLOR: always
   RUSTUP_MAX_RETRIES: 10
 
-# Individual size-gate jobs are intentionally never allowed to fail.
+# Individual measure-baml-size jobs are intentionally never allowed to fail.
 # Each platform job has `continue-on-error: true` so a violation, runner
 # death, or build hiccup does not fail the calling workflow. The
-# size-gate-report job aggregates all available reports and is the one
+# enforce-baml-size job aggregates all available reports and is the one
 # place where a real failure (policy violation or a missing platform
 # report) can block CI.
 
 jobs:
   size-gate-linux:
-    name: "size-gate (linux)"
+    name: "measure-baml-size (linux)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     continue-on-error: true
@@ -131,7 +131,7 @@ jobs:
           if-no-files-found: ignore
 
   size-gate-macos:
-    name: "size-gate (macos)"
+    name: "measure-baml-size (macos)"
     runs-on: blacksmith-6vcpu-macos-latest
     timeout-minutes: 20
     continue-on-error: true
@@ -217,7 +217,7 @@ jobs:
           if-no-files-found: ignore
 
   size-gate-windows:
-    name: "size-gate (windows)"
+    name: "measure-baml-size (windows)"
     runs-on: blacksmith-8vcpu-windows-2025
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
@@ -325,7 +325,7 @@ jobs:
           if-no-files-found: ignore
 
   size-gate-wasm:
-    name: "size-gate (wasm)"
+    name: "measure-baml-size (wasm)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
     continue-on-error: true
@@ -413,7 +413,7 @@ jobs:
           if-no-files-found: ignore
 
   size-gate-report:
-    name: "size-gate (report)"
+    name: "enforce-baml-size"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     if: always()
     needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
@@ -500,7 +500,7 @@ jobs:
 
           for platform in linux macos windows wasm; do
             f="reports/size-gate-${platform}.json"
-            if [ -f "$f" ]; then
+            if [ -s "$f" ]; then
               json_files+=("$f")
             else
               missing+=("$platform (job result: ${platform_results[$platform]:-unknown})")
@@ -540,13 +540,9 @@ jobs:
             printf '%s\n' "${missing[@]}" > missing-platforms.txt
           fi
 
-      - name: "Post PR comment"
-        if: github.event_name == 'pull_request'
-        uses: thollander/actions-comment-pull-request@v3.0.1
-        with:
-          file-path: unified-report.md
-          comment-tag: size-gate
-
+      # Print the report BEFORE attempting the PR comment: on fork PRs the
+      # token is read-only and the comment post fails, so stdout + the
+      # summary tab must not depend on it.
       - name: "Print report + write job summary"
         run: |
           # Print to the workflow console log (so the status is visible in
@@ -554,6 +550,17 @@ jobs:
           cat unified-report.md
           # ...and to the run's summary tab.
           cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Best effort: fork PRs run with a read-only GITHUB_TOKEN
+      # (pull-requests: read), so posting the comment fails there. The
+      # report is still visible in the step above and the summary tab.
+      - name: "Post PR comment (best effort)"
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
+        with:
+          header: size-gate
+          path: unified-report.md
 
       - name: "Fail if any platform is missing or any check failed"
         env:

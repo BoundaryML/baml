@@ -4,7 +4,7 @@
 // Decodes the BamlOutboundResult envelope → TS objects (call results), and
 // bare BamlOutboundValue bytes → TS objects (host-callable args).
 
-import { baml_core } from './proto/baml_cffi.js';
+import { baml_bridge } from './proto/baml_cffi.js';
 import {
     BamlHandle,
     HandleKey,
@@ -23,14 +23,16 @@ import {
     tryRehydrateHostValueByKey,
 } from './host_value_registry.js';
 import { BamlTypeMap, getTypeMap } from './typemap.js';
+import { lowerTypeToWireTy, outboundTyToBamlType, type BamlType } from './wire_ty.js';
 
-const CallFunctionArgs = baml_core.cffi.v1.CallFunctionArgs;
-const BamlOutboundValue = baml_core.cffi.v1.BamlOutboundValue;
-const BamlOutboundResult = baml_core.cffi.v1.BamlOutboundResult;
-const InboundValue = baml_core.cffi.v1.InboundValue;
-const InboundClassValue = baml_core.cffi.v1.InboundClassValue;
-const InboundMapEntry = baml_core.cffi.v1.InboundMapEntry;
-const BamlHandleType = baml_core.cffi.v1.BamlHandleType;
+const CallFunctionArgs = baml_bridge.cffi.v1.CallFunctionArgs;
+const BamlOutboundValue = baml_bridge.cffi.v1.BamlOutboundValue;
+const BamlOutboundResult = baml_bridge.cffi.v1.BamlOutboundResult;
+const BamlToHostCall = baml_bridge.cffi.v1.BamlToHostCall;
+const InboundValue = baml_bridge.cffi.v1.InboundValue;
+const InboundClassValue = baml_bridge.cffi.v1.InboundClassValue;
+const InboundMapEntry = baml_bridge.cffi.v1.InboundMapEntry;
+const BamlHandleType = baml_bridge.cffi.v1.BamlHandleType;
 const CANCELLED_PANIC_CLASS = 'baml.panics.Cancelled';
 
 // ─── Inbound (TS → Rust) ───
@@ -66,9 +68,32 @@ interface EncodeCtx {
 export interface EncodeCallArgsOptions {
     callId: bigint;
     syncMode?: boolean;
+    /**
+     * Call-level TypeVar bindings for a generic function/method, as
+     * `[typeVarName, wireTy]` pairs in De Bruijn order (enclosing class params
+     * first, then the callee's own `<...>` params). Encoded into
+     * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
+     * `type_args` argument. Omitted/empty for non-generic calls.
+     */
+    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy]>;
 }
 
-function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ctx: EncodeCtx): void {
+/**
+ * Generic-class instances declare their TypeVar names (declaration order) in a
+ * static `$generic` field that codegen emits; this reads it back. Returns the
+ * param-name list for a generic class instance, or `null` for a non-generic
+ * one. The value-level type args ride a sibling `$types` instance field.
+ */
+function genericParamNames(value: object): string[] | null {
+    const ctor = (value as { constructor?: { $generic?: unknown } }).constructor;
+    const g = ctor?.$generic;
+    if (Array.isArray(g) && g.length > 0 && g.every((x) => typeof x === 'string')) {
+        return g as string[];
+    }
+    return null;
+}
+
+function setInboundValue(iv: baml_bridge.cffi.v1.IInboundValue, value: unknown, ctx: EncodeCtx): void {
     if (value === null || value === undefined) {
         return; // Leave oneof unset → null
     }
@@ -147,9 +172,9 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
         ctx.registered.push(key);
         iv.handle = { key, handleType: BamlHandleType.HOST_VALUE_CALLABLE };
     } else if (Array.isArray(value)) {
-        const listVal: baml_core.cffi.v1.IInboundValue[] = [];
+        const listVal: baml_bridge.cffi.v1.IInboundValue[] = [];
         for (const item of value) {
-            const child: baml_core.cffi.v1.IInboundValue = {};
+            const child: baml_bridge.cffi.v1.IInboundValue = {};
             setInboundValue(child, item, ctx);
             listVal.push(child);
         }
@@ -184,22 +209,52 @@ function setInboundValue(iv: baml_core.cffi.v1.IInboundValue, value: unknown, ct
         if (isClassInstance && Object.values(value).some(v => v instanceof BamlHandle)) {
             const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
             if (fqn) {
-                const classFields: baml_core.cffi.v1.IInboundMapEntry[] = [];
+                const classFields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
                 for (const [k, v] of Object.entries(value)) {
                     if (typeof v === 'function') continue;
-                    const childVal: baml_core.cffi.v1.IInboundValue = {};
+                    const childVal: baml_bridge.cffi.v1.IInboundValue = {};
                     setInboundValue(childVal, v, ctx);
                     classFields.push({ stringKey: k, value: childVal });
                 }
-                iv.classValue = { name: fqn, fields: classFields };
+                iv.classValue = { classTy: { name: fqn }, fields: classFields };
                 return;
             }
         }
-        const entries: baml_core.cffi.v1.IInboundMapEntry[] = [];
+        // Generic class instance → a FQN-tagged `class_value` carrying the
+        // value-level class type-args channel (`class_ty`). Unlike a non-generic
+        // class instance (which encodes as a bare `map_value` for the engine to
+        // reshape against the declared param type), a generic instance MUST send
+        // its concrete type args: the engine strictly rejects coercing a bare map
+        // into a generic class slot ("a bare map carries no class type
+        // arguments"). The args come from the optional `$types` instance field;
+        // an absent binding lowers to the unknown/top type. Mirrors
+        // bridge_python's pydantic-generic-metadata path in proto.py, which sets
+        // `class_value.class_ty` for a generic instance.
+        if (isClassInstance) {
+            const params = genericParamNames(value);
+            if (params) {
+                const fqn = getTypeMap().jsTypeToBamlType((value as object).constructor);
+                const userTypes = (value as { $types?: Record<string, BamlType> }).$types;
+                const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes?.[p]));
+                const classFields: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
+                for (const [k, v] of Object.entries(value)) {
+                    // Skip method bindings (behavior, not state) and the synthetic
+                    // `$types` carrier (it rides `class_ty`, not the field list).
+                    if (typeof v === 'function') continue;
+                    if (k === '$types') continue;
+                    const childVal: baml_bridge.cffi.v1.IInboundValue = {};
+                    setInboundValue(childVal, v, ctx);
+                    classFields.push({ stringKey: k, value: childVal });
+                }
+                iv.classValue = { classTy: { name: fqn, typeArgs }, fields: classFields };
+                return;
+            }
+        }
+        const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
         for (const [k, v] of Object.entries(value)) {
             if (isClassInstance && typeof v === 'function') continue;
-            const entry: baml_core.cffi.v1.IInboundMapEntry = { stringKey: k };
-            const childVal: baml_core.cffi.v1.IInboundValue = {};
+            const entry: baml_bridge.cffi.v1.IInboundMapEntry = { stringKey: k };
+            const childVal: baml_bridge.cffi.v1.IInboundValue = {};
             setInboundValue(childVal, v, ctx);
             entry.value = childVal;
             entries.push(entry);
@@ -236,15 +291,23 @@ export function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeC
     }
     const ctx: EncodeCtx = { syncMode: options.syncMode ?? false, registered: [] };
     try {
-        const entries: baml_core.cffi.v1.IInboundMapEntry[] = [];
+        const entries: baml_bridge.cffi.v1.IInboundMapEntry[] = [];
         for (const [key, value] of Object.entries(kwargs)) {
-            const entry: baml_core.cffi.v1.IInboundMapEntry = { stringKey: key };
-            const iv: baml_core.cffi.v1.IInboundValue = {};
+            const entry: baml_bridge.cffi.v1.IInboundMapEntry = { stringKey: key };
+            const iv: baml_bridge.cffi.v1.IInboundValue = {};
             setInboundValue(iv, value, ctx);
             entry.value = iv;
             entries.push(entry);
         }
-        const msg = CallFunctionArgs.fromObject({ kwargs: entries, callId: callId.toString() });
+        const typeArgs = (options.typeArgs ?? []).map(([typeVar, typeValue]) => ({
+            typeVar,
+            typeValue,
+        }));
+        const msg = CallFunctionArgs.fromObject({
+            kwargs: entries,
+            callId: callId.toString(),
+            typeArgs,
+        });
         return Buffer.from(CallFunctionArgs.encode(msg).finish());
     } catch (err) {
         // Roll back any host callables registered before the failure so
@@ -293,7 +356,7 @@ function parseHexBigint(s: string): bigint {
 }
 
 function decodeValueHolder(
-    holder: baml_core.cffi.v1.IBamlOutboundValue,
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue,
     typeMap: BamlTypeMap,
 ): unknown {
     if (holder.nullValue != null) return null;
@@ -312,21 +375,24 @@ function decodeValueHolder(
         return decodeEnum(holder.enumValue, typeMap);
     }
     if (holder.literalValue) {
-        if (holder.literalValue.stringLiteral != null) return holder.literalValue.stringLiteral.value;
-        if (holder.literalValue.intLiteral != null) return Number(holder.literalValue.intLiteral.value);
-        if (holder.literalValue.boolLiteral != null) return holder.literalValue.boolLiteral.value;
-        // Hex / base sixteen on the wire, matching `bigint_value`. `value`
-        // is a required field on `BamlTyLiteralBigint`, so its absence
-        // indicates a corrupted / malformed wire message — reject loudly
-        // rather than silently coercing a missing field to `0n`.
-        if (holder.literalValue.bigintLiteral != null) {
-            const hex = holder.literalValue.bigintLiteral.value;
-            if (hex == null) {
-                throw new Error(
-                    'wire message: BamlTyLiteralBigint missing required `value`',
-                );
-            }
-            return parseHexBigint(hex);
+        // Inline scalars in a oneof (mirrors `BamlTyLiteral`); dispatch on the
+        // protobufjs oneof virtual getter (only on the decoded class instance,
+        // not the `I`-interface) since scalar fields default to a non-null zero
+        // value rather than `null`.
+        const lit = holder.literalValue as baml_bridge.cffi.v1.BamlLiteralValue;
+        switch (lit.literal) {
+            case 'stringValue':
+                return lit.stringValue;
+            case 'intValue':
+                return Number(lit.intValue);
+            case 'boolValue':
+                return lit.boolValue;
+            // Hex / base sixteen on the wire, matching `bigint_value`.
+            case 'bigintValue':
+                return parseHexBigint(lit.bigintValue ?? '');
+            // Source text on the wire (mirrors `BamlTyLiteral.float_value`).
+            case 'floatValue':
+                return Number(lit.floatValue);
         }
     }
     if (holder.listValue) {
@@ -364,7 +430,9 @@ function decodeValueHolder(
             // `baml.llm.Stream → BamlStream`), so any class is reachable without
             // special-casing here. Mirrors bridge_python's `_decode_handle`
             // ADT_TAGGED_HEAP_HANDLE arm (sdks/python/.../proto.py).
-            const fqn = holder.handleValue.name?.name ?? '';
+            // The handle's `ty` is a full `BamlTy`; the typed-wrapper FQN lives
+            // on its class variant (a non-class `ty` reads back as `''`).
+            const fqn = holder.handleValue.ty?.classTy?.name ?? '';
             const Cls = typeMap.getClass(fqn) as { _fromHandle(h: BamlHandle): unknown };
             return Cls._fromHandle(handle);
         }
@@ -395,7 +463,7 @@ function decodeValueHolder(
  * class), fall back to a plain object — preserving the pre-typemap behavior.
  */
 function decodeClass(
-    classValue: baml_core.cffi.v1.IBamlValueClass,
+    classValue: baml_bridge.cffi.v1.IBamlValueClass,
     typeMap: BamlTypeMap,
 ): unknown {
     const fieldDict: Record<string, unknown> = {};
@@ -404,7 +472,7 @@ function decodeClass(
             fieldDict[entry.key] = decodeValueHolder(entry.value, typeMap);
         }
     }
-    const fqn = classValue.name?.name ?? '';
+    const fqn = classValue.name ?? '';
     if (fqn) {
         let Cls: unknown;
         try {
@@ -422,8 +490,31 @@ function decodeClass(
             ) {
                 return fieldDict._data;
             }
-            const Ctor = Cls as new (init: Record<string, unknown>) => unknown;
-            return new Ctor(fieldDict);
+            const Ctor = Cls as (new (init: Record<string, unknown>) => unknown) & {
+                $generic?: readonly string[];
+            };
+            const instance = new Ctor(fieldDict);
+            // Repopulate a generic instance's `$types` from the wire's positional
+            // `type_args` (the value-level type channel), keyed by the class's
+            // static `$generic` param names — the decode-side mirror of the
+            // encoder's `class_ty`. Defined non-enumerable so it neither perturbs
+            // structural equality (`toEqual`) nor re-encodes as a data field,
+            // while still being readable by a later generic instance-method call.
+            const params = Array.isArray(Ctor.$generic) ? Ctor.$generic : null;
+            const typeArgs = classValue.typeArgs;
+            if (params && typeArgs && typeArgs.length) {
+                const types: Record<string, BamlType> = {};
+                params.forEach((p, i) => {
+                    types[p] = outboundTyToBamlType(typeArgs[i]);
+                });
+                Object.defineProperty(instance, '$types', {
+                    value: types,
+                    enumerable: false,
+                    writable: true,
+                    configurable: true,
+                });
+            }
+            return instance;
         }
     }
     // Fallback: plain object (null-prototype, matching the prior behavior).
@@ -437,10 +528,10 @@ function decodeClass(
  * the raw variant string when the FQN is unmapped (bare bridge / unmapped enum).
  */
 function decodeEnum(
-    enumValue: baml_core.cffi.v1.IBamlValueEnum,
+    enumValue: baml_bridge.cffi.v1.IBamlValueEnum,
     typeMap: BamlTypeMap,
 ): unknown {
-    const fqn = enumValue.name?.name ?? '';
+    const fqn = enumValue.name ?? '';
     const variant = enumValue.value;
     if (fqn && variant != null) {
         let En: unknown;
@@ -467,6 +558,51 @@ export function decodeOutboundValue(data: Buffer | Uint8Array): unknown {
 }
 
 /**
+ * Decode the engine→host `BamlToHostCall`. The engine has already resolved the
+ * call against the callee's declared params and dropped omitted optionals, so
+ * `args` is a flat, declared-order list of the supplied args. Partition it back
+ * into the required positional run and the supplied optionals (keyed by
+ * `argName`) using each arg's `isOptionalArg` flag.
+ */
+function decodeHostCall(data: Buffer | Uint8Array): {
+    positional: unknown[];
+    optional: Record<string, unknown>;
+} {
+    const msg = BamlToHostCall.decode(data instanceof Buffer ? data : Buffer.from(data));
+    const typeMap = getTypeMap();
+    const positional: unknown[] = [];
+    const optional: Record<string, unknown> = {};
+    for (const arg of msg.args ?? []) {
+        const value = arg.value ? decodeValueHolder(arg.value, typeMap) : undefined;
+        if (arg.isOptionalArg) {
+            optional[arg.argName ?? ''] = value;
+        } else {
+            positional.push(value);
+        }
+    }
+    return { positional, optional };
+}
+
+/**
+ * Reshape the split args into the TypeScript calling convention the callback's
+ * generated type advertises: the required args stay positional and the supplied
+ * optionals are passed as a single trailing `$opts` object — exactly mirroring
+ * how a BAML function is *called* from TypeScript.
+ *
+ * The `$opts` object is appended only when at least one optional was supplied.
+ * With none supplied (or a callback with no optional params at all) the args
+ * stay purely positional — the correct shape for a callback declared without an
+ * `$opts` object, and the shape that lets the callback's own defaults fill any
+ * omitted optionals.
+ */
+function reshapeHostArgs(positional: unknown[], optional: Record<string, unknown>): unknown[] {
+    if (Object.keys(optional).length === 0) {
+        return positional;
+    }
+    return [...positional, optional];
+}
+
+/**
  * Decode the thrown value off the wire holder. Returns the fully decoded BAML
  * `value` (a generated class instance when the FQN is mapped, else a plain
  * object / primitive), the class FQN (`className`), and a readable `message`
@@ -478,10 +614,27 @@ export function decodeOutboundValue(data: Buffer | Uint8Array): unknown {
  * the original error/panic, so a decode failure degrades to an undefined value
  * (the formatted message and className are still surfaced).
  */
+/**
+ * Peel any `union_variant_value` wrapper(s) so a metadata read sees the inner
+ * value. The engine wraps a thrown value in `union_variant_value` when the
+ * function declares a multi-member `throws` union; `decodeValueHolder` already
+ * unwraps this for the value itself (see the `unionVariantValue` arm), so the
+ * FQN read below must match or `className` is lost for union throws.
+ */
+function unwrapUnionVariant(
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined
+): baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined {
+    let h = holder;
+    while (h?.unionVariantValue?.value) {
+        h = h.unionVariantValue.value;
+    }
+    return h;
+}
+
 function decodeThrown(
-    holder: baml_core.cffi.v1.IBamlOutboundValue | null | undefined
+    holder: baml_bridge.cffi.v1.IBamlOutboundValue | null | undefined
 ): { value: unknown; className: string | undefined; message: string } {
-    const className = holder?.classValue?.name?.name ?? undefined;
+    const className = unwrapUnionVariant(holder)?.classValue?.name ?? undefined;
     let value: unknown;
     try {
         value = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
@@ -603,15 +756,12 @@ function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown) {
         try {
             let args: unknown[];
             try {
-                // Host-callable args arrive as a bare list-shaped
-                // BamlOutboundValue, not the call-result envelope.
-                const decoded = decodeOutboundValue(argsBytes);
-                if (!Array.isArray(decoded)) {
-                    throw new TypeError(
-                        `host-callable args decoded to a non-list value (got ${typeof decoded})`
-                    );
-                }
-                args = decoded;
+                // Host-callable args arrive as a `BamlToHostCall` with a flat
+                // `args` list. Partition it into the positional run and the
+                // supplied optionals, then reshape into the `$opts` calling
+                // convention the callback's type advertises.
+                const { positional, optional } = decodeHostCall(argsBytes);
+                args = reshapeHostArgs(positional, optional);
             } catch (err) {
                 sendHostCallableError(callId, err);
                 return;
@@ -667,7 +817,7 @@ function sendHostCallableResult(callId: number, value: unknown): void {
     // argument-path rollback in `encodeCallArgs`.
     const ctx: EncodeCtx = { syncMode: false, registered: [] };
     try {
-        const iv: baml_core.cffi.v1.IInboundValue = {};
+        const iv: baml_bridge.cffi.v1.IInboundValue = {};
         setInboundValue(iv, value, ctx);
         const msg = InboundValue.create(iv);
         bytes = Buffer.from(InboundValue.encode(msg).finish());
@@ -722,7 +872,7 @@ function buildHostCallableInbound(
     fields.push(handleField);
     return InboundValue.create({
         classValue: InboundClassValue.create({
-            name: 'baml.errors.HostCallable',
+            classTy: { name: 'baml.errors.HostCallable' },
             fields,
         }),
     });

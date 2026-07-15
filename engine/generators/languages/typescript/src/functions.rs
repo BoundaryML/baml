@@ -262,18 +262,24 @@ pub fn render_react_server_streaming_types(
     types: &[String],
     pkg: &CurrentRenderPackage,
 ) -> Result<String, askama::Error> {
+    let previous_pkg = pkg.get().to_string();
+    pkg.set("baml_client.react");
+
     let mut streaming_types: IndexMap<String, String> = functions
         .iter()
         .map(|f| (f.name.clone(), f.stream_return_type.serialize_type(pkg)))
         .collect();
     streaming_types.sort_keys();
 
-    ReactServerStreamingTypes {
+    let rendered = ReactServerStreamingTypes {
         streaming_types: &streaming_types,
         types,
         pkg,
     }
-    .render()
+    .render();
+
+    pkg.set(&previous_pkg);
+    rendered
 }
 
 #[derive(askama::Template)]

@@ -115,7 +115,9 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
 /// Extract the full rendered text from a `PromptAst` value.
 pub(crate) fn prompt_ast_to_string(value: &BexExternalValue) -> String {
     match value {
-        BexExternalValue::Instance { class_name, fields } if class_name == "baml.llm.PromptAst" => {
+        BexExternalValue::Instance {
+            class_name, fields, ..
+        } if class_name == "baml.llm.PromptAst" => {
             let data = fields
                 .get("_data")
                 .expect("PromptAst instance should contain _data");
@@ -201,7 +203,7 @@ function TestFunc(input: string) -> {return_type} {{
 }}
 
 function get_prompt() -> baml.llm.PromptAst {{
-    let args = {{ "input": "test" }};
+    let args: map<string, unknown> = {{ "input": "test" }};
     baml.llm.render_prompt(TestClient, "TestFunc", args)
 }}
 "##

@@ -91,7 +91,21 @@ class ZonedDateTime {
     /// annotation when the timezone is an IANA identifier
     /// (`2026-03-18T13:04:27-07:00[America/Los_Angeles]`); plain RFC 3339
     /// when it is a fixed offset (with `Z` for the zero offset).
-    function to_string(self) -> string throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
+    ///
+    /// Panics if the value cannot be formatted (year out of range, unknown
+    /// timezone, or an IO error resolving the IANA zone).
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self._to_string_impl() catch (_) {
+                _ => root.sys.panic("ZonedDateTime.to_string: value cannot be formatted (year out of range, unknown timezone, or IO error)")
+            }
+        }
+    }
+
+    /// Internal RFC 9557 / RFC 3339 formatter. Throws when the value cannot be
+    /// formatted; `baml.ToString.to_string` turns that into a panic, while
+    /// `to_json` surfaces it as a `JsonSerializationError`.
+    function _to_string_impl(self) -> string throws root.errors.InvalidArgument | UnknownTimezoneError | root.errors.Io {
         _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana)
     }
 
@@ -177,19 +191,23 @@ class ZonedDateTime {
         self.to_plain().millisecond()
     }
 
-    function from_json(j: baml.json.json) -> ZonedDateTime throws root.json.JsonDecodeError {
-        match (j) {
-            string => ZonedDateTime.parse(j) catch (_) {
-                root.errors.ParseError { message } => throw root.json.JsonDecodeError { message: message, path: "" },
-            },
-            _ => throw root.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string" }
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+            match (j) {
+                string => ZonedDateTime.parse(j) catch (_) {
+                    root.errors.ParseError { message } => throw baml.json.JsonDecodeError { message: message, path: "" },
+                },
+                _ => throw baml.json.JsonDecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string", path: "" }
+            }
         }
     }
-    function to_json(self) -> string throws root.json.JsonSerializationError {
-        self.to_string() catch (_) {
-            root.errors.InvalidArgument { message } => throw root.json.JsonSerializationError { message: message, path: "" },
-            UnknownTimezoneError { timezone } => throw root.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" },
-            root.errors.Io { message } => throw root.json.JsonSerializationError { message: message, path: "" },
+    implements baml.ToJson {
+        function to_json(self) -> baml.json.json throws baml.json.JsonSerializationError {
+            self._to_string_impl() catch (_) {
+                root.errors.InvalidArgument { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+                UnknownTimezoneError { timezone } => throw baml.json.JsonSerializationError { message: "unknown timezone: " + timezone, path: "" },
+                root.errors.Io { message } => throw baml.json.JsonSerializationError { message: message, path: "" },
+            }
         }
     }
 }

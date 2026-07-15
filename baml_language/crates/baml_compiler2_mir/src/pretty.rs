@@ -160,20 +160,6 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
         StatementKind::Drop(place) => {
             write!(f, "drop({place});")
         }
-        StatementKind::Unwatch(local) => {
-            write!(f, "unwatch({local});")
-        }
-        StatementKind::NotifyBlock { name, level } => {
-            write!(f, "notify_block({name}, level={level});")
-        }
-        StatementKind::WatchOptions { local, filter } => {
-            write!(f, "{local}.$watch.options(")?;
-            write_operand(f, filter)?;
-            write!(f, ");")
-        }
-        StatementKind::WatchNotify(local) => {
-            write!(f, "{local}.$watch.notify();")
-        }
         StatementKind::VizEnter(idx) => {
             write!(f, "viz_enter({idx});")
         }
@@ -256,6 +242,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             callee,
             args,
             ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -273,12 +260,15 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 write!(f, ">")?;
             }
             write!(f, "(")?;
-            for (i, arg) in args.iter().skip(*ntypeargs).enumerate() {
-                if i > 0 {
+            let mut wrote_arg = false;
+            for arg in args.iter().skip(*ntypeargs) {
+                if wrote_arg {
                     write!(f, ", ")?;
                 }
                 write_operand(f, arg)?;
+                wrote_arg = true;
             }
+            write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -290,6 +280,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             method,
             args,
             ntypeargs,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -306,12 +297,15 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 write!(f, ">")?;
             }
             write!(f, "(")?;
-            for (i, arg) in args.iter().skip(*ntypeargs).enumerate() {
-                if i > 0 {
+            let mut wrote_arg = false;
+            for arg in args.iter().skip(*ntypeargs) {
+                if wrote_arg {
                     write!(f, ", ")?;
                 }
                 write_operand(f, arg)?;
+                wrote_arg = true;
             }
+            write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
             write!(f, ") -> [{target}")?;
             if let Some(u) = unwind {
                 write!(f, ", unwind: {u}")?;
@@ -324,6 +318,7 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
         Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             target,
             unwind,
@@ -331,12 +326,15 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write!(f, "{destination} = sys_op ")?;
             write_operand(f, callee)?;
             write!(f, "(")?;
-            for (i, arg) in args.iter().enumerate() {
-                if i > 0 {
+            let mut wrote_arg = false;
+            for arg in args {
+                if wrote_arg {
                     write!(f, ", ")?;
                 }
                 write_operand(f, arg)?;
+                wrote_arg = true;
             }
+            write_runtime_id_arg(f, wrote_arg, runtime_id.as_ref())?;
             write!(f, ") -> {target}")?;
             if let Some(u) = unwind {
                 write!(f, " unwind {u}")?;
@@ -391,6 +389,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             write_operand(f, value)?;
             write!(f, ";")
         }
+        Terminator::Rethrow { value } => {
+            write!(f, "rethrow ")?;
+            write_operand(f, value)?;
+            write!(f, ";")
+        }
         Terminator::ThrowIfPanic { value, otherwise } => {
             write!(f, "throw_if_panic ")?;
             write_operand(f, value)?;
@@ -411,6 +414,21 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
     }
 }
 
+fn write_runtime_id_arg(
+    f: &mut impl Write,
+    wrote_arg: bool,
+    runtime_id: Option<&Operand>,
+) -> fmt::Result {
+    if let Some(runtime_id) = runtime_id {
+        if wrote_arg {
+            write!(f, ", ")?;
+        }
+        write!(f, "$id = ")?;
+        write_operand(f, runtime_id)?;
+    }
+    Ok(())
+}
+
 fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
     match rvalue {
         Rvalue::Use(operand) => write_operand(f, operand),
@@ -423,7 +441,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write!(f, "{op}")?;
             write_operand(f, operand)
         }
-        Rvalue::Array(elements) => {
+        Rvalue::Array(element_template, elements) => {
             write!(f, "[")?;
             for (i, elem) in elements.iter().enumerate() {
                 if i > 0 {
@@ -431,10 +449,12 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
                 }
                 write_operand(f, elem)?;
             }
-            write!(f, "]")
+            // Show the emitted element-type template so MIR snapshots can catch a
+            // wrong array element type (not just the later bytecode `load_type`).
+            write!(f, "]: {element_template}[]")
         }
         Rvalue::Uint8Array(bytes) => write!(f, "b\"<{} bytes>\"", bytes.len()),
-        Rvalue::Map(entries) => {
+        Rvalue::Map(key_template, value_template, entries) => {
             write!(f, "{{ ")?;
             for (i, (key, value)) in entries.iter().enumerate() {
                 if i > 0 {
@@ -444,7 +464,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
                 write!(f, ": ")?;
                 write_operand(f, value)?;
             }
-            write!(f, " }}")
+            write!(f, " }}: map<{key_template}, {value_template}>")
         }
         Rvalue::Aggregate { kind, fields } => {
             match kind {
@@ -518,6 +538,20 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write_operand(f, receiver)?;
             write!(f, ")")
         }
+        Rvalue::MakeVirtualBoundMethod {
+            iface,
+            method,
+            receiver,
+            type_args,
+        } => {
+            write!(f, "make_virtual_bound_method {iface:?}.{method}")?;
+            if !type_args.is_empty() {
+                write!(f, "<{type_args:?}>")?;
+            }
+            write!(f, "(")?;
+            write_operand(f, receiver)?;
+            write!(f, ")")
+        }
         Rvalue::LoadType(template) => {
             write!(f, "load_type({template})")
         }
@@ -576,5 +610,75 @@ impl fmt::Display for MirFunction {
         let mut buf = String::new();
         write_function(&mut buf, self).map_err(|_| fmt::Error)?;
         f.write_str(&buf)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{BlockId, Place};
+
+    fn render_terminator(terminator: &Terminator) -> String {
+        let mut output = String::new();
+        write_terminator(&mut output, terminator).expect("terminator renders");
+        output
+    }
+
+    fn local_copy(local: usize) -> Operand {
+        Operand::copy_local(Local(local))
+    }
+
+    #[test]
+    fn call_runtime_id_without_visible_args_has_no_leading_comma() {
+        let terminator = Terminator::Call {
+            callee: local_copy(1),
+            args: Vec::new(),
+            ntypeargs: 0,
+            runtime_id: Some(local_copy(9)),
+            destination: Place::local(Local(0)),
+            target: BlockId(1),
+            unwind: None,
+        };
+
+        assert_eq!(
+            render_terminator(&terminator),
+            "_0 = call copy _1($id = copy _9) -> [bb1];"
+        );
+    }
+
+    #[test]
+    fn virtual_call_runtime_id_without_visible_args_has_no_leading_comma() {
+        let terminator = Terminator::VirtualCall {
+            iface: baml_type::TyTemplate::Wildcard,
+            method: "eq".to_string(),
+            args: Vec::new(),
+            ntypeargs: 0,
+            runtime_id: Some(local_copy(9)),
+            destination: Place::local(Local(0)),
+            target: BlockId(1),
+            unwind: None,
+        };
+
+        assert_eq!(
+            render_terminator(&terminator),
+            "_0 = virtual_call eq as _($id = copy _9) -> [bb1];"
+        );
+    }
+
+    #[test]
+    fn sys_op_runtime_id_without_visible_args_has_no_leading_comma() {
+        let terminator = Terminator::SysOp {
+            callee: local_copy(1),
+            args: Vec::new(),
+            runtime_id: Some(local_copy(9)),
+            destination: Place::local(Local(0)),
+            target: BlockId(1),
+            unwind: None,
+        };
+
+        assert_eq!(
+            render_terminator(&terminator),
+            "_0 = sys_op copy _1($id = copy _9) -> bb1;"
+        );
     }
 }

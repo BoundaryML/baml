@@ -7,6 +7,7 @@ type Outcome = "pass" | "fail" | "error"
 class RunReport {
   outcome Outcome
   duration_ms int
+  message string?
   // TODO: extras map<string, unknown>
   // Commented out: Ty::BuiltinUnknown is not handled by ty_to_field_type in
   // value_encode.rs, so deep-copying a TestReport for FFI panics when it
@@ -27,6 +28,7 @@ class TestSetReport {
   passed int
   failed int
   total int
+  failed_names string[]
   results ChildReport[]
   // TODO: extras map<string, unknown> — see RunReport comment
 }
@@ -34,13 +36,49 @@ class TestSetReport {
 /// A report for a single child — either a `TestReport` or a `TestSetReport`.
 type ChildReport = TestReport | TestSetReport
 
+/// A named child report used internally when aggregating testset children.
+class NamedChildReport {
+  name string
+  report ChildReport
+}
+
 // Runner type aliases — lambda transformers.
 // TestRunner wraps "run test once" into a new execution lambda.
 type TestBody = () -> void throws unknown
 type TestSetBody = (TestCollector) -> void throws unknown
 type TestReportThunk = () -> TestReport throws never
 type TestSetReportThunk = () -> TestSetReport throws never
+type ChildReportThunk = () -> ChildReport throws never
 type TestRunner = (TestReportThunk) -> TestReportThunk throws never
 
-// TestSetRunner wraps "run all children" into a new execution lambda.
-type TestSetRunner = (TestSetReportThunk) -> TestSetReportThunk throws never
+/// A named child of a testset. Runners decide when, and whether, to invoke it.
+class TestSetChild {
+  name string
+  run ChildReportThunk
+}
+
+// TestSetRunner receives lazy children and returns the aggregate report.
+type TestSetRunner = (TestSetChild[]) -> TestSetReport throws never
+
+// --- Flat report type for the CLI test runner ---
+//
+// `TestRegistry.run_filtered` returns this already-aggregated, primitive-only
+// shape so the Rust driver prints it directly instead of walking the nested,
+// union-wrapped `TestReport | TestSetReport` tree across the FFI boundary.
+
+/// Aggregated, already-flattened report returned to the CLI driver.
+///
+/// `outcome` is the aggregate verdict (honors testset runners). Counts are
+/// leaf-level: `failed` = hard failures, `tolerated` = failing leaves whose
+/// enclosing testset runner still passed (e.g. under `PassRate`), `passed` and
+/// `total` as usual. `failed_names` are the hard-failure names; `messages` are
+/// every failing run's message.
+class FlatTestReport {
+  outcome Outcome
+  passed int
+  failed int
+  tolerated int
+  total int
+  failed_names string[]
+  messages string[]
+}

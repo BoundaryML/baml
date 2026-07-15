@@ -119,7 +119,7 @@ impl OutputFormatContent {
 
     fn render_impl(&self, options: &RenderOptions) -> Result<Option<String>, RenderError> {
         if matches!(options.prefix, RenderSetting::Auto) {
-            if let Some(instruction) = media_output_instruction(&self.target) {
+            if let Some(instruction) = media_output_instruction(&self.target, options) {
                 return Ok(Some(instruction));
             }
         }
@@ -456,7 +456,7 @@ impl OutputFormatContent {
             RuntimeTy::Bigint { .. } => Ok(Some("bigint".to_string())),
             RuntimeTy::Float { .. } => Ok(Some("float".to_string())),
             RuntimeTy::Bool { .. } => Ok(Some("bool".to_string())),
-            RuntimeTy::Null { .. } => Ok(Some("null".to_string())),
+            RuntimeTy::Null { .. } => Ok(Some(rendered_null_type(options).to_string())),
 
             RuntimeTy::List(inner, _) => {
                 let inner_str = self
@@ -517,7 +517,7 @@ impl OutputFormatContent {
                 match options.map_style {
                     MapStyle::TypeParameters => Ok(Some(format!("map<{key_str}, {value_str}>"))),
                     MapStyle::ObjectLiteral => {
-                        Ok(Some(format!("{{ [key: {key_str}]: {value_str} }}")))
+                        Ok(Some(format!("{{ \"<{key_str}>\": {value_str} }}")))
                     }
                 }
             }
@@ -598,7 +598,6 @@ impl OutputFormatContent {
 
             RuntimeTy::Function { .. }
             | RuntimeTy::Void { .. }
-            | RuntimeTy::WatchAccessor(..)
             | RuntimeTy::BuiltinUnknown { .. }
             | RuntimeTy::EnumVariant(..)
             | RuntimeTy::Future(..)
@@ -733,12 +732,20 @@ fn render_literal(lit: &LiteralValue) -> String {
     }
 }
 
-fn media_output_instruction(target: &RuntimeTy) -> Option<String> {
+fn rendered_null_type(options: &RenderOptions) -> &str {
+    match &options.render_null_as {
+        RenderSetting::Always(value) => value.as_str(),
+        RenderSetting::Auto | RenderSetting::Never => "null",
+    }
+}
+
+fn media_output_instruction(target: &RuntimeTy, options: &RenderOptions) -> Option<String> {
+    let null_type = rendered_null_type(options);
     match target {
         RuntimeTy::Media(kind, _) => Some(format!("Return an {kind} output.")),
         RuntimeTy::Union(variants, _) if nullable_media_union_kind(variants).is_some() => {
             let kind = nullable_media_union_kind(variants).expect("checked above");
-            Some(format!("Return an {kind} output or null."))
+            Some(format!("Return an {kind} output or {null_type}."))
         }
         RuntimeTy::List(inner, _) => match inner.as_ref() {
             RuntimeTy::Media(kind, _) => Some(format!("Return one or more {kind} outputs.")),
@@ -808,10 +815,13 @@ pub enum RenderSetting<T> {
 /// Ported from engine/baml-lib/jinja-runtime/src/output_format/types.rs:201-208
 #[derive(Clone, Debug, Default)]
 pub enum MapStyle {
-    /// Render as `map<K, V>` (angle bracket style)
-    #[default]
+    /// Render as `map<K, V>` (angle bracket style). Opt-in escape hatch: the
+    /// raw BAML type gives the model no example of the JSON object it must emit.
     TypeParameters,
-    /// Render as `{ [key: K]: V }` (object literal style)
+    /// Render as `{ "<K>": V }` (JSON object shape). Default: the model answers
+    /// with JSON, so the hint mirrors the object it needs to produce (consistent
+    /// with how classes and lists render) instead of leaking BAML type syntax.
+    #[default]
     ObjectLiteral,
 }
 
@@ -848,6 +858,8 @@ pub struct RenderOptions {
     pub map_style: MapStyle,
     /// Whether to quote class field names
     pub quote_class_fields: RenderSetting<bool>,
+    /// String to use when rendering the `null` type.
+    pub render_null_as: RenderSetting<String>,
 }
 
 impl Default for RenderOptions {
@@ -859,8 +871,9 @@ impl Default for RenderOptions {
             hoisted_class_prefix: RenderSetting::Auto,
             hoist_classes: HoistClasses::Auto,
             always_hoist_enums: RenderSetting::Auto,
-            map_style: MapStyle::TypeParameters,
+            map_style: MapStyle::ObjectLiteral,
             quote_class_fields: RenderSetting::Auto,
+            render_null_as: RenderSetting::Auto,
         }
     }
 }
@@ -1064,6 +1077,17 @@ mod tests {
             Some("Return an image output or null.".to_string())
         );
 
+        let rendered = OutputFormatContent::new(RuntimeTy::optional(image.clone()))
+            .render(&RenderOptions {
+                render_null_as: RenderSetting::Always("omit".to_string()),
+                ..RenderOptions::default()
+            })
+            .unwrap();
+        assert_eq!(
+            rendered,
+            Some("Return an image output or omit.".to_string())
+        );
+
         let rendered = OutputFormatContent::new(RuntimeTy::Union(
             vec![
                 image,
@@ -1091,6 +1115,20 @@ mod tests {
     }
 
     #[test]
+    fn test_render_optional_with_custom_null_type() {
+        let content = OutputFormatContent::new(RuntimeTy::optional(RuntimeTy::String {
+            attr: TyAttr::default(),
+        }));
+        let rendered = content
+            .render(&RenderOptions {
+                render_null_as: RenderSetting::Always("omit".to_string()),
+                ..RenderOptions::default()
+            })
+            .unwrap();
+        assert_eq!(rendered, Some("string or omit".to_string()));
+    }
+
+    #[test]
     fn test_render_map() {
         let content = OutputFormatContent::new(RuntimeTy::Map {
             key: Box::new(RuntimeTy::String {
@@ -1104,7 +1142,54 @@ mod tests {
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
+            Some("Answer in JSON using this schema:\n{ \"<string>\": int }".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_map_type_parameters_opt_in() {
+        // `map_style='type_parameters'` stays available as an opt-in escape hatch
+        // that renders the literal BAML type syntax.
+        let content = OutputFormatContent::new(RuntimeTy::Map {
+            key: Box::new(RuntimeTy::String {
+                attr: TyAttr::default(),
+            }),
+            value: Box::new(RuntimeTy::Int {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
+        });
+        let rendered = content
+            .render(&RenderOptions {
+                map_style: MapStyle::TypeParameters,
+                ..RenderOptions::default()
+            })
+            .unwrap();
+        assert_eq!(
+            rendered,
             Some("Answer in JSON using this schema:\nmap<string, int>".to_string())
+        );
+    }
+
+    #[test]
+    fn test_render_class_with_map_field_object_shape() {
+        // B-630 repro: a `map<string, T>` field must render as a JSON object
+        // shape so the model sees the object it has to emit, rather than leaking
+        // the literal BAML type syntax `map<string, int>`.
+        let content = OutputFormatContent::new(ty_class("Review")).with_class(mk_class(
+            "Review",
+            vec![("scores", ty_map(ty_string(), ty_int()))],
+        ));
+
+        let rendered = content.render(&RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                r#"Answer in JSON using this schema:
+{
+  scores: { "<string>": int },
+}"#
+            ))
         );
     }
 
@@ -2000,7 +2085,7 @@ Node[]"#
             rendered,
             Some(String::from(
                 r#"RecursiveMap {
-  data: map<string, RecursiveMap>,
+  data: { "<string>": RecursiveMap },
 }
 
 Answer in JSON using this schema: RecursiveMap"#
@@ -2026,7 +2111,7 @@ Answer in JSON using this schema: RecursiveMap"#
             rendered,
             Some(String::from(
                 r#"RecursiveMap {
-  data: map<string, RecursiveMap>,
+  data: { "<string>": RecursiveMap },
 }
 
 Answer in JSON using this schema:
@@ -2056,7 +2141,7 @@ Answer in JSON using this schema:
 }
 
 Answer in JSON using this schema:
-map<string, Node>"#
+{ "<string>": Node }"#
             ))
         );
     }
@@ -2085,7 +2170,7 @@ map<string, Node>"#
 
 Answer in JSON using this schema:
 {
-  data: map<string, Node>,
+  data: { "<string>": Node },
 }"#
             ))
         );
@@ -2115,7 +2200,7 @@ Answer in JSON using this schema:
 
 Answer in JSON using this schema:
 {
-  data: map<string, Node or null>,
+  data: { "<string>": Node or null },
 }"#
             ))
         );
@@ -2147,10 +2232,10 @@ Answer in JSON using this schema:
 }
 
 Answer in JSON using this schema:
-map<string, Node or int or {
+{ "<string>": Node or int or {
   field: string,
   data: int,
-}>"#
+} }"#
             ))
         );
     }
@@ -2189,10 +2274,10 @@ map<string, Node or int or {
 
 Answer in JSON using this schema:
 {
-  data: map<string, Node or int or {
+  data: { "<string>": Node or int or {
     field: string,
     data: int,
-  }>,
+  } },
 }"#
             ))
         );
@@ -2921,7 +3006,7 @@ Answer in JSON using this schema: SelfReferential"#
         assert_eq!(
             rendered,
             Some(String::from(
-                r#"RecursiveMapAlias = map<string, RecursiveMapAlias>
+                r#"RecursiveMapAlias = { "<string>": RecursiveMapAlias }
 
 Answer in JSON using this schema: RecursiveMapAlias"#
             ))

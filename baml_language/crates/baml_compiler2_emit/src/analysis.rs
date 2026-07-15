@@ -581,36 +581,11 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                 StatementKind::Drop(place) => {
                     collect_uses_in_place(place, block.id, stmt_ref, &mut def_use);
                 }
-                StatementKind::Unwatch(local) => {
-                    // Unwatch uses the local (we need to read its value to unlink from watch graph)
-                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
-                        block: block.id,
-                        statement_ref: stmt_ref,
-                    });
-                }
-                StatementKind::NotifyBlock { .. } => {
-                    // NotifyBlock doesn't use any locals - it's a pure side effect
-                }
                 StatementKind::Intrinsic { args, .. } => {
                     // Intrinsic args are reads — record uses for each operand
                     for arg in args {
                         collect_uses_in_operand(arg, block.id, stmt_ref, &mut def_use);
                     }
-                }
-                StatementKind::WatchOptions { local, filter } => {
-                    // WatchOptions uses the local and the filter operand
-                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
-                        block: block.id,
-                        statement_ref: stmt_ref,
-                    });
-                    collect_uses_in_operand(filter, block.id, stmt_ref, &mut def_use);
-                }
-                StatementKind::WatchNotify(local) => {
-                    // WatchNotify uses the local
-                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
-                        block: block.id,
-                        statement_ref: stmt_ref,
-                    });
                 }
                 StatementKind::FreshCell(local) => {
                     // FreshCell only has an effect when the local is captured
@@ -644,6 +619,22 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
         if let Some(du) = def_use.get_mut(&local) {
             du.uses.push(UseLocation {
                 block: block_id,
+                statement_ref: StatementRef::Terminator,
+            });
+        }
+    }
+
+    // The VM also materializes the caught error's `ErrorContext` into the
+    // context (second-binding) slot, and the BEP-042 cause-chain pre-walk reads
+    // it from an *enclosing* handler — uses the static walk can't see. Mark it
+    // used so it isn't classified Dead and always gets a slot, even when the
+    // `ctx` binding looks statically dead.
+    for region in &body.catch_regions {
+        if let Some(ctx_local) = region.stack_trace_local
+            && let Some(du) = def_use.get_mut(&ctx_local)
+        {
+            du.uses.push(UseLocation {
+                block: region.handler,
                 statement_ref: StatementRef::Terminator,
             });
         }
@@ -688,13 +679,13 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
             walk_operand_locals(right, f);
         }
         Rvalue::UnaryOp { operand, .. } => walk_operand_locals(operand, f),
-        Rvalue::Array(elements) => {
+        Rvalue::Array(_, elements) => {
             for elem in elements {
                 walk_operand_locals(elem, f);
             }
         }
         Rvalue::Uint8Array(_) => {}
-        Rvalue::Map(entries) => {
+        Rvalue::Map(_, _, entries) => {
             for (key, value) in entries {
                 walk_operand_locals(key, f);
                 walk_operand_locals(value, f);
@@ -716,7 +707,8 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
                 walk_operand_locals(cap, f);
             }
         }
-        Rvalue::MakeBoundMethod { receiver, .. } => {
+        Rvalue::MakeBoundMethod { receiver, .. }
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => {
             walk_operand_locals(receiver, f);
         }
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => {
@@ -806,12 +798,16 @@ fn collect_uses_in_terminator(
         Terminator::Call {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination (where call result is stored)
             if let Place::Local(local) = destination {
@@ -829,11 +825,17 @@ fn collect_uses_in_terminator(
             }
         }
         Terminator::VirtualCall {
-            args, destination, ..
+            args,
+            runtime_id,
+            destination,
+            ..
         } => {
             // No callee operand — the method is resolved at runtime from `iface`.
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination (where the call result is stored).
             if let Place::Local(local) = destination {
@@ -850,12 +852,16 @@ fn collect_uses_in_terminator(
         Terminator::SysOp {
             callee,
             args,
+            runtime_id,
             destination,
             ..
         } => {
             collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
                 collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
+            }
+            if let Some(runtime_id) = runtime_id {
+                collect_uses_in_operand(runtime_id, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination place
             if let Place::Local(local) = destination {
@@ -928,7 +934,9 @@ fn collect_uses_in_terminator(
                 }
             }
         }
-        Terminator::Throw { value } | Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Throw { value }
+        | Terminator::Rethrow { value }
+        | Terminator::ThrowIfPanic { value, .. } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
         }
         Terminator::ShortCircuit {
@@ -989,11 +997,7 @@ fn classify_locals(
         // Compiler temps have name=None and are always eligible for optimization.
         let is_user_local = local_decl.name.is_some();
 
-        let classification = if local_decl.is_watched {
-            // Watched variables must always be Real - no optimizations allowed.
-            // This ensures they have a stable stack slot for Watch/Unwatch instructions.
-            LocalClassification::Real
-        } else if idx > 0 && idx <= arity {
+        let classification = if idx > 0 && idx <= arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
         } else if local_decl.is_captured {
@@ -1176,18 +1180,11 @@ fn is_short_circuit_phi(local: Local, du: &LocalDefUse, body: &MirFunctionBody) 
 fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
     match kind {
         // These don't touch the stack at all - just update external state
-        StatementKind::Unwatch(_) => true,
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true,
-        StatementKind::NotifyBlock { .. } => true,
-        StatementKind::WatchNotify(_) => true,
         StatementKind::FreshCell(_) => true,
         // Intrinsics push args then SendEvent consumes them - net neutral
         StatementKind::Intrinsic { .. } => true,
         StatementKind::Nop => true,
-
-        // WatchOptions pushes 2 (channel, filter) then Watch pops 2 - net neutral
-        // The return value stays at TOS throughout
-        StatementKind::WatchOptions { .. } => true,
 
         // These modify the stack
         StatementKind::Assign { .. } => false,
@@ -1198,7 +1195,7 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
 /// Check if `_0` (the return place) is a "return-phi" local.
 ///
 /// Return-phi applies when `_0` is assigned before Return in each defining block,
-/// with only stack-neutral statements (like Unwatch, `VizExit`) between the assignment
+/// with only stack-neutral statements (like `VizExit`) between the assignment
 /// and Return. This allows us to:
 /// - At def sites: emit rvalue but NOT `StoreVar` (leave value on stack)
 /// - At Return: skip `LoadVar` for _0 (value already on stack)
@@ -1336,6 +1333,13 @@ fn can_be_virtual(
     if has_single_def && is_pure_constant(&def.rvalue) {
         // Just need at least one use to not be dead
         return !du.uses.is_empty();
+    }
+
+    // `Rvalue::Len` must be materialized eagerly at the binding site.
+    // Re-evaluating a virtualized `len` after intervening mutations (e.g.
+    // `push`) changes observable semantics for `let` bindings.
+    if matches!(def.rvalue, Rvalue::Len(_)) {
+        return false;
     }
 
     // For non-constant rvalues, require exactly one definition site.
@@ -1495,9 +1499,9 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
             operand_has_projection(left) || operand_has_projection(right)
         }
         Rvalue::UnaryOp { operand, .. } => operand_has_projection(operand),
-        Rvalue::Array(elements) => elements.iter().any(operand_has_projection),
+        Rvalue::Array(_, elements) => elements.iter().any(operand_has_projection),
         Rvalue::Uint8Array(_) => false,
-        Rvalue::Map(entries) => entries
+        Rvalue::Map(_, _, entries) => entries
             .iter()
             .any(|(key, value)| operand_has_projection(key) || operand_has_projection(value)),
         Rvalue::Aggregate { fields, .. } => fields.iter().any(operand_has_projection),
@@ -1506,7 +1510,8 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         }
         Rvalue::IsType { operand, .. } => operand_has_projection(operand),
         Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
-        Rvalue::MakeBoundMethod { receiver, .. } => operand_has_projection(receiver),
+        Rvalue::MakeBoundMethod { receiver, .. }
+        | Rvalue::MakeVirtualBoundMethod { receiver, .. } => operand_has_projection(receiver),
         Rvalue::LoadType(_) | Rvalue::MakeGenericFunction { .. } => false,
         Rvalue::MakeGenericFunctionFromValue { value, .. } => operand_has_projection(value),
     }
@@ -1600,10 +1605,6 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
             false
         }
         StatementKind::Drop(_) => true,
-        StatementKind::Unwatch(_) => true, // Unwatch has side effects on watch graph
-        StatementKind::NotifyBlock { .. } => true, // NotifyBlock has side effects (emits notification)
-        StatementKind::WatchOptions { .. } => true, // WatchOptions has side effects on watch graph
-        StatementKind::WatchNotify(_) => true, // WatchNotify has side effects (emits notification)
         StatementKind::FreshCell(local) => rvalue_reads.contains(local),
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Intrinsic { .. } => true, // Intrinsics emit events — observable side effect
@@ -1753,11 +1754,11 @@ fn is_call_result_aggregate_operand(
 
 fn aggregate_stack_prefix_operands(rvalue: &Rvalue) -> Option<Vec<&Operand>> {
     match rvalue {
-        Rvalue::Array(elements) => Some(elements.iter().collect()),
+        Rvalue::Array(_, elements) => Some(elements.iter().collect()),
         // Map lowering emits all values first, then all keys, because the VM
         // consumes maps as `[v1, v2, ..., k1, k2, ...]`. A carried key would sit
         // below the emitted values, so only value positions are stack-carryable.
-        Rvalue::Map(entries) => Some(entries.iter().map(|(_key, value)| value).collect()),
+        Rvalue::Map(_, _, entries) => Some(entries.iter().map(|(_key, value)| value).collect()),
         Rvalue::Aggregate {
             kind: baml_compiler2_mir::AggregateKind::Array,
             fields,
@@ -1880,7 +1881,10 @@ fn get_copy_source(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_mir::{BasicBlock, Constant, Operand, Place, Statement, Terminator};
+    use baml_compiler2_mir::{
+        BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place, Statement, Terminator,
+    };
+    use baml_type::{RuntimeTy, TyAttr};
 
     use super::*;
 
@@ -1922,6 +1926,7 @@ mod tests {
                         callee: Operand::Constant(Constant::Null),
                         args: vec![],
                         ntypeargs: 0,
+                        runtime_id: None,
                         destination: Place::Local(target),
                         target: BlockId(1),
                         unwind: None,
@@ -1934,10 +1939,13 @@ mod tests {
                     statements: vec![Statement {
                         kind: StatementKind::Assign {
                             destination: Place::Local(Local(0)),
-                            value: Rvalue::Array(vec![
-                                Operand::copy_local(target),
-                                Operand::Constant(Constant::Int(1)),
-                            ]),
+                            value: Rvalue::Array(
+                                baml_type::TyTemplate::from(baml_type::RealizedTy::unknown()),
+                                vec![
+                                    Operand::copy_local(target),
+                                    Operand::Constant(Constant::Int(1)),
+                                ],
+                            ),
                         },
                         span: None,
                     }],
@@ -1968,5 +1976,70 @@ mod tests {
         assert!(!is_call_result_aggregate_operand(
             target, &du, &body, &def_use,
         ));
+    }
+
+    /// Builds a minimal integer local declaration for MIR analysis tests.
+    fn int_local_decl(name: Option<&str>) -> LocalDecl {
+        LocalDecl {
+            name: name.map(baml_base::Name::new),
+            ty: RuntimeTy::Int {
+                attr: TyAttr::default(),
+            },
+            span: None,
+            scope_span: None,
+            is_captured: false,
+        }
+    }
+
+    /// Verifies `Rvalue::Len` bindings are always classified as materialized locals.
+    #[test]
+    fn len_bindings_are_not_virtualized() {
+        let arr = Local(1);
+        let len = Local(2);
+        let body = MirFunctionBody {
+            blocks: vec![BasicBlock {
+                id: BlockId(0),
+                statements: vec![
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(arr),
+                            value: Rvalue::Use(Operand::Constant(Constant::Null)),
+                        },
+                        span: None,
+                    },
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(len),
+                            value: Rvalue::Len(Place::Local(arr)),
+                        },
+                        span: None,
+                    },
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(Local(0)),
+                            value: Rvalue::Use(Operand::copy_local(len)),
+                        },
+                        span: None,
+                    },
+                ],
+                terminator: Some(Terminator::Return),
+                span: None,
+                terminator_span: None,
+            }],
+            entry: BlockId(0),
+            locals: vec![
+                int_local_decl(None),
+                int_local_decl(Some("arr")),
+                int_local_decl(Some("n")),
+            ],
+            catch_regions: vec![],
+            viz_nodes: vec![],
+        };
+
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications.get(&len),
+            Some(&LocalClassification::Real)
+        );
     }
 }

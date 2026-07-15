@@ -8,7 +8,7 @@
 //! can be constructed directly in tests without parsing.
 
 pub mod ast;
-pub(crate) mod auto_derive_json;
+pub mod cleanup_guard;
 pub(crate) mod companions;
 pub(crate) mod disambiguate;
 pub mod docstring;
@@ -19,6 +19,11 @@ pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
 
 pub use ast::*;
+/// Decode common escape sequences in a quoted string literal body.
+///
+/// Re-exported from [`baml_base::escape::unescape_string_literal`] so existing
+/// callers don't need to change their import path.
+pub use baml_base::escape::unescape_string_literal;
 pub use companions::llm_parse as llm_parse_companion;
 pub use disambiguate::is_field_attr;
 pub use docstring::extract_docstring;
@@ -27,6 +32,9 @@ pub use lower_cst::{
 };
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
+// Re-exported so callers of `TypeExprKind::at(span)` can name the span type
+// without depending on `text_size` directly.
+pub use text_size::TextRange;
 
 /// The BEP-044 `default` receiver keyword. Inside an `implements` block,
 /// `default.method(...)` invokes the interface's *default* method body,
@@ -36,6 +44,44 @@ pub use lowering_diagnostic::LoweringDiagnostic;
 /// is the single source of truth for that spelling; prefer the
 /// `is_default_receiver_root` helpers over comparing the literal string.
 pub const DEFAULT_RECEIVER_KEYWORD: &str = "default";
+
+/// Parse a string attribute value into its runtime string, handling both
+/// regular strings (`"text"`, `'text'`) and raw strings (`#"text"#`,
+/// `##"text"##`, …).
+///
+/// The input is the raw, still-quoted token text as it appears in
+/// [`RawAttributeArg::value`]. Returns `None` if the value is not a recognized
+/// string literal. This is the single source of truth for turning an
+/// `@alias`/`@description` argument into the value used both by the emitter
+/// (for the runtime alias) and by HIR validation (for effective-key collision
+/// detection), so the two agree on quote/escape/raw-string normalization.
+pub fn parse_string_attr_value(raw: &str) -> Option<String> {
+    // Double-quoted string: "text"
+    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
+        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+    }
+    // Single-quoted string: 'text'
+    if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
+        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+    }
+
+    // Raw string: #"text"#, ##"text"##, etc.
+    let hash_count = raw.bytes().take_while(|&b| b == b'#').count();
+    if hash_count == 0 {
+        return None;
+    }
+
+    let rest = &raw[hash_count..];
+    let closing = format!("\"{}", &raw[..hash_count]);
+
+    // Need at least `"` + `"` + closing hashes
+    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
+        return None;
+    }
+
+    // Raw strings: no escape processing
+    Some(rest[1..rest.len() - 1 - hash_count].to_string())
+}
 
 /// Parse the digit body of a `bigint` literal into a [`num_bigint::BigInt`].
 ///
@@ -59,32 +105,9 @@ pub fn parse_bigint_literal_token(text: &str) -> num_bigint::BigInt {
     parse_bigint_literal_digits(digits)
 }
 
-/// Decode common escape sequences in a quoted string literal body.
-pub fn unescape_string_literal(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut chars = input.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => result.push('\n'),
-                Some('t') => result.push('\t'),
-                Some('r') => result.push('\r'),
-                Some('0') => result.push('\0'),
-                Some('\\') => result.push('\\'),
-                Some('"') => result.push('"'),
-                Some(other) => {
-                    result.push('\\');
-                    result.push(other);
-                }
-                None => result.push('\\'),
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
-
+// `unescape_string_literal` lives in `baml_base::escape` and is re-exported
+// above. The pre-merge canary copy was dropped here in favor of the shared
+// implementation introduced by BEP-049 M1.
 #[cfg(test)]
 mod tests {
     use baml_base::FileId;
@@ -93,7 +116,7 @@ mod tests {
     use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 
     use crate::{
-        ast::{BuiltinKind, Expr, FunctionBodyDef, Item, Stmt, TypeExpr},
+        ast::{BuiltinKind, Expr, FunctionBodyDef, Item, Stmt, TypeExpr, TypeExprKind},
         lower_cst::lower_file,
         unescape_string_literal,
     };
@@ -145,45 +168,49 @@ mod tests {
         };
 
         // ── Leaves ──
-        (Int $(, Attr($a:expr))*) => { TypeExpr::Int { attrs: type_expr!(@attrs $(, Attr($a))*) } };
-        (Bigint $(, Attr($a:expr))*) => { TypeExpr::Bigint { attrs: type_expr!(@attrs $(, Attr($a))*) } };
-        (Float $(, Attr($a:expr))*) => { TypeExpr::Float { attrs: type_expr!(@attrs $(, Attr($a))*) } };
-        (String $(, Attr($a:expr))*) => { TypeExpr::String { attrs: type_expr!(@attrs $(, Attr($a))*) } };
-        (Bool $(, Attr($a:expr))*) => { TypeExpr::Bool { attrs: type_expr!(@attrs $(, Attr($a))*) } };
-        (Null $(, Attr($a:expr))*) => { TypeExpr::Null { attrs: type_expr!(@attrs $(, Attr($a))*) } };
-        (Never $(, Attr($a:expr))*) => { TypeExpr::Never { attrs: type_expr!(@attrs $(, Attr($a))*) } };
-        (Rust $(, Attr($a:expr))*) => { TypeExpr::Rust { attrs: type_expr!(@attrs $(, Attr($a))*) } };
+        (Int $(, Attr($a:expr))*) => { TypeExprKind::Int { attrs: type_expr!(@attrs $(, Attr($a))*) }.at(text_size::TextRange::default()) };
+        (Bigint $(, Attr($a:expr))*) => { TypeExprKind::Bigint { attrs: type_expr!(@attrs $(, Attr($a))*) }.at(text_size::TextRange::default()) };
+        (Float $(, Attr($a:expr))*) => { TypeExprKind::Float { attrs: type_expr!(@attrs $(, Attr($a))*) }.at(text_size::TextRange::default()) };
+        (String $(, Attr($a:expr))*) => { TypeExprKind::String { attrs: type_expr!(@attrs $(, Attr($a))*) }.at(text_size::TextRange::default()) };
+        (Bool $(, Attr($a:expr))*) => { TypeExprKind::Bool { attrs: type_expr!(@attrs $(, Attr($a))*) }.at(text_size::TextRange::default()) };
+        (Null $(, Attr($a:expr))*) => { TypeExprKind::Null { attrs: type_expr!(@attrs $(, Attr($a))*) }.at(text_size::TextRange::default()) };
+        (Never $(, Attr($a:expr))*) => { TypeExprKind::Never { attrs: type_expr!(@attrs $(, Attr($a))*) }.at(text_size::TextRange::default()) };
+        (Rust $(, Attr($a:expr))*) => { TypeExprKind::Rust { attrs: type_expr!(@attrs $(, Attr($a))*) }.at(text_size::TextRange::default()) };
 
         // ── Path ──
         (Path($name:expr $(, Attr($a:expr))*)) => {
-            TypeExpr::Path {
+            TypeExprKind::Path {
                 segments: vec![baml_base::Name::new($name)],
                 generic_args: vec![],
                 associated_type_bindings: vec![],
                 attrs: type_expr!(@attrs $(, Attr($a))*),
             }
+            .at(text_size::TextRange::default())
         };
 
         // ── Containers ──
         (Optional($($inner:tt)+)) => {
-            TypeExpr::Optional {
+            TypeExprKind::Optional {
                 inner: Box::new(type_expr!($($inner)+)),
                 attrs: vec![],
             }
+            .at(text_size::TextRange::default())
         };
         (List($($inner:tt)+)) => {
-            TypeExpr::List {
+            TypeExprKind::List {
                 inner: Box::new(type_expr!($($inner)+)),
                 attrs: vec![],
             }
+            .at(text_size::TextRange::default())
         };
 
         // ── Union: each variant is wrapped in parens ──
         (Union($(($($variant:tt)+)),+ $(,)?)) => {
-            TypeExpr::Union {
+            TypeExprKind::Union {
                 variants: vec![$(type_expr!(($($variant)+))),+],
                 attrs: vec![],
             }
+            .at(text_size::TextRange::default())
         };
 
         // ── Attach attrs to any type: WithAttrs((List(String)), Attr("stream.done")) ──
@@ -223,43 +250,43 @@ mod tests {
             attrs.iter().map(strip_attr).collect()
         }
 
-        match expr {
-            TypeExpr::Int { attrs } => TypeExpr::Int {
+        let __stripped = match &expr.kind {
+            TypeExprKind::Int { attrs } => TypeExprKind::Int {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Bigint { attrs } => TypeExpr::Bigint {
+            TypeExprKind::Bigint { attrs } => TypeExprKind::Bigint {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Float { attrs } => TypeExpr::Float {
+            TypeExprKind::Float { attrs } => TypeExprKind::Float {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::String { attrs } => TypeExpr::String {
+            TypeExprKind::String { attrs } => TypeExprKind::String {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Bool { attrs } => TypeExpr::Bool {
+            TypeExprKind::Bool { attrs } => TypeExprKind::Bool {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Null { attrs } => TypeExpr::Null {
+            TypeExprKind::Null { attrs } => TypeExprKind::Null {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Uint8Array { attrs } => TypeExpr::Uint8Array {
+            TypeExprKind::Uint8Array { attrs } => TypeExprKind::Uint8Array {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Never { attrs } => TypeExpr::Never {
+            TypeExprKind::Never { attrs } => TypeExprKind::Never {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Void { attrs } => TypeExpr::Void {
+            TypeExprKind::Void { attrs } => TypeExprKind::Void {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Rust { attrs } => TypeExpr::Rust {
+            TypeExprKind::Rust { attrs } => TypeExprKind::Rust {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Path {
+            TypeExprKind::Path {
                 segments,
                 generic_args,
                 associated_type_bindings,
                 attrs,
-            } => TypeExpr::Path {
+            } => TypeExprKind::Path {
                 segments: segments.clone(),
                 generic_args: generic_args.iter().map(strip_spans).collect(),
                 associated_type_bindings: associated_type_bindings
@@ -271,12 +298,12 @@ mod tests {
                     .collect(),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::AssociatedTypeProjection {
+            TypeExprKind::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
                 attrs,
-            } => TypeExpr::AssociatedTypeProjection {
+            } => TypeExprKind::AssociatedTypeProjection {
                 base: Box::new(strip_spans(base)),
                 interface: interface
                     .as_ref()
@@ -284,40 +311,33 @@ mod tests {
                 member: member.clone(),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Optional { inner, attrs } => TypeExpr::Optional {
+            TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
                 inner: Box::new(strip_spans(inner)),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::List { inner, attrs } => TypeExpr::List {
+            TypeExprKind::List { inner, attrs } => TypeExprKind::List {
                 inner: Box::new(strip_spans(inner)),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Map { key, value, attrs } => TypeExpr::Map {
+            TypeExprKind::Map { key, value, attrs } => TypeExprKind::Map {
                 key: Box::new(strip_spans(key)),
                 value: Box::new(strip_spans(value)),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Union { variants, attrs } => TypeExpr::Union {
+            TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
                 variants: variants.iter().map(strip_spans).collect(),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Literal { value, attrs } => TypeExpr::Literal {
+            TypeExprKind::Literal { value, attrs } => TypeExprKind::Literal {
                 value: value.clone(),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Function {
-                generic_params,
-                generic_param_bounds,
+            TypeExprKind::Function {
                 params,
                 ret,
                 throws,
                 attrs,
-            } => TypeExpr::Function {
-                generic_params: generic_params.clone(),
-                generic_param_bounds: generic_param_bounds
-                    .iter()
-                    .map(|bound| bound.as_ref().map(strip_spans))
-                    .collect(),
+            } => TypeExprKind::Function {
                 params: params
                     .iter()
                     .map(|p| crate::ast::FunctionTypeParam {
@@ -330,23 +350,27 @@ mod tests {
                 throws: throws.as_ref().map(|throws| Box::new(strip_spans(throws))),
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Media { kind, attrs } => TypeExpr::Media {
+            TypeExprKind::Media { kind, attrs } => TypeExprKind::Media {
                 kind: *kind,
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::BuiltinUnknown { attrs } => TypeExpr::BuiltinUnknown {
+            TypeExprKind::BuiltinUnknown { attrs } => TypeExprKind::BuiltinUnknown {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Type { attrs } => TypeExpr::Type {
+            TypeExprKind::Type { attrs } => TypeExprKind::Type {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Error { attrs } => TypeExpr::Error {
+            TypeExprKind::Error { attrs } => TypeExprKind::Error {
                 attrs: strip_attrs(attrs),
             },
-            TypeExpr::Unknown { attrs } => TypeExpr::Unknown {
+            TypeExprKind::Unknown { attrs } => TypeExprKind::Unknown {
                 attrs: strip_attrs(attrs),
             },
-        }
+            TypeExprKind::Infer { attrs } => TypeExprKind::Infer {
+                attrs: strip_attrs(attrs),
+            },
+        };
+        __stripped.at(text_size::TextRange::default())
     }
 
     /// Parse BAML source text and return the CST root.
@@ -436,6 +460,114 @@ function Extract(client: string, text: string) -> string {
         );
     }
 
+    /// The synthesized `<Client>$new` constructor for `client_name`.
+    fn client_new_companion(items: Vec<Item>, client_name: &str) -> crate::ast::FunctionDef {
+        let target = format!("{client_name}$new");
+        items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Function(f) if f.name.as_str() == target => Some(f),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("expected synthesized {target} function"))
+    }
+
+    /// Does `$new`'s body read `env_var` via a soft `baml.env.get`?
+    fn new_companion_reads_env(function: &crate::ast::FunctionDef, env_var: &str) -> bool {
+        use baml_base::Name;
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body for $new companion");
+        };
+        body.exprs.iter().any(|(_, expr)| {
+            let Expr::Call { callee, args, .. } = expr else {
+                return false;
+            };
+            let Expr::Path(path) = &body.exprs[*callee] else {
+                return false;
+            };
+            let is_env_get =
+                path.iter().map(Name::as_str).collect::<Vec<_>>() == ["baml", "env", "get"];
+            let reads_var = args.first().is_some_and(|arg| {
+                matches!(
+                    &body.exprs[arg.expr],
+                    Expr::Literal(baml_base::Literal::String(s)) if s == env_var
+                )
+            });
+            is_env_get && reads_var
+        })
+    }
+
+    #[test]
+    fn named_openai_client_defaults_api_key_to_env_var() {
+        // B-489: a named `client<llm>` with `provider openai` and no explicit
+        // `api_key` defaults the key to a soft `baml.env.get("OPENAI_API_KEY")`,
+        // mirroring the inline `"openai/model"` shorthand (unset -> null, never
+        // panics, so offline render still works without the var set).
+        let source = r#"
+client<llm> C {
+  provider openai
+  options { model "gpt-4o" }
+}
+"#;
+        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        assert!(
+            new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
+            "named openai client with no api_key should default to OPENAI_API_KEY"
+        );
+    }
+
+    #[test]
+    fn named_anthropic_client_defaults_api_key_to_env_var() {
+        let source = r#"
+client<llm> C {
+  provider anthropic
+  options { model "claude-3-5-sonnet-20241022" }
+}
+"#;
+        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        assert!(
+            new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
+            "named anthropic client with no api_key should default to ANTHROPIC_API_KEY"
+        );
+    }
+
+    #[test]
+    fn named_client_explicit_api_key_suppresses_env_default() {
+        // An explicit `api_key` wins: no env-var default is synthesized.
+        let source = r#"
+client<llm> C {
+  provider openai
+  options { model "gpt-4o"  api_key "sk-explicit" }
+}
+"#;
+        let new_fn = client_new_companion(parse_and_lower(source), "C");
+        assert!(
+            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
+            "explicit api_key must suppress the OPENAI_API_KEY default"
+        );
+    }
+
+    #[test]
+    fn named_client_unknown_provider_gets_no_env_default() {
+        // Providers without a ubiquitous env-var convention are untouched.
+        // vertex-ai emits an unrelated MissingClientOptions diagnostic (no
+        // base_url/location), but the `$new` companion is still synthesized —
+        // so tolerate diagnostics and only assert on the api_key default.
+        let source = r#"
+client<llm> C {
+  provider vertex-ai
+  options { model "gemini-2.0-flash" }
+}
+"#;
+        let (items, _diags) = parse_and_lower_with_diagnostics(source);
+        let new_fn = client_new_companion(items, "C");
+        assert!(
+            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY")
+                && !new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
+            "vertex-ai must not default an api_key env var"
+        );
+    }
+
     #[test]
     fn ast_function_def_has_generic_params() {
         let source = r#"
@@ -490,6 +622,162 @@ function Search(query: string, max_results: int = 10) -> int {
             args[1].label.as_ref().map(smol_str::SmolStr::as_str),
             Some("max_results")
         );
+    }
+
+    #[test]
+    fn ast_tagged_template_body_marked_synthetic() {
+        // The desugared closure body of a tagged template is compiler-generated,
+        // so every node it allocates is recorded in the source map's synthetic
+        // sets — while the user-written tag expr and `${…}` interp expressions
+        // (reused from `segments`) stay non-synthetic. This is what lets inlay
+        // hints skip the `__tt_*` accumulators / `.push(...)` calls robustly,
+        // independent of their (incidental) empty spans / type annotations.
+        use crate::ast::{TemplateSegment, TemplateTag};
+        let source = r#"
+function Demo(items: string[]) -> string {
+  sql`a ${1} ${for (let x in items)}${x},${endfor}`
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[root]
+        else {
+            panic!("expected block root");
+        };
+        let Expr::Template {
+            tag: TemplateTag::Custom { tag, body: tbody },
+            segments,
+        } = &body.exprs[*tail]
+        else {
+            panic!("expected Custom Template tail");
+        };
+
+        // The elaborated closure body block and all of its statements are synthetic.
+        assert!(
+            source_map.is_synthetic_expr(*tbody),
+            "tagged-template body block should be marked synthetic"
+        );
+        let Expr::Block { stmts, .. } = &body.exprs[*tbody] else {
+            panic!("tagged body should be a block");
+        };
+        assert!(
+            !stmts.is_empty() && stmts.iter().all(|s| source_map.is_synthetic_stmt(*s)),
+            "every statement in the tagged-template body should be marked synthetic"
+        );
+
+        // The tag expr and the user's `${…}` interp expression stay non-synthetic.
+        assert!(
+            !source_map.is_synthetic_expr(*tag),
+            "user-written tag expr must not be marked synthetic"
+        );
+        let interp = segments
+            .iter()
+            .find_map(|s| match s {
+                TemplateSegment::Interp(e) => Some(*e),
+                _ => None,
+            })
+            .expect("expected a top-level ${…} interp segment");
+        assert!(
+            !source_map.is_synthetic_expr(interp),
+            "user ${{…}} interpolation expression must stay non-synthetic"
+        );
+    }
+
+    #[test]
+    fn ast_tagged_template_lowers_to_template_expr() {
+        // BEP-049 §10. `tag`...`` lowers to a first-class `Expr::Template`
+        // with `TemplateTag::Custom`, PRESERVING segment structure (text /
+        // interp / for / if). The tag itself lowers as an ordinary expression
+        // (here the bare path `sql`).
+        use crate::ast::{TemplateIfBranch, TemplateSegment, TemplateTag};
+        let source = r#"
+function Demo(items: string[]) -> string {
+  sql`a ${1} ${for (let x in items)}${x},${endfor}${if (true)}w${else}e${endif}`
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _source_map)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected body root expression");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[root]
+        else {
+            panic!("expected block root, got {:?}", body.exprs[root]);
+        };
+        let Expr::Template { tag, segments } = &body.exprs[*tail] else {
+            panic!("expected Template tail, got {:?}", body.exprs[*tail]);
+        };
+
+        // A tagged template carries `TemplateTag::Custom`, whose tag expr
+        // lowers to the bare path `sql` (TIR validates it resolves to a
+        // `//baml:tagged_string` fn; lowering only handles it structurally).
+        let TemplateTag::Custom { tag, .. } = tag else {
+            panic!("expected Custom tag, got {tag:?}");
+        };
+        assert!(
+            matches!(&body.exprs[*tag], Expr::Path(p) if p.len() == 1 && p[0].as_str() == "sql"),
+            "tag should lower to Path([sql]), got {:?}",
+            body.exprs[*tag]
+        );
+
+        // Top-level segments include a leading Text, an Interp, a For block
+        // and an If chain (whitespace Text segments interleave them).
+        assert!(
+            matches!(segments.first(), Some(TemplateSegment::Text(_))),
+            "first segment should be literal text, got {:?}",
+            segments.first()
+        );
+        assert!(
+            segments
+                .iter()
+                .any(|s| matches!(s, TemplateSegment::Interp(_))),
+            "expected a top-level Interp segment"
+        );
+
+        let TemplateSegment::For { body: for_body, .. } = segments
+            .iter()
+            .find(|s| matches!(s, TemplateSegment::For { .. }))
+            .expect("expected a For segment")
+        else {
+            unreachable!()
+        };
+        assert!(
+            for_body
+                .iter()
+                .any(|s| matches!(s, TemplateSegment::Interp(_))),
+            "for body should contain the ${{x}} interpolation, got {for_body:?}"
+        );
+
+        let TemplateSegment::If {
+            branches,
+            else_body,
+        } = segments
+            .iter()
+            .find(|s| matches!(s, TemplateSegment::If { .. }))
+            .expect("expected an If segment")
+        else {
+            unreachable!()
+        };
+        assert_eq!(branches.len(), 1, "expected a single if-branch");
+        let TemplateIfBranch {
+            body: then_body, ..
+        } = &branches[0];
+        assert!(
+            then_body
+                .iter()
+                .any(|s| matches!(s, TemplateSegment::Text(_))),
+            "then-branch should contain text"
+        );
+        assert!(else_body.is_some(), "if should carry an else body");
     }
 
     #[test]
@@ -558,8 +846,8 @@ implements ToJson for Dog {
             })
             .expect("external class target should remain an ImplementsFor item");
 
-        assert_eq!(imp.interface_target.expr.to_string(), "ToJson");
-        assert_eq!(imp.for_target.expr.to_string(), "Dog");
+        assert_eq!(imp.interface_target.to_string(), "ToJson");
+        assert_eq!(imp.for_target.to_string(), "Dog");
     }
 
     #[test]
@@ -599,7 +887,7 @@ implements ToJson for other.Dog {
                 _ => None,
             })
             .expect("qualified target should remain an ImplementsFor item");
-        assert_eq!(imp.for_target.expr.to_string(), "other.Dog");
+        assert_eq!(imp.for_target.to_string(), "other.Dog");
     }
 
     #[test]
@@ -639,7 +927,7 @@ implements ToJson for Dog<int> {
                 _ => None,
             })
             .expect("generic target should remain an ImplementsFor item");
-        assert_eq!(imp.for_target.expr.to_string(), "Dog<int>");
+        assert_eq!(imp.for_target.to_string(), "Dog<int>");
     }
 
     #[test]
@@ -820,8 +1108,8 @@ class Response {
         assert_eq!(method.attributes[0].args[0].value, "engine_ctx");
         let throws = method.throws.as_ref().expect("expected throws contract");
         assert_eq!(
-            throws.expr,
-            TypeExpr::Path {
+            throws.kind,
+            TypeExprKind::Path {
                 segments: vec![
                     baml_base::Name::new("baml"),
                     baml_base::Name::new("errors"),
@@ -856,7 +1144,7 @@ class InterfaceTwo {
             field
                 .type_expr
                 .as_ref()
-                .map(|te| te.expr.to_string())
+                .map(std::string::ToString::to_string)
                 .as_deref(),
             Some("string")
         );
@@ -935,8 +1223,8 @@ interface Response {
 
         let throws = method.throws.as_ref().expect("expected throws contract");
         assert_eq!(
-            throws.expr,
-            TypeExpr::Path {
+            throws.kind,
+            TypeExprKind::Path {
                 segments: vec![
                     baml_base::Name::new("baml"),
                     baml_base::Name::new("errors"),
@@ -1195,7 +1483,7 @@ function add(a: int, b: int) -> int {
         }
     }
 
-    // ── 4.5: TypeExpr::Rust is produced for $rust_type field type ────────────
+    // ── 4.5: TypeExprKind::Rust is produced for $rust_type field type ────────────
 
     #[test]
     fn field_with_rust_type_produces_type_expr_rust() {
@@ -1223,9 +1511,9 @@ class Media {
             .expect("expected _data field");
 
         match &field.type_expr {
-            Some(spanned) => match &spanned.expr {
-                TypeExpr::Rust { .. } => {}
-                other => panic!("expected TypeExpr::Rust, got {other:?}"),
+            Some(spanned) => match &spanned.kind {
+                TypeExprKind::Rust { .. } => {}
+                other => panic!("expected TypeExprKind::Rust, got {other:?}"),
             },
             None => panic!("expected a type expression for _data field"),
         }
@@ -1339,10 +1627,10 @@ class Media {
             assert!(data_field.is_some(), "expected _data field");
             assert!(
                 matches!(
-                    data_field.unwrap().type_expr.as_ref().map(|te| &te.expr),
-                    Some(TypeExpr::Rust { .. })
+                    data_field.unwrap().type_expr.as_ref().map(|te| &te.kind),
+                    Some(TypeExprKind::Rust { .. })
                 ),
-                "_data field should have TypeExpr::Rust"
+                "_data field should have TypeExprKind::Rust"
             );
         } else {
             panic!("expected Item::Class");
@@ -1361,9 +1649,9 @@ function f() -> int throws never {
             .throws
             .expect("expected throws clause to be lowered into FunctionDef.throws");
         assert!(
-            matches!(throws.expr, TypeExpr::Never { .. }),
-            "expected throws type to lower as TypeExpr::Never, got {:?}",
-            throws.expr
+            matches!(throws.kind, TypeExprKind::Never { .. }),
+            "expected throws type to lower as TypeExprKind::Never, got {:?}",
+            throws.kind
         );
     }
 
@@ -1504,20 +1792,26 @@ function f() -> int {
     #[test]
     fn type_expr_simple_optional() {
         let ta = first_type_alias(parse_and_lower("type T = int?\n"));
-        assert_eq!(ta.type_expr.unwrap().expr, type_expr!(Optional(Int)));
+        assert_eq!(
+            strip_spans(&ta.type_expr.unwrap()),
+            type_expr!(Optional(Int))
+        );
     }
 
     #[test]
     fn type_expr_simple_array() {
         let ta = first_type_alias(parse_and_lower("type T = int[]\n"));
-        assert_eq!(ta.type_expr.unwrap().expr, type_expr!(List(Int)));
+        assert_eq!(strip_spans(&ta.type_expr.unwrap()), type_expr!(List(Int)));
     }
 
     #[test]
     fn type_expr_array_optional() {
         // int[]? = Optional(List(Int))
         let ta = first_type_alias(parse_and_lower("type T = int[]?\n"));
-        assert_eq!(ta.type_expr.unwrap().expr, type_expr!(Optional(List(Int))));
+        assert_eq!(
+            strip_spans(&ta.type_expr.unwrap()),
+            type_expr!(Optional(List(Int)))
+        );
     }
 
     #[test]
@@ -1525,7 +1819,7 @@ function f() -> int {
         // string?[] = List(Optional(String))
         let ta = first_type_alias(parse_and_lower("type T = string?[]\n"));
         assert_eq!(
-            ta.type_expr.unwrap().expr,
+            strip_spans(&ta.type_expr.unwrap()),
             type_expr!(List(Optional(String)))
         );
     }
@@ -1535,7 +1829,7 @@ function f() -> int {
         // string?[]? = Optional(List(Optional(String)))
         let ta = first_type_alias(parse_and_lower("type T = string?[]?\n"));
         assert_eq!(
-            ta.type_expr.unwrap().expr,
+            strip_spans(&ta.type_expr.unwrap()),
             type_expr!(Optional(List(Optional(String))))
         );
     }
@@ -1544,7 +1838,10 @@ function f() -> int {
     fn type_expr_nested_int_array() {
         // int[][] = List(List(Int))
         let ta = first_type_alias(parse_and_lower("type T = int[][]\n"));
-        assert_eq!(ta.type_expr.unwrap().expr, type_expr!(List(List(Int))));
+        assert_eq!(
+            strip_spans(&ta.type_expr.unwrap()),
+            type_expr!(List(List(Int)))
+        );
     }
 
     #[test]
@@ -1552,7 +1849,7 @@ function f() -> int {
         // int[][][] = List(List(List(Int)))
         let ta = first_type_alias(parse_and_lower("type T = int[][][]\n"));
         assert_eq!(
-            ta.type_expr.unwrap().expr,
+            strip_spans(&ta.type_expr.unwrap()),
             type_expr!(List(List(List(Int))))
         );
     }
@@ -1567,10 +1864,10 @@ function f() -> int {
         ));
 
         let omitted_outer = omitted.type_expr.expect("expected type alias body");
-        let TypeExpr::Function { params, .. } = &omitted_outer.expr else {
+        let TypeExprKind::Function { params, .. } = &omitted_outer.kind else {
             panic!("expected outer function type for omitted case");
         };
-        let TypeExpr::Function { throws, .. } = &params[0].ty else {
+        let TypeExprKind::Function { throws, .. } = &params[0].ty.kind else {
             panic!("expected inner function type for omitted case");
         };
         assert!(
@@ -1579,14 +1876,17 @@ function f() -> int {
         );
 
         let explicit_outer = explicit.type_expr.expect("expected type alias body");
-        let TypeExpr::Function { params, .. } = &explicit_outer.expr else {
+        let TypeExprKind::Function { params, .. } = &explicit_outer.kind else {
             panic!("expected outer function type for explicit case");
         };
-        let TypeExpr::Function { throws, .. } = &params[0].ty else {
+        let TypeExprKind::Function { throws, .. } = &params[0].ty.kind else {
             panic!("expected inner function type for explicit case");
         };
         assert!(
-            matches!(throws.as_deref(), Some(TypeExpr::Never { .. })),
+            matches!(
+                throws.as_deref().map(|t| &t.kind),
+                Some(TypeExprKind::Never { .. })
+            ),
             "expected explicit nested throws never to be preserved, got {throws:?}"
         );
     }
@@ -1596,7 +1896,7 @@ function f() -> int {
         // (int | string)[] = List(Union(Int, String))
         let ta = first_type_alias(parse_and_lower("type T = (int | string)[]\n"));
         assert_eq!(
-            ta.type_expr.unwrap().expr,
+            strip_spans(&ta.type_expr.unwrap()),
             type_expr!(List(Union((Int), (String))))
         );
     }
@@ -1606,7 +1906,7 @@ function f() -> int {
         // (int | bool)[][] = List(List(Union(Int, Bool)))
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]\n"));
         assert_eq!(
-            ta.type_expr.unwrap().expr,
+            strip_spans(&ta.type_expr.unwrap()),
             type_expr!(List(List(Union((Int), (Bool)))))
         );
     }
@@ -1616,7 +1916,7 @@ function f() -> int {
         // (int | bool)[][]? = Optional(List(List(Union(Int, Bool))))
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]?\n"));
         assert_eq!(
-            ta.type_expr.unwrap().expr,
+            strip_spans(&ta.type_expr.unwrap()),
             type_expr!(Optional(List(List(Union((Int), (Bool))))))
         );
     }
@@ -1626,7 +1926,7 @@ function f() -> int {
         // (int | bool)?[] = List(Optional(Union(Int, Bool)))
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)?[]\n"));
         assert_eq!(
-            ta.type_expr.unwrap().expr,
+            strip_spans(&ta.type_expr.unwrap()),
             type_expr!(List(Optional(Union((Int), (Bool)))))
         );
     }
@@ -1803,7 +2103,7 @@ class Foo {
         assert_eq!(field.attributes[0].name.as_str(), "alias");
 
         // Type attribute: @stream.done should be on the TypeExpr
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
+        let type_expr = &field.type_expr.as_ref().expect("expected type expr");
         let type_attrs = type_expr.attrs();
         assert_eq!(
             type_attrs.len(),
@@ -1841,7 +2141,7 @@ class Foo {
 
         // Type attribute: @stream.done stays on the TypeExpr
         assert_eq!(
-            strip_spans(&field.type_expr.as_ref().expect("expected type expr").expr),
+            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
             type_expr!(Path("Fizz", Attr("stream.done")))
         );
     }
@@ -1860,10 +2160,10 @@ class Foo {
             .find(|f| f.name.as_str() == "bar")
             .expect("expected field 'bar'");
 
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
+        let type_expr = &field.type_expr.as_ref().expect("expected type expr");
         // Type should be Optional(Int)
         assert!(
-            matches!(type_expr, TypeExpr::Optional { .. }),
+            matches!(type_expr.kind, TypeExprKind::Optional { .. }),
             "expected Optional type, got {type_expr:?}",
         );
         // @stream.done should be a type attribute
@@ -1890,9 +2190,9 @@ class Foo {
             .find(|f| f.name.as_str() == "items")
             .expect("expected field 'items'");
 
-        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
+        let type_expr = &field.type_expr.as_ref().expect("expected type expr");
         assert!(
-            matches!(type_expr, TypeExpr::List { .. }),
+            matches!(type_expr.kind, TypeExprKind::List { .. }),
             "expected List type, got {type_expr:?}",
         );
         let type_attrs = type_expr.attrs();
@@ -1904,7 +2204,7 @@ class Foo {
         assert_eq!(type_attrs[0].name.as_str(), "stream.done");
         // Type attribute: @stream.done stays on the TypeExpr
         assert_eq!(
-            strip_spans(&field.type_expr.as_ref().expect("expected type expr").expr),
+            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
             type_expr!(WithAttrs((List(String)), Attr("stream.done")))
         );
     }
@@ -1958,7 +2258,7 @@ class C {
         let field = &class.fields[0];
         assert_eq!(field.attributes.len(), 1);
         assert_eq!(field.attributes[0].name.as_str(), "alias");
-        let te = &field.type_expr.as_ref().unwrap().expr;
+        let te = &field.type_expr.as_ref().unwrap();
         assert_eq!(te.attrs().len(), 1);
         assert_eq!(te.attrs()[0].name.as_str(), "stream.done");
     }
@@ -1978,8 +2278,8 @@ class C {
         assert_eq!(field.attributes.len(), 1);
         assert_eq!(field.attributes[0].name.as_str(), "alias");
         assert!(matches!(
-            &field.type_expr.as_ref().unwrap().expr,
-            TypeExpr::Union { attrs, .. } if attrs.is_empty()
+            &field.type_expr.as_ref().unwrap().kind,
+            TypeExprKind::Union { attrs, .. } if attrs.is_empty()
         ));
     }
 
@@ -2008,7 +2308,7 @@ class C {
         let class = first_class(parse_and_lower(source));
         let field = &class.fields[0];
         assert_eq!(
-            strip_spans(&field.type_expr.as_ref().expect("expected type expr").expr),
+            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
             type_expr!(Union(
                 (Union((Path("A")), (Path("B", Attr("stream.done"))))),
                 (Path("C"))
@@ -2031,7 +2331,7 @@ class C {
         let field = &class.fields[0];
 
         assert_eq!(
-            strip_spans(&field.type_expr.as_ref().expect("expected type expr").expr),
+            strip_spans(field.type_expr.as_ref().expect("expected type expr")),
             type_expr!(Union(
                 (Path("A")),
                 (Path("B")),
@@ -2052,5 +2352,160 @@ class C {
         let (_, diags) = parse_lower_validate(source);
         assert_eq!(diags.len(), 1, "expected 1 diagnostic, got {diags:?}");
         assert_eq!(diags[0].0, "alias");
+    }
+
+    // ─── BEP-049: backtick string literal lowering ────────────────────────────
+
+    fn extract_first_string_literal(items: Vec<Item>) -> String {
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _sm)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected root expr");
+        // Body is wrapped in a Block; find the tail or first statement string.
+        let candidate = match &body.exprs[root] {
+            Expr::Block {
+                tail_expr: Some(tail),
+                ..
+            } => *tail,
+            Expr::Block { stmts, .. } => match &body.stmts[stmts[0]] {
+                Stmt::Expr(expr_id) => *expr_id,
+                Stmt::Let {
+                    initializer: Some(init),
+                    ..
+                } => *init,
+                other => panic!("unexpected stmt: {other:?}"),
+            },
+            _ => root,
+        };
+        // An untagged backtick lowers to `Expr::Template`; its desugared
+        // realization (a string literal, for pure-text templates) lives in
+        // `TemplateTag::Default { elaborated }`.
+        let candidate = match &body.exprs[candidate] {
+            Expr::Template {
+                tag: crate::ast::TemplateTag::Default { elaborated },
+                ..
+            } => *elaborated,
+            _ => candidate,
+        };
+        match &body.exprs[candidate] {
+            Expr::Literal(baml_base::Literal::String(s)) => s.clone(),
+            other => panic!("expected string literal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn backtick_one_liner_lowers_to_string_literal() {
+        let source = "
+function Demo() -> string {
+    `hello world`
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "hello world");
+    }
+
+    #[test]
+    fn backtick_decodes_standard_escapes() {
+        let source = r#"
+function Demo() -> string {
+    `line\nbreak`
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "line\nbreak");
+    }
+
+    #[test]
+    fn backtick_escapes_backtick_and_dollar() {
+        let source = r#"
+function Demo() -> string {
+    `a\`b\${name}c`
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "a`b${name}c");
+    }
+
+    #[test]
+    fn backtick_multiline_dedents() {
+        let source = "
+function Demo() -> string {
+    `
+        line one
+        line two
+    `
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "line one\nline two");
+    }
+
+    #[test]
+    fn backtick_multi_tick_ladder_preserves_inner_ticks() {
+        let source = "
+function Demo() -> string {
+    ``inline `code` here``
+}
+";
+        let items = parse_and_lower(source);
+        assert_eq!(extract_first_string_literal(items), "inline `code` here");
+    }
+
+    #[test]
+    fn backtick_interpolation_lowers_to_concat_chain() {
+        // BEP §11: `Hello, ${name}!` is an untagged `Expr::Template` whose
+        // `Default { elaborated }` realization is the left-folded Binary Add
+        // chain ("Hello, " + name.to_string()) + "!" over the segments.
+        let source = "
+function Demo(name: string) -> string {
+    `Hello, ${name}!`
+}
+";
+        let items = parse_and_lower(source);
+        let function = first_function(items);
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("root");
+        let Expr::Block {
+            tail_expr: Some(tail),
+            ..
+        } = &body.exprs[root]
+        else {
+            panic!("expected Block at root, got {:?}", body.exprs[root]);
+        };
+        let Expr::Template {
+            tag: crate::ast::TemplateTag::Default { elaborated },
+            ..
+        } = &body.exprs[*tail]
+        else {
+            panic!(
+                "expected untagged Template at tail, got {:?}",
+                body.exprs[*tail]
+            );
+        };
+        let Expr::Binary { op, lhs, rhs } = &body.exprs[*elaborated] else {
+            panic!(
+                "expected Binary at elaborated root, got {:?}",
+                body.exprs[*elaborated]
+            );
+        };
+        assert!(matches!(op, crate::ast::BinaryOp::Add));
+        assert!(matches!(
+            &body.exprs[*rhs],
+            Expr::Literal(baml_base::Literal::String(s)) if s == "!"
+        ));
+        let Expr::Binary {
+            op: op2, lhs: lhs2, ..
+        } = &body.exprs[*lhs]
+        else {
+            panic!("expected nested Binary on lhs");
+        };
+        assert!(matches!(op2, crate::ast::BinaryOp::Add));
+        assert!(matches!(
+            &body.exprs[*lhs2],
+            Expr::Literal(baml_base::Literal::String(s)) if s == "Hello, "
+        ));
     }
 }

@@ -88,7 +88,7 @@ pub trait Db: baml_compiler2_tir::Db {}
 // ── Public API re-exports ─────────────────────────────────────────────────────
 
 pub use actions::{FileAction, FileActionKind, file_actions};
-pub use annotations::{AnnotationKind, InlineAnnotation, annotations};
+pub use annotations::{AnnotationKind, InlineAnnotation, file_annotations};
 // Re-export `DefinitionKind` so callers (e.g. bex_project) don't need to
 // depend on `baml_compiler2_hir` directly just for type conversions.
 pub use baml_compiler2_hir::contributions::DefinitionKind;
@@ -107,6 +107,8 @@ pub use listing::{
 };
 pub use outline::{OutlineItem, file_outline};
 pub use search::{SymbolInfo, search_symbols};
-pub use tokens::{SemanticToken, SemanticTokenType, TOKEN_TYPES, semantic_tokens};
+pub use tokens::{
+    ModifierSet, SemanticToken, SemanticTokenType, TOKEN_MODIFIERS, TOKEN_TYPES, semantic_tokens,
+};
 pub use type_info::{FunctionParamInfo, TypeInfo, type_at};
 pub use usages::usages_at;

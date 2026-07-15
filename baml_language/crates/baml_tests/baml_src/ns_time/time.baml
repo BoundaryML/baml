@@ -93,6 +93,21 @@ test "duration_from_seconds_to_milliseconds" {
     ))
 }
 
+test "duration_constructors_accept_int_and_bigint" {
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_nanoseconds(2).to_nanoseconds(), 2n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_nanoseconds(2n).to_nanoseconds(), 2n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_microseconds(2).to_nanoseconds(), 2000n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_microseconds(2n).to_nanoseconds(), 2000n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_milliseconds(2).to_nanoseconds(), 2000000n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_milliseconds(2n).to_nanoseconds(), 2000000n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_seconds(2).to_nanoseconds(), 2000000000n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_seconds(2n).to_nanoseconds(), 2000000000n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_minutes(2).to_nanoseconds(), 120000000000n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_minutes(2n).to_nanoseconds(), 120000000000n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_hours(2).to_nanoseconds(), 7200000000000n))
+    assert.is_true(baml.deep_equals(baml.time.Duration.from_hours(2n).to_nanoseconds(), 7200000000000n))
+}
+
 test "duration_since_is_nonnegative_for_past_instant" {
     assert.is_true(
         baml.time.Instant.parse("1970-01-01T00:00:00Z").elapsed().to_nanoseconds() > 0n

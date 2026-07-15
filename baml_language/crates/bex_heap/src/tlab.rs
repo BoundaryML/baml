@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use bex_vm_types::{
     HeapPtr, Object, Value,
-    types::{Instance, Variant},
+    types::{Array, Instance, Map, Variant},
 };
 use indexmap::IndexMap;
 
@@ -67,7 +67,7 @@ impl TlabChunk {
 ///
 /// // Fast allocation - just bumps pointer
 /// let ptr1 = tlab.alloc_string("hello".to_string());
-/// let ptr2 = tlab.alloc_array(vec![Value::int(1), Value::int(2)]);
+/// let ptr2 = tlab.alloc_array(baml_type::RealizedTy::int(), vec![Value::int(1), Value::int(2)]);
 ///
 /// // When chunk exhausted, refill gets a new region
 /// for _ in 0..2000 {
@@ -171,22 +171,44 @@ impl Tlab {
         self.alloc(Object::String(s.into()))
     }
 
-    /// Allocate an array object.
+    /// Allocate an array object whose elements have static type `element_ty`.
     #[inline]
-    pub fn alloc_array(&mut self, values: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Array(values.into()))
+    pub fn alloc_array(
+        &mut self,
+        element_ty: baml_type::RealizedTy,
+        values: Vec<Value>,
+    ) -> HeapPtr {
+        self.alloc(Object::Array(Array::new(element_ty, values)))
     }
 
-    /// Allocate a map object.
+    /// Allocate a map object whose keys/values have static types `key_ty`/`value_ty`.
     #[inline]
-    pub fn alloc_map(&mut self, values: IndexMap<bex_str::BexStr, Value>) -> HeapPtr {
-        self.alloc(Object::Map(values.into()))
+    pub fn alloc_map(
+        &mut self,
+        key_ty: baml_type::RealizedTy,
+        value_ty: baml_type::RealizedTy,
+        values: IndexMap<bex_str::BexStr, Value>,
+    ) -> HeapPtr {
+        self.alloc(Object::Map(Map::new(key_ty, value_ty, values)))
     }
 
-    /// Allocate an instance object.
+    /// Allocate a non-generic instance object (empty class type args).
     #[inline]
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
-        self.alloc(Object::Instance(Instance::new(class, vec![], fields)))
+        self.alloc_instance_with_type_args(class, Box::new([]), fields)
+    }
+
+    /// Allocate an instance object carrying its concrete class type args (De
+    /// Bruijn order). Used by the inbound FFI path to land a generic instance's
+    /// wire-supplied `type_args` into `Object::Instance::class_type_args`.
+    #[inline]
+    pub fn alloc_instance_with_type_args(
+        &mut self,
+        class: HeapPtr,
+        type_args: Box<[baml_type::RealizedTy]>,
+        fields: Vec<Value>,
+    ) -> HeapPtr {
+        self.alloc(Object::Instance(Instance::new(class, type_args, fields)))
     }
 
     /// Allocate a variant object.
@@ -222,7 +244,7 @@ impl Tlab {
 
     /// Allocate a type descriptor object on the heap.
     #[inline]
-    pub fn alloc_type(&mut self, ty: baml_type::RuntimeTy) -> HeapPtr {
+    pub fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
         self.alloc(Object::Type(Box::new(ty)))
     }
 
@@ -331,12 +353,17 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_string(s)
     }
 
-    fn alloc_array(&mut self, values: Vec<Value>) -> HeapPtr {
-        self.tlab_mut().alloc_array(values)
+    fn alloc_array(&mut self, element_ty: baml_type::RealizedTy, values: Vec<Value>) -> HeapPtr {
+        self.tlab_mut().alloc_array(element_ty, values)
     }
 
-    fn alloc_map(&mut self, values: IndexMap<bex_str::BexStr, Value>) -> HeapPtr {
-        self.tlab_mut().alloc_map(values)
+    fn alloc_map(
+        &mut self,
+        key_ty: baml_type::RealizedTy,
+        value_ty: baml_type::RealizedTy,
+        values: IndexMap<bex_str::BexStr, Value>,
+    ) -> HeapPtr {
+        self.tlab_mut().alloc_map(key_ty, value_ty, values)
     }
 
     fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
@@ -363,7 +390,7 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_collector(collector)
     }
 
-    fn alloc_type(&mut self, ty: baml_type::RuntimeTy) -> HeapPtr {
+    fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
         self.tlab_mut().alloc_type(ty)
     }
 
@@ -519,7 +546,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         let values = vec![Value::int(1), Value::int(2), Value::int(3)];
-        let ptr = tlab.alloc_array(values);
+        let ptr = tlab.alloc_array(baml_type::RealizedTy::int(), values);
 
         unsafe {
             match ptr.get() {
@@ -539,7 +566,11 @@ mod tests {
 
         let mut map = IndexMap::new();
         map.insert(bex_str::BexStr::from("key"), Value::int(42));
-        let ptr = tlab.alloc_map(map);
+        let ptr = tlab.alloc_map(
+            baml_type::RealizedTy::string(),
+            baml_type::RealizedTy::int(),
+            map,
+        );
 
         unsafe {
             match ptr.get() {
@@ -568,7 +599,7 @@ mod tests {
                     field_type: baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     },
-                    field_template: baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Int {
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
                         attr: baml_type::TyAttr::default(),
                     }),
                     description: None,
@@ -580,7 +611,7 @@ mod tests {
                     field_type: baml_type::RuntimeTy::Int {
                         attr: baml_type::TyAttr::default(),
                     },
-                    field_template: baml_type::TyTemplate::Concrete(baml_type::RuntimeTy::Int {
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
                         attr: baml_type::TyAttr::default(),
                     }),
                     description: None,
@@ -592,6 +623,8 @@ mod tests {
             alias: None,
             type_tag: 100,
             ty_attr: baml_type::TyAttr::default(),
+            has_cleanup: false,
+            generic_param_count: 0,
         })));
 
         // Allocate an instance of that class

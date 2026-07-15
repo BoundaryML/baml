@@ -362,6 +362,7 @@ mod tests {
             validate_host_return(
                 &BexExternalValue::Instance {
                     class_name: "User".to_string(),
+                    type_args: vec![],
                     fields: IndexMap::new(),
                 },
                 &user,
@@ -373,6 +374,7 @@ mod tests {
             validate_host_return(
                 &BexExternalValue::Instance {
                     class_name: "Other".to_string(),
+                    type_args: vec![],
                     fields: IndexMap::new(),
                 },
                 &user,
@@ -397,8 +399,6 @@ mod tests {
     #[test]
     fn function_type_accepts_only_callables() {
         let fn_ty = RuntimeTy::Function {
-            generic_params: vec![],
-            generic_param_bounds: vec![],
             params: vec![RuntimeFunctionParamTy::required(None, RuntimeTy::int())],
             ret: Box::new(RuntimeTy::string()),
             throws: Box::new(RuntimeTy::null()),

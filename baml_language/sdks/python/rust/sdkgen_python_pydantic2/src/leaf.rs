@@ -9,10 +9,11 @@ use std::{
 
 use baml_base::Literal;
 use baml_codegen_types::{DefaultLiteral, FunctionArgumentDefault, Ty};
+use indexmap::IndexMap;
 
 use crate::{
     emit::{
-        EmittedSymbol, SortKey,
+        EmittedSymbol, SortKey, bare_callable_name,
         function::{PyFunction, SyncAsync},
         method::{MethodKind, PyMethodBinding},
     },
@@ -39,6 +40,19 @@ impl LeafBody {
             .map(|(s, _)| s.py_name())
             .filter(|n| !n.starts_with('_'))
             .collect()
+    }
+
+    pub(crate) fn callable_child_names(&self, kids: &BTreeSet<String>) -> BTreeSet<String> {
+        let mut out = BTreeSet::new();
+        for (sym, _) in &self.symbols {
+            let EmittedSymbol::Function(f) = sym else {
+                continue;
+            };
+            if f.mode == SyncAsync::Sync && kids.contains(&f.py_name) {
+                out.insert(f.py_name.clone());
+            }
+        }
+        out
     }
 
     pub(crate) fn stdlib_imports(&self) -> Vec<&'static str> {
@@ -102,7 +116,7 @@ impl LeafBody {
 
     /// True when any class field, function/method param, or return type
     /// in this leaf is `Ty::RustType` — i.e. needs the
-    /// `from baml_core import BamlPyHandle as _BamlPyHandle` line.
+    /// `from baml_bridge import BamlPyHandle as _BamlPyHandle` line.
     pub(crate) fn needs_baml_pyhandle(&self) -> bool {
         fn ty_uses_rust_type(ty: &Ty) -> bool {
             match ty {
@@ -142,6 +156,63 @@ impl LeafBody {
 
     pub(crate) fn is_empty(&self) -> bool {
         self.symbols.is_empty()
+    }
+
+    /// The optional-argument `Ty::Callable`s reachable from this leaf's
+    /// function/method/field signatures, in deterministic first-seen order,
+    /// each paired with the `_<owner>__<param>` prefix for its Protocol name
+    /// (`render_leaf_body_pyi` appends a per-prefix counter, giving e.g.
+    /// `_call_optional_int_callback_supplied__callback1`). Each is rendered as a
+    /// named `typing.Protocol` in the `.pyi` (see `render_callback_protocol`),
+    /// because a `typing.Callable[[…], R]` type can't express per-parameter
+    /// optionality.
+    ///
+    /// Type aliases are skipped: they render via the shared `.py`/`.pyi`
+    /// `render_type_alias` (which has no Protocol map), so a callable alias
+    /// falls back to `typing.Callable[..., R]` rather than referencing a
+    /// Protocol — collecting one here would emit an unused class.
+    pub(crate) fn callback_protocols(&self) -> Vec<(Ty, String)> {
+        let mut seen: std::collections::HashSet<Ty> = std::collections::HashSet::new();
+        let mut out: Vec<(Ty, String)> = Vec::new();
+        for (sym, _) in &self.symbols {
+            match sym {
+                EmittedSymbol::Class(c) => {
+                    for prop in &c.properties {
+                        let base = format!("_{}__{}", c.py_name, prop.name);
+                        collect_optional_callables(&prop.ty, &base, &mut seen, &mut out);
+                    }
+                    for m in c.static_methods.iter().chain(&c.instance_methods) {
+                        // `bare_callable_name` applies the companion `$` rule
+                        // (`$stream` → `_stream`, `$<other>` → `__<other>`) so the
+                        // Protocol identifier stays a valid Python name.
+                        let owner = bare_callable_name(fqn_leaf(&m.baml_fqn));
+                        for arg in &m.required_args {
+                            let base = format!("_{owner}__{}", arg.name);
+                            collect_optional_callables(&arg.ty, &base, &mut seen, &mut out);
+                        }
+                        for arg in &m.optional_args {
+                            let base = format!("_{owner}__{}", arg.name);
+                            collect_optional_callables(&arg.ty, &base, &mut seen, &mut out);
+                        }
+                        let base = format!("_{owner}__ret");
+                        collect_optional_callables(&m.return_ty, &base, &mut seen, &mut out);
+                    }
+                }
+                EmittedSymbol::Function(f) => {
+                    // See the method case: normalize the companion `$` suffix so
+                    // the Protocol identifier is a valid Python name.
+                    let owner = bare_callable_name(fqn_leaf(&f.baml_fqn));
+                    for (name, ty) in f.param_names.iter().zip(f.arg_tys.iter()) {
+                        let base = format!("_{owner}__{name}");
+                        collect_optional_callables(ty, &base, &mut seen, &mut out);
+                    }
+                    let base = format!("_{owner}__ret");
+                    collect_optional_callables(&f.return_ty, &base, &mut seen, &mut out);
+                }
+                EmittedSymbol::TypeAlias(_) | EmittedSymbol::Enum(_) => {}
+            }
+        }
+        out
     }
 
     /// Root imports referenced by this leaf, in two buckets. Every
@@ -426,19 +497,56 @@ impl RootImportSets {
     }
 }
 
-/// Walk a `Ty` and record every reference it carries that needs to be
-/// imported through the SDK root:
-///
-/// - References whose routed leaf differs from `current` and has at
-///   least one segment go into `segments` (first segment only — the
-///   first-segment module is imported via the root, then the type is
-///   accessed via the dotted form `<seg>.<rest>.Symbol`).
-/// - References whose routed leaf is empty (root namespace) and
-///   `current` is non-root go into `root_names` (bare type name — the
-///   translator emits these references as the bare name and relies on
-///   a `from <root_dots> import <Name>` line to bring it into scope).
-/// - Same-leaf references are skipped — translator emits them as bare
-///   names and the symbol is locally defined.
+/// The last `.`-separated segment of a BAML FQN — the unqualified
+/// function/method name, used as the owner part of a callback Protocol name.
+fn fqn_leaf(fqn: &str) -> &str {
+    fqn.rsplit('.').next().unwrap_or(fqn)
+}
+
+/// Recursively collect every optional-argument `Ty::Callable` reachable from
+/// `ty`, in first-seen order, skipping duplicates (`seen`). Each is paired with
+/// `base` — the `_<owner>__<param>` prefix for its Protocol name (the final
+/// name appends a per-base counter in `LeafBody::callback_protocols`). Children
+/// are visited before the enclosing callable so nested callbacks get earlier
+/// names.
+fn collect_optional_callables(
+    ty: &Ty,
+    base: &str,
+    seen: &mut std::collections::HashSet<Ty>,
+    out: &mut Vec<(Ty, String)>,
+) {
+    match ty {
+        Ty::List(inner) => collect_optional_callables(inner, base, seen, out),
+        Ty::Map { key, value } => {
+            collect_optional_callables(key, base, seen, out);
+            collect_optional_callables(value, base, seen, out);
+        }
+        Ty::Union(items) => {
+            for item in items {
+                collect_optional_callables(item, base, seen, out);
+            }
+        }
+        Ty::Class(_, args) => {
+            for a in args {
+                collect_optional_callables(a, base, seen, out);
+            }
+        }
+        Ty::Callable { params, ret } => {
+            for p in params {
+                collect_optional_callables(&p.ty, base, seen, out);
+            }
+            collect_optional_callables(ret, base, seen, out);
+            let has_optional = params
+                .iter()
+                .any(|p| p.mode == baml_codegen_types::CodegenFunctionParamMode::Optional);
+            if has_optional && seen.insert(ty.clone()) {
+                out.push((ty.clone(), base.to_string()));
+            }
+        }
+        _ => {}
+    }
+}
+
 fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
     match ty {
         Ty::Class(name, args) => {
@@ -474,7 +582,7 @@ fn collect_root_imports(ty: &Ty, current: &LeafPath, out: &mut RootImportSets) {
         // `media` as an attribute of `baml` for the dotted access.
         //
         // `Ty::RustType` renders as `_BamlPyHandle` and gets its own
-        // `from baml_core import BamlPyHandle as _BamlPyHandle`
+        // `from baml_bridge import BamlPyHandle as _BamlPyHandle`
         // line via `needs_baml_pyhandle` — it does *not* go through
         // the cross-leaf segment set.
         Ty::Media(_) => {
@@ -625,10 +733,10 @@ fn render_class_bases(generic_params: &[String]) -> String {
 ///
 /// `baml.media.{Image,Video,Audio,Pdf}` (15b §lines 14-19): re-exports
 /// of `PyO3` types holding `Arc<MediaValue>` directly — live in
-/// `baml_core.baml_py` (the `PyO3` extension module).
+/// `baml_bridge.baml_py` (the `PyO3` extension module).
 ///
-/// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_core`
-/// (`sdks/python/src/baml_core/_stream.py`). Lives outside the `PyO3`
+/// `baml.llm.Stream`: pure-Python wrapper re-exported from `baml_bridge`
+/// (`sdks/python/src/baml_bridge/_stream.py`). Lives outside the `PyO3`
 /// module because nothing on the call path needed Rust — the args
 /// encoder, runtime accessor, and result decoder are all already
 /// exposed to Python.
@@ -636,11 +744,11 @@ fn media_reexport_rust_name(
     c: &crate::emit::class::PyClass,
 ) -> Option<(&'static str, &'static str)> {
     match c.source.to_string().as_str() {
-        "baml.media.Image" => Some(("baml_core.baml_py", "BamlImage")),
-        "baml.media.Video" => Some(("baml_core.baml_py", "BamlVideo")),
-        "baml.media.Audio" => Some(("baml_core.baml_py", "BamlAudio")),
-        "baml.media.Pdf" => Some(("baml_core.baml_py", "BamlPdf")),
-        "baml.llm.Stream" => Some(("baml_core", "BamlStream")),
+        "baml.media.Image" => Some(("baml_bridge.baml_py", "BamlImage")),
+        "baml.media.Video" => Some(("baml_bridge.baml_py", "BamlVideo")),
+        "baml.media.Audio" => Some(("baml_bridge.baml_py", "BamlAudio")),
+        "baml.media.Pdf" => Some(("baml_bridge.baml_py", "BamlPdf")),
+        "baml.llm.Stream" => Some(("baml_bridge", "BamlStream")),
         _ => None,
     }
 }
@@ -774,7 +882,10 @@ struct TypeAliasTypePy {
 /// `source_method_root` with the previous one (sync/async/companion
 /// fan-out). The first method also gets `true` — the template emits
 /// the leading blank line unconditionally.
-fn build_method_line_views(methods: &[PyMethodBinding]) -> Vec<MethodLineView> {
+fn build_method_line_views(
+    methods: &[PyMethodBinding],
+    class_generic_params: &[String],
+) -> Vec<MethodLineView> {
     let mut out = Vec::with_capacity(methods.len());
     let mut prev_root: Option<&str> = None;
     for m in methods {
@@ -784,7 +895,7 @@ fn build_method_line_views(methods: &[PyMethodBinding]) -> Vec<MethodLineView> {
             Some(p) => p == root,
         };
         out.push(MethodLineView {
-            line: render_method_binding(m),
+            line: render_method_binding(m, class_generic_params),
             tight_to_prev,
         });
         prev_root = Some(root);
@@ -799,6 +910,9 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
         current_leaf: leaf.clone(),
         self_ref: None,
         defer_name_refs: false,
+        // Runtime `.py`: callback Protocols are stub-only, so optional-arg
+        // callables widen to `typing.Callable[..., R]` here.
+        callback_protocols: None,
     };
 
     match s {
@@ -807,7 +921,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 // 25b2 Phase 4: media re-export is now a pure import
                 // line. The engine FQN lives only in `_TYPE_MAP`'s
                 // reverse map (seeded with the PyO3 identity →
-                // `baml.media.*` overrides in `baml_core/typemap.py`).
+                // `baml.media.*` overrides in `baml_bridge/typemap.py`).
                 return format!(
                     "from {module} import {rust_name} as {py_name}\n",
                     py_name = c.py_name,
@@ -837,8 +951,8 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath) -> String {
                 bases: render_class_bases(&c.generic_params),
                 docstring,
                 properties,
-                static_methods: build_method_line_views(&c.static_methods),
-                instance_methods: build_method_line_views(&c.instance_methods),
+                static_methods: build_method_line_views(&c.static_methods, &c.generic_params),
+                instance_methods: build_method_line_views(&c.instance_methods, &c.generic_params),
             }
             .render()
             .expect("class_body template should always render");
@@ -955,6 +1069,10 @@ fn render_type_alias(a: &crate::emit::type_alias::PyTypeAlias, leaf: &LeafPath) 
         // globals. Pydantic resolves the strings later when it walks
         // the alias.
         defer_name_refs: a.recursive,
+        // Alias bodies are shared between `.py` and `.pyi`; a callable alias
+        // with optional params widens to `typing.Callable[..., R]` rather than
+        // referencing a stub-only Protocol.
+        callback_protocols: None,
     };
     let rhs = translate_ty(&a.resolves_to, &ctx);
     if a.recursive {
@@ -1002,8 +1120,11 @@ fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
     let (required_params, optional_params) = split_param_names(&f.param_names, &f.arg_defaults, 0);
     let required_params = render_param_list(&required_params);
     let optional_params = optional_param_list_arg(&optional_params);
+    // Free functions have no enclosing class, so only their own `<...>` params
+    // (bound via `_types=`) participate.
+    let generic_kwargs = render_generic_kwargs(&f.generic_params, &[]);
     format!(
-        "{name}{lhs_pad} = _define_function({fqn}, {mode_str} {required_params}{optional_params})",
+        "{name}{lhs_pad} = _define_function({fqn}, {mode_str} {required_params}{optional_params}{generic_kwargs})",
         name = f.py_name,
         fqn = py_string(&f.baml_fqn),
     )
@@ -1012,7 +1133,7 @@ fn render_factory_binding(f: &crate::emit::function::PyFunction) -> String {
 /// One method-binding line, indented for a class body. Mirrors
 /// `render_factory_binding` modulo the factory alias and the
 /// `staticmethod(...)` wrap on statics.
-fn render_method_binding(m: &PyMethodBinding) -> String {
+fn render_method_binding(m: &PyMethodBinding, class_generic_params: &[String]) -> String {
     let (lhs_pad, mode_str) = match m.mode {
         SyncAsync::Sync => ("      ", "\"sync\", "),
         SyncAsync::Async => ("", "\"async\","),
@@ -1021,8 +1142,16 @@ fn render_method_binding(m: &PyMethodBinding) -> String {
     let optional_params = m.optional_names();
     let required_params = render_param_list(&required_params);
     let optional_params = optional_param_list_arg(&optional_params);
+    // Instance methods recover the enclosing class's TypeVars from the `self`
+    // receiver; static methods have no receiver, so only their own `<...>`
+    // params (via `_types=`) bind.
+    let class_type_params: &[String] = match m.kind {
+        MethodKind::Instance => class_generic_params,
+        MethodKind::Static => &[],
+    };
+    let generic_kwargs = render_generic_kwargs(&m.generic_params, class_type_params);
     let inner = format!(
-        "_define_function({fqn}, {mode_str} {required_params}{optional_params})",
+        "_define_function({fqn}, {mode_str} {required_params}{optional_params}{generic_kwargs})",
         fqn = py_string(&m.baml_fqn),
     );
     // `staticmethod(...)` wrap stops Python's descriptor protocol from
@@ -1056,6 +1185,26 @@ fn optional_param_list_arg(names: &[String]) -> String {
     } else {
         format!(", {}", render_param_list(names))
     }
+}
+
+/// Trailing `_define_function` kwargs that turn on host-side `TypeVar` binding:
+/// `type_params` (the callee's own `<...>` params, bound via `_types=`) and
+/// `class_type_params` (the enclosing generic class's params, recovered from
+/// the `self` receiver). Empty string when the callee binds nothing.
+fn render_generic_kwargs(type_params: &[String], class_type_params: &[String]) -> String {
+    let mut s = String::new();
+    if !type_params.is_empty() {
+        write!(s, ", type_params={}", render_param_list(type_params)).unwrap();
+    }
+    if !class_type_params.is_empty() {
+        write!(
+            s,
+            ", class_type_params={}",
+            render_param_list(class_type_params)
+        )
+        .unwrap();
+    }
+    s
 }
 
 fn split_param_names(
@@ -1096,7 +1245,7 @@ fn required_positional_count(
 ///     ...
 /// ]
 /// ```
-pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
+pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<String>) -> String {
     if body.is_empty() {
         return String::new();
     }
@@ -1104,6 +1253,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     let mut out = String::new();
 
     let mut stdlibs = body.stdlib_imports();
+    if !callable_child_names.is_empty() && !stdlibs.contains(&"importlib") {
+        stdlibs.push("importlib");
+    }
     let root_imports = body.root_imports_py();
     let root_segments = &root_imports.segments;
     let root_names = &root_imports.root_names;
@@ -1115,7 +1267,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     }
     // Generic functions emit `T = typing.TypeVar("T")` lines below; the
     // `Class`/`TypeAlias` rule in `stdlib_imports` doesn't catch the
-    // function-only-but-generic case (e.g. stdlib `baml.unstable.string<T>`).
+    // function-only-but-generic case (e.g. stdlib `string.from<T>`).
     if !body.generic_typevars().is_empty() && !stdlibs.contains(&"typing") {
         stdlibs.push("typing");
     }
@@ -1173,7 +1325,7 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         }
     }
     let _ = (root_segments, root_names);
-    // Factory imports use absolute paths (`baml_core` is a
+    // Factory imports use absolute paths (`baml_bridge` is a
     // separate installed package, not reachable from this SDK tree)
     // with a `_` alias to keep them private to the module.
     //
@@ -1193,9 +1345,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         out.push('\n');
         if runtime_imports.len() == 1 {
             let (original, alias) = runtime_imports[0];
-            writeln!(out, "from baml_core import {original} as {alias}").unwrap();
+            writeln!(out, "from baml_bridge import {original} as {alias}").unwrap();
         } else {
-            out.push_str("from baml_core import (\n");
+            out.push_str("from baml_bridge import (\n");
             for (original, alias) in &runtime_imports {
                 writeln!(out, "    {original} as {alias},").unwrap();
             }
@@ -1204,14 +1356,14 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     }
 
     // The `BamlError` / `BamlPanic` wrappers and optional-argument sentinel
-    // are defined in `baml_core` and
+    // are defined in `baml_bridge` and
     // re-exported on the top-level `baml` builtins package so user code can
     // `from baml_sdk.baml import BamlError, BamlPanic, UNSET`.
     let is_baml_builtins_root = body.leaf.segments == ["baml"];
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, Unset as Unset, UNSET as UNSET\n",
+            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -1248,6 +1400,32 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
         prev = Some((key, sym));
     }
 
+    if !callable_child_names.is_empty() {
+        out.push_str("\n\n");
+        for (idx, name) in callable_child_names.iter().enumerate() {
+            if idx > 0 {
+                out.push('\n');
+            }
+            let module_var = format!("_{name}_namespace");
+            writeln!(
+                out,
+                "{module_var} = importlib.import_module(\".{name}\", __name__)"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "for _baml_child_name in getattr({module_var}, \"__all__\", ()):"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "    setattr({name}, _baml_child_name, getattr({module_var}, _baml_child_name))"
+            )
+            .unwrap();
+            writeln!(out, "del {module_var}").unwrap();
+        }
+    }
+
     // 25b2 Phase 4: per-leaf `_register_*` trailers are gone. The
     // codegen-emitted `baml_sdk/_typemap.py` carries every FQN → leaf
     // lazy entry; `set_type_map(_TYPE_MAP)` in the root init installs
@@ -1259,7 +1437,6 @@ pub(crate) fn render_leaf_body(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         names.push("BamlError");
         names.push("BamlPanic");
-        names.push("Unset");
         names.push("UNSET");
     }
     if !names.is_empty() {
@@ -1327,7 +1504,21 @@ fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     } else {
         ""
     };
-    let typed_params = render_method_params_pyi(m, ctx);
+    let mut typed_params = render_method_params_pyi(m, ctx);
+    // A method with its OWN generic params (`pair_with<U>`, static `new<T>`)
+    // requires the caller to bind them via a keyword-only `_types=` dict (the
+    // class's TypeVars ride the receiver, not `_types=`). Mirror the runtime
+    // requirement in the stub. Instance methods always have a `self` param, and
+    // statics with own generics always have at least one value param, so
+    // `typed_params` is never empty here.
+    if !m.generic_params.is_empty() {
+        if m.optional_args.is_empty() {
+            typed_params.push_str(", *, _types: dict[str, type]");
+        } else {
+            // optionals already introduced the `*` keyword-only marker.
+            typed_params.push_str(", _types: dict[str, type]");
+        }
+    }
     let ret_py = translate_ty(&m.return_ty, ctx);
     // 32d: methods carry their `Raises:` block in the `.pyi` only (no runtime
     // `.py` __doc__ trailer for methods). No-op when the method throws nothing.
@@ -1378,12 +1569,17 @@ fn build_method_block_views(
 /// their variant lines verbatim; type aliases mirror the `.py` shape;
 /// functions render as typed `def`/`async def` signatures. An empty
 /// class (no fields, no methods) collapses to `class Foo(...): ...`.
-fn render_symbol_pyi(s: &EmittedSymbol, leaf: &LeafPath) -> String {
+fn render_symbol_pyi(
+    s: &EmittedSymbol,
+    leaf: &LeafPath,
+    callback_protocols: Option<&std::rc::Rc<IndexMap<Ty, String>>>,
+) -> String {
     use askama::Template;
     let ctx = TranslateCtx {
         current_leaf: leaf.clone(),
         self_ref: None,
         defer_name_refs: false,
+        callback_protocols: callback_protocols.cloned(),
     };
 
     match s {
@@ -1505,13 +1701,33 @@ fn render_typed_method_arguments(m: &PyMethodBinding, ctx: &TranslateCtx) -> Str
     s
 }
 
+fn render_function_params_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
+    let mut typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
+    // A generic free function requires the caller to bind every TypeVar via a
+    // keyword-only `_types=` dict (the runtime enforces this; the stub mirrors
+    // it so type checkers flag a missing/positional binding). Methods get their
+    // own surface in 01pt5.
+    if !f.generic_params.is_empty() {
+        let has_kwonly_marker = f.arg_defaults.iter().any(Option::is_some);
+        if has_kwonly_marker {
+            // optionals already introduced a `*` keyword-only marker.
+            typed_params.push_str(", _types: dict[str, type]");
+        } else if typed_params.is_empty() {
+            typed_params.push_str("*, _types: dict[str, type]");
+        } else {
+            typed_params.push_str(", *, _types: dict[str, type]");
+        }
+    }
+    typed_params
+}
+
 fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     let async_kw = if matches!(f.mode, SyncAsync::Async) {
         "async "
     } else {
         ""
     };
-    let typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
+    let typed_params = render_function_params_pyi(f, ctx);
     let ret_py = translate_ty(&f.return_ty, ctx);
     // 32d: append the `Raises:` block to the stub docstring (a no-op when the
     // function throws nothing; flips `: ...` into a docstring body when it
@@ -1530,6 +1746,63 @@ fn render_function_signature_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
             name = f.py_name
         ),
     }
+}
+
+fn render_callable_child_protocol_pyi(
+    name: &str,
+    parent_fn: &PyFunction,
+    child_body: &LeafBody,
+    parent_leaf: &LeafPath,
+    callback_protocols: Option<&std::rc::Rc<IndexMap<Ty, String>>>,
+) -> String {
+    let parent_ctx = TranslateCtx {
+        current_leaf: parent_leaf.clone(),
+        self_ref: None,
+        defer_name_refs: false,
+        callback_protocols: callback_protocols.cloned(),
+    };
+    let child_ctx = TranslateCtx {
+        current_leaf: child_body.leaf.clone(),
+        self_ref: None,
+        defer_name_refs: false,
+        callback_protocols: callback_protocols.cloned(),
+    };
+    let protocol_name = callable_child_protocol_name(name);
+    let mut out = format!("class {protocol_name}(typing.Protocol):\n");
+    out.push_str(&render_protocol_function_method_pyi(
+        "__call__",
+        parent_fn,
+        &parent_ctx,
+    ));
+    for (sym, _) in &child_body.symbols {
+        if let EmittedSymbol::Function(f) = sym {
+            out.push_str(&render_protocol_function_method_pyi(
+                &f.py_name, f, &child_ctx,
+            ));
+        }
+    }
+    writeln!(out, "\n{name}: {protocol_name}").unwrap();
+    out
+}
+
+fn callable_child_protocol_name(name: &str) -> String {
+    format!("_BamlCallableNamespace_{name}")
+}
+
+fn render_protocol_function_method_pyi(name: &str, f: &PyFunction, ctx: &TranslateCtx) -> String {
+    let async_kw = if matches!(f.mode, SyncAsync::Async) {
+        "async "
+    } else {
+        ""
+    };
+    let typed_params = render_function_params_pyi(f, ctx);
+    let params = if typed_params.is_empty() {
+        "self".to_string()
+    } else {
+        format!("self, {typed_params}")
+    };
+    let ret_py = translate_ty(&f.return_ty, ctx);
+    format!("    {async_kw}def {name}({params}) -> {ret_py}: ...\n")
 }
 
 fn render_typed_params(
@@ -1561,6 +1834,37 @@ fn render_typed_params(
     s
 }
 
+/// Render one callback `typing.Protocol` block: a single-method Protocol whose
+/// `__call__` carries the callable's precise signature. Required params are
+/// positional; optional params (the `?` marker on a BAML callable type) get an
+/// Ellipsis default (`= ...`) so a host callback that either supplies or omits
+/// them type-checks. Unlike an optional *function* argument there is no
+/// `UNSET` sentinel: BAML invokes the callback positionally, and the
+/// callback's own language-level default fills any omitted trailing arg.
+fn render_callback_protocol(
+    name: &str,
+    params: &[baml_codegen_types::CallableParam],
+    ret: &Ty,
+    ctx: &TranslateCtx,
+) -> String {
+    let mut sig = String::from("self");
+    for (idx, p) in params.iter().enumerate() {
+        let pname = p
+            .name
+            .as_ref()
+            .map(|n| n.as_str().to_string())
+            .unwrap_or_else(|| format!("arg{idx}"));
+        let pty = translate_ty(&p.ty, ctx);
+        if p.mode == baml_codegen_types::CodegenFunctionParamMode::Optional {
+            write!(sig, ", {pname}: {pty} = ...").unwrap();
+        } else {
+            write!(sig, ", {pname}: {pty}").unwrap();
+        }
+    }
+    let ret_py = translate_ty(ret, ctx);
+    format!("class {name}(typing.Protocol):\n    def __call__({sig}) -> {ret_py}: ...\n")
+}
+
 fn render_param_pyi(
     name: &str,
     ty: &Ty,
@@ -1581,20 +1885,24 @@ fn render_param_pyi(
 }
 
 fn with_unset_union(ty_py: &str) -> String {
+    // `UNSET` is a PEP 661 sentinel that doubles as its own type. Type
+    // checkers only accept a sentinel in a type expression when it is a bare
+    // name, so the leaf imports `UNSET` directly (see `render_leaf_body_pyi`)
+    // and we reference it unqualified here rather than as `baml.UNSET`.
     if let Some(inner) = ty_py
         .strip_prefix("typing.Union[")
         .and_then(|inner| inner.strip_suffix(']'))
     {
-        format!("typing.Union[{inner}, baml.Unset]")
+        format!("typing.Union[{inner}, UNSET]")
     } else if let Some(inner) = ty_py
         .strip_prefix("typing.Optional[")
         .and_then(|inner| inner.strip_suffix(']'))
     {
         // `Optional[X]` is `Union[X, None]`; flatten so a nullable keyword
-        // argument composes into a single `Union[X, None, baml.Unset]`.
-        format!("typing.Union[{inner}, None, baml.Unset]")
+        // argument composes into a single `Union[X, None, UNSET]`.
+        format!("typing.Union[{inner}, None, UNSET]")
     } else {
-        format!("typing.Union[{ty_py}, baml.Unset]")
+        format!("typing.Union[{ty_py}, UNSET]")
     }
 }
 
@@ -1606,7 +1914,7 @@ fn render_default_pyi(default: &FunctionArgumentDefault) -> String {
         }
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyList) => "[]".to_string(),
         FunctionArgumentDefault::Literal(DefaultLiteral::EmptyMap) => "{}".to_string(),
-        FunctionArgumentDefault::Expression { .. } => "baml.UNSET".to_string(),
+        FunctionArgumentDefault::Expression { .. } => "UNSET".to_string(),
     }
 }
 
@@ -1622,10 +1930,13 @@ fn render_literal_default(lit: &Literal) -> String {
 }
 
 /// Mirrors `render_leaf_body` with these differences: no
-/// `baml_core` factory imports; `typing` is needed whenever a
+/// `baml_bridge` factory imports; `typing` is needed whenever a
 /// signature is present (`needs_typing_pyi`); `enum` and `pydantic`
 /// follow the `.py` rule.
-pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
+pub(crate) fn render_leaf_body_pyi(
+    body: &LeafBody,
+    callable_child_bodies: &BTreeMap<String, &LeafBody>,
+) -> String {
     if body.is_empty() {
         return String::new();
     }
@@ -1642,15 +1953,21 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     // type checkers and keeps the stub minimal.
     let mut rel_imports = body.all_rel_imports_py();
     if body.has_defaulted_call_params() && body.leaf.segments != ["baml"] {
+        // Optional arguments annotate as `typing.Union[..., UNSET]` and
+        // default to `UNSET`. The sentinel must be a bare name in the type
+        // expression (type checkers reject `baml.UNSET` member access there),
+        // so import it directly from the `baml` builtins package rather than
+        // importing the package and using attribute access.
         rel_imports.push(RelImport {
             depth: body.leaf.segments.len() + 1,
-            from_path: String::new(),
-            anchor: "baml".to_string(),
+            from_path: "baml".to_string(),
+            anchor: "UNSET as UNSET".to_string(),
         });
         rel_imports.sort();
         rel_imports.dedup();
     }
-    let needs_typing = body.needs_typing_pyi() || !rel_imports.is_empty();
+    let needs_typing =
+        body.needs_typing_pyi() || !rel_imports.is_empty() || !callable_child_bodies.is_empty();
     let needs_typing_extensions = body.has_recursive_alias();
     let needs_pydantic = body.needs_pydantic();
     let has_stdlib_block = needs_enum || needs_typing || needs_typing_extensions || needs_pydantic;
@@ -1682,7 +1999,7 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     // can resolve `$rust_type` field annotations.
     if body.needs_baml_pyhandle() {
         out.push('\n');
-        out.push_str("from baml_core import BamlPyHandle as _BamlPyHandle\n");
+        out.push_str("from baml_bridge import BamlPyHandle as _BamlPyHandle\n");
     }
 
     // Mirror the `.py` re-export so `from baml_sdk.baml import BamlError,
@@ -1691,7 +2008,7 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         out.push('\n');
         out.push_str(
-            "from baml_core import BamlError as BamlError, BamlPanic as BamlPanic, Unset as Unset, UNSET as UNSET\n",
+            "from baml_bridge import BamlError as BamlError, BamlPanic as BamlPanic, UNSET as UNSET\n",
         );
     }
 
@@ -1705,11 +2022,73 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
         }
     }
 
+    // Callback Protocols: each optional-argument callable in the leaf gets a
+    // `typing.Protocol` with a `__call__` carrying its precise signature, named
+    // `_BamlCallback{n}`. Signatures below reference these by name. Emitted
+    // before the symbols that use them; the shared map lets nested callbacks
+    // resolve to each other's Protocol names.
+    let protocol_tys = body.callback_protocols();
+    let callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>> = if protocol_tys.is_empty() {
+        None
+    } else {
+        // Final name = `<base><n>`, where `n` is a per-base 1-based counter
+        // (usually 1; >1 only when one parameter's type nests multiple
+        // optional-arg callables under the same `_<owner>__<param>` prefix).
+        // `IndexMap` keeps deterministic (insertion-order) iteration so the
+        // emitted Protocols are stable across runs.
+        let mut base_counts: IndexMap<String, usize> = IndexMap::new();
+        let mut map: IndexMap<Ty, String> = IndexMap::new();
+        for (ty, base) in &protocol_tys {
+            let n = base_counts.entry(base.clone()).or_insert(0);
+            *n += 1;
+            map.insert(ty.clone(), format!("{base}{n}"));
+        }
+        Some(std::rc::Rc::new(map))
+    };
+    if let Some(map) = &callback_protocols {
+        let proto_ctx = TranslateCtx {
+            current_leaf: body.leaf.clone(),
+            self_ref: None,
+            defer_name_refs: false,
+            callback_protocols: Some(map.clone()),
+        };
+        for (ty, _base) in &protocol_tys {
+            if let Ty::Callable { params, ret } = ty {
+                out.push_str("\n\n");
+                out.push_str(&render_callback_protocol(&map[ty], params, ret, &proto_ctx));
+            }
+        }
+    }
+
+    for (name, child_body) in callable_child_bodies {
+        if let Some(parent_fn) = body.symbols.iter().find_map(|(sym, _)| match sym {
+            EmittedSymbol::Function(f) if f.mode == SyncAsync::Sync && f.py_name == *name => {
+                Some(f)
+            }
+            _ => None,
+        }) {
+            out.push_str("\n\n");
+            out.push_str(&render_callable_child_protocol_pyi(
+                name,
+                parent_fn,
+                child_body,
+                &body.leaf,
+                callback_protocols.as_ref(),
+            ));
+        }
+    }
+
     out.push_str("\n\n");
 
     let mut prev: Option<(&SortKey, &EmittedSymbol)> = None;
     for (sym, key) in &body.symbols {
-        let body_text = render_symbol_pyi(sym, &body.leaf);
+        if let EmittedSymbol::Function(f) = sym
+            && f.mode == SyncAsync::Sync
+            && callable_child_bodies.contains_key(&f.py_name)
+        {
+            continue;
+        }
+        let body_text = render_symbol_pyi(sym, &body.leaf, callback_protocols.as_ref());
         if body_text.is_empty() {
             continue;
         }
@@ -1734,7 +2113,6 @@ pub(crate) fn render_leaf_body_pyi(body: &LeafBody) -> String {
     if is_baml_builtins_root {
         names.push("BamlError");
         names.push("BamlPanic");
-        names.push("Unset");
         names.push("UNSET");
     }
     if !names.is_empty() {

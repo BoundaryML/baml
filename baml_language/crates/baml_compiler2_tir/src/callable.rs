@@ -9,7 +9,6 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     inference::{CallPlan, MemberResolution, ScopeInference, infer_scope_types},
-    lower_type_expr::lower_type_expr_in_ns,
     package_interface::package_resolution_context,
     throw_inference::{function_throw_sets, throw_set_key},
     throws_analysis::ThrowsAnalysisContext,
@@ -46,12 +45,18 @@ fn lowered_declared_callable_throws<'db>(
 
     sig.throws.as_ref().map(|declared_throws| {
         let mut diags = Vec::new();
-        lower_type_expr_in_ns(
-            db,
+        crate::lower_type_expr::lower_type_expr(
             declared_throws,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
+            &crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context: &pkg_info.namespace_path,
+                generic_params: &generic_params,
+                bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                    db, function,
+                ),
+                self_ty: None,
+            },
             &mut diags,
         )
     })
@@ -72,17 +77,18 @@ fn signature_cycle_initial_callable_throws<'db>(
     generic_params.extend(sig.user_generic_params.iter().cloned());
     generic_params.extend(sig.synthetic_effect_params.iter().cloned());
 
+    let param_scope = crate::lower_type_expr::ScopeCtx {
+        db,
+        package_items: pkg_items,
+        ns_context: &pkg_info.namespace_path,
+        generic_params: &generic_params,
+        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(db, function),
+        self_ty: None,
+    };
     let mut facts = BTreeSet::new();
     for param in &sig.params {
         let mut diags = Vec::new();
-        let lowered = lower_type_expr_in_ns(
-            db,
-            &param.ty,
-            pkg_items,
-            &pkg_info.namespace_path,
-            &generic_params,
-            &mut diags,
-        );
+        let lowered = crate::lower_type_expr::lower_type_expr(&param.ty, &param_scope, &mut diags);
         if let Ty::Function { throws, .. } = lowered {
             facts.extend(crate::throw_inference::flatten_ty_to_facts(&throws));
         }
@@ -255,6 +261,17 @@ impl ThrowsAnalysisContext for CallableThrowsAnalysis<'_, '_> {
         // builder impl.
         lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("id.set"))
     }
+
+    fn to_json_fallback_throws(&self) -> Option<BTreeSet<Ty>> {
+        // `recv.to_json()` lowers to `baml.json.from(recv)` — see the builder impl.
+        lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("json.from"))
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    fn from_json_fallback_throws(&self) -> Option<BTreeSet<Ty>> {
+        // `Type.from_json(j)` lowers to `baml.json.to<Type>(j)` — see the builder impl.
+        lookup_named_throw_summary(self.db, self.pkg_id, &Name::new("json.to"))
+    }
 }
 
 fn callee_uses_method_call_convention(
@@ -357,6 +374,33 @@ fn callable_throws_cycle_initial<'db>(
 
 #[salsa::tracked(returns(ref), cycle_initial=callable_throws_cycle_initial)]
 pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Ty {
+    // A seeded value from a previous compile short-circuits body
+    // inference for a clean function, returning exactly the `Ty` this query
+    // produced last time. `seeds.by_path(db)` is a *tracked* read of the
+    // `SeededCallableThrows` input (present-from-construction, empty until
+    // seeded), so a later seed reliably invalidates this memo. The seed is
+    // keyed by (source path, item-tree `LocalItemId`) — process-independent for
+    // byte-identical files. Only functions the reuse plan proved clean are
+    // seeded, so a converged fixpoint value is returned without re-entering the
+    // callee body; a dirty function is never in the map and infers below.
+    if let Some(seeds) = db.seeded_callable_throws() {
+        // `by_path(db)` is the tracked read (kept unconditional so a later seed
+        // still invalidates this memo), but the path-display allocation and the
+        // lookup are skipped whenever no seeds were injected — the LSP and every
+        // cold CLI compile hold the empty map, so this guard avoids a per-eval
+        // `String` allocation on the hot `callable_throws` path.
+        let by_path = seeds.by_path(db);
+        if !by_path.is_empty() {
+            let path = function.file(db).path(db).display().to_string();
+            if let Some(ty) = by_path
+                .get(&path)
+                .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
+            {
+                return ty.clone();
+            }
+        }
+    }
+
     if let Some(declared_throws) = lowered_declared_callable_throws(db, function) {
         return declared_throws;
     }

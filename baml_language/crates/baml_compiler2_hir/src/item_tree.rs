@@ -12,9 +12,9 @@ use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, InterfaceMarker,
-    ItemKind, LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker,
-    TypeAliasMarker, hash_name,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, ItemKind,
+    LetMarker, LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    hash_impl_key, hash_name,
 };
 
 // ── Span-free attribute representation ───────────────────────────────────────
@@ -72,9 +72,9 @@ pub struct Function {
     /// Function parameter default expression arena.
     pub defaults: ast::FunctionDefaults,
     /// Return type with its source span.
-    pub return_type: Option<ast::SpannedTypeExpr>,
+    pub return_type: Option<ast::TypeExpr>,
     /// Throws contract type with its source span.
-    pub throws: Option<ast::SpannedTypeExpr>,
+    pub throws: Option<ast::TypeExpr>,
     /// Function body — either an expression or a builtin.
     pub body: Option<ast::FunctionBodyDef>,
     /// Declarative metadata, if this function was declared with declarative syntax.
@@ -82,6 +82,10 @@ pub struct Function {
     pub origin: ast::FunctionOrigin,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
+    /// BEP-049 §10: set when the fn def had a `//baml:tagged_string` marker.
+    /// Mirrors `ast::FunctionDef::is_tagged_template_tag` so TIR can validate
+    /// tagged-template tags without re-reading the CST.
+    pub is_tagged_template_tag: bool,
     /// Full source span of the function.
     pub span: TextRange,
 }
@@ -90,7 +94,7 @@ pub struct Function {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionParam {
     pub name: Name,
-    pub type_expr: Option<ast::SpannedTypeExpr>,
+    pub type_expr: Option<ast::TypeExpr>,
     pub default: Option<DefaultExprRef>,
     pub span: TextRange,
 }
@@ -105,7 +109,7 @@ pub struct DefaultExprRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassField {
     pub name: Name,
-    pub type_expr: Option<ast::SpannedTypeExpr>,
+    pub type_expr: Option<ast::TypeExpr>,
     pub attributes: Vec<Attribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
@@ -142,22 +146,10 @@ pub struct Class {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsBlock {
-    pub target: ast::SpannedTypeExpr,
+    pub target: ast::TypeExpr,
     pub field_links: Vec<InterfaceFieldLink>,
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub is_out_of_body: bool,
-    pub span: TextRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplementsFor {
-    pub generic_params: Vec<Name>,
-    pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
-    pub interface_target: ast::SpannedTypeExpr,
-    pub for_target: ast::SpannedTypeExpr,
-    pub field_links: Vec<InterfaceFieldLink>,
-    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
-    pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub span: TextRange,
 }
 
@@ -168,6 +160,64 @@ pub struct InterfaceFieldLink {
     pub span: TextRange,
     pub interface_field_span: TextRange,
     pub class_field_span: TextRange,
+}
+
+impl InterfaceFieldLink {
+    pub(crate) fn from_ast(link: &ast::InterfaceFieldLinkDef) -> Self {
+        Self {
+            interface_field: link.interface_field.clone(),
+            class_field: link.class_field.clone(),
+            span: link.span,
+            interface_field_span: link.interface_field_span,
+            class_field_span: link.class_field_span,
+        }
+    }
+}
+
+/// A generic parameter on an out-of-body `implements` block, paired with its set
+/// of `&`-separated interface bounds (`<T>` → `bounds = []`; `<T extends A & B>`
+/// → `bounds = [A, B]`). Pairing name and bounds makes a length mismatch between
+/// the two unrepresentable. Bounds are unresolved `TypeExpr`s here; they resolve
+/// to `baml_type::Interface` constraints downstream.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericParam {
+    pub name: Name,
+    pub bounds: Vec<ast::TypeExpr>,
+}
+
+/// What an `implements` block applies to. Unifying the owner with the for-target
+/// makes "in-body with an explicit for-target" and "out-of-body without one"
+/// both unrepresentable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImplSubject {
+    /// `implements I { … }` in a class body (or a simple `implement I for C`
+    /// merged onto `C`). The for-type is the class itself; the generics are the
+    /// class's. `out_of_body` records the syntactic origin for diagnostics only
+    /// — it must NOT influence resolution, dispatch, or coherence.
+    InClass {
+        class: LocalItemId<ClassMarker>,
+        out_of_body: bool,
+    },
+    /// `implement<…> I for <for_target> { … }`: an explicit for-type plus the
+    /// block's own generic parameters.
+    Free {
+        for_target: ast::TypeExpr,
+        generics: Vec<GenericParam>,
+    },
+}
+
+/// A unified `implements` block (both kinds) stored in the `ItemTree`, keyed by
+/// a stable `LocalItemId<ImplMarker>`. The interface target is kept as a raw
+/// `TypeExpr` here; resolution to an `InterfaceLoc` + `Ty` happens lazily in the
+/// `impl_data` query so HIR construction stays independent of name resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplBlock {
+    pub subject: ImplSubject,
+    pub interface_target: ast::TypeExpr,
+    pub field_links: Vec<InterfaceFieldLink>,
+    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
+    pub methods: Vec<LocalItemId<FunctionMarker>>,
+    pub span: TextRange,
 }
 
 /// An enum variant stored in the `ItemTree`.
@@ -202,8 +252,8 @@ pub struct InterfaceMethodSig {
     /// BEP-044 generic bounds parallel to `generic_params`.
     pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     pub params: Vec<FunctionParam>,
-    pub return_type: Option<ast::SpannedTypeExpr>,
-    pub throws: Option<ast::SpannedTypeExpr>,
+    pub return_type: Option<ast::TypeExpr>,
+    pub throws: Option<ast::TypeExpr>,
     pub attributes: Vec<Attribute>,
     pub docstring: Option<String>,
     pub span: TextRange,
@@ -221,7 +271,7 @@ pub struct Interface {
     /// BEP-044 generic bounds parallel to `generic_params`.
     pub generic_param_bounds: Vec<Option<ast::TypeExpr>>,
     /// Required interfaces from `requires I1, I2, …`.
-    pub requires: Vec<ast::SpannedTypeExpr>,
+    pub requires: Vec<ast::TypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values.
     pub fields: Vec<ClassField>,
@@ -240,7 +290,7 @@ pub struct Interface {
 pub struct TypeAlias {
     pub name: Name,
     /// The type expression on the RHS of the alias, if present.
-    pub type_expr: Option<ast::SpannedTypeExpr>,
+    pub type_expr: Option<ast::TypeExpr>,
     /// Full source span of the type alias declaration.
     pub span: TextRange,
 }
@@ -258,33 +308,7 @@ pub struct Client {
     pub round_robin_start: Option<usize>,
 }
 
-/// A test argument value stored in the `ItemTree`.
-///
-/// Floats are stored as bit patterns (via `f64::to_bits`) to allow `Eq` and `Hash`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TestArgValue {
-    Null,
-    Int(i64),
-    /// Float stored as raw bits (`f64::to_bits(value)`).
-    FloatBits(u64),
-    Bool(bool),
-    String(String),
-    Array(Vec<TestArgValue>),
-    Map(Vec<(String, TestArgValue)>),
-}
-
-impl TestArgValue {
-    pub fn float(v: f64) -> Self {
-        Self::FloatBits(v.to_bits())
-    }
-
-    pub fn as_float(&self) -> Option<f64> {
-        match self {
-            Self::FloatBits(bits) => Some(f64::from_bits(*bits)),
-            _ => None,
-        }
-    }
-}
+pub use baml_compiler2_ast::ast::TestArgValue;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Test {
@@ -293,18 +317,6 @@ pub struct Test {
     pub function_refs: Vec<Name>,
     /// Test arguments as key-value pairs.
     pub args: Vec<(Name, TestArgValue)>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GeneratorConfigItem {
-    pub key: Name,
-    pub value: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Generator {
-    pub name: Name,
-    pub config_items: Vec<GeneratorConfigItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -358,11 +370,11 @@ pub struct ItemTreeSourceMap {
     pub enum_variant_spans: FxHashMap<LocalItemId<EnumMarker>, Vec<TextRange>>,
     /// `name_span` for each function.
     pub function_name_spans: FxHashMap<LocalItemId<FunctionMarker>, TextRange>,
-    /// Whole-block span for each generator (the `generator … { … }` node).
-    pub generator_block_spans: FxHashMap<LocalItemId<GeneratorMarker>, TextRange>,
-    /// Per-config-item span for each generator, parallel to
-    /// `Generator::config_items`.
-    pub generator_config_item_spans: FxHashMap<LocalItemId<GeneratorMarker>, Vec<TextRange>>,
+    /// `name_span` for each interface's fields, parallel to `Interface::fields`.
+    pub interface_field_spans: FxHashMap<LocalItemId<InterfaceMarker>, Vec<TextRange>>,
+    /// `name_span` for each interface's required methods, parallel to
+    /// `Interface::required_methods`.
+    pub interface_method_spans: FxHashMap<LocalItemId<InterfaceMarker>, Vec<TextRange>>,
 }
 
 // ── ItemTree ─────────────────────────────────────────────────────────────────
@@ -381,11 +393,22 @@ pub struct ItemTree {
     pub type_aliases: FxHashMap<LocalItemId<TypeAliasMarker>, TypeAlias>,
     pub clients: FxHashMap<LocalItemId<ClientMarker>, Client>,
     pub tests: FxHashMap<LocalItemId<TestMarker>, Test>,
-    pub generators: FxHashMap<LocalItemId<GeneratorMarker>, Generator>,
     pub template_strings: FxHashMap<LocalItemId<TemplateStringMarker>, TemplateString>,
     pub retry_policies: FxHashMap<LocalItemId<RetryPolicyMarker>, RetryPolicy>,
     pub lets: FxHashMap<LocalItemId<LetMarker>, Let>,
-    pub implements_for: Vec<ImplementsFor>,
+
+    /// Unified store for every `implements` block (both in-body and
+    /// out-of-body), keyed by a stable `ImplMarker` id. Downstream queries
+    /// (`impl_data`) read this map; `class_to_impls` / `free_impls` index it.
+    pub impls: FxHashMap<LocalItemId<ImplMarker>, ImplBlock>,
+    /// Index from a class to the impls whose subject is that class
+    /// (`ImplSubject::InClass`), in source order. Lets "impls for class C" be
+    /// answered without a scan; parallel to `Class::implements`.
+    pub class_to_impls: FxHashMap<LocalItemId<ClassMarker>, Vec<LocalItemId<ImplMarker>>>,
+    /// Out-of-body (`ImplSubject::Free`) impl ids in source order. Gives consumers a
+    /// deterministic iteration order over free impls (the unified `impls` map is unordered) —
+    /// e.g. resolving the enclosing out-of-body impl of a method.
+    pub free_impls: Vec<LocalItemId<ImplMarker>>,
 
     /// BEP-044: for a class method declared inside an `implements I {}`
     /// block, record the unresolved interface target path. Empty for
@@ -393,7 +416,7 @@ pub struct ItemTree {
     /// block) and for interface default-methods themselves. Consumers
     /// resolve the path to an `InterfaceLoc` lazily so HIR construction
     /// stays independent of name resolution.
-    pub method_to_iface_target: FxHashMap<LocalItemId<FunctionMarker>, ast::SpannedTypeExpr>,
+    pub method_to_iface_target: FxHashMap<LocalItemId<FunctionMarker>, ast::TypeExpr>,
     pub method_to_iface_associated_type_bindings:
         FxHashMap<LocalItemId<FunctionMarker>, Vec<ast::AssociatedTypeBindingDef>>,
 
@@ -417,11 +440,12 @@ impl ItemTree {
             type_aliases: FxHashMap::default(),
             clients: FxHashMap::default(),
             tests: FxHashMap::default(),
-            generators: FxHashMap::default(),
             template_strings: FxHashMap::default(),
             retry_policies: FxHashMap::default(),
             lets: FxHashMap::default(),
-            implements_for: Vec::new(),
+            impls: FxHashMap::default(),
+            class_to_impls: FxHashMap::default(),
+            free_impls: Vec::new(),
             method_to_iface_target: FxHashMap::default(),
             method_to_iface_associated_type_bindings: FxHashMap::default(),
             next_index: FxHashMap::default(),
@@ -464,6 +488,7 @@ impl ItemTree {
                 declarative_meta: f.declarative_meta.clone(),
                 origin: f.origin,
                 docstring: f.docstring.clone(),
+                is_tagged_template_tag: f.is_tagged_template_tag,
                 span: f.span,
             },
         );
@@ -490,13 +515,7 @@ impl ItemTree {
                 field_links: b
                     .field_links
                     .iter()
-                    .map(|link| InterfaceFieldLink {
-                        interface_field: link.interface_field.clone(),
-                        class_field: link.class_field.clone(),
-                        span: link.span,
-                        interface_field_span: link.interface_field_span,
-                        class_field_span: link.class_field_span,
-                    })
+                    .map(InterfaceFieldLink::from_ast)
                     .collect(),
                 associated_type_bindings: b.associated_type_bindings.clone(),
                 is_out_of_body: b.is_out_of_body,
@@ -531,32 +550,28 @@ impl ItemTree {
         }
     }
 
-    pub fn add_implements_for(
+    /// Allocate a stable id for an `implements` block and store it in the
+    /// unified `impls` map. `iface_head`/`for_head` seed the position-independent
+    /// id (impls have no declared name); the collision index disambiguates impls
+    /// that share both heads. Records the `class_to_impls` edge for `InClass`.
+    pub fn alloc_impl(
         &mut self,
-        imp: &ast::ImplementsForDef,
-        methods: Vec<LocalItemId<FunctionMarker>>,
-    ) {
-        let field_links = imp
-            .field_links
-            .iter()
-            .map(|link| InterfaceFieldLink {
-                interface_field: link.interface_field.clone(),
-                class_field: link.class_field.clone(),
-                span: link.span,
-                interface_field_span: link.interface_field_span,
-                class_field_span: link.class_field_span,
-            })
-            .collect();
-        self.implements_for.push(ImplementsFor {
-            generic_params: imp.generic_params.iter().map(|(n, _)| n.clone()).collect(),
-            generic_param_bounds: imp.generic_params.iter().map(|(_, b)| b.clone()).collect(),
-            interface_target: imp.interface_target.clone(),
-            for_target: imp.for_target.clone(),
-            field_links,
-            associated_type_bindings: imp.associated_type_bindings.clone(),
-            methods,
-            span: imp.span,
-        });
+        iface_head: &Name,
+        for_head: &Name,
+        block: ImplBlock,
+    ) -> LocalItemId<ImplMarker> {
+        let h = hash_impl_key(iface_head, for_head);
+        let index = self.next_index.entry((ItemKind::Impl, h)).or_insert(0);
+        let id = LocalItemId::new(h, *index);
+        *index += 1;
+        match &block.subject {
+            ImplSubject::InClass { class, .. } => {
+                self.class_to_impls.entry(*class).or_default().push(id);
+            }
+            ImplSubject::Free { .. } => self.free_impls.push(id),
+        }
+        self.impls.insert(id, block);
+        id
     }
 
     pub fn alloc_enum(&mut self, e: &ast::EnumDef) -> LocalItemId<EnumMarker> {
@@ -612,6 +627,22 @@ impl ItemTree {
     ) {
         let spans: Vec<TextRange> = enum_def.variants.iter().map(|v| v.name_span).collect();
         source_map.enum_variant_spans.insert(id, spans);
+    }
+
+    /// Populate source map spans for an interface allocated via `alloc_interface`.
+    pub fn collect_interface_spans(
+        source_map: &mut ItemTreeSourceMap,
+        id: LocalItemId<InterfaceMarker>,
+        iface_def: &ast::InterfaceDef,
+    ) {
+        let field_spans: Vec<TextRange> = iface_def.fields.iter().map(|f| f.name_span).collect();
+        source_map.interface_field_spans.insert(id, field_spans);
+        let method_spans: Vec<TextRange> = iface_def
+            .required_methods
+            .iter()
+            .map(|m| m.name_span)
+            .collect();
+        source_map.interface_method_spans.insert(id, method_spans);
     }
 
     /// Allocate an interface (BEP-044) in the `ItemTree`.
@@ -724,65 +755,15 @@ impl ItemTree {
 
     pub fn alloc_test(&mut self, t: &ast::TestDef) -> LocalItemId<TestMarker> {
         let id = self.alloc_id(ItemKind::Test, &t.name);
-        // Extract function_refs from config_items (key "functions" or "function")
-        let function_refs = t
-            .config_items
-            .iter()
-            .filter(|item| item.key.as_str() == "functions" || item.key.as_str() == "function")
-            .flat_map(|item| {
-                // Values may be comma-separated or a single name
-                item.value
-                    .split(',')
-                    .map(|s| Name::new(s.trim().trim_matches('"')))
-                    .collect::<Vec<_>>()
-            })
-            .collect();
-        // Args come from config_items with key "args" — store raw; complex parsing skipped
-        let args = Vec::new();
         self.tests.insert(
             id,
             Test {
                 name: t.name.clone(),
-                function_refs,
-                args,
+                function_refs: t.function_refs.clone(),
+                args: t.args.clone(),
             },
         );
         id
-    }
-
-    pub fn alloc_generator(&mut self, g: &ast::GeneratorDef) -> LocalItemId<GeneratorMarker> {
-        let id = self.alloc_id(ItemKind::Generator, &g.name);
-        let config_items = g
-            .config_items
-            .iter()
-            .map(|item| GeneratorConfigItem {
-                key: item.key.clone(),
-                value: item.value.clone(),
-            })
-            .collect();
-        self.generators.insert(
-            id,
-            Generator {
-                name: g.name.clone(),
-                config_items,
-            },
-        );
-        id
-    }
-
-    /// Populate source map spans for a generator that was allocated via
-    /// `alloc_generator`. Mirrors `collect_class_spans` / `collect_enum_spans`.
-    pub fn collect_generator_spans(
-        source_map: &mut ItemTreeSourceMap,
-        id: LocalItemId<GeneratorMarker>,
-        gen_def: &ast::GeneratorDef,
-    ) {
-        source_map.generator_block_spans.insert(id, gen_def.span);
-        let item_spans: Vec<TextRange> =
-            gen_def.config_items.iter().map(|item| item.span).collect();
-        source_map
-            .generator_config_item_spans
-            .insert(id, item_spans);
     }
 
     pub fn alloc_template_string(
@@ -901,13 +882,6 @@ impl Index<LocalItemId<TestMarker>> for ItemTree {
     type Output = Test;
     fn index(&self, id: LocalItemId<TestMarker>) -> &Test {
         &self.tests[&id]
-    }
-}
-
-impl Index<LocalItemId<GeneratorMarker>> for ItemTree {
-    type Output = Generator;
-    fn index(&self, id: LocalItemId<GeneratorMarker>) -> &Generator {
-        &self.generators[&id]
     }
 }
 

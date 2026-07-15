@@ -21,6 +21,12 @@ use crate::{
 struct DecodedCallArgs {
     kwargs: bex_project::BexArgs,
     call_id: bex_project::CallId,
+    /// Explicit, named `TypeVar` bindings for a generic call (`_types=` + a
+    /// generic receiver's class type args): `TypeVar name -> concrete type`,
+    /// insertion order is De Bruijn order. Empty for non-generic calls. The
+    /// engine maps each name onto the entry-frame `type_args` slot by matching
+    /// the callee's generic params.
+    type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
 }
 
 /// The main BAML runtime. A zero-sized handle: the single source of truth for
@@ -131,8 +137,9 @@ impl BamlRuntime {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let bytes = match prepared {
                 Ok((runtime, decoded)) => {
-                    let call_ctx =
-                        bridge_cffi::function_call_context_builder(decoded.call_id).build();
+                    let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
+                        .with_type_args(decoded.type_args)
+                        .build();
                     bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx)
                         .await
                 }
@@ -178,7 +185,9 @@ impl BamlRuntime {
         // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
         // stability but no longer wired into the call context.
         let _ = (&ctx, &collectors);
-        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id).build();
+        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
+            .with_type_args(decoded.type_args)
+            .build();
 
         // Same shared call_and_encode as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.
@@ -204,7 +213,7 @@ fn decode_args(
     args_proto: &[u8],
     _function_name: &str,
 ) -> Result<DecodedCallArgs, bridge_cffi::BridgeError> {
-    let args = bridge_ctypes::baml_core::cffi::CallFunctionArgs::decode(args_proto)
+    let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(args_proto)
         .map_err(bridge_ctypes::CtypesError::from)?;
 
     if args.call_id == 0 {
@@ -212,18 +221,20 @@ fn decode_args(
     }
 
     let call_id = bex_project::CallId(args.call_id);
+    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
     let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
     Ok(DecodedCallArgs {
         kwargs: kwargs.into(),
         call_id,
+        type_args,
     })
 }
 
 /// Return the process-global `BamlRuntime`, or raise `BamlError` if
 /// `BamlRuntime.initialize_runtime(...)` has not been called yet.
 ///
-/// Used by the pure-Python factories in `baml_core` so generated
+/// Used by the pure-Python factories in `baml_bridge` so generated
 /// leaves don't have to thread a runtime reference through every call
 /// site.
 #[gen_stub_pyfunction]
