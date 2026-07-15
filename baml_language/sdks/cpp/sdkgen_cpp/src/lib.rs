@@ -1149,6 +1149,12 @@ fn translate_ty(
                     other => return other,
                 }
             }
+            // BAML unions are sets (string | int == int | string), so the
+            // C++ spelling must be a function of the member set, not the
+            // declaration sequence: canonical order = sorted rendered types.
+            // Decode order independence is the codec's job (exact-kind pass
+            // before widening pass in Codec<std::variant>).
+            alternatives.sort();
             let inner = match alternatives.as_slice() {
                 [] => return Translated::Unsupported("empty union".to_string()),
                 [single] => single.clone(),

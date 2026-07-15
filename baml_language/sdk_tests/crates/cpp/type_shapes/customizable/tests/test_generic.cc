@@ -13,7 +13,7 @@ BAML_TEST(generic) {
   // fused into a union with a concrete class (the Stream.next shape).
   const WrapperMethods<std::string> w =
       baml_sdk::generics::make_wrapper_methods("hello");
-  const std::variant<std::string, WrapperMarker> got = w.get_value_or_marker();
+  const std::variant<WrapperMarker, std::string> got = w.get_value_or_marker();
   BAML_ASSERT(std::holds_alternative<std::string>(got));
   BAML_ASSERT_EQ(std::get<std::string>(got), std::string("hello"));
 }

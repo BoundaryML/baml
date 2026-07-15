@@ -22,7 +22,8 @@ using complex_models::WirePayment;
 
 using Payment = std::variant<CardPayment, WirePayment>;
 using Featured = std::variant<Invoice, PostalAddress, std::string>;
-using Flag = std::variant<int64_t, std::string, bool>;
+// Alternative order is canonical (sorted rendered types).
+using Flag = std::variant<bool, int64_t, std::string>;
 
 BAML_TEST(
     round_trip_complex_profile_preserves_deeply_nested_mixed_shape_class) {

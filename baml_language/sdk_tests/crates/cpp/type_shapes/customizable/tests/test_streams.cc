@@ -38,8 +38,9 @@ BAML_TEST(round_trip_resume_or_resume_stream) {
 
 BAML_TEST(round_trip_resume_or_http_response) {
   // Pass the Resume arm; the baml.http.Response arm isn't
-  // host-constructible.
-  const std::variant<Resume, baml_sdk::baml::http::Response> u =
+  // host-constructible. Alternative order is canonical (sorted rendered
+  // types), not BAML declaration order.
+  const std::variant<baml_sdk::baml::http::Response, Resume> u =
       Resume{"lovelace", std::string("a@x.com")};
   const auto result = baml_sdk::lorem::round_trip_resume_or_http_response(u);
   BAML_ASSERT(std::holds_alternative<Resume>(result));

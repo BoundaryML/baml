@@ -167,9 +167,38 @@ struct Codec<Handle> {
   }
 };
 
+namespace detail {
+
+// True for types whose Decode widens an integer wire value (double and
+// BigInt accept Kind::Int), transitively through the containers a union
+// alternative can be built from. The variant codec tries these LAST so a
+// union's int arm always wins a wire int regardless of alternative order
+// (the emitter sorts alternatives canonically; order must not matter).
+template <typename T>
+struct is_widening_decoder : std::false_type {};
+template <>
+struct is_widening_decoder<double> : std::true_type {};
+template <>
+struct is_widening_decoder<BigInt> : std::true_type {};
+template <typename T>
+struct is_widening_decoder<std::vector<T>> : is_widening_decoder<T> {};
+template <typename T>
+struct is_widening_decoder<std::optional<T>> : is_widening_decoder<T> {};
+template <typename T>
+struct is_widening_decoder<std::map<std::string, T>> : is_widening_decoder<T> {
+};
+template <typename T>
+struct is_widening_decoder<Box<T>> : is_widening_decoder<T> {};
+template <typename T>
+struct is_widening_decoder<OptionalBox<T>> : is_widening_decoder<T> {};
+
+}  // namespace detail
+
 // Union values arrive as their inner value (union metadata is dropped on the
-// wire, Python parity), so decode tries each alternative in declared BAML
-// order; generated class codecs check the wire FQN, making class
+// wire, Python parity). Alternatives are canonically sorted by the emitter
+// (BAML unions are sets), so decode must be order-independent: an exact-kind
+// pass runs before the widening decoders (double/BigInt, which accept wire
+// ints). Generated class codecs check the wire FQN, making class
 // alternatives dispatch precisely. Encode writes the active alternative's
 // inner value (no union wrapper inbound).
 template <typename... Ts>
@@ -184,7 +213,12 @@ struct Codec<std::variant<Ts...>> {
   }
   static std::variant<Ts...> Decode(const detail::OutboundValue& v) {
     std::optional<std::variant<Ts...>> out;
-    (TryAlternative<Ts>(v, out) || ...);
+    ((!detail::is_widening_decoder<Ts>::value && TryAlternative<Ts>(v, out)) ||
+     ...);
+    if (!out.has_value()) {
+      ((detail::is_widening_decoder<Ts>::value && TryAlternative<Ts>(v, out)) ||
+       ...);
+    }
     if (!out.has_value()) {
       detail::KindMismatch("a union alternative", v);
     }
