@@ -67,6 +67,22 @@ When a change is not local, an agent goes on a side quest across the codebase. I
 
 Humans still need editors, graphs, and debuggers. Agents also need first-class ways to discover and operate on code without hovering, clicking, or interpreting a visual interface.
 
+## Install BAML
+
+Just want to install it and run something? Install the toolchain and run a project:
+
+```sh
+# macOS or Linux (Homebrew)
+brew install boundaryml/tap/baml
+# or: curl -fsSL https://pkg.boundaryml.com/install.sh | sh -s
+
+baml init
+baml agent install
+baml run main
+```
+
+Full quickstart, editor setup, and more options: https://boundaryml.com/quickstart.md
+
 ## A better language
 
 BAML starts with familiar syntax and a type system that resembles TypeScript, then changes the parts that become dangerous when agents write most of the code.

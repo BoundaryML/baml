@@ -285,7 +285,7 @@ function renderPrompt(text: string) {
   );
 }
 
-export function TryBaml() {
+export function TryBaml({ compact = false }: { compact?: boolean } = {}) {
   const [tab, setTab] = useState<'humans' | 'agents'>('humans');
   const [os, setOs] = useState('brew');
   const [env, setEnv] = useState('code');
@@ -325,6 +325,32 @@ export function TryBaml() {
     },
     { cmd: 'baml run main' },
   ];
+
+  // Slim variant for the top of /explore: platform install command + project
+  // commands only, no humans/agents tabs or editor picker. Full options live in
+  // the complete unit further down and on /quickstart.
+  if (compact) {
+    return (
+      <div className={`${styles.unit} ${styles.compact}`}>
+        <div className={styles.body}>
+          <OptRow
+            ariaLabel="Install method"
+            cap="install with"
+            onChange={setOs}
+            opts={OS_OPTS}
+            value={os}
+          />
+          <Section
+            key={os}
+            label="Copy install command"
+            lines={[{ cmd: osOpt.cmd }]}
+          />
+          <div className={styles.optLabel}>in a project</div>
+          <Section label="Copy project commands" lines={project} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.unit}>

@@ -543,6 +543,23 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
               <TenetsAccordion />
             </Section>
 
+            {/* ---- quick install pointer (top of /explore) ----
+               The homepage "Explore" CTA lands here; give impatient readers an
+               install path before the deep dive instead of only at the "Try
+               BAML out!" close. The full unit lives at #close and on
+               /quickstart. */}
+            {view === 'deep' && (
+              <section className="l6-section" id="try">
+                <p className="l6-part-eyebrow font-mono">Try BAML</p>
+                <TryBaml compact />
+                <p>
+                  <Link className="l6-link" href="/quickstart">
+                    Full quickstart: editor setup and more options →
+                  </Link>
+                </p>
+              </section>
+            )}
+
             {/* ===== Part 1 · A better language ===== */}
             <Part eyebrow="Part 1" id="language" title="A better language">
               <p>

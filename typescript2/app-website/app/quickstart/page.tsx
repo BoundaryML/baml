@@ -73,6 +73,10 @@ export default function QuickstartPage() {
 
         <h2>Handy links</h2>
         <div className="qs-grid">
+          <a className="qs-card" href="/explore">
+            <span className="qs-card-t">Explore BAML</span>
+            <span className="qs-card-v">see the language and code</span>
+          </a>
           <a className="qs-card" href="https://boundaryml.com/changelog">
             <span className="qs-card-t">Changelog</span>
             <span className="qs-card-v">boundaryml.com/changelog</span>
