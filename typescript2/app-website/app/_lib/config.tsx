@@ -436,10 +436,12 @@ export const siteConfig = {
         {
           id: 16,
           title: 'Changelog',
-          url: 'https://docs.boundaryml.com/changelog/changelog',
+          url: '/changelog',
         },
         { id: 18, title: 'Docs', url: '/quickstart' },
         { id: 19, title: 'Jobs', url: '/jobs' },
+        { id: 24, title: 'Blog', url: '/blog' },
+        { id: 25, title: 'Pricing', url: '/pricing' },
       ],
       title: 'Resources',
     },

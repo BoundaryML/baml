@@ -1,4 +1,6 @@
 import { createMetadata } from '@/app/_lib/metadata';
+// CONTENT PARITY: keep substantive copy and commands in sync with
+// content/quickstart.md. Update both representations in the same change.
 import { TryBaml } from '@/app/baml-intro/_components/TryBaml';
 import { DiscordCta } from '@/components/discord-cta';
 import { EapCta } from '@/components/eap-cta';

@@ -28,7 +28,7 @@ export function FooterSection() {
               <p className="text-xl font-semibold text-primary">Boundary</p>
             </Link>
             <p className="tracking-tight text-muted-foreground font-medium">
-              A programming language for agents. They write it. They run in it.
+              The programming language for agents.
             </p>
             <div className="flex items-center gap-2 dark:hidden">
               {/* <Icons.soc2 className="size-12" /> */}

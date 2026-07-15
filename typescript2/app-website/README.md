@@ -1,5 +1,17 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
+## HTML and Markdown content parity
+
+The landing pages `/`, `/quickstart`, `/explore`, `/pricing`, and `/changelog`
+have checked-in Markdown representations in `content/`. Plain curl requests,
+`Accept: text/markdown`, and the corresponding `.md` URLs serve these files.
+
+Treat each React page and Markdown file as two representations of the same
+content. Any substantive copy, command, claim, link, example, or availability
+change must update both in the same change. Markdown should preserve all useful
+context. Replace interactive editors, playgrounds, diagrams, and animations
+with complete prose and code fallbacks—never placeholders such as “Loading…”.
+
 ## Getting Started
 
 First, run the development server:
@@ -28,36 +40,6 @@ To learn more about Next.js, take a look at the following resources:
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Agent Mode
-
-The site serves a plain-markdown view for LLM agents and crawlers. There are three entry points:
-
-1. **Content negotiation.** Any top-level marketing page returns markdown when the request looks agent-ish. Detection is a pure function in `lib/agent-detect.ts` (UA patterns: curl / wget / httpie / python-requests / node-fetch / Go-http-client / ChatGPT-User / GPTBot / ClaudeBot / Claude-Web / anthropic-ai / PerplexityBot / cohere-ai / Bytespider; Accept-header ranking; query params `?format=md` or `?agent=1`). `middleware.ts` rewrites matching requests to `/agent.md` and sets `Vary: Accept, User-Agent`.
-2. **Static routes.** `/agent.md` (Content-Type `text/markdown`) and `/llms.txt` (Content-Type `text/plain`) both stream `content/agent.md` verbatim.
-3. **Manual toggle.** The `human` / `agent` pill in the top nav routes to `/agent?from=toggle`, which bypasses middleware and renders the same markdown in a styled monospace layout. The toggle uses `?from=toggle` specifically so agents can't be trapped in the styled view.
-
-### Updating the content
-
-Edit `content/agent.md`. The file is read at request time by all three entry points. `{{TODO}}` placeholders mark claims that should be confirmed against current product docs before publishing.
-
-### Verifying locally
-
-```bash
-# Agent view (raw markdown)
-curl -sI http://localhost:3000/ | grep -i content-type
-curl -s http://localhost:3000/ | head -5
-
-# Human view (HTML)
-curl -s -H "Accept: text/html" http://localhost:3000/ | head -5
-
-# Direct static routes
-curl -s http://localhost:3000/agent.md | head -5
-curl -s http://localhost:3000/llms.txt | head -5
-
-# Query-param override
-curl -s "http://localhost:3000/?format=md" | head -5
-```
 
 ## Deploy on Vercel
 

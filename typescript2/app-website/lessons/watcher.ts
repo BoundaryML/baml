@@ -15,9 +15,8 @@ const LESSONS_FOLDER = 'lessons';
 fs.watch(
   CONTENT_FOLDER,
   { persistent: true, recursive: true },
-  async (eventType, fileName) => {
+  async (_eventType, _fileName) => {
     clients.forEach((ws) => {
-      // do any pre-processing you want to do here...
       ws.send('refresh');
     });
   },
@@ -31,11 +30,9 @@ fs.watch(
     console.log(`Change detected in lessons: ${eventType} ${fileName}`);
 
     try {
-      // Run generate-lessons.js script
       await execAsync('node scripts/generate-lessons.js');
       console.log('Lessons regenerated successfully');
 
-      // Send refresh signal to all connected clients
       clients.forEach((ws) => {
         ws.send('refresh');
       });

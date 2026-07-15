@@ -1,5 +1,9 @@
 'use client';
 
+// CONTENT PARITY: this component renders / and /explore. Keep substantive
+// copy in sync with content/index.md and content/explore.md. Interactive
+// components need complete text/code fallbacks in the Markdown files.
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { type ReactNode, useCallback, useState } from 'react';
@@ -1079,7 +1083,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 }
                 <a
                   className="l6-link"
-                  href="https://new.boundaryml.com/atb"
+                  href="/atb"
                   rel="noreferrer"
                   target="_blank"
                 >
@@ -1090,7 +1094,7 @@ export function Article({ view = 'all' }: { view?: 'all' | 'intro' | 'deep' }) {
                 }
                 <a
                   className="l6-link"
-                  href="https://new.boundaryml.com/atb/arena"
+                  href="/atb/arena"
                   rel="noreferrer"
                   target="_blank"
                 >

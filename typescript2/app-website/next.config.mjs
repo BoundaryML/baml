@@ -33,6 +33,8 @@ const nextConfig = {
   outputFileTracingIncludes: {
     // /api/og reads brand fonts + the lamb mark from components/og via fs.
     '/api/og': ['./components/og/**'],
+    // /api/markdown-page serves the checked-in alternate representations.
+    '/api/markdown-page': ['./content/*.md'],
     // next's error-reporting path requires these compiled modules
     // dynamically; nft cannot see dynamic requires, so include them.
     '/**': [

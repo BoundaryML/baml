@@ -1,4 +1,6 @@
 import { createMetadata } from '@/app/_lib/metadata';
+// CONTENT PARITY: keep the page introduction in sync with
+// content/changelog.md. Live entries are appended by the Markdown route.
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 import { ChangelogList } from './changelog-list';

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+// CONTENT PARITY: keep substantive copy in sync with content/pricing.md.
 import { FooterSection } from '@/components/footer-section';
 import { Navbar } from '@/components/navbar';
 import { SoftwareApplicationStructuredData } from '@/components/structured-data';
