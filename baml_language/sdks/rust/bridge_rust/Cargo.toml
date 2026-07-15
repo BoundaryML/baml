@@ -1,6 +1,10 @@
 [package]
 name = "baml_bridge"
 edition.workspace = true
+# Advertise the crate's minimum supported Rust to crates.io consumers; the
+# verify workflow's MSRV leg proves the packaged crate + generated SDK compile
+# on it.
+rust-version.workspace = true
 # A literal version, NOT the workspace `0.0.0-beta`: this crate publishes to
 # crates.io, so its version must be the canonical BAML language version.
 # `scripts/baml-language-version` keeps this equal to the canary version and

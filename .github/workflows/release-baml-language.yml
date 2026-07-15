@@ -418,7 +418,7 @@ jobs:
 
   verify-rust-sdk:
     name: Verify Rust SDK
-    needs: [plan, build-bridge-cffi, build-rust-sdk]
+    needs: [plan, build-toolchain, build-bridge-cffi, build-rust-sdk]
     uses: ./.github/workflows/verify-rust-sdk.reusable.yaml
     permissions:
       contents: read
