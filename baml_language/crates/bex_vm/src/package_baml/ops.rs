@@ -221,7 +221,7 @@ fn dispatch_op(
         return NativeCallResult::from(unresolved_op(iface, method));
     };
     let Some((rule, bound_args)) =
-        resolve::resolve_implements_rule(vm, &self_ty.into(), &op_qtn, iface_args)
+        resolve::resolve_implements_rule_exact(vm, &self_ty.into(), &op_qtn, iface_args)
     else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };

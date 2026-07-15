@@ -50,7 +50,7 @@ interface Remainder<Rhs extends root.Concrete> requires root.Concrete {
 }
 
 /// `-self`
-interface Negate {
+interface Negate requires root.Concrete {
     function neg(self) -> Self throws never
 }
 
