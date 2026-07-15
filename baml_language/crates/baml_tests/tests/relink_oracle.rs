@@ -1,4 +1,4 @@
-//! Per-file relink oracle (B-693 Stage 3): reusing a clean file's compiled
+//! Per-file relink oracle: reusing a clean file's compiled
 //! unit from a previous compile's decomposed image must produce byte-identical
 //! output to a full compile.
 //!
@@ -10,7 +10,9 @@
 //! shifts `GlobalIndex`/`ObjectIndex` layouts, so a reused unit only matches the
 //! full compile if the linker rewrote every cross-unit reference correctly.
 
-use std::{collections::HashSet, path::Path};
+mod common;
+
+use std::collections::HashSet;
 
 use baml_compiler2_emit::{
     CompileOptions, OptLevel, emit_units, generate_project_bytecode_with_reuse_units,
@@ -18,60 +20,13 @@ use baml_compiler2_emit::{
 };
 use baml_project::ProjectDatabase;
 use bex_vm_types::{CompilationUnit, Object, Program};
+use common::{A_BAML, B_BAML, C_BAML, assert_programs_byte_identical, build_db};
 
 const ROOT: &str = "/relink-oracle";
 
-const A_BAML: &str = r#"class Point {
-  x int
-  y int
-}
-
-function make_point(x: int, y: int) -> Point {
-  Point { x: x, y: y }
-}
-
-function origin() -> Point {
-  make_point(0, 0)
-}
-"#;
-
-const B_BAML: &str = r#"function scale(p: Point, factor: int) -> Point {
-  let mul = (v: int) -> int { v * factor }
-  Point { x: mul(p.x), y: mul(p.y) }
-}
-
-function magnitude_ish(p: Point) -> int {
-  p.x * p.x + p.y * p.y
-}
-
-function label(p: Point) -> string {
-  "point-label"
-}
-"#;
-
-const C_BAML: &str = r#"function main() -> int {
-  let banner = "start";
-  baml.io.println(banner);
-  let p = make_point(3, 4);
-  let doubled = scale(p, 2);
-  let tag = label(doubled);
-  baml.io.println(tag);
-  magnitude_ish(doubled)
-}
-"#;
-
-fn build_db(files: &[(&str, &str)]) -> ProjectDatabase {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new(ROOT));
-    for (name, content) in files {
-        db.add_or_update_file(&Path::new(ROOT).join(name), content);
-    }
-    db
-}
-
 fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
     generate_project_bytecode_with_stdlib(
-        &build_db(files),
+        &build_db(ROOT, files),
         &CompileOptions {
             emit_test_cases: false,
         },
@@ -86,7 +41,7 @@ fn compile_full(files: &[(&str, &str)], base: &Program) -> Program {
 /// it is produced in-process by `emit_units` over the previous sources).
 fn prev_units(files: &[(&str, &str)]) -> Vec<CompilationUnit> {
     emit_units(
-        &build_db(files),
+        &build_db(ROOT, files),
         &CompileOptions {
             emit_test_cases: false,
         },
@@ -101,7 +56,7 @@ fn relink(
     prev_units: &[CompilationUnit],
     clean: &[&str],
 ) -> Program {
-    relink_with_db(build_db(files), base, prev_units, clean)
+    relink_with_db(build_db(ROOT, files), base, prev_units, clean)
 }
 
 /// Relink exactly as the CLI does: throw facts for the clean files are
@@ -115,7 +70,7 @@ fn relink_seeded(
     clean: &[&str],
 ) -> Program {
     use baml_compiler2_tir::throw_inference::file_throw_facts;
-    let prev_db = build_db(prev_files);
+    let prev_db = build_db(ROOT, prev_files);
     let mut seeds = std::collections::BTreeMap::new();
     for sf in prev_db.get_source_files() {
         let path = sf.path(&prev_db).display().to_string();
@@ -124,7 +79,7 @@ fn relink_seeded(
             seeds.insert(path, file_throw_facts(&prev_db, sf).0.clone());
         }
     }
-    let mut db = build_db(files);
+    let mut db = build_db(ROOT, files);
     db.set_seeded_throw_facts(seeds);
     relink_with_db(db, base, prev_units, clean)
 }
@@ -156,22 +111,17 @@ fn assert_relink_matches(
     prev_units: &[CompilationUnit],
     clean: &[&str],
 ) {
-    let full = borsh::to_vec(&compile_full(edited, base)).expect("serialize full");
-    let relinked =
-        borsh::to_vec(&relink(edited, base, prev_units, clean)).expect("serialize relink");
-    assert!(
-        full == relinked,
-        "{label}: relink differs from full compile (lengths {} vs {}, first diff at {:?})",
-        full.len(),
-        relinked.len(),
-        full.iter().zip(relinked.iter()).position(|(a, b)| a != b),
+    assert_programs_byte_identical(
+        label,
+        &compile_full(edited, base),
+        &relink(edited, base, prev_units, clean),
     );
 }
 
 #[test]
 fn relink_is_byte_identical_to_full_compile() {
     let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
-    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
     let prev = prev_units(&files);
 
     // 1. Body-only edit in b: a and c reuse with identical layout.
@@ -277,7 +227,7 @@ fn relink_is_byte_identical_to_full_compile() {
 #[test]
 fn seeded_relink_is_byte_identical_to_full_compile() {
     let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
-    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
     let prev = prev_units(&files);
 
     // Body edit.
@@ -321,7 +271,7 @@ fn seeded_relink_is_byte_identical_to_full_compile() {
     assert!(full == seeded, "seeded relink differs (throws edit)");
 }
 
-/// B-693 Stage 6 evidence: an incremental compile lowers ONLY the dirty files.
+/// An incremental compile lowers ONLY the dirty files.
 /// `take_lowered_files` drains the per-thread record of files whose bodies hit
 /// Pass 4 (MIR/bytecode lowering); after a reuse compile it must contain the
 /// dirty file and none of the clean files.
@@ -330,7 +280,7 @@ fn relink_lowers_only_dirty_files() {
     use baml_compiler2_emit::take_lowered_files;
 
     let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
-    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
     let prev = prev_units(&files);
 
     // Body-only edit in b; a and c stay clean.
@@ -362,9 +312,9 @@ fn relink_lowers_only_dirty_files() {
 /// files were MIR/bytecode-lowered (clean files' units — including their `let`
 /// helpers and `$init_test` contributions — came from `prev_units`).
 ///
-/// This is the B-693 R1/R2 gate: the three scenarios below (dirty `test` block,
-/// dirty top-level `let`, dirty generic-function value shadowing a clean owner)
-/// previously hit `ReuseUnsupported` and fell back to a full compile.
+/// This is the design §9 R1/R2 gate: the three scenarios below (dirty `test`
+/// block, dirty top-level `let`, dirty generic-function value shadowing a clean
+/// owner) are handled incrementally and stay byte-identical to a full compile.
 fn assert_incremental_matches(
     label: &str,
     edited: &[(&str, &str)],
@@ -373,10 +323,10 @@ fn assert_incremental_matches(
     clean: &[&str],
     dirty: &[&str],
 ) {
-    let full = borsh::to_vec(&compile_full(edited, base)).expect("serialize full");
+    let full = compile_full(edited, base);
 
     let clean_files: HashSet<String> = clean.iter().map(ToString::to_string).collect();
-    let db = build_db(edited);
+    let db = build_db(ROOT, edited);
     // Drain everything the setup (stdlib, prev_units, the full compile above)
     // lowered, so the counter reflects only the reuse call below.
     let _ = take_lowered_files();
@@ -399,16 +349,7 @@ fn assert_incremental_matches(
              incremental: {e}"
         ),
     };
-    let reused_bytes = borsh::to_vec(&reused).expect("serialize reuse");
-    assert!(
-        full == reused_bytes,
-        "{label}: reuse differs from full compile (lengths {} vs {}, first diff at {:?})",
-        full.len(),
-        reused_bytes.len(),
-        full.iter()
-            .zip(reused_bytes.iter())
-            .position(|(a, b)| a != b),
-    );
+    assert_programs_byte_identical(label, &full, &reused);
 
     for d in dirty {
         assert!(
@@ -425,9 +366,8 @@ fn assert_incremental_matches(
 }
 
 /// R2 (design §9): a dirty file with a top-level `test` block. Editing it changes
-/// the per-package `$init_test` chainer tail, which the reuse path used to reuse
-/// verbatim (→ `ReuseUnsupported`). Now the tail is resynthesized incrementally
-/// and stays byte-identical.
+/// the per-package `$init_test` chainer tail; the reuse path resynthesizes it
+/// incrementally and stays byte-identical.
 #[test]
 fn incremental_dirty_test_block() {
     const CLEAN: &str = r#"function clean_fn() -> int {
@@ -443,7 +383,7 @@ test "t_dirty" {
 }
 "#;
     let files = [("t_clean.baml", CLEAN), ("t_dirty.baml", DIRTY)];
-    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
     let prev = prev_units(&files);
 
     let dirty_edit = DIRTY.replace("  1\n}", "  2\n}");
@@ -463,7 +403,7 @@ test "t_dirty" {
 }
 
 /// R2 (design §9): a dirty file with a top-level `let` (client-like). Editing it
-/// re-participates in the package `$init` synthesis, which used to abort reuse.
+/// re-participates in the package `$init` synthesis, resynthesized incrementally.
 #[test]
 fn incremental_dirty_top_level_let() {
     const CLEAN: &str = r#"function clean_fn() -> int {
@@ -477,7 +417,7 @@ function use_greeting() -> string {
 }
 "#;
     let files = [("l_clean.baml", CLEAN), ("l_dirty.baml", DIRTY)];
-    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
     let prev = prev_units(&files);
 
     let dirty_edit = DIRTY.replace("  greeting\n}", "  greeting\n  // edited\n}");
@@ -500,7 +440,7 @@ function use_greeting() -> string {
 /// (`ident<int>`) that a *clean* file also uses. The clean file is the
 /// first-referencer, so it owns the canonical pooled object; the dirty-only emit
 /// re-interns a local copy. The linker must dedup them (keep the clean owner,
-/// redirect the dirty reference) to stay byte-identical — previously this aborted.
+/// redirect the dirty reference) to stay byte-identical.
 #[test]
 fn incremental_dirty_generic_value_shadows_clean() {
     // File order (sorted): gen_a_base < gen_b_use < gen_c_use. `gen_b_use` is the
@@ -525,7 +465,7 @@ fn incremental_dirty_generic_value_shadows_clean() {
         ("gen_b_use.baml", USE_A),
         ("gen_c_use.baml", USE_B),
     ];
-    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
     let prev = prev_units(&files);
 
     let dirty_edit = USE_B.replace("  f(2)", "  f(2) + 0");
@@ -552,7 +492,7 @@ fn incremental_dirty_generic_value_shadows_clean() {
 #[test]
 fn relink_actually_reuses_prev_unit() {
     let files = [("a.baml", A_BAML), ("b.baml", B_BAML), ("c.baml", C_BAML)];
-    let base = generate_stdlib_program(&build_db(&files), OptLevel::Two).expect("stdlib");
+    let base = generate_stdlib_program(&build_db(ROOT, &files), OptLevel::Two).expect("stdlib");
     let mut prev = prev_units(&files);
 
     // Plant the probe inside b's unit — the `code` bucket entry that compiled
