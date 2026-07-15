@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// A reference to an environment variable found in source code (`env.VAR_NAME`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnvVarRef {
     /// The variable name (e.g., `"OPENAI_API_KEY"`).
     pub name: String,

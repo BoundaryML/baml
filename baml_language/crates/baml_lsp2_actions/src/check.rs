@@ -154,15 +154,12 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     let res_ctx = baml_compiler2_tir::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
     let aliases = collect_type_aliases_for_resolution_context(db, res_ctx);
-    let ast_items = {
-        let tree = baml_compiler_parser::syntax_tree(db, file);
-        let (items, _, _) = baml_compiler2_ast::lower_file(&tree);
-        items
-    };
+    // Reuse the memoized CST → AST lowering instead of re-lowering here.
+    let ast_items = &baml_compiler2_hir::file_ast(db, file).items;
     diagnostics.extend(validate_associated_type_bindings_in_items(
         db,
         file_id,
-        &ast_items,
+        ast_items,
         pkg_items,
         &pkg_info.namespace_path,
     ));
