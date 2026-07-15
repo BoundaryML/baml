@@ -319,8 +319,8 @@ mod tests {
 
     #[test]
     fn class_type_parameter_edits_change_the_layout_hash() {
-        // Verification bar #4: a class's generic-parameter list is part of its
-        // layout surface (it feeds `generic_param_count`).
+        // A class's generic-parameter list is part of its layout surface (it
+        // feeds `generic_param_count`).
         let base = layout_of("class Box<T> {\n  value T\n}\n");
         assert_ne!(
             base,

@@ -11,6 +11,8 @@
 
 pub(crate) mod agent_command;
 pub(crate) mod bytecode_cache;
+#[cfg(test)]
+mod cache_test_support;
 pub(crate) mod check_command;
 pub(crate) mod commands;
 pub(crate) mod describe_command;

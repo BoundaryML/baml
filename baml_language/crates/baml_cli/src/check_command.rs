@@ -6,7 +6,7 @@ use baml_project::ProjectDatabase;
 use clap::Args;
 
 use crate::{
-    bytecode_cache::{CacheContext, prepare_reuse_plan},
+    bytecode_cache::CacheContext,
     project_load::{build_db_from_sources, resolve_project_sources},
     reporter::Reporter,
 };
@@ -37,13 +37,12 @@ impl CheckArgs {
         // Check is a read-only cache consumer. It can use the immutable stdlib
         // interface and the last successful compile's reuse seeds, but cannot
         // advance the manifest without emitting matching Program/unit entries.
-        if !CacheContext::verify_enabled()
-            && let Some(interface) = cache.as_ref().and_then(CacheContext::load_stdlib_interface)
-        {
-            db.set_seeded_stdlib_interface(interface);
-        }
-        let reuse_plan = cache.as_ref().and_then(|cache| cache.plan_reuse(&db));
-        let reuse_plan = prepare_reuse_plan(&mut db, reuse_plan);
+        // The stdlib-interface-hit flag is only useful to run/test (which write),
+        // so a read-only check discards it.
+        let reuse_plan = match &cache {
+            Some(ctx) => ctx.prepare_warm_db(&mut db).reuse_plan,
+            None => None,
+        };
 
         reporter.spin("Checking", format!("{file_count} file(s)"));
         let diagnostics = cache.as_ref().map_or_else(

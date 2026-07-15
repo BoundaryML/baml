@@ -1,4 +1,4 @@
-//! Typed (de)hydration for the per-file diagnostics cache (Phase 1).
+//! Typed (de)hydration for the per-file diagnostics cache.
 //!
 //! The manifest stores each file's diagnostics as an opaque borsh blob
 //! (`bex_cache` never interprets it — the SeededStdlibInterface pattern). This
@@ -86,12 +86,7 @@ fn rel_path_of(db: &ProjectDatabase, root: &Path, file_id: FileId) -> Option<Str
     if path.to_string_lossy().starts_with("<builtin>/") {
         return None;
     }
-    Some(
-        path.strip_prefix(root)
-            .unwrap_or(path)
-            .display()
-            .to_string(),
-    )
+    Some(bex_cache::rel_path(root, path))
 }
 
 /// The file that owns a diagnostic for per-file caching: its primary span's
@@ -208,19 +203,29 @@ fn rehydrate(db: &ProjectDatabase, root: &Path, cached: &CachedDiagnostic) -> Op
     rehydrate_with(cached, |span| rehydrate_span(db, root, span))
 }
 
-/// Serialize one file's diagnostics into the opaque manifest blob. Returns a
-/// poison blob (`None` inside) if any diagnostic can't be dehydrated, so the
-/// owner file is conservatively re-checked next compile rather than served an
-/// incomplete set.
-fn serialize_file_blob(db: &ProjectDatabase, root: &Path, diags: &[&Diagnostic]) -> Vec<u8> {
+/// Serialize a diagnostic set into the opaque blob, mapping every span through
+/// `map_span`. Returns a poison blob (`None` inside) if any diagnostic has an
+/// unmappable span, so the owner is conservatively re-checked next compile
+/// rather than served an incomplete set. The per-file (rel-path) and builtin
+/// (`<builtin>/...` path) keyings differ only in `map_span`.
+fn serialize_blob_with(
+    diags: &[&Diagnostic],
+    map_span: impl Fn(Span) -> Option<CachedSpan>,
+) -> Vec<u8> {
     let mut cached = Vec::with_capacity(diags.len());
     for d in diags {
-        match dehydrate(db, root, d) {
+        match dehydrate_with(d, &map_span) {
             Some(c) => cached.push(c),
             None => return borsh::to_vec(&CachedFileBlob::None).unwrap_or_default(),
         }
     }
     borsh::to_vec(&CachedFileBlob::Some(cached)).unwrap_or_default()
+}
+
+/// Serialize one file's diagnostics into the opaque manifest blob (rel-path
+/// keyed). Poison (re-check) if any span can't be mapped to a tracked user file.
+fn serialize_file_blob(db: &ProjectDatabase, root: &Path, diags: &[&Diagnostic]) -> Vec<u8> {
+    serialize_blob_with(diags, |span| dehydrate_span(db, root, span))
 }
 
 /// The blob for a checked file with no diagnostics (distinct from a poison
@@ -255,21 +260,30 @@ pub(crate) fn one_fake_diagnostic_blob(rel_path: &str) -> Vec<u8> {
     borsh::to_vec(&CachedFileBlob::Some(cached)).unwrap_or_default()
 }
 
-/// Rehydrate an opaque manifest blob into live diagnostics. `None` — a poison
-/// marker, an undecodable blob, or an unmappable / out-of-range span — means
-/// "re-check this file"; the cache never serves a partial or stale set.
-pub(crate) fn rehydrate_file_blob(
-    db: &ProjectDatabase,
-    root: &Path,
+/// Decode an opaque blob and rehydrate each diagnostic, mapping every cached
+/// span through `map_span`. `None` — a poison marker, an undecodable blob, or an
+/// unmappable / out-of-range span — means "re-check"; the cache never serves a
+/// partial or stale set.
+fn rehydrate_blob_with(
     blob: &[u8],
+    map_span: impl Fn(&CachedSpan) -> Option<Span>,
 ) -> Option<Vec<Diagnostic>> {
     let cached: CachedFileBlob = borsh::from_slice(blob).ok()?;
     let cached = cached?;
     let mut out = Vec::with_capacity(cached.len());
     for c in &cached {
-        out.push(rehydrate(db, root, c)?);
+        out.push(rehydrate_with(c, &map_span)?);
     }
     Some(out)
+}
+
+/// Rehydrate an opaque manifest blob (rel-path keyed) into live diagnostics.
+pub(crate) fn rehydrate_file_blob(
+    db: &ProjectDatabase,
+    root: &Path,
+    blob: &[u8],
+) -> Option<Vec<Diagnostic>> {
+    rehydrate_blob_with(blob, |span| rehydrate_span(db, root, span))
 }
 
 /// Group freshly-checked diagnostics by owner file and serialize each group to
@@ -374,14 +388,7 @@ pub(crate) fn collect_builtin_diagnostics(db: &ProjectDatabase) -> Vec<Diagnosti
 /// [`serialize_builtin_diagnostics`] so the verify oracle's negative test can
 /// build a stale, non-empty blob from fabricated builtin diagnostics.)
 pub(crate) fn serialize_builtin_blob(db: &ProjectDatabase, diags: &[&Diagnostic]) -> Vec<u8> {
-    let mut cached = Vec::with_capacity(diags.len());
-    for d in diags {
-        match dehydrate_with(d, |span| dehydrate_builtin_span(db, span)) {
-            Some(c) => cached.push(c),
-            None => return borsh::to_vec(&CachedFileBlob::None).unwrap_or_default(),
-        }
-    }
-    borsh::to_vec(&CachedFileBlob::Some(cached)).unwrap_or_default()
+    serialize_blob_with(diags, |span| dehydrate_builtin_span(db, span))
 }
 
 /// Run the honest builtin check and serialize it into the stdlib-diagnostics
@@ -397,16 +404,8 @@ pub(crate) fn serialize_builtin_diagnostics(db: &ProjectDatabase) -> Vec<u8> {
 /// out-of-range span — means "check the builtins honestly"; the cache never
 /// serves a partial or stale set.
 pub(crate) fn rehydrate_builtin_blob(db: &ProjectDatabase, blob: &[u8]) -> Option<Vec<Diagnostic>> {
-    let cached: CachedFileBlob = borsh::from_slice(blob).ok()?;
-    let cached = cached?;
     let builtins = builtin_files_by_path(db);
-    let mut out = Vec::with_capacity(cached.len());
-    for c in &cached {
-        out.push(rehydrate_with(c, |span| {
-            rehydrate_builtin_span(db, &builtins, span)
-        })?);
-    }
-    Some(out)
+    rehydrate_blob_with(blob, |span| rehydrate_builtin_span(db, &builtins, span))
 }
 
 #[cfg(test)]

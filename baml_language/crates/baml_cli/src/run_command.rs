@@ -7,10 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{
-    baml_compiler_diagnostics::{Severity, render},
-    baml_compiler2_emit,
-};
+use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
 // `surface_clap_error` is defined later in this file.
@@ -215,8 +212,9 @@ impl RunArgs {
     }
 
     /// Filter `diagnostics` to errors and, if any, render the full ariadne block
-    /// (sources/paths for all files, since an error may carry cross-file spans)
-    /// and bail with `bail_context`. Warnings are intentionally not surfaced.
+    /// (sources/paths for every user file plus builtins, since an error may carry
+    /// cross-file spans) and bail with `bail_context`. Warnings are intentionally
+    /// not surfaced.
     fn render_and_bail_on_errors(
         &self,
         diagnostics: &[baml_db::baml_compiler_diagnostics::Diagnostic],
@@ -227,23 +225,12 @@ impl RunArgs {
         let errors: Vec<_> = diagnostics
             .iter()
             .filter(|d| d.severity == Severity::Error)
+            .cloned()
             .collect();
         if errors.is_empty() {
             return Ok(());
         }
-        let mut sources = HashMap::new();
-        let mut file_paths = HashMap::new();
-        for sf in &db.get_source_files() {
-            let file_id = sf.file_id(db);
-            sources.insert(file_id, sf.text(db).to_string());
-            file_paths.insert(file_id, sf.path(db));
-        }
-        let rendered = render::render_diagnostics(
-            &errors.iter().copied().cloned().collect::<Vec<_>>(),
-            &sources,
-            &file_paths,
-            &render::RenderConfig::cli_auto(),
-        );
+        let rendered = crate::check_command::render_project_diagnostics(db, &errors);
         reporter.abandon();
         eprintln!("{rendered}");
         anyhow::bail!("{bail_context}");
@@ -734,29 +721,24 @@ impl RunArgs {
             }
         }
 
-        // Seed the stdlib typed interface (B-694) before the first typecheck
-        // query, so a fresh process skips re-deriving stdlib types. Applies to
-        // every compile (the stdlib is a build constant), independent of the
-        // per-file reuse plan, and gated off under verify so the oracle
-        // exercises the honest path.
-        let stdlib_interface_hit = !crate::bytecode_cache::CacheContext::verify_enabled()
-            && cache
-                .as_ref()
-                .and_then(|ctx| ctx.load_stdlib_interface())
-                .map(|by_package| db.set_seeded_stdlib_interface(by_package))
-                .is_some();
-
-        // Per-file reuse: decide from the manifest which files' compiled
-        // bytecode can be spliced from the previous program.
-        let reuse_plan = cache.as_ref().and_then(|ctx| ctx.plan_reuse(&db));
-        if let Some(plan) = &reuse_plan {
-            self.vlog(format_args!(
-                "Per-file reuse: {} clean, {} dirty",
-                plan.clean_files.len(),
-                plan.dirty_files.len()
-            ));
-        }
-        let reuse_plan = crate::bytecode_cache::prepare_reuse_plan(&mut db, reuse_plan);
+        // Seed the stdlib typed interface before the first typecheck query (a
+        // build constant, so it applies to every compile independent of the reuse
+        // plan and is gated off under verify) and prepare the per-file reuse plan
+        // — the same warm-database setup `check` and `test` run.
+        let (reuse_plan, stdlib_interface_hit) = match &cache {
+            Some(ctx) => {
+                let prep = ctx.prepare_warm_db(&mut db);
+                if let Some(plan) = &prep.reuse_plan {
+                    self.vlog(format_args!(
+                        "Per-file reuse: {} clean, {} dirty",
+                        plan.clean_files.len(),
+                        plan.dirty_files.len()
+                    ));
+                }
+                (prep.reuse_plan, prep.stdlib_interface_hit)
+            }
+            None => (None, false),
+        };
 
         // `baml run` keeps the compile phase silent; the program's output is
         // the point. Compile/count progress belongs to `check` and `generate`.
@@ -789,41 +771,17 @@ impl RunArgs {
         )
         .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
         if let Some(ctx) = &cache {
-            ctx.verify_against(&compiled.program)?;
-            ctx.verify_stdlib_interface(&db)?;
-            ctx.verify_diagnostics(&db)?;
-            ctx.verify_stdlib_diagnostics(&db)?;
-            ctx.verify_callable_throws_fragments(&db)?;
             let fresh = fresh_diagnostics
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
-            if let Err(e) = ctx.store_artifacts_with_manifest(
+            ctx.verify_and_store(
                 &db,
-                &compiled.program,
-                compiled.units.as_deref(),
+                &compiled,
                 fresh,
                 reuse_plan.as_ref(),
-            ) {
-                crate::bytecode_cache::cache_debug(format_args!(
-                    "Bytecode cache write failed: {e}"
-                ));
-            }
-            // Materialize the stdlib interface blob on a miss (idempotent on a
-            // hit, so only write when the seed was absent).
-            if !stdlib_interface_hit {
-                ctx.store_stdlib_interface(&db);
-            }
-            // Materialize the per-toolchain builtin-diagnostics blob on a miss
-            // (self-gating on blob presence, so a warm hit is a no-op write).
-            ctx.store_stdlib_diagnostics(&db);
-            // Sampled field verification (rustc-style 1-in-32): now that the
-            // compile result exists, ~1 warm run in 32 re-derives one served
-            // clean file on a fresh, un-seeded database and hard-errors on any
-            // drift. Bounded latency (one file's honest work), loud on the
-            // silent-staleness bug class the full BAML_CACHE_VERIFY guards.
-            ctx.maybe_sampled_verify(reuse_plan.as_ref(), || {
-                crate::project_load::build_db_from_sources(&resolved, |_| {})
-            })?;
+                stdlib_interface_hit,
+                || crate::project_load::build_db_from_sources(&resolved, |_| {}),
+            )?;
         }
         // Warm-incremental evidence: with the diagnostics cache serving clean
         // files, this counts only the dirty files' scopes; a cold compile walks

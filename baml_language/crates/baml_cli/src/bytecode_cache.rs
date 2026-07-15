@@ -50,10 +50,10 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 use bex_cache::{
     BytecodeCache, CacheKey, KeyInputs, ManifestFile, ProjectManifest, compiler_fingerprint,
-    compute_key, manifest_key, stdlib_diagnostics_key, stdlib_interface_key, test_discovery_key,
+    compute_key, content_hash, env_flag, manifest_key, rel_path, stdlib_diagnostics_key,
+    stdlib_interface_key, test_discovery_key,
 };
 use bex_vm_types::{CompilationUnit, Object, Program, relink};
-use sha2::{Digest, Sha256};
 
 use crate::{
     file_signature::{file_layout_hash, file_signature_hash},
@@ -123,7 +123,7 @@ pub(crate) struct CacheContext {
 impl CacheContext {
     /// `None` when caching is disabled via `BAML_NO_BYTECODE_CACHE=1`.
     pub(crate) fn open(resolved: &ResolvedProject, emit_test_cases: bool) -> Option<Self> {
-        if std::env::var_os("BAML_NO_BYTECODE_CACHE").is_some_and(|v| v == "1") {
+        if env_flag("BAML_NO_BYTECODE_CACHE") {
             return None;
         }
         let dir = std::env::var_os("BAML_CACHE_DIR")
@@ -171,7 +171,36 @@ impl CacheContext {
 
     /// Tripwire mode: force a real compile even on a hit, then byte-compare.
     pub(crate) fn verify_enabled() -> bool {
-        std::env::var_os("BAML_CACHE_VERIFY").is_some_and(|v| v == "1")
+        env_flag("BAML_CACHE_VERIFY")
+    }
+
+    /// Load and borsh-decode a raw cache entry under `key`. `None` on a miss or
+    /// a decode failure — both fall through to honest recomputation, the decode
+    /// failure logged (labelled `what`) under `BAML_CACHE_DEBUG`. Callers own any
+    /// disable-knob gating before this.
+    fn load_decoded<T: borsh::BorshDeserialize>(&self, key: &CacheKey, what: &str) -> Option<T> {
+        let bytes = self.cache.load_raw(key)?;
+        match borsh::from_slice::<T>(&bytes) {
+            Ok(value) => Some(value),
+            Err(e) => {
+                cache_debug(format_args!("{what} undecodable: {e}"));
+                None
+            }
+        }
+    }
+
+    /// Serialize `value` and store it under `key`, best-effort: a serialize or
+    /// store failure is logged (labelled `what`) under `BAML_CACHE_DEBUG` and
+    /// otherwise ignored — the entry is simply re-derived next run.
+    fn store_encoded<T: borsh::BorshSerialize>(&self, key: &CacheKey, value: &T, what: &str) {
+        match borsh::to_vec(value) {
+            Ok(payload) => {
+                if let Err(e) = self.cache.store_raw(key, &payload) {
+                    cache_debug(format_args!("{what} store failed: {e}"));
+                }
+            }
+            Err(e) => cache_debug(format_args!("{what} serialize failed: {e}")),
+        }
     }
 
     pub(crate) fn load(&self) -> Option<Program> {
@@ -216,7 +245,7 @@ impl CacheContext {
     /// timing comparison isolates B-694. `BAML_NO_BYTECODE_CACHE` already
     /// disables the whole cache, so this is the finer-grained knob.
     fn stdlib_interface_cache_disabled() -> bool {
-        std::env::var_os("BAML_NO_STDLIB_INTERFACE_CACHE").is_some_and(|v| v == "1")
+        env_flag("BAML_NO_STDLIB_INTERFACE_CACHE")
     }
 
     /// Isolation toggle for measuring the per-file diagnostics cache's win:
@@ -225,7 +254,7 @@ impl CacheContext {
     /// otherwise intact. `BAML_NO_BYTECODE_CACHE` already disables the whole
     /// cache, so this is the finer-grained knob.
     fn diagnostics_cache_disabled() -> bool {
-        std::env::var_os("BAML_NO_DIAGNOSTICS_CACHE").is_some_and(|v| v == "1")
+        env_flag("BAML_NO_DIAGNOSTICS_CACHE")
     }
 
     /// Isolation toggle for measuring the `callable_throws` seed's win:
@@ -235,7 +264,7 @@ impl CacheContext {
     /// leaving reuse / diagnostics serving intact. `BAML_NO_BYTECODE_CACHE`
     /// already disables the whole cache, so this is the finer-grained knob.
     fn callable_throws_cache_disabled() -> bool {
-        std::env::var_os("BAML_NO_CALLABLE_THROWS_CACHE").is_some_and(|v| v == "1")
+        env_flag("BAML_NO_CALLABLE_THROWS_CACHE")
     }
 
     /// Load the cached stdlib typed-interface blob (B-694), if present:
@@ -248,14 +277,7 @@ impl CacheContext {
         if Self::stdlib_interface_cache_disabled() {
             return None;
         }
-        let bytes = self.cache.load_raw(&self.stdlib_interface_key)?;
-        match borsh::from_slice::<std::collections::BTreeMap<String, Vec<u8>>>(&bytes) {
-            Ok(map) => Some(map),
-            Err(e) => {
-                cache_debug(format_args!("stdlib interface undecodable: {e}"));
-                None
-            }
-        }
+        self.load_decoded(&self.stdlib_interface_key, "stdlib interface")
     }
 
     /// Extract and store the stdlib typed-interface blob after a successful
@@ -267,14 +289,7 @@ impl CacheContext {
             return;
         }
         let blob = extract_stdlib_interface(db);
-        match borsh::to_vec(&blob) {
-            Ok(payload) => {
-                if let Err(e) = self.cache.store_raw(&self.stdlib_interface_key, &payload) {
-                    cache_debug(format_args!("stdlib interface store failed: {e}"));
-                }
-            }
-            Err(e) => cache_debug(format_args!("stdlib interface serialize failed: {e}")),
-        }
+        self.store_encoded(&self.stdlib_interface_key, &blob, "stdlib interface");
     }
 
     /// Localized B-694 verify oracle (analog of `gocacheverify`): under
@@ -314,8 +329,7 @@ impl CacheContext {
     fn load_raw_stdlib_interface_for_verify(
         &self,
     ) -> Option<std::collections::BTreeMap<String, Vec<u8>>> {
-        let bytes = self.cache.load_raw(&self.stdlib_interface_key)?;
-        borsh::from_slice::<std::collections::BTreeMap<String, Vec<u8>>>(&bytes).ok()
+        self.load_decoded(&self.stdlib_interface_key, "stdlib interface")
     }
 
     /// Load the cached stdlib **builtin diagnostics** blob, if present: the
@@ -441,7 +455,7 @@ impl CacheContext {
     /// `BAML_NO_BYTECODE_CACHE` already disables the whole cache, so this is the
     /// finer-grained knob.
     fn discovery_cache_disabled() -> bool {
-        std::env::var_os("BAML_NO_DISCOVERY_CACHE").is_some_and(|v| v == "1")
+        env_flag("BAML_NO_DISCOVERY_CACHE")
     }
 
     /// Load the cached `--list` discovery output, if present: `load_raw` + borsh
@@ -451,14 +465,7 @@ impl CacheContext {
         if Self::discovery_cache_disabled() {
             return None;
         }
-        let bytes = self.cache.load_raw(&self.test_discovery_key)?;
-        match borsh::from_slice::<TestDiscovery>(&bytes) {
-            Ok(disco) => Some(disco),
-            Err(e) => {
-                cache_debug(format_args!("test discovery undecodable: {e}"));
-                None
-            }
-        }
+        self.load_decoded(&self.test_discovery_key, "test discovery")
     }
 
     /// Write-through the discovery output after a successful honest discovery.
@@ -470,14 +477,7 @@ impl CacheContext {
         if Self::discovery_cache_disabled() {
             return;
         }
-        match borsh::to_vec(disco) {
-            Ok(payload) => {
-                if let Err(e) = self.cache.store_raw(&self.test_discovery_key, &payload) {
-                    cache_debug(format_args!("test discovery store failed: {e}"));
-                }
-            }
-            Err(e) => cache_debug(format_args!("test discovery serialize failed: {e}")),
-        }
+        self.store_encoded(&self.test_discovery_key, disco, "test discovery");
     }
 
     /// The `BAML_CACHE_VERIFY` tripwire for `--list` discovery (design §6): under
@@ -492,10 +492,9 @@ impl CacheContext {
         }
         // Read the on-disk blob directly, bypassing the `BAML_NO_DISCOVERY_CACHE`
         // disable (verify must still compare against whatever is on disk).
-        let Some(bytes) = self.cache.load_raw(&self.test_discovery_key) else {
-            return Ok(());
-        };
-        let Ok(cached) = borsh::from_slice::<TestDiscovery>(&bytes) else {
+        let Some(cached) =
+            self.load_decoded::<TestDiscovery>(&self.test_discovery_key, "test discovery")
+        else {
             return Ok(());
         };
         Self::compare_test_discovery(&cached, honest)
@@ -674,6 +673,15 @@ pub(crate) struct ReusePlan {
     pub(crate) clean_diagnostics: std::collections::BTreeMap<String, Vec<u8>>,
 }
 
+/// The result of the warm-database preamble ([`CacheContext::prepare_warm_db`]).
+pub(crate) struct WarmPrep {
+    /// The prepared per-file reuse plan (`None` when nothing can be reused).
+    pub(crate) reuse_plan: Option<ReusePlan>,
+    /// Whether the stdlib interface seed was served — run/test skip re-writing
+    /// it in that case; `check` ignores this.
+    pub(crate) stdlib_interface_hit: bool,
+}
+
 /// Install a reuse plan's type-inference seeds, then enforce its throws
 /// invariant before callers may serve cached diagnostics. Files that fail the
 /// invariant are demoted to dirty; the remaining clean units can still be
@@ -724,7 +732,7 @@ pub(crate) fn prepare_reuse_plan(
 /// without affecting normal output.
 #[allow(clippy::print_stderr)] // opt-in debug channel (BAML_CACHE_DEBUG=1)
 pub(crate) fn cache_debug(args: std::fmt::Arguments<'_>) {
-    if std::env::var_os("BAML_CACHE_DEBUG").is_some_and(|v| v == "1") {
+    if env_flag("BAML_CACHE_DEBUG") {
         eprintln!("[baml-cache] {args}");
     }
 }
@@ -732,10 +740,6 @@ pub(crate) fn cache_debug(args: std::fmt::Arguments<'_>) {
 /// Last path segment of a dotted fq name (`user.ns.foo` → `foo`).
 fn last_segment(name: &str) -> &str {
     name.rsplit('.').next().unwrap_or(name)
-}
-
-fn content_hash(text: &str) -> [u8; 32] {
-    Sha256::digest(text.as_bytes()).into()
 }
 
 /// Last-segment names of every item `file` defines, from the HIR item tree.
@@ -775,10 +779,9 @@ fn defined_names(db: &ProjectDatabase, file: SourceFile) -> Vec<String> {
     }
     // Type aliases are erased into their consumers (a non-recursive alias is
     // expanded inline at every use), so an alias whose RHS changes must reach
-    // the change-propagation set by *name*. Omitting them (the original bug)
-    // left an alias edit invisible: consumers that named the alias spliced the
-    // stale expansion. `def_to_item_ref` handles `TypeAlias` like any other
-    // named item.
+    // the change-propagation set by *name*: a consumer that named the alias
+    // would otherwise splice the stale expansion. `def_to_item_ref` handles
+    // `TypeAlias` like any other named item.
     for local_id in item_tree.type_aliases.keys() {
         let fq = def_to_item_ref(
             db,
@@ -966,9 +969,8 @@ fn file_defines_type(db: &ProjectDatabase, file: SourceFile) -> bool {
 /// (and thus a coherence verdict), so an impl-free edit never trips the fallback.
 fn file_has_impl_construct(db: &ProjectDatabase, file: SourceFile) -> bool {
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    // The unified `impls` map holds both in-class and out-of-body impl blocks, so
-    // it subsumes the removed flat `implements_for` view; a class `implements`
-    // block is a distinct construct still worth a separate check.
+    // The unified `impls` map holds both in-class and out-of-body impl blocks; a
+    // class `implements` block is a distinct construct, so it needs its own check.
     !item_tree.impls.is_empty() || item_tree.classes.values().any(|c| !c.implements.is_empty())
 }
 
@@ -1039,6 +1041,16 @@ fn referenced_names_by_file(program: &Program) -> HashMap<String, Vec<String>> {
         .collect()
 }
 
+/// Root-relative display path for a user `SourceFile`, or `None` for the legacy
+/// `<builtin>/` entries the v1 compiler still surfaces.
+fn user_rel_path(db: &ProjectDatabase, root: &std::path::Path, sf: SourceFile) -> Option<String> {
+    let path = sf.path(db);
+    if path.to_string_lossy().starts_with("<builtin>/") {
+        return None;
+    }
+    Some(rel_path(root, &path))
+}
+
 /// User source files with their root-relative paths (skipping legacy
 /// `<builtin>/` entries the v1 compiler still sees).
 fn user_files_with_rel_paths(db: &ProjectDatabase) -> Vec<(SourceFile, String)> {
@@ -1048,18 +1060,7 @@ fn user_files_with_rel_paths(db: &ProjectDatabase) -> Vec<(SourceFile, String)> 
     let root = project.root(db);
     db.get_source_files()
         .into_iter()
-        .filter_map(|sf| {
-            let path = sf.path(db);
-            if path.to_string_lossy().starts_with("<builtin>/") {
-                return None;
-            }
-            let rel = path
-                .strip_prefix(&root)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
-            Some((sf, rel))
-        })
+        .filter_map(|sf| user_rel_path(db, &root, sf).map(|rel| (sf, rel)))
         .collect()
 }
 
@@ -1078,6 +1079,10 @@ struct DirtyPartition {
     /// walked them, and the facts are content-derived so the value is honest).
     fresh_throw_facts:
         std::collections::BTreeMap<String, Vec<baml_type::throw_facts::FunctionThrowFacts>>,
+    /// Every current user file with its rel path — the single walk this pass
+    /// makes over the source set, handed back so [`CacheContext::plan_reuse`]
+    /// need not list them again on the warm hot path.
+    current: Vec<(SourceFile, String)>,
 }
 
 fn throw_fn_names(
@@ -1095,19 +1100,18 @@ fn throw_fn_names(
 /// signature/layout/impl change set, one hop) ∪ (files reachable from a
 /// throws-changed function through the transitive throws-taint closure).
 ///
-/// The throws-taint closure is the Phase 2 upgrade over the one-hop throws
-/// propagation. `callable_throws` is transitive over the call graph, so a throws
-/// change can flow through a *content-clean intermediary* — whose own
-/// `file_throw_facts` are byte-identical, only its solved transitive throws grew
-/// — to a caller the one-hop pass never reaches. The closure seeds a worklist
-/// with the last-segment names of every function whose facts changed (or was
+/// The throws-taint closure covers throws changes that flow transitively.
+/// `callable_throws` is transitive over the call graph, so a throws change can
+/// flow through a *content-clean intermediary* — whose own `file_throw_facts`
+/// are byte-identical, only its solved transitive throws grew — to a caller a
+/// one-hop pass would never reach. The closure seeds a worklist with the
+/// last-segment names of every function whose facts changed (or was
 /// added/removed), then walks reverse call edges — over-approximated by
 /// `referenced_names` — marking each referencing file dirty and re-tainting its
 /// own functions, stopping at closed-`throws` contracts (whose `callable_throws`
-/// is the declared set, independent of callees). It strictly subsumes the
-/// one-hop version (direct callers ⊂ transitive callers) and over-dirties only,
-/// so a seeded function's body and transitive throw contributors are always
-/// stable — the invariant the `callable_throws` seed rests on.
+/// is the declared set, independent of callees). It over-dirties only, so a
+/// seeded function's body and transitive throw contributors are always stable —
+/// the invariant the `callable_throws` seed rests on.
 fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> DirtyPartition {
     let prev_files: HashMap<&str, &ManifestFile> = manifest
         .files
@@ -1334,6 +1338,7 @@ fn compute_dirty_partition(db: &ProjectDatabase, manifest: &ProjectManifest) -> 
         clean_files,
         dirty_files,
         fresh_throw_facts,
+        current,
     }
 }
 
@@ -1414,12 +1419,13 @@ impl CacheContext {
             mut clean_files,
             mut dirty_files,
             fresh_throw_facts,
+            current,
         } = partition;
 
-        let current_files: HashMap<String, SourceFile> = user_files_with_rel_paths(db)
-            .into_iter()
-            .map(|(file, rel)| (rel, file))
-            .collect();
+        // Reuse the single file walk `compute_dirty_partition` already made rather
+        // than re-listing the source set on the warm hot path.
+        let current_files: HashMap<String, SourceFile> =
+            current.into_iter().map(|(file, rel)| (rel, file)).collect();
         let mut prev_units = Vec::with_capacity(clean_files.len());
         let mut unit_keys = HashMap::with_capacity(clean_files.len());
         let mut degraded = Vec::new();
@@ -1676,6 +1682,69 @@ impl CacheContext {
         })
     }
 
+    /// Seed the immutable stdlib typed interface (gated off under verify so the
+    /// oracle exercises the honest path) and prepare the per-file reuse plan —
+    /// the identical warm-database setup `run`, `test`, and `check` each run
+    /// before the diagnostics gate. `check` discards `stdlib_interface_hit`.
+    pub(crate) fn prepare_warm_db(&self, db: &mut ProjectDatabase) -> WarmPrep {
+        let stdlib_interface_hit = !Self::verify_enabled()
+            && self
+                .load_stdlib_interface()
+                .map(|by_package| db.set_seeded_stdlib_interface(by_package))
+                .is_some();
+        let reuse_plan = prepare_reuse_plan(db, self.plan_reuse(db));
+        WarmPrep {
+            reuse_plan,
+            stdlib_interface_hit,
+        }
+    }
+
+    /// The warm-path verify-and-store sequence shared by `run` and `test`: run
+    /// every `BAML_CACHE_VERIFY` oracle, persist the Program + per-file units and
+    /// manifest, materialize the stdlib interface (unless it was already served)
+    /// and the per-toolchain builtin-diagnostics blob, then run the sampled
+    /// field-verify. `honest_db` builds a fresh un-seeded database for that
+    /// sampled oracle.
+    pub(crate) fn verify_and_store(
+        &self,
+        db: &ProjectDatabase,
+        compiled: &CompiledArtifacts,
+        fresh: &std::collections::BTreeMap<String, Vec<u8>>,
+        plan: Option<&ReusePlan>,
+        stdlib_interface_hit: bool,
+        honest_db: impl FnOnce() -> ProjectDatabase,
+    ) -> anyhow::Result<()> {
+        self.verify_against(&compiled.program)?;
+        self.verify_stdlib_interface(db)?;
+        self.verify_diagnostics(db)?;
+        self.verify_stdlib_diagnostics(db)?;
+        self.verify_callable_throws_fragments(db)?;
+        if let Err(e) = self.store_artifacts_with_manifest(
+            db,
+            &compiled.program,
+            compiled.units.as_deref(),
+            fresh,
+            plan,
+        ) {
+            cache_debug(format_args!("bytecode cache write failed: {e}"));
+        }
+        // Materialize the stdlib interface blob on a miss (idempotent on a hit,
+        // so only write when the seed was absent).
+        if !stdlib_interface_hit {
+            self.store_stdlib_interface(db);
+        }
+        // Materialize the per-toolchain builtin-diagnostics blob on a miss
+        // (self-gating on blob presence, so a warm hit is a no-op write).
+        self.store_stdlib_diagnostics(db);
+        // Sampled field verification (rustc-style 1-in-32): now that the compile
+        // result exists, ~1 warm run in 32 re-derives one served clean file on a
+        // fresh, un-seeded database and hard-errors on any drift. Bounded latency
+        // (one file's honest work), loud on the silent-staleness bug class the
+        // full `BAML_CACHE_VERIFY` guards.
+        self.maybe_sampled_verify(plan, honest_db)?;
+        Ok(())
+    }
+
     /// Read-only diagnostics collector for `baml check`. It uses the same
     /// prepared reuse plan as run/test, but does not serialize fresh blobs: a
     /// check-only manifest cannot advance hashes without matching new units.
@@ -1764,18 +1833,7 @@ impl CacheContext {
                 .map(|mut diags| precomputed.append(&mut diags))
                 .is_some();
 
-        let rel_of = |sf: SourceFile| -> Option<String> {
-            let path = sf.path(db);
-            if path.to_string_lossy().starts_with("<builtin>/") {
-                return None;
-            }
-            Some(
-                path.strip_prefix(&root)
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string(),
-            )
-        };
+        let rel_of = |sf: SourceFile| user_rel_path(db, &root, sf);
         let should_check = |sf: SourceFile| -> bool {
             match rel_of(sf) {
                 // Builtin: served from the per-toolchain constant blob when
@@ -1886,8 +1944,7 @@ impl CacheContext {
     /// `plan_reuse` verify short-circuit (verify must still compare against
     /// whatever manifest is on disk).
     fn load_prev_manifest_for_verify(&self) -> Option<ProjectManifest> {
-        let bytes = self.cache.load_raw(&self.manifest_key)?;
-        borsh::from_slice::<ProjectManifest>(&bytes).ok()
+        self.load_decoded(&self.manifest_key, "manifest")
     }
 
     /// Load the previous compile's symbolic units for the verify oracle,
@@ -2276,19 +2333,16 @@ mod tests {
     //!   - the fragment and diagnostics `BAML_CACHE_VERIFY` oracles (a faithful
     //!     cache passes, a poisoned one bails).
 
-    use std::{
-        path::{Path, PathBuf},
-        sync::atomic::{AtomicUsize, Ordering},
-    };
+    use std::path::{Path, PathBuf};
 
     use super::*;
+    use crate::cache_test_support::{
+        cache_disabled, compile_and_store_v1, dirty_basenames, opts, resolved, unique_root,
+    };
 
-    static COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-    fn opts() -> CompileOptions {
-        CompileOptions {
-            emit_test_cases: false,
-        }
+    /// A unique on-disk root for a `bytecode_cache` disk-round-trip test.
+    fn bc_root() -> PathBuf {
+        unique_root("baml-bc-cache-test")
     }
 
     fn build_db(files: &[(&str, &str)]) -> ProjectDatabase {
@@ -2307,82 +2361,14 @@ mod tests {
             .expect("source file present")
     }
 
-    fn cache_disabled() -> bool {
-        std::env::var_os("BAML_NO_BYTECODE_CACHE").is_some()
-            || std::env::var_os("BAML_CACHE_VERIFY").is_some()
-    }
-
-    fn unique_root() -> PathBuf {
-        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        // Anchor the root under the *canonical* temp base so it is already in the
-        // OS's resolved form (macOS resolves the `/var` -> `/private/var`
-        // symlink; Windows adds the `\\?\` verbatim prefix). `ProjectDatabase`
-        // canonicalizes both the project root and every source path, but only
-        // when they exist on disk: db1 is built before the cache dir exists (root
-        // canonicalize is a no-op fallback), then `store` materializes the root,
-        // so db2's `set_project_root` *does* canonicalize it — while the
-        // in-memory `.baml` files never exist to canonicalize. If the base held
-        // an unresolved symlink, the root would then gain a resolved prefix the
-        // file paths lack, `strip_prefix` would fail, every rel_path would come
-        // out absolute, and the reuse plan would collapse (macOS/Windows only;
-        // `/tmp` on Linux has no symlink so it was silently fine). Canonicalizing
-        // the base up front keeps the root idempotent under `canonicalize`, so
-        // db1 and db2 agree on every platform.
-        let base = std::env::temp_dir();
-        let base = base.canonicalize().unwrap_or(base);
-        base.join(format!("baml-bc-cache-test-{}-{n}", std::process::id()))
-    }
-
-    fn resolved(root: &Path, files: &[(&str, &str)]) -> ResolvedProject {
-        ResolvedProject {
-            root: root.to_path_buf(),
-            manifest: None,
-            files: files
-                .iter()
-                .map(|(name, content)| (root.join(name), (*content).to_string()))
-                .collect(),
-        }
-    }
-
     /// Compile+cache `initial`, then plan a reuse against `edited`; return the
-    /// set of dirty file names (`None` when caching is disabled by env).
+    /// set of dirty file names (`None` when caching is disabled by env). A strict
+    /// subset of [`plan_after_edit`]'s partition.
     fn dirty_after_edit(
         initial: &[(&str, &str)],
         edited: &[(&str, &str)],
     ) -> Option<HashSet<String>> {
-        if cache_disabled() {
-            return None;
-        }
-        let root = unique_root();
-        let _ = std::fs::remove_dir_all(&root);
-
-        let r1 = resolved(&root, initial);
-        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
-        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-        let program1 =
-            compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile succeeds");
-        let fresh1 = ctx1
-            .collect_diagnostics_incremental(&db1, None)
-            .fresh_by_file;
-        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
-            .expect("manifest stored");
-
-        let r2 = resolved(&root, edited);
-        let db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
-        let plan = ctx2.plan_reuse(&db2).expect("reuse plan available");
-
-        let dirty: HashSet<String> = plan
-            .dirty_files
-            .iter()
-            .filter_map(|sf| {
-                sf.path(&db2)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-            })
-            .collect();
-        let _ = std::fs::remove_dir_all(&root);
-        Some(dirty)
+        plan_after_edit(initial, edited).map(|plan| plan.dirty)
     }
 
     /// The reuse plan's file partition after an edit, by basename: which files
@@ -2410,34 +2396,15 @@ mod tests {
         if cache_disabled() {
             return None;
         }
-        let root = unique_root();
-        let _ = std::fs::remove_dir_all(&root);
-
-        let r1 = resolved(&root, initial);
-        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
-        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-        let program1 =
-            compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile succeeds");
-        let fresh1 = ctx1
-            .collect_diagnostics_incremental(&db1, None)
-            .fresh_by_file;
-        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
-            .expect("manifest stored");
+        let root = bc_root();
+        let _ = compile_and_store_v1(&root, initial);
 
         let r2 = resolved(&root, edited);
         let db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx2 = CacheContext::open(&r2, false).expect("cache reopens");
         let plan = ctx2.plan_reuse(&db2).expect("reuse plan available");
 
-        let dirty: HashSet<String> = plan
-            .dirty_files
-            .iter()
-            .filter_map(|sf| {
-                sf.path(&db2)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-            })
-            .collect();
+        let dirty = dirty_basenames(&plan.dirty_files, &db2);
         let clean: HashSet<String> = plan.clean_files.iter().map(|r| basename(r)).collect();
         let seeded: HashSet<String> = plan
             .seeded_callable_throws
@@ -2465,20 +2432,8 @@ mod tests {
         if cache_disabled() {
             return None;
         }
-        let root = unique_root();
-        let _ = std::fs::remove_dir_all(&root);
-
-        // v1: compile and store the manifest + per-file units.
-        let r1 = resolved(&root, initial);
-        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
-        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-        let program1 =
-            compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile succeeds");
-        let fresh1 = ctx1
-            .collect_diagnostics_incremental(&db1, None)
-            .fresh_by_file;
-        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
-            .expect("manifest stored");
+        let root = bc_root();
+        let _ = compile_and_store_v1(&root, initial);
 
         // v2 served path: plan reuse, seed exactly as the CLI does, relink.
         let r2 = resolved(&root, edited);
@@ -2503,15 +2458,7 @@ mod tests {
             == borsh::to_vec(&full).expect("ser full");
 
         let summary = PlanSummary {
-            dirty: plan
-                .dirty_files
-                .iter()
-                .filter_map(|sf| {
-                    sf.path(&db2)
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                })
-                .collect(),
+            dirty: dirty_basenames(&plan.dirty_files, &db2),
             clean: plan.clean_files.iter().map(|r| basename(r)).collect(),
             seeded,
         };
@@ -2531,19 +2478,8 @@ mod tests {
         if cache_disabled() {
             return None;
         }
-        let root = unique_root();
-        let _ = std::fs::remove_dir_all(&root);
-
-        let r1 = resolved(&root, initial);
-        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
-        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-        let program1 =
-            compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile succeeds");
-        let fresh1 = ctx1
-            .collect_diagnostics_incremental(&db1, None)
-            .fresh_by_file;
-        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
-            .expect("manifest stored");
+        let root = bc_root();
+        let _ = compile_and_store_v1(&root, initial);
 
         let r2 = resolved(&root, edited);
         let mut db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
@@ -2573,15 +2509,7 @@ mod tests {
             == borsh::to_vec(&full).expect("ser full");
 
         let summary = PlanSummary {
-            dirty: plan
-                .dirty_files
-                .iter()
-                .filter_map(|sf| {
-                    sf.path(&db2)
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                })
-                .collect(),
+            dirty: dirty_basenames(&plan.dirty_files, &db2),
             clean: plan.clean_files.iter().map(|r| basename(r)).collect(),
             seeded,
         };
@@ -2589,7 +2517,7 @@ mod tests {
         Some((summary, diags_match, byte_identical))
     }
 
-    // ── Phase 2 follow-up: layout-scoped sentinel (mixed class+function files) ─
+    // ── Layout-scoped sentinel (mixed class+function files) ──────────────────
 
     /// A function-signature edit in a file that ALSO defines a class must leave
     /// the layout sentinel unraised: only the edited file is dirty, an unrelated
@@ -2682,9 +2610,9 @@ mod tests {
         );
     }
 
-    /// Verification bar #4: editing a class's generic-parameter list is a layout
-    /// change — it must fire the sentinel (the generic-param count feeds the
-    /// class object), dirtying layout-baking files, byte-identity preserved.
+    /// Editing a class's generic-parameter list is a layout change — it must
+    /// fire the sentinel (the generic-param count feeds the class object),
+    /// dirtying layout-baking files, byte-identity preserved.
     #[test]
     fn plan_reuse_mixed_file_type_param_edit_fires_sentinel() {
         let mixed_v1 = "class Box<T> {\n  value T\n}\n\
@@ -3207,19 +3135,8 @@ mod tests {
             ("boundary.baml", boundary),
             ("z.baml", unrelated),
         ];
-        let root = unique_root();
-        let _ = std::fs::remove_dir_all(&root);
-
-        let r1 = resolved(&root, &initial);
-        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
-        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-        let program1 =
-            compile_program(&db1, &opts(), Some(&ctx1), None).expect("v1 compile succeeds");
-        let fresh1 = ctx1
-            .collect_diagnostics_incremental(&db1, None)
-            .fresh_by_file;
-        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
-            .expect("v1 manifest stored");
+        let root = bc_root();
+        let _ = compile_and_store_v1(&root, &initial);
 
         // v2 sources; the diagnostics oracle (env-independent core) must pass:
         // boundary is dirty (skipped), the truly-clean files are unchanged.
@@ -3310,21 +3227,15 @@ mod tests {
         if cache_disabled() {
             return;
         }
-        let root = unique_root();
-        let _ = std::fs::remove_dir_all(&root);
+        let root = bc_root();
         let files = [
             ("a.baml", "function a() -> int {\n  1\n}\n"),
             ("b.baml", "function b() -> int {\n  2\n}\n"),
         ];
-        let r = resolved(&root, &files);
-        let db = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx = CacheContext::open(&r, false).expect("cache opens");
-        let program = compile_program(&db, &opts(), Some(&ctx), None).expect("compile succeeds");
-        let fresh = ctx.collect_diagnostics_incremental(&db, None).fresh_by_file;
-        ctx.store_with_manifest(&db, &program, &fresh, None)
-            .expect("manifest stored");
+        let _ = compile_and_store_v1(&root, &files);
 
         // A faithful fragment cache passes the oracle (all files content-clean).
+        let r = resolved(&root, &files);
         let db2 = crate::project_load::build_db_from_sources(&r, |_| {});
         let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
         ctx2.check_callable_throws_fragments_against_honest(&db2)
@@ -3422,8 +3333,7 @@ mod tests {
         if cache_disabled() {
             return;
         }
-        let root = unique_root();
-        let _ = std::fs::remove_dir_all(&root);
+        let root = bc_root();
         let initial = [
             ("a.baml", "function stable() -> int {\n  1\n}\n"),
             ("b.baml", "function edited() -> int {\n  1\n}\n"),
@@ -3435,15 +3345,7 @@ mod tests {
             ("c.baml", "function untouched() -> int {\n  3\n}\n"),
         ];
 
-        let r1 = resolved(&root, &initial);
-        let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
-        let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-        let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("initial compile");
-        let fresh = ctx1
-            .collect_diagnostics_incremental(&db1, None)
-            .fresh_by_file;
-        ctx1.store_with_manifest(&db1, &program1, &fresh, None)
-            .expect("manifest stored");
+        let _ = compile_and_store_v1(&root, &initial);
 
         let r2 = resolved(&root, &edited);
         let mut db2 = crate::project_load::build_db_from_sources(&r2, |_| {});
@@ -3546,16 +3448,8 @@ mod tests {
             ("b.baml", "function b() -> int {\n  2\n}\n"),
             ("c.baml", "function c() -> int {\n  3\n}\n"),
         ];
-        let root = unique_root();
-        let r = resolved(&root, &files);
-        let db1 = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx1 = CacheContext::open(&r, false).expect("cache opens");
-        let initial = compile_program(&db1, &opts(), Some(&ctx1), None).expect("compile");
-        let fresh = ctx1
-            .collect_diagnostics_incremental(&db1, None)
-            .fresh_by_file;
-        ctx1.store_with_manifest(&db1, &initial, &fresh, None)
-            .expect("initial cache store");
+        let root = bc_root();
+        let (_db1, ctx1) = compile_and_store_v1(&root, &files);
 
         let manifest_bytes = ctx1
             .cache
@@ -3580,18 +3474,11 @@ mod tests {
             .join(format!("{hex}.bexc"));
         std::fs::remove_file(missing_path).expect("remove b unit");
 
+        let r = resolved(&root, &files);
         let mut db2 = crate::project_load::build_db_from_sources(&r, |_| {});
         let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
         let pending = ctx2.plan_reuse(&db2).expect("partial reuse survives");
-        let dirty: HashSet<String> = pending
-            .dirty_files
-            .iter()
-            .filter_map(|file| {
-                file.path(&db2)
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-            })
-            .collect();
+        let dirty = dirty_basenames(&pending.dirty_files, &db2);
         assert_eq!(dirty, HashSet::from(["b.baml".to_string()]));
         assert_eq!(
             pending.clean_files,
@@ -3629,7 +3516,7 @@ mod tests {
             ("b.baml", "function b() -> int {\n  2\n}\n"),
             ("c.baml", "function c() -> int {\n  3\n}\n"),
         ];
-        let root = unique_root();
+        let root = bc_root();
 
         let r1 = resolved(&root, &initial);
         let db1 = crate::project_load::build_db_from_sources(&r1, |_| {});
@@ -3790,7 +3677,7 @@ mod tests {
         if cache_disabled() {
             return;
         }
-        let root = unique_root();
+        let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
         let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
         let ctx = CacheContext::open(&r, true).expect("cache opens");
@@ -3819,7 +3706,7 @@ mod tests {
         if cache_disabled() {
             return;
         }
-        let root = unique_root();
+        let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
         let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
         let ctx = CacheContext::open(&r, true).expect("cache opens");
@@ -3934,18 +3821,10 @@ mod tests {
         if cache_disabled() {
             return None;
         }
-        let root = unique_root();
-        let _ = std::fs::remove_dir_all(&root);
-        let r = resolved(&root, files);
-        let db1 = crate::project_load::build_db_from_sources(&r, |_| {});
-        let ctx1 = CacheContext::open(&r, false).expect("cache opens");
-        let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("v1 compile");
-        let fresh1 = ctx1
-            .collect_diagnostics_incremental(&db1, None)
-            .fresh_by_file;
-        ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
-            .expect("manifest stored");
+        let root = bc_root();
+        let _ = compile_and_store_v1(&root, files);
 
+        let r = resolved(&root, files);
         let db2 = crate::project_load::build_db_from_sources(&r, |_| {});
         let ctx2 = CacheContext::open(&r, false).expect("cache reopens");
         let plan = ctx2.plan_reuse(&db2).expect("all-clean reuse plan");
@@ -4079,7 +3958,7 @@ mod tests {
         if cache_disabled() || CacheContext::diagnostics_cache_disabled() {
             return;
         }
-        let root = unique_root();
+        let root = bc_root();
         let _ = std::fs::remove_dir_all(&root);
         let r = resolved(&root, &[("a.baml", "function f() -> int {\n  1\n}\n")]);
         let db = crate::project_load::build_db_from_sources(&r, |_| {});

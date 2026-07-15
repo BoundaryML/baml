@@ -1,82 +1,33 @@
-//! Oracle for the per-file diagnostics cache (Phase 1): on a warm incremental
-//! compile the *served* diagnostics — clean files from cache, dirty files
-//! freshly checked — must render byte-identically to an honest full check of
-//! the edited sources.
+//! Oracle for the per-file diagnostics cache: on a warm incremental compile the
+//! *served* diagnostics — clean files from cache, dirty files freshly checked —
+//! must render byte-identically to an honest full check of the edited sources.
 //!
 //! Each scenario compiles+stores `v1`, edits to `v2`, then compares the served
 //! set (`collect_diagnostics_incremental` through the reuse plan) against the
 //! honest set (`collect_compiler2_diagnostics` on an independent fresh
 //! database). The scenario matrix mirrors `relink_oracle` — body edit, signature
-//! edit, add-fn, add-class, layout reorder, throws edit, delete-file — plus the
-//! two Phase-1 cases: a warning in a clean file must survive the incremental
+//! edit, add-fn, add-class, layout reorder, throws edit, delete-file — plus two
+//! cache-served cases: a warning in a clean file must survive the incremental
 //! compile, and a new error in a dirty file must still gate.
 //!
 //! These round-trip through the on-disk cache on every supported platform.
 
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::{collections::HashSet, path::PathBuf};
 
-use baml_db::{baml_compiler_diagnostics::Diagnostic, baml_compiler2_emit::CompileOptions};
 use baml_project::ProjectDatabase;
 
 use crate::{
-    bytecode_cache::{CacheContext, compile_program, prepare_reuse_plan},
+    bytecode_cache::{CacheContext, prepare_reuse_plan},
+    cache_test_support::{
+        cache_disabled, compile_and_store_v1, dirty_basenames, resolved, unique_root,
+    },
     check_command::render_project_diagnostics,
     project_load,
 };
 
-static COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-fn cache_disabled() -> bool {
-    std::env::var_os("BAML_NO_BYTECODE_CACHE").is_some()
-        || std::env::var_os("BAML_CACHE_VERIFY").is_some()
-}
-
-fn unique_root() -> PathBuf {
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    // Anchor the root under the *canonical* temp base so it is already in the
-    // OS's resolved form (macOS resolves the `/var` -> `/private/var` symlink;
-    // Windows adds the `\\?\` verbatim prefix). `ProjectDatabase` canonicalizes
-    // both the project root and every source path, but only when they exist on
-    // disk: db1 is built before the cache dir exists (root canonicalize is a
-    // no-op fallback), then `store_with_manifest` materializes the root, so
-    // db2's `set_project_root` *does* canonicalize it — while the in-memory
-    // `.baml` files never exist to canonicalize. If the base held an unresolved
-    // symlink, the root would then gain a resolved prefix the file paths lack,
-    // `strip_prefix` would fail, every rel_path would come out absolute, the
-    // reuse plan would collapse to `None`, and `plan.dirty_files` would be empty
-    // (macOS/Windows only; `/tmp` on Linux has no symlink so it was silently
-    // fine). Canonicalizing the base up front keeps the root idempotent under
-    // `canonicalize`, so db1 and db2 agree on every platform.
-    let base = std::env::temp_dir();
-    let base = base.canonicalize().unwrap_or(base);
-    base.join(format!("baml-diag-oracle-{}-{n}", std::process::id()))
-}
-
-fn opts() -> CompileOptions {
-    CompileOptions {
-        emit_test_cases: false,
-    }
-}
-
-fn resolved(root: &Path, files: &[(&str, &str)]) -> project_load::ResolvedProject {
-    project_load::ResolvedProject {
-        root: root.to_path_buf(),
-        manifest: None,
-        files: files
-            .iter()
-            .map(|(name, content)| (root.join(name), (*content).to_string()))
-            .collect(),
-    }
-}
-
-/// Render a diagnostic set the way the CLI would, resolving every span's file
-/// (user files plus builtins, for cross-file spans) against this database.
-fn render_all(db: &ProjectDatabase, diags: &[Diagnostic]) -> String {
-    render_project_diagnostics(db, diags)
+/// A unique on-disk root for a diagnostics-oracle scenario.
+fn oracle_root() -> PathBuf {
+    unique_root("baml-diag-oracle")
 }
 
 struct OracleResult {
@@ -110,19 +61,8 @@ fn run_scenario_with(
     if cache_disabled() {
         return None;
     }
-    let root = unique_root();
-    let _ = std::fs::remove_dir_all(&root);
-
-    // v1: compile, gate (to compute fresh diagnostics), store manifest.
-    let r1 = resolved(&root, initial);
-    let db1 = project_load::build_db_from_sources(&r1, |_| {});
-    let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-    let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("v1 compiles");
-    let fresh1 = ctx1
-        .collect_diagnostics_incremental(&db1, None)
-        .fresh_by_file;
-    ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
-        .expect("v1 manifest stored");
+    let root = oracle_root();
+    let _ = compile_and_store_v1(&root, initial);
 
     // v2 served path: reuse plan + seed + incremental gate.
     let r2 = resolved(&root, edited);
@@ -137,26 +77,17 @@ fn run_scenario_with(
         }
         ServePath::Check => ctx2.collect_diagnostics_for_check(&db2, plan.as_ref()),
     };
-    let served_render = render_all(&db2, &served);
+    let served_render = render_project_diagnostics(&db2, &served);
 
     let dirty: HashSet<String> = plan
         .as_ref()
-        .map(|p| {
-            p.dirty_files
-                .iter()
-                .filter_map(|sf| {
-                    sf.path(&db2)
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                })
-                .collect()
-        })
+        .map(|p| dirty_basenames(&p.dirty_files, &db2))
         .unwrap_or_default();
 
     // v2 honest path: an independent fresh database, no cache, no seed.
     let db_honest = project_load::build_db_from_sources(&r2, |_| {});
     let honest = baml_project::collect_compiler2_diagnostics(&db_honest);
-    let honest_render = render_all(&db_honest, &honest);
+    let honest_render = render_project_diagnostics(&db_honest, &honest);
 
     let _ = std::fs::remove_dir_all(&root);
     Some(OracleResult {
@@ -185,6 +116,10 @@ const POINT_V1: &str = "class Point {\n  x int\n  y int\n}\n";
 const POINT_V2_REORDER: &str = "class Point {\n  y int\n  x int\n}\n";
 const CONSUMER: &str = "function diff(p: Point) -> int {\n  p.x - p.y\n}\n";
 const UNRELATED: &str = "function unrelated() -> int {\n  42\n}\n";
+// A clean file carrying an unreachable-code warning (E0146): the statement after
+// an unconditional `throw` is dead. Used wherever a scenario needs a warning that
+// must survive being served from cache.
+const WARN: &str = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
 
 // ── Scenario 1: body edit (clean deps unchanged) ─────────────────────────────
 
@@ -278,10 +213,10 @@ fn oracle_layout_reorder() {
 /// contract-violation error. Served must equal honest — which only holds
 /// because the throws-change propagation re-checks `guarded`.
 ///
-/// `risky` deliberately declares no `throws` clause: #3983 removed the open
-/// `throws X | _` contract (a declared clause is now a *closed* set), so
-/// "inferred throws grow while the signature is unchanged" is only expressible
-/// through an undeclared-throws function whose set is body-inferred.
+/// `risky` deliberately declares no `throws` clause: a declared clause is a
+/// *closed* set, so "inferred throws grow while the signature is unchanged" is
+/// only expressible through an undeclared-throws function whose set is
+/// body-inferred.
 const THROWS_ERR: &str = "class MyErr {\n  msg string\n}\n";
 const THROWS_BOOM: &str =
     "function boom() -> int throws MyErr {\n  throw MyErr { msg: \"x\" }\n}\n";
@@ -289,10 +224,8 @@ const THROWS_RISKY_V1: &str = "function risky() -> int {\n  0\n}\n";
 const THROWS_RISKY_V2: &str = "function risky() -> int {\n  boom()\n}\n";
 const THROWS_GUARDED: &str = "function guarded() -> int throws never {\n  risky()\n}\n";
 
-/// A four-file project fixture (name, content).
-type Fixture4 = [(&'static str, &'static str); 4];
-
-fn throws_scenario() -> (Fixture4, Fixture4) {
+#[test]
+fn oracle_throws_edit() {
     let initial = [
         ("err.baml", THROWS_ERR),
         ("boom.baml", THROWS_BOOM),
@@ -305,12 +238,6 @@ fn throws_scenario() -> (Fixture4, Fixture4) {
         ("risky.baml", THROWS_RISKY_V2),
         ("guarded.baml", THROWS_GUARDED),
     ];
-    (initial, edited)
-}
-
-#[test]
-fn oracle_throws_edit() {
-    let (initial, edited) = throws_scenario();
     let Some(dirty) = assert_served_equals_honest(&initial, &edited) else {
         return;
     };
@@ -339,14 +266,12 @@ fn oracle_delete_file() {
 
 #[test]
 fn oracle_warning_in_clean_file_is_served() {
-    // `w.baml` emits an unreachable-code warning (E0146; the E0148 aliasing lint
-    // this test originally used was removed by #3983). Editing an unrelated file
-    // must keep `w.baml` clean, yet its warning must still appear in the served
-    // set (byte-identical to honest) — i.e. it is served from cache, not dropped.
-    let warn = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
-    let initial = [("w.baml", warn), ("z.baml", UNRELATED)];
+    // `w.baml` emits an unreachable-code warning (E0146). Editing an unrelated
+    // file must keep `w.baml` clean, yet its warning must still appear in the
+    // served set (byte-identical to honest) — served from cache, not dropped.
+    let initial = [("w.baml", WARN), ("z.baml", UNRELATED)];
     let edited = [
-        ("w.baml", warn),
+        ("w.baml", WARN),
         ("z.baml", "function unrelated() -> int {\n  43\n}\n"),
     ];
     let Some(dirty) = run_scenario(&initial, &edited).map(|r| {
@@ -389,8 +314,7 @@ fn oracle_new_error_in_dirty_file() {
 
 #[test]
 fn check_cold_and_warm_warning_output_is_byte_identical() {
-    let warn = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
-    let files = [("w.baml", warn), ("z.baml", UNRELATED)];
+    let files = [("w.baml", WARN), ("z.baml", UNRELATED)];
     let Some(result) = run_check_scenario(&files, &files) else {
         return;
     };
@@ -404,19 +328,18 @@ fn check_cold_and_warm_warning_output_is_byte_identical() {
 
 #[test]
 fn check_merges_clean_warning_dirty_error_and_cross_file_conflict() {
-    let warn = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
     let stable = "function duplicate() -> int {\n  1\n}\n";
     let initial_dirty = "function distinct() -> int {\n  2\n}\n";
     let edited_dirty = "function duplicate() -> int {\n  \"not an int\"\n}\n";
     let initial = [
         ("a.baml", stable),
         ("d.baml", initial_dirty),
-        ("w.baml", warn),
+        ("w.baml", WARN),
     ];
     let edited = [
         ("a.baml", stable),
         ("d.baml", edited_dirty),
-        ("w.baml", warn),
+        ("w.baml", WARN),
     ];
     let Some(result) = run_check_scenario(&initial, &edited) else {
         return;
@@ -439,22 +362,21 @@ fn check_corrupt_clean_blob_degrades_to_honest_file_check() {
     if cache_disabled() {
         return;
     }
-    let warn = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
-    with_stored_manifest(&[("w.baml", warn), ("z.baml", UNRELATED)], |ctx, db| {
+    with_stored_manifest(&[("w.baml", WARN), ("z.baml", UNRELATED)], |ctx, db| {
         ctx.corrupt_manifest_diagnostics_for_test("w.baml");
         let pending_plan = ctx.plan_reuse(db);
         let plan = prepare_reuse_plan(db, pending_plan);
         let served = ctx.collect_diagnostics_for_check(db, plan.as_ref());
         let honest = baml_project::collect_compiler2_diagnostics(db);
         assert_eq!(
-            render_all(db, &served),
-            render_all(db, &honest),
+            render_project_diagnostics(db, &served),
+            render_project_diagnostics(db, &honest),
             "an undecodable clean-file blob must be recomputed honestly"
         );
     });
 }
 
-// ── Phase 2 follow-up: layout-scoped sentinel in mixed class+function files ──
+// ── Layout-scoped sentinel in mixed class+function files ─────────────────────
 
 // A file that defines a class AND a free function; a layout-baker naming
 // nothing it defines.
@@ -523,42 +445,27 @@ fn with_stored_manifest(
     files: &[(&str, &str)],
     check: impl FnOnce(&CacheContext, &mut ProjectDatabase),
 ) {
-    let root = unique_root();
-    let _ = std::fs::remove_dir_all(&root);
-    let r1 = resolved(&root, files);
-    let db1 = project_load::build_db_from_sources(&r1, |_| {});
-    let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-    let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("compiles");
-    let fresh1 = ctx1
-        .collect_diagnostics_incremental(&db1, None)
-        .fresh_by_file;
-    ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
-        .expect("manifest stored");
+    let root = oracle_root();
+    let _ = compile_and_store_v1(&root, files);
 
+    let r1 = resolved(&root, files);
     let mut db2 = project_load::build_db_from_sources(&r1, |_| {});
     let ctx2 = CacheContext::open(&r1, false).expect("cache reopens");
     check(&ctx2, &mut db2);
     let _ = std::fs::remove_dir_all(&root);
 }
 
-// An unreachable-code warning (E0146); the E0148 aliasing lint the verify tests
-// originally used was removed by #3983.
-const VERIFY_WARN: &str = "function warns() -> int {\n  throw \"boom\"\n  0\n}\n";
-
 #[test]
 fn verify_diagnostics_passes_for_faithful_cache() {
     if cache_disabled() {
         return;
     }
-    with_stored_manifest(
-        &[("w.baml", VERIFY_WARN), ("z.baml", UNRELATED)],
-        |ctx, db| {
-            assert!(
-                ctx.check_cached_diagnostics_against_fresh(db).is_ok(),
-                "the oracle must not bail on a faithfully-cached clean file"
-            );
-        },
-    );
+    with_stored_manifest(&[("w.baml", WARN), ("z.baml", UNRELATED)], |ctx, db| {
+        assert!(
+            ctx.check_cached_diagnostics_against_fresh(db).is_ok(),
+            "the oracle must not bail on a faithfully-cached clean file"
+        );
+    });
 }
 
 #[test]
@@ -570,16 +477,13 @@ fn verify_diagnostics_bails_on_a_stale_cache() {
     // (unchanged), so the oracle would serve the cached blob. If the cache is
     // empty (a stale substitute that dropped the warning) while a fresh
     // check_file still produces it, the oracle must bail.
-    with_stored_manifest(
-        &[("w.baml", VERIFY_WARN), ("z.baml", UNRELATED)],
-        |ctx, db| {
-            // Overwrite the manifest so w.baml's cached diagnostics are empty (a
-            // stale serve) while its content is unchanged.
-            ctx.poison_manifest_diagnostics_for_test("w.baml");
-            assert!(
-                ctx.check_cached_diagnostics_against_fresh(db).is_err(),
-                "the oracle must bail when the cached diagnostics drop a warning the fresh check has"
-            );
-        },
-    );
+    with_stored_manifest(&[("w.baml", WARN), ("z.baml", UNRELATED)], |ctx, db| {
+        // Overwrite the manifest so w.baml's cached diagnostics are empty (a
+        // stale serve) while its content is unchanged.
+        ctx.poison_manifest_diagnostics_for_test("w.baml");
+        assert!(
+            ctx.check_cached_diagnostics_against_fresh(db).is_err(),
+            "the oracle must bail when the cached diagnostics drop a warning the fresh check has"
+        );
+    });
 }

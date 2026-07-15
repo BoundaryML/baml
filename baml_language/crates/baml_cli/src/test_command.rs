@@ -138,20 +138,17 @@ impl TestArgs {
                 .get_project()
                 .ok_or_else(|| anyhow!("No project context"))?;
 
-            // Seed the stdlib typed interface (B-694) before the first typecheck
-            // query, so a fresh process skips re-deriving stdlib types. Gated off
-            // under verify so the oracle exercises the honest path.
-            let stdlib_interface_hit = !CacheContext::verify_enabled()
-                && cache
-                    .as_ref()
-                    .and_then(|ctx| ctx.load_stdlib_interface())
-                    .map(|by_package| db.set_seeded_stdlib_interface(by_package))
-                    .is_some();
-
-            // Per-file reuse: decide from the manifest which files' compiled
-            // bytecode can be spliced from the previous program.
-            let reuse_plan = cache.as_ref().and_then(|ctx| ctx.plan_reuse(&db));
-            let reuse_plan = crate::bytecode_cache::prepare_reuse_plan(&mut db, reuse_plan);
+            // Seed the stdlib typed interface before the first typecheck query
+            // (gated off under verify so the oracle exercises the honest path) and
+            // prepare the per-file reuse plan — the same warm-database setup `run`
+            // and `check` run.
+            let (reuse_plan, stdlib_interface_hit) = match &cache {
+                Some(ctx) => {
+                    let prep = ctx.prepare_warm_db(&mut db);
+                    (prep.reuse_plan, prep.stdlib_interface_hit)
+                }
+                None => (None, false),
+            };
 
             // ── 2. Diagnostics ─────────────────────────────────────────────
             // Keep `baml test` quiet during the compile phase. `baml check`
@@ -160,7 +157,6 @@ impl TestArgs {
             // plan's dirty files, serve clean files from their cached blobs, and
             // carry the fresh per-file blobs into the manifest); without one,
             // run the honest full check. The merged set is byte-identical.
-            let source_files = db.get_source_files();
             let (diagnostics, fresh_diagnostics) = if let Some(ctx) = &cache {
                 let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
@@ -170,25 +166,14 @@ impl TestArgs {
             let errors: Vec<_> = diagnostics
                 .iter()
                 .filter(|d| d.severity == Severity::Error)
+                .cloned()
                 .collect();
             if !errors.is_empty() {
                 // Render the full ariadne block so test errors look like
-                // run/pack errors instead of the previous "bullet list of
-                // messages" shape. Sources/paths cover ALL files — an error
-                // in one file may carry related spans elsewhere.
-                let mut sources = std::collections::HashMap::new();
-                let mut file_paths = std::collections::HashMap::new();
-                for sf in &source_files {
-                    let file_id = sf.file_id(&db);
-                    sources.insert(file_id, sf.text(&db).to_string());
-                    file_paths.insert(file_id, sf.path(&db));
-                }
-                let rendered = baml_db::baml_compiler_diagnostics::render::render_diagnostics(
-                    &errors.iter().copied().cloned().collect::<Vec<_>>(),
-                    &sources,
-                    &file_paths,
-                    &baml_db::baml_compiler_diagnostics::render::RenderConfig::cli_auto(),
-                );
+                // run/pack errors instead of a bullet list of messages. Sources
+                // and paths cover every user file plus builtins — an error in one
+                // file may carry related spans elsewhere.
+                let rendered = crate::check_command::render_project_diagnostics(&db, &errors);
                 reporter.abandon();
                 eprintln!("{rendered}");
                 return Ok(crate::ExitCode::Other);
@@ -209,38 +194,17 @@ impl TestArgs {
             )
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
             if let Some(ctx) = &cache {
-                ctx.verify_against(&compiled.program)?;
-                ctx.verify_stdlib_interface(&db)?;
-                ctx.verify_diagnostics(&db)?;
-                ctx.verify_stdlib_diagnostics(&db)?;
-                ctx.verify_callable_throws_fragments(&db)?;
                 let fresh = fresh_diagnostics
                     .as_ref()
                     .expect("a cache is present, so fresh diagnostics were computed");
-                if let Err(e) = ctx.store_artifacts_with_manifest(
+                ctx.verify_and_store(
                     &db,
-                    &compiled.program,
-                    compiled.units.as_deref(),
+                    &compiled,
                     fresh,
                     reuse_plan.as_ref(),
-                ) {
-                    crate::bytecode_cache::cache_debug(format_args!("store failed: {e}"));
-                }
-                // Materialize the stdlib interface blob on a miss (idempotent on
-                // a hit, so only write when the seed was absent).
-                if !stdlib_interface_hit {
-                    ctx.store_stdlib_interface(&db);
-                }
-                // Materialize the per-toolchain builtin-diagnostics blob on a
-                // miss (self-gating on blob presence, so a warm hit is a no-op).
-                ctx.store_stdlib_diagnostics(&db);
-                // Sampled field verification (rustc-style 1-in-32): after the
-                // compile result exists, ~1 warm run in 32 re-derives one served
-                // clean file on a fresh, un-seeded database and hard-errors on
-                // any drift. Bounded latency, loud on silent staleness.
-                ctx.maybe_sampled_verify(reuse_plan.as_ref(), || {
-                    build_db_from_sources(&resolved, |_| {})
-                })?;
+                    stdlib_interface_hit,
+                    || build_db_from_sources(&resolved, |_| {}),
+                )?;
             }
             // Warm-run evidence: with the stdlib interface seeded this is 0 (the
             // seed served every stdlib package); a cold run reports up to 6.
@@ -569,21 +533,17 @@ fn discover_legacy_tests(
 /// HIR discovery yields — `run_legacy_test` already resolves each test against
 /// the engine's copy by name — so no database is needed for execution.
 ///
-/// KNOWN `--list` DIVERGENCE (interim): [`discover_legacy_tests`] (fresh run)
-/// derives each test's `file_path` from the file where the `test` block was
-/// *defined*. [`bex_vm_types::TestCase::source_file`] records that
-/// test-defining file (set in `baml_compiler2_emit` Pass 8 via
-/// `relative_source_path`, the same project-root-relative form
-/// `discover_legacy_tests` uses), so `--list` output is identical between a
-/// fresh compile and a bytecode-cache hit.
+/// Each test's `file_path` comes from [`bex_vm_types::TestCase::source_file`] —
+/// the test-defining file recorded at emit (`baml_compiler2_emit` Pass 8 via
+/// `relative_source_path`) in the same project-root-relative form
+/// [`discover_legacy_tests`] derives — so `--list` output is byte-identical
+/// between a fresh compile and a bytecode-cache hit.
 fn legacy_tests_from_program(program: &bex_vm_types::Program) -> Vec<LegacyTest> {
     let mut tests = Vec::new();
     for tc in &program.test_cases {
-        // The test-defining file, recorded at emit time (Pass 8) via
-        // `relative_source_path` — the same project-root-relative form
-        // `discover_legacy_tests` uses, so `--list` output is identical
-        // between a fresh compile and a bytecode-cache hit. Empty only for a
-        // blob predating the source_file field (impossible: the format version gates it).
+        // `source_file` is empty only for a blob predating the field, which the
+        // cache format version already gates out, so the `<unknown>` fallback is
+        // unreachable in practice.
         let file_path = if tc.source_file.is_empty() {
             PathBuf::from("<unknown>")
         } else {
