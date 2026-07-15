@@ -66,12 +66,7 @@ impl CacheKey {
     }
 
     pub fn hex(&self) -> String {
-        let mut s = String::with_capacity(64);
-        for b in self.0 {
-            use std::fmt::Write as _;
-            let _ = write!(s, "{b:02x}");
-        }
-        s
+        hex(&self.0)
     }
 }
 
@@ -93,20 +88,53 @@ pub struct KeyInputs<'a> {
     pub files: &'a [(String, &'a str)],
 }
 
+/// Seed a hasher with the cache-wide header prefix (magic + format version)
+/// and a `domain` separator, so entries of different kinds that share the same
+/// keying inputs land under distinct keys.
+fn keyed_hasher(domain: &[u8]) -> Sha256 {
+    let mut h = Sha256::new();
+    h.update(MAGIC);
+    h.update(FORMAT_VERSION.to_le_bytes());
+    h.update(domain);
+    h
+}
+
+/// Hash `bytes` behind a u64 little-endian length prefix. The prefix is what
+/// keeps adjacent variable-length fields from aliasing across their boundary.
+fn update_framed(h: &mut Sha256, bytes: &[u8]) {
+    h.update((bytes.len() as u64).to_le_bytes());
+    h.update(bytes);
+}
+
+/// Hash an optional string as a 1-byte present/absent tag followed, when
+/// present, by the length-framed bytes.
+fn hash_opt_str(h: &mut Sha256, value: Option<&str>) {
+    match value {
+        Some(v) => {
+            h.update([1u8]);
+            update_framed(h, v.as_bytes());
+        }
+        None => h.update([0u8]),
+    }
+}
+
+/// Cache key for an entry keyed solely by compiler build + opt level under
+/// `domain`. The stdlib bytecode slice, typed interface, and builtin
+/// diagnostics share this shape and are kept distinct by their `domain`.
+fn fingerprint_opt_key(domain: &[u8], compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
+    let mut h = keyed_hasher(domain);
+    h.update(compiler_fingerprint);
+    h.update([opt_level]);
+    CacheKey(h.finalize().into())
+}
+
 pub fn compute_key(inputs: &KeyInputs<'_>) -> CacheKey {
     let mut h = Sha256::new();
     h.update(MAGIC);
     h.update(FORMAT_VERSION.to_le_bytes());
     h.update(inputs.compiler_fingerprint);
     h.update([inputs.opt_level, u8::from(inputs.emit_test_cases)]);
-    match inputs.manifest {
-        Some(m) => {
-            h.update([1u8]);
-            h.update((m.len() as u64).to_le_bytes());
-            h.update(m.as_bytes());
-        }
-        None => h.update([0u8]),
-    }
+    hash_opt_str(&mut h, inputs.manifest);
     h.update((inputs.files.len() as u64).to_le_bytes());
     // Sort defensively rather than trusting the documented precondition: an
     // unsorted caller in a release build would silently produce
@@ -117,10 +145,8 @@ pub fn compute_key(inputs: &KeyInputs<'_>) -> CacheKey {
     let mut ordered: Vec<&(String, &str)> = inputs.files.iter().collect();
     ordered.sort_unstable_by(|a, b| a.0.cmp(&b.0));
     for (path, content) in ordered {
-        h.update((path.len() as u64).to_le_bytes());
-        h.update(path.as_bytes());
-        h.update((content.len() as u64).to_le_bytes());
-        h.update(content.as_bytes());
+        update_framed(&mut h, path.as_bytes());
+        update_framed(&mut h, content.as_bytes());
     }
     CacheKey(h.finalize().into())
 }
@@ -190,9 +216,9 @@ pub struct ManifestFile {
     /// interface blob. Because the manifest is written only after a passing
     /// error gate, a clean file's blob holds warnings / info only.
     pub diagnostics: Vec<u8>,
-    /// Content-addressed cache key of this file's serialized [`CompilationUnit`].
-    /// Appended in v10 so the manifest is the sole mutable pointer table for
-    /// immutable per-file unit entries.
+    /// Content-addressed cache key of this file's serialized [`CompilationUnit`];
+    /// the manifest is the sole mutable pointer table for the immutable per-file
+    /// unit entries.
     pub unit_key: [u8; 32],
 }
 
@@ -209,26 +235,14 @@ pub fn manifest_key(
     project_root: &Path,
     project_manifest_toml: Option<&str>,
 ) -> CacheKey {
-    let mut h = Sha256::new();
-    h.update(MAGIC);
-    h.update(FORMAT_VERSION.to_le_bytes());
-    h.update(b"project-manifest");
+    let mut h = keyed_hasher(b"project-manifest");
     h.update(compiler_fingerprint);
     h.update([opt_level, u8::from(emit_test_cases)]);
-    let root = project_root.as_os_str().as_encoded_bytes();
-    h.update((root.len() as u64).to_le_bytes());
-    h.update(root);
+    update_framed(&mut h, project_root.as_os_str().as_encoded_bytes());
     // baml.toml is a compile input of the program key, so it must gate the
     // manifest too: a config-only change must not let plan_reuse splice
     // every source file against stale project configuration.
-    match project_manifest_toml {
-        Some(m) => {
-            h.update([1u8]);
-            h.update((m.len() as u64).to_le_bytes());
-            h.update(m.as_bytes());
-        }
-        None => h.update([0u8]),
-    }
+    hash_opt_str(&mut h, project_manifest_toml);
     CacheKey(h.finalize().into())
 }
 
@@ -239,10 +253,7 @@ pub fn manifest_key(
 /// The manifest owns reuse policy and points to the exact value produced by the
 /// last successful compile.
 pub fn unit_key(payload: &[u8]) -> CacheKey {
-    let mut h = Sha256::new();
-    h.update(MAGIC);
-    h.update(FORMAT_VERSION.to_le_bytes());
-    h.update(b"unit");
+    let mut h = keyed_hasher(b"unit");
     h.update(Sha256::digest(payload));
     CacheKey(h.finalize().into())
 }
@@ -253,16 +264,10 @@ pub fn unit_key(payload: &[u8]) -> CacheKey {
 /// any project. One entry per compiler build serves every project on the
 /// machine (the Go model: the stdlib is compiled once per toolchain, ever).
 pub fn stdlib_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
-    let mut h = Sha256::new();
-    h.update(MAGIC);
-    h.update(FORMAT_VERSION.to_le_bytes());
-    h.update(b"stdlib-slice");
-    h.update(compiler_fingerprint);
-    h.update([opt_level]);
-    CacheKey(h.finalize().into())
+    fingerprint_opt_key(b"stdlib-slice", compiler_fingerprint, opt_level)
 }
 
-/// Key for the cached stdlib **typed interface** blob (B-694 "export data").
+/// Key for the cached stdlib **typed interface** blob ("export data").
 ///
 /// The stored value is `borsh(BTreeMap<package-name, borsh(PackageInterface)>)`
 /// for the six stdlib packages. Like [`stdlib_key`], it depends only on the
@@ -273,13 +278,7 @@ pub fn stdlib_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
 /// shares the same `(fingerprint, opt_level)` inputs. `opt_level` is included
 /// for parity even though the interface itself is opt-invariant.
 pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
-    let mut h = Sha256::new();
-    h.update(MAGIC);
-    h.update(FORMAT_VERSION.to_le_bytes());
-    h.update(b"stdlib-interface");
-    h.update(compiler_fingerprint);
-    h.update([opt_level]);
-    CacheKey(h.finalize().into())
+    fingerprint_opt_key(b"stdlib-interface", compiler_fingerprint, opt_level)
 }
 
 /// Key for the cached stdlib **builtin diagnostics** blob — the diagnostics that
@@ -288,7 +287,8 @@ pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> C
 /// Like [`stdlib_interface_key`] and [`stdlib_key`], it depends only on the
 /// compiler build + opt level: the builtin diagnostic set is a build constant
 /// (no user file contributes to a stdlib package, the same soundness basis as
-/// B-694), so one entry per compiler build serves every project on the machine.
+/// the typed interface), so one entry per compiler build serves every project
+/// on the machine.
 /// For a valid stdlib the set is empty, but the blob caches whatever the honest
 /// check produces. The `b"stdlib-diagnostics"` domain separator keeps it a
 /// distinct entry from the bytecode slice ([`stdlib_key`]) and the typed
@@ -302,13 +302,7 @@ pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> C
 /// format is covered by [`FORMAT_VERSION`], which is folded into this key and
 /// the entry header.
 pub fn stdlib_diagnostics_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
-    let mut h = Sha256::new();
-    h.update(MAGIC);
-    h.update(FORMAT_VERSION.to_le_bytes());
-    h.update(b"stdlib-diagnostics");
-    h.update(compiler_fingerprint);
-    h.update([opt_level]);
-    CacheKey(h.finalize().into())
+    fingerprint_opt_key(b"stdlib-diagnostics", compiler_fingerprint, opt_level)
 }
 
 /// Key for the cached `baml test --list` **discovery output** — the flattened,
@@ -330,10 +324,7 @@ pub fn stdlib_diagnostics_key(compiler_fingerprint: &[u8; 32], opt_level: u8) ->
 /// its shape; a change to that wire format is covered by [`FORMAT_VERSION`],
 /// which is folded into this key and the entry header.
 pub fn test_discovery_key(program_key: &[u8; 32]) -> CacheKey {
-    let mut h = Sha256::new();
-    h.update(MAGIC);
-    h.update(FORMAT_VERSION.to_le_bytes());
-    h.update(b"test-discovery");
+    let mut h = keyed_hasher(b"test-discovery");
     h.update(program_key);
     CacheKey(h.finalize().into())
 }
@@ -504,9 +495,12 @@ impl BytecodeCache {
         let payload = borsh::to_vec(unit)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         let key = unit_key(&payload);
-        if self.load_raw(&key).is_some_and(|stored| {
-            unit_key(&stored) == key && borsh::from_slice::<CompilationUnit>(&stored).is_ok()
-        }) {
+        // load_raw already returns only a checksum-valid entry whose key echo
+        // matches, so a content-key match is a sufficient "already stored" signal.
+        if self
+            .load_raw(&key)
+            .is_some_and(|stored| unit_key(&stored) == key)
+        {
             return Ok((key, false));
         }
         self.store_raw_shared(&key, &payload)?;
@@ -857,21 +851,20 @@ mod tests {
                 diagnostics: Vec::new(),
             }],
         })
-        .expect("serialize v9 manifest");
-        let mut entry = Vec::with_capacity(HEADER_LEN + payload.len());
-        entry.extend_from_slice(&MAGIC);
-        entry.extend_from_slice(&(FORMAT_VERSION - 1).to_le_bytes());
-        entry.extend_from_slice(key.as_bytes());
-        entry.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-        entry.extend_from_slice(&<[u8; 32]>::from(Sha256::digest(&payload)));
-        entry.extend_from_slice(&payload);
+        .expect("serialize legacy manifest");
+        // Write a well-formed current-version entry, then rewind only its version
+        // field so the legacy payload sits under a header the reader must reject.
+        cache
+            .store_raw(&key, &payload)
+            .expect("store legacy payload");
         let path = cache.entry_path(&key);
-        fs::create_dir_all(path.parent().expect("parent")).expect("create fanout");
-        fs::write(path, entry).expect("write legacy entry");
+        let mut bytes = fs::read(&path).expect("read entry");
+        bytes[4..8].copy_from_slice(&(FORMAT_VERSION - 1).to_le_bytes());
+        fs::write(&path, bytes).expect("rewrite version");
 
         assert!(
             cache.load_raw(&key).is_none(),
-            "v9 manifest entry must degrade to a cache miss"
+            "legacy manifest entry must degrade to a cache miss"
         );
     }
 
@@ -935,10 +928,12 @@ mod tests {
     }
 
     #[test]
-    fn test_discovery_entry_roundtrips_and_rejects_corruption() {
+    fn test_discovery_entry_roundtrips_opaque_bytes() {
         // The discovery blob is stored via the payload-agnostic `store_raw` /
-        // `load_raw` seam (opaque CLI-owned bytes), so it inherits the same
-        // header + checksum integrity as every other entry.
+        // `load_raw` seam, so it inherits the header + checksum integrity that
+        // `store_load_roundtrip_and_rejections` already pins for every entry.
+        // This pins only what is specific to the discovery kind: CLI-owned
+        // opaque bytes survive the raw round-trip byte-for-byte.
         let dir = tempfile::tempdir().expect("tempdir");
         let cache = BytecodeCache::open(dir.path().to_path_buf());
         let key = test_discovery_key(&[1u8; 32]);
@@ -947,25 +942,6 @@ mod tests {
         let payload = b"opaque-discovery-bytes".to_vec();
         cache.store_raw(&key, &payload).expect("store");
         assert_eq!(cache.load_raw(&key).as_deref(), Some(payload.as_slice()));
-
-        // Corrupt one payload byte: checksum must reject, silently.
-        let path = cache.entry_path(&key);
-        let mut bytes = std::fs::read(&path).expect("read entry");
-        let last = bytes.len() - 1;
-        bytes[last] ^= 0xFF;
-        std::fs::write(&path, &bytes).expect("rewrite");
-        assert!(cache.load_raw(&key).is_none(), "corrupt discovery rejected");
-
-        // A stale format version is a silent miss too (the version-bump escape
-        // hatch): a discovery blob is only meaningful against a matching build.
-        cache.store_raw(&key, &payload).expect("re-store");
-        let mut bytes = std::fs::read(&path).expect("read entry");
-        bytes[4..8].copy_from_slice(&(FORMAT_VERSION - 1).to_le_bytes());
-        std::fs::write(&path, &bytes).expect("rewrite version");
-        assert!(
-            cache.load_raw(&key).is_none(),
-            "stale-version discovery rejected"
-        );
     }
 
     #[test]
@@ -1123,6 +1099,27 @@ impl BytecodeCache {
         self
     }
 
+    /// Publish the local entry for `key` to the remote backend, if one is
+    /// configured. Best-effort: sharing is an optimization, never a failure.
+    fn publish_remote(&self, key: &CacheKey) {
+        if let Some(remote) = &self.remote
+            && let Ok(entry) = fs::read(self.entry_path(key))
+        {
+            remote.put(key, entry);
+        }
+    }
+
+    /// Persist a validated remote `entry` into the local store so the remote is
+    /// hit at most once per key. Best-effort.
+    fn persist_from_remote(&self, key: &CacheKey, entry: &[u8]) {
+        let path = self.entry_path(key);
+        if let Some(parent) = path.parent()
+            && fs::create_dir_all(parent).is_ok()
+        {
+            let _ = write_atomic(&path, entry);
+        }
+    }
+
     /// Like [`Self::load`], but on a local miss consults the remote backend:
     /// a downloaded entry is validated exactly like a local one (magic,
     /// version, key echo, payload checksum) and persisted locally before use.
@@ -1137,12 +1134,7 @@ impl BytecodeCache {
         // corruption, truncation, version skew, and responses for another key.
         let payload = check_entry(&entry, key)?;
         let program = borsh::from_slice::<Program>(payload).ok()?;
-        let path = self.entry_path(key);
-        if let Some(parent) = path.parent()
-            && fs::create_dir_all(parent).is_ok()
-        {
-            let _ = write_atomic(&path, &entry);
-        }
+        self.persist_from_remote(key, &entry);
         Some(program)
     }
 
@@ -1155,12 +1147,7 @@ impl BytecodeCache {
         let remote = self.remote.as_ref()?;
         let entry = remote.get(key)?;
         let payload = check_entry(&entry, key)?.to_vec();
-        let path = self.entry_path(key);
-        if let Some(parent) = path.parent()
-            && fs::create_dir_all(parent).is_ok()
-        {
-            let _ = write_atomic(&path, &entry);
-        }
+        self.persist_from_remote(key, &entry);
         Some(payload)
     }
 
@@ -1168,11 +1155,7 @@ impl BytecodeCache {
     /// backend (best-effort) so other machines can hit it.
     pub fn store_shared(&self, key: &CacheKey, program: &Program) -> io::Result<()> {
         self.store(key, program)?;
-        if let Some(remote) = &self.remote
-            && let Ok(entry) = fs::read(self.entry_path(key))
-        {
-            remote.put(key, entry);
-        }
+        self.publish_remote(key);
         Ok(())
     }
 
@@ -1180,11 +1163,7 @@ impl BytecodeCache {
     /// content-addressed entries.
     pub fn store_raw_shared(&self, key: &CacheKey, payload: &[u8]) -> io::Result<()> {
         self.store_raw(key, payload)?;
-        if let Some(remote) = &self.remote
-            && let Ok(entry) = fs::read(self.entry_path(key))
-        {
-            remote.put(key, entry);
-        }
+        self.publish_remote(key);
         Ok(())
     }
 }
@@ -1192,6 +1171,7 @@ impl BytecodeCache {
 #[cfg(test)]
 mod remote_tests {
     use std::{
+        collections::HashMap,
         io::{BufRead, BufReader, Read as _, Write as _},
         net::TcpListener,
         sync::{Arc, Mutex},
@@ -1199,12 +1179,16 @@ mod remote_tests {
 
     use super::*;
 
+    /// Shared body store backing the in-process HTTP server, keyed by request
+    /// path.
+    type SharedStore = Arc<Mutex<HashMap<String, Vec<u8>>>>;
+
     /// Minimal in-process HTTP store: GET serves stored bodies, PUT stores
     /// them. Std-only so the test needs no async runtime.
-    fn spawn_http_store() -> (String, Arc<Mutex<HashMapStore>>) {
+    fn spawn_http_store() -> (String, SharedStore) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("addr");
-        let store: Arc<Mutex<HashMapStore>> = Arc::default();
+        let store: SharedStore = Arc::default();
         let server_store = Arc::clone(&store);
         std::thread::spawn(move || {
             for stream in listener.incoming() {
@@ -1233,11 +1217,11 @@ mod remote_tests {
                     "PUT" => {
                         let mut body = vec![0u8; content_length];
                         if reader.read_exact(&mut body).is_ok() {
-                            server_store.lock().expect("lock").0.insert(path, body);
+                            server_store.lock().expect("lock").insert(path, body);
                         }
                         let _ = stream.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n");
                     }
-                    "GET" => match server_store.lock().expect("lock").0.get(&path) {
+                    "GET" => match server_store.lock().expect("lock").get(&path) {
                         Some(body) => {
                             let _ = stream.write_all(
                                 format!(
@@ -1263,9 +1247,6 @@ mod remote_tests {
         });
         (format!("http://{addr}"), store)
     }
-
-    #[derive(Default)]
-    struct HashMapStore(std::collections::HashMap<String, Vec<u8>>);
 
     fn remote_for(base_url: &str) -> RemoteCache {
         RemoteCache {
@@ -1301,7 +1282,7 @@ mod remote_tests {
         let (unit_key, wrote) = cache_a.store_unit_shared(&unit).expect("store unit");
         assert!(wrote);
         assert_eq!(
-            store.lock().expect("lock").0.len(),
+            store.lock().expect("lock").len(),
             2,
             "program and unit entries published to remote"
         );
@@ -1336,7 +1317,6 @@ mod remote_tests {
         store
             .lock()
             .expect("lock")
-            .0
             .insert(format!("/{}", key2.hex()), b"garbage".to_vec());
         assert!(
             cache_b.load_shared(&key2).is_none(),
