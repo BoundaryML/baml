@@ -185,7 +185,6 @@ use crate::{
     errors::{StackFrame, VmBamlError, VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::{EvalStack, EvalStackTrait},
     package_baml::{NativeCallResult, NativeFunction},
-    type_context::RuntimeTypeContext,
     types::ObjectTrait,
 };
 
@@ -1680,9 +1679,8 @@ impl BexVm {
         template: &baml_type::TyTemplate,
         class_type_args: &[baml_type::RealizedTy],
     ) -> baml_type::RealizedTy {
-        let ctx = RuntimeTypeContext::new(self);
         template
-            .substitute(class_type_args, &ctx)
+            .substitute(class_type_args, self)
             .unwrap_or_else(|e| {
                 unreachable!(
                     "class field type template did not realize against realized class args: {e}"
@@ -6926,8 +6924,7 @@ impl BexVm {
                                 } else {
                                     vec![]
                                 };
-                            let ctx = RuntimeTypeContext::new(self);
-                            template.substitute(&frame_type_args, &ctx).map_err(|e| {
+                            template.substitute(&frame_type_args, self).map_err(|e| {
                                 VmInternalError::TypeSubstitution {
                                     message: e.to_string(),
                                 }

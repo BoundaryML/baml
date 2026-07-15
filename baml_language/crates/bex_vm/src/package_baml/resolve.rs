@@ -20,7 +20,7 @@ use bex_vm_types::{
     types::{Object, Package, RuntimeImplRule},
 };
 
-use crate::{BexVm, type_context::RuntimeTypeContext};
+use crate::BexVm;
 
 /// Dereference a package pointer to its [`Package`]. The runtime `vm.packages`
 /// index only ever holds `Object::Package` pointers.
@@ -228,11 +228,10 @@ pub(crate) fn realize_frame(
     // The impl's frame templates realize fully against the (realized) bound args —
     // every projection reduced through the impl registry — or it is an internal
     // error, never a silent `unknown`.
-    let ctx = RuntimeTypeContext::new(vm);
     template
         .iter()
         .map(|t| {
-            t.substitute(bound_args, &ctx)
+            t.substitute(bound_args, vm)
                 .map_err(|e| VmInternalError::TypeSubstitution {
                     message: e.to_string(),
                 })
@@ -810,9 +809,8 @@ fn substitute_checked(vm: &BexVm, template: &TyTemplate, env: &[RealizedTy]) -> 
         "impl rule references a type arg out of range for an env of {}",
         env.len(),
     );
-    let ctx = RuntimeTypeContext::new(vm);
     template
-        .substitute(env, &ctx)
+        .substitute(env, vm)
         .unwrap_or_else(|_| RealizedTy::unknown())
 }
 

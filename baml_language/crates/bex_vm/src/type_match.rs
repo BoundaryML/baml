@@ -1,6 +1,6 @@
 //! Runtime `IsType` matching against a [`TyTemplate`], using the canonical type
-//! algebra (`baml_type::normalize`) over the running program via
-//! [`RuntimeTypeContext`].
+//! algebra (`baml_type::normalize`) over the running program — the [`BexVm`]
+//! itself is the [`baml_type::normalize::TypeContext`].
 //!
 //! This is the value-directed successor to the tag/pointer `IsType` fast paths
 //! and the type-directed `guard_template_matches`: given a VM value, a template
@@ -36,7 +36,7 @@
 use baml_type::{RealizedTy, Ty, TyTemplate, normalize};
 use bex_vm_types::Value;
 
-use crate::{BexVm, type_context::RuntimeTypeContext};
+use crate::BexVm;
 
 /// The variance at a template position the structural walk visits. Only two
 /// arise here:
@@ -80,9 +80,8 @@ pub(crate) fn value_matches_template(
     // into it (a shallow structural conversion — `ConcreteRealizedTy` is not a
     // deep, transmute-compatible family member with a borrowed upcast).
     let value_ty: Ty = value_ty.into();
-    let ctx = RuntimeTypeContext::new(vm);
     template_relates(
-        &ctx,
+        vm,
         template,
         frame_type_args,
         &value_ty,
