@@ -20,10 +20,11 @@ namespace detail {
 template <typename Ret>
 Future<Ret> StartCall(const std::string& fqn, ArgsEncoder&& args) {
   CallRegistry::Started started = CallRegistry::Instance().Begin();
-  const uint64_t engine_call_id = new_function_call();
+  const uint64_t engine_call_id = Api().new_function_call();
   const std::string encoded = args.Finish(engine_call_id);
-  call_function(fqn.c_str(), reinterpret_cast<const uint8_t*>(encoded.data()),
-                encoded.size(), started.correlation_id);
+  Api().call_function(fqn.c_str(),
+                      reinterpret_cast<const uint8_t*>(encoded.data()),
+                      encoded.size(), started.correlation_id);
   return Future<Ret>(std::move(started.envelope), engine_call_id);
 }
 

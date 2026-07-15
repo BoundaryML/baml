@@ -395,8 +395,9 @@ inline std::string JoinTrace(const std::vector<std::string>& trace) {
   if (result.arm == OutboundResult::Arm::Panic) {
     if (result.is_exit_panic) {
       // Clean baml.sys.exit: hard process exit, not a catchable panic
-      // (parity with Python's os._exit path).
-      flush_events();
+      // (parity with Python's os._exit path). The legacy flush_events()
+      // call is gone: it is a documented no-op and lives outside the v1
+      // ABI table.
       std::_Exit(static_cast<int>(result.exit_code));
     }
     if (class_name == "baml.panics.Cancelled") {

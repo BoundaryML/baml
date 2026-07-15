@@ -1,6 +1,7 @@
 #ifndef BAML_DETAIL_REGISTRY_H_
 #define BAML_DETAIL_REGISTRY_H_
 
+#include <baml/detail/loader.h>
 #include <baml_cffi.h>
 
 #include <atomic>
@@ -68,7 +69,7 @@ class CallRegistry {
   }
 
  private:
-  CallRegistry() { register_callback(&baml_cpp_result_trampoline); }
+  CallRegistry() { Api().register_callback(&baml_cpp_result_trampoline); }
 
   std::mutex mu_;
   std::unordered_map<uint32_t, std::promise<std::vector<uint8_t>>> pending_;

@@ -11,6 +11,7 @@
 #include <baml/codec.h>
 #include <baml/detail/call.h>
 #include <baml/detail/host_value.h>
+#include <baml/detail/loader.h>
 #include <baml/detail/registry.h>
 #include <baml/errors.h>
 #include <baml/future.h>

@@ -36,9 +36,15 @@ fi
 # The compile and run checks execute concurrently under nextest; each mode
 # writes its own binary so they cannot clobber each other mid-execution.
 compile() {
-    c++ -std=c++17 -Wall -Wextra "${INCLUDES[@]}" "${SOURCES[@]}" -o "$1" \
-        -L"$LIBDIR" -lbridge_cffi -Wl,-rpath,"$LIBDIR"
+    # The bridge dlopens the runtime at first use; no link-time dependency.
+    c++ -std=c++17 -Wall -Wextra "${INCLUDES[@]}" "${SOURCES[@]}" -o "$1"
 }
+
+case "$(uname -s)" in
+    Darwin) RUNTIME_LIB="libbridge_cffi.dylib" ;;
+    *) RUNTIME_LIB="libbridge_cffi.so" ;;
+esac
+export BAML_RUNTIME_PATH="$LIBDIR/$RUNTIME_LIB"
 
 case "${1:-}" in
     compile)

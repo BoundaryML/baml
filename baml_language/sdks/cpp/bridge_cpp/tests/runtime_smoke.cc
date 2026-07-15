@@ -39,7 +39,8 @@ static void TestBytecodeInitRejectsGarbage() {
   const uint8_t garbage[] = {0xde, 0xad, 0xbe, 0xef};
   bool threw = false;
   try {
-    baml::InitializeRuntimeFromBytecode(garbage, sizeof(garbage));
+    const std::string v = baml::Version();
+    baml::InitializeRuntimeFromBytecode(garbage, sizeof(garbage), v.c_str());
   } catch (const baml::BamlError&) {
     threw = true;
   }
@@ -204,7 +205,7 @@ static void TestArgTwoState() {
 }
 
 static void TestOwnedBufferMove() {
-  baml::detail::OwnedBuffer a{::version()};
+  baml::detail::OwnedBuffer a{baml::detail::Api().version()};
   assert(!a.empty());
   baml::detail::OwnedBuffer b = std::move(a);
   assert(a.empty() && !b.empty());

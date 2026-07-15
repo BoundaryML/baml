@@ -1,6 +1,7 @@
 #ifndef BAML_BUFFER_H_
 #define BAML_BUFFER_H_
 
+#include <baml/detail/loader.h>
 #include <baml_cffi.h>
 
 #include <cstdint>
@@ -45,7 +46,7 @@ class OwnedBuffer {
  private:
   void Release() {
     if (buf_.ptr != nullptr) {
-      free_buffer(buf_);
+      Api().free_buffer(buf_);
       buf_ = Buffer{nullptr, 0};
     }
   }

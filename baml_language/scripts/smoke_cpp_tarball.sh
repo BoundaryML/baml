@@ -73,9 +73,14 @@ int main() {
     return 0;
 }
 EOF
-    c++ -std=c++17 -I"$root/include" "$workdir/main_bridge.cc" -o "$workdir/smoke_bridge" \
-        -L"$root/lib" -lbridge_cffi -Wl,-rpath,"$root/lib"
-    bridge_got="$("$workdir/smoke_bridge")"
+    # The bridge dlopens the runtime; no link-time dependency.
+    c++ -std=c++17 -I"$root/include" "$workdir/main_bridge.cc" -o "$workdir/smoke_bridge"
+    case "$TARBALL" in
+        *apple*) runtime_lib="libbridge_cffi.dylib" ;;
+        *windows*) runtime_lib="bridge_cffi.dll" ;;
+        *) runtime_lib="libbridge_cffi.so" ;;
+    esac
+    bridge_got="$(BAML_RUNTIME_PATH="$root/lib/$runtime_lib" "$workdir/smoke_bridge")"
     if [ "$bridge_got" != "$(cat "$root/VERSION")" ]; then
         echo "smoke test FAILED: bridge header version '$bridge_got' != VERSION" >&2
         exit 1

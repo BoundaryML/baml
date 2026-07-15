@@ -19,7 +19,12 @@ trap 'rm -rf "$out"' EXIT
 
 c++ -std=c++17 -Wall -Wextra -Werror \
     -I"$bridge_cpp_dir/include" -Icrates/bridge_cffi/include \
-    "$bridge_cpp_dir/tests/runtime_smoke.cc" -o "$out/runtime_smoke" \
-    -L"$libdir" -lbridge_cffi -Wl,-rpath,"$PWD/$libdir"
+    "$bridge_cpp_dir/tests/runtime_smoke.cc" -o "$out/runtime_smoke"
 
-"$out/runtime_smoke"
+# The bridge dlopens the runtime at first use; no link-time dependency.
+case "$target" in
+    *apple*) runtime_lib="libbridge_cffi.dylib" ;;
+    *windows*) runtime_lib="bridge_cffi.dll" ;;
+    *) runtime_lib="libbridge_cffi.so" ;;
+esac
+BAML_RUNTIME_PATH="$PWD/$libdir/$runtime_lib" "$out/runtime_smoke"

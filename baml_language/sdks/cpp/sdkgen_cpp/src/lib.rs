@@ -1997,12 +1997,17 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) ->
     }
     buf.push_str("\n};\n}  // namespace\n");
     let _ = writeln!(buf, "\nvoid {}() {{", GeneratorIdent::EnsureRuntime.token());
-    buf.push_str(
+    // The canonical version stamped at generation time: register_bridge
+    // requires exact equality with the loaded runtime.
+    let _ = writeln!(
+        buf,
         "  static std::once_flag once;\n  \
-         std::call_once(once, [] {\n    \
-         ::baml::InitializeRuntimeFromBytecode(kBamlBytecode, sizeof(kBamlBytecode));\n  \
-         });\n\
-         }\n\n",
+         std::call_once(once, [] {{\n    \
+         ::baml::InitializeRuntimeFromBytecode(kBamlBytecode, sizeof(kBamlBytecode),\n                                          \
+         \"{version}\");\n  \
+         }});\n\
+         }}\n",
+        version = baml_version::CANONICAL_VERSION
     );
     let _ = writeln!(buf, "}}  // namespace {detail}");
     buf.push_str("}  // namespace baml_sdk\n");

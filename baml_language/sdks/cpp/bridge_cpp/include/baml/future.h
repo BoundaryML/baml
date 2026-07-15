@@ -1,6 +1,7 @@
 #ifndef BAML_FUTURE_H_
 #define BAML_FUTURE_H_
 
+#include <baml/detail/loader.h>
 #include <baml_cffi.h>
 
 #include <chrono>
@@ -48,7 +49,9 @@ class Future {
   // Requests cancellation of the in-flight call. Returns false if the call
   // is unknown or already completed. The result envelope still arrives
   // (as a BamlCancelled panic) and get() reports it.
-  bool Cancel() { return cancel_function_call(engine_call_id_) == 0; }
+  bool Cancel() {
+    return detail::Api().cancel_function_call(engine_call_id_) == 0;
+  }
 
   uint64_t call_id() const { return engine_call_id_; }
 

@@ -9,6 +9,7 @@
 // because the engine's inbound decode consumes (drains) the key it
 // receives.
 
+#include <baml/detail/loader.h>
 #include <baml/errors.h>
 #include <baml_cffi.h>
 
@@ -83,7 +84,7 @@ class Handle {
  private:
   uint64_t ClonedKey(const char* context) const {
     uint64_t out_key = 0;
-    if (baml_handle_clone(key_, &out_key) != BamlCffiStatus_Ok) {
+    if (detail::Api().handle_clone(key_, &out_key) != BamlCffiStatus_Ok) {
       throw BamlError(std::string(context) + ": invalid handle key " +
                       std::to_string(key_));
     }
@@ -92,7 +93,7 @@ class Handle {
 
   void Release() {
     if (key_ != 0) {
-      baml_handle_release(key_);
+      detail::Api().handle_release(key_);
       key_ = 0;
     }
   }

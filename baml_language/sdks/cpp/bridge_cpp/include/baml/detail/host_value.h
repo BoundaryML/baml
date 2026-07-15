@@ -20,6 +20,7 @@
 //     on same-process round-trip (see ThrowFromResult in codec.h).
 
 #include <baml/arg.h>
+#include <baml/detail/loader.h>
 #include <baml/detail/proto.h>
 #include <baml/detail/wire.h>
 #include <baml/errors.h>
@@ -123,8 +124,8 @@ class HostValueRegistry {
   };
 
   HostValueRegistry() {
-    register_host_dispatch_callback(&baml_cpp_host_dispatch_trampoline);
-    register_host_release_callback(&baml_cpp_host_release_trampoline);
+    Api().register_host_dispatch_callback(&baml_cpp_host_dispatch_trampoline);
+    Api().register_host_release_callback(&baml_cpp_host_release_trampoline);
   }
 
   std::mutex mu_;
@@ -221,16 +222,16 @@ inline std::string BuildHostCallableInbound(const std::string& class_name,
 
 inline void CompleteHostSuccess(uint32_t call_id,
                                 const std::string& inbound_bytes) {
-  complete_host_call(call_id, 0,
-                     reinterpret_cast<const int8_t*>(inbound_bytes.data()),
-                     inbound_bytes.size());
+  Api().complete_host_call(
+      call_id, 0, reinterpret_cast<const int8_t*>(inbound_bytes.data()),
+      inbound_bytes.size());
 }
 
 inline void CompleteHostError(uint32_t call_id,
                               const std::string& inbound_bytes) {
-  complete_host_call(call_id, 1,
-                     reinterpret_cast<const int8_t*>(inbound_bytes.data()),
-                     inbound_bytes.size());
+  Api().complete_host_call(
+      call_id, 1, reinterpret_cast<const int8_t*>(inbound_bytes.data()),
+      inbound_bytes.size());
 }
 
 // Re-encodes a decoded outbound value as an InboundValue message body:
