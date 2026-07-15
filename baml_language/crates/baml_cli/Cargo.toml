@@ -40,6 +40,7 @@ clap = { workspace = true, features = [ "color" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
 flate2 = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }

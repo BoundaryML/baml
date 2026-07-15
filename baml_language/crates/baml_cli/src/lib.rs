@@ -38,6 +38,7 @@ pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod skill_check;
 pub(crate) mod telemetry;
+pub(crate) mod telemetry_command;
 pub(crate) mod test_command;
 pub(crate) mod test_filter;
 pub(crate) mod util;
