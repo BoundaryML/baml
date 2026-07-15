@@ -80,8 +80,10 @@ class HostValueRegistry {
       std::function<void(uint32_t call_id, std::vector<uint8_t> args)>;
 
   static HostValueRegistry& Instance() {
-    static HostValueRegistry registry;
-    return registry;
+    // Intentionally leaked, like CallRegistry: release callbacks can fire
+    // from engine threads during process teardown.
+    static HostValueRegistry* registry = new HostValueRegistry();
+    return *registry;
   }
 
   uint64_t AddDispatcher(Dispatcher dispatch) {
@@ -559,7 +561,11 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(
 
 extern "C" inline void baml_cpp_host_release_trampoline(
     uint64_t host_value_key) {
-  baml::detail::HostValueRegistry::Instance().Release(host_value_key);
+  // No C++ exception may cross the C ABI (bridge contract).
+  try {
+    baml::detail::HostValueRegistry::Instance().Release(host_value_key);
+  } catch (...) {
+  }
 }
 
 #endif  // BAML_DETAIL_HOST_VALUE_H_

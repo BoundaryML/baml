@@ -31,8 +31,11 @@ class CallRegistry {
   };
 
   static CallRegistry& Instance() {
-    static CallRegistry registry;
-    return registry;
+    // Intentionally leaked (never destroyed): engine callback threads may
+    // fire during process teardown, after static destructors would have
+    // run a function-local static's destructor.
+    static CallRegistry* registry = new CallRegistry();
+    return *registry;
   }
 
   Started Begin() {
@@ -82,8 +85,12 @@ class CallRegistry {
 extern "C" inline void baml_cpp_result_trampoline(uint32_t call_id,
                                                   const int8_t* content,
                                                   uintptr_t length) {
-  baml::detail::CallRegistry::Instance().Complete(call_id, content,
-                                                  static_cast<size_t>(length));
+  // No C++ exception may cross the C ABI (bridge contract).
+  try {
+    baml::detail::CallRegistry::Instance().Complete(
+        call_id, content, static_cast<size_t>(length));
+  } catch (...) {
+  }
 }
 
 #endif  // BAML_DETAIL_REGISTRY_H_
