@@ -13,14 +13,14 @@ relationships, and citations. Do not use `grep`, `rg`, `find`, `cat`, `sed`,
 ## Current command surface
 
 ```bash
-baml describe SYMBOL --output compact
+baml describe SYMBOL
 baml describe SYMBOL --view source
-baml describe SYMBOL --view usage --output compact
-baml describe SYMBOL --view impact --output compact
-baml describe SYMBOL --view dependencies --output compact
+baml describe SYMBOL --view usage
+baml describe SYMBOL --view impact
+baml describe SYMBOL --view dependencies
 baml describe NAME1 NAME2 --view source
-baml describe --search term1,term2 --kind function --output compact
-baml describe --search term --file path-fragment --output compact
+baml describe --search term1,term2 --kind function
+baml describe --search term --file path-fragment
 baml describe SYMBOL --max-lines 80
 baml describe SYMBOL --output json
 baml describe SYMBOL --from path/to/project
@@ -61,9 +61,9 @@ symbol when its own facts are necessary.
    invocation per Bash tool call so invocation accounting remains explicit.
 7. Use `--from` only when the working directory is outside the target BAML
    project. Do not add it reflexively.
-8. Prefer compact output for relationships and discovery. Use text source for
-   implementation. Use JSON when complete dependency/reference arrays matter
-   more than rendered line limits.
+8. Use the intent-matched text view for relationships, discovery, and source.
+   Use JSON when complete dependency/reference arrays matter more than rendered
+   line limits.
 9. `--max-lines` is a soft rendering cap, not proof that omitted relationships
    do not exist. Follow a specific expansion hint only when the missing section
    is required.

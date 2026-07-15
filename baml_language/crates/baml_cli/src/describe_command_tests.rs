@@ -2124,14 +2124,13 @@ fn search_preview_requires_one_unique_exact_single_term_match() {
         ),
     ];
     assert_eq!(
-        preview_candidate(&terms, &unique, DescribeOutput::Text)
+        preview_candidate(&terms, &unique)
             .unwrap()
             .entry
             .kind
             .as_str(),
         "class"
     );
-    assert!(preview_candidate(&terms, &unique, DescribeOutput::Compact).is_none());
     assert!(
         preview_candidate(
             &terms,
@@ -2139,7 +2138,6 @@ fn search_preview_requires_one_unique_exact_single_term_match() {
                 report,
                 &[(0, "Trophy", SearchMatchReason::NamePrefix)]
             )],
-            DescribeOutput::Text,
         )
         .is_none()
     );
@@ -2150,15 +2148,8 @@ fn search_preview_requires_one_unique_exact_single_term_match() {
             &[(0, "Trophy", SearchMatchReason::ExactName)],
         ),
     ];
-    assert!(preview_candidate(&terms, &tied, DescribeOutput::Json).is_none());
-    assert!(
-        preview_candidate(
-            &["Trophy".to_string(), "report".to_string()],
-            &unique,
-            DescribeOutput::Text,
-        )
-        .is_none()
-    );
+    assert!(preview_candidate(&terms, &tied).is_none());
+    assert!(preview_candidate(&["Trophy".to_string(), "report".to_string()], &unique).is_none());
 }
 
 #[test]
@@ -2310,11 +2301,10 @@ class TrophyReport {}
     );
     assert!(tight.lines().count() <= tight_args.max_lines, "{tight}");
 
-    args.output = DescribeOutput::Compact;
     let suggested = suggested_search_candidates(&selection, terms.len());
-    let mut compact = Vec::new();
+    let mut suggested_output = Vec::new();
     write_search_output(
-        &mut compact,
+        &mut suggested_output,
         &db,
         &files,
         Path::new("/test"),
@@ -2326,14 +2316,20 @@ class TrophyReport {}
         0,
     )
     .unwrap();
-    let compact = String::from_utf8(compact).unwrap();
+    let suggested_output = String::from_utf8(suggested_output).unwrap();
     assert_eq!(
-        compact.matches("suggested: baml describe").count(),
+        suggested_output.matches("suggested: baml describe").count(),
         1,
-        "{compact}"
+        "{suggested_output}"
     );
-    assert!(!compact.contains("Previewing:"), "{compact}");
-    assert!(!compact.contains("class Trophy {"), "{compact}");
+    assert!(
+        !suggested_output.contains("Previewing:"),
+        "{suggested_output}"
+    );
+    assert!(
+        !suggested_output.contains("class Trophy {"),
+        "{suggested_output}"
+    );
 
     args.output = DescribeOutput::Json;
     let json = search_to_json(
@@ -2406,7 +2402,7 @@ function parse_trophy(raw: string) -> TrophyReport {
 }
 
 #[test]
-fn compact_batch_honors_max_lines_without_recommending_redundant_expansion() {
+fn text_batch_honors_max_lines_without_recommending_redundant_expansion() {
     let mut source =
         String::from("class First { value: string, }\nclass Second { value: string, }\n");
     source.push_str("function first() -> First {\n");
@@ -2421,8 +2417,7 @@ fn compact_batch_honors_max_lines_without_recommending_redundant_expansion() {
     let db = make_db(&[("agent.baml", &source)]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let descriptions = vec![describe_one(&db, "first"), describe_one(&db, "second")];
-    let mut args = batch_args(240);
-    args.output = DescribeOutput::Compact;
+    let args = batch_args(240);
     let mut output = Vec::new();
     write_batch_output(
         &mut output,
@@ -2442,12 +2437,12 @@ fn compact_batch_honors_max_lines_without_recommending_redundant_expansion() {
     assert!(!output.contains("lines omitted —"), "{output}");
     assert!(output.contains("\"first\""), "{output}");
     assert!(output.contains("\"second\""), "{output}");
-    assert!(output.contains("depends on class First"), "{output}");
-    assert!(output.contains("depends on class Second"), "{output}");
+    assert!(!output.contains("depends on class First"), "{output}");
+    assert!(!output.contains("depends on class Second"), "{output}");
 }
 
 #[test]
-fn compact_batch_emits_one_next_command_when_symbols_receive_no_content() {
+fn text_batch_emits_one_next_command_when_symbols_receive_no_content() {
     let db = make_db(&[(
         "tiny.baml",
         r#"
@@ -2457,8 +2452,7 @@ function second() -> string { "second" }
     )]);
     let files = baml_compiler2_hir::compiler2_all_files(&db);
     let descriptions = vec![describe_one(&db, "first"), describe_one(&db, "second")];
-    let mut args = batch_args(3);
-    args.output = DescribeOutput::Compact;
+    let args = batch_args(3);
     let mut output = Vec::new();
     write_batch_output(
         &mut output,
@@ -2474,12 +2468,12 @@ function second() -> string { "second" }
     let output = String::from_utf8(output).unwrap();
     assert_eq!(output.lines().count(), 3, "{output}");
     assert_eq!(output.matches("next: baml describe").count(), 1, "{output}");
-    assert!(output.contains("--output compact"), "{output}");
+    assert!(!output.contains("--output"), "{output}");
     assert!(output.contains("first second"), "{output}");
 }
 
 #[test]
-fn compact_source_batch_gives_every_symbol_a_signature_and_follows_up_truncation() {
+fn text_source_batch_gives_every_symbol_a_signature_and_follows_up_truncation() {
     let mut source = String::new();
     for name in ["first", "second", "third", "fourth"] {
         source.push_str(&format!("function {name}() -> string {{\n"));
@@ -2495,7 +2489,6 @@ fn compact_source_batch_gives_every_symbol_a_signature_and_follows_up_truncation
         .map(|name| describe_one(&db, name))
         .collect::<Vec<_>>();
     let mut args = batch_args(13);
-    args.output = DescribeOutput::Compact;
     args.view = DescribeView::Source;
     let mut output = Vec::new();
     write_batch_output(

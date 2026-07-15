@@ -330,10 +330,7 @@ mod tests {
         ] {
             assert!(!help.contains(removed), "unexpected {removed}: {help}");
         }
-        assert!(
-            help.contains("possible values: text, compact, json"),
-            "{help}"
-        );
+        assert!(help.contains("possible values: text, json"), "{help}");
         assert!(help.contains("dependencies"), "{help}");
         for kind in [
             "class",

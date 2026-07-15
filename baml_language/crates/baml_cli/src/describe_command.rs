@@ -66,7 +66,6 @@ pub enum DescribeView {
 pub enum DescribeOutput {
     #[default]
     Text,
-    Compact,
     Json,
 }
 
@@ -766,9 +765,8 @@ pub(crate) fn select_search_candidates(
 pub(crate) fn preview_candidate<'a>(
     terms: &[String],
     candidates: &'a [SearchCandidate],
-    output: DescribeOutput,
 ) -> Option<&'a SearchCandidate> {
-    if terms.len() != 1 || output == DescribeOutput::Compact {
+    if terms.len() != 1 {
         return None;
     }
     let mut exact = candidates.iter().filter(|candidate| {
@@ -861,7 +859,7 @@ impl DescribeArgs {
 
     /// Run the describe command and return the CLI exit code.
     pub fn run(&self) -> Result<crate::ExitCode> {
-        if self.output != DescribeOutput::Text {
+        if self.output == DescribeOutput::Json {
             crate::paint::init_color(crate::paint::ColorChoice::Never);
         }
 
@@ -876,9 +874,7 @@ impl DescribeArgs {
             return self.run_search(&db, &from);
         }
 
-        if self.names.len() > 1
-            || (self.output == DescribeOutput::Compact && !self.names.is_empty())
-        {
+        if self.names.len() > 1 {
             return self.run_exact_batch(&db, &from);
         }
 
@@ -1222,7 +1218,7 @@ impl DescribeArgs {
             return Ok(crate::ExitCode::Other);
         }
         let files = baml_compiler2_hir::compiler2_all_files(db);
-        let preview_candidate = preview_candidate(&terms, &all_candidates, self.output);
+        let preview_candidate = preview_candidate(&terms, &all_candidates);
         let preview = preview_candidate
             .map(|candidate| {
                 describe_listing_entry(db, &files, &candidate.entry, self.describe_options())
@@ -1530,7 +1526,7 @@ fn search_candidate_to_json(
 fn suggested_command(suggested: &[&SearchCandidate], view: DescribeView) -> Option<String> {
     (!suggested.is_empty()).then(|| {
         format!(
-            "baml describe {} --view {} --output compact --max-lines {}",
+            "baml describe {} --view {} --max-lines {}",
             suggested
                 .iter()
                 .map(|candidate| candidate.entry.fqn())
@@ -1791,7 +1787,6 @@ pub(crate) fn write_batch_output(
     project_root: &std::path::Path,
 ) -> std::io::Result<()> {
     let output_max_lines = args.max_lines;
-    let compact = args.output == DescribeOutput::Compact;
     let mut blocks = Vec::new();
     for description in descriptions {
         let mut bytes = Vec::new();
@@ -1829,49 +1824,7 @@ pub(crate) fn write_batch_output(
             .lines()
             .map(ToOwned::to_owned)
             .collect::<Vec<_>>();
-        let mut block = Vec::new();
-        if let Some(identity) = rendered.first() {
-            block.push(identity.clone());
-        }
-        if compact && args.view == DescribeView::Source {
-            block.extend(description.full_body.lines().map(ToOwned::to_owned));
-        }
-        if compact && args.view != DescribeView::Dependencies {
-            let mut seen_relationships = std::collections::HashSet::new();
-            for dependency in description.dependencies.iter().take(6) {
-                let path = relative_path(&dependency.file.path(db), project_root);
-                let line = line_number_at_offset(
-                    dependency.file.text(db),
-                    dependency.name_span.start().into(),
-                );
-                let relationship = format!(
-                    "depends on {} {}  {}:{}",
-                    dependency.kind.as_str(),
-                    dependency.name,
-                    path.display(),
-                    line
-                );
-                if seen_relationships.insert(relationship.clone()) {
-                    block.push(relationship);
-                }
-            }
-            for reference in description.references.iter().take(3) {
-                let path = relative_path(&reference.file.path(db), project_root);
-                let relationship = format!(
-                    "used at {}:{}  {}",
-                    path.display(),
-                    reference.line_number,
-                    reference.line_text.trim()
-                );
-                if seen_relationships.insert(relationship.clone()) {
-                    block.push(relationship);
-                }
-            }
-        }
-        if !(compact && args.view == DescribeView::Source) {
-            block.extend(rendered.into_iter().skip(1));
-        }
-        blocks.push(block);
+        blocks.push(rendered);
     }
 
     let minimum = blocks.len();
@@ -1883,83 +1836,58 @@ pub(crate) fn write_batch_output(
     }
 
     let view = describe_view_name(args.view);
-    if compact {
-        let total_content = blocks
-            .iter()
-            .map(|block| block.len().saturating_sub(1))
-            .sum::<usize>();
-        let reserve_next = usize::from(remaining > 0 && total_content > remaining);
-        let content_budget = remaining.saturating_sub(reserve_next);
-        let mut emitted = vec![0usize; blocks.len()];
-        let mut content_remaining = content_budget;
-        while content_remaining > 0 {
-            let mut progressed = false;
-            for (index, block) in blocks.iter().enumerate() {
-                if emitted[index] >= block.len().saturating_sub(1) {
-                    continue;
-                }
-                emitted[index] += 1;
-                content_remaining -= 1;
-                progressed = true;
-                if content_remaining == 0 {
-                    break;
-                }
+    let total_content = blocks
+        .iter()
+        .map(|block| block.len().saturating_sub(1))
+        .sum::<usize>();
+    let reserve_next = usize::from(remaining > 0 && total_content > remaining);
+    let content_budget = remaining.saturating_sub(reserve_next);
+    let mut emitted = vec![0usize; blocks.len()];
+    let mut content_remaining = content_budget;
+    while content_remaining > 0 {
+        let mut progressed = false;
+        for (index, block) in blocks.iter().enumerate() {
+            if emitted[index] >= block.len().saturating_sub(1) {
+                continue;
             }
-            if !progressed {
+            emitted[index] += 1;
+            content_remaining -= 1;
+            progressed = true;
+            if content_remaining == 0 {
                 break;
             }
         }
-        for (index, block) in blocks.iter().enumerate() {
-            for line in block.iter().skip(1).take(emitted[index]) {
-                writeln!(w, "{line}")?;
-            }
+        if !progressed {
+            break;
         }
-        remaining = remaining.saturating_sub(emitted.iter().sum::<usize>());
-        let truncated = blocks
+    }
+    for (index, block) in blocks.iter().enumerate() {
+        for line in block.iter().skip(1).take(emitted[index]) {
+            writeln!(w, "{line}")?;
+        }
+    }
+    remaining = remaining.saturating_sub(emitted.iter().sum::<usize>());
+    let truncated = blocks
+        .iter()
+        .enumerate()
+        .filter(|(index, block)| emitted[*index] < block.len().saturating_sub(1))
+        .map(|(index, block)| (index, block))
+        .collect::<Vec<_>>();
+    if !truncated.is_empty() && remaining > 0 {
+        let names = truncated
             .iter()
-            .enumerate()
-            .filter(|(index, block)| emitted[*index] < block.len().saturating_sub(1))
-            .map(|(index, block)| (index, block))
+            .map(|(index, _)| descriptions[*index].name.as_str())
             .collect::<Vec<_>>();
-        if !truncated.is_empty() && remaining > 0 {
-            let names = truncated
-                .iter()
-                .map(|(index, _)| descriptions[*index].name.as_str())
-                .collect::<Vec<_>>();
-            let needed = truncated
-                .iter()
-                .map(|(_, block)| block.len())
-                .sum::<usize>();
-            writeln!(
-                w,
-                "next: baml describe {} --view {view} --max-lines {needed} --output compact",
-                names.join(" ")
-            )?;
-            remaining -= 1;
-        }
-    } else {
-        for (index, block) in blocks.iter().enumerate() {
-            if remaining == 0 {
-                break;
-            }
-            let content = block.len().saturating_sub(1);
-            let reserve_hint = usize::from(content > remaining);
-            let shown = content.min(remaining.saturating_sub(reserve_hint));
-            for line in block.iter().skip(1).take(shown) {
-                writeln!(w, "{line}")?;
-            }
-            remaining = remaining.saturating_sub(shown);
-            let omitted = content.saturating_sub(shown);
-            if omitted > 0 && remaining > 0 {
-                writeln!(
-                    w,
-                    "… {omitted} lines omitted — baml describe {} --view {view} --max-lines {}",
-                    descriptions[index].name,
-                    block.len(),
-                )?;
-                remaining -= 1;
-            }
-        }
+        let needed = truncated
+            .iter()
+            .map(|(_, block)| block.len())
+            .sum::<usize>();
+        writeln!(
+            w,
+            "next: baml describe {} --view {view} --max-lines {needed}",
+            names.join(" ")
+        )?;
+        remaining -= 1;
     }
 
     let mut seen_unmatched = std::collections::HashSet::new();

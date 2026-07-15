@@ -866,15 +866,7 @@ function make_user(name: string) -> User {
     let batch = run_baml_cli(
         built,
         tmp.path(),
-        &[
-            "describe",
-            "User",
-            "make_user",
-            "--output",
-            "compact",
-            "--max-lines",
-            "40",
-        ],
+        &["describe", "User", "make_user", "--max-lines", "40"],
     );
     assert!(
         batch.status.success(),
@@ -1021,32 +1013,6 @@ function slack_post_message(message: string) -> string {
     );
     assert!(source_stdout.lines().count() <= 20, "{source_stdout}");
 
-    let compact_search = run_baml_cli(
-        built,
-        tmp.path(),
-        &[
-            "describe",
-            "--search",
-            "trophy",
-            "--output",
-            "compact",
-            "--max-lines",
-            "20",
-        ],
-    );
-    assert!(compact_search.status.success());
-    let compact_stdout = String::from_utf8_lossy(&compact_search.stdout);
-    assert!(compact_stdout.contains("trophy ("), "{compact_stdout}");
-    assert!(
-        compact_stdout.contains("suggested: baml describe"),
-        "{compact_stdout}"
-    );
-    assert!(!compact_stdout.contains("Previewing:"), "{compact_stdout}");
-    assert!(
-        !compact_stdout.contains("class Trophy {}"),
-        "{compact_stdout}"
-    );
-
     let multi_search = run_baml_cli(
         built,
         tmp.path(),
@@ -1075,7 +1041,7 @@ function slack_post_message(message: string) -> string {
     assert!(multi_stdout.contains("slack ("), "{multi_stdout}");
     assert!(!multi_stdout.contains("Previewing:"), "{multi_stdout}");
     assert!(
-        multi_stdout.contains("--view impact --output compact --max-lines 60"),
+        multi_stdout.contains("--view impact --max-lines 60"),
         "{multi_stdout}"
     );
 
@@ -1111,7 +1077,7 @@ function slack_post_message(message: string) -> string {
         json["suggested"]["command"]
             .as_str()
             .unwrap()
-            .contains("--view impact --output compact --max-lines 60")
+            .contains("--view impact --max-lines 60")
     );
     assert!(json["suggested"]["symbols"].as_array().unwrap().len() <= 4);
 
@@ -1124,6 +1090,44 @@ function slack_post_message(message: string) -> string {
     assert!(
         String::from_utf8_lossy(&zero.stderr)
             .contains("No search results for: definitely_absent_symbol")
+    );
+}
+
+#[test]
+fn describe_output_keeps_color_separate_from_serialization() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), "class Trophy {}\n");
+
+    let text = run_baml_cli(
+        built,
+        tmp.path(),
+        &["--color", "always", "describe", "Trophy"],
+    );
+    assert!(text.status.success());
+    assert!(text.stdout.windows(2).any(|bytes| bytes == b"\x1b["));
+
+    let json = run_baml_cli(
+        built,
+        tmp.path(),
+        &[
+            "--color", "always", "describe", "Trophy", "--output", "json",
+        ],
+    );
+    assert!(json.status.success());
+    assert!(!json.stdout.windows(2).any(|bytes| bytes == b"\x1b["));
+    serde_json::from_slice::<serde_json::Value>(&json.stdout).unwrap();
+
+    let rejected_compact = run_baml_cli(
+        built,
+        tmp.path(),
+        &["describe", "Trophy", "--output", "compact"],
+    );
+    assert!(!rejected_compact.status.success());
+    assert!(
+        String::from_utf8_lossy(&rejected_compact.stderr).contains("invalid value 'compact'"),
+        "{}",
+        String::from_utf8_lossy(&rejected_compact.stderr)
     );
 }
 
