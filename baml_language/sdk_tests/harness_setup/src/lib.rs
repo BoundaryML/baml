@@ -36,6 +36,7 @@ use baml_codegen_types::SymbolPool;
 use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
+pub mod java;
 pub mod python_pydantic2;
 pub mod typescript_node;
 

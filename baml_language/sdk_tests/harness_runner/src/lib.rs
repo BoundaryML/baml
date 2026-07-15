@@ -445,6 +445,22 @@ pub mod python_pydantic2 {
     pub use crate::python_pydantic2_test_suite as test_suite;
 }
 
+/// Java generator's test-side glue. Invoked from
+/// `crates/java/src/lib.rs` as
+/// `sdk_test_harness_runner::java::test_suite!()`.
+pub mod java {
+    /// `include!`s `OUT_DIR/java_tests.rs` — the per-fixture scaffold
+    /// emitted by `sdk_test_harness_setup::java::run_all`.
+    #[macro_export]
+    macro_rules! java_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/java_tests.rs"));
+        };
+    }
+
+    pub use crate::java_test_suite as test_suite;
+}
+
 /// Node.js + TypeScript generator's test-side glue. Invoked from
 /// `crates/typescript_node/src/lib.rs` as
 /// `sdk_test_harness_runner::typescript_node::test_suite!()`.
