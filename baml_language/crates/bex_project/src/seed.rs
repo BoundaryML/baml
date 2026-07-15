@@ -87,7 +87,6 @@ use std::collections::BTreeMap;
 
 use baml_project::ProjectDatabase;
 use baml_type::{Ty, throw_facts::FunctionThrowFacts};
-use sha2::{Digest, Sha256};
 
 /// Optimization level the LSP compiles with (`ProjectDatabase::get_bytecode`
 /// uses `generate_project_bytecode`, whose default is `OptLevel::Two`). The
@@ -156,11 +155,7 @@ impl PerFileSeeds {
         let mut current: Vec<(String, String, [u8; 32])> = Vec::new();
         for file in db.get_source_files() {
             let path = file.path(db);
-            let rel = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
+            let rel = rel_path(root, &path);
             let full = path.display().to_string();
             current.push((full, rel, content_hash(file.text(db))));
         }
@@ -214,16 +209,41 @@ pub(crate) fn evict_per_file_seeds(db: &mut ProjectDatabase) {
     db.set_seeded_callable_throws(BTreeMap::new());
 }
 
+/// SHA-256 of a file's full content, matching the CLI's manifest writer so the
+/// whole-project-clean gate compares like against like. Native routes through
+/// the shared `bex_cache::content_hash`; WASM has no on-disk cache to agree
+/// with, so it hashes locally.
+#[cfg(not(target_arch = "wasm32"))]
 fn content_hash(text: &str) -> [u8; 32] {
+    bex_cache::content_hash(text)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn content_hash(text: &str) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
     Sha256::digest(text.as_bytes()).into()
 }
 
-/// The seed opt-out knobs are all consulted on the native disk-loading path;
-/// WASM has no on-disk cache, so this is native-only.
+/// `path` relative to `root` — the project-root-relative form the CLI manifest
+/// writer keys each file by, so the LSP's seed lookup matches it. Native shares
+/// `bex_cache::rel_path`; WASM (no on-disk cache) formats locally.
 #[cfg(not(target_arch = "wasm32"))]
-fn env_flag(name: &str) -> bool {
-    std::env::var_os(name).is_some_and(|v| v == "1")
+fn rel_path(root: &std::path::Path, path: &std::path::Path) -> String {
+    bex_cache::rel_path(root, path)
 }
+
+#[cfg(target_arch = "wasm32")]
+fn rel_path(root: &std::path::Path, path: &std::path::Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
+}
+
+/// The seed opt-out knobs are all consulted on the native disk-loading path;
+/// WASM has no on-disk cache, so this reader is native-only.
+#[cfg(not(target_arch = "wasm32"))]
+use bex_cache::env_flag;
 
 // ── On-disk loading (native only; WASM has no filesystem cache) ─────────────
 
@@ -453,11 +473,7 @@ mod tests {
         let mut callable = BTreeMap::new();
         for sf in db.get_source_files() {
             let path = sf.path(db);
-            let rel = path
-                .strip_prefix(&root)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
+            let rel = super::rel_path(&root, &path);
             content_hash.insert(rel.clone(), content_hash_of(sf.text(db)));
             throw_facts.insert(rel.clone(), file_throw_facts(db, sf).0.clone());
             let frag = package_interface::file_callable_throws_fragment(db, sf);
