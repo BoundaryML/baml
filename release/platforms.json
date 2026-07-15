@@ -50,7 +50,8 @@
       "npm_package": "linux-arm64-musl",
       "node_build": {
         "host": "ubuntu-22.04",
-        "before": "curl -LO https://musl.cc.timfish.dev/aarch64-linux-musl-cross.tgz\ntar -xzf aarch64-linux-musl-cross.tgz\necho \"$PWD/aarch64-linux-musl-cross/bin\" >> \"$GITHUB_PATH\"\ncat >>\"$GITHUB_ENV\" <<EOF\nRUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable\nEOF",
+        "cross_toolchain_sha256": "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38",
+        "before": "archive=aarch64-linux-musl-cross.tgz\nexpected_sha256=c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38\ncurl --fail --location --output \"$archive\" https://musl.cc.timfish.dev/aarch64-linux-musl-cross.tgz\necho \"$expected_sha256  $archive\" | sha256sum --check --strict\ntar -xzf \"$archive\"\necho \"$PWD/aarch64-linux-musl-cross/bin\" >> \"$GITHUB_PATH\"\ncat >>\"$GITHUB_ENV\" <<EOF\nRUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable\nEOF",
         "napi_args": "--use-napi-cross"
       },
       "node_verify": { "host": "ubuntu-24.04-arm", "docker_image": "node:22-alpine" },

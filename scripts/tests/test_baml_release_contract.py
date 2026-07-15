@@ -169,6 +169,25 @@ class ReleaseContractTests(unittest.TestCase):
             )
             self.assertNotEqual(failed.returncode, 0)
 
+    def test_aarch64_musl_cross_toolchain_is_verified_before_extraction(self) -> None:
+        expected_sha256 = (
+            "c909817856d6ceda86aa510894fa3527eac7989f0ef6e87b5721c58737a06c38"
+        )
+        rows = json.loads(
+            self.run_command(PLATFORM_SCRIPT, "matrix", "node_build").stdout
+        )
+        row = next(
+            row
+            for row in rows
+            if row["target"] == "aarch64-unknown-linux-musl"
+        )
+        self.assertEqual(row["cross_toolchain_sha256"], expected_sha256)
+        self.assertIn(f"expected_sha256={expected_sha256}", row["before"])
+        self.assertLess(
+            row["before"].index("sha256sum --check --strict"),
+            row["before"].index("tar -xzf"),
+        )
+
     def test_node_package_set_requires_exact_names_versions_and_budgets(self) -> None:
         platforms = json.loads((ROOT / "release" / "platforms.json").read_text())
         names = ["@boundaryml/baml-bridge"] + [
@@ -218,8 +237,11 @@ class ReleaseContractTests(unittest.TestCase):
         plan = {
             "schema": 2,
             "channel": "nightly",
+            "canary_version": "1.2.2",
             "canonical_version": version,
             "registry_versions": {"npm": version, "pypi": "1.2.3.dev2026071400"},
+            "git_tag": f"baml-language-{version}",
+            "source_sha": "0" * 40,
             "released_at": "2026-07-14T22:00:00Z",
         }
         with tempfile.TemporaryDirectory() as tmp:
@@ -266,6 +288,71 @@ class ReleaseContractTests(unittest.TestCase):
                 manifest["sdks"]["nodejs"]["package"], "@boundaryml/baml-bridge"
             )
             self.assertEqual(manifest["sdks"]["nodejs"]["version"], version)
+
+    def test_manifest_generation_requires_exactly_the_versioned_vsix(self) -> None:
+        platforms = json.loads((ROOT / "release" / "platforms.json").read_text())
+        version = "1.2.3-nightly.20260714.a"
+        plan = {
+            "schema": 2,
+            "channel": "nightly",
+            "canary_version": "1.2.2",
+            "canonical_version": version,
+            "registry_versions": {"npm": version, "pypi": "1.2.3.dev2026071400"},
+            "git_tag": f"baml-language-{version}",
+            "source_sha": "0" * 40,
+            "released_at": "2026-07-14T22:00:00Z",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            toolchain = root / "toolchain"
+            wrapper = root / "wrapper"
+            vsix = root / "vsix"
+            toolchain.mkdir()
+            wrapper.mkdir()
+            vsix.mkdir()
+            for entry in platforms["platforms"]:
+                target = entry["target"]
+                extension = "zip" if target.endswith("windows-msvc") else "tar.gz"
+                (
+                    toolchain / f"baml-language-{version}-{target}.{extension}"
+                ).write_bytes(target.encode())
+            plan_path = root / "release-plan.json"
+            plan_path.write_text(json.dumps(plan))
+
+            def run_manifest(out: str) -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    [
+                        str(MANIFEST_SCRIPT),
+                        "--plan",
+                        str(plan_path),
+                        "--toolchain-dir",
+                        str(toolchain),
+                        "--wrapper-dir",
+                        str(wrapper),
+                        "--vsix-dir",
+                        str(vsix),
+                        "--out",
+                        str(root / out),
+                        "--wrapper-version",
+                        "1.0.0",
+                    ],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                )
+
+            wrong_name = vsix / "extension.vsix"
+            wrong_name.write_bytes(b"vsix")
+            missing = run_manifest("missing")
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn(f"missing=['baml-language-{version}.vsix']", missing.stderr)
+            self.assertIn("extra=['extension.vsix']", missing.stderr)
+
+            expected = vsix / f"baml-language-{version}.vsix"
+            expected.write_bytes(b"vsix")
+            extra = run_manifest("extra")
+            self.assertNotEqual(extra.returncode, 0)
+            self.assertIn("extra=['extension.vsix']", extra.stderr)
 
 
 if __name__ == "__main__":

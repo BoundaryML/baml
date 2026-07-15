@@ -16,6 +16,7 @@ Set-Location $PSScriptRoot
 $WorkspaceRoot = (Resolve-Path '..\..\..').Path
 $RepoRoot = (Resolve-Path (Join-Path $WorkspaceRoot '..')).Path
 $BridgeNodejs = Join-Path $WorkspaceRoot 'sdks\nodejs\bridge_nodejs'
+$FixturesRoot = Join-Path $WorkspaceRoot 'sdk_tests\fixtures'
 
 # Shared pnpm store under target/ so per-fixture installs hardlink from
 # one location rather than fetching N copies.
@@ -63,7 +64,13 @@ try {
 #    when bridge_nodejs build output changes.
 Get-ChildItem -Directory | ForEach-Object {
     $generated = Join-Path $_.FullName 'generated'
-    if (Test-Path $generated) {
+    $fixture = Join-Path $FixturesRoot $_.Name
+    # Ignore generated output left behind after a shared fixture is removed.
+    # Build.rs only refreshes fixtures that still exist under sdk_tests/fixtures.
+    if (
+        (Test-Path -Path $generated -PathType Container) -and
+        (Test-Path -Path $fixture -PathType Container)
+    ) {
         Write-Host "==> pnpm install in $($_.Name)/generated"
         Push-Location $generated
         try {

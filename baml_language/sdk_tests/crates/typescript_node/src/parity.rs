@@ -7,11 +7,6 @@ use std::{
 
 type Cases = BTreeMap<String, Vec<Location>>;
 
-// Ratchet at the current baseline: every Python-shared case is either parity
-// or an explicitly documented host-language N/A. A new fixable Node gap must
-// fail this guard instead of silently consuming historical headroom.
-const INITIAL_NODE_GAP_BUDGET: usize = 0;
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum VitestCaseKind {
     Plain,
@@ -134,9 +129,9 @@ fn documented_node_gap_budget_does_not_grow() {
     }
 
     assert!(
-        gaps.len() <= INITIAL_NODE_GAP_BUDGET,
-        "TypeScript/Node documented gaps grew from the initial budget of \
-         {INITIAL_NODE_GAP_BUDGET} to {}. New shared behavior belongs in Python first; \
+        gaps.is_empty(),
+        "TypeScript/Node documented gap budget is zero, but found {}. \
+         New shared behavior belongs in Python first; \
          a real host-language mismatch must use nodeNA with a concrete rationale.\n{}",
         gaps.len(),
         gaps.join("\n")

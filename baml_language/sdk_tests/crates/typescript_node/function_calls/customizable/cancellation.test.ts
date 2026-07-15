@@ -88,7 +88,25 @@ describe("function_calls — cancellation parity", () => {
       }, 50);
     });
 
-    await expect(Promise.all([pending, failSoon])).rejects.toThrow("cancel siblings");
+    // Observe both promises at once: aborting the BAML call and rejecting the
+    // sibling happen back-to-back, so Promise.all would expose whichever
+    // rejection happens to settle first.
+    const [pendingResult, failSoonResult] = await Promise.allSettled([
+      pending,
+      failSoon,
+    ]);
+
+    expect(pendingResult.status).toBe("rejected");
+    expect(failSoonResult.status).toBe("rejected");
+    if (
+      pendingResult.status !== "rejected" ||
+      failSoonResult.status !== "rejected"
+    ) {
+      throw new Error("expected both sibling operations to reject");
+    }
+    expectBamlCancelledReason(pendingResult.reason);
+    expect(failSoonResult.reason).toBeInstanceOf(Error);
+    expect((failSoonResult.reason as Error).message).toBe("cancel siblings");
     expectFastCancellation(start);
   });
 

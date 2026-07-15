@@ -6,10 +6,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import runpy
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+LOAD_RELEASE_PLAN = runpy.run_path(
+    str(ROOT / "scripts" / "baml-language-version")
+)["load_plan"]
 PLATFORMS = json.loads(
     (ROOT / "release" / "platforms.json").read_text(encoding="utf-8")
 )
@@ -26,6 +30,17 @@ def sha256(path: Path) -> str:
 
 def artifact_url(tag: str, path: Path) -> str:
     return f"https://github.com/BoundaryML/baml/releases/download/{tag}/{path.name}"
+
+
+def require_vsix(root: Path, version: str) -> Path:
+    expected_name = f"baml-language-{version}.vsix"
+    expected = root / expected_name
+    candidates = sorted(root.glob("*.vsix"))
+    missing = [] if expected.is_file() else [expected_name]
+    extra = [path.name for path in candidates if path != expected]
+    if missing or extra or len(candidates) != 1:
+        raise SystemExit(f"VSIX artifact mismatch missing={missing} extra={extra}")
+    return expected
 
 
 def collect_artifacts(
@@ -69,19 +84,13 @@ def main() -> None:
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "version").mkdir(parents=True, exist_ok=True)
-    plan = json.loads(args.plan.read_text(encoding="utf-8"))
-    if plan.get("schema") != 2:
-        raise SystemExit(f"unsupported release plan schema {plan.get('schema')!r}")
-    version = plan["canonical_version"]
-    channel = plan["channel"]
-    released_at = plan["released_at"]
-    registry_versions = plan["registry_versions"]
-    if registry_versions.get("npm") != version:
-        raise SystemExit("release plan npm version must equal canonical_version")
+    plan = LOAD_RELEASE_PLAN(args.plan)
+    version = plan.canonical_version
+    channel = plan.channel
+    released_at = plan.released_at
+    registry_versions = plan.registry_versions
 
-    vsix = next(args.vsix_dir.glob("*.vsix"), None)
-    if vsix is None:
-        raise SystemExit(f"no .vsix files found in --vsix-dir {args.vsix_dir}")
+    vsix = require_vsix(args.vsix_dir, version)
     toolchain = {
         "schema": 1,
         "version": version,

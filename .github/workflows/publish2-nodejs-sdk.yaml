@@ -99,12 +99,14 @@ jobs:
       - name: Validate verified inputs
         env:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_CHANNEL: ${{ inputs.channel }}
         run: |
           set -euo pipefail
           (cd verified-npm && sha256sum -c SHA256SUMS)
           version="$(printf '%s\n' "$RELEASE_PLAN_JSON" | jq -r .canonical_version)"
-          test "$(printf '%s\n' "$RELEASE_PLAN_JSON" | jq -r .source_sha)" = '${{ inputs.source_sha }}'
-          test "$(printf '%s\n' "$RELEASE_PLAN_JSON" | jq -r .channel)" = '${{ inputs.channel }}'
+          test "$(printf '%s\n' "$RELEASE_PLAN_JSON" | jq -r .source_sha)" = "$EXPECTED_SOURCE_SHA"
+          test "$(printf '%s\n' "$RELEASE_PLAN_JSON" | jq -r .channel)" = "$EXPECTED_CHANNEL"
           scripts/baml-release-platforms check-node-packages verified-npm/packages.json --version "$version"
       - name: Publish native leaves, then commit the umbrella channel
         env:
