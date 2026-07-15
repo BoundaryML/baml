@@ -76,10 +76,7 @@ mod tests {
             if current.join(".git").exists() {
                 return Some(current.to_path_buf());
             }
-            match current.parent() {
-                Some(parent) => current = parent,
-                None => return None,
-            }
+            current = current.parent()?;
         }
     }
 }

@@ -394,6 +394,13 @@ pub struct TestCase {
     pub function_names: Vec<String>,
     /// Test arguments, keyed by parameter name.
     pub args: IndexMap<String, TestArgValue>,
+    /// Project-root-relative path of the file that *defines* this test block.
+    ///
+    /// Recorded so `baml test --list` reports the test-defining file
+    /// identically whether the program was freshly compiled or served from the
+    /// bytecode cache. Empty only for programs compiled before this field
+    /// existed.
+    pub source_file: String,
 }
 
 /// Compile-time constant values.

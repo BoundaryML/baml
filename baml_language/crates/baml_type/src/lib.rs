@@ -35,6 +35,7 @@ mod realized_ty;
 mod runtime_ty;
 pub mod simplify_sap;
 pub mod template;
+pub mod throw_facts;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;

@@ -37,6 +37,20 @@ use crate::{
     ty::{FunctionParamTy, Ty, TyAttr},
 };
 
+/// Count of honest `infer_scope_types` bodies walked (Salsa cache misses) since
+/// process start. The per-file diagnostics cache serves clean files' diagnostics
+/// without querying their scopes, so a warm incremental compile leaves this at
+/// only the dirty files' scope count; a cold compile bumps it once per scope.
+/// Exposed for the `BAML_CACHE_DEBUG` warm-run evidence, not part of any result.
+static SCOPE_INFERENCES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Number of scopes whose bodies `infer_scope_types` walked honestly (not served
+/// from a Salsa memo) since process start. Small on a warm incremental compile
+/// (dirty scopes only); large on a cold compile.
+pub fn scope_inferences() -> usize {
+    SCOPE_INFERENCES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 #[derive(Debug, Clone, Default)]
 struct GenericEnv {
     params: Vec<Name>,
@@ -1615,6 +1629,10 @@ pub fn infer_scope_types<'db>(
     db: &'db dyn crate::Db,
     scope_id: ScopeId<'db>,
 ) -> ScopeInference<'db> {
+    // Salsa only enters the query body on a cache miss, so this counts scopes
+    // actually re-inferred — the warm-incremental evidence that clean files
+    // (never queried, because the diagnostics cache serves them) skip inference.
+    SCOPE_INFERENCES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let file = scope_id.file(db);
     let file_scope = scope_id.file_scope_id(db);
     let index = baml_compiler2_ppir::file_semantic_index(db, file);

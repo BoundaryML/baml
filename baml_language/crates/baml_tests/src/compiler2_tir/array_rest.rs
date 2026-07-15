@@ -328,9 +328,7 @@ function f(xs: int[]) -> int {
 function main() -> int { 0 }
 "#,
     );
-    let project = db.get_project().expect("project must be set");
-    let files = db.get_source_files();
-    let diags = baml_project::collect_diagnostics(&db, project, &files);
+    let diags = baml_project::collect_diagnostics(&db);
 
     assert!(
         diags
