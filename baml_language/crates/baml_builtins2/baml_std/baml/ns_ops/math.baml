@@ -1,6 +1,6 @@
-// Native math operators (`+ - * / %` and unary `-`) for the numeric primitives
-// and string, declared as `baml.ops.{Add,Subtract,Multiply,Divide,Remainder,
-// Negate}` and implemented in `crates/bex_vm/src/package_baml/ops_math.rs`.
+// Native math operators (`+ - * / %` and unary `-`) for the numeric primitives,
+// declared as `baml.ops.{Add,Subtract,Multiply,Divide,Remainder,Negate}` and
+// implemented in `crates/bex_vm/src/package_baml/ops_math.rs`.
 //
 // Like the comparison ops in `comparison.baml`, the compiler special-cases these
 // for statically-typed operands (emitting `AddInt` / `AddFloat` / … bytecode);
@@ -282,20 +282,12 @@ implement Remainder<bigint> for int {
 }
 
 // ==== string ====
-// implement<T extends root.Concrete> Add<T> for string {
-//     /// Stringifies `rhs` and returns the concatenation of `self` and `rhs`.
-//     //baml:vm
-//     //baml:fallible
-//     function add(self, rhs: T) -> string throws never {
-//         $rust_function
-//     }
-// }
-// implement Multiply<int> for string {
-//     /// Repeats `self` `rhs` times.
-//     function mul(self, rhs: int) -> string throws never {
-//         $rust_function
-//     }
-// }
+//
+// Deliberately no impls: `string + string` concatenation is compiler
+// fast-path only, and `string + <non-string>` / `string * int` stay type
+// errors. `string` therefore never satisfies an `Add` bound and never
+// reaches the `__union_*` drivers (a union pair involving it fails the
+// type check first).
 
 // ==== operator dispatch drivers ====
 //

@@ -33,7 +33,7 @@ use super::{
     BamlClassOpsCompare_for_string, BamlClassOpsEquals_for_bigint, BamlClassOpsEquals_for_bool,
     BamlClassOpsEquals_for_float, BamlClassOpsEquals_for_int, BamlClassOpsEquals_for_string,
     BamlClassOpsEquals_for_uint8array, BamlNamespaceOps, Continuation, NativeCallResult,
-    PackageBamlImpl, resolve,
+    PackageBamlImpl, PassThroughContinuation, resolve,
 };
 use crate::BexVm;
 
@@ -240,7 +240,7 @@ fn dispatch_op(
         args,
         type_args,
         // The operator's value *is* the impl method's return value — forward it.
-        continuation: Box::new(ForwardResult),
+        continuation: Box::new(PassThroughContinuation),
     }
 }
 
@@ -251,22 +251,6 @@ fn unresolved_op(iface: &str, method: &str) -> VmInternalError {
     VmInternalError::UnresolvedVirtualCall {
         method: format!("baml.ops.{iface}.{method}"),
     }
-}
-
-/// Continuation that returns the callee's result unchanged — the tail-call shape
-/// for [`drive_binary_op`], whose value is exactly the dispatched method's.
-struct ForwardResult;
-
-impl Continuation for ForwardResult {
-    fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
-        NativeCallResult::Done(value)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        Vec::new()
-    }
-
-    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
 }
 
 /// Outcome of comparing one popped pair in the [`EqualsDriver`] worklist.

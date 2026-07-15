@@ -6614,82 +6614,101 @@ impl LoweringContext<'_> {
     ) {
         let lhs_op = self.lower_to_operand(lhs);
         let rhs_op = self.lower_to_operand(rhs);
+        let bool_ty = RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        };
+        if matches!(op, AstBinaryOp::Eq) {
+            self.lower_via_ops_driver("equals_equals", vec![lhs_op, rhs_op], bool_ty, dest);
+            return;
+        }
+        // `!=`: call into a bool temp, then negate into `dest` (`assign` handles
+        // projection destinations, so this covers both local and projection cases).
+        let eq_dest = Place::local(self.builder.temp(bool_ty.clone()));
+        self.lower_via_ops_driver(
+            "equals_equals",
+            vec![lhs_op, rhs_op],
+            bool_ty,
+            eq_dest.clone(),
+        );
+        self.builder.assign(
+            dest,
+            Rvalue::UnaryOp {
+                op: crate::UnaryOp::Not,
+                operand: Operand::Copy(eq_dest),
+            },
+        );
+    }
+
+    /// Emit `dest = baml.ops.<driver>(args)` — the shared shape of the operator
+    /// dispatch drivers (`equals_equals`, `__union_add`, …, `__union_neg`). A
+    /// driver may yield (it can call user bytecode), so the call splits the block
+    /// and lowering resumes in a fresh one. The call terminator's destination
+    /// must be a `Place::Local` (the emitter stores its result with
+    /// `emit_store_place`, which only handles locals), so a projection/capture
+    /// `dest` is routed through a `result_ty`-typed temp and copied through.
+    fn lower_via_ops_driver(
+        &mut self,
+        driver: &str,
+        args: Vec<Operand>,
+        result_ty: RuntimeTy,
+        dest: Place,
+    ) {
         let callee = Operand::Constant(Constant::Function(ItemRef::Free {
             package: Name::new("baml"),
             namespace: vec![Name::new("ops")],
-            name: Name::new("equals_equals"),
+            name: Name::new(driver),
         }));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        // The driver call's destination must be a `Place::Local` (the emitter
-        // stores its result with `emit_store_place`, which only handles locals).
-        // Route through a bool temp whenever we must post-process the result —
-        // always for `!=` (we negate into `dest`), and for `==` when `dest` is a
-        // projection/capture (we copy into it after the call). When `op == Eq`
-        // and `dest` is already a local, the call writes straight into it.
-        let is_ne = matches!(op, AstBinaryOp::Ne);
-        let needs_temp = is_ne || !matches!(dest, Place::Local(_));
-        let eq_dest = if needs_temp {
-            Place::local(self.builder.temp(RuntimeTy::Bool {
-                attr: TyAttr::default(),
-            }))
+        let needs_temp = !matches!(dest, Place::Local(_));
+        let call_dest = if needs_temp {
+            Place::local(self.builder.temp(result_ty))
         } else {
             dest.clone()
         };
         let resume = self.builder.create_block();
-        self.builder.call(
-            callee,
-            vec![lhs_op, rhs_op],
-            eq_dest.clone(),
-            resume,
-            unwind,
-        );
+        self.builder
+            .call(callee, args, call_dest.clone(), resume, unwind);
         self.builder.set_current_block(resume);
-        if is_ne {
-            // `assign` handles projection destinations, so negating into `dest`
-            // covers both local and projection cases.
-            self.builder.assign(
-                dest,
-                Rvalue::UnaryOp {
-                    op: crate::UnaryOp::Not,
-                    operand: Operand::Copy(eq_dest),
-                },
-            );
-        } else if needs_temp {
-            // `op == Eq` with a projection/capture `dest`: copy the temp through.
+        if needs_temp {
             self.builder
-                .assign(dest, Rvalue::Use(Operand::Copy(eq_dest)));
+                .assign(dest, Rvalue::Use(Operand::Copy(call_dest)));
         }
     }
 
-    /// Whether both arithmetic operands are primitives the specialized opcodes /
-    /// `exec_binop` handle directly (int/bigint/float, plus `string` for `+`),
+    /// Whether `ty` is a primitive the specialized arithmetic opcodes /
+    /// `exec_binop` handle directly — int/bigint/float, plus `string` when
+    /// `include_string` (binary `+` concatenates; unary `-` has no string form) —
     /// including literals and unions of those. Anything else (a user type, or a
     /// union / existential / type variable involving one) goes through the
     /// `__union_*` interface driver.
-    fn arithmetic_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
-        fn is_primitive(ty: &RuntimeTy) -> bool {
-            use baml_base::Literal;
-            match ty {
-                RuntimeTy::Int { .. }
-                | RuntimeTy::Bigint { .. }
-                | RuntimeTy::Float { .. }
-                | RuntimeTy::String { .. } => true,
-                RuntimeTy::Literal(
-                    Literal::Int(_) | Literal::Bigint(_) | Literal::Float(_) | Literal::String(_),
-                    _,
-                    _,
-                ) => true,
-                RuntimeTy::Union(members, _) => members.iter().all(is_primitive),
-                _ => false,
+    fn arith_primitive(ty: &RuntimeTy, include_string: bool) -> bool {
+        use baml_base::Literal;
+        match ty {
+            RuntimeTy::Int { .. } | RuntimeTy::Bigint { .. } | RuntimeTy::Float { .. } => true,
+            RuntimeTy::Literal(Literal::Int(_) | Literal::Bigint(_) | Literal::Float(_), _, _) => {
+                true
             }
+            RuntimeTy::String { .. } | RuntimeTy::Literal(Literal::String(_), _, _) => {
+                include_string
+            }
+            RuntimeTy::Union(members, _) => members
+                .iter()
+                .all(|m| Self::arith_primitive(m, include_string)),
+            _ => false,
         }
-        is_primitive(&self.expr_ty(lhs)) && is_primitive(&self.expr_ty(rhs))
+    }
+
+    /// Whether both arithmetic operands are [`Self::arith_primitive`] (string
+    /// included: `+` concatenates, and TIR rejects strings under the other ops
+    /// before lowering).
+    fn arithmetic_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
+        Self::arith_primitive(&self.expr_ty(lhs), true)
+            && Self::arith_primitive(&self.expr_ty(rhs), true)
     }
 
     /// Lower `a OP b` through the `baml.ops.__union_<op>` driver — the general
     /// case for operands whose static types don't pin a single impl. The driver
-    /// resolves `<typeof a as Op<typeof b>>` at runtime and tail-calls it; it may
-    /// yield (a user impl is bytecode), so the call splits the block. Its
+    /// resolves `<typeof a as Op<typeof b>>` at runtime and tail-calls it; its
     /// `unknown` result is the operator's value, re-typed by `dest`.
     fn lower_arithmetic_via_driver(
         &mut self,
@@ -6709,79 +6728,22 @@ impl LoweringContext<'_> {
         };
         let lhs_op = self.lower_to_operand(lhs);
         let rhs_op = self.lower_to_operand(rhs);
-        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("ops")],
-            name: Name::new(driver),
-        }));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        // The driver call's destination must be a `Place::Local`; route a
-        // projection/capture `dest` through a result-typed temp and copy through.
-        let needs_temp = !matches!(dest, Place::Local(_));
-        let call_dest = if needs_temp {
-            Place::local(self.builder.temp(self.expr_ty(expr_id)))
-        } else {
-            dest.clone()
-        };
-        let resume = self.builder.create_block();
-        self.builder.call(
-            callee,
-            vec![lhs_op, rhs_op],
-            call_dest.clone(),
-            resume,
-            unwind,
-        );
-        self.builder.set_current_block(resume);
-        if needs_temp {
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Copy(call_dest)));
-        }
+        let result_ty = self.expr_ty(expr_id);
+        self.lower_via_ops_driver(driver, vec![lhs_op, rhs_op], result_ty, dest);
     }
 
-    /// Whether the negation operand is a primitive the `Neg` opcode handles
-    /// (int/bigint/float, plus literals and unions of those). Anything else goes
-    /// through the `__union_neg` driver.
+    /// Whether the negation operand is [`Self::arith_primitive`] (the `Neg`
+    /// opcode has no string form).
     fn negate_uses_primitive_opcode(&self, operand: AstExprId) -> bool {
-        fn is_primitive(ty: &RuntimeTy) -> bool {
-            use baml_base::Literal;
-            match ty {
-                RuntimeTy::Int { .. } | RuntimeTy::Bigint { .. } | RuntimeTy::Float { .. } => true,
-                RuntimeTy::Literal(
-                    Literal::Int(_) | Literal::Bigint(_) | Literal::Float(_),
-                    _,
-                    _,
-                ) => true,
-                RuntimeTy::Union(members, _) => members.iter().all(is_primitive),
-                _ => false,
-            }
-        }
-        is_primitive(&self.expr_ty(operand))
+        Self::arith_primitive(&self.expr_ty(operand), false)
     }
 
     /// Lower `-a` through the `baml.ops.__union_neg` driver (single dispatch on
     /// `a`'s runtime type). Mirrors [`Self::lower_arithmetic_via_driver`].
     fn lower_negate_via_driver(&mut self, expr_id: AstExprId, operand: AstExprId, dest: Place) {
         let operand_op = self.lower_to_operand(operand);
-        let callee = Operand::Constant(Constant::Function(ItemRef::Free {
-            package: Name::new("baml"),
-            namespace: vec![Name::new("ops")],
-            name: Name::new("__union_neg"),
-        }));
-        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        let needs_temp = !matches!(dest, Place::Local(_));
-        let call_dest = if needs_temp {
-            Place::local(self.builder.temp(self.expr_ty(expr_id)))
-        } else {
-            dest.clone()
-        };
-        let resume = self.builder.create_block();
-        self.builder
-            .call(callee, vec![operand_op], call_dest.clone(), resume, unwind);
-        self.builder.set_current_block(resume);
-        if needs_temp {
-            self.builder
-                .assign(dest, Rvalue::Use(Operand::Copy(call_dest)));
-        }
+        let result_ty = self.expr_ty(expr_id);
+        self.lower_via_ops_driver("__union_neg", vec![operand_op], result_ty, dest);
     }
 
     fn lower_short_circuit(
