@@ -105,10 +105,11 @@ fn load() -> Result<Api, LoaderError> {
 }
 
 /// The leading fields of `bridge_cffi`'s versioned `BamlApiV1` table (returned
-/// by its `baml_get_api_v1` entry point) that this bridge reads. `#[repr(C)]`
-/// + field order mirror `BamlApiV1` exactly, so reading it through the real
-/// (possibly longer) table is sound; `struct_size` guards against a shorter or
-/// older table. Extend this in ABI order as more of the table is used.
+/// by its `baml_get_api_v1` entry point) that this bridge reads. Its
+/// `#[repr(C)]` layout and field order mirror `BamlApiV1` exactly, so reading
+/// it through the real (possibly longer) table is sound; `struct_size` guards
+/// against a shorter or older table. Extend this in ABI order as more of the
+/// table is used.
 ///
 /// `create_baml_runtime` is intentionally NOT in `BamlApiV1` (it is a legacy
 /// direct export) and is resolved separately.
