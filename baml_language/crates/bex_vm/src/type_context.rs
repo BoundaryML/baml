@@ -24,11 +24,10 @@
 //! at runtime yet — the resolver proves `concrete: I`, not `I_a requires I_b`.
 //!
 //! Pass a `&BexVm` directly wherever the algebra wants a `&impl TypeContext`
-//! (e.g. `normalize::is_subtype(a, b, vm)`), or use the convenience wrappers on
-//! [`BexVm`] such as [`BexVm::runtime_subtype`]. Call sites migrate onto this
-//! only as the surrounding relation is made canonical (the runtime must not
-//! become stricter than the compiler where it would break a proven-exhaustive
-//! match — see the List/Map-invariance sequencing constraint).
+//! (e.g. `normalize::is_subtype(a, b, vm)`). Call sites migrate onto this only as
+//! the surrounding relation is made canonical (the runtime must not become
+//! stricter than the compiler where it would break a proven-exhaustive match —
+//! see the List/Map-invariance sequencing constraint).
 
 use baml_type::{Interface, Name, QualifiedTypeName, RealizedTy, Ty, normalize::TypeContext};
 use bex_vm_types::types::Object;
