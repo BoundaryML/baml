@@ -19,95 +19,6 @@ use std::{collections::HashMap, sync::Arc};
 use baml_type::Name;
 use smallvec::SmallVec;
 
-fn guard_template_matches(
-    template: &baml_type::TyTemplate,
-    frame_type_args: &[baml_type::RealizedTy],
-    actual: &baml_type::RealizedTy,
-) -> bool {
-    use baml_type::{RealizedTy, TyTemplate};
-
-    // A fully-realized template carries no frame refs or holes: compare it to
-    // the actual arg by exact structural equality (the invariant-position rule
-    // for reified type args). This is the flattened successor to the old
-    // `Concrete(expected) => expected == actual` arm.
-    if let Ok(realized) = <&RealizedTy>::try_from(template) {
-        return realized == actual;
-    }
-
-    match template {
-        TyTemplate::Wildcard => true,
-        #[expect(deprecated)]
-        TyTemplate::TypeArgRefOrWildcard(n) => match frame_type_args.get(*n as usize) {
-            Some(RealizedTy::BuiltinUnknown { .. }) | None => true,
-            // The context-free subtype fork lives on `RuntimeTy`; upcast only to
-            // consult it.
-            Some(expected) => actual
-                .as_runtime_ty()
-                .is_subtype_of(expected.as_runtime_ty()),
-        },
-        TyTemplate::TypeArgRef(n) => frame_type_args.get(*n as usize).map_or_else(
-            || RealizedTy::unknown() == *actual,
-            |expected| expected == actual,
-        ),
-        TyTemplate::List(inner, _) => {
-            matches!(actual, RealizedTy::List(actual_inner, _) if guard_template_matches(inner, frame_type_args, actual_inner))
-        }
-        TyTemplate::Map { key, value, .. } => {
-            matches!(actual, RealizedTy::Map { key: actual_key, value: actual_value, .. } if guard_template_matches(key, frame_type_args, actual_key) && guard_template_matches(value, frame_type_args, actual_value))
-        }
-        TyTemplate::Class(name, args, _) => {
-            matches!(actual, RealizedTy::Class(actual_name, actual_args, _) if name == actual_name && args.len() == actual_args.len() && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual)))
-        }
-        TyTemplate::Interface(name, args, assoc, _) => {
-            matches!(actual, RealizedTy::Interface(actual_name, actual_args, actual_assoc, _) if name == actual_name
-            && args.len() == actual_args.len()
-            && args.iter().zip(actual_args).all(|(template, actual)| guard_template_matches(template, frame_type_args, actual))
-            && assoc.iter().all(|(name, template)| {
-                actual_assoc
-                    .iter()
-                    .find(|(actual_name, _)| actual_name == name)
-                    .is_some_and(|(_, actual)| guard_template_matches(template, frame_type_args, actual))
-            }))
-        }
-        TyTemplate::Union(parts, _) => match actual {
-            RealizedTy::Union(actual_parts, _) => actual_parts.iter().all(|actual_part| {
-                parts
-                    .iter()
-                    .any(|part| guard_template_matches(part, frame_type_args, actual_part))
-            }),
-            _ => parts
-                .iter()
-                .any(|part| guard_template_matches(part, frame_type_args, actual)),
-        },
-        TyTemplate::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            matches!(actual, RealizedTy::Function { params: actual_params, ret: actual_ret, throws: actual_throws, .. }
-                if params.len() == actual_params.len()
-                && params.iter().zip(actual_params).all(|(param, actual_param)| {
-                    param.mode == actual_param.mode
-                        && guard_template_matches(&param.ty, frame_type_args, &actual_param.ty)
-                })
-                && guard_template_matches(ret, frame_type_args, actual_ret)
-                && guard_template_matches(throws, frame_type_args, actual_throws))
-        }
-        TyTemplate::Future(value, error, _) => {
-            matches!(actual, RealizedTy::Future(actual_value, actual_error, _)
-                if guard_template_matches(value, frame_type_args, actual_value)
-                && guard_template_matches(error, frame_type_args, actual_error))
-        }
-        // A symbolic projection whose witness type was not resolved at compile
-        // time — never a match: a runtime value's concrete type carries no
-        // unresolved projection for it to equal.
-        TyTemplate::AssociatedTypeProjection { .. } => false,
-        // Realized leaves are handled by the fast path above.
-        _ => false,
-    }
-}
-
 /// Lower named host `TypeVar` bindings to the positional De Bruijn `type_args`
 /// vec the VM frame consumes. Each `(name, ty)` is placed at the index of the
 /// matching name in `param_names` (the callee's De Bruijn-ordered generic
@@ -359,7 +270,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::AtomicBool;
 
-    use baml_type::{Name, RealizedTy, RuntimeTy, TyAttr, TyTemplate, TypeName};
+    use baml_type::{RuntimeTy, TyAttr};
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
         EarlyYieldCheck, FunctionCaptureProps, FunctionKind, GlobalPool, HeapPtr, Object,
@@ -561,99 +472,6 @@ mod tests {
         assert!(
             !forwarding.contains_key(&trampoline),
             "unrooted trampoline function must not be forwarded after return"
-        );
-    }
-
-    // ── B-634: reified type-arg comparison in generic class match arms ──────
-    //
-    // A generic `match` arm `let s: Opt<T>` lowers its runtime type-test to a
-    // template whose frame type-arg is checked against the scrutinee instance's
-    // `class_type_args`. When inference pins `T` to a supertype union of the
-    // value's actual arg (a `default: T` arg subtypes, so `T` reifies to the
-    // un-subsumed join `Shape | Sq`), an EXACT (`==`) comparison wrongly misses.
-    // The fix lowers the arm through the dispatch-guard template so the frame
-    // arg becomes `TypeArgRefOrWildcard` (subtype-or-wildcard), matching the
-    // interface class-dispatch guard path. These tests lock the directional
-    // semantics of `guard_template_matches` — the property that is awkward to
-    // observe from surface BAML because static typing + covariance guarantee a
-    // well-typed scrutinee's runtime arg is always `<:` the frame `T`.
-    #[test]
-    fn guard_template_type_arg_ref_or_wildcard_honors_subtyping() {
-        use super::guard_template_matches;
-
-        let shape = RealizedTy::class("Shape");
-        let sq = RealizedTy::class("Sq");
-        // The reified frame `T` from the B-634 repro: the un-subsumed join.
-        let widened_t = RealizedTy::union([shape.clone(), sq.clone()]);
-
-        // Under-match fix: the value's actual arg (`Shape`) is a member of the
-        // widened frame `T` (`Shape | Sq`), so the subtype-or-wildcard template
-        // now matches. This is the exact B-634 scenario (was `false`).
-        #[expect(deprecated)]
-        let subtype_template = TyTemplate::TypeArgRefOrWildcard(0);
-        assert!(
-            guard_template_matches(&subtype_template, std::slice::from_ref(&widened_t), &shape),
-            "Shape must match a Shape|Sq frame T under subtype-or-wildcard"
-        );
-
-        // The exact `TypeArgRef` template (kept exact on purpose — this is why
-        // the fix is at the MIR layer, swapping which template the arm emits,
-        // rather than broadening every `TypeArgRef` comparison in the VM).
-        let exact_template = TyTemplate::TypeArgRef(0);
-        assert!(
-            !guard_template_matches(&exact_template, std::slice::from_ref(&widened_t), &shape),
-            "exact TypeArgRef must still reject Shape != Shape|Sq"
-        );
-
-        // Directionality / soundness: a strictly WIDER runtime arg must NOT
-        // match a narrower frame `T`. Here `T` is pinned to `Sq` and the value
-        // carries the wider `Shape | Sq`; `(Shape|Sq) <: Sq` is false, so the
-        // arm is skipped (falls to the default). The fix does not over-match.
-        assert!(
-            !guard_template_matches(&subtype_template, std::slice::from_ref(&sq), &widened_t),
-            "a wider runtime arg (Shape|Sq) must not match a narrower frame T (Sq)"
-        );
-        // Same directionality with two unrelated classes.
-        assert!(
-            !guard_template_matches(&subtype_template, std::slice::from_ref(&sq), &shape),
-            "an unrelated runtime arg must not match the frame T"
-        );
-
-        // A proper subtype (union member) matches (covariant "belongs to").
-        assert!(
-            guard_template_matches(&subtype_template, std::slice::from_ref(&widened_t), &sq),
-            "Sq must match a Shape|Sq frame T under subtype-or-wildcard"
-        );
-
-        // An unconcretized (all-`unknown`) frame slot matches any instance.
-        assert!(
-            guard_template_matches(&subtype_template, &[RealizedTy::unknown()], &shape),
-            "an unknown frame slot must match any runtime arg"
-        );
-    }
-
-    #[test]
-    fn guard_template_concrete_type_args_still_discriminate() {
-        use super::guard_template_matches;
-
-        // Concrete parametric arms (`Foo<int>` vs `Foo<string>`) take the
-        // concrete path (`contains_typevar == false`) and must keep exact
-        // discrimination — unaffected by the B-634 subtype fix.
-        let foo = TypeName::local(Name::new("Foo"));
-        let foo_int_template = TyTemplate::class(
-            foo.clone(),
-            vec![TyTemplate::from(baml_type::RealizedTy::int())],
-        );
-        let foo_int_value = RealizedTy::class_with_args(foo.clone(), vec![RealizedTy::int()]);
-        let foo_string_value = RealizedTy::class_with_args(foo, vec![RealizedTy::string()]);
-
-        assert!(
-            guard_template_matches(&foo_int_template, &[], &foo_int_value),
-            "Foo<int> template must match a Foo<int> value"
-        );
-        assert!(
-            !guard_template_matches(&foo_int_template, &[], &foo_string_value),
-            "Foo<int> template must not match a Foo<string> value"
         );
     }
 }
@@ -6705,9 +6523,9 @@ impl BexVm {
                     let result = match raw_const {
                         // Structural type test against a full `TyTemplate` (a
                         // container element type, a bare frame ref, a `Wildcard`
-                        // hole, …), matched with the canonical type algebra. Not
-                        // emitted yet — the MIR/emit routing that produces these
-                        // constants lands with the structural-routing unit.
+                        // hole, …), matched with the canonical type algebra —
+                        // emitted for element-discriminating containers, unions,
+                        // and frame refs (see the emitter's `is_type`).
                         ConstValue::Type(template) => {
                             let frame_type_args =
                                 if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
@@ -6736,20 +6554,30 @@ impl BexVm {
                                             } else {
                                                 vec![]
                                             };
-                                        // Position-wise match: plain
-                                        // `TypeArgRef` is exact, while
-                                        // guard-only wildcard templates can
-                                        // intentionally leave a position
-                                        // unconstrained.
+                                        // Class-pointer identity (above) fixes the
+                                        // class; each type arg is then related
+                                        // *invariantly* through the canonical
+                                        // algebra (BAML generics are invariant; a
+                                        // `Wildcard` arg matches any). No covariance
+                                        // is needed for a reified frame type-param
+                                        // that inference widened to a union (`T =
+                                        // Shape | Sq` vs a value's narrower `Shape`):
+                                        // the algebra knows `Sq <: Shape` and absorbs
+                                        // `Shape | Sq == Shape`, so the invariant
+                                        // relation already holds — the retired guard
+                                        // needed a covariant band-aid only because it
+                                        // could not see that membership.
                                         type_args_templates.len() == inst.class_type_args.len()
                                             && type_args_templates
                                                 .iter()
                                                 .zip(&inst.class_type_args)
                                                 .all(|(template, actual)| {
-                                                    guard_template_matches(
+                                                    crate::type_match::template_relates(
+                                                        self,
                                                         template,
                                                         &frame_type_args,
-                                                        actual,
+                                                        actual.as_ty(),
+                                                        crate::type_match::Variance::Invariant,
                                                     )
                                                 })
                                     }

@@ -30,8 +30,10 @@
 //! subtyping is arity-sensitive — are never hand-walked, so a holey function arm
 //! fails closed while a hole-free one is left to the canonical algebra.
 //!
-//! Dormant until MIR/emit routes structural type tests through
-//! `ConstValue::Type` — the sole caller today is a unit-tested `IsType` arm.
+//! Live: the emitter routes element-discriminating containers, unions, and
+//! frame refs through `ConstValue::Type` to [`value_matches_template`], and the
+//! `ClassWithTypeArgs` `IsType` check relates its per-arg positions through
+//! [`class_type_arg_matches`] — both over this same canonical algebra.
 
 use baml_type::{RealizedTy, Ty, TyTemplate, normalize};
 use bex_vm_types::Value;
@@ -57,7 +59,7 @@ use crate::BexVm;
 /// handed whole to the canonical algebra, which applies parameter contravariance
 /// (and the rest of function subtyping) itself.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Variance {
+pub(crate) enum Variance {
     Covariant,
     Invariant,
 }
@@ -96,7 +98,11 @@ pub(crate) fn value_matches_template(
 /// (`is_subtype` for covariant, `equivalent` for invariant). A subtree that
 /// contains a `Wildcard` is walked structurally so the hole can match anything
 /// at its own position while the rest is still related canonically.
-fn template_relates<C: normalize::TypeContext>(
+///
+/// The `ClassWithTypeArgs` `IsType` check calls this directly with
+/// [`Variance::Invariant`] for each class type-arg (`self` as the `TypeContext`),
+/// which is why it is `pub(crate)`.
+pub(crate) fn template_relates<C: normalize::TypeContext>(
     ctx: &C,
     template: &TyTemplate,
     frame_type_args: &[RealizedTy],

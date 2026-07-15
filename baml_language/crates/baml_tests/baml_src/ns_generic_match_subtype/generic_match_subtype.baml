@@ -1,20 +1,22 @@
 // End-to-end tests for B-634.
 //
 // A generic `match` arm `let s: Opt<T>` (where `T` is the enclosing function's
-// type var) used to lower its runtime type-test to an EXACT reified type-arg
-// comparison. When inference pins `T` to a supertype UNION of the scrutinee's
-// actual type arg — which happens whenever a `default: T` argument subtypes,
-// so `T` reifies to the un-subsumed join `Shape | Sq` while the value is a
-// plain `Opt<Shape>` — the exact `Shape | Sq == Shape` check failed and the arm
-// silently missed, falling through to the default.
+// type var) compares the scrutinee instance's reified type arg against the
+// frame's `T`. When inference pins `T` to a supertype UNION of the scrutinee's
+// actual arg — which happens whenever a `default: T` argument subtypes, so `T`
+// reifies to the un-subsumed join `Shape | Sq` while the value is a plain
+// `Opt<Shape>` — the arm must still match, because `Shape | Sq` *is* `Shape`:
+// `Sq` implements `Shape` (`Sq <: Shape`), so the union absorbs to `Shape`.
 //
-// Fixed in `baml_compiler2_mir::lower::lower_pattern_test`: the typevar-carrying
-// class-pattern arm now builds its `IsType` template with
-// `tir2_to_dispatch_guard_template` (frame `TypeVar` -> `TypeArgRefOrWildcard`,
-// subtype-or-wildcard) instead of `ty_to_template` (frame `TypeVar` ->
-// `TypeArgRef`, exact). This matches the interface class-dispatch guard path and
-// gives the correct covariant "does this value belong to type `Opt<T>`"
-// semantics.
+// The original miss came from comparing with the context-free structural
+// relation, which has no interface-membership knowledge: it could not absorb
+// `Shape | Sq -> Shape`, so the two spellings looked like different types and
+// the arm fell through to the default. The runtime now relates class type args
+// *invariantly* through the canonical algebra, which knows `Sq <: Shape` and
+// absorbs the union, so `equivalent(Shape, Shape | Sq)` holds and the arm
+// matches — no covariance, no widening. (The arm still lowers `T` to a
+// `TypeArgRefOrWildcard` template, which the canonical algebra resolves and
+// matches identically to a plain `TypeArgRef`.)
 //
 // NOTE: test bodies live in top-level helper functions — locals holding class
 // instances misbehave when compared/passed inside `test { ... }` blocks (the
