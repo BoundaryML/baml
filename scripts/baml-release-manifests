@@ -98,6 +98,10 @@ def main() -> None:
     parser.add_argument("--channel", required=True, choices=["canary", "nightly"])
     parser.add_argument("--version", required=True)
     parser.add_argument("--pypi-version", required=True)
+    # Optional until the crates.io publisher lands; when set, the toolchain
+    # manifest records `sdks.rust`. crates.io's version encoding is the identity
+    # of the canonical version (SemVer prereleases are valid).
+    parser.add_argument("--crates-io-version", default=None)
     parser.add_argument("--wrapper-version", required=True)
     parser.add_argument("--wrapper-changed", action="store_true")
     args = parser.parse_args()
@@ -129,6 +133,17 @@ def main() -> None:
         },
         "cffi": collect_cffi_artifacts(args.cffi_dir, args.version),
     }
+    # Generated-SDK registry coordinates, recorded once a language's publisher
+    # lands. Rust is gated on --crates-io-version so a manifest never claims a
+    # baml_bridge crate that has not been published to crates.io yet.
+    if args.crates_io_version:
+        toolchain["sdks"] = {
+            "rust": {
+                "registry": "crates_io",
+                "package": "baml_bridge",
+                "version": args.crates_io_version,
+            },
+        }
     text = json.dumps(toolchain, indent=2, sort_keys=True) + "\n"
     (args.out / "version" / f"{args.version}.json").write_text(text)
     (args.out / f"{args.channel}.json").write_text(text)

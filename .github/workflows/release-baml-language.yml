@@ -56,6 +56,7 @@ jobs:
       channel: ${{ steps.plan.outputs.channel }}
       version: ${{ steps.plan.outputs.version }}
       pypi_version: ${{ steps.plan.outputs.pypi_version }}
+      crates_io_version: ${{ steps.plan.outputs.crates_io_version }}
       git_tag: ${{ steps.plan.outputs.git_tag }}
       release_plan_json: ${{ steps.plan.outputs.release_plan_json }}
       source_sha: ${{ steps.plan.outputs.source_sha }}
@@ -100,11 +101,13 @@ jobs:
           source_sha="$(git rev-parse HEAD)"
           version="$(jq -r .canonical_version release-plan.json)"
           pypi_version="$(jq -r .registry_versions.pypi release-plan.json)"
+          crates_io_version="$(jq -r .registry_versions.crates_io release-plan.json)"
           git_tag="$(jq -r .git_tag release-plan.json)"
           {
             echo "channel=$channel"
             echo "version=$version"
             echo "pypi_version=$pypi_version"
+            echo "crates_io_version=$crates_io_version"
             echo "git_tag=$git_tag"
             echo "release_plan_json<<EOF"
             cat release-plan.json
@@ -629,10 +632,112 @@ jobs:
             fi
           done
 
+  publish-crates-io:
+    name: Publish Rust crates.io
+    # After the cffi asset publisher: the loader downloads the engine cdylib
+    # from the `baml-language-<version>` GitHub release on first call, so those
+    # assets must be live before the crate that fetches them lands on crates.io.
+    needs: [plan, all-builds, build-rust-sdk, verify-rust-sdk, publish-bridge-cffi-release]
+    # Also gated on the RUST_SDK_RELEASE_ENABLED repo variable so the crate
+    # cannot publish until the crates.io name is reserved and trusted publishing
+    # is configured for this workflow (contract rollout: production publisher
+    # behind an explicit enable flag). Set the variable to `true` to go live.
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && vars.RUST_SDK_RELEASE_ENABLED == 'true' }}
+    # crates.io trusted publishing is bound to this top-level workflow identity,
+    # like PyPI/npm above. Match the builder's runner + toolchain so the
+    # repackaged `.crate` is byte-reproducible.
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ needs.plan.outputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-sdk-crate
+          path: dist/rust
+      - name: Repackage and prove bytes match the verified crate
+        id: crate
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          verified="$(find "$GITHUB_WORKSPACE/dist/rust" -name 'baml_bridge-*.crate' | head -n1)"
+          if [[ -z "$verified" ]]; then
+            echo "::error::verified crate not found under dist/rust"
+            find "$GITHUB_WORKSPACE/dist/rust" -type f || true
+            exit 1
+          fi
+          # Repackage from the stamped source (no rebuild: --no-verify) and prove
+          # the bytes are identical to the crate the verifier already smoked.
+          # crates.io forces repackaging, so this is the contract's "prove the
+          # package inputs match the verified artifact" step; if cargo ever stops
+          # producing a reproducible `.crate` here it fails closed rather than
+          # publishing unverified bytes.
+          rm -f target/package/baml_bridge-*.crate
+          cargo package -p baml_bridge --no-verify --allow-dirty
+          repacked="$(find target/package -name 'baml_bridge-*.crate' | head -n1)"
+          have="$(sha256sum "$repacked" | cut -d' ' -f1)"
+          want="$(sha256sum "$verified" | cut -d' ' -f1)"
+          if [[ "$have" != "$want" ]]; then
+            echo "::error::repackaged crate ($have) != verified crate ($want)"
+            exit 1
+          fi
+          echo "sha256=$have" >> "$GITHUB_OUTPUT"
+          echo "crate matches verified artifact ($have)"
+      - name: Skip if this exact version is already on crates.io
+        id: exists
+        env:
+          VERSION: ${{ needs.plan.outputs.crates_io_version }}
+          WANT_CKSUM: ${{ steps.crate.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          # Sparse-index path for a 4+ char name is <first2>/<next2>/<name>.
+          index="$(curl -fsSL "https://index.crates.io/ba/ml/baml_bridge" || true)"
+          entry="$(printf '%s\n' "$index" | jq -c "select(.vers == \"$VERSION\")" 2>/dev/null || true)"
+          if [[ -z "$entry" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "baml_bridge $VERSION not yet on crates.io; will publish"
+          else
+            have="$(printf '%s' "$entry" | jq -r .cksum)"
+            if [[ "$have" == "$WANT_CKSUM" ]]; then
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "baml_bridge $VERSION already published with identical bytes; skipping"
+            else
+              echo "::error::baml_bridge $VERSION exists on crates.io with different content"
+              exit 1
+            fi
+          fi
+      - name: Mint crates.io trusted-publishing token
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+      - name: Publish baml_bridge to crates.io
+        if: ${{ steps.exists.outputs.publish == 'true' }}
+        working-directory: baml_language
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          # Publish the already-verified crate; --no-verify skips a rebuild (the
+          # verifier already smoked it). No cargo-release, no git tags.
+          cargo publish -p baml_bridge --no-verify --allow-dirty
+
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
-    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-wrapper-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-crates-io, publish-wrapper-release, publish-homebrew, publish-aur]
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && (needs.publish-crates-io.result == 'success' || needs.publish-crates-io.result == 'skipped') && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -672,6 +777,11 @@ jobs:
           args=()
           if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
             args+=(--wrapper-changed)
+          fi
+          # Record sdks.rust only when the crate actually published this run, so
+          # the manifest never promises a baml_bridge version absent from crates.io.
+          if [[ "${{ needs.publish-crates-io.result }}" == "success" ]]; then
+            args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
           fi
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
@@ -881,6 +991,11 @@ jobs:
           args=()
           if [[ "${{ needs.plan.outputs.wrapper_changed }}" == "true" ]]; then
             args+=(--wrapper-changed)
+          fi
+          # Dry-run rehearses the real manifest shape: include sdks.rust when the
+          # Rust release is enabled (a real run would publish + record it).
+          if [[ "${{ vars.RUST_SDK_RELEASE_ENABLED }}" == "true" ]]; then
+            args+=(--crates-io-version "${{ needs.plan.outputs.crates_io_version }}")
           fi
           scripts/baml-release-manifests \
             --toolchain-dir dist/toolchain \
