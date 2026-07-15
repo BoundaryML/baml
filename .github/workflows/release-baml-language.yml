@@ -143,40 +143,40 @@ jobs:
           name: release-plan
           path: release-plan.json
 
+  # The toolchain/wrapper build matrix (and, over time, the others) is generated
+  # from the repository's platform contract (`release/platforms.json`) so the
+  # target set + per-target runners live in one machine-readable place.
+  build-matrix:
+    name: Compute build matrices
+    needs: [plan]
+    runs-on: ubuntu-latest
+    outputs:
+      toolchain: ${{ steps.gen.outputs.toolchain }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          persist-credentials: false
+      - name: Generate build matrices from the platform contract
+        id: gen
+        run: |
+          set -euo pipefail
+          # target + toolchain runner (as `os`); `libc` rides along so the musl
+          # setup step can key on it.
+          toolchain="$(jq -c '[.targets[]
+            | select(.artifacts.toolchain != null)
+            | {target: .triple, os: .artifacts.toolchain.runner, libc: .libc}]' release/platforms.json)"
+          echo "toolchain=$toolchain" >> "$GITHUB_OUTPUT"
+          jq . <<<"$toolchain"
+
   build-toolchain:
     name: Build toolchain (${{ matrix.target }})
-    needs: [plan, build-vsix]
+    needs: [plan, build-vsix, build-matrix]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: aarch64-apple-darwin
-            os: macos-14
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
+        include: ${{ fromJson(needs.build-matrix.outputs.toolchain) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -204,9 +204,11 @@ jobs:
           cache-on-failure: true
           enable-cross: false
           skip-protoc: true
-      - name: Build tools setup
-        if: matrix.before
-        run: ${{ matrix.before }}
+      - name: Setup musl cross toolchain
+        if: ${{ matrix.libc == 'musl' }}
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: ${{ matrix.target }}
       - name: Build CLI and pack host
         run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
       - name: Archive layout smoke
@@ -302,38 +304,14 @@ jobs:
 
   build-wrapper:
     name: Build wrapper (${{ matrix.target }})
-    needs: [plan]
+    # The wrapper is a native release build of the workspace, so it uses the
+    # same per-target runners as the toolchain and reuses that generated matrix.
+    needs: [plan, build-matrix]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: aarch64-apple-darwin
-            os: macos-14
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
+        include: ${{ fromJson(needs.build-matrix.outputs.toolchain) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -348,9 +326,11 @@ jobs:
           cache-on-failure: true
           enable-cross: false
           skip-protoc: true
-      - name: Build tools setup
-        if: matrix.before
-        run: ${{ matrix.before }}
+      - name: Setup musl cross toolchain
+        if: ${{ matrix.libc == 'musl' }}
+        uses: ./.github/actions/setup-musl-cross
+        with:
+          target: ${{ matrix.target }}
       - name: Build wrapper
         run: cargo build --manifest-path baml_language/Cargo.toml --release --bin baml --target "${{ matrix.target }}"
       - name: Archive wrapper

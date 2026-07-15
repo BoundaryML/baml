@@ -72,52 +72,44 @@ defaults:
     shell: bash
 
 jobs:
+  # The cffi build matrix is generated from the repository's platform contract
+  # (`release/platforms.json`) so the target set + per-target build config live
+  # in one machine-readable place, not a hand-copied YAML list. The experimental
+  # musl + arm64-Windows targets carry `experimental: true` in the contract,
+  # which drives `continue-on-error` on the build job below.
+  matrix:
+    name: Compute target matrix
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.gen.outputs.include }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - name: Generate the cffi build matrix from the platform contract
+        id: gen
+        run: |
+          set -euo pipefail
+          # One entry per target whose `cffi` artifact is present (a missing
+          # `cffi` means unsupported → excluded). Each entry is the fields the
+          # build job reads: target + runner (as `os`) + the true-valued
+          # use_cross / smoke / experimental flags.
+          include="$(jq -c '[.targets[]
+            | select(.artifacts.cffi != null)
+            | .artifacts.cffi as $c
+            | {target: .triple, os: $c.runner}
+              + ({use_cross: $c.use_cross, smoke: $c.smoke, experimental: $c.experimental}
+                 | with_entries(select(.value == true)))]' release/platforms.json)"
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+          jq . <<<"$include"
+
   build:
+    needs: matrix
     strategy:
       fail-fast: false
       matrix:
-        _:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
-            use_cross: true
-            # Built via cross (older-glibc image) but a normal x86_64-linux-gnu
-            # .so, so the x86_64 glibc host can dlopen it for the smoke.
-            smoke: true
-
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-22.04
-            use_cross: true
-
-          # Experimental: the musl cdylib builds (crt-static disabled in the
-          # build step so rustc emits a `.so`), but no Alpine/musl dlopen smoke
-          # validates it yet — so a leg failing must not fail the release (see
-          # continue-on-error below).
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-22.04
-            use_cross: true
-            experimental: true
-
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-22.04
-            use_cross: true
-            experimental: true
-
-          - target: x86_64-apple-darwin
-            os: macos-14
-
-          - target: aarch64-apple-darwin
-            os: macos-14
-            smoke: true
-
-          - target: x86_64-pc-windows-msvc
-            os: windows-2022
-            smoke: true
-
-          # Experimental until a native arm64-Windows smoke exists.
-          - target: aarch64-pc-windows-msvc
-            os: windows-11-arm
-            smoke: true
-            experimental: true
+        _: ${{ fromJson(needs.matrix.outputs.include) }}
 
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.os }}

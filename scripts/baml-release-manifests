@@ -10,16 +10,23 @@ import json
 from pathlib import Path
 
 
-TARGETS = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-unknown-linux-gnu",
-    "aarch64-unknown-linux-gnu",
-    "x86_64-unknown-linux-musl",
-    "aarch64-unknown-linux-musl",
-    "x86_64-pc-windows-msvc",
-    "aarch64-pc-windows-msvc",
-]
+def _toolchain_required_targets() -> list[str]:
+    """Target triples the toolchain (and wrapper) release must ship, read from
+    the repository's platform contract (`release/platforms.json`) so the target
+    set lives in one machine-readable place instead of a hand-copied list.
+    Required = the `toolchain` artifact is present and not experimental."""
+    contract = json.loads(
+        (Path(__file__).resolve().parent.parent / "release" / "platforms.json").read_text()
+    )
+    targets = []
+    for target in contract["targets"]:
+        toolchain = target["artifacts"].get("toolchain")
+        if toolchain is not None and not toolchain.get("experimental", False):
+            targets.append(target["triple"])
+    return targets
+
+
+TARGETS = _toolchain_required_targets()
 
 
 def sha256(path: Path) -> str:
