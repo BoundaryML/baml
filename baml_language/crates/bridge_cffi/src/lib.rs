@@ -23,6 +23,7 @@ use once_cell::sync::OnceCell;
 use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
 
+pub mod api;
 pub mod baml_to_host;
 pub mod buffer;
 pub mod collector;
@@ -31,6 +32,7 @@ mod ffi;
 pub mod host_spans;
 mod panic;
 
+pub use api::{BamlApiV1, baml_get_api_v1};
 pub use baml_to_host::{call_and_encode, error_to_outbound, result_to_outbound};
 pub use bridge_ctypes::baml_bridge;
 pub use buffer::Buffer;
@@ -48,7 +50,12 @@ pub use ffi::{
         register_host_release_callback,
     },
     objects::{flush_events, free_buffer},
-    runtime::{create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli, version},
+    runtime::{
+        BamlBridgeInfoV1, BridgeInfo, BridgeLanguage, create_baml_runtime, destroy_baml_runtime,
+        ensure_version_compatible,
+        initialize_runtime_from_bytecode as initialize_runtime_from_bytecode_ffi,
+        invoke_runtime_cli, register_bridge, register_bridge_ffi, registered_bridge, version,
+    },
 };
 
 use crate::ffi::callbacks::send_outbound_result_to_callback;
