@@ -825,14 +825,15 @@ pub struct CompileOptions {
 /// Errors that can occur during bytecode generation.
 #[derive(Debug)]
 pub enum LoweringError {
-    /// A stub — no errors expected from Phase 1 stub.
+    /// An internal invariant was violated during lowering/decomposition/linking
+    /// (a compiler bug), carrying a diagnostic message.
     Internal(String),
     /// The incremental (dirty-only) reuse path cannot reuse the cached image for
-    /// this project — e.g. a caller-clean file is missing from `prev_units` (a
-    /// corrupt / stale cached image). Tail-producing dirty files (top-level `let` /
-    /// `test` block, design §9 R2) and dirty generic-function values (design §9 R1)
-    /// are now handled incrementally and no longer raise this. Not a compiler
-    /// fault: callers silently fall back to a full compile, which is byte-identical.
+    /// this project. Raised in two cases: a caller-clean file is missing from
+    /// `prev_units` (a corrupt / stale cached image); or a dirty top-level `let`
+    /// initializer interns a generic-function value already owned by a clean file
+    /// (the design §9 R1 tail edge). Not a compiler fault: callers silently fall
+    /// back to a full compile, which is byte-identical.
     ReuseUnsupported(String),
     /// The project has unresolved compile errors, so bytecode generation was
     /// not attempted. Lowering an error-bearing program would feed
@@ -1012,10 +1013,6 @@ pub fn generate_project_bytecode_with_stdlib(
 /// (design §4 — the throws gate). `prev_units` must come from the same compiler
 /// build / options / stdlib base.
 ///
-/// A dirty *tail-producing* file (top-level `let` / `test` block) is now handled
-/// incrementally: the tail is resynthesized rather than reused verbatim, so no
-/// fallback is triggered for it (design §9 R2 is closed).
-///
 /// # Errors
 ///
 /// Returns [`LoweringError::Internal`] if `prev_units` fail to link (a corrupt /
@@ -1065,7 +1062,7 @@ pub fn generate_project_bytecode_with_reuse_artifacts(
     // so a dirty tail-producing file no longer aborts reuse.
     let partial = generate_impl(db, options, opt, Some(base), false, Some(clean_files))?;
 
-    let mut fresh_units = decompose_program_into_units(db, options, &partial)?;
+    let mut fresh_units = decompose_units(db, options, &partial)?;
 
     // The freshly-synthesized (symbolic) tail: whichever fresh unit the
     // decomposition placed it on. It reflects the *current* project's lets/tests
@@ -1201,7 +1198,18 @@ pub fn emit_units(
     opt: OptLevel,
 ) -> Result<Vec<CompilationUnit>, LoweringError> {
     let program = generate_project_bytecode_with_opt(db, options, opt)?;
-    decompose_program_into_units(db, options, &program)
+    decompose_units(db, options, &program)
+}
+
+/// Per-object attribution kind, computed during the pool walk.
+enum PoolObjKind {
+    Class,
+    Enum,
+    Interface,
+    /// A named function (fully-qualified name interned in `function_indices`).
+    NamedFn(String),
+    /// A lambda / interned literal — attributed to a file by proximity, not name.
+    CodeAnon,
 }
 
 /// Decompose an already-compiled `Program` into per-file symbolic
@@ -1217,27 +1225,8 @@ pub fn emit_units(
 ///
 /// [`LoweringError::Internal`] if the program holds a pool object the
 /// decomposition cannot attribute to a source file.
-pub fn decompose_units(
-    db: &dyn baml_compiler2_mir::Db,
-    options: &CompileOptions,
-    program: &Program,
-) -> Result<Vec<CompilationUnit>, LoweringError> {
-    decompose_program_into_units(db, options, program)
-}
-
-/// Per-object attribution kind, computed during the pool walk.
-enum PoolObjKind {
-    Class,
-    Enum,
-    Interface,
-    /// A named function (fully-qualified name interned in `function_indices`).
-    NamedFn(String),
-    /// A lambda / interned literal — attributed to a file by proximity, not name.
-    CodeAnon,
-}
-
 #[allow(clippy::too_many_lines)]
-fn decompose_program_into_units(
+pub fn decompose_units(
     db: &dyn baml_compiler2_mir::Db,
     options: &CompileOptions,
     program: &Program,
@@ -1527,7 +1516,6 @@ fn decompose_program_into_units(
         let mut glob_import_idx: HashMap<String, usize> = HashMap::new();
         let mut object_imports: Vec<Symbol> = Vec::new();
         let mut global_imports: Vec<Symbol> = Vec::new();
-        let mut lowering_err: Option<LoweringError> = None;
 
         // Precompute this unit's flat-local index for each pool object it owns.
         // (Captured references keep the closure `Fn`.)
@@ -1541,82 +1529,62 @@ fn decompose_program_into_units(
         };
 
         for object in &mut unit.code {
-            bex_vm_types::relink::visit_object_operands(object, |operand| {
-                if lowering_err.is_some() {
-                    return;
-                }
-                match operand {
-                    bex_vm_types::relink::IndexOperand::Object(idx) => {
-                        let target = idx.raw();
-                        let new = if obj_owner[target] == u {
-                            flat_local(target)
-                        } else {
-                            match object_symbol(program, target, &obj_kind, &slot_to_name) {
-                                Ok(sym) => {
-                                    let key = sym.fq_name.clone();
-                                    let import_idx =
-                                        *obj_import_idx.entry(key).or_insert_with(|| {
-                                            let n = object_imports.len();
-                                            object_imports.push(sym);
-                                            n
-                                        });
-                                    n_local_objects + import_idx
-                                }
-                                Err(err) => {
-                                    lowering_err = Some(err);
-                                    return;
-                                }
-                            }
-                        };
-                        *idx = ObjectIndex::from_raw(new);
+            rewrite_pool_operands(
+                object,
+                |target| {
+                    if obj_owner[target] == u {
+                        Ok(flat_local(target))
+                    } else {
+                        let sym = object_symbol(program, target, &obj_kind, &slot_to_name)?;
+                        let import_idx = intern_import(
+                            &mut object_imports,
+                            &mut obj_import_idx,
+                            sym.fq_name.clone(),
+                            sym,
+                        );
+                        Ok(n_local_objects + import_idx)
                     }
-                    bex_vm_types::relink::IndexOperand::Global(slot) => {
-                        let target = slot.raw();
-                        let Some(name) = slot_to_name.get(target).and_then(Option::as_ref) else {
-                            lowering_err = Some(LoweringError::Internal(format!(
-                                "global slot {target} referenced by a unit object owns \
-                                 no function/let name (synthesized $init slot?); \
-                                 Stage 2 does not handle it yet (design §9 R2)"
-                            )));
-                            return;
+                },
+                |target| {
+                    let Some(name) = slot_to_name.get(target).and_then(Option::as_ref) else {
+                        return Err(LoweringError::Internal(format!(
+                            "global slot {target} referenced by a unit object owns \
+                             no function/let name (synthesized $init slot?); \
+                             Stage 2 does not handle it yet (design §9 R2)"
+                        )));
+                    };
+                    // Local iff this unit owns the slot; otherwise an import.
+                    // A name absent from `name_to_local_global` is a reference
+                    // to a definition not lowered into this (partial) pool —
+                    // i.e. a clean file's function/let in the Stage 6 dirty-only
+                    // emit — which is likewise an import.
+                    let owned_local = name_to_local_global
+                        .get(name)
+                        .filter(|&&(owner, _)| owner == u)
+                        .map(|&(_, flat)| flat as usize);
+                    if let Some(flat) = owned_local {
+                        Ok(flat)
+                    } else {
+                        let is_let = let_name_to_file.contains_key(name);
+                        let sym = Symbol {
+                            kind: if is_let {
+                                SymbolKind::Let
+                            } else {
+                                SymbolKind::Function
+                            },
+                            fq_name: name.clone(),
+                            generic: None,
                         };
-                        // Local iff this unit owns the slot; otherwise an import.
-                        // A name absent from `name_to_local_global` is a reference
-                        // to a definition not lowered into this (partial) pool —
-                        // i.e. a clean file's function/let in the Stage 6 dirty-only
-                        // emit — which is likewise an import.
-                        let owned_local = name_to_local_global
-                            .get(name)
-                            .filter(|&&(owner, _)| owner == u)
-                            .map(|&(_, flat)| flat as usize);
-                        let new = if let Some(flat) = owned_local {
-                            flat
-                        } else {
-                            let is_let = let_name_to_file.contains_key(name);
-                            let sym = Symbol {
-                                kind: if is_let {
-                                    SymbolKind::Let
-                                } else {
-                                    SymbolKind::Function
-                                },
-                                fq_name: name.clone(),
-                                generic: None,
-                            };
-                            let import_idx =
-                                *glob_import_idx.entry(name.clone()).or_insert_with(|| {
-                                    let n = global_imports.len();
-                                    global_imports.push(sym);
-                                    n
-                                });
-                            n_local_globals + import_idx
-                        };
-                        *slot = GlobalIndex::from_raw(new);
+                        let import_idx = intern_import(
+                            &mut global_imports,
+                            &mut glob_import_idx,
+                            name.clone(),
+                            sym,
+                        );
+                        Ok(n_local_globals + import_idx)
                     }
-                }
-            });
-            if let Some(err) = lowering_err {
-                return Err(err);
-            }
+                },
+            )?;
         }
         unit.object_imports = object_imports;
         unit.global_imports = global_imports;
@@ -1626,16 +1594,8 @@ fn decompose_program_into_units(
     for idx in 0..tail_start {
         let u = obj_owner[idx];
         match &obj_kind[idx] {
-            PoolObjKind::Class => {
-                let fq = class_fq(&program.objects[ObjectIndex::from_raw(idx)]);
-                units[u].exports.objects.push((fq, obj_localref[idx]));
-            }
-            PoolObjKind::Enum => {
-                let fq = enum_fq(&program.objects[ObjectIndex::from_raw(idx)]);
-                units[u].exports.objects.push((fq, obj_localref[idx]));
-            }
-            PoolObjKind::Interface => {
-                let fq = iface_fq(&program.objects[ObjectIndex::from_raw(idx)]);
+            PoolObjKind::Class | PoolObjKind::Enum | PoolObjKind::Interface => {
+                let fq = def_object_fq(&program.objects[ObjectIndex::from_raw(idx)]);
                 units[u].exports.objects.push((fq, obj_localref[idx]));
             }
             PoolObjKind::NamedFn(name) => {
@@ -1694,17 +1654,8 @@ fn decompose_program_into_units(
     for (fi, file) in all_files.iter().enumerate() {
         let item_tree = file_item_tree(db, *file);
         for ts_data in item_tree.template_strings.values() {
-            if let Some(body) = &ts_data.body {
-                let args = ts_data
-                    .params
-                    .iter()
-                    .map(|param| param.name.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                units[fi].template_macros.push(format!(
-                    "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
-                    name = ts_data.name,
-                ));
+            if let Some(macro_def) = render_template_macro(ts_data) {
+                units[fi].template_macros.push(macro_def);
             }
         }
     }
@@ -1756,22 +1707,78 @@ fn local_ref_sort_key(r: LocalRef) -> (u8, u32) {
     }
 }
 
-fn class_fq(obj: &Object) -> String {
+/// Render one template-string definition as a Jinja `{% macro %}` block, or
+/// `None` for a body-less (declaration-only) template string.
+fn render_template_macro(ts: &baml_compiler2_hir::item_tree::TemplateString) -> Option<String> {
+    let body = ts.body.as_ref()?;
+    let args = ts
+        .params
+        .iter()
+        .map(|param| param.name.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!(
+        "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
+        name = ts.name,
+    ))
+}
+
+/// Fully-qualified name of a class/enum/interface definition object.
+fn def_object_fq(obj: &Object) -> String {
     match obj {
         Object::Class(c) => c.name.to_string(),
-        _ => unreachable!("class_fq on non-class"),
-    }
-}
-fn enum_fq(obj: &Object) -> String {
-    match obj {
         Object::Enum(e) => e.name.to_string(),
-        _ => unreachable!("enum_fq on non-enum"),
+        Object::Interface(i) => i.name.to_string(),
+        _ => unreachable!("def_object_fq on non-definition object"),
     }
 }
-fn iface_fq(obj: &Object) -> String {
-    match obj {
-        Object::Interface(i) => i.name.to_string(),
-        _ => unreachable!("iface_fq on non-interface"),
+
+/// Intern `sym` into `imports`, deduplicated by `key`, returning its import
+/// index. A repeated key reuses the first slot, so a unit's import table holds
+/// one entry per referenced symbol.
+fn intern_import(
+    imports: &mut Vec<Symbol>,
+    dedup: &mut HashMap<String, usize>,
+    key: String,
+    sym: Symbol,
+) -> usize {
+    *dedup.entry(key).or_insert_with(|| {
+        let n = imports.len();
+        imports.push(sym);
+        n
+    })
+}
+
+/// Rewrite every cross-object index operand of `object` from whole-program space
+/// into the per-unit / import-relative encoding. `resolve_object` and
+/// `resolve_global` map a raw program index to its rewritten value, or a
+/// [`LoweringError`] for an operand that cannot be attributed; the first such
+/// error stops the walk and is returned. Shared by the per-file decomposition
+/// and the `$init`-tail encoding — only the local-vs-import decision differs.
+fn rewrite_pool_operands(
+    object: &mut Object,
+    mut resolve_object: impl FnMut(usize) -> Result<usize, LoweringError>,
+    mut resolve_global: impl FnMut(usize) -> Result<usize, LoweringError>,
+) -> Result<(), LoweringError> {
+    let mut err: Option<LoweringError> = None;
+    bex_vm_types::relink::visit_object_operands(object, |operand| {
+        if err.is_some() {
+            return;
+        }
+        match operand {
+            bex_vm_types::relink::IndexOperand::Object(idx) => match resolve_object(idx.raw()) {
+                Ok(new) => *idx = ObjectIndex::from_raw(new),
+                Err(e) => err = Some(e),
+            },
+            bex_vm_types::relink::IndexOperand::Global(slot) => match resolve_global(slot.raw()) {
+                Ok(new) => *slot = GlobalIndex::from_raw(new),
+                Err(e) => err = Some(e),
+            },
+        }
+    });
+    match err {
+        Some(e) => Err(e),
+        None => Ok(()),
     }
 }
 
@@ -2060,74 +2067,49 @@ fn build_init_tail(
     let mut object_imports: Vec<Symbol> = Vec::new();
     let mut global_imports: Vec<Symbol> = Vec::new();
     let mut objects: Vec<Object> = Vec::with_capacity(n_tail_objects);
-    let mut lowering_err: Option<LoweringError> = None;
     for tidx in tail_start..n_obj {
         let mut object = program.objects[ObjectIndex::from_raw(tidx)].clone();
-        bex_vm_types::relink::visit_object_operands(&mut object, |operand| {
-            if lowering_err.is_some() {
-                return;
-            }
-            match operand {
-                bex_vm_types::relink::IndexOperand::Object(idx) => {
-                    let t = idx.raw();
-                    let new = if t >= tail_start {
-                        t - tail_start
-                    } else {
-                        match object_symbol(program, t, obj_kind, slot_to_name) {
-                            Ok(sym) => {
-                                let import_idx = *obj_import_idx
-                                    .entry(sym.fq_name.clone())
-                                    .or_insert_with(|| {
-                                        let n = object_imports.len();
-                                        object_imports.push(sym);
-                                        n
-                                    });
-                                n_tail_objects + import_idx
-                            }
-                            Err(err) => {
-                                lowering_err = Some(err);
-                                return;
-                            }
-                        }
-                    };
-                    *idx = ObjectIndex::from_raw(new);
+        rewrite_pool_operands(
+            &mut object,
+            |t| {
+                if t >= tail_start {
+                    Ok(t - tail_start)
+                } else {
+                    let sym = object_symbol(program, t, obj_kind, slot_to_name)?;
+                    let import_idx = intern_import(
+                        &mut object_imports,
+                        &mut obj_import_idx,
+                        sym.fq_name.clone(),
+                        sym,
+                    );
+                    Ok(n_tail_objects + import_idx)
                 }
-                bex_vm_types::relink::IndexOperand::Global(slot) => {
-                    let s = slot.raw();
-                    let new = if s >= tail_slot_base {
-                        s - tail_slot_base
-                    } else {
-                        let Some(name) = slot_to_name.get(s).and_then(Option::as_ref) else {
-                            lowering_err = Some(LoweringError::Internal(format!(
-                                "$init tail references unnamed non-tail slot {s}"
-                            )));
-                            return;
-                        };
-                        let is_let = let_name_to_file.contains_key(name);
-                        let sym = Symbol {
-                            kind: if is_let {
-                                SymbolKind::Let
-                            } else {
-                                SymbolKind::Function
-                            },
-                            fq_name: name.clone(),
-                            generic: None,
-                        };
-                        let import_idx =
-                            *glob_import_idx.entry(name.clone()).or_insert_with(|| {
-                                let n = global_imports.len();
-                                global_imports.push(sym);
-                                n
-                            });
-                        n_tail_slots + import_idx
+            },
+            |s| {
+                if s >= tail_slot_base {
+                    Ok(s - tail_slot_base)
+                } else {
+                    let Some(name) = slot_to_name.get(s).and_then(Option::as_ref) else {
+                        return Err(LoweringError::Internal(format!(
+                            "$init tail references unnamed non-tail slot {s}"
+                        )));
                     };
-                    *slot = GlobalIndex::from_raw(new);
+                    let is_let = let_name_to_file.contains_key(name);
+                    let sym = Symbol {
+                        kind: if is_let {
+                            SymbolKind::Let
+                        } else {
+                            SymbolKind::Function
+                        },
+                        fq_name: name.clone(),
+                        generic: None,
+                    };
+                    let import_idx =
+                        intern_import(&mut global_imports, &mut glob_import_idx, name.clone(), sym);
+                    Ok(n_tail_slots + import_idx)
                 }
-            }
-        });
-        if let Some(err) = lowering_err {
-            return Err(err);
-        }
+            },
+        )?;
         objects.push(object);
     }
 
@@ -2302,17 +2284,8 @@ fn generate_impl(
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
         for ts_data in item_tree.template_strings.values() {
-            let args = ts_data
-                .params
-                .iter()
-                .map(|param| param.name.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            if let Some(body) = &ts_data.body {
-                template_macros.push(format!(
-                    "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
-                    name = ts_data.name,
-                ));
+            if let Some(macro_def) = render_template_macro(ts_data) {
+                template_macros.push(macro_def);
             }
         }
     }
