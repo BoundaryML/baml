@@ -9,12 +9,11 @@
 
 namespace baml {
 
-// The BAML `null` unit type is std::monostate; this alias is documentation.
-// Union-with-null is std::optional, so nullability uses only std vocabulary:
-//   null         -> std::monostate (baml::Null)
+// The BAML `null` unit type is std::monostate. Union-with-null is
+// std::optional, so nullability uses only std vocabulary:
+//   null         -> std::monostate
 //   T | null     -> std::optional<T>
 //   A | B | null -> std::optional<std::variant<A, B>>
-using Null = std::monostate;
 
 // Explicit spelling for the unset state of an optional argument (Python's
 // UNSET analog). Omitting the setter is equivalent.
@@ -56,7 +55,7 @@ class Arg {
                   detail::is_std_optional<T>::value)>>
   Arg(U&& value) : value_(std::in_place, std::forward<U>(value)) {}
 
-  // A value of the null type is a null: baml::Null{} sets a nullable
+  // A value of the null type is a null: std::monostate{} sets a nullable
   // argument to null. Excluded when T itself is the bare null type, where
   // the converting constructor already treats monostate as the value.
   template <typename U = T,

@@ -17,7 +17,7 @@ guide itself:
    `is_unset`, `value`), `Box`/`OptionalBox` (`has_value`, `operator*`,
    `operator->`), `Future` (`get`, `wait`, `wait_for`), `OwnedBuffer`
    (`data`, `size`, `empty`, `to_string`), `Handle` (`empty`, `swap`),
-   `BamlError` (`is<T>`, `get<T>`, `what`), `unset_t`/`unset`, `Null`.
+   `BamlError` (`is<T>`, `get<T>`, `what`), `unset_t`/`unset`.
 3. Type traits keep std spelling: `is_std_optional`, `is_arg`, `arg_inner`,
    `dependent`, `dependent_t`, `has_set_opt1`, `has_set_opt3`.
 4. `extern "C"` symbols keep snake_case (C ABI): `baml_cpp_result_trampoline`,

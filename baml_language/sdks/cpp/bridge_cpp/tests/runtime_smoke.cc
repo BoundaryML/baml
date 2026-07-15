@@ -172,15 +172,12 @@ static void TestArgTwoState() {
   baml::Arg<std::optional<std::string>> lang_null = std::nullopt;
   assert(lang_null.is_set() && !lang_null.value().has_value());
 
-  baml::Arg<std::optional<std::string>> lang_null2 = baml::Null{};
+  baml::Arg<std::optional<std::string>> lang_null2 = std::monostate{};
   assert(lang_null2.is_set() && !lang_null2.value().has_value());
 
   // Bare-null-typed argument: monostate is the VALUE there.
   baml::Arg<std::monostate> null_typed_arg = std::monostate{};
   assert(null_typed_arg.is_set());
-
-  static_assert(std::is_same<baml::Null, std::monostate>::value,
-                "bare null unifies with the std vocabulary");
 
   bool threw = false;
   try {
@@ -201,7 +198,7 @@ static void TestArgTwoState() {
   assert(Opts{}.set_lang("fr").lang.value().value() == "fr");
   assert(Opts{}.set_lang(std::nullopt).lang.is_set());
   assert(!Opts{}.set_lang(std::nullopt).lang.value().has_value());
-  assert(Opts{}.set_lang(baml::Null{}).lang.is_set());
+  assert(Opts{}.set_lang(std::monostate{}).lang.is_set());
   assert(Opts{}.lang.is_unset());
   std::printf("arg two-state ok\n");
 }
