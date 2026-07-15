@@ -89,6 +89,8 @@ pub(crate) struct RenderedField {
     pub ty: String,
     pub boxed: bool,
     pub doc: Option<String>,
+    /// `$rust_type` field (opaque engine handle).
+    pub is_rust: bool,
 }
 
 pub(crate) fn render_class(
@@ -164,6 +166,20 @@ pub(crate) fn render_class(
         })
         .collect::<Vec<_>>()
         .join(",\n");
+    // Media shape: a class whose ONLY field is a `$rust_type` handle
+    // arrives from the engine as a bare tagged handle (ADT_MEDIA_*),
+    // not a class value — decode accepts both forms.
+    let media_fallback = if fields.len() == 1 && fields[0].is_rust {
+        format!(
+            "\t\tif let handle = try? BamlHandle._bamlDecode(v) {{\n\
+             \t\t\treturn {name}({}: handle)\n\
+             \t\t}}\n",
+            fields[0].name
+        )
+    } else {
+        String::new()
+    };
+
     if fields.is_empty() {
         let _ = write!(
             out,
@@ -176,7 +192,7 @@ pub(crate) fn render_class(
         let _ = write!(
             out,
             "\n\tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{\n\
-             \t\tlet fields = try v.classFields()\n\
+             {media_fallback}\t\tlet fields = try v.classFields()\n\
              \t\treturn {name}(\n{decode_args}\n\t\t)\n\
              \t}}\n"
         );

@@ -124,6 +124,9 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                 Some(path)
             }
         }
+        // Opaque engine-owned state (`$rust_type` fields on stdlib
+        // resource classes: File._handle, Response._body, media _data).
+        Ty::RustType => Some("BamlHandle?".to_string()),
         // Unit is only meaningful in return position; the emitter
         // special-cases it. Everything else lands in later phases.
         _ => None,

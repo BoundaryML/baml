@@ -78,7 +78,7 @@ extension BamlDecodable {
     public static var _bamlArmIdentity: String? { nil }
 }
 
-private func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
+func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
     guard let value = v.value else { return "null (absent oneof)" }
     switch value {
     case .nullValue: return "null"

@@ -110,6 +110,23 @@ pub fn to_source_code_with_bytecode(
         }
     }
 
+    // A function and a child namespace can share a name in BAML
+    // (Python separates module vs attribute lookup), but in Swift the
+    // namespace enum and the func collide in one scope. The namespace
+    // wins — it carries arbitrarily many symbols — and the colliding
+    // function is dropped (e.g. vendor `boundary.id()` vs the
+    // `boundary.id.*` namespace).
+    let all_paths: Vec<Vec<String>> = namespaces.keys().cloned().collect();
+    for path in &all_paths {
+        if path.is_empty() {
+            continue;
+        }
+        let (parent, seg) = (path[..path.len() - 1].to_vec(), &path[path.len() - 1]);
+        if let Some(decls) = namespaces.get_mut(&parent) {
+            decls.remove(&format!("3:{seg}"));
+        }
+    }
+
     let root_decls = namespaces.remove(&Vec::new()).unwrap_or_default();
     // Named `BamlRoot.swift`, NOT `Baml.swift`: the stdlib namespace
     // emits `baml.swift`, and macOS filesystems are case-insensitive —
@@ -307,6 +324,7 @@ fn render_supported_class(
             ty: translate_ty(&prop.ty, ctx)?,
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
+            is_rust: matches!(prop.ty, Ty::RustType),
         });
     }
 
