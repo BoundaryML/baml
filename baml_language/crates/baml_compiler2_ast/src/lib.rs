@@ -544,74 +544,30 @@ function Extract(client: string, text: string) -> string {
     }
 
     #[test]
-    fn named_openai_client_defaults_api_key_to_env_var() {
-        // B-489: a named `client<llm>` with `provider openai` and no explicit
-        // `api_key` defaults the key to a soft `baml.env.get("OPENAI_API_KEY")`,
-        // mirroring the inline `"openai/model"` shorthand (unset -> null, never
-        // panics, so offline render still works without the var set).
-        let source = r#"
-client<llm> C {
-  provider openai
-  options { model "gpt-4o" }
-}
-"#;
-        let new_fn = client_new_companion(parse_and_lower(source), "C");
-        assert!(
-            new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
-            "named openai client with no api_key should default to OPENAI_API_KEY"
-        );
-    }
-
-    #[test]
-    fn named_anthropic_client_defaults_api_key_to_env_var() {
-        let source = r#"
-client<llm> C {
-  provider anthropic
-  options { model "claude-3-5-sonnet-20241022" }
-}
-"#;
-        let new_fn = client_new_companion(parse_and_lower(source), "C");
-        assert!(
-            new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
-            "named anthropic client with no api_key should default to ANTHROPIC_API_KEY"
-        );
-    }
-
-    #[test]
-    fn named_client_explicit_api_key_suppresses_env_default() {
-        // An explicit `api_key` wins: no env-var default is synthesized.
-        let source = r#"
-client<llm> C {
-  provider openai
-  options { model "gpt-4o"  api_key "sk-explicit" }
-}
-"#;
-        let new_fn = client_new_companion(parse_and_lower(source), "C");
-        assert!(
-            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY"),
-            "explicit api_key must suppress the OPENAI_API_KEY default"
-        );
-    }
-
-    #[test]
-    fn named_client_unknown_provider_gets_no_env_default() {
-        // Providers without a ubiquitous env-var convention are untouched.
-        // vertex-ai emits an unrelated MissingClientOptions diagnostic (no
-        // base_url/location), but the `$new` companion is still synthesized —
-        // so tolerate diagnostics and only assert on the api_key default.
-        let source = r#"
-client<llm> C {
-  provider vertex-ai
-  options { model "gemini-2.0-flash" }
-}
-"#;
-        let (items, _diags) = parse_and_lower_with_diagnostics(source);
-        let new_fn = client_new_companion(items, "C");
-        assert!(
-            !new_companion_reads_env(&new_fn, "OPENAI_API_KEY")
-                && !new_companion_reads_env(&new_fn, "ANTHROPIC_API_KEY"),
-            "vertex-ai must not default an api_key env var"
-        );
+    fn named_clients_do_not_apply_provider_defaults_during_lowering() {
+        for (provider, model, env_var) in [
+            ("openai", "gpt-4o", "OPENAI_API_KEY"),
+            ("openai-responses", "gpt-4o", "OPENAI_API_KEY"),
+            (
+                "anthropic",
+                "claude-3-5-sonnet-20241022",
+                "ANTHROPIC_API_KEY",
+            ),
+        ] {
+            let source = format!(
+                r#"
+client<llm> C {{
+  provider {provider}
+  options {{ model "{model}" }}
+}}
+"#
+            );
+            let new_fn = client_new_companion(parse_and_lower(&source), "C");
+            assert!(
+                !new_companion_reads_env(&new_fn, env_var),
+                "{provider} defaults must be applied at runtime"
+            );
+        }
     }
 
     #[test]
