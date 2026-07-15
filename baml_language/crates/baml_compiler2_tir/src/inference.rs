@@ -1671,6 +1671,8 @@ pub fn infer_scope_types<'db>(
             {
                 let local_id = &func_loc.id(db);
                 let func_data = &item_tree[func_loc.id(db)];
+                let func_span =
+                    baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
                 let body = baml_compiler2_ppir::function_body(db, func_loc);
                 let sig = baml_compiler2_ppir::item_data::elaborated_function_data(db, func_loc);
 
@@ -1684,7 +1686,7 @@ pub fn infer_scope_types<'db>(
                 let mut env = GenericEnv::from_params(sig.user_generic_params.clone());
                 env.params
                     .extend(sig.synthetic_effect_params.iter().cloned());
-                report_duplicate_generic_params(&builder, &sig.user_generic_params, func_data.span);
+                report_duplicate_generic_params(&builder, &sig.user_generic_params, func_span);
                 if let Some(imp) = enclosing_impl {
                     let (impl_generic_params, impl_generic_bounds) = free_impl_generics(imp);
                     for mp in &sig.user_generic_params {
@@ -1693,7 +1695,7 @@ pub fn infer_scope_types<'db>(
                                 crate::infer_context::TirTypeError::TypeParamShadowedImplParam {
                                     param_name: mp.clone(),
                                 },
-                                func_data.span,
+                                func_span,
                             );
                         }
                     }
@@ -1714,7 +1716,7 @@ pub fn infer_scope_types<'db>(
                                     type_name: parent.type_name.clone(),
                                     owner: parent.owner,
                                 },
-                                func_data.span,
+                                func_span,
                             );
                         }
                     }
@@ -1774,7 +1776,7 @@ pub fn infer_scope_types<'db>(
                     pkg_items,
                     &pkg_info.namespace_path,
                     &env,
-                    func_data.span,
+                    func_span,
                 );
                 if let Some(sm) = baml_compiler2_ppir::function_body_source_map(db, func_loc) {
                     builder.set_body_source_map(sm);
@@ -2023,7 +2025,7 @@ pub fn infer_scope_types<'db>(
                     let return_ty = sig
                         .return_type
                         .map(|id| {
-                            let span = sig_sm.return_type_span.unwrap_or(func_data.span);
+                            let span = sig_sm.return_type_span.unwrap_or(func_span);
                             let mut diags = Vec::new();
                             let ty = lower_with_self(id, &mut diags);
                             for diag in diags {
@@ -2107,7 +2109,7 @@ pub fn infer_scope_types<'db>(
                             &sig.type_refs,
                             sig.throws,
                             sig_sm.throws_type_span,
-                            func_data.span,
+                            func_span,
                             true,
                         );
                     }
@@ -2384,11 +2386,9 @@ pub fn infer_scope_types<'db>(
             let scope_item = baml_compiler2_ppir::item_data::scope_owner(db, scope_id);
             if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Class(class_loc)) = scope_item {
                 let class_data = &item_tree[class_loc.id(db)];
-                report_duplicate_generic_params(
-                    &builder,
-                    &class_data.generic_params,
-                    class_data.span,
-                );
+                let class_span =
+                    baml_compiler2_ppir::item_data::class_source_map(db, class_loc).span;
+                report_duplicate_generic_params(&builder, &class_data.generic_params, class_span);
                 let mut env = GenericEnv::from_params(class_data.generic_params.clone());
                 env.add_bounds_for_declared_params(
                     &class_data.generic_params,
@@ -2400,7 +2400,7 @@ pub fn infer_scope_types<'db>(
                     pkg_items,
                     &pkg_info.namespace_path,
                     &env,
-                    class_data.span,
+                    class_span,
                 );
                 let resolved = resolve_class_fields(db, class_loc);
                 for (field, (_, ty, _)) in class_data.fields.iter().zip(resolved.fields.iter()) {
@@ -2413,11 +2413,9 @@ pub fn infer_scope_types<'db>(
                 scope_item
             {
                 let iface_data = &item_tree[iface_loc.id(db)];
-                report_duplicate_generic_params(
-                    &builder,
-                    &iface_data.generic_params,
-                    iface_data.span,
-                );
+                let iface_span =
+                    baml_compiler2_ppir::item_data::interface_source_map(db, iface_loc).span;
+                report_duplicate_generic_params(&builder, &iface_data.generic_params, iface_span);
                 // Associated types share the interface's type-level namespace with its
                 // generic parameters (a bare `Assoc` reference lowers as a type variable),
                 // so a name collision — with a parameter or another associated type —
@@ -2454,7 +2452,7 @@ pub fn infer_scope_types<'db>(
                 if let Some(chain) = crate::interfaces::interface_requires_cycle(db, iface_loc) {
                     builder.report_at_span(
                         crate::infer_context::TirTypeError::InterfaceRequiresCycle { chain },
-                        iface_data.span,
+                        iface_span,
                     );
                 }
                 // E0136: a field type may not name the *bare* `Self` type (a recursive field
@@ -2588,7 +2586,7 @@ pub fn infer_scope_types<'db>(
                     pkg_items,
                     &pkg_info.namespace_path,
                     &iface_env,
-                    iface_data.span,
+                    iface_span,
                 );
                 // Computed once per env — every signature type expr below shares it.
                 let iface_env_bounds =

@@ -2503,34 +2503,15 @@ impl<'db> LoweringContext<'db> {
     ) -> Self {
         let file = func_loc.file(db);
 
-        // --- Resolve FunctionLoc → FileScopeId via span ---
         let item_tree = file_item_tree(db, file);
         let func_data = &item_tree[func_loc.id(db)];
-        let func_span = func_data.span;
-
         let index = file_semantic_index(db, file);
-        // For synthesized functions whose span is `0..0` (e.g. `$init_test_N`),
-        // `scope_at_offset` may return a descendant Lambda scope instead of the
-        // Function scope itself, because all synthesized expressions share span
-        // `0..0` and the descendant search finds a matching lambda first.
-        // Avoid this by searching explicitly for a `ScopeKind::Function` scope
-        // with the correct name and span before falling back to `scope_at_offset`.
-        let func_scope_id: FileScopeId = index
-            .scopes
-            .iter()
-            .enumerate()
-            .find_map(|(i, scope)| {
-                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Function
-                    && scope.range == func_span
-                    && scope.name.as_ref() == Some(&func_data.name)
-                {
-                    #[allow(clippy::cast_possible_truncation)]
-                    Some(FileScopeId::new(i as u32))
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| index.scope_at_offset(func_span.start(), Some(&func_data.name)));
+        // The scope this function opened, from the recorded item↔scope index.
+        // Exact — no span match, so companion functions and synthesized `0..0`
+        // functions (which the old scan special-cased) resolve correctly.
+        let func_scope_id = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
+            .expect("every item-tree function has a recorded scope")
+            .file_scope_id(db);
 
         // --- Collect per-scope TIR inference views (func + all descendants) ---
         // Borrows the Salsa-cached `infer_scope_types` results instead of
@@ -2753,14 +2734,13 @@ impl<'db> LoweringContext<'db> {
     ) -> Self {
         let file = let_loc.file(db);
 
-        // --- Resolve LetLoc → FileScopeId via span ---
         let item_tree = file_item_tree(db, file);
         let let_data = &item_tree[let_loc.id(db)];
-        let let_span = let_data.span;
         let let_name = let_data.name.clone();
-
         let index = file_semantic_index(db, file);
-        let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
+        let let_scope_id = baml_compiler2_ppir::item_data::let_scope(db, let_loc)
+            .expect("every item-tree let has a recorded scope")
+            .file_scope_id(db);
 
         // --- Collect per-scope TIR inference views (let + all descendants) ---
         // Borrows the Salsa-cached `infer_scope_types` results instead of
@@ -3994,13 +3974,13 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(self.db, self.file);
         let item_tree = file_item_tree(self.db, self.file);
         let func_data = &item_tree[func_loc.id(self.db)];
+        let func_span = baml_compiler2_ppir::item_data::function_source_map(self.db, func_loc).span;
         // Set the function-level span on the builder so MirFunction::span is populated.
-        self.builder.set_span(baml_base::Span::new(
-            self.file.file_id(self.db),
-            func_data.span,
-        ));
-        let func_scope_id: FileScopeId =
-            index.scope_at_offset(func_data.span.start(), Some(&func_data.name));
+        self.builder
+            .set_span(baml_base::Span::new(self.file.file_id(self.db), func_span));
+        let func_scope_id = baml_compiler2_ppir::item_data::function_scope(self.db, func_loc)
+            .expect("every item-tree function has a recorded scope")
+            .file_scope_id(self.db);
         let func_scope = &index.scopes[func_scope_id.index() as usize];
         let enclosing_class_name: Option<Name> = func_scope.parent.and_then(|parent_idx| {
             let parent = &index.scopes[parent_idx.index() as usize];

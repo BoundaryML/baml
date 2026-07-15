@@ -57,11 +57,7 @@ use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
     ast::{AstSourceMap, DeclarativeMeta, ExprBody, FunctionBodyDef, FunctionOrigin},
 };
-use baml_compiler2_hir::{
-    body::FunctionBody,
-    loc::FunctionLoc,
-    scope::{FileScopeId, ScopeKind},
-};
+use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::FileScopeId};
 use baml_compiler2_tir::{inference::infer_scope_types, ty::Ty};
 use text_size::TextSize;
 
@@ -143,9 +139,12 @@ pub fn file_annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> 
             continue;
         };
 
-        let owner_scope = function_scope_for(index, func_data.span, &func_data.name)
+        let owner_scope = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
+            .map(|scope| scope.file_scope_id(db))
             .unwrap_or_else(|| {
-                index.scope_at_offset(func_data.span.start(), Some(&func_data.name))
+                let func_span =
+                    baml_compiler2_ppir::item_data::function_source_map(db, func_loc).span;
+                index.scope_at_offset(func_span.start(), Some(&func_data.name))
             });
         process_body(
             db,
@@ -352,23 +351,6 @@ fn is_synthetic_registration(body: &ExprBody, callee: ExprId) -> bool {
         _ => return false,
     };
     matches!(name, "register_test" | "register_test_set")
-}
-
-fn function_scope_for(
-    index: &SemanticIndex<'_>,
-    span: text_size::TextRange,
-    name: &baml_base::Name,
-) -> Option<FileScopeId> {
-    index
-        .scopes
-        .iter()
-        .enumerate()
-        .find(|(_, scope)| {
-            matches!(scope.kind, ScopeKind::Function)
-                && scope.range == span
-                && scope.name.as_ref() == Some(name)
-        })
-        .map(|(idx, _)| FileScopeId::new(u32::try_from(idx).expect("scope index fits in u32")))
 }
 
 fn scope_at_offset_within_body(
