@@ -34,9 +34,13 @@ name: BAML Release - Build bridge_cffi
 # dry-run before other bridges depend on this):
 #   - darwin x86_64/aarch64: native cargo, aws-lc-sys cross-compile confirmed.
 #   - linux gnu x86_64/aarch64: `cross` with prebuilt aws-lc-sys bindings.
-#   - linux musl, windows aarch64: experimental until a dry-run confirms
-#     aws-lc-sys builds there (the fallback is the crate's `ring-crypto`
-#     feature, which sidesteps aws-lc-sys entirely).
+#   - linux musl x86_64/aarch64: `cross`, aws-lc-sys builds fine. musl defaults
+#     to `+crt-static`, which cannot emit a cdylib, so the build disables
+#     `crt-static` (RUSTFLAGS in the build step + `Cross.toml` passthrough) to
+#     produce a musl `.so` dynamically linked against musl libc. Experimental
+#     until an Alpine (or other real musl) dlopen smoke proves a consumer loads
+#     it.
+#   - windows aarch64: experimental until a native arm64 smoke runner exists.
 #   - windows x86_64: `AWS_LC_SYS_PREBUILT_NASM=1` (below) lets aws-lc-sys use
 #     its prebuilt NASM objects if the runner has no NASM.
 
@@ -84,8 +88,10 @@ jobs:
             os: ubuntu-22.04
             use_cross: true
 
-          # Experimental: aws-lc-sys on musl is unproven here; a leg failing
-          # must not fail the release (see continue-on-error below).
+          # Experimental: the musl cdylib builds (crt-static disabled in the
+          # build step so rustc emits a `.so`), but no Alpine/musl dlopen smoke
+          # validates it yet — so a leg failing must not fail the release (see
+          # continue-on-error below).
           - target: x86_64-unknown-linux-musl
             os: ubuntu-22.04
             use_cross: true
@@ -171,6 +177,18 @@ jobs:
           set -euo pipefail
           # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
           # release artifact. `release-bridge-cffi` = release + panic = "unwind".
+          #
+          # musl targets default to `+crt-static`, and rustc cannot emit a
+          # cdylib under a static CRT — it silently drops the crate type and
+          # produces only the `.rlib`. Disable `crt-static` so the build yields
+          # a real musl `.so`, dynamically linked against musl libc and
+          # dlopen-loadable on a musl consumer (e.g. Alpine). Scoped to musl so
+          # the other targets keep their `.cargo/config.toml` rustflags (the
+          # Windows `/STACK` link-arg), which a blanket RUSTFLAGS would clobber.
+          # `cross` forwards RUSTFLAGS into the build container via `Cross.toml`.
+          if [[ "${{ matrix._.target }}" == *-musl ]]; then
+            export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-feature=-crt-static"
+          fi
           ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "${{ matrix._.target }}"
 
       - name: Rename and checksum artifact
