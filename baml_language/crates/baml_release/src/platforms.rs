@@ -2,11 +2,10 @@
 //! single machine-readable source for the release target set, each target's
 //! per-artifact support, and the `bridge_cffi` cdylib build config.
 //!
-//! The `bridge_cffi` build matrix is generated from this file (see
-//! `.github/workflows/build2-bridge-cffi.reusable.yaml`); the Rust target list
-//! is kept in sync with [`crate::SUPPORTED_RELEASE_TARGETS`] by the tests
-//! below. Other release artifacts (toolchain/python/nodejs) migrate their
-//! matrices onto this file over time.
+//! The cffi, toolchain, and python build matrices are generated from this file
+//! (each in its own workflow); the Rust target list is kept in sync with
+//! [`crate::SUPPORTED_RELEASE_TARGETS`] by the tests below. The nodejs matrix
+//! keeps its bespoke per-target build recipes in its own workflow.
 //!
 //! Support is encoded structurally: an artifact that is `None` in [`Artifacts`]
 //! is not built for the target (unsupported), so "unsupported but configured"
@@ -45,7 +44,7 @@ pub struct Artifacts {
     #[serde(default)]
     pub toolchain: Option<ToolchainArtifact>,
     #[serde(default)]
-    pub python: Option<SdkArtifact>,
+    pub python: Option<PythonArtifact>,
     #[serde(default)]
     pub nodejs: Option<SdkArtifact>,
     #[serde(default)]
@@ -62,9 +61,25 @@ pub struct ToolchainArtifact {
     pub experimental: bool,
 }
 
-/// A registry-packaged SDK artifact (python/nodejs). Carries only the support
-/// tier for now; per-target runner + setup config move here as each matrix
-/// migrates onto the contract.
+/// The python wheel artifact built per target.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PythonArtifact {
+    /// GitHub Actions runner label (distinct from the target's `os` family).
+    pub runner: String,
+    /// `manylinux`/`musllinux` platform tag for maturin (Linux targets only).
+    #[serde(default)]
+    pub manylinux: Option<String>,
+    /// Python-setup architecture override (arm64-Windows only).
+    #[serde(default)]
+    pub architecture: Option<String>,
+    /// Built best-effort: a build failure must not block the release.
+    #[serde(default)]
+    pub experimental: bool,
+}
+
+/// A registry-packaged SDK artifact (nodejs). Carries only the support tier for
+/// now; per-target runner + setup config move here when its matrix migrates
+/// onto the contract.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct SdkArtifact {
     /// Built best-effort: a build failure must not block the release.
@@ -132,6 +147,22 @@ mod tests {
             assert!(
                 !toolchain.runner.is_empty(),
                 "{}: empty toolchain runner",
+                t.triple
+            );
+        }
+    }
+
+    #[test]
+    fn every_target_has_a_python_runner() {
+        for t in platforms().targets {
+            let python = t
+                .artifacts
+                .python
+                .as_ref()
+                .unwrap_or_else(|| panic!("{}: python artifact missing", t.triple));
+            assert!(
+                !python.runner.is_empty(),
+                "{}: empty python runner",
                 t.triple
             );
         }

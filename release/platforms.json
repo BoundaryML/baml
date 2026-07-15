@@ -1,5 +1,5 @@
 {
-  "description": "Repository-owned platform contract: the single machine-readable source for the BAML language release target set, per-target per-artifact support, and each artifact's build config. The cffi and toolchain build matrices are generated from this file (see .github/workflows/build2-bridge-cffi.reusable.yaml and release-baml-language.yml); the Rust side is validated against it by baml_release::platforms tests. The python/nodejs matrices migrate onto this file over time. Per target, `artifacts` maps each supported SDK/build artifact to its config: a MISSING key means that artifact is not built for the target (unsupported); `experimental: true` means built best-effort (a failure must not block the release); absent/false means required (must succeed). `runner` is the GitHub Actions runner label, distinct from the target's `os` family.",
+  "description": "Repository-owned platform contract: the single machine-readable source for the BAML language release target set, per-target per-artifact support, and each artifact's build config. The cffi, toolchain, and python build matrices are generated from this file (see .github/workflows/build2-bridge-cffi.reusable.yaml, release-baml-language.yml, build2-python-sdk.reusable.yaml); the Rust side is validated against it by baml_release::platforms tests. The nodejs matrix keeps its bespoke per-target build recipes in its own workflow. Per target, `artifacts` maps each supported SDK/build artifact to its config: a MISSING key means that artifact is not built for the target (unsupported); `experimental: true` means built best-effort (a failure must not block the release); absent/false means required (must succeed). `runner` is the GitHub Actions runner label, distinct from the target's `os` family.",
   "schema": 1,
   "targets": [
     {
@@ -10,7 +10,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "macos-14" },
-        "python": {},
+        "python": { "runner": "macos-latest" },
         "nodejs": {},
         "cffi": { "asset": "libbaml_cffi-aarch64-apple-darwin.dylib", "runner": "macos-14", "smoke": true }
       }
@@ -23,7 +23,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "macos-15-intel" },
-        "python": {},
+        "python": { "runner": "macos-latest" },
         "nodejs": {},
         "cffi": { "asset": "libbaml_cffi-x86_64-apple-darwin.dylib", "runner": "macos-14" }
       }
@@ -36,7 +36,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-24.04-arm" },
-        "python": {},
+        "python": { "runner": "ubuntu-latest", "manylinux": "2_24" },
         "nodejs": {},
         "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true }
       }
@@ -49,7 +49,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-24.04-arm" },
-        "python": {},
+        "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
         "cffi": { "asset": "libbaml_cffi-aarch64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true }
       }
@@ -62,7 +62,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-latest" },
-        "python": {},
+        "python": { "runner": "ubuntu-latest", "manylinux": "2_17" },
         "nodejs": {},
         "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-gnu.so", "runner": "ubuntu-22.04", "use_cross": true, "smoke": true }
       }
@@ -75,7 +75,7 @@
       "archive_suffix": ".tar.gz",
       "artifacts": {
         "toolchain": { "runner": "ubuntu-latest" },
-        "python": {},
+        "python": { "runner": "ubuntu-latest", "manylinux": "musllinux_1_1" },
         "nodejs": {},
         "cffi": { "asset": "libbaml_cffi-x86_64-unknown-linux-musl.so", "runner": "ubuntu-22.04", "use_cross": true, "experimental": true }
       }
@@ -88,7 +88,7 @@
       "archive_suffix": ".zip",
       "artifacts": {
         "toolchain": { "runner": "windows-latest" },
-        "python": {},
+        "python": { "runner": "windows-latest" },
         "nodejs": {},
         "cffi": { "asset": "baml_cffi-x86_64-pc-windows-msvc.dll", "runner": "windows-2022", "smoke": true }
       }
@@ -101,7 +101,7 @@
       "archive_suffix": ".zip",
       "artifacts": {
         "toolchain": { "runner": "windows-latest" },
-        "python": {},
+        "python": { "runner": "windows-11-arm", "architecture": "arm64" },
         "nodejs": {},
         "cffi": { "asset": "baml_cffi-aarch64-pc-windows-msvc.dll", "runner": "windows-11-arm", "smoke": true, "experimental": true }
       }
