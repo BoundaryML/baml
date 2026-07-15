@@ -3301,13 +3301,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
             // ── Structural (value matcher) ───────────────────────────────────
             // Element/key/value discriminates, a bare frame reference (`T`,
             // `T[]`), or a union that may carry one: the VM value matcher. The
-            // deprecated `TypeArgRefOrWildcard` (B-634 dispatch-guard tolerance)
-            // routes here too — `substitute` resolves it to the same frame slot
-            // as `TypeArgRef`, and the matcher's covariant top-level relation
-            // gives it the subtype-or-wildcard semantics it needs.
+            // deprecated `TypeArgRefOrWildcard` is no longer produced (typevars
+            // now lower to `TypeArgRef`), but is still routed here defensively —
+            // `substitute` resolves it to the same frame slot as `TypeArgRef`.
             #[expect(
                 deprecated,
-                reason = "TypeArgRefOrWildcard is a live dispatch-guard template variant until type erasure is removed"
+                reason = "TypeArgRefOrWildcard is a still-defined (unemitted) template variant until type erasure is removed"
             )]
             TyTemplate::List(..)
             | TyTemplate::Map { .. }

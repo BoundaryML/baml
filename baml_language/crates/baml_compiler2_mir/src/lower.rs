@@ -996,10 +996,13 @@ fn tir2_to_dispatch_guard_template(
             .iter()
             .position(|p| p == name)
             .map(|n| {
-                #[expect(deprecated)]
-                TyTemplate::TypeArgRefOrWildcard(
-                    u32::try_from(n).expect("generic param index fits in u32"),
-                )
+                // A frame type-parameter lowers to its `TypeArgRef` slot. It used
+                // to lower to the covariant `TypeArgRefOrWildcard` band-aid so a
+                // reified-and-widened `T` (`Shape | Sq`) would match a value's
+                // narrower `Shape`; that is unnecessary now the runtime relates
+                // type args through the canonical algebra, which absorbs
+                // `Shape | Sq == Shape` (`Sq <: Shape`) and matches invariantly.
+                TyTemplate::TypeArgRef(u32::try_from(n).expect("generic param index fits in u32"))
             })
             .unwrap_or(TyTemplate::Wildcard),
         Tir2Ty::List(inner, _) | Tir2Ty::EvolvingList(inner, _) => TyTemplate::list(
@@ -13568,21 +13571,21 @@ impl LoweringContext<'_> {
                     // site a type variable corresponds to exactly one realized
                     // type).
                     //
-                    // Use the dispatch-guard template (frame TypeVar →
-                    // `TypeArgRefOrWildcard`, subtype-or-wildcard) rather than the
-                    // exact `TypeArgRef` one. A pattern type-test is covariant —
-                    // it asks "does this value belong to type `Opt<T>`" — so the
-                    // reified frame arg must be compared with `is_subtype_of`, not
-                    // `==`. Otherwise, when inference pins `T` to a supertype union
-                    // of the value's actual type arg (e.g. a `default: T` arg
+                    // Each frame `TypeVar` lowers to a `TypeArgRef` and is
+                    // compared *invariantly* against the value's realized arg by
+                    // the canonical algebra. When inference pins `T` to a supertype
+                    // union of the value's actual arg (e.g. a `default: T` arg
                     // subtypes, so `T` reifies to the un-subsumed join `Shape | Sq`
-                    // while the value is `Opt<Shape>`), the exact check
-                    // `Shape | Sq == Shape` fails and the arm silently misses. This
-                    // matches the interface class-dispatch guard path
-                    // (`emit_interface_class_guard_branch`), which already builds
-                    // its typevar args with `tir2_to_dispatch_guard_template`.
-                    // Directionality is preserved: a strictly wider runtime arg
-                    // still fails to match a narrower pinned `T`.
+                    // while the value is `Opt<Shape>`), the arm still matches: the
+                    // algebra knows `Sq <: Shape` and absorbs `Shape | Sq == Shape`,
+                    // so invariant equivalence holds. (The old context-free
+                    // comparison could not see that membership, which is why this
+                    // used to need a covariant `TypeArgRefOrWildcard` band-aid.)
+                    //
+                    // `tir2_to_dispatch_guard_template` (rather than
+                    // `tir2_to_template`) is still used because it also maps an
+                    // unresolved associated projection in the pattern to a match-any
+                    // `Wildcard` — a separate erasure concern.
                     //
                     // `Self`-carrying patterns are excluded: `Self` has no frame
                     // slot yet, so the guard builder would lower it to a

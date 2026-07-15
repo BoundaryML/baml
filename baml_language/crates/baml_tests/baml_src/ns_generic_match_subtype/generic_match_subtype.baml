@@ -14,9 +14,9 @@
 // the arm fell through to the default. The runtime now relates class type args
 // *invariantly* through the canonical algebra, which knows `Sq <: Shape` and
 // absorbs the union, so `equivalent(Shape, Shape | Sq)` holds and the arm
-// matches — no covariance, no widening. (The arm still lowers `T` to a
-// `TypeArgRefOrWildcard` template, which the canonical algebra resolves and
-// matches identically to a plain `TypeArgRef`.)
+// matches — no covariance, no widening. The arm lowers `T` to a plain
+// `TypeArgRef` frame slot; the covariant `TypeArgRefOrWildcard` band-aid it once
+// used is gone.
 //
 // NOTE: test bodies live in top-level helper functions — locals holding class
 // instances misbehave when compared/passed inside `test { ... }` blocks (the
