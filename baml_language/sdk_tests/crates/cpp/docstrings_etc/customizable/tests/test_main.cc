@@ -64,13 +64,14 @@ BAML_TEST(enum_doc_summary_and_members_section) {
       "///     HAPPY: Smiling face.\n"
       "///     SAD: Frowning face.\n"
       "///     NEUTRAL\n"
-      "enum class Sentiment {";
+      "// Enumerator values: FNV-1a-64 of the wire value (reorder-stable).\n"
+      "enum class Sentiment : uint64_t {";
   BAML_ASSERT(HeaderText().find(expected) != std::string::npos);
 }
 
 BAML_TEST(enum_summary_only_omits_members_section) {
   const std::string text = HeaderText();
-  const size_t decl = text.find("enum class Priority {");
+  const size_t decl = text.find("enum class Priority : uint64_t {");
   BAML_ASSERT(decl != std::string::npos);
   const std::string before =
       text.substr(decl < 400 ? 0 : decl - 400, decl < 400 ? decl : size_t{400});

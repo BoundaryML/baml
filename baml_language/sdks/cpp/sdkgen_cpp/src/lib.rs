@@ -1517,9 +1517,25 @@ fn render_header(
         buf.push('\n');
         open_namespaces(&mut buf, &e.ns);
         push_doc(&mut buf, "", e.doc.as_ref(), &[]);
-        let _ = writeln!(buf, "enum class {} {{", e.name.declared());
-        for (variant, _) in &e.variants {
-            let _ = writeln!(buf, "  {},", variant.declared());
+        // Hash-valued enumerators: the value derives from the wire value, so
+        // it is stable across variant reordering and regeneration. The wire
+        // still carries names; the ordinal is identity only.
+        buf.push_str("// Enumerator values: FNV-1a-64 of the wire value (reorder-stable).\n");
+        let _ = writeln!(buf, "enum class {} : uint64_t {{", e.name.declared());
+        let mut seen: HashMap<u64, &str> = HashMap::new();
+        for (variant, value) in &e.variants {
+            let hash = naming::fnv1a64(value);
+            if let Some(other) = seen.insert(hash, value) {
+                // ~2^-64 within one enum; equal enumerator values would make
+                // the two variants compare equal, so this must be loud, not
+                // a suffix.
+                panic!(
+                    "enum {}: FNV-1a-64 collision between variant values \
+                     '{other}' and '{value}'",
+                    e.name.wire()
+                );
+            }
+            let _ = writeln!(buf, "  {} = 0x{hash:016x}ULL,", variant.declared());
         }
         buf.push_str("};\n");
         close_namespaces(&mut buf, &e.ns);

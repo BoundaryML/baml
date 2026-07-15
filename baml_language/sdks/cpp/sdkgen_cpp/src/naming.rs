@@ -519,6 +519,15 @@ pub(crate) fn pascal_case(name: &str) -> String {
 // Stable hashing (collision suffixes)
 // ---------------------------------------------------------------------------
 
+/// Plain FNV-1a-64 of a string. Enum enumerator values derive from this
+/// (hash of the variant's wire value), so they are stable across variant
+/// reordering; the framed [`ComponentHash`] below shares the constants.
+pub(crate) fn fnv1a64(s: &str) -> u64 {
+    let mut hash = ComponentHash::new();
+    hash.bytes(s.as_bytes());
+    hash.0
+}
+
 /// FNV-1a with explicit component framing: lengths and tags are hashed so
 /// distinct typed requests cannot collapse onto one digest the way a joined
 /// display string could.
@@ -762,6 +771,14 @@ mod tests {
     fn test_pascal_case() {
         assert_eq!(pascal_case("optional_args_probe"), "OptionalArgsProbe");
         assert_eq!(pascal_case("greet"), "Greet");
+    }
+
+    #[test]
+    fn test_fnv1a64_known_vectors() {
+        // Published FNV-1a 64-bit test vectors.
+        assert_eq!(fnv1a64(""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(fnv1a64("a"), 0xaf63_dc4c_8601_ec8c);
+        assert_eq!(fnv1a64("foobar"), 0x8594_4171_f739_67e8);
     }
 
     #[test]
