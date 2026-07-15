@@ -265,7 +265,7 @@ impl Frame {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::sync::Arc;
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::AtomicBool;
@@ -302,7 +302,7 @@ mod tests {
         }
     }
 
-    fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
+    pub(crate) fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
         let heap = BexHeap::new(compile_time_objects);
         BexVm {
             frames: Vec::new(),
@@ -6060,17 +6060,11 @@ impl BexVm {
                         }),
                     );
                     let (callee_ptr, type_args) = {
-                        let (rule, bound_args) = crate::package_baml::resolve_implements_rule(
-                            self,
-                            &self_ty,
-                            &iface_qtn,
-                            &iface_args,
-                        )
-                        .ok_or_else(|| {
-                            VmInternalError::UnresolvedVirtualCall {
+                        let (rule, bound_args) = crate::package_baml::ImplResolver::new(self)
+                            .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
+                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
-                            }
-                        })?;
+                            })?;
                         let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
                             VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
@@ -6084,8 +6078,8 @@ impl BexVm {
                         // or the interface's args + associated types for an inherited
                         // default), then the method-level type args — matching the
                         // callee's De Bruijn layout `[owner… ++ method…]`.
-                        let mut frame =
-                            crate::package_baml::realize_frame(self, &method.frame, &bound_args)?;
+                        let mut frame = crate::package_baml::ImplResolver::new(self)
+                            .realize_frame(&method.frame, &bound_args)?;
                         frame.extend(method_type_args);
                         (callee, frame)
                     };
@@ -6844,24 +6838,18 @@ impl BexVm {
                         }),
                     );
                     let (function_ptr, type_args) = {
-                        let (rule, bound_args) = crate::package_baml::resolve_implements_rule(
-                            self,
-                            &self_ty,
-                            &iface_qtn,
-                            &iface_args,
-                        )
-                        .ok_or_else(|| {
-                            VmInternalError::UnresolvedVirtualCall {
+                        let (rule, bound_args) = crate::package_baml::ImplResolver::new(self)
+                            .resolve_implements_rule(&self_ty, &iface_qtn, &iface_args)
+                            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
-                            }
-                        })?;
+                            })?;
                         let method = rule.methods.get(method_name.as_str()).ok_or_else(|| {
                             VmInternalError::UnresolvedVirtualCall {
                                 method: method_name.clone(),
                             }
                         })?;
-                        let mut frame =
-                            crate::package_baml::realize_frame(self, &method.frame, &bound_args)?;
+                        let mut frame = crate::package_baml::ImplResolver::new(self)
+                            .realize_frame(&method.frame, &bound_args)?;
                         frame.extend(method_type_args);
                         (method.fqn, frame)
                     };

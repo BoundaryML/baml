@@ -65,7 +65,12 @@ impl TypeContext for BexVm {
         else {
             return false;
         };
-        crate::package_baml::type_implements(self, &concrete, &interface.name, &args, &assoc)
+        crate::package_baml::ImplResolver::new(self).type_implements(
+            &concrete,
+            &interface.name,
+            &args,
+            &assoc,
+        )
     }
 
     fn type_var_bound(&self, _name: &Name) -> Vec<Interface> {
@@ -157,8 +162,8 @@ impl TypeContext for BexVm {
             return ProjectionStep::Opaque;
         };
         // Select the applicable impl and read its associated-type binding template.
-        let Some((rule, bound_args)) =
-            crate::package_baml::resolve_implements_rule(self, &base, &interface.name, &iface_args)
+        let Some((rule, bound_args)) = crate::package_baml::ImplResolver::new(self)
+            .resolve_implements_rule(&base, &interface.name, &iface_args)
         else {
             return ProjectionStep::Opaque;
         };
@@ -173,5 +178,74 @@ impl TypeContext for BexVm {
             Ok(reduced) => ProjectionStep::Reduced(reduced.into()),
             Err(_) => ProjectionStep::Opaque,
         }
+    }
+}
+
+/// A [`TypeContext`] for order-insensitive *structural* equivalence over realized
+/// runtime types: **aliases are expanded** — so recursive aliases fold correctly
+/// (`type A = int | A[]` and `type B = int | B[]` denote the same type, via the
+/// canonicalizer's μ-folding) — while every *re-entrant* nominal fact stays an
+/// opaque leaf. It runs the canonical set-theoretic algebra (union
+/// flatten/sort/dedup, `never` removal, literal-into-base collapse), and interface
+/// bindings compare order-insensitively because the canonicalizer sorts them.
+///
+/// This is the runtime twin of the compiler matcher's `AliasEquivCtx` and shares
+/// its exact fact profile — alias-real, nominal-opaque — which keeps runtime
+/// dispatch in agreement with compile-time coherence. `alias_def` is safe to
+/// answer because it is non-re-entrant (a map lookup; the expanded body normalizes
+/// under this same opaque context). `implements_interface` and `project` MUST stay
+/// opaque: the resolver is a link in the membership chain
+/// ([`BexVm::implements_interface`](TypeContext::implements_interface) →
+/// `type_implements` → `rule_applies` → the equivalence check → here), so
+/// answering them would re-enter it — `implements_interface` unboundedly (via the
+/// canonicalizer's `absorb_subtypes`), `project` fuel-bounded but wastefully.
+///
+/// Two conservative *misses* remain, documented and shared with the compiler
+/// matcher (so the two sides agree): interface-membership absorption
+/// (`Shape | Sq` ≡ `Shape` when `Sq <: Shape`) and enum completeness
+/// (`E.A | E.B | …` ≡ `E`). Membership is *forced* opaque by re-entry; enum is
+/// non-re-entrant and could be made real, but only in lockstep with
+/// `AliasEquivCtx`. Their soundness rests on the compiler emitting dispatch
+/// requests already in absorbed form. The general fix is a unified goal solver
+/// whose in-progress table spans the equivalence↔membership boundary (so
+/// membership can be answered as a *goal* with per-sort cycle semantics instead
+/// of severed here); until then, opacity is the termination guarantee.
+pub(crate) struct StructuralEquivCtx<'a>(pub(crate) &'a BexVm);
+
+impl TypeContext for StructuralEquivCtx<'_> {
+    fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
+        // Same alias facts as the full context — non-re-entrant, and required
+        // for recursive-alias folding.
+        self.0.alias_def(name)
+    }
+
+    fn implements_interface(&self, _concrete: &Ty, _interface: &Interface) -> bool {
+        false // Opaque: re-entrant (→ the resolver), unboundedly.
+    }
+
+    fn type_var_bound(&self, _name: &Name) -> Vec<Interface> {
+        Vec::new()
+    }
+
+    fn interface_requires(&self, _sub: &Interface, _sup: &Interface) -> bool {
+        false // Opaque.
+    }
+
+    fn enum_variants(&self, _name: &QualifiedTypeName) -> Option<Vec<Name>> {
+        None // Opaque.
+    }
+
+    fn associated_type_bound(&self, _interface: &Interface, _assoc: Name) -> Vec<Interface> {
+        Vec::new()
+    }
+
+    fn project(
+        &self,
+        _base: &Ty,
+        _interface: &Interface,
+        _member: &Name,
+        _fuel: u32,
+    ) -> baml_type::normalize::ProjectionStep {
+        baml_type::normalize::ProjectionStep::Opaque // Opaque: re-entrant (→ the resolver).
     }
 }
