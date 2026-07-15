@@ -57,6 +57,10 @@ echo "==> pnpm build:debug in sdks/nodejs/bridge_nodejs"
 #    dependency when bridge_nodejs build output changes.
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue
+    fixture_name="${fixture_dir%/generated}"
+    # Ignore generated output left behind after a shared fixture is removed.
+    # Build.rs only refreshes fixtures that still exist under sdk_tests/fixtures.
+    [[ -d "../../fixtures/$fixture_name" ]] || continue
     echo "==> pnpm install in $fixture_dir"
     # `--ignore-scripts`: the only dependency with a build script is
     # protobufjs, which needs no build for our pure-JS usage (we ship a

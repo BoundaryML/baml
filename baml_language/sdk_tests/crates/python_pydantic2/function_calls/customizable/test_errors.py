@@ -37,9 +37,16 @@ from baml_sdk import hello_world
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument
 from baml_sdk.baml.json import JsonParseError
-from baml_sdk.baml.panics import UserPanic
+from baml_sdk.baml.panics import DivisionByZero, UserPanic
 from baml_sdk.raises_test import LoadDoc, ParseError, Reparse
-from baml_sdk.throws_test import MyError, ParseJson, SleepMs, ThrowMyError
+from baml_sdk.throws_test import (
+    MyError,
+    PanicWithUnsafeInt,
+    ParseJson,
+    SleepMs,
+    ThrowMyError,
+    ThrowUnsafeIntError,
+)
 
 # stdlib native builtins (`baml.json.parse`, `baml.sys.*`) can't be called as
 # top-level entry points, so the fixture wraps each in a bytecode function
@@ -63,6 +70,22 @@ def test_user_throw_surfaces_declared_instance():
     with pytest.raises(BamlError) as exc_info:
         ThrowMyError()
     assert isinstance(exc_info.value.value, MyError)
+
+
+def test_unsafe_int_nested_in_baml_error_surfaces_explicitly():
+    with pytest.raises(BamlError) as exc_info:
+        ThrowUnsafeIntError()
+
+    assert isinstance(exc_info.value.value, MyError)
+    assert exc_info.value.value.code == 9007199254740993
+
+
+def test_unsafe_int_nested_in_baml_panic_surfaces_explicitly():
+    with pytest.raises(BamlPanic) as exc_info:
+        PanicWithUnsafeInt()
+
+    assert isinstance(exc_info.value.value, DivisionByZero)
+    assert exc_info.value.value.dividend == 9007199254740993
 
 
 def test_union_throws_preserves_class_name():

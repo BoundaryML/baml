@@ -84,7 +84,7 @@ export function registerHostOpaque(value: unknown): HandleKey {
 }
 
 /**
- * Look up a host-registered JS value by key. Returns `undefined` when:
+ * Look up a host-registered JS value by key. Returns `{ found: false }` when:
  * - the key is the reserved sentinel `0n` (no real value was registered);
  * - the engine has already released the entry (last `HostValueArc` clone
  *   dropped → Rust `host_release_callback` fired → `_releaseHostValue`
@@ -104,23 +104,28 @@ export function registerHostOpaque(value: unknown): HandleKey {
  * Arc; in that case the user has already observed the original throw at
  * least once, so a second lookup-miss → metadata-fallback is acceptable.
  */
-export function lookupHostValue(key: bigint): unknown {
-    return hostValueMap.get(key);
+export type HostValueLookup =
+    | { found: true; value: unknown }
+    | { found: false };
+
+export function lookupHostValue(key: bigint): HostValueLookup {
+    if (!hostValueMap.has(key)) return { found: false };
+    return { found: true, value: hostValueMap.get(key) };
 }
 
 /**
  * Convenience for the outbound decoder: if `handle` is a `BamlHandle`
  * tagged `HOST_VALUE_OPAQUE`, look up the originating JS value in
- * the registry and return it. Returns `undefined` for any other handle
- * type, a non-`BamlHandle` argument, or a key that doesn't resolve.
+ * the registry. The discriminated result preserves the difference between a
+ * missing key and a present key whose registered JS value is `undefined`.
  *
  * Used by `decodeCallResult`'s `error` arm to rehydrate the original JS
  * exception when a BAML-thrown `baml.errors.HostCallable` propagates back
  * to the same Node process that originated it.
  */
-export function tryRehydrateHostValueByKey(handle: unknown): unknown {
-    if (!(handle instanceof BamlHandle)) return undefined;
-    if (handle.handleType !== BamlHandleType.HOST_VALUE_OPAQUE) return undefined;
+export function tryRehydrateHostValueByKey(handle: unknown): HostValueLookup {
+    if (!(handle instanceof BamlHandle)) return { found: false };
+    if (handle.handleType !== BamlHandleType.HOST_VALUE_OPAQUE) return { found: false };
     return lookupHostValue(handleKeyToBigint(handle.key));
 }
 

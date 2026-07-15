@@ -51,185 +51,201 @@ function genericParamNames(value) {
     }
     return null;
 }
-function setInboundValue(iv, value, ctx) {
-    if (value === null || value === undefined) {
-        return; // Leave oneof unset → null
+/** Exact generated instance-method names emitted by sdkgen. */
+function generatedInstanceMethodNames(value) {
+    const ctor = value.constructor;
+    const names = ctor?.$bamlMethodNames;
+    if (Array.isArray(names) && names.every((name) => typeof name === 'string')) {
+        return names;
     }
-    if (typeof value === 'boolean') {
-        iv.boolValue = value;
-    }
-    else if (typeof value === 'number') {
-        if (Number.isInteger(value)) {
-            iv.intValue = value;
+    return [];
+}
+// `Object.prototype` identity is realm-local. Compare the native Object
+// constructor source as well so records created by node:vm remain structural
+// maps while actual class instances still require a generated typemap entry.
+const OBJECT_CONSTRUCTOR_SOURCE = Function.prototype.toString.call(Object);
+function isPlainRecord(value) {
+    const proto = Object.getPrototypeOf(value);
+    if (proto === null)
+        return true;
+    if (!Object.prototype.hasOwnProperty.call(proto, 'constructor'))
+        return false;
+    const ctor = proto.constructor;
+    return typeof ctor === 'function'
+        && Function.prototype.toString.call(ctor) === OBJECT_CONSTRUCTOR_SOURCE;
+}
+function childPath(parent, key) {
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)
+        ? `${parent}.${key}`
+        : `${parent}[${JSON.stringify(key)}]`;
+}
+function setInboundValue(iv, value, ctx, path = '$') {
+    const tracked = value !== null && typeof value === 'object' ? value : null;
+    if (tracked) {
+        const firstPath = ctx.active.get(tracked);
+        if (firstPath !== undefined) {
+            throw new TypeError(`Cannot encode cyclic value at ${path}; it references the active value at ${firstPath}`);
         }
-        else {
-            iv.floatValue = value;
+        ctx.active.set(tracked, path);
+    }
+    try {
+        if (value === null || value === undefined) {
+            return; // Leave oneof unset → null
         }
-    }
-    else if (typeof value === 'bigint') {
-        // Hex / base sixteen on the wire. BigInt.prototype.toString(16)
-        // yields e.g. "-2a"; signed values round-trip via num-bigint's
-        // LowerHex impl on the Rust side.
-        iv.bigintValue = value.toString(16);
-    }
-    else if (typeof value === 'string') {
-        iv.stringValue = value;
-    }
-    else if (value instanceof Uint8Array) {
-        iv.uint8arrayValue = value;
-    }
-    else if (value instanceof BamlHandle) {
-        // A round-tripped host callable arrives as a handle, not a raw
-        // function — apply the same sync-path fast-fail so `callFunctionSync`
-        // can't hang waiting on a callback that the blocked main thread can
-        // never run. HOST_VALUE_CALLABLE is currently the only handle type
-        // that dispatches back into the host; the rest are engine-side ADT/
-        // heap handles that need no host callback and so are safe on the sync
-        // path. Any future dispatch-backed handle type must be guarded here.
-        if (ctx.syncMode && value.handleType === BamlHandleType.HOST_VALUE_CALLABLE) {
-            throw new HostCallableSyncError('host callables are only supported on the async call path; use the async API ' +
-                '(callFunction) instead of callFunctionSync. The sync path blocks the Node main ' +
-                'thread, so the host callback can never run and the call would hang.');
+        if (typeof value === 'boolean') {
+            iv.boolValue = value;
         }
-        // The Rust inbound decoder drains handle-table entries. Send a fresh
-        // cloned key so the JS-owned handle remains valid for later calls.
-        iv.handle = { key: value._cloneKeyForWire(), handleType: value.handleType };
-    }
-    else if (value instanceof BamlStream) {
-        // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
-        // branch above: the Rust inbound decoder *drains* the handle-table
-        // entry, so send a fresh cloned key — otherwise the engine consumes the
-        // stream's only key and the next `next()`/`final()` call fails with
-        // "Invalid handle key". (`BamlStream._toHandle()` returns the inner
-        // handle without cloning, unlike the media wrappers' `_toHandle`.)
-        const h = value._toHandle();
-        iv.handle = { key: h._cloneKeyForWire(), handleType: h.handleType };
-    }
-    else if (value instanceof BamlImage
-        || value instanceof BamlAudio
-        || value instanceof BamlVideo
-        || value instanceof BamlPdf) {
-        // Stdlib media wrappers → their backing ADT_MEDIA_* handle. `_toHandle`
-        // clones the table row so the wrapper stays usable after encode.
-        const h = value._toHandle();
-        iv.handle = { key: h.key, handleType: h.handleType };
-    }
-    else if (typeof value === 'function') {
-        // Host callables cannot work on the synchronous call path —
-        // fast-fail before any blocking happens (and before we register a
-        // tsfn, which would otherwise be orphaned).
-        if (ctx.syncMode) {
-            throw new HostCallableSyncError('host callables are only supported on the async call path; use the async API ' +
-                '(callFunction) instead of callFunctionSync. The sync path blocks the Node main ' +
-                'thread, so the host callback can never run and the call would hang.');
-        }
-        // JS callable → register a dispatch wrapper in the host-value
-        // registry and emit `Handle{key, HOST_VALUE_CALLABLE}`. The Rust
-        // side decodes this into `BexExternalValue::HostValue` and binds it
-        // to an `Object::HostClosure`; BAML invocations land back in
-        // `hostCallableDispatch` below via the ThreadsafeFunction.
-        const key = registerHostCallable(makeHostCallableDispatch(value));
-        // Remember the key so a later encode failure can release it.
-        ctx.registered.push(key);
-        iv.handle = { key, handleType: BamlHandleType.HOST_VALUE_CALLABLE };
-    }
-    else if (Array.isArray(value)) {
-        const listVal = [];
-        for (const item of value) {
-            const child = {};
-            setInboundValue(child, item, ctx);
-            listVal.push(child);
-        }
-        iv.listValue = { values: listVal };
-    }
-    else if (value !== null && typeof value === 'object') {
-        // Any remaining object — a plain object OR a codegen-emitted class
-        // instance (e.g. `new Resume({...})`) — encodes as `map_value` with
-        // no FQN tag. The Rust side's `coerce_arg_to_declared_type` reshapes
-        // it against the function's declared parameter type (the 10a
-        // typemap-free encode simplification). `Object.entries` yields the
-        // class's own enumerable fields, set by the constructor's
-        // `Object.assign(this, init)`. The specific built-in wrappers
-        // (BamlHandle/BamlStream/media) are handled by the instanceof
-        // branches above, so they never reach here.
-        //
-        // Class instances additionally carry their instance-method bindings
-        // (`m = defineInstanceFunction(...).bind(this)`) as own enumerable
-        // fields. Those are behavior, not state — skip function-valued fields
-        // on a class instance so re-encoding a handle-backed value (e.g. a
-        // `baml.fs.File` with `read`/`text` bindings) sends only its data
-        // (the `_handle`). Plain objects keep every field, so a host callable
-        // nested in a plain object still encodes as a callable.
-        const proto = Object.getPrototypeOf(value);
-        const isClassInstance = proto !== Object.prototype && proto !== null;
-        // Handle-backed stdlib types (e.g. `baml.fs.File`, `baml.http.Response`)
-        // decode to a class instance that carries the engine's handle in a
-        // field (`_handle` / `_body`). The engine resolves these from a
-        // FQN-tagged `class_value` (not a bare `map` — which has no FQN — nor a
-        // bare `handle`), so re-sending the same handle inside the named class
-        // value lets it resolve the same object and preserve cursor/connection
-        // state across FFI calls. The FQN comes from the typemap reverse map.
-        if (isClassInstance && Object.values(value).some(v => v instanceof BamlHandle)) {
-            const fqn = getTypeMap().jsTypeToBamlType(value.constructor);
-            if (fqn) {
-                const classFields = [];
-                for (const [k, v] of Object.entries(value)) {
-                    if (typeof v === 'function')
-                        continue;
-                    const childVal = {};
-                    setInboundValue(childVal, v, ctx);
-                    classFields.push({ stringKey: k, value: childVal });
-                }
-                iv.classValue = { classTy: { name: fqn }, fields: classFields };
-                return;
+        else if (typeof value === 'number') {
+            if (Number.isSafeInteger(value)) {
+                iv.intValue = value;
+            }
+            else {
+                iv.floatValue = value;
             }
         }
-        // Generic class instance → a FQN-tagged `class_value` carrying the
-        // value-level class type-args channel (`class_ty`). Unlike a non-generic
-        // class instance (which encodes as a bare `map_value` for the engine to
-        // reshape against the declared param type), a generic instance MUST send
-        // its concrete type args: the engine strictly rejects coercing a bare map
-        // into a generic class slot ("a bare map carries no class type
-        // arguments"). The args come from the optional `$types` instance field;
-        // an absent binding lowers to the unknown/top type. Mirrors
-        // bridge_python's pydantic-generic-metadata path in proto.py, which sets
-        // `class_value.class_ty` for a generic instance.
-        if (isClassInstance) {
-            const params = genericParamNames(value);
-            if (params) {
+        else if (typeof value === 'bigint') {
+            // Hex / base sixteen on the wire. BigInt.prototype.toString(16)
+            // yields e.g. "-2a"; signed values round-trip via num-bigint's
+            // LowerHex impl on the Rust side.
+            iv.bigintValue = value.toString(16);
+        }
+        else if (typeof value === 'string') {
+            iv.stringValue = value;
+        }
+        else if (value instanceof Uint8Array) {
+            iv.uint8arrayValue = value;
+        }
+        else if (value instanceof BamlHandle) {
+            // A round-tripped host callable arrives as a handle, not a raw
+            // function — apply the same sync-path fast-fail so `callFunctionSync`
+            // can't hang waiting on a callback that the blocked main thread can
+            // never run. HOST_VALUE_CALLABLE is currently the only handle type
+            // that dispatches back into the host; the rest are engine-side ADT/
+            // heap handles that need no host callback and so are safe on the sync
+            // path. Any future dispatch-backed handle type must be guarded here.
+            if (ctx.syncMode && value.handleType === BamlHandleType.HOST_VALUE_CALLABLE) {
+                throw new HostCallableSyncError('host callables are only supported on the async call path; use the async API ' +
+                    '(callFunction) instead of callFunctionSync. The sync path blocks the Node main ' +
+                    'thread, so the host callback can never run and the call would hang.');
+            }
+            // The Rust inbound decoder drains handle-table entries. Send a fresh
+            // cloned key so the JS-owned handle remains valid for later calls.
+            iv.handle = { key: value._cloneKeyForWire(), handleType: value.handleType };
+        }
+        else if (value instanceof BamlStream) {
+            // Stream wrapper → its inner TaggedHeapHandle. Mirrors the BamlHandle
+            // branch above: the Rust inbound decoder *drains* the handle-table
+            // entry, so send a fresh cloned key — otherwise the engine consumes the
+            // stream's only key and the next `next()`/`final()` call fails with
+            // "Invalid handle key". (`BamlStream._toHandle()` returns the inner
+            // handle without cloning, unlike the media wrappers' `_toHandle`.)
+            const h = value._toHandle();
+            iv.handle = { key: h._cloneKeyForWire(), handleType: h.handleType };
+        }
+        else if (value instanceof BamlImage
+            || value instanceof BamlAudio
+            || value instanceof BamlVideo
+            || value instanceof BamlPdf) {
+            // Stdlib media wrappers → their backing ADT_MEDIA_* handle. `_toHandle`
+            // clones the table row so the wrapper stays usable after encode.
+            const h = value._toHandle();
+            iv.handle = { key: h.key, handleType: h.handleType };
+        }
+        else if (typeof value === 'function') {
+            // Host callables cannot work on the synchronous call path —
+            // fast-fail before any blocking happens (and before we register a
+            // tsfn, which would otherwise be orphaned).
+            if (ctx.syncMode) {
+                throw new HostCallableSyncError('host callables are only supported on the async call path; use the async API ' +
+                    '(callFunction) instead of callFunctionSync. The sync path blocks the Node main ' +
+                    'thread, so the host callback can never run and the call would hang.');
+            }
+            // JS callable → register a dispatch wrapper in the host-value
+            // registry and emit `Handle{key, HOST_VALUE_CALLABLE}`. The Rust
+            // side decodes this into `BexExternalValue::HostValue` and binds it
+            // to an `Object::HostClosure`; BAML invocations land back in
+            // `hostCallableDispatch` below via the ThreadsafeFunction.
+            const key = registerHostCallable(makeHostCallableDispatch(value));
+            // Remember the key so a later encode failure can release it.
+            ctx.registered.push(key);
+            iv.handle = { key, handleType: BamlHandleType.HOST_VALUE_CALLABLE };
+        }
+        else if (Array.isArray(value)) {
+            const listVal = [];
+            for (const [i, item] of value.entries()) {
+                const child = {};
+                setInboundValue(child, item, ctx, `${path}[${i}]`);
+                listVal.push(child);
+            }
+            iv.listValue = { values: listVal };
+        }
+        else if (value !== null && typeof value === 'object') {
+            const isClassInstance = !isPlainRecord(value);
+            if (isClassInstance) {
+                // Every generated class instance must retain its BAML identity on
+                // the wire. Besides matching Python's Pydantic-model branch, the
+                // FQN is the evidence generic inference needs when a class value is
+                // passed through a bare `T` parameter.
                 const fqn = getTypeMap().jsTypeToBamlType(value.constructor);
+                if (!fqn) {
+                    const name = value.constructor?.name;
+                    throw new TypeError(`Cannot encode unregistered class instance${name ? ` ${name}` : ''} to protobuf`);
+                }
+                const params = genericParamNames(value);
                 const userTypes = value.$types;
-                const typeArgs = params.map((p) => lowerTypeToWireTy(userTypes?.[p]));
+                let typeArgs = [];
+                if (userTypes !== undefined && userTypes !== null) {
+                    if (!params) {
+                        throw new TypeError(`$types is not accepted on non-generic class ${fqn}`);
+                    }
+                    if (typeof userTypes !== 'object' || Array.isArray(userTypes)) {
+                        throw new TypeError(`$types on ${fqn} must be an object`);
+                    }
+                    const bindings = userTypes;
+                    const extra = Object.keys(bindings).filter((p) => !params.includes(p));
+                    if (extra.length) {
+                        throw new TypeError(`$types on ${fqn} has unknown parameter(s) ${JSON.stringify(extra)}; ` +
+                            `expected names from ${JSON.stringify(params)}`);
+                    }
+                    // A partial object binds the named slots and leaves the rest as
+                    // unknown/top so the engine can infer them from instance fields.
+                    typeArgs = params.map((p) => lowerTypeToWireTy(bindings[p]));
+                }
                 const classFields = [];
+                const methodNames = generatedInstanceMethodNames(value);
                 for (const [k, v] of Object.entries(value)) {
-                    // Skip method bindings (behavior, not state) and the synthetic
-                    // `$types` carrier (it rides `class_ty`, not the field list).
-                    if (typeof v === 'function')
-                        continue;
-                    if (k === '$types')
+                    // Generated instance methods are behavior, not state. Callable
+                    // BAML properties are data and must take the host-callable path,
+                    // so omit only names explicitly emitted by sdkgen. `$types`
+                    // rides on `class_ty`, never in the value's field map.
+                    if (methodNames.includes(k) || k === '$types')
                         continue;
                     const childVal = {};
-                    setInboundValue(childVal, v, ctx);
+                    setInboundValue(childVal, v, ctx, childPath(path, k));
                     classFields.push({ stringKey: k, value: childVal });
                 }
                 iv.classValue = { classTy: { name: fqn, typeArgs }, fields: classFields };
                 return;
             }
+            // Plain object literals remain structural maps. In particular, nested
+            // function values still take the host-callable path above.
+            const entries = [];
+            for (const [k, v] of Object.entries(value)) {
+                const entry = { stringKey: k };
+                const childVal = {};
+                setInboundValue(childVal, v, ctx, childPath(path, k));
+                entry.value = childVal;
+                entries.push(entry);
+            }
+            iv.mapValue = { entries };
         }
-        const entries = [];
-        for (const [k, v] of Object.entries(value)) {
-            if (isClassInstance && typeof v === 'function')
-                continue;
-            const entry = { stringKey: k };
-            const childVal = {};
-            setInboundValue(childVal, v, ctx);
-            entry.value = childVal;
-            entries.push(entry);
+        else {
+            throw new TypeError(`Cannot encode value of type ${Object.prototype.toString.call(value)} to protobuf`);
         }
-        iv.mapValue = { entries };
     }
-    else {
-        throw new TypeError(`Cannot encode value of type ${Object.prototype.toString.call(value)} to protobuf`);
+    finally {
+        if (tracked)
+            ctx.active.delete(tracked);
     }
 }
 /**
@@ -254,13 +270,17 @@ export function encodeCallArgs(kwargs, options) {
     if (callId === 0n) {
         throw new TypeError('callId must be a nonzero uint64');
     }
-    const ctx = { syncMode: options.syncMode ?? false, registered: [] };
+    const ctx = {
+        syncMode: options.syncMode ?? false,
+        registered: [],
+        active: new WeakMap(),
+    };
     try {
         const entries = [];
         for (const [key, value] of Object.entries(kwargs)) {
             const entry = { stringKey: key };
             const iv = {};
-            setInboundValue(iv, value, ctx);
+            setInboundValue(iv, value, ctx, childPath('$', key));
             entry.value = iv;
             entries.push(entry);
         }
@@ -315,13 +335,21 @@ function parseHexBigint(s) {
         ? -BigInt(`0x${magnitude}`)
         : BigInt(`0x${magnitude}`);
 }
+function decodeSafeInteger(value) {
+    const decoded = Number(value);
+    if (!Number.isSafeInteger(decoded)) {
+        throw new RangeError(`BAML int ${String(value)} is outside JavaScript's safe-integer range; ` +
+            'use BAML bigint when exact Node.js values may exceed Number.MAX_SAFE_INTEGER.');
+    }
+    return decoded;
+}
 function decodeValueHolder(holder, typeMap) {
     if (holder.nullValue != null)
         return null;
     if (holder.stringValue != null)
         return holder.stringValue;
     if (holder.intValue != null)
-        return Number(holder.intValue);
+        return decodeSafeInteger(holder.intValue);
     if (holder.bigintValue != null) {
         return parseHexBigint(holder.bigintValue);
     }
@@ -347,7 +375,7 @@ function decodeValueHolder(holder, typeMap) {
             case 'stringValue':
                 return lit.stringValue;
             case 'intValue':
-                return Number(lit.intValue);
+                return decodeSafeInteger(lit.intValue);
             case 'boolValue':
                 return lit.boolValue;
             // Hex / base sixteen on the wire, matching `bigint_value`.
@@ -584,7 +612,14 @@ function decodeThrown(holder) {
     try {
         value = holder ? decodeValueHolder(holder, getTypeMap()) : undefined;
     }
-    catch {
+    catch (err) {
+        // An unsafe BAML int is a valid wire value that Node cannot represent
+        // exactly. Preserve the same loud failure as the normal result path
+        // instead of silently replacing the structured thrown value with
+        // `undefined`. Other malformed/unsupported thrown payloads retain the
+        // metadata-only defensive fallback below.
+        if (err instanceof RangeError)
+            throw err;
         value = undefined;
     }
     let message = '';
@@ -635,8 +670,8 @@ export function decodeCallResult(data) {
             if (className === 'baml.errors.HostCallable' && value !== null && typeof value === 'object') {
                 const handle = value._handle;
                 const original = tryRehydrateHostValueByKey(handle);
-                if (original !== undefined) {
-                    throw original;
+                if (original.found) {
+                    throw original.value;
                 }
             }
             const formatted = formatThrownMessage('error', className ?? '', message, trace);
@@ -750,10 +785,14 @@ function sendHostCallableResult(callId, value) {
     // throws, the bytes never reach the engine, so it never decodes (and
     // never releases) the callable. Roll those back on failure, mirroring the
     // argument-path rollback in `encodeCallArgs`.
-    const ctx = { syncMode: false, registered: [] };
+    const ctx = {
+        syncMode: false,
+        registered: [],
+        active: new WeakMap(),
+    };
     try {
         const iv = {};
-        setInboundValue(iv, value, ctx);
+        setInboundValue(iv, value, ctx, '$result');
         const msg = InboundValue.create(iv);
         bytes = Buffer.from(InboundValue.encode(msg).finish());
     }
@@ -796,9 +835,15 @@ function buildHostCallableInbound(className, message, traceback, handleKey) {
         stringField('class_name', className),
         stringField('language', 'nodejs'),
     ];
-    if (traceback != null) {
-        fields.push(stringField('traceback', traceback));
-    }
+    // The HostCallable class requires the field key to be present even though
+    // its declared type is `string?`. Preserve a missing JavaScript stack as an
+    // explicit BAML null (an InboundValue with no selected oneof), not `""`.
+    fields.push(InboundMapEntry.create({
+        stringKey: 'traceback',
+        value: traceback == null
+            ? InboundValue.create({})
+            : InboundValue.create({ stringValue: traceback }),
+    }));
     fields.push(handleField);
     return InboundValue.create({
         classValue: InboundClassValue.create({
@@ -849,10 +894,14 @@ function sendHostCallableError(callId, err) {
         // as an error. Treating both via the same wire path is consistent
         // with how engine-internal throws are routed.
         if (err instanceof BamlError && err.value != null) {
-            const ctx = { syncMode: false, registered: [] };
+            const ctx = {
+                syncMode: false,
+                registered: [],
+                active: new WeakMap(),
+            };
             try {
                 const iv = InboundValue.create({});
-                setInboundValue(iv, err.value, ctx);
+                setInboundValue(iv, err.value, ctx, '$error.value');
                 const bytes = Buffer.from(InboundValue.encode(iv).finish());
                 completeHostCall(callId, 1, bytes);
                 return;

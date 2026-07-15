@@ -47,5 +47,19 @@ export declare class BamlAbortError extends Error {
 export declare class BamlPanic extends BamlError {
     constructor(message: string, detail?: BamlErrorDetail);
 }
+/**
+ * Build the Node equivalent of Python's `make_sdk_panic(message)`.
+ *
+ * Once a generated SDK has installed its typemap, `.value` is an actual
+ * generated `baml.panics.SdkPanic` instance. During early import/setup the
+ * typemap may not exist yet, so construction deliberately falls back to the
+ * plain message string instead of masking the original failure.
+ */
+export declare function makeSdkPanic(message: string): BamlPanic;
+/**
+ * Map a thrown napi error from a handle-returning/setup boundary to the
+ * structured public panic contract. This helper must wrap only the native
+ * call itself; decoder errors and rehydrated host exceptions must bypass it.
+ */
 export declare function wrapNativeError(err: unknown): BamlError;
 //# sourceMappingURL=errors.d.ts.map

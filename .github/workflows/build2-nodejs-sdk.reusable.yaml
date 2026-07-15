@@ -5,8 +5,8 @@ name: BAML SDK Release - Build Node.js
 # 8-target set), with `napi-rs` standing in for `maturin`. Each job builds one
 # `*.node` native addon, assembles it into its publishable per-platform sub-package
 # (`@boundaryml/baml-bridge-<platform>`), and uploads that as `nodejs-sdk-<target>`.
-# The publish-npm job downloads them all, wires the umbrella package's
-# optionalDependencies, and publishes the umbrella + sub-packages.
+# A fan-in job wires the umbrella metadata, packs all final tarballs, and a
+# native matrix installs and smoke-tests those exact tarballs before publishing.
 # Release builds must pass the frozen BAML language release plan so package.json
 # and Rust version surfaces are stamped before any build reads them.
 
@@ -16,18 +16,11 @@ on:
       release_plan_json:
         description: "Frozen BAML language release-plan.json content"
         type: string
-        default: ""
-        required: false
+        required: true
       source_sha:
         description: "Exact repository commit to build"
         type: string
-        default: ""
-        required: false
-  push:
-    branches:
-      # Mirror the Python reusable workflow's rehearsal-branch trigger so the
-      # Node build matrix can be exercised on a branch before release.
-      - sam/publish-nodejs
+        required: true
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -42,50 +35,31 @@ env:
   MACOSX_DEPLOYMENT_TARGET: "10.13"
 
 jobs:
+  platforms:
+    name: Load release platforms
+    runs-on: ubuntu-latest
+    outputs:
+      build_matrix: ${{ steps.matrix.outputs.build_matrix }}
+      verify_matrix: ${{ steps.matrix.outputs.verify_matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Validate and export platform matrices
+        id: matrix
+        run: |
+          set -euo pipefail
+          scripts/baml-release-platforms check
+          echo "build_matrix=$(scripts/baml-release-platforms matrix node_build)" >> "$GITHUB_OUTPUT"
+          echo "verify_matrix=$(scripts/baml-release-platforms matrix node_verify)" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: [platforms]
     strategy:
       fail-fast: false
       matrix:
-        _:
-          - target: aarch64-unknown-linux-gnu
-            host: ubuntu-24.04-arm
-            # Target glibc 2.28 for aarch64 using the available rust-cross image.
-            # This is newer than the ideal glibc floor; our users still need the oldest
-            # practical compatible baseline we can support for this target.
-            # See https://github.com/BoundaryML/baml/issues/2736
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
-            before: |
-              echo "CFLAGS_aarch64_unknown_linux_gnu=-D__ARM_ARCH=8" >> "$GITHUB_ENV"
-          - target: aarch64-apple-darwin
-            host: macos-14
-          - target: x86_64-apple-darwin
-            host: macos-14
-          - target: x86_64-pc-windows-msvc
-            host: windows-latest
-          - target: aarch64-pc-windows-msvc
-            host: windows-11-arm
-          - target: x86_64-unknown-linux-gnu
-            # Do not use -latest, since it uses a newer glibc version.
-            host: ubuntu-22.04
-          - target: x86_64-unknown-linux-musl
-            host: ubuntu-22.04
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              cat >>$GITHUB_ENV <<EOF
-              CC_x86_64_unknown_linux_musl=musl-gcc
-              RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
-              EOF
-          - target: aarch64-unknown-linux-musl
-            host: ubuntu-22.04
-            before: |
-              curl -LO https://musl.cc.timfish.dev/aarch64-linux-musl-cross.tgz
-              tar -xzf aarch64-linux-musl-cross.tgz
-              echo "$PWD/aarch64-linux-musl-cross/bin" >> "$GITHUB_PATH"
-              cat >>$GITHUB_ENV <<EOF
-              RUSTFLAGS=-C target-feature=-crt-static --cfg tracing_unstable
-              EOF
-            napi_args: --use-napi-cross
+        _: ${{ fromJSON(needs.platforms.outputs.build_matrix) }}
 
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
@@ -93,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_sha || github.sha }}
+          ref: ${{ inputs.source_sha }}
           persist-credentials: false
 
       - name: Stamp release plan
@@ -101,11 +75,7 @@ jobs:
           RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
         run: |
           set -euo pipefail
-          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
-            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
-          else
-            scripts/baml-language-version plan --channel canary --out release-plan.json
-          fi
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
           scripts/baml-language-version stamp --plan release-plan.json
 
       - name: Check GLIBC version
@@ -222,7 +192,7 @@ jobs:
       # to keep the umbrella platform-independent. (If this target is ever dropped
       # from the matrix, move these two steps to another non-cross target.)
       - name: Build umbrella dist (platform-agnostic)
-        if: matrix._.target == 'x86_64-unknown-linux-gnu'
+        if: matrix._.build_umbrella
         working-directory: baml_language/sdks/nodejs/bridge_nodejs
         run: |
           set -euo pipefail
@@ -234,7 +204,7 @@ jobs:
           echo "Assembled umbrella dist/:"
           ls -l dist
       - name: Upload umbrella dist
-        if: matrix._.target == 'x86_64-unknown-linux-gnu'
+        if: matrix._.build_umbrella
         uses: actions/upload-artifact@v7
         with:
           # Named so it does NOT match the publish job's `nodejs-sdk-*` download
@@ -243,3 +213,141 @@ jobs:
           name: nodejs-umbrella-dist
           path: baml_language/sdks/nodejs/bridge_nodejs/dist
           if-no-files-found: error
+
+  assemble:
+    name: Assemble verified npm package set
+    needs: [build]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nodejs-sdk-*
+          path: baml_language/sdks/nodejs/bridge_nodejs/npm
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: nodejs-umbrella-dist
+          path: baml_language/sdks/nodejs/bridge_nodejs/dist
+      - uses: ./.github/actions/setup-node
+        with:
+          node-action-version: v6
+          node-version: 22
+          install-dependencies: false
+      - name: Stamp and assemble final package metadata
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          scripts/baml-language-version stamp --plan release-plan.json
+          cd baml_language/sdks/nodejs/bridge_nodejs
+          napi_version="$(jq -r '.devDependencies["@napi-rs/cli"]' package.json)"
+          attw_version="$(jq -r '.devDependencies["@arethetypeswrong/cli"]' package.json)"
+          npm install -g "@napi-rs/cli@${napi_version}" "@arethetypeswrong/cli@${attw_version}"
+          napi pre-publish -t npm --no-gh-release --skip-optional-publish
+      - name: Validate package layout and pack exact publish artifacts
+        working-directory: baml_language/sdks/nodejs/bridge_nodejs
+        run: |
+          set -euo pipefail
+          version="$(jq -r .canonical_version ../../../../release-plan.json)"
+          mapfile -t expected_leaves < <(jq -r '.platforms[].npm_package' ../../../../release/platforms.json | sort)
+          mapfile -t actual_leaves < <(find npm -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+          if [[ "${expected_leaves[*]}" != "${actual_leaves[*]}" ]]; then
+            printf 'expected leaves: %s\nactual leaves: %s\n' "${expected_leaves[*]}" "${actual_leaves[*]}" >&2
+            exit 1
+          fi
+          mkdir -p verified-npm
+          : > verified-npm/package-records.jsonl
+          for dir in npm/*/; do
+            test "$(find "$dir" -maxdepth 1 -type f -name '*.node' | wc -l | tr -d ' ')" = 1
+            test "$(find "$dir" -maxdepth 1 -type f ! -name '*.node' ! -name package.json ! -name README.md | wc -l | tr -d ' ')" = 0
+            npm pack "$dir" --pack-destination verified-npm --json | jq -c '.[0] | {name,version,filename,size,unpackedSize,integrity}' >> verified-npm/package-records.jsonl
+          done
+          npm pack . --pack-destination verified-npm --json | jq -c '.[0] | {name,version,filename,size,unpackedSize,integrity}' >> verified-npm/package-records.jsonl
+          jq -s 'sort_by(.name)' verified-npm/package-records.jsonl > verified-npm/packages.json
+          rm verified-npm/package-records.jsonl
+          ../../../../scripts/baml-release-platforms check-node-packages verified-npm/packages.json --version "$version"
+          umbrella_filename="$(jq -r '.[] | select(.name == "@boundaryml/baml-bridge") | .filename' verified-npm/packages.json)"
+          ../../../../scripts/baml-release-platforms check-node-umbrella "verified-npm/$umbrella_filename" --version "$version"
+          attw "verified-npm/$umbrella_filename" --profile esm-only
+          (cd verified-npm && for file in *.tgz; do sha256sum "$file"; done > SHA256SUMS)
+          jq -r '.[] | [.name, .version, .size, .unpackedSize, .integrity] | @tsv' verified-npm/packages.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nodejs-verified-packages
+          path: baml_language/sdks/nodejs/bridge_nodejs/verified-npm
+          if-no-files-found: error
+
+  verify:
+    name: Verify npm package / ${{ matrix._.target }}
+    needs: [platforms, assemble]
+    strategy:
+      fail-fast: false
+      matrix:
+        _: ${{ fromJSON(needs.platforms.outputs.verify_matrix) }}
+    runs-on: ${{ matrix._.host }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: nodejs-verified-packages
+          path: verified-npm
+      - uses: actions/setup-node@v6
+        if: ${{ !matrix._.docker_image }}
+        with:
+          node-version: 22
+      - name: Verify checksums and package identity
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd verified-npm && sha256sum -c SHA256SUMS)
+          else
+            (cd verified-npm && shasum -a 256 --check SHA256SUMS)
+          fi
+          version="$(printf '%s\n' "$RELEASE_PLAN_JSON" | jq -r .canonical_version)"
+          jq -e --arg version "$version" 'length == 9 and all(.version == $version)' verified-npm/packages.json >/dev/null
+          test "$(jq -r --arg name '@boundaryml/baml-bridge-${{ matrix._.npm_package }}' '.[] | select(.name == $name) | .filename' verified-npm/packages.json | wc -l | tr -d ' ')" = 1
+      - name: Install and smoke-test exact tarballs
+        env:
+          NPM_CONFIG_AUDIT: "false"
+          NPM_CONFIG_ENGINE_STRICT: "true"
+          NPM_CONFIG_FUND: "false"
+        run: |
+          set -euo pipefail
+          umbrella="$(find verified-npm -maxdepth 1 -name 'boundaryml-baml-bridge-[0-9]*.tgz' -print -quit)"
+          leaf="$(jq -r --arg name '@boundaryml/baml-bridge-${{ matrix._.npm_package }}' '.[] | select(.name == $name) | .filename' verified-npm/packages.json)"
+          version="$(jq -r '.[] | select(.name == "@boundaryml/baml-bridge") | .version' verified-npm/packages.json)"
+          cold_import_max_ms="$(jq -r .node_budgets.cold_import_max_ms release/platforms.json)"
+          version_calls_max_ms="$(jq -r .node_budgets.version_calls_10000_max_ms release/platforms.json)"
+          mkdir consumer-smoke
+          cp scripts/verify-node-release-package.mjs consumer-smoke/
+          if [[ -n '${{ matrix._.docker_image }}' ]]; then
+            cp "$umbrella" "verified-npm/$leaf" consumer-smoke/
+            docker run --rm -v "$PWD/consumer-smoke:/app" -w /app \
+              --env EXPECTED_VERSION="$version" \
+              --env COLD_IMPORT_MAX_MS="$cold_import_max_ms" \
+              --env VERSION_CALLS_MAX_MS="$version_calls_max_ms" \
+              --env NPM_CONFIG_ENGINE_STRICT=true \
+              '${{ matrix._.docker_image }}' sh -eu -c '
+              npm init -y >/dev/null
+              npm install --ignore-scripts ./*.tgz >/dev/null
+              node verify-node-release-package.mjs
+            '
+          else
+            cd consumer-smoke
+            npm init -y >/dev/null
+            npm install --ignore-scripts "../$umbrella" "../verified-npm/$leaf" >/dev/null
+            EXPECTED_VERSION="$version" \
+              COLD_IMPORT_MAX_MS="$cold_import_max_ms" \
+              VERSION_CALLS_MAX_MS="$version_calls_max_ms" \
+              node verify-node-release-package.mjs
+          fi

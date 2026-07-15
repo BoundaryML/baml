@@ -13,10 +13,15 @@ class Primitives {
   bool_field bool
   null_field null
   uint8array_field uint8array
+  bigint_field bigint
 }
 
 function return_int() -> int {
   42
+}
+
+function return_unsafe_int() -> int {
+  9007199254740993
 }
 
 function return_float() -> float {
@@ -35,11 +40,19 @@ function return_null() -> null {
   null
 }
 
+function return_bigint() -> bigint {
+  9223372036854775808n
+}
+
 function round_trip_uint8_array(b: uint8array) -> uint8array {
   b
 }
 
 function round_trip_int(x: int) -> int {
+  x
+}
+
+function round_trip_bigint(x: bigint) -> bigint {
   x
 }
 

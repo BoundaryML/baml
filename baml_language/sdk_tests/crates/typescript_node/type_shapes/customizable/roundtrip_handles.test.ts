@@ -15,7 +15,7 @@ const PNG_B64 =
   "+M8AAAQEAQB9eIv5AAAAAElFTkSuQmCC";
 
 describe("roundtrip handles — media Image.fromBase64", () => {
-  it("image_from_base64 roundtrips payload", () => {
+  it("test_image_from_base64_roundtrips_payload", () => {
     const img = baml.media.Image.fromBase64(PNG_B64, "image/png");
     expect(img.mimeType()).toBe("image/png");
     expect(img.base64()).toBe(PNG_B64);
@@ -35,7 +35,9 @@ describe("roundtrip handles — baml.http.Response", () => {
       });
       res.end(HTTP_BODY);
     });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
     const addr = server.address();
     const port = typeof addr === "object" && addr ? addr.port : 0;
     url = `http://127.0.0.1:${port}/`;
@@ -45,7 +47,7 @@ describe("roundtrip handles — baml.http.Response", () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  it("http_get response fields and body roundtrip", async () => {
+  it("test_http_get_response_fields_and_methods", async () => {
     // Must be async: the sync path blocks the Node main thread, starving the
     // libuv loop the localhost server runs on (Python runs it in a thread).
     const resp = await baml.http.fetch_async(url);
@@ -68,14 +70,14 @@ describe("roundtrip handles — baml.fs.File", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it("baml.fs.open returns a typed File handle", () => {
+  it("test_open_file_returns_file_handle", () => {
     const f = baml.fs.open(filePath, "r");
     expect(f).toBeDefined();
     expect(f.constructor.name).toBe("File");
     expect(f.close()).toBeNull();
   });
 
-  it("cursor state persists across calls", () => {
+  it("test_file_cursor_state_persists_across_calls", () => {
     const f = baml.fs.open(filePath, "r");
 
     expect(f.read(3)).toBe("012");

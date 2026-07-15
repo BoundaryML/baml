@@ -2,14 +2,12 @@ import "./baml_sdk/index.js";
 import {
   BamlCallContext,
   BamlCancelledError,
-  callFunction,
-  callFunctionSync,
-  getRuntime,
 } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
+import { SleepMs, SleepMs_async } from "./baml_sdk/throws_test/index.js";
 
-const SLEEP_FQN = "user.throws_test.SleepMs";
 const MAX_CANCELLATION_MS = 500;
+const nodeNA = it;
 
 function expectAbortError(error: unknown): void {
   expect(error).toBeInstanceOf(Error);
@@ -25,134 +23,86 @@ function expectFastCancellation(start: number): void {
   expect(performance.now() - start).toBeLessThan(MAX_CANCELLATION_MS);
 }
 
-describe("function_calls — explicit runtime cancellation", () => {
-  it("surfaces sync pre-aborted cancellation as AbortError", () => {
+describe("function_calls — cancellation parity", () => {
+  it("test_sync_call_returns_none", () => {
+    expect(SleepMs(1)).toBeNull();
+  });
+
+  it("test_async_call_returns_none", async () => {
+    await expect(SleepMs_async(1)).resolves.toBeNull();
+  });
+
+  it("test_sync_cancel_via_call_context", () => {
     const start = performance.now();
-    // True in-flight sync cancellation cannot be scheduled from JS: the sync
-    // bridge blocks the Node main thread, so setTimeout/setImmediate and
-    // ThreadsafeFunction deliveries cannot run until callFunctionSync returns.
-    // A pre-aborted context still exercises the sync cancellation path.
+    // Node's synchronous bridge blocks the event loop, so a timer cannot abort
+    // an in-flight sync call. A pre-aborted generated call is the executable
+    // host analogue and proves the `$ctx` path reaches BAML cancellation.
     const ctx = new BamlCallContext();
     ctx.abort();
 
     try {
-      callFunctionSync(
-        getRuntime(),
-        SLEEP_FQN,
-        { ms: 2000 },
-        undefined,
-        undefined,
-        ctx,
-      );
-      throw new Error("expected callFunctionSync to throw");
+      SleepMs(2_000, { $ctx: ctx });
+      throw new Error("expected generated sync call to throw");
     } catch (error) {
       expectBamlCancelledReason(error);
     }
-
     expectFastCancellation(start);
   });
 
-  it("surfaces async cancellation as AbortError with BAML reason", async () => {
+  it("test_async_cancel_via_call_context", async () => {
     const start = performance.now();
     const ctx = new BamlCallContext();
-    const pending = callFunction(
-      getRuntime(),
-      SLEEP_FQN,
-      { ms: 2000 },
-      undefined,
-      undefined,
-      ctx,
-    );
+    const pending = SleepMs_async(2_000, { $ctx: ctx });
 
     await new Promise((resolve) => setTimeout(resolve, 50));
     ctx.abort();
-
     try {
       await pending;
-      throw new Error("expected callFunction to reject");
+      throw new Error("expected generated async call to reject");
     } catch (error) {
       expectBamlCancelledReason(error);
     }
-
     expectFastCancellation(start);
   });
 
-  it("can pre-abort async BAML cancellation", async () => {
+  nodeNA("test_async_cancel_via_task_cancel", async () => {
+    const ctx = new BamlCallContext();
+    const pending = SleepMs_async(2_000, { $ctx: ctx });
+
+    // Unlike asyncio.Task, a Promise has no cancellation operation. This is a
+    // host-language N/A; AbortSignal is the Node analogue. Clean up through the
+    // supported call-context path so the test never leaks a two-second call.
+    expect((pending as Promise<null> & { cancel?: unknown }).cancel).toBeUndefined();
+    ctx.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("test_async_cancel_via_task_group_sibling", async () => {
     const start = performance.now();
     const ctx = new BamlCallContext();
-    ctx.abort();
+    const pending = SleepMs_async(2_000, { $ctx: ctx });
+    const failSoon = new Promise<never>((_resolve, reject) => {
+      setTimeout(() => {
+        ctx.abort();
+        reject(new Error("cancel siblings"));
+      }, 50);
+    });
 
-    try {
-      await callFunction(
-        getRuntime(),
-        SLEEP_FQN,
-        { ms: 2000 },
-        undefined,
-        undefined,
-        ctx,
-      );
-      throw new Error("expected callFunction to reject");
-    } catch (error) {
-      expectAbortError(error);
-    }
-
+    await expect(Promise.all([pending, failSoon])).rejects.toThrow("cancel siblings");
     expectFastCancellation(start);
   });
 
-  it("surfaces cancellation through Promise.all", async () => {
+  it("test_async_cancel_via_asyncio_timeout", async () => {
     const start = performance.now();
     const ctx = new BamlCallContext();
-    const pending = Promise.all([
-      callFunction(
-        getRuntime(),
-        SLEEP_FQN,
-        { ms: 2000 },
-        undefined,
-        undefined,
-        ctx,
-      ),
-      callFunction(
-        getRuntime(),
-        SLEEP_FQN,
-        { ms: 2000 },
-        undefined,
-        undefined,
-        ctx,
-      ),
-    ]);
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    ctx.abort();
+    const pending = SleepMs_async(2_000, { $ctx: ctx });
+    const timer = setTimeout(() => ctx.abort(), 50);
 
     try {
-      await pending;
-      throw new Error("expected Promise.all to reject");
-    } catch (error) {
-      expectBamlCancelledReason(error);
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    } finally {
+      clearTimeout(timer);
     }
-
     expectFastCancellation(start);
-  });
-
-  it("surfaces a reused call context as AbortError with BAML reason", async () => {
-    const ctx = new BamlCallContext();
-    const pending = callFunction(
-      getRuntime(),
-      SLEEP_FQN,
-      { ms: 2000 },
-      undefined,
-      undefined,
-      ctx,
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    ctx.abort();
-
-    try {
-      await pending;
-      throw new Error("expected callFunction to reject");
-    } catch (error) {
-      expectBamlCancelledReason(error);
-    }
   });
 });

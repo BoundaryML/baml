@@ -244,6 +244,20 @@ pub fn copy_customizable(customizable_dir: &Path, dst_dir: &Path) {
         let file_name = entry.file_name();
         let dst = dst_dir.join(&file_name);
 
+        // Preserve nested source layout (for example `language_specific/`),
+        // just like the Python overlay below. Vitest discovers tests
+        // recursively, so generator-specific cases can stay out of the
+        // Python-parity tree without requiring a separate fixture.
+        if src.is_dir() {
+            fs::create_dir_all(&dst).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to create {} for customizable overlay: {e}",
+                    dst.display()
+                )
+            });
+            copy_customizable(&src, &dst);
+            continue;
+        }
         if !src.is_file() {
             continue;
         }

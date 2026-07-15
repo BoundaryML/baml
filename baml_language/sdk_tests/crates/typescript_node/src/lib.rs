@@ -5,4 +5,7 @@
 //! macro `include!`s the OUT_DIR scaffold emitted by
 //! `sdk_test_harness_setup::typescript_node::run_all` (`build.rs`).
 #[cfg(test)]
+mod parity;
+
+#[cfg(test)]
 sdk_test_harness_runner::typescript_node::test_suite!();

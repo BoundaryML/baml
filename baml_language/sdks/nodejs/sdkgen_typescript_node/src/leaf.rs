@@ -32,7 +32,7 @@ use crate::{
         type_alias::NodeTypeAlias,
     },
     routing::LeafPath,
-    translate_ty::{TranslateCtx, TranslatedType, translate_ty},
+    translate_ty::{TranslateCtx, TranslatedType, translate_host_input_ty, translate_ty},
 };
 
 const RUNTIME_PKG: &str = "@boundaryml/baml-bridge";
@@ -189,6 +189,9 @@ struct RenderState {
     /// Set when a generic class emits a `$types` field, which references the
     /// runtime `BamlType` token type.
     uses_baml_type: bool,
+    /// Set when a generated callable exposes the runtime call context in its
+    /// trailing `$opts` object.
+    uses_baml_call_context: bool,
 }
 
 impl RenderState {
@@ -333,10 +336,17 @@ fn is_ts_property_identifier(name: &str) -> bool {
 
 /// Build the surface function-type `<G>(a: A, b: B) => R` (or `Promise<R>`
 /// for async), given the function's own generic params, parallel
-/// `names`/`tys`, and a return type. `generics` are the callable's OWN type
-/// vars; a class type var is already in scope on the enclosing class.
+/// `names`/`tys`, and a return type. `signature_generics` are the type vars the
+/// TypeScript function type must declare. `type_params` are the callee's own
+/// runtime-bindable vars exposed through `$types`; for a static method these
+/// sets can differ because referenced class vars must be re-declared locally
+/// for TypeScript, but remain engine-inferred class vars at runtime. Every
+/// callable has exactly one trailing `$opts` object: optional BAML args are
+/// merged with `$ctx` / `$signal`, and generic callables additionally expose
+/// partial `$types` bindings for engine-side inference.
 fn fn_type_sig(
-    generics: &[String],
+    signature_generics: &[String],
+    type_params: &[String],
     names: &[&str],
     tys: &[TranslatedType],
     defaults: &[Option<FunctionArgumentDefault>],
@@ -350,23 +360,35 @@ fn fn_type_sig(
         .take(required)
         .map(|(n, t)| format!("{}: {}", safe_param_name(n), t.expr))
         .collect();
-    if required < names.len() {
-        let mut fields = Vec::new();
-        for (name, ty) in names.iter().zip(tys.iter()).skip(required) {
-            fields.push(format!(
-                "{}?: {} | undefined",
-                option_field_name(name),
-                ty.expr
-            ));
-        }
-        params.push(format!("$opts?: {{ {} }} | undefined", fields.join("; ")));
+    let mut fields = Vec::new();
+    for (name, ty) in names.iter().zip(tys.iter()).skip(required) {
+        fields.push(format!(
+            "{}?: {} | undefined",
+            option_field_name(name),
+            ty.expr
+        ));
     }
+    fields.push("$ctx?: BamlCallContext | undefined".to_string());
+    fields.push("$signal?: AbortSignal | undefined".to_string());
+    if !type_params.is_empty() {
+        let type_fields = type_params
+            .iter()
+            .map(|name| format!("{}?: BamlType", option_field_name(name)))
+            .collect::<Vec<_>>()
+            .join("; ");
+        fields.push(format!("$types?: {{ {type_fields} }} | undefined"));
+    }
+    params.push(format!("$opts?: {{ {} }} | undefined", fields.join("; ")));
     let ret = if is_async {
         format!("Promise<{ret_expr}>")
     } else {
         ret_expr.to_string()
     };
-    format!("{}({}) => {ret}", generic_decl(generics), params.join(", "))
+    format!(
+        "{}({}) => {ret}",
+        generic_decl(signature_generics),
+        params.join(", ")
+    )
 }
 
 // ── Public entry point ──
@@ -511,6 +533,9 @@ fn runtime_import_line(state: &RenderState, extra: &[&str]) -> String {
     // value/type-only named import.
     if state.uses_baml_type {
         names.push("type BamlType");
+    }
+    if state.uses_baml_call_context {
+        names.push("type BamlCallContext");
     }
     if names.is_empty() {
         return String::new();
@@ -690,6 +715,24 @@ fn render_class_ts(out: &mut String, c: &NodeClass, ctx: &TranslateCtx, state: &
         let _ = writeln!(out, "  static readonly $generic = [{params}] as const;");
     }
 
+    // Instance methods are emitted as own enumerable class fields below, so
+    // the inbound encoder cannot distinguish them from a legitimate
+    // function-typed BAML property by looking at `typeof value` alone. Publish
+    // the exact generated-method names on the constructor; proto.ts uses this
+    // metadata to omit behavior while preserving callable data fields.
+    if !c.instance_methods.is_empty() {
+        let names = c
+            .instance_methods
+            .iter()
+            .map(|m| crate::ts_string(&m.name))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(
+            out,
+            "  static readonly $bamlMethodNames = [{names}] as const;"
+        );
+    }
+
     // Static + instance method bindings, as class fields.
     for m in &c.static_methods {
         render_method_binding_ts(out, m, &c.generic_params, ctx, state);
@@ -699,21 +742,6 @@ fn render_class_ts(out: &mut String, c: &NodeClass, ctx: &TranslateCtx, state: &
     }
 
     out.push_str("}\n");
-}
-
-/// The generic params a method's surface function-type should declare. A
-/// STATIC member cannot reference the class's type parameters (TS2302), so a
-/// static method on a generic class re-declares them as its own fresh params.
-/// An instance method has the class params already in scope.
-fn method_sig_generics(m: &NodeMethodBinding, class_generics: &[String]) -> Vec<String> {
-    match m.kind {
-        MethodKind::Static => {
-            let mut g = class_generics.to_vec();
-            g.extend(m.generic_params.iter().cloned());
-            g
-        }
-        MethodKind::Instance => m.generic_params.clone(),
-    }
 }
 
 /// Translate a binding's surface params (skipping the synthetic `self`
@@ -739,13 +767,13 @@ fn binding_surface<'a>(
         .required_args
         .iter()
         .map(|arg| {
-            let tt = translate_ty(&arg.ty, ctx);
+            let tt = translate_host_input_ty(&arg.ty, ctx);
             state.merge(&tt);
             tt
         })
         .collect();
     tys.extend(m.optional_args.iter().map(|arg| {
-        let tt = translate_ty(&arg.ty, ctx);
+        let tt = translate_host_input_ty(&arg.ty, ctx);
         state.merge(&tt);
         tt
     }));
@@ -761,6 +789,77 @@ fn binding_surface<'a>(
     (surface_names, tys, defaults, ret)
 }
 
+fn ty_references_type_var(ty: &baml_codegen_types::Ty, target: &str) -> bool {
+    use baml_codegen_types::Ty;
+
+    match ty {
+        Ty::TypeVar(name) => name.as_str() == target,
+        Ty::Class(_, args) | Ty::Union(args) => {
+            args.iter().any(|arg| ty_references_type_var(arg, target))
+        }
+        Ty::List(inner) => ty_references_type_var(inner, target),
+        Ty::Map { key, value } => {
+            ty_references_type_var(key, target) || ty_references_type_var(value, target)
+        }
+        Ty::Callable { params, ret } => {
+            params
+                .iter()
+                .any(|param| ty_references_type_var(&param.ty, target))
+                || ty_references_type_var(ret, target)
+        }
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Literal(_)
+        | Ty::Uint8Array
+        | Ty::Media(_)
+        | Ty::Enum(_)
+        | Ty::TypeAlias(_)
+        | Ty::BuiltinUnknown
+        | Ty::Unit
+        | Ty::BamlOptions
+        | Ty::RustType => false,
+    }
+}
+
+fn method_references_type_var(m: &NodeMethodBinding, target: &str) -> bool {
+    m.required_args
+        .iter()
+        .any(|arg| ty_references_type_var(&arg.ty, target))
+        || m.optional_args
+            .iter()
+            .any(|arg| ty_references_type_var(&arg.ty, target))
+        || ty_references_type_var(&m.return_ty, target)
+}
+
+/// Type parameters declared by the rendered TypeScript function type.
+///
+/// Instance methods already have their class parameters in scope. Static
+/// members cannot reference the enclosing class parameters (TS2302), so only
+/// the class parameters actually present in that method's surface are
+/// re-declared as fresh method generics. This avoids both invalid references
+/// and phantom generics on unrelated static methods.
+fn method_signature_generics(m: &NodeMethodBinding, class_generics: &[String]) -> Vec<String> {
+    let mut generics = Vec::new();
+    if m.kind == MethodKind::Static {
+        generics.extend(
+            class_generics
+                .iter()
+                .filter(|name| method_references_type_var(m, name))
+                .cloned(),
+        );
+    }
+    for name in &m.generic_params {
+        if !generics.contains(name) {
+            generics.push(name.clone());
+        }
+    }
+    generics
+}
+
 fn render_method_binding_ts(
     out: &mut String,
     m: &NodeMethodBinding,
@@ -771,8 +870,20 @@ fn render_method_binding_ts(
     write_doc_with_raises(out, m.docstring.as_deref(), &m.raises_names);
     let (names, tys, defaults, ret) = binding_surface(m, ctx, state);
     let is_async = m.mode == SyncAsync::Async;
-    let sig_generics = method_sig_generics(m, class_generics);
-    let sig = fn_type_sig(&sig_generics, &names, &tys, &defaults, &ret.expr, is_async);
+    state.uses_baml_call_context = true;
+    if !m.generic_params.is_empty() {
+        state.uses_baml_type = true;
+    }
+    let signature_generics = method_signature_generics(m, class_generics);
+    let sig = fn_type_sig(
+        &signature_generics,
+        &m.generic_params,
+        &names,
+        &tys,
+        &defaults,
+        &ret.expr,
+        is_async,
+    );
     let required_params = m.runtime_required_names();
     let optional_params = m.optional_names();
     let required_params_lit = param_names_literal(&required_params);
@@ -819,11 +930,15 @@ fn render_function_ts(
 ) {
     write_doc_with_raises(out, f.docstring.as_deref(), &f.raises_names);
     state.uses_define_function = true;
+    state.uses_baml_call_context = true;
+    if !f.generic_params.is_empty() {
+        state.uses_baml_type = true;
+    }
     let tys: Vec<TranslatedType> = f
         .arg_tys
         .iter()
         .map(|t| {
-            let tt = translate_ty(t, ctx);
+            let tt = translate_host_input_ty(t, ctx);
             state.merge(&tt);
             tt
         })
@@ -833,6 +948,7 @@ fn render_function_ts(
     let names: Vec<&str> = f.param_names.iter().map(String::as_str).collect();
     let is_async = f.mode == SyncAsync::Async;
     let sig = fn_type_sig(
+        &f.generic_params,
         &f.generic_params,
         &names,
         &tys,
@@ -1064,6 +1180,36 @@ mod tests {
     }
 
     #[test]
+    fn class_renders_exact_instance_method_metadata_for_the_encoder() {
+        let b = body(
+            &["lorem"],
+            vec![EmittedSymbol::Class(NodeClass {
+                name: "Worker".to_string(),
+                source: name("user", &["lorem"], "Worker"),
+                generic_params: Vec::new(),
+                docstring: None,
+                properties: Vec::new(),
+                static_methods: Vec::new(),
+                instance_methods: vec![NodeMethodBinding {
+                    name: "run".to_string(),
+                    baml_fqn: "user.lorem.Worker.run".to_string(),
+                    mode: SyncAsync::Sync,
+                    kind: MethodKind::Instance,
+                    required_args: Vec::new(),
+                    optional_args: Vec::new(),
+                    return_ty: Ty::String,
+                    generic_params: Vec::new(),
+                    docstring: None,
+                    raises_names: Vec::new(),
+                }],
+            })],
+        );
+        let ts = render_index_ts(&b, &BTreeSet::new(), false);
+        assert!(ts.contains("static readonly $bamlMethodNames = [\"run\"] as const;"));
+        assert!(ts.contains("run = defineInstanceFunction("));
+    }
+
+    #[test]
     fn enum_renders_runtime_enum() {
         let b = body(
             &["ipsum"],
@@ -1100,9 +1246,11 @@ mod tests {
             ],
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
-        assert!(ts.contains("import { defineFunction } from \"@boundaryml/baml-bridge\";"));
-        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string) => number;"));
-        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string) => Promise<number>;"));
+        assert!(ts.contains(
+            "import { defineFunction, type BamlCallContext } from \"@boundaryml/baml-bridge\";"
+        ));
+        assert!(ts.contains("export const extract = defineFunction(\"user.lorem.extract\", \"sync\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined; $signal?: AbortSignal | undefined } | undefined) => number;"));
+        assert!(ts.contains("export const extract_async = defineFunction(\"user.lorem.extract\", \"async\", [\"text\"]) as (text: string, $opts?: { $ctx?: BamlCallContext | undefined; $signal?: AbortSignal | undefined } | undefined) => Promise<number>;"));
     }
 
     #[test]
@@ -1135,9 +1283,127 @@ mod tests {
         );
         let ts = render_index_ts(&b, &BTreeSet::new(), false);
         assert!(ts.contains(
-            "as (arg0: number, $opts?: { default?: number | undefined; \"not-valid\"?: string | undefined } | undefined) => number;"
+            "as (arg0: number, $opts?: { default?: number | undefined; \"not-valid\"?: string | undefined; $ctx?: BamlCallContext | undefined; $signal?: AbortSignal | undefined } | undefined) => number;"
         ));
         assert!(!ts.contains("default_?:"));
+    }
+
+    #[test]
+    fn generic_function_opts_expose_context_signal_and_partial_type_bindings() {
+        let b = body(
+            &["lorem"],
+            vec![EmittedSymbol::Function(NodeFunction {
+                name: "convert".to_string(),
+                baml_fqn: "user.lorem.convert".to_string(),
+                mode: SyncAsync::Async,
+                param_names: vec!["value".to_string()],
+                arg_tys: vec![Ty::TypeVar(BaseName::new("T"))],
+                arg_defaults: vec![None],
+                return_ty: Ty::TypeVar(BaseName::new("R")),
+                generic_params: vec!["T".to_string(), "R".to_string()],
+                docstring: None,
+                raises_names: Vec::new(),
+            })],
+        );
+        let ts = render_index_ts(&b, &BTreeSet::new(), false);
+        assert!(ts.contains(
+            "import { defineFunction, type BamlCallContext, type BamlType } from \"@boundaryml/baml-bridge\";"
+        ));
+        assert!(ts.contains(
+            "as <T, R>(value: T, $opts?: { $ctx?: BamlCallContext | undefined; $signal?: AbortSignal | undefined; $types?: { T?: BamlType; R?: BamlType } | undefined } | undefined) => Promise<R>;"
+        ));
+    }
+
+    #[test]
+    fn static_methods_redeclare_only_referenced_enclosing_class_generics() {
+        let own_generic_method = NodeMethodBinding {
+            name: "convert".to_string(),
+            baml_fqn: "user.lorem.Box.convert".to_string(),
+            mode: SyncAsync::Sync,
+            kind: MethodKind::Static,
+            required_args: vec![crate::emit::method::RequiredArg {
+                name: "value".to_string(),
+                ty: Ty::TypeVar(BaseName::new("U")),
+            }],
+            optional_args: Vec::new(),
+            return_ty: Ty::TypeVar(BaseName::new("U")),
+            generic_params: vec!["U".to_string()],
+            docstring: None,
+            raises_names: Vec::new(),
+        };
+        let class_generic_method = NodeMethodBinding {
+            name: "wrap".to_string(),
+            baml_fqn: "user.lorem.Box.wrap".to_string(),
+            mode: SyncAsync::Sync,
+            kind: MethodKind::Static,
+            required_args: vec![crate::emit::method::RequiredArg {
+                name: "value".to_string(),
+                ty: Ty::TypeVar(BaseName::new("T")),
+            }],
+            optional_args: Vec::new(),
+            return_ty: Ty::Class(
+                name("user", &["lorem"], "Box"),
+                vec![Ty::TypeVar(BaseName::new("T"))],
+            ),
+            generic_params: Vec::new(),
+            docstring: None,
+            raises_names: Vec::new(),
+        };
+        let b = body(
+            &["lorem"],
+            vec![EmittedSymbol::Class(NodeClass {
+                name: "Box".to_string(),
+                source: name("user", &["lorem"], "Box"),
+                generic_params: vec!["T".to_string()],
+                docstring: None,
+                properties: Vec::new(),
+                static_methods: vec![own_generic_method, class_generic_method],
+                instance_methods: Vec::new(),
+            })],
+        );
+        let ts = render_index_ts(&b, &BTreeSet::new(), false);
+        let own_generic_line = ts
+            .lines()
+            .find(|line| line.contains("static convert ="))
+            .expect("generated static method");
+        assert!(own_generic_line.contains("as <U>(value: U,"));
+        assert!(own_generic_line.contains("$types?: { U?: BamlType }"));
+        assert!(!own_generic_line.contains("<T, U>"));
+        assert!(!own_generic_line.contains("T?: BamlType"));
+
+        let class_generic_line = ts
+            .lines()
+            .find(|line| line.contains("static wrap ="))
+            .expect("generated class-generic static method");
+        assert!(class_generic_line.contains("as <T>(value: T,"));
+        assert!(class_generic_line.contains("=> Box<T>;"));
+        assert!(!class_generic_line.contains("$types?:"));
+    }
+
+    #[test]
+    fn host_callback_inputs_accept_thenables_but_returned_closures_do_not() {
+        let callback_ty = Ty::Callable {
+            params: vec![baml_codegen_types::CallableParam {
+                name: None,
+                ty: Ty::Int,
+                mode: baml_codegen_types::CodegenFunctionParamMode::Required,
+            }],
+            ret: Box::new(Ty::String),
+        };
+        let b = body(
+            &["lorem"],
+            vec![func_sym(
+                "round_trip_callback",
+                "user.lorem.round_trip_callback",
+                SyncAsync::Sync,
+                vec![("callback", callback_ty.clone())],
+                callback_ty,
+            )],
+        );
+        let ts = render_index_ts(&b, &BTreeSet::new(), false);
+        assert!(ts.contains(
+            "as (callback: (arg0: number) => string | PromiseLike<string>, $opts?: { $ctx?: BamlCallContext | undefined; $signal?: AbortSignal | undefined } | undefined) => (arg0: number) => string;"
+        ));
     }
 
     #[test]
@@ -1210,11 +1476,11 @@ mod tests {
         assert!(ts.contains("import * as __ns_id from \"./id/index.js\";"));
         assert!(!ts.contains("export * as id from \"./id/index.js\";"));
         assert!(ts.contains(
-            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as () => LocalId, __ns_id);"
+            "export const id = Object.assign(defineFunction(\"boundary.id\", \"sync\", []) as ($opts?: { $ctx?: BamlCallContext | undefined; $signal?: AbortSignal | undefined } | undefined) => LocalId, __ns_id);"
         ));
         assert!(
             ts.contains(
-                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as () => Promise<LocalId>;"
+                "export const id_async = defineFunction(\"boundary.id\", \"async\", []) as ($opts?: { $ctx?: BamlCallContext | undefined; $signal?: AbortSignal | undefined } | undefined) => Promise<LocalId>;"
             )
         );
     }
@@ -1238,6 +1504,6 @@ mod tests {
         assert!(ts.contains("setTypeMap(_TYPE_MAP);"));
         assert!(ts.contains("export * as lorem from \"./lorem/index.js\";"));
         assert!(ts.contains("export const make_foo = defineFunction("));
-        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap } from \"@boundaryml/baml-bridge\";"));
+        assert!(ts.contains("import { defineFunction, initializeRuntimeFromBytecode, setTypeMap, type BamlCallContext } from \"@boundaryml/baml-bridge\";"));
     }
 }

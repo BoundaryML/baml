@@ -97,7 +97,7 @@ sdk_tests/
         |-- function_calls/
         |   |-- customizable/             # tracked: *.test.ts -- copied into generated/
         |   `-- generated/                # gitignored: build output
-        |       |-- baml_sdk/             # empty until sdkgen_typescript_node lands
+        |       |-- baml_sdk/             # TypeScript codegen output
         |       |-- package.json          # name = "sdk-tests-nodejs-typescript-docstrings-etc"
         |       |-- tsconfig.json
         |       |-- node_modules/         # pnpm install output
@@ -121,6 +121,26 @@ sdk_tests/
   matching the generator key (`python_pydantic2`,
   `typescript_node`).
 - **Rust crate name**: `sdk_test_<generator>` -- one per generator.
+
+### Python parity and language-specific tests
+
+Python is the reference contract for shared SDK behavior. Every common
+TypeScript/Node Vitest case uses the exact Python `test_*` case ID, with the
+same multiplicity inside the corresponding fixture. The
+`sdk_test_typescript_node` crate enforces this source-level mapping in its
+`python_and_typescript_common_case_ids_match_by_fixture` test.
+
+Tests that are genuinely specific to one host language belong below a
+`language_specific/` path segment, for example:
+
+```text
+sdk_tests/crates/typescript_node/function_calls/customizable/language_specific/
+sdk_tests/crates/python_pydantic2/type_shapes/customizable/language_specific/
+```
+
+The customizable overlays recurse into subdirectories, and the parity check
+intentionally excludes `language_specific/`. If a capability is shared but
+missing from Python, add the Python reference test first and then port it.
 
 ## Adding a Fixture
 

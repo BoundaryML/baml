@@ -30,6 +30,18 @@ function call_with_class_callback(callback: (Person) -> string, p: Person) -> st
     callback(p)
 }
 
+// A callable can also be ordinary data stored on a generated class. This
+// exercises host-to-BAML class encoding without confusing the callable field
+// with a generated method binding on the host-language instance.
+class CallableFieldHolder {
+    prefix string
+    callback (int) -> string
+}
+
+function call_callable_field(holder: CallableFieldHolder, x: int) -> string {
+    holder.prefix + holder.callback(x)
+}
+
 // ─── Optional args × host callables (the combination) ───────────────────────
 //
 // These exercise the intersection of two surfaces that were each covered
@@ -69,6 +81,15 @@ function call_repeatedly(callback: (int) -> string, n: int) -> string[] {
 function call_with_throwing(callback: (int) -> string throws baml.errors.HostCallable, x: int) -> string {
     callback(x) catch (e) {
         _ => "caught:" + e.class_name
+    }
+}
+
+// Surface the optional traceback field from a caught native host throw. Some
+// JavaScript throw values (notably `undefined`) have no stack; the bridge must
+// encode that absence as BAML null rather than inventing an empty string.
+function call_with_throwing_traceback(callback: (int) -> string throws baml.errors.HostCallable, x: int) -> string? {
+    callback(x) catch (e) {
+        _ => e.traceback
     }
 }
 

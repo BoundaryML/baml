@@ -20,8 +20,10 @@ import pytest
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.baml import BamlError
 from baml_sdk.host_callable_tests import (
+    CallableFieldHolder,
     Person,
     ValidationError,
+    call_callable_field,
     call_callback_with_optional_args_all_set,
     call_callback_with_optional_args_all_unset,
     call_callback_with_optional_args_partially_set,
@@ -284,6 +286,15 @@ def test_class_callback_round_trips_pydantic_model():
     person = Person(name="Ada", age=37)
     result = call_with_class_callback(callback=cb, p=person)
     assert result == "Ada is 37"
+
+
+def test_callable_valued_class_field_round_trips():
+    holder = CallableFieldHolder(
+        prefix="value=",
+        callback=lambda value: str(value * 2),
+    )
+
+    assert call_callable_field(holder=holder, x=21) == "value=42"
 
 
 def test_call_repeatedly_invokes_callback_n_times():

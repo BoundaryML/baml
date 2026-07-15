@@ -69,6 +69,10 @@ command -v uv >/dev/null 2>&1 || uv_bin="$(mise which uv)"
 #    no-op. The shared .so it points at is (re)built by step 2.
 for fixture_dir in */generated; do
     [[ -d "$fixture_dir" ]] || continue
+    fixture_name="${fixture_dir%/generated}"
+    # Ignore generated output left behind after a shared fixture is removed.
+    # Build.rs only refreshes fixtures that still exist under sdk_tests/fixtures.
+    [[ -d "../../fixtures/$fixture_name" ]] || continue
     echo "==> uv sync in $fixture_dir"
     (cd "$fixture_dir" && "$uv_bin" sync)
 done

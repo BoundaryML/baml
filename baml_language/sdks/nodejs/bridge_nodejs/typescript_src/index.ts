@@ -10,6 +10,7 @@ import {
     Timing,
     Usage,
     LLMCall,
+    getRuntime as nativeGetRuntime,
     cancelFunctionCall as nativeCancelFunctionCall,
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
@@ -22,7 +23,6 @@ export {
     BamlCallContext,
     BamlHandle,
     HostSpanManager,
-    getRuntime,
     getVersion,
     flushEvents,
 } from './native.js';
@@ -51,7 +51,11 @@ export type { BamlType, BamlPrimitiveToken, BamlClassCtor } from './wire_ty.js';
  * singleton reachable via `getRuntime()`).
  */
 export function initializeRuntime(srcDir: string, files: Record<string, string>): void {
-    BamlRuntime.initializeRuntime(srcDir, files);
+    try {
+        BamlRuntime.initializeRuntime(srcDir, files);
+    } catch (err) {
+        throw wrapNativeError(err);
+    }
 }
 
 /**
@@ -59,7 +63,24 @@ export function initializeRuntime(srcDir: string, files: Record<string, string>)
  * codegen embeds precompiled BAML bytecode.
  */
 export function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array): void {
-    BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode));
+    try {
+        BamlRuntime.initializeRuntimeFromBytecode(Buffer.from(bytecode));
+    } catch (err) {
+        throw wrapNativeError(err);
+    }
+}
+
+/**
+ * Return the process-global runtime. The native binding raises a napi error
+ * before initialization; expose that setup failure as `BamlPanic(SdkPanic)`
+ * just like the Python bridge's handle-returning boundary.
+ */
+export function getRuntime(): BamlRuntime {
+    try {
+        return nativeGetRuntime();
+    } catch (err) {
+        throw wrapNativeError(err);
+    }
 }
 export {
     BamlError,
@@ -67,6 +88,7 @@ export {
     BamlClientError,
     BamlCancelledError,
     BamlPanic,
+    makeSdkPanic,
     wrapNativeError,
 } from './errors.js';
 

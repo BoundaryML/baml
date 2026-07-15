@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+"""Validate and query the canonical BAML release platform contract."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import tarfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+CONTRACT = ROOT / "release" / "platforms.json"
+SURFACES = ("node_build", "node_verify", "python_build", "toolchain", "wrapper")
+
+
+def load_contract() -> dict:
+    data = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    if data.get("schema") != 1:
+        raise SystemExit(f"unsupported platform contract schema {data.get('schema')!r}")
+    platforms = data.get("platforms")
+    if not isinstance(platforms, list) or not platforms:
+        raise SystemExit("platform contract must contain a non-empty platforms array")
+
+    targets = [entry.get("target") for entry in platforms]
+    packages = [entry.get("npm_package") for entry in platforms]
+    if len(targets) != len(set(targets)):
+        raise SystemExit("platform contract contains duplicate targets")
+    if len(packages) != len(set(packages)):
+        raise SystemExit("platform contract contains duplicate npm package families")
+    if len(platforms) != 8:
+        raise SystemExit(
+            f"expected 8 required release platforms, found {len(platforms)}"
+        )
+    node_support = data.get("node_support")
+    if not isinstance(node_support, dict):
+        raise SystemExit("platform contract must contain node_support")
+    minimum_major = node_support.get("minimum_major")
+    if not isinstance(minimum_major, int) or minimum_major <= 0:
+        raise SystemExit("node_support.minimum_major must be a positive integer")
+    if node_support.get("module_format") != "esm":
+        raise SystemExit("node_support.module_format must be 'esm'")
+    for entry in platforms:
+        if not isinstance(entry.get("target"), str) or not isinstance(
+            entry.get("npm_package"), str
+        ):
+            raise SystemExit(
+                "every platform needs string target and npm_package fields"
+            )
+        for surface in SURFACES:
+            value = entry.get(surface)
+            if not isinstance(value, dict) or not value:
+                raise SystemExit(
+                    f"{entry['target']} is missing {surface} configuration"
+                )
+    umbrella_builders = [
+        entry["target"]
+        for entry in platforms
+        if entry["node_build"].get("build_umbrella")
+    ]
+    if len(umbrella_builders) != 1:
+        raise SystemExit(
+            f"exactly one Node platform must build the umbrella, found {umbrella_builders}"
+        )
+    node_package = (
+        ROOT / "baml_language" / "sdks" / "nodejs" / "bridge_nodejs" / "package.json"
+    )
+    if node_package.exists():
+        node_manifest = json.loads(node_package.read_text(encoding="utf-8"))
+        package_targets = set(node_manifest["napi"]["targets"])
+        if package_targets != set(targets):
+            raise SystemExit(
+                "Node package target mismatch "
+                f"missing={sorted(set(targets) - package_targets)} "
+                f"extra={sorted(package_targets - set(targets))}"
+            )
+        validate_node_umbrella_manifest(data, node_manifest)
+    budgets = data.get("node_budgets", {})
+    for name in (
+        "umbrella_max_unpacked_bytes",
+        "native_leaf_max_unpacked_bytes",
+        "cold_import_max_ms",
+        "version_calls_10000_max_ms",
+    ):
+        if not isinstance(budgets.get(name), int) or budgets[name] <= 0:
+            raise SystemExit(f"node_budgets.{name} must be a positive integer")
+    return data
+
+
+def validate_node_umbrella_manifest(
+    data: dict,
+    manifest: dict,
+    *,
+    version: str | None = None,
+    require_optional_dependencies: bool = False,
+) -> None:
+    if manifest.get("name") != "@boundaryml/baml-bridge":
+        raise SystemExit("Node umbrella package name must be @boundaryml/baml-bridge")
+    if version is not None and manifest.get("version") != version:
+        raise SystemExit(
+            f"Node umbrella version {manifest.get('version')!r} does not equal {version!r}"
+        )
+    minimum_major = data["node_support"]["minimum_major"]
+    if manifest.get("engines", {}).get("node") != f">={minimum_major}":
+        raise SystemExit(f"Node umbrella engines.node must be >={minimum_major}")
+    if manifest.get("type") != "module":
+        raise SystemExit("Node umbrella must declare type=module")
+    root_export = manifest.get("exports", {}).get(".")
+    if not isinstance(root_export, dict) or set(root_export) != {"types", "import"}:
+        raise SystemExit(
+            "Node umbrella root export must contain exactly types and import (ESM-only)"
+        )
+    if not isinstance(manifest.get("types"), str):
+        raise SystemExit("Node umbrella must declare its types entrypoint")
+
+    if require_optional_dependencies:
+        expected = {
+            f"@boundaryml/baml-bridge-{entry['npm_package']}": version
+            for entry in data["platforms"]
+        }
+        actual = manifest.get("optionalDependencies")
+        if actual != expected:
+            actual = actual if isinstance(actual, dict) else {}
+            raise SystemExit(
+                "Node umbrella optionalDependencies mismatch "
+                f"missing={sorted(set(expected) - set(actual))} "
+                f"extra={sorted(set(actual) - set(expected))} "
+                f"wrong_versions={sorted(name for name in expected if actual.get(name) != expected[name])}"
+            )
+
+
+def validate_node_umbrella_tarball(data: dict, path: Path, version: str) -> None:
+    try:
+        with tarfile.open(path, mode="r:gz") as archive:
+            names = archive.getnames()
+            if any(name.endswith(".node") for name in names):
+                raise SystemExit(
+                    "Node umbrella tarball must not contain a native addon"
+                )
+            required_files = {
+                "package/package.json",
+                "package/dist/index.js",
+                "package/dist/index.d.ts",
+                "package/dist/native.js",
+                "package/dist/native.d.ts",
+            }
+            missing = required_files - set(names)
+            if missing:
+                raise SystemExit(
+                    f"Node umbrella tarball is missing required files {sorted(missing)}"
+                )
+            package_file = archive.extractfile("package/package.json")
+            if package_file is None:
+                raise SystemExit("Node umbrella tarball has no readable package.json")
+            manifest = json.load(package_file)
+    except (tarfile.TarError, OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"cannot read Node umbrella tarball {path}: {exc}") from exc
+    validate_node_umbrella_manifest(
+        data,
+        manifest,
+        version=version,
+        require_optional_dependencies=True,
+    )
+
+
+def matrix(data: dict, surface: str) -> list[dict]:
+    result = []
+    for entry in data["platforms"]:
+        row = {"target": entry["target"]}
+        row.update(entry[surface])
+        if surface in ("node_build", "node_verify"):
+            row["npm_package"] = entry["npm_package"]
+        result.append(row)
+    return result
+
+
+def validate_node_package_manifest(data: dict, path: Path, version: str) -> None:
+    packages = json.loads(path.read_text(encoding="utf-8"))
+    expected_names = {"@boundaryml/baml-bridge"} | {
+        f"@boundaryml/baml-bridge-{entry['npm_package']}" for entry in data["platforms"]
+    }
+    actual_names = {package.get("name") for package in packages}
+    if len(packages) != len(expected_names) or actual_names != expected_names:
+        raise SystemExit(
+            f"Node package set mismatch missing={sorted(expected_names - actual_names)} "
+            f"extra={sorted(actual_names - expected_names)} count={len(packages)}"
+        )
+    if any(package.get("version") != version for package in packages):
+        versions = sorted({str(package.get("version")) for package in packages})
+        raise SystemExit(f"Node package versions {versions} do not all equal {version}")
+    if any(
+        not package.get("integrity", "").startswith("sha512-") for package in packages
+    ):
+        raise SystemExit("every Node package must have an npm sha512 integrity")
+    if len({package.get("integrity") for package in packages}) != len(packages):
+        raise SystemExit("Node package integrities must be unique")
+    filenames = [package.get("filename") for package in packages]
+    if any(not isinstance(filename, str) or not filename for filename in filenames):
+        raise SystemExit("every Node package must have a filename")
+    if len(set(filenames)) != len(filenames):
+        raise SystemExit("Node package filenames must be unique")
+
+    budgets = data["node_budgets"]
+    for package in packages:
+        limit = (
+            budgets["umbrella_max_unpacked_bytes"]
+            if package["name"] == "@boundaryml/baml-bridge"
+            else budgets["native_leaf_max_unpacked_bytes"]
+        )
+        if not isinstance(package.get("size"), int) or package["size"] <= 0:
+            raise SystemExit(f"{package['name']} packed size must be positive")
+        if not isinstance(package.get("unpackedSize"), int) or not (
+            0 < package["unpackedSize"] <= limit
+        ):
+            raise SystemExit(
+                f"{package['name']} unpacked size {package.get('unpackedSize')} exceeds {limit} bytes"
+            )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("check")
+    matrix_parser = subparsers.add_parser("matrix")
+    matrix_parser.add_argument("surface", choices=SURFACES)
+    subparsers.add_parser("targets")
+    package_parser = subparsers.add_parser("check-node-packages")
+    package_parser.add_argument("manifest", type=Path)
+    package_parser.add_argument("--version", required=True)
+    umbrella_parser = subparsers.add_parser("check-node-umbrella")
+    umbrella_parser.add_argument("tarball", type=Path)
+    umbrella_parser.add_argument("--version", required=True)
+    args = parser.parse_args()
+
+    data = load_contract()
+    if args.command == "check":
+        print("ok: release/platforms.json")
+    elif args.command == "matrix":
+        print(json.dumps(matrix(data, args.surface), separators=(",", ":")))
+    elif args.command == "targets":
+        print("\n".join(entry["target"] for entry in data["platforms"]))
+    elif args.command == "check-node-packages":
+        validate_node_package_manifest(data, args.manifest, args.version)
+        print(f"ok: verified Node package set for {args.version}")
+    else:
+        validate_node_umbrella_tarball(data, args.tarball, args.version)
+        print(f"ok: verified Node umbrella tarball for {args.version}")
+
+
+if __name__ == "__main__":
+    main()

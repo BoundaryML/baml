@@ -22,7 +22,7 @@ import { type HandleKey } from './native.js';
  */
 export declare function registerHostOpaque(value: unknown): HandleKey;
 /**
- * Look up a host-registered JS value by key. Returns `undefined` when:
+ * Look up a host-registered JS value by key. Returns `{ found: false }` when:
  * - the key is the reserved sentinel `0n` (no real value was registered);
  * - the engine has already released the entry (last `HostValueArc` clone
  *   dropped → Rust `host_release_callback` fired → `_releaseHostValue`
@@ -42,16 +42,22 @@ export declare function registerHostOpaque(value: unknown): HandleKey;
  * Arc; in that case the user has already observed the original throw at
  * least once, so a second lookup-miss → metadata-fallback is acceptable.
  */
-export declare function lookupHostValue(key: bigint): unknown;
+export type HostValueLookup = {
+    found: true;
+    value: unknown;
+} | {
+    found: false;
+};
+export declare function lookupHostValue(key: bigint): HostValueLookup;
 /**
  * Convenience for the outbound decoder: if `handle` is a `BamlHandle`
  * tagged `HOST_VALUE_OPAQUE`, look up the originating JS value in
- * the registry and return it. Returns `undefined` for any other handle
- * type, a non-`BamlHandle` argument, or a key that doesn't resolve.
+ * the registry. The discriminated result preserves the difference between a
+ * missing key and a present key whose registered JS value is `undefined`.
  *
  * Used by `decodeCallResult`'s `error` arm to rehydrate the original JS
  * exception when a BAML-thrown `baml.errors.HostCallable` propagates back
  * to the same Node process that originated it.
  */
-export declare function tryRehydrateHostValueByKey(handle: unknown): unknown;
+export declare function tryRehydrateHostValueByKey(handle: unknown): HostValueLookup;
 //# sourceMappingURL=host_value_registry.d.ts.map

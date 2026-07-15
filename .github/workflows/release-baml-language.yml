@@ -64,6 +64,8 @@ jobs:
       wrapper_version: ${{ steps.wrapper.outputs.wrapper_version }}
       wrapper_changed: ${{ steps.wrapper.outputs.wrapper_changed }}
       dispatch_nightly_after_canary: ${{ steps.plan.outputs.dispatch_nightly_after_canary }}
+      toolchain_matrix: ${{ steps.plan.outputs.toolchain_matrix }}
+      wrapper_matrix: ${{ steps.plan.outputs.wrapper_matrix }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -96,10 +98,18 @@ jobs:
               fi
             fi
           fi
-          scripts/baml-language-version plan --channel "$channel" --out release-plan.json
-          source_sha="$(git rev-parse HEAD)"
+          # GitHub keeps run_id stable across rerun attempts. Using the run's
+          # creation time makes the frozen plan byte-stable during repair reruns.
+          released_at="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .created_at)"
+          BAML_LANGUAGE_RELEASED_AT="$released_at" \
+            scripts/baml-language-version plan --channel "$channel" --out release-plan.json
+          source_sha="$(jq -r .source_sha release-plan.json)"
+          test "$source_sha" = "$(git rev-parse HEAD)"
+          scripts/baml-release-platforms check
+          toolchain_matrix="$(scripts/baml-release-platforms matrix toolchain | jq -c '{include:.}')"
+          wrapper_matrix="$(scripts/baml-release-platforms matrix wrapper | jq -c '{include:.}')"
           version="$(jq -r .canonical_version release-plan.json)"
-          pypi_version="$(jq -r .pypi_version release-plan.json)"
+          pypi_version="$(jq -r .registry_versions.pypi release-plan.json)"
           git_tag="$(jq -r .git_tag release-plan.json)"
           {
             echo "channel=$channel"
@@ -113,6 +123,8 @@ jobs:
             echo "source_branch=$source_branch"
             echo "dry_run=$dry_run"
             echo "dispatch_nightly_after_canary=$dispatch_nightly_after_canary"
+            echo "toolchain_matrix=$toolchain_matrix"
+            echo "wrapper_matrix=$wrapper_matrix"
           } >> "$GITHUB_OUTPUT"
 
       - name: Check wrapper version
@@ -146,34 +158,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: aarch64-apple-darwin
-            os: macos-14
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
+      matrix: ${{ fromJSON(needs.plan.outputs.toolchain_matrix) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -303,34 +288,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - target: aarch64-apple-darwin
-            os: macos-14
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_x86_64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
-            before: |
-              sudo apt-get update
-              sudo apt-get install -y musl-tools
-              echo "CC_aarch64_unknown_linux_musl=musl-gcc" >> "$GITHUB_ENV"
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc" >> "$GITHUB_ENV"
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
+      matrix: ${{ fromJSON(needs.plan.outputs.wrapper_matrix) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -383,7 +341,7 @@ jobs:
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
   build-nodejs-sdk:
-    name: Build Node.js SDK
+    name: Build and verify Node.js SDK
     needs: [plan]
     uses: ./.github/workflows/build2-nodejs-sdk.reusable.yaml
     permissions:
@@ -572,13 +530,11 @@ jobs:
             args+=(--wrapper-changed)
           fi
           scripts/baml-release-manifests \
+            --plan release-plan.json \
             --toolchain-dir dist/toolchain \
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
             --out manifests \
-            --channel "${{ needs.plan.outputs.channel }}" \
-            --version "${{ needs.plan.outputs.version }}" \
-            --pypi-version "${{ needs.plan.outputs.pypi_version }}" \
             --wrapper-version "${{ needs.plan.outputs.wrapper_version }}" \
             "${args[@]}"
       - name: Upload install scripts, index, and manifests
@@ -755,6 +711,9 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
+          name: release-plan
+      - uses: actions/download-artifact@v4
+        with:
           pattern: toolchain-*
           path: dist/toolchain
           merge-multiple: true
@@ -775,13 +734,11 @@ jobs:
             args+=(--wrapper-changed)
           fi
           scripts/baml-release-manifests \
+            --plan release-plan.json \
             --toolchain-dir dist/toolchain \
             --wrapper-dir dist/wrapper \
             --vsix-dir dist/vsix \
             --out dry-run/manifest/v1 \
-            --channel "${{ needs.plan.outputs.channel }}" \
-            --version "${{ needs.plan.outputs.version }}" \
-            --pypi-version "${{ needs.plan.outputs.pypi_version }}" \
             --wrapper-version "${{ needs.plan.outputs.wrapper_version }}" \
             "${args[@]}"
           scripts/baml-package-manager-artifacts \
