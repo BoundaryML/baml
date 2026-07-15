@@ -54,13 +54,12 @@ impl FunctionParameterDefaults {
 
 /// Canonical callable-signature view used by TIR.
 ///
-/// This keeps the user-written top-level throws contract optional, but makes
-/// every nested function-type throws surface explicit:
-/// - immediate callback parameter roots with omitted throws are opened to a
-///   fresh synthetic effect parameter
-/// - immediate function-valued return roots derive their omitted throws from
-///   any immediate callback parameters they expose
-/// - every other omitted nested function-type throws becomes `never`
+/// This keeps the user-written top-level throws contract optional (inferred
+/// from the body, `TYPE_SYSTEM.md` rule 3). Immediate callback parameter roots
+/// with omitted throws are opened to a fresh synthetic effect parameter
+/// (rule 4). Every other function type must declare its `throws` explicitly
+/// (rule 5) — an omitted clause is left as `None` here and rejected during TIR
+/// lowering (`FunctionTypeMissingThrows`, E0151).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElaboratedFunctionSignature {
     pub name: Name,
@@ -149,10 +148,6 @@ fn type_expr_for_effect_param(name: Name) -> TypeExpr {
     .at(TextRange::default())
 }
 
-fn never_type_expr() -> TypeExpr {
-    TypeExprKind::Never { attrs: Vec::new() }.at(TextRange::default())
-}
-
 fn fresh_effect_param_name(used_names: &mut FxHashSet<Name>) -> Name {
     let mut index = 0usize;
     loop {
@@ -164,88 +159,6 @@ fn fresh_effect_param_name(used_names: &mut FxHashSet<Name>) -> Name {
     }
 }
 
-fn fill_omitted_nested_throws_with_never(type_expr: TypeExpr) -> TypeExpr {
-    let span = type_expr.span;
-    let kind = match type_expr.kind {
-        TypeExprKind::Path {
-            segments,
-            generic_args,
-            associated_type_bindings,
-            attrs,
-        } => TypeExprKind::Path {
-            segments,
-            generic_args: generic_args
-                .into_iter()
-                .map(fill_omitted_nested_throws_with_never)
-                .collect(),
-            associated_type_bindings: associated_type_bindings
-                .into_iter()
-                .map(|binding| baml_compiler2_ast::AssociatedTypeBinding {
-                    name: binding.name,
-                    ty: Box::new(fill_omitted_nested_throws_with_never(*binding.ty)),
-                })
-                .collect(),
-            attrs,
-        },
-        TypeExprKind::AssociatedTypeProjection {
-            base,
-            interface,
-            member,
-            attrs,
-        } => TypeExprKind::AssociatedTypeProjection {
-            base: Box::new(fill_omitted_nested_throws_with_never(*base)),
-            interface: interface
-                .map(|interface| Box::new(fill_omitted_nested_throws_with_never(*interface))),
-            member,
-            attrs,
-        },
-        TypeExprKind::Optional { inner, attrs } => TypeExprKind::Optional {
-            inner: Box::new(fill_omitted_nested_throws_with_never(*inner)),
-            attrs,
-        },
-        TypeExprKind::List { inner, attrs } => TypeExprKind::List {
-            inner: Box::new(fill_omitted_nested_throws_with_never(*inner)),
-            attrs,
-        },
-        TypeExprKind::Map { key, value, attrs } => TypeExprKind::Map {
-            key: Box::new(fill_omitted_nested_throws_with_never(*key)),
-            value: Box::new(fill_omitted_nested_throws_with_never(*value)),
-            attrs,
-        },
-        TypeExprKind::Union { variants, attrs } => TypeExprKind::Union {
-            variants: variants
-                .into_iter()
-                .map(fill_omitted_nested_throws_with_never)
-                .collect(),
-            attrs,
-        },
-        TypeExprKind::Function {
-            params,
-            ret,
-            throws,
-            attrs,
-        } => TypeExprKind::Function {
-            params: params
-                .into_iter()
-                .map(|param| FunctionTypeParam {
-                    name: param.name,
-                    optional: param.optional,
-                    ty: fill_omitted_nested_throws_with_never(param.ty),
-                })
-                .collect(),
-            ret: Box::new(fill_omitted_nested_throws_with_never(*ret)),
-            throws: Some(Box::new(
-                throws
-                    .map(|throws| fill_omitted_nested_throws_with_never(*throws))
-                    .unwrap_or_else(never_type_expr),
-            )),
-            attrs,
-        },
-        other => other,
-    };
-    kind.at(span)
-}
-
 fn elaborate_immediate_callback_param(
     params: Vec<FunctionTypeParam>,
     ret: TypeExpr,
@@ -253,93 +166,9 @@ fn elaborate_immediate_callback_param(
     effect_param: Name,
 ) -> TypeExpr {
     TypeExprKind::Function {
-        params: params
-            .into_iter()
-            .map(|param| FunctionTypeParam {
-                name: param.name,
-                optional: param.optional,
-                ty: fill_omitted_nested_throws_with_never(param.ty),
-            })
-            .collect(),
-        ret: Box::new(fill_omitted_nested_throws_with_never(ret)),
-        throws: Some(Box::new(type_expr_for_effect_param(effect_param))),
-        attrs,
-    }
-    .at(TextRange::default())
-}
-
-fn union_type_expr(members: Vec<TypeExpr>) -> TypeExpr {
-    match members.as_slice() {
-        [single] => single.clone(),
-        _ => TypeExprKind::Union {
-            variants: members,
-            attrs: Vec::new(),
-        }
-        .at(TextRange::default()),
-    }
-}
-
-fn elaborate_immediate_function_return_root(
-    params: Vec<FunctionTypeParam>,
-    ret: TypeExpr,
-    attrs: Vec<baml_compiler2_ast::RawAttribute>,
-    used_names: &mut FxHashSet<Name>,
-    synthetic_effect_params: &mut Vec<Name>,
-) -> TypeExpr {
-    let mut immediate_effects = Vec::new();
-    let params = params
-        .into_iter()
-        .map(|param| {
-            let span = param.ty.span;
-            let ty = match param.ty.kind {
-                TypeExprKind::Function {
-                    params,
-                    ret,
-                    throws,
-                    attrs,
-                } => {
-                    let callback_throws = match throws {
-                        Some(throws) => fill_omitted_nested_throws_with_never(*throws),
-                        None => {
-                            let effect_param = fresh_effect_param_name(used_names);
-                            synthetic_effect_params.push(effect_param.clone());
-                            type_expr_for_effect_param(effect_param)
-                        }
-                    };
-                    immediate_effects.push(callback_throws.clone());
-                    TypeExprKind::Function {
-                        params: params
-                            .into_iter()
-                            .map(|param| FunctionTypeParam {
-                                name: param.name,
-                                optional: param.optional,
-                                ty: fill_omitted_nested_throws_with_never(param.ty),
-                            })
-                            .collect(),
-                        ret: Box::new(fill_omitted_nested_throws_with_never(*ret)),
-                        throws: Some(Box::new(callback_throws)),
-                        attrs,
-                    }
-                    .at(span)
-                }
-                other => fill_omitted_nested_throws_with_never(other.at(span)),
-            };
-            FunctionTypeParam {
-                name: param.name,
-                optional: param.optional,
-                ty,
-            }
-        })
-        .collect();
-
-    TypeExprKind::Function {
         params,
-        ret: Box::new(fill_omitted_nested_throws_with_never(ret)),
-        throws: Some(Box::new(if immediate_effects.is_empty() {
-            never_type_expr()
-        } else {
-            union_type_expr(immediate_effects)
-        })),
+        ret: Box::new(ret),
+        throws: Some(Box::new(type_expr_for_effect_param(effect_param))),
         attrs,
     }
     .at(TextRange::default())
@@ -360,7 +189,6 @@ pub fn elaborate_function_signature_parts(
     let params = params
         .into_iter()
         .map(|param| {
-            let span = param.ty.span;
             let elaborated = match param.ty.kind {
                 TypeExprKind::Function {
                     params,
@@ -372,21 +200,7 @@ pub fn elaborate_function_signature_parts(
                     synthetic_effect_params.push(effect_param.clone());
                     elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
                 }
-                TypeExprKind::Function {
-                    params,
-                    ret,
-                    throws,
-                    attrs,
-                } => fill_omitted_nested_throws_with_never(
-                    TypeExprKind::Function {
-                        params,
-                        ret,
-                        throws,
-                        attrs,
-                    }
-                    .at(span),
-                ),
-                other => fill_omitted_nested_throws_with_never(other.at(span)),
+                other => other.at(param.ty.span),
             };
             SignatureParam {
                 name: param.name,
@@ -395,38 +209,6 @@ pub fn elaborate_function_signature_parts(
             }
         })
         .collect();
-    let return_type = return_type.map(|return_type| {
-        let span = return_type.span;
-        match return_type.kind {
-            TypeExprKind::Function {
-                params,
-                ret,
-                throws: None,
-                attrs,
-            } => elaborate_immediate_function_return_root(
-                params,
-                *ret,
-                attrs,
-                &mut used_names,
-                &mut synthetic_effect_params,
-            ),
-            TypeExprKind::Function {
-                params,
-                ret,
-                throws,
-                attrs,
-            } => fill_omitted_nested_throws_with_never(
-                TypeExprKind::Function {
-                    params,
-                    ret,
-                    throws,
-                    attrs,
-                }
-                .at(span),
-            ),
-            other => fill_omitted_nested_throws_with_never(other.at(span)),
-        }
-    });
 
     ElaboratedFunctionSignature {
         name,
@@ -434,7 +216,7 @@ pub fn elaborate_function_signature_parts(
         synthetic_effect_params,
         params,
         return_type,
-        throws: throws.map(fill_omitted_nested_throws_with_never),
+        throws,
     }
 }
 

@@ -25,6 +25,10 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "int"
         WORD "int"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   TYPE_ALIAS_DEF
     KW_TYPE "type"
     WORD "NarrowSearcher"
@@ -50,6 +54,10 @@ SOURCE_FILE
         WORD "string"
         L_BRACKET "["
         R_BRACKET "]"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   CLIENT_DEF
     KW_CLIENT "client"
     CLIENT_TYPE "<llm>"

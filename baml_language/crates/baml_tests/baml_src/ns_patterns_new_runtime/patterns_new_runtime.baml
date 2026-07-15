@@ -726,17 +726,17 @@ function or_deep_class() -> int {
 
 // dispatch helpers — these were generic in Rust; here we use concrete variants
 // to avoid the type-argument inference issues with generic top-level functions.
-function dispatch_int_cb(cb: ((int) -> int) | ((string) -> int)) -> int {
+function dispatch_int_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
     match (cb) {
-        let f: (int) -> int => f(5),
-        let f: (string) -> int => f("x")
+        let f: (int) -> int throws never => f(5),
+        let f: (string) -> int throws never => f("x")
     }
 }
 
-function dispatch_union_cb(cb: ((int) -> int) | ((string) -> int)) -> int {
+function dispatch_union_cb(cb: ((int) -> int throws never) | ((string) -> int throws never)) -> int {
     match (cb) {
-        let f: (int) -> int => f(5),
-        let f: (string) -> int => f("hello")
+        let f: (int) -> int throws never => f(5),
+        let f: (string) -> int throws never => f("hello")
     }
 }
 
@@ -800,7 +800,7 @@ function test_for_let_chain_trailing_type() -> int {
 }
 
 function test_for_let_chain_alias_capture() -> int {
-    let funcs: (() -> int)[] = [];
+    let funcs: (() -> int throws never)[] = [];
     for (let a: let b in [1, 2, 3]) {
         funcs.push(() -> int { b })
     };
@@ -834,7 +834,7 @@ function test_for_rest_sums_rows() -> int {
 
 function test_for_rest_capture_fresh_cell() -> int {
     let rows = [[1], [2, 3], [4, 5, 6]];
-    let funcs: (() -> int)[] = [];
+    let funcs: (() -> int throws never)[] = [];
     for (let row in rows) {
         funcs.push(() -> int { row.length() })
     };
@@ -1061,7 +1061,7 @@ function test_for_deep_class_capture_fresh() -> int {
         UserCoord { address: Addr { coordinate: Coord { zip: 2 } } },
         UserCoord { address: Addr { coordinate: Coord { zip: 3 } } }
     ];
-    let funcs: (() -> int)[] = [];
+    let funcs: (() -> int throws never)[] = [];
     for (let UserCoord {
         address: Addr {
             coordinate: Coord { zip: let zip }

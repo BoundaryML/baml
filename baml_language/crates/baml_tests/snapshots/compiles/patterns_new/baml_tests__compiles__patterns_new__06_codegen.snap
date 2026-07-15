@@ -215,23 +215,7 @@ function user.fn_pattern(cb: (int) -> int throws never) -> int {
 }
 
 function user.fn_return_widens(cb: (int) -> int | string throws never) -> int {
-    load_var cb
-    is_type (int) -> int throws never
-    pop_jump_if_false L0
-    jump L1
-
-  L0:
-    load_var cb
-    pop 1
-    load_const false
-    pop_jump_if_false L2
     load_const 1
-    jump L2
-
-  L1:
-    load_const 1
-
-  L2:
     return
 }
 

@@ -318,6 +318,13 @@ pub enum DiagnosticId {
     /// is a lint (warning), not a type error.
     ArrayFilledAliasing,
 
+    // Function-type throws requirement (E0151)
+    /// A function type in a position where its error type cannot be inferred
+    /// (type alias, class field, `let` annotation, nested or return position)
+    /// omits its `throws` clause (`TYPE_SYSTEM.md` rule 5). Only an immediate
+    /// callback parameter of a function declaration may omit it (rule 4).
+    FunctionTypeMissingThrows,
+
     // Serialized-key collision (E0149)
     /// Two or more fields of a class serialize to the same JSON key — either two
     /// fields share an `@alias`, or one field's name equals another field's
@@ -531,6 +538,9 @@ impl DiagnosticId {
 
             // Serialized-key collision
             DiagnosticId::DuplicateFieldAlias => "E0149",
+
+            // Function-type throws requirement
+            DiagnosticId::FunctionTypeMissingThrows => "E0151",
         }
     }
 }

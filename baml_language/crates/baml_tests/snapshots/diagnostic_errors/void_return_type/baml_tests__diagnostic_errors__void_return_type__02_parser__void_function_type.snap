@@ -16,6 +16,10 @@ SOURCE_FILE
       ARROW "->"
       TYPE_EXPR "void"
         WORD "void"
+      THROWS_CLAUSE
+        KW_THROWS "throws"
+        TYPE_EXPR "never"
+          WORD "never"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "run_callback"

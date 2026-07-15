@@ -1,8 +1,11 @@
+// Function types outside immediate callback-parameter position must declare
+// `throws` (E0151, TYPE_SYSTEM.md rule 5); the aliases here do so explicitly.
+// Omission coverage lives in the function_type_missing_throws project.
 type ExplicitHandler = (value: int) -> string throws never
 
-type ImplicitHandler = (value: int) -> string
+type ImplicitHandler = (value: int) -> string throws never
 
-type HiddenHandler = (value: int) -> string
+type HiddenHandler = (value: int) -> string throws never
 
 function run_explicit(handler: ExplicitHandler, value: int) -> string {
   handler(value)
@@ -16,7 +19,7 @@ function forward_direct(handler: (value: int) -> string, value: int) -> string {
   handler(value)
 }
 
-function forward_optional(handler: ((value: int) -> string)?, value: int) -> string? {
+function forward_optional(handler: ((value: int) -> string throws never)?, value: int) -> string? {
   handler?.(value)
 }
 
@@ -24,6 +27,6 @@ function run_hidden(handler: HiddenHandler, value: int) -> string {
   handler(value)
 }
 
-function return_closure(handler: (value: int) -> string) -> (value: int) -> string {
+function return_closure(handler: (value: int) -> string) -> (value: int) -> string throws never {
   return (value: int) -> string { handler(value) }
 }
