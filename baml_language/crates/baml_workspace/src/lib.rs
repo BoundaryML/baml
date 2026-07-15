@@ -58,8 +58,8 @@ pub trait Db: salsa::Database {
         None
     }
 
-    /// The stdlib packages' resolved typed interfaces from a previous compile
-    /// (B-694 "export data"), keyed by package name.
+    /// The stdlib packages' resolved typed interfaces from a previous compile,
+    /// keyed by package name.
     ///
     /// When present, `package_interface::package_interface` returns the seeded
     /// interface for a stdlib package instead of re-deriving it from source —
@@ -106,8 +106,8 @@ pub struct SeededThrowFacts {
 /// (same as [`SeededThrowFacts`]). The `LocalItemId` key is a content-derived,
 /// process-independent item-tree index, so a byte-identical file's functions map
 /// to the same keys across compiles. `callable_throws` reads it through a
-/// *tracked* dependency (present-from-construction, empty until seeded — the
-/// #3924 discipline), so a later seed on a reused database invalidates the memo.
+/// *tracked* dependency (present-from-construction, empty until seeded), so a
+/// later seed on a reused database invalidates the memo.
 #[salsa::input]
 pub struct SeededCallableThrows {
     #[returns(ref)]

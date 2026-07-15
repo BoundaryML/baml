@@ -275,6 +275,19 @@ struct SourceState {
     per_file_seeds_active: bool,
 }
 
+impl SourceState {
+    /// Evict any installed per-file seeds and clear the active flag. Called
+    /// before re-applying seeds on a full reload and before dropping them on an
+    /// edit — the seeds hide transitive throws / name-resolution edges, so they
+    /// can never survive a content change soundly.
+    fn deactivate_per_file_seeds(&mut self) {
+        if self.per_file_seeds_active {
+            crate::seed::evict_per_file_seeds(&mut self.db);
+            self.per_file_seeds_active = false;
+        }
+    }
+}
+
 /// Read guard over the source gate. Exposes the database plus the revision
 /// and document versions captured under the same lock, so callers can build
 /// revision-tagged owned results without a second racy lookup.
@@ -737,20 +750,14 @@ impl BexProject {
         // eviction could keep them sound past an edit).
         if batch.replace_all {
             if let Some(seeds) = source.seed_source.take() {
-                if source.per_file_seeds_active {
-                    crate::seed::evict_per_file_seeds(&mut source.db);
-                    source.per_file_seeds_active = false;
-                }
+                source.deactivate_per_file_seeds();
                 if let Some(root) = source.db.get_project().map(|p| p.root(&source.db)) {
                     source.per_file_seeds_active = seeds.apply(&mut source.db, &root);
                 }
                 source.seed_source = Some(seeds);
             }
         } else if source.per_file_seeds_active || source.seed_source.is_some() {
-            if source.per_file_seeds_active {
-                crate::seed::evict_per_file_seeds(&mut source.db);
-                source.per_file_seeds_active = false;
-            }
+            source.deactivate_per_file_seeds();
             source.seed_source = None;
         }
 

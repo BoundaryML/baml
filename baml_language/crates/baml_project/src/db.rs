@@ -139,7 +139,7 @@ pub struct ProjectDatabase {
     /// invalidates dependents.
     seeded_throw_facts: Option<baml_workspace::SeededThrowFacts>,
     /// Stdlib packages' typed interfaces seeded from a previous compile
-    /// (B-694 "export data"; bytecode cache).
+    /// (bytecode cache).
     ///
     /// Same present-from-construction discipline as `seeded_throw_facts` above: a
     /// real `#[salsa::input]` handle created **once** (empty) in the constructors
@@ -149,7 +149,7 @@ pub struct ProjectDatabase {
     /// memo on a reused database, e.g. the LSP's long-lived `ProjectDatabase`).
     seeded_stdlib_interface: Option<baml_workspace::SeededStdlibInterface>,
     /// Per-function `callable_throws` values seeded from a previous compile
-    /// (Phase 2 interface fragments; bytecode cache).
+    /// (bytecode cache).
     ///
     /// Same present-from-construction discipline as `seeded_throw_facts` and
     /// `seeded_stdlib_interface` above: a real `#[salsa::input]` handle created
@@ -240,55 +240,7 @@ impl ProjectDatabase {
 
     /// Create a new empty database.
     pub fn new() -> Self {
-        let mut db = Self {
-            storage: salsa::Storage::default(),
-            next_file_id: Arc::new(AtomicU32::new(0)),
-            project: None,
-            compiler2_extra_files: None,
-            seeded_throw_facts: None,
-            seeded_stdlib_interface: None,
-            seeded_callable_throws: None,
-            file_map: HashMap::new(),
-            compiler2_file_map: HashMap::new(),
-            file_id_to_path: HashMap::new(),
-            removed_file_tombstones: HashMap::new(),
-        };
-        db.seeded_throw_facts = Some(db.empty_seeded_throw_facts());
-        db.seeded_stdlib_interface = Some(db.empty_seeded_stdlib_interface());
-        db.seeded_callable_throws = Some(db.empty_seeded_callable_throws());
-        db
-    }
-
-    /// Create the always-present, initially-empty `SeededThrowFacts` Salsa
-    /// input. Held as a real input (not a plain field) so that
-    /// `throw_inference::file_throw_facts` reads its `by_path` map through a
-    /// *tracked* dependency; `set_seeded_throw_facts` then mutates it via the
-    /// Salsa setter, which bumps the revision and invalidates the memo even on
-    /// a reused database. An empty map means "no seeds": every file falls
-    /// through to honest body-walking extraction, exactly as an unseeded
-    /// database. See the field docs on `seeded_throw_facts`.
-    fn empty_seeded_throw_facts(&self) -> baml_workspace::SeededThrowFacts {
-        baml_workspace::SeededThrowFacts::new(self, std::collections::BTreeMap::new())
-    }
-
-    /// Create the always-present, initially-empty `SeededStdlibInterface` Salsa
-    /// input. Same present-from-construction discipline as
-    /// `empty_seeded_throw_facts` so `package_interface::package_interface`
-    /// records a *tracked* dependency on the seed map: an empty map means "no
-    /// seeds" and every stdlib package derives its interface honestly, exactly
-    /// as an unseeded database. See the field docs on `seeded_stdlib_interface`.
-    fn empty_seeded_stdlib_interface(&self) -> baml_workspace::SeededStdlibInterface {
-        baml_workspace::SeededStdlibInterface::new(self, std::collections::BTreeMap::new())
-    }
-
-    /// Create the always-present, initially-empty `SeededCallableThrows` Salsa
-    /// input. Same present-from-construction discipline as
-    /// `empty_seeded_throw_facts` so `callable::callable_throws` records a
-    /// *tracked* dependency on the seed map: an empty map means "no seeds" and
-    /// every function infers its throws honestly, exactly as an unseeded
-    /// database. See the field docs on `seeded_callable_throws`.
-    fn empty_seeded_callable_throws(&self) -> baml_workspace::SeededCallableThrows {
-        baml_workspace::SeededCallableThrows::new(self, std::collections::BTreeMap::new())
+        Self::from_storage(salsa::Storage::default())
     }
 
     /// Create a new database with an event callback for tracking query execution.
@@ -299,8 +251,19 @@ impl ProjectDatabase {
     ///
     /// This is useful for tracking incremental compilation behavior.
     pub fn new_with_event_callback(callback: EventCallback) -> Self {
+        Self::from_storage(salsa::Storage::new(Some(callback)))
+    }
+
+    /// Build a database over `storage`, installing the three seed inputs empty
+    /// from construction. Holding each `#[salsa::input]` handle present (not
+    /// `None`) from the start is what lets the seed-reading queries record a
+    /// *tracked* dependency on the initially-empty seed maps, so a later
+    /// `set_seeded_*` on a reused database reliably invalidates their memos; an
+    /// empty map means "no seeds" and every file derives honestly. See the
+    /// `seeded_*` field docs.
+    fn from_storage(storage: salsa::Storage<Self>) -> Self {
         let mut db = Self {
-            storage: salsa::Storage::new(Some(callback)),
+            storage,
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
             compiler2_extra_files: None,
@@ -312,9 +275,18 @@ impl ProjectDatabase {
             file_id_to_path: HashMap::new(),
             removed_file_tombstones: HashMap::new(),
         };
-        db.seeded_throw_facts = Some(db.empty_seeded_throw_facts());
-        db.seeded_stdlib_interface = Some(db.empty_seeded_stdlib_interface());
-        db.seeded_callable_throws = Some(db.empty_seeded_callable_throws());
+        db.seeded_throw_facts = Some(baml_workspace::SeededThrowFacts::new(
+            &db,
+            std::collections::BTreeMap::new(),
+        ));
+        db.seeded_stdlib_interface = Some(baml_workspace::SeededStdlibInterface::new(
+            &db,
+            std::collections::BTreeMap::new(),
+        ));
+        db.seeded_callable_throws = Some(baml_workspace::SeededCallableThrows::new(
+            &db,
+            std::collections::BTreeMap::new(),
+        ));
         db
     }
 
@@ -347,7 +319,6 @@ impl ProjectDatabase {
         self
     }
 
-    /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
     /// Seed per-file throw facts from a previous compile of identical file
     /// content (bytecode-cache per-file reuse); keys are full source-file path
     /// strings.
@@ -369,9 +340,8 @@ impl ProjectDatabase {
         seeds.set_by_path(self).to(by_path);
     }
 
-    /// Seed the stdlib packages' typed interfaces from a previous compile
-    /// (B-694 "export data"); keys are package names, values are
-    /// `borsh(PackageInterface)`.
+    /// Seed the stdlib packages' typed interfaces from a previous compile;
+    /// keys are package names, values are `borsh(PackageInterface)`.
     ///
     /// Mutates the always-present `SeededStdlibInterface` input (created in
     /// `new`) through its Salsa setter, so it bumps the revision and correctly
@@ -390,9 +360,8 @@ impl ProjectDatabase {
     }
 
     /// Seed per-function `callable_throws` values from a previous compile of
-    /// identical file content (Phase 2 interface fragments); the outer key is a
-    /// full source-file path string, the inner key an item-tree
-    /// `LocalItemId::as_u32`.
+    /// identical file content; the outer key is a full source-file path string,
+    /// the inner key an item-tree `LocalItemId::as_u32`.
     ///
     /// Mutates the always-present `SeededCallableThrows` input (created in `new`)
     /// through its Salsa setter, so it bumps the revision and correctly
@@ -411,6 +380,7 @@ impl ProjectDatabase {
         seeds.set_by_path(self).to(by_path);
     }
 
+    /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
     pub fn get_source_files(&self) -> Vec<SourceFile> {
         let mut files: Vec<SourceFile> = self.file_map.values().copied().collect();
         files.sort_by_key(|f| f.file_id(self).as_u32());
