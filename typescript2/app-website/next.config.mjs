@@ -79,6 +79,13 @@ const nextConfig = {
         destination: 'https://discord.gg/yzaTpQ3tdT',
         permanent: true,
       },
+      // The CLI's telemetry notice links here; the canonical disclosure lives
+      // in the repo. Temporary so a real /telemetry page can replace it later.
+      {
+        source: '/telemetry',
+        destination: 'https://github.com/BoundaryML/baml/blob/canary/TELEMETRY.md',
+        permanent: false,
+      },
       {
         source: '/jobs',
         destination: 'https://github.com/BoundaryML/baml/tree/canary/jobs',
