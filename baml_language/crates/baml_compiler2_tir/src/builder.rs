@@ -13716,6 +13716,15 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// The qualified name of the `baml.ops.<name>` interface.
+    fn ops_qtn(name: &str) -> crate::ty::QualifiedTypeName {
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("ops")],
+            Name::new(name),
+        )
+    }
+
     /// The `baml.ops.<Interface>` an arithmetic operator dispatches through, or
     /// `None` for a non-arithmetic operator.
     fn arithmetic_interface_qtn(
@@ -13730,11 +13739,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             BinaryOp::Mod => "Remainder",
             _ => return None,
         };
-        Some(crate::ty::QualifiedTypeName::new(
-            Name::new("baml"),
-            vec![Name::new("ops")],
-            Name::new(name),
-        ))
+        Some(Self::ops_qtn(name))
     }
 
     /// Split an operand type into the concrete alternatives an operator must hold
@@ -13747,11 +13752,20 @@ impl<'db> TypeInferenceBuilder<'db> {
         // Widen each alternative to its base (literal → primitive, enum-variant →
         // enum): impls are keyed on base types, so `c + 1` must request `Add<int>`,
         // not `Add<1>`.
-        match self.normalize(ty) {
+        let members = match self.normalize(ty) {
             Ty::Union(members, _) => members.iter().map(Self::widen_literal_base).collect(),
             Ty::Unknown { .. } | Ty::Error { .. } => Vec::new(),
             other => vec![Self::widen_literal_base(&other)],
+        };
+        // Widening can collapse distinct alternatives to one base (`1 | 2` → two
+        // `int`s); dedup so each base contributes one pair to the operator product.
+        let mut deduped: Vec<Ty> = Vec::with_capacity(members.len());
+        for member in members {
+            if !deduped.iter().any(|seen| self.equivalent(seen, &member)) {
+                deduped.push(member);
+            }
         }
+        deduped
     }
 
     /// For one operand pair, resolve `<l as Iface<r>>::Output` — the result of
@@ -13830,11 +13844,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             return None;
         }
         let negate = Ty::Interface(
-            crate::ty::QualifiedTypeName::new(
-                Name::new("baml"),
-                vec![Name::new("ops")],
-                Name::new("Negate"),
-            ),
+            Self::ops_qtn("Negate"),
             Vec::new(),
             Vec::new(),
             TyAttr::default(),
