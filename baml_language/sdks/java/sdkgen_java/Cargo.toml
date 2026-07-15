@@ -1,4 +1,4 @@
-# Java SDK emitter — stub, mirrors `sdks/go/sdkgen_go`'s shape.
+# Java SDK emitter.
 [package]
 name = "sdkgen_java"
 version = { workspace = true }
@@ -13,6 +13,9 @@ license = { workspace = true }
 
 [dependencies]
 baml_codegen_types = { workspace = true }
+
+[dev-dependencies]
+baml_base = { workspace = true }
 
 [lib]
 doctest = false
