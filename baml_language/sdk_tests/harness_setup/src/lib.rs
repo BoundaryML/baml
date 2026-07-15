@@ -37,6 +37,7 @@ use baml_db::baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
 
 pub mod python_pydantic2;
+pub mod swift;
 pub mod typescript_node;
 
 /// Emit one Cargo build-script line. Cargo consumes directives and

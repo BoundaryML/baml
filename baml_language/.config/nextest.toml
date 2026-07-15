@@ -22,6 +22,18 @@ filter = 'package(=sdk_test_typescript_node)'
 platform = { host = 'cfg(windows)' }
 setup = 'typescript_node_pnpm_win'
 
+# swift tests need the host-arch bridge_swift staticlib assembled into
+# sdks/swift/Binaries/BamlBridgeFFI.xcframework (the fixtures' path dep
+# links it). macOS only — there is no Swift toolchain on the other CI
+# hosts, and the fixture tests are #[ignore]d off-macOS to match.
+[scripts.setup.swift_xcframework_macos]
+command = './sdk_tests/crates/swift/setup.sh'
+
+[[profile.default.scripts]]
+filter = 'package(=sdk_test_swift)'
+platform = { host = 'cfg(target_os = "macos")' }
+setup = 'swift_xcframework_macos'
+
 # python tests need each fixture's venv synced with freshly-built baml_bridge.
 # fire only when a python sdk-test is selected. Unix uses `uv sync` per
 # fixture plus one incremental `maturin develop`; Windows builds one wheel

@@ -445,6 +445,22 @@ pub mod python_pydantic2 {
     pub use crate::python_pydantic2_test_suite as test_suite;
 }
 
+/// Swift generator's test-side glue. Invoked from
+/// `crates/swift/src/lib.rs` as
+/// `sdk_test_harness_runner::swift::test_suite!()`.
+pub mod swift {
+    /// `include!`s `OUT_DIR/swift_tests.rs` — the per-fixture
+    /// scaffold emitted by `sdk_test_harness_setup::swift::run_all`.
+    #[macro_export]
+    macro_rules! swift_test_suite {
+        () => {
+            include!(concat!(env!("OUT_DIR"), "/swift_tests.rs"));
+        };
+    }
+
+    pub use crate::swift_test_suite as test_suite;
+}
+
 /// Node.js + TypeScript generator's test-side glue. Invoked from
 /// `crates/typescript_node/src/lib.rs` as
 /// `sdk_test_harness_runner::typescript_node::test_suite!()`.

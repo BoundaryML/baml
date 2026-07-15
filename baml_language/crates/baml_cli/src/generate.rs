@@ -175,6 +175,11 @@ impl GenerateArgs {
                     &baml_bytecode,
                     generator.naming_convention,
                 ),
+                OutputType::Swift => sdkgen_swift::to_source_code_with_bytecode(
+                    &pool,
+                    &baml_bytecode,
+                    generator.naming_convention,
+                ),
             };
 
             std::fs::create_dir_all(&output_dir).with_context(|| {

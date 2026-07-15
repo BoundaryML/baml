@@ -749,6 +749,7 @@ dependencies = [
  "regex",
  "reqwest",
  "sdkgen_python_pydantic2",
+ "sdkgen_swift",
  "sdkgen_typescript_node",
  "serde",
  "serde_json",
@@ -1614,6 +1615,13 @@ dependencies = [
  "serde_json",
  "sys_native",
  "tokio",
+]
+
+[[package]]
+name = "bridge_swift"
+version = "0.0.0-beta"
+dependencies = [
+ "bridge_cffi",
 ]
 
 [[package]]
@@ -6545,6 +6553,7 @@ dependencies = [
  "baml_workspace",
  "borsh",
  "sdkgen_python_pydantic2",
+ "sdkgen_swift",
  "sdkgen_typescript_node",
 ]
 
@@ -6560,6 +6569,14 @@ dependencies = [
 
 [[package]]
 name = "sdk_test_python_pydantic2"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
+name = "sdk_test_swift"
 version = "0.1.0"
 dependencies = [
  "sdk_test_harness_runner",
@@ -6588,6 +6605,17 @@ dependencies = [
  "askama",
  "baml_base",
  "baml_codegen_types",
+ "indexmap",
+ "pretty_assertions",
+]
+
+[[package]]
+name = "sdkgen_swift"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_codegen_types",
+ "base64",
  "indexmap",
  "pretty_assertions",
 ]

@@ -21,6 +21,7 @@ publish = false
 
 [dependencies]
 sdkgen_python_pydantic2 = { workspace = true }
+sdkgen_swift = { workspace = true }
 sdkgen_typescript_node = { workspace = true }
 baml_codegen_types = { workspace = true }
 baml_db = { workspace = true }
