@@ -133,6 +133,47 @@ fn invalid_index(unit: usize, space: &str, raw: usize) -> LinkError {
     LinkError::InvalidUnit(format!("unit {unit} has out-of-range {space} index {raw}"))
 }
 
+/// Rewrite every index operand of a pooled `object` from unit-local space into
+/// absolute program space. `resolve_obj` / `resolve_glob` map a raw local (or
+/// import) index to its absolute slot, returning `None` when it is out of range;
+/// the first such failure is reported through `describe(space, raw)`. This is
+/// the single relocation dance used for both regular code placement and the
+/// `$init` tail — only the local-index arithmetic and error framing differ.
+fn relocate_object_operands(
+    object: &mut Object,
+    mut resolve_obj: impl FnMut(usize) -> Option<usize>,
+    mut resolve_glob: impl FnMut(usize) -> Option<usize>,
+    describe: impl Fn(&str, usize) -> LinkError,
+) -> Result<(), LinkError> {
+    let mut link_error = None;
+    visit_object_operands(object, |operand| match operand {
+        IndexOperand::Object(idx) => {
+            if link_error.is_some() {
+                return;
+            }
+            let raw = idx.raw();
+            match resolve_obj(raw) {
+                Some(abs) => *idx = ObjectIndex::from_raw(abs),
+                None => link_error = Some(describe("object operand", raw)),
+            }
+        }
+        IndexOperand::Global(slot) => {
+            if link_error.is_some() {
+                return;
+            }
+            let raw = slot.raw();
+            match resolve_glob(raw) {
+                Some(abs) => *slot = GlobalIndex::from_raw(abs),
+                None => link_error = Some(describe("global operand", raw)),
+            }
+        }
+    });
+    match link_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
 /// The fully-qualified name of the base function of a generic value
 /// (`Object::GenericFunction`) in a unit's per-unit encoding (design §9 R1). The
 /// base's `GlobalIndex` is unit-local (a function this unit defines, resolved via
@@ -436,7 +477,7 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
     // ---- Resolve every unit's import tables ---------------------------------
     // Precompute, per unit, import-index -> absolute index so the operand patch
     // is a pure array lookup. Non-generic imports resolve against the maps above;
-    // generic-function imports (Stage 2) resolve through an intern map filled as
+    // generic-function imports resolve through an intern map filled as
     // code is placed.
     // Global imports (functions / lets) resolve fully against the step-1 name
     // maps, up front — this also validates them (keeping the unresolved-import
@@ -536,14 +577,10 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
                     continue;
                 }
                 let mut object = object.clone();
-                let mut link_error = None;
-                visit_object_operands(&mut object, |operand| match operand {
-                    IndexOperand::Object(idx) => {
-                        if link_error.is_some() {
-                            return;
-                        }
-                        let raw = idx.raw();
-                        let abs = if raw < n_local_objects {
+                relocate_object_operands(
+                    &mut object,
+                    |raw| {
+                        if raw < n_local_objects {
                             if raw < c {
                                 Some(lay.class_base + raw)
                             } else if raw < c + e {
@@ -558,31 +595,17 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
                             }
                         } else {
                             obj_imports.get(raw - n_local_objects).copied()
-                        };
-                        match abs {
-                            Some(abs) => *idx = ObjectIndex::from_raw(abs),
-                            None => link_error = Some(invalid_index(u, "object operand", raw)),
                         }
-                    }
-                    IndexOperand::Global(slot) => {
-                        if link_error.is_some() {
-                            return;
-                        }
-                        let raw = slot.raw();
-                        let abs = if raw < n_local_globals {
+                    },
+                    |raw| {
+                        if raw < n_local_globals {
                             Some(lay.local_global(raw))
                         } else {
                             glob_imports.get(raw - n_local_globals).copied()
-                        };
-                        match abs {
-                            Some(abs) => *slot = GlobalIndex::from_raw(abs),
-                            None => link_error = Some(invalid_index(u, "global operand", raw)),
                         }
-                    }
-                });
-                if let Some(error) = link_error {
-                    return Err(error);
-                }
+                    },
+                    |space, raw| invalid_index(u, space, raw),
+                )?;
                 program.objects.push(object);
             }
         }
@@ -606,50 +629,26 @@ pub fn link(units: &[CompilationUnit]) -> Result<Program, LinkError> {
 
             for object in &tail.objects {
                 let mut object = object.clone();
-                let mut link_error = None;
-                visit_object_operands(&mut object, |operand| match operand {
-                    IndexOperand::Object(idx) => {
-                        if link_error.is_some() {
-                            return;
-                        }
-                        let raw = idx.raw();
-                        let abs = if raw < n_tail_objects {
+                relocate_object_operands(
+                    &mut object,
+                    |raw| {
+                        if raw < n_tail_objects {
                             Some(tail_object_base + raw)
                         } else {
                             obj_imports.get(raw - n_tail_objects).copied()
-                        };
-                        match abs {
-                            Some(abs) => *idx = ObjectIndex::from_raw(abs),
-                            None => {
-                                link_error = Some(LinkError::InvalidUnit(format!(
-                                    "init tail has out-of-range object operand {raw}"
-                                )));
-                            }
                         }
-                    }
-                    IndexOperand::Global(slot) => {
-                        if link_error.is_some() {
-                            return;
-                        }
-                        let raw = slot.raw();
-                        let abs = if raw < n_tail_slots {
+                    },
+                    |raw| {
+                        if raw < n_tail_slots {
                             Some(slot_base + raw)
                         } else {
                             glob_imports.get(raw - n_tail_slots).copied()
-                        };
-                        match abs {
-                            Some(abs) => *slot = GlobalIndex::from_raw(abs),
-                            None => {
-                                link_error = Some(LinkError::InvalidUnit(format!(
-                                    "init tail has out-of-range global operand {raw}"
-                                )));
-                            }
                         }
-                    }
-                });
-                if let Some(error) = link_error {
-                    return Err(error);
-                }
+                    },
+                    |space, raw| {
+                        LinkError::InvalidUnit(format!("init tail has out-of-range {space} {raw}"))
+                    },
+                )?;
                 program.objects.push(object);
             }
 
@@ -791,24 +790,12 @@ fn merge_package_fragment(
 
 /// Re-sort every per-package map and the top-level `packages` map exactly as the
 /// full compile's `build_packages` tail does, so the serialized order is
-/// content-determined regardless of merge order.
+/// content-determined regardless of merge order. Per-package sorting is shared
+/// with the full compile through [`ProgramPackage::sort_maps`] so the two paths
+/// cannot drift.
 fn sort_packages(program: &mut Program) {
     for pkg in program.packages.values_mut() {
-        pkg.classes.sort_keys();
-        pkg.enums.sort_keys();
-        pkg.recursive_type_aliases.sort_keys();
-        pkg.interfaces.sort_keys();
-        pkg.impl_rules.sort_keys();
-        for rules in pkg.impl_rules.values_mut() {
-            rules.sort_by_cached_key(|rule| {
-                (
-                    rule.for_ty_pattern.to_string(),
-                    format!("{:?}", rule.for_ty_pattern),
-                    format!("{:?}", rule.interface_args),
-                    format!("{:?}", rule.interface_assoc),
-                )
-            });
-        }
+        pkg.sort_maps();
     }
     program.packages.sort_keys();
 }

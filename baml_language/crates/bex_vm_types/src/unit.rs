@@ -59,8 +59,8 @@ pub struct GenericFnKey {
     pub base_fn: String,
     /// Concrete type arguments seeded into `frame.type_args` when the value is
     /// called. Together with `base_fn` this is the whole-program intern key
-    /// (mirrors `GenericFunction::type_args`, which the runtime narrowed to
-    /// `RealizedTy` in #3998 — typevars are invalid in a called frame's args).
+    /// (mirrors `GenericFunction::type_args`: typevars are invalid in a called
+    /// frame's args, so these are `RealizedTy`, not `TyTemplate`).
     pub type_args: Vec<RealizedTy>,
 }
 

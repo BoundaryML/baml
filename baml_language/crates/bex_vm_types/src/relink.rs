@@ -23,7 +23,7 @@
 
 use crate::{
     GlobalIndex, ObjectIndex,
-    bytecode::Instruction,
+    bytecode::{ClassInitPlan, Instruction},
     types::{ConstValue, Function},
 };
 
@@ -41,10 +41,13 @@ pub enum IndexOperandRef<'a> {
     Object(&'a ObjectIndex),
 }
 
-// Keep the exhaustive opcode classification in one place for the mutable
-// relinker and the read-only dependency collector.
-macro_rules! visit_instruction_index_operands {
-    ($instructions:expr, $visit:ident, $operand:ident) => {{
+// Keep the exhaustive operand classification — instructions, constant pool, and
+// class-init plans — in one place for the mutable relinker and the read-only
+// dependency collector. Every match here is exhaustive on purpose: a new
+// operand-carrying opcode or `ConstValue` variant fails compilation instead of
+// silently escaping the walk.
+macro_rules! visit_bytecode_index_operands {
+    ($instructions:expr, $constants:expr, $plans:expr, $visit:ident, $operand:ident) => {{
         use Instruction as I;
         let mut bakes_type_layout = false;
         for instruction in $instructions {
@@ -147,25 +150,40 @@ macro_rules! visit_instruction_index_operands {
             | I::StoreVar2(..) => {}
             }
         }
+        // Constant-pool object references. Exhaustive on `ConstValue` so a new
+        // object-carrying variant fails compilation here rather than escaping.
+        for constant in $constants {
+            match constant {
+                ConstValue::Object(obj)
+                | ConstValue::ClassWithTypeArgs { class_obj: obj, .. } => {
+                    $visit($operand::Object(obj));
+                }
+                ConstValue::OmittedArg
+                | ConstValue::Null
+                | ConstValue::Int(_)
+                | ConstValue::Float(_)
+                | ConstValue::Bool(_)
+                | ConstValue::Type(_) => {}
+            }
+        }
+        // Each class-init plan carries one class-object reference.
+        for plan in $plans {
+            let ClassInitPlan { class_obj, .. } = plan;
+            $visit($operand::Object(class_obj));
+        }
         bakes_type_layout
     }};
 }
 
 /// Visit every cross-function index operand in `function`'s bytecode.
 pub fn visit_index_operands(function: &mut Function, mut visit: impl FnMut(IndexOperand<'_>)) {
-    let _ =
-        visit_instruction_index_operands!(&mut function.bytecode.instructions, visit, IndexOperand);
-    for constant in &mut function.bytecode.constants {
-        match constant {
-            ConstValue::Object(obj) | ConstValue::ClassWithTypeArgs { class_obj: obj, .. } => {
-                visit(IndexOperand::Object(obj));
-            }
-            _ => {}
-        }
-    }
-    for plan in &mut function.bytecode.class_init_plans {
-        visit(IndexOperand::Object(&mut plan.class_obj));
-    }
+    let _ = visit_bytecode_index_operands!(
+        &mut function.bytecode.instructions,
+        &mut function.bytecode.constants,
+        &mut function.bytecode.class_init_plans,
+        visit,
+        IndexOperand
+    );
 }
 
 /// Read every cross-function index operand without cloning the function.
@@ -174,20 +192,13 @@ pub fn visit_index_operands_ref(
     function: &Function,
     mut visit: impl FnMut(IndexOperandRef<'_>),
 ) -> bool {
-    let bakes_type_layout =
-        visit_instruction_index_operands!(&function.bytecode.instructions, visit, IndexOperandRef);
-    for constant in &function.bytecode.constants {
-        match constant {
-            ConstValue::Object(obj) | ConstValue::ClassWithTypeArgs { class_obj: obj, .. } => {
-                visit(IndexOperandRef::Object(obj));
-            }
-            _ => {}
-        }
-    }
-    for plan in &function.bytecode.class_init_plans {
-        visit(IndexOperandRef::Object(&plan.class_obj));
-    }
-    bakes_type_layout
+    visit_bytecode_index_operands!(
+        &function.bytecode.instructions,
+        &function.bytecode.constants,
+        &function.bytecode.class_init_plans,
+        visit,
+        IndexOperandRef
+    )
 }
 
 /// Visit every cross-function index operand in a pool `object`.

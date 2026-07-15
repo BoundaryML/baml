@@ -753,24 +753,9 @@ fn build_packages(
     // + `Converter<float>`) orders by content rather than declaration order.
     // Package-level ordering is finalized by the caller once every map is built.
     for pkg in program_packages.values_mut() {
-        // Sort every per-package map so the serialized `Program` is byte-reproducible
-        // regardless of the source map's iteration order (`recursive_type_aliases` in
-        // particular is sourced from a `std::HashMap` with a per-process seed).
-        pkg.classes.sort_keys();
-        pkg.enums.sort_keys();
-        pkg.recursive_type_aliases.sort_keys();
-        pkg.interfaces.sort_keys();
-        pkg.impl_rules.sort_keys();
-        for rules in pkg.impl_rules.values_mut() {
-            rules.sort_by_cached_key(|rule| {
-                (
-                    rule.for_ty_pattern.to_string(),
-                    format!("{:?}", rule.for_ty_pattern),
-                    format!("{:?}", rule.interface_args),
-                    format!("{:?}", rule.interface_assoc),
-                )
-            });
-        }
+        // Sort each package's maps into the byte-reproducible order; shared with
+        // the incremental linker so the two paths stay byte-identical.
+        pkg.sort_maps();
     }
 }
 
