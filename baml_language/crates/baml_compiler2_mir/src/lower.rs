@@ -1,7 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, TypePath};
-use baml_type::{RealizedTy, ResolvedAliases, RuntimeTy, TyAttr, TyTemplate, TypeName};
+use baml_type::{
+    RealizedTy, ResolvedAliases, RuntimeTy, TyAttr, TyTemplate, TypeName,
+    normalize::TypeContext as _,
+};
 use indexmap::IndexMap;
 
 use crate::{
@@ -98,9 +101,8 @@ fn interface_tir_type_args_match_preserving_typevars(
                 // runtime `IsType` guard on the concrete instance discriminates.
                 (matches!(iface_arg, Tir2Ty::TypeVar(_, _))
                     && !matches!(impl_arg, Tir2Ty::TypeVar(_, _)))
-                    || baml_compiler2_tir::normalize::is_same_normalized_type(
-                        impl_arg, iface_arg, aliases,
-                    )
+                    || baml_compiler2_tir::type_context::AliasEquivCtx(aliases)
+                        .equivalent(impl_arg, iface_arg)
             })
 }
 
@@ -109,7 +111,7 @@ fn tir_type_satisfies_dispatch_request(
     requested: &Tir2Ty,
     aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
 ) -> bool {
-    if baml_compiler2_tir::normalize::is_same_normalized_type(actual, requested, aliases) {
+    if baml_compiler2_tir::type_context::AliasEquivCtx(aliases).equivalent(actual, requested) {
         return true;
     }
 
@@ -231,7 +233,7 @@ fn bind_interface_class_type_arg(
 ) -> bool {
     match bindings.get(name) {
         Some(existing) => {
-            baml_compiler2_tir::normalize::is_same_normalized_type(existing, actual, aliases)
+            baml_compiler2_tir::type_context::AliasEquivCtx(aliases).equivalent(existing, actual)
         }
         None => {
             bindings.insert(name.clone(), actual.clone());
@@ -461,11 +463,12 @@ fn infer_interface_class_bindings(
                 && fparts.iter().all(|f| {
                     is_class_param(f)
                         || aparts.iter().any(|a| {
-                            baml_compiler2_tir::normalize::is_same_normalized_type(f, a, aliases)
+                            baml_compiler2_tir::type_context::AliasEquivCtx(aliases)
+                                .equivalent(f, a)
                         })
                 })
         }
-        _ => baml_compiler2_tir::normalize::is_same_normalized_type(formal, actual, aliases),
+        _ => baml_compiler2_tir::type_context::AliasEquivCtx(aliases).equivalent(formal, actual),
     }
 }
 

@@ -12,6 +12,7 @@ mod impl_rules;
 
 use baml_base::{Literal, Name};
 use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+use baml_type::normalize::TypeContext as _;
 pub use coherence::*;
 pub use impl_rules::*;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -19,8 +20,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     generics,
     lower_type_expr::qualify_def,
-    normalize,
     ty::{FunctionParamTy, QualifiedTypeName, Ty, TyAttr},
+    type_context::AliasEquivCtx,
 };
 
 pub type TypeBindings = FxHashMap<Name, Ty>;
@@ -543,7 +544,7 @@ pub fn match_ty_pattern_into(
     }
 
     if !contains_bound_typevar(pattern, generic_params)
-        && normalize::is_same_normalized_type(pattern, concrete, aliases)
+        && AliasEquivCtx(aliases).equivalent(pattern, concrete)
     {
         return Some(());
     }
@@ -559,7 +560,7 @@ pub fn match_ty_pattern_into(
         let unbound = |name: &Name| generic_params.contains(name) && !bindings.contains_key(name);
         if !crate::generics::contains_typevar_where(pattern, &unbound) {
             let substituted = crate::generics::substitute_ty(pattern, bindings);
-            if normalize::is_same_normalized_type(&substituted, concrete, aliases) {
+            if AliasEquivCtx(aliases).equivalent(&substituted, concrete) {
                 return Some(());
             }
         }
@@ -646,7 +647,7 @@ pub fn match_ty_pattern_into(
             match_ty_pattern_into(p_ret, c_ret, generic_params, aliases, bindings)?;
             match_ty_pattern_into(p_throws, c_throws, generic_params, aliases, bindings)
         }
-        _ if normalize::is_same_normalized_type(pattern, concrete, aliases) => Some(()),
+        _ if AliasEquivCtx(aliases).equivalent(pattern, concrete) => Some(()),
         _ => None,
     }
 }
@@ -706,9 +707,7 @@ fn bind_type_var(
     aliases: &std::collections::HashMap<QualifiedTypeName, Ty>,
 ) -> Option<()> {
     match bindings.get(name) {
-        Some(existing) if normalize::is_same_normalized_type(existing, concrete, aliases) => {
-            Some(())
-        }
+        Some(existing) if AliasEquivCtx(aliases).equivalent(existing, concrete) => Some(()),
         Some(_) => None,
         None => {
             bindings.insert(name.clone(), concrete.clone());
