@@ -37,7 +37,23 @@ fn cache_disabled() -> bool {
 
 fn unique_root() -> PathBuf {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("baml-diag-oracle-{}-{n}", std::process::id()))
+    // Anchor the root under the *canonical* temp base so it is already in the
+    // OS's resolved form (macOS resolves the `/var` -> `/private/var` symlink;
+    // Windows adds the `\\?\` verbatim prefix). `ProjectDatabase` canonicalizes
+    // both the project root and every source path, but only when they exist on
+    // disk: db1 is built before the cache dir exists (root canonicalize is a
+    // no-op fallback), then `store_with_manifest` materializes the root, so
+    // db2's `set_project_root` *does* canonicalize it — while the in-memory
+    // `.baml` files never exist to canonicalize. If the base held an unresolved
+    // symlink, the root would then gain a resolved prefix the file paths lack,
+    // `strip_prefix` would fail, every rel_path would come out absolute, the
+    // reuse plan would collapse to `None`, and `plan.dirty_files` would be empty
+    // (macOS/Windows only; `/tmp` on Linux has no symlink so it was silently
+    // fine). Canonicalizing the base up front keeps the root idempotent under
+    // `canonicalize`, so db1 and db2 agree on every platform.
+    let base = std::env::temp_dir();
+    let base = base.canonicalize().unwrap_or(base);
+    base.join(format!("baml-diag-oracle-{}-{n}", std::process::id()))
 }
 
 fn opts() -> CompileOptions {

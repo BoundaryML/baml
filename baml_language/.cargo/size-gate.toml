@@ -42,9 +42,9 @@ max_file_bytes = 18_026_879
 # Linux x86_64: baseline 22.77 MB file.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
 max_file_bytes = 23_455_737
-# Windows x86_64: baseline 18.11 MB file.
+# Windows x86_64: baseline 18.73 MB file (18_726_400), ceiling = baseline x1.03.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 19_098_870
+max_file_bytes = 19_288_192
 
 [artifacts.packed-program]
 kind = "pack"
