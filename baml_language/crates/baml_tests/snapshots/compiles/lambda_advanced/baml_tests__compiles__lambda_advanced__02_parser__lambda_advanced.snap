@@ -306,6 +306,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               COMMA ","
               PARAMETER
                 WORD "x"
@@ -1564,6 +1568,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               COMMA ","
               PARAMETER
                 WORD "x"
@@ -1711,6 +1719,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               COMMA ","
               PARAMETER
                 WORD "g"
@@ -1724,6 +1736,10 @@ SOURCE_FILE
                   ARROW "->"
                   TYPE_EXPR "int"
                     WORD "int"
+                  THROWS_CLAUSE
+                    KW_THROWS "throws"
+                    TYPE_EXPR "never"
+                      WORD "never"
               COMMA ","
               PARAMETER
                 WORD "x"

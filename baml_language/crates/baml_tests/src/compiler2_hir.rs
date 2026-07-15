@@ -1763,7 +1763,7 @@ function foo(user: User) -> string {
         let mut db = make_db();
         let file = db.add_file(
             "alias_hidden.baml",
-            "type Handler = (value: int) -> string\nfunction use_alias(cb: Handler) -> string { return \"ok\"; }",
+            "type Handler = (value: int) -> string throws never\nfunction use_alias(cb: Handler) -> string { return \"ok\"; }",
         );
 
         let sig = elaborated_function_signature(&db, find_function_loc(&db, file, "use_alias"));
@@ -1772,8 +1772,11 @@ function foo(user: User) -> string {
         assert_eq!(sig.params[0].ty.to_string(), "Handler");
     }
 
+    /// A nested callback position is NOT opened to an effect parameter — only the
+    /// immediate parameter root is (rule 4). The nested omitted throws is left
+    /// unfilled; TIR lowering rejects it (`FunctionTypeMissingThrows`, E0151).
     #[test]
-    fn function_type_throws_nested_callback_position_stays_closed() {
+    fn function_type_throws_nested_callback_position_left_unfilled() {
         let mut db = make_db();
         let file = db.add_file(
             "nested.baml",
@@ -1788,12 +1791,14 @@ function foo(user: User) -> string {
         );
         assert_eq!(
             sig.params[0].ty.to_string(),
-            "((value: int) -> string throws never) -> string throws __effect_param_0"
+            "((value: int) -> string) -> string throws __effect_param_0"
         );
     }
 
+    /// Return position is not an argument position, so rule 4 does not apply: the
+    /// omitted throws is left unfilled for TIR to reject (rule 5, E0151).
     #[test]
-    fn function_type_throws_return_position_stays_closed() {
+    fn function_type_throws_return_position_left_unfilled() {
         let mut db = make_db();
         let file = db.add_file(
             "returns_fn.baml",
@@ -1806,12 +1811,14 @@ function foo(user: User) -> string {
         assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
             sig.return_type.as_ref().expect("return type").to_string(),
-            "(value: int) -> string throws never"
+            "(value: int) -> string"
         );
     }
 
+    /// A returned function type's callback parameters do not open effect
+    /// parameters either — the whole return type passes through untouched.
     #[test]
-    fn function_type_throws_return_position_opens_immediate_callback_surface() {
+    fn function_type_throws_return_position_callbacks_left_unfilled() {
         let mut db = make_db();
         let file = db.add_file(
             "returns_wrapper.baml",
@@ -1821,22 +1828,19 @@ function foo(user: User) -> string {
         let sig =
             elaborated_function_signature(&db, find_function_loc(&db, file, "returns_wrapper"));
 
-        assert_eq!(
-            sig.synthetic_effect_params,
-            vec![Name::new("__effect_param_0")]
-        );
+        assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
             sig.return_type.as_ref().expect("return type").to_string(),
-            "((value: int) -> string throws __effect_param_0) -> string throws __effect_param_0"
+            "((value: int) -> string) -> string"
         );
     }
 
     #[test]
-    fn function_type_throws_return_position_preserves_explicit_callback_throws() {
+    fn function_type_throws_return_position_preserves_explicit_throws() {
         let mut db = make_db();
         let file = db.add_file(
             "returns_explicit_wrapper.baml",
-            "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string { return \"ok\"; }",
+            "function returns_explicit_wrapper() -> ((value: int) -> string throws string) -> string throws never { return \"ok\"; }",
         );
 
         let sig = elaborated_function_signature(
@@ -1847,7 +1851,7 @@ function foo(user: User) -> string {
         assert!(sig.synthetic_effect_params.is_empty());
         assert_eq!(
             sig.return_type.as_ref().expect("return type").to_string(),
-            "((value: int) -> string throws string) -> string throws string"
+            "((value: int) -> string throws string) -> string throws never"
         );
     }
 

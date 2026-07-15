@@ -38,8 +38,8 @@ function user.Search(query: string, max_results: int = 10, filter: string = "non
 class user.Counter {
   value: int
 }
-type user.NamedFilter = (query: string, filter?: string?) -> int
-type user.NamedLimit = (query: string, limit?: string?) -> int
+type user.NamedFilter = (query: string, filter?: string?) -> int throws never
+type user.NamedLimit = (query: string, limit?: string?) -> int throws never
 function user.Current(self: ? = null) -> int  [expr] {
   {  } self.value
 }

@@ -1255,7 +1255,7 @@ async fn host_callable_wrong_enum_identity_panics_as_host_contract_violation() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_callable_returning_a_callable_is_rejected() {
     let source = r#"
-        function call_returns_callable(f: (int) -> (() -> int), x: int) -> int {
+        function call_returns_callable(f: (int) -> (() -> int throws never), x: int) -> int {
             f(x);
             return 0;
         }

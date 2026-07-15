@@ -3,22 +3,22 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 class user.Holder {
-  cb: (value: int) -> int
+  cb: (value: int) -> int throws never
 }
-type user.HiddenHandler = (value: int) -> int
+type user.HiddenHandler = (value: int) -> int throws never
 function user.accept_hidden(cb: user.HiddenHandler) -> int  [expr] {
   {  } cb(1)
 }
 function user.fail_hidden() -> int  [expr] {
   {  } accept_hidden(risky)
 }
-function user.fail_returned() -> (value: int) -> int  [expr] {
+function user.fail_returned() -> (value: int) -> int throws never  [expr] {
   { let local = (value: int) -> int throws string { { throw "boom" } } } local
 }
 function user.fail_stored() -> user.Holder  [expr] {
   {  } user.Holder { cb: risky }
 }
-function user.nested_position(cb: ((value: int) -> int) -> int) -> int  [expr] {
+function user.nested_position(cb: ((value: int) -> int throws never) -> int) -> int  [expr] {
   { let inner = (value: int) -> int throws string { { throw "boom" } } } cb(inner)
 }
 function user.risky(value: int) -> int  [expr] {

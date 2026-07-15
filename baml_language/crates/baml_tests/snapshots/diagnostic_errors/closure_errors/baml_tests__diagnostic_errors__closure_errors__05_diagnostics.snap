@@ -33,21 +33,21 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] error: type mismatch: expected (Counter) -> int throws never, got () -> int throws never
-    ╭─[ closure_errors.baml:33:31 ]
+    ╭─[ closure_errors.baml:33:44 ]
     │
- 33 │   let inc: (Counter) -> int = c.increment;
-    │                               ─────┬─────  
-    │                                    ╰─────── type mismatch: expected (Counter) -> int throws never, got () -> int throws never
+ 33 │   let inc: (Counter) -> int throws never = c.increment;
+    │                                            ─────┬─────  
+    │                                                 ╰─────── type mismatch: expected (Counter) -> int throws never, got () -> int throws never
     │ 
     │ Note: Error code: E0001
 ────╯
 
   [type] error: type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
-    ╭─[ closure_errors.baml:39:25 ]
+    ╭─[ closure_errors.baml:39:38 ]
     │
- 39 │   let f: () -> string = Employee.full_name;
-    │                         ─────────┬────────  
-    │                                  ╰────────── type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
+ 39 │   let f: () -> string throws never = Employee.full_name;
+    │                                      ─────────┬────────  
+    │                                               ╰────────── type mismatch: expected () -> string throws never, got (self: Employee) -> string throws never
     │ 
     │ Note: Error code: E0001
 ────╯
