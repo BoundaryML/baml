@@ -499,22 +499,6 @@ pub(crate) fn project(token: &str) -> String {
     out
 }
 
-/// `optional_args_probe` -> `OptionalArgsProbe`: splits on `_` and
-/// uppercases the first character of each part. Used only for the preferred
-/// tokens of synthesized symbols (opts structs), which have no BAML source
-/// name to preserve.
-pub(crate) fn pascal_case(name: &str) -> String {
-    let mut out = String::new();
-    for part in name.split('_') {
-        let mut chars = part.chars();
-        if let Some(first) = chars.next() {
-            out.extend(first.to_uppercase());
-            out.push_str(chars.as_str());
-        }
-    }
-    out
-}
-
 // ---------------------------------------------------------------------------
 // Stable hashing (collision suffixes)
 // ---------------------------------------------------------------------------
@@ -765,12 +749,6 @@ mod tests {
         assert_eq!(project("void"), "void_");
         assert_eq!(project("value"), "value");
         assert_eq!(project("9lives"), "_9lives");
-    }
-
-    #[test]
-    fn test_pascal_case() {
-        assert_eq!(pascal_case("optional_args_probe"), "OptionalArgsProbe");
-        assert_eq!(pascal_case("greet"), "Greet");
     }
 
     #[test]

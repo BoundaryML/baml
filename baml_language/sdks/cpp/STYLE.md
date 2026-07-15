@@ -22,7 +22,9 @@ guide itself:
    `dependent`, `dependent_t`, `has_set_opt1`, `has_set_opt3`.
 4. `extern "C"` symbols keep snake_case (C ABI): `baml_cpp_result_trampoline`,
    `baml_cpp_host_dispatch_trampoline`, `baml_cpp_host_release_trampoline`.
-5. Generated identifiers derived from BAML source names are unchanged
+5. Generated identifiers derived from BAML source names are unchanged,
+   including derived names: the opts struct for function `probe` is
+   `probeOpts` (source casing preserved, never re-cased)
    (functions, classes, fields, params in generated `baml_sdk` code).
 
 ## Deliberate deviations

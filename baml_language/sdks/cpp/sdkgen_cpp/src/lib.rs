@@ -378,11 +378,21 @@ fn request_callable_members(
 /// functions.
 fn companion_preferred(name: &Name) -> Option<String> {
     let raw = name.name.as_str();
-    let (base, companion) = raw.split_once('$')?;
-    if companion == "stream" {
-        Some(format!("{base}_stream"))
+    if raw.contains('$') {
+        Some(function_spelling(raw))
     } else {
-        Some(format!("{base}__{companion}"))
+        None
+    }
+}
+
+/// The C++ spelling of a function's source name: companions get their
+/// Python-parity form, everything else is verbatim (bridges never re-case
+/// user spellings).
+fn function_spelling(raw: &str) -> String {
+    match raw.split_once('$') {
+        Some((base, "stream")) => format!("{base}_stream"),
+        Some((base, companion)) => format!("{base}__{companion}"),
+        None => raw.to_string(),
     }
 }
 
@@ -429,7 +439,11 @@ fn opts_request(callable: &BamlFqn, function: &Function) -> NameRequest {
     NameRequest::synthesized(
         callable.child(OPTS_MEMBER),
         CppNameKind::OptsStruct,
-        &format!("{}Opts", naming::pascal_case(function.name.as_str())),
+        // Verbatim source spelling + "Opts" (probe -> probeOpts): the other
+        // bridges never re-case user names (Python kwargs and TS's inline
+        // $opts never even mint a type); C++ needs a name only because the
+        // struct must be constructible.
+        &format!("{}Opts", function_spelling(function.name.as_str())),
     )
 }
 
