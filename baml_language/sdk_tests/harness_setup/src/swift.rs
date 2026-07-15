@@ -62,7 +62,7 @@ const SETUP_ENV_VAR: &str = "SDK_TEST_SWIFT_SETUP";
 /// Fixtures whose `swift_build` / `swift_test` run for real. Everything
 /// else is emitted `#[ignore]`d. Flip fixtures in as their capability
 /// phases land (Phase 1: type_shapes + function_calls subsets).
-const ENFORCED_FIXTURES: &[&str] = &[];
+const ENFORCED_FIXTURES: &[&str] = &["type_shapes", "function_calls"];
 
 const IGNORE_REASON: &str = "sdkgen_swift emitter incomplete (bridge Phase 0)";
 
@@ -281,11 +281,11 @@ mod {fixture} {{
         );
     }}
 
-    #[test]
-{ignore_attr}    fn swift_build() {{
-        cmd("swift build --build-tests");
-    }}
-
+    // One test per fixture on purpose: `swift test` builds first, and a
+    // sibling `swift build` test would contend for the same SwiftPM
+    // `.build` lock (nextest runs a fixture's tests concurrently;
+    // SwiftPM serializes them, doubling wall clock — and a killed run
+    // leaves the lock held by an orphaned swift-build).
     #[test]
 {ignore_attr}    fn swift_test() {{
         cmd("swift test");
