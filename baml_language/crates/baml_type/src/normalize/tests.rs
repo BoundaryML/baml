@@ -246,6 +246,53 @@ fn never_is_removed_unknown_absorbs() {
 }
 
 #[test]
+fn literal_types_are_subtypes_of_their_base_only() {
+    // A literal type is a member of its base primitive's value set — a free,
+    // representation-preserving widening (TYPE_SYSTEM.md §BAML Subtyping Cases) —
+    // and of any union/optional containing it. It does NOT cross representations:
+    // `42 <: float` would be an int→float coercion, which is not a subtype
+    // relation.
+    let ctx = Ctx::default();
+    assert!(is_subtype(&lit_int(42), &Ty::int(), &ctx));
+    assert!(is_subtype(&lit_float("3.14"), &Ty::float(), &ctx));
+    assert!(is_subtype(
+        &Ty::Literal(
+            Literal::String("hello".to_string()),
+            Freshness::Regular,
+            TyAttr::default(),
+        ),
+        &Ty::string(),
+        &ctx
+    ));
+    assert!(is_subtype(
+        &Ty::Literal(Literal::Bool(true), Freshness::Regular, TyAttr::default()),
+        &Ty::bool(),
+        &ctx
+    ));
+    assert!(!is_subtype(&lit_int(42), &Ty::float(), &ctx));
+    // Union / optional membership.
+    assert!(is_subtype(
+        &lit_int(42),
+        &union(vec![Ty::string(), Ty::int()]),
+        &ctx
+    ));
+    assert!(is_subtype(&lit_int(42), &Ty::optional(Ty::int()), &ctx));
+    assert!(is_subtype(&Ty::null(), &Ty::optional(Ty::string()), &ctx));
+}
+
+#[test]
+fn numeric_types_do_not_widen_across_representations() {
+    // Concrete types are atomic: `int` (i64) is not a subtype of `float` (f64 —
+    // precision loss past 2^53) nor of `bigint` (heap representation); those
+    // conversions are explicit or FFI-boundary coercions, never subtyping. The
+    // same holds under an (invariant) container.
+    let ctx = Ctx::default();
+    assert!(!is_subtype(&Ty::int(), &Ty::float(), &ctx));
+    assert!(!is_subtype(&Ty::int(), &bigint(), &ctx));
+    assert!(!is_subtype(&Ty::list(Ty::int()), &Ty::list(bigint()), &ctx));
+}
+
+#[test]
 fn literal_into_base_absorption() {
     let ctx = Ctx::default();
     // `int | 99 == int`.

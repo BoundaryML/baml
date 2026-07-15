@@ -1,8 +1,8 @@
 //! [`BexVm`] as a [`baml_type::normalize::TypeContext`], so the canonical type
-//! algebra (`baml_type::normalize::is_subtype` / `equivalent`) can run at
-//! runtime over the running program in place of the context-free
-//! `RuntimeTy::is_subtype_of` fork — keeping runtime type decisions in lockstep
-//! with the compiler.
+//! algebra (`baml_type::normalize::is_subtype` / `equivalent`) runs at runtime
+//! over the running program — keeping runtime type decisions in lockstep with
+//! the compiler. (This replaced the since-deleted context-free structural
+//! subtype fork.)
 //!
 //! The VM *is* the runtime type context: it holds the whole program, so it can
 //! answer the nominal facts the structural algebra cannot derive on its own.

@@ -11,8 +11,7 @@
 //! # Relation
 //!
 //! The leaf relation is the canonical `baml_type::normalize` algebra — invariant
-//! generic arguments, interface-membership- and alias-aware — never the
-//! deprecated context-free [`RuntimeTy::is_subtype_of`] fork. It is applied with
+//! generic arguments, interface-membership- and alias-aware. It is applied with
 //! a [`Variance`]:
 //!
 //! - **top level** (a value against the arm type) is *covariant* membership
