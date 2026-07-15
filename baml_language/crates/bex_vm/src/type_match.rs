@@ -195,9 +195,14 @@ pub(crate) fn template_relates<C: normalize::TypeContext>(
         // nothing. Hole-free function arms never reach here; they take the fast
         // path into the canonical algebra, which applies all of the above.
         TyTemplate::Function { .. } => false,
-        // Interface and projection templates with holes have no structural
-        // runtime membership check yet (Unit-5 work); a hole there matches
-        // nothing until then.
+        // A *holey* interface template (an instantiation position that is a
+        // genuine `Wildcard`, e.g. an unresolved projection) has no runtime
+        // membership check: answering it would need per-position holes in the
+        // resolver's instantiation request, which it does not support — fail
+        // closed. (Hole-free interface templates never reach here; the fast path
+        // above resolves them through canonical interface membership.) A symbolic
+        // projection likewise matches nothing: a value's concrete type carries no
+        // unresolved projection to unify with.
         TyTemplate::Interface(..) | TyTemplate::AssociatedTypeProjection { .. } => false,
         // Frame references and realized leaves contain no `Wildcard`, so the
         // hole-free fast path above already handled them; they cannot be the top

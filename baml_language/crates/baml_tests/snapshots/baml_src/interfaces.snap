@@ -3770,7 +3770,7 @@ function interfaces.fz39_main() -> string {
     call user.interfaces.fz39_risky
     jump L2
     load_var e
-    is_type interfaces.Fz39ConcreteErr
+    is_type interfaces.Fz39IError
     pop_jump_if_false L0
     jump L1
 
@@ -3819,7 +3819,7 @@ function interfaces.fz41_main() -> string {
 
 function interfaces.fz41_maybe_speak(a: interfaces.Fz41Animal | null) -> string {
     load_var a
-    is_type interfaces.Fz41Dog
+    is_type interfaces.Fz41Animal
     pop_jump_if_false L0
     jump L1
 
@@ -3881,7 +3881,7 @@ function interfaces.fz44_main() -> int {
 
 function interfaces.fz45_describe(x: interfaces.Fz45Animal | string) -> string {
     load_var x
-    is_type interfaces.Fz45Dog
+    is_type interfaces.Fz45Animal
     pop_jump_if_false L0
     jump L1
 
@@ -4490,7 +4490,7 @@ function interfaces.mdif_main() -> string {
 
 function interfaces.midr_describe(s: interfaces.MidrSwitch) -> string {
     load_var s
-    is_type interfaces.MidrLamp
+    is_type interfaces.MidrSwitch
     pop_jump_if_false L0
     load_var s
     is_type interfaces.MidrLamp
@@ -5110,7 +5110,7 @@ function interfaces.uf01_readName(x: interfaces.Uf01Dog | interfaces.Uf01Named) 
 
 function interfaces.uf02_addOne(x: interfaces.Uf02Slot<int> | interfaces.Uf02Slot<string>) -> int {
     load_var x
-    is_type interfaces.Uf02IntSlot
+    is_type interfaces.Uf02Slot<int>
     pop_jump_if_false L0
     jump L1
 
@@ -5145,7 +5145,7 @@ function interfaces.uf02_main() -> int {
 
 function interfaces.uf05_go(x: interfaces.Uf05Slot<int> | interfaces.Uf05Slot<string>) -> string {
     load_var x
-    is_type interfaces.Uf05IntSlot
+    is_type interfaces.Uf05Slot<int>
     pop_jump_if_false L0
     jump L1
 
