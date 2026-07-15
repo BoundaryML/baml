@@ -961,16 +961,19 @@ fn baml.Float.to_degrees(self: baml.Float) -> float {
     let _3: float
 
     bb0: {
-        _2 = copy _1 * const 180_f64;
-        _3 = call const fn baml.Float.pi() -> [bb1];
+        _2 = call const fn baml.ops.__union_mul(copy _1, const 180_f64) -> [bb1];
     }
 
     bb1: {
-        _0 = copy _2 / copy _3;
-        goto -> bb2;
+        _3 = call const fn baml.Float.pi() -> [bb2];
     }
 
     bb2: {
+        _0 = copy _2 / copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -987,12 +990,15 @@ fn baml.Float.to_radians(self: baml.Float) -> float {
     }
 
     bb1: {
-        _2 = copy _1 * copy _3;
-        _0 = copy _2 / const 180_f64;
-        goto -> bb2;
+        _2 = call const fn baml.ops.__union_mul(copy _1, copy _3) -> [bb2];
     }
 
     bb2: {
+        _0 = copy _2 / const 180_f64;
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
@@ -8450,6 +8456,94 @@ fn baml.ops.Equals$for$null.neq(self: null, other: Self) -> bool {
         return;
     }
 }
+
+fn baml.ops.__union_add = builtin(vm)
+
+fn baml.ops.__union_div = builtin(vm)
+
+fn baml.ops.__union_mul = builtin(vm)
+
+fn baml.ops.__union_neg = builtin(vm)
+
+fn baml.ops.__union_rem = builtin(vm)
+
+fn baml.ops.__union_sub = builtin(vm)
+
+fn baml.ops.Add<float>$for$float.add = builtin(vm)
+
+fn baml.ops.Add<bigint>$for$bigint.add = builtin(vm)
+
+fn baml.ops.Add<int>$for$int.add = builtin(vm)
+
+fn baml.ops.Add<float>$for$int.add = builtin(vm)
+
+fn baml.ops.Add<bigint>$for$int.add = builtin(vm)
+
+fn baml.ops.Add<int>$for$float.add = builtin(vm)
+
+fn baml.ops.Add<int>$for$bigint.add = builtin(vm)
+
+fn baml.ops.Divide<int>$for$int.div = builtin(vm)
+
+fn baml.ops.Divide<float>$for$int.div = builtin(vm)
+
+fn baml.ops.Divide<bigint>$for$int.div = builtin(vm)
+
+fn baml.ops.Divide<int>$for$float.div = builtin(vm)
+
+fn baml.ops.Divide<int>$for$bigint.div = builtin(vm)
+
+fn baml.ops.Divide<float>$for$float.div = builtin(vm)
+
+fn baml.ops.Divide<bigint>$for$bigint.div = builtin(vm)
+
+fn baml.ops.Multiply<bigint>$for$int.mul = builtin(vm)
+
+fn baml.ops.Multiply<int>$for$float.mul = builtin(vm)
+
+fn baml.ops.Multiply<int>$for$bigint.mul = builtin(vm)
+
+fn baml.ops.Multiply<float>$for$float.mul = builtin(vm)
+
+fn baml.ops.Multiply<bigint>$for$bigint.mul = builtin(vm)
+
+fn baml.ops.Multiply<int>$for$int.mul = builtin(vm)
+
+fn baml.ops.Multiply<float>$for$int.mul = builtin(vm)
+
+fn baml.ops.Negate$for$bigint.neg = builtin(vm)
+
+fn baml.ops.Negate$for$float.neg = builtin(vm)
+
+fn baml.ops.Negate$for$int.neg = builtin(vm)
+
+fn baml.ops.Remainder<int>$for$float.rem = builtin(vm)
+
+fn baml.ops.Remainder<int>$for$bigint.rem = builtin(vm)
+
+fn baml.ops.Remainder<float>$for$float.rem = builtin(vm)
+
+fn baml.ops.Remainder<bigint>$for$bigint.rem = builtin(vm)
+
+fn baml.ops.Remainder<int>$for$int.rem = builtin(vm)
+
+fn baml.ops.Remainder<float>$for$int.rem = builtin(vm)
+
+fn baml.ops.Remainder<bigint>$for$int.rem = builtin(vm)
+
+fn baml.ops.Subtract<int>$for$float.sub = builtin(vm)
+
+fn baml.ops.Subtract<int>$for$bigint.sub = builtin(vm)
+
+fn baml.ops.Subtract<float>$for$float.sub = builtin(vm)
+
+fn baml.ops.Subtract<bigint>$for$bigint.sub = builtin(vm)
+
+fn baml.ops.Subtract<int>$for$int.sub = builtin(vm)
+
+fn baml.ops.Subtract<float>$for$int.sub = builtin(vm)
+
+fn baml.ops.Subtract<bigint>$for$int.sub = builtin(vm)
 
 fn baml.spawn.TaskGroup.active_count = builtin(vm)
 
