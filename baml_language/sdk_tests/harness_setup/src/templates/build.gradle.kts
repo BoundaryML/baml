@@ -7,18 +7,17 @@
 //   tests/      JUnit sources copied from `../customizable/`
 //
 // Java 17 is the SDK's minimum-supported release (records + sealed
-// interfaces; see ref-java-state-of-completeness.md). The foojay
-// toolchain resolver in settings.gradle.kts lets Gradle provision a
-// JDK 17 when none is installed locally.
+// interfaces; see ref-java-state-of-completeness.md). The JDK itself
+// comes from the repo-root mise.toml (temurin-23); `--release 17`
+// makes javac check against the Java 17 API so newer-JDK-only
+// symbols can't sneak into generated code or tests.
 
 plugins {
     java
 }
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
+tasks.withType<JavaCompile> {
+    options.release.set(17)
 }
 
 repositories {
