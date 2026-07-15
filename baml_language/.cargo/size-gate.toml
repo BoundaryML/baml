@@ -36,17 +36,20 @@ package = "baml_cli"
 bin = "baml-cli"
 policy.max_delta_pct = 3.0
 
-# macOS arm64: baseline 16.09 MB file (generics: TyArg/TyClass proto types +
-# engine/compiler/sdkgen generics support, +499 KB / +3.2% vs the prior
-# 15.59 MB baseline).
+# baml-cli baselines bumped ~+3% for the Rust SDK generator: `sdkgen_rust`
+# formats generated code with `quote` + `prettyplease`, which pulls `syn`
+# into the CLI's runtime graph (the python/node generators use string
+# templates and don't). Reclaiming this would mean dropping prettyplease
+# (raw, unformatted generated SDK output).
+# macOS arm64: baseline 17.52 MB file.
 [artifacts.baml-cli.platform.aarch64-apple-darwin]
-max_file_bytes = 17_480_864
-# Linux x86_64: baseline 21.51 MB file.
+max_file_bytes = 18_043_721
+# Linux x86_64: baseline 22.77 MB file.
 [artifacts.baml-cli.platform.x86_64-unknown-linux-gnu]
-max_file_bytes = 22_747_163
-# Windows x86_64: baseline 18.11 MB file.
+max_file_bytes = 23_450_653
+# Windows x86_64: baseline 19.15 MB file.
 [artifacts.baml-cli.platform.x86_64-pc-windows-msvc]
-max_file_bytes = 19_098_870
+max_file_bytes = 19_723_264
 
 [artifacts.packed-program]
 kind = "pack"

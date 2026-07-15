@@ -16,9 +16,9 @@
 //! ported test files are not compiled directly from `tests/`: the only
 //! auto-discovered integration-test target is `tests/main.rs`, and each
 //! ported file under `customizable/` is compiled only if `main.rs` declares
-//! it as a `#[path]` module. [`TEST_MODS`] is the single source of truth —
+//! it as a `#[path]` module. `TEST_MODS` is the single source of truth —
 //! enabling a capability's tests is a one-line-per-file flip from
-//! [`Gate::Later`] to [`Gate::Now`]. Gated-off files still land on disk
+//! `Gate::Later` to `Gate::Now`. Gated-off files still land on disk
 //! (and in `generated/customizable/`) so the cross-language suite checker
 //! sees the full python-matching file set.
 //!
