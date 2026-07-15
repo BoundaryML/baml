@@ -105,23 +105,6 @@ struct Ty<std::optional<T>> {
   }
 };
 
-template <typename... Ts>
-struct Ty<std::variant<Ts...>> {
-  static void Encode(detail::wire::Writer& m) {
-    detail::wire::Writer union_ty;  // BamlTyUnion { options = 1 }
-    (EncodeOption<Ts>(union_ty), ...);
-    m.MessageField(7, union_ty);  // BamlTy.union
-  }
-
- private:
-  template <typename T>
-  static void EncodeOption(detail::wire::Writer& union_ty) {
-    detail::wire::Writer option;
-    Ty<T>::Encode(option);
-    union_ty.MessageField(1, option);
-  }
-};
-
 // Boxes are a C++ recursion artifact, invisible at the type level.
 template <typename T>
 struct Ty<Box<T>> {

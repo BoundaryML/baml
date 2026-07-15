@@ -14,44 +14,8 @@
 #include <vector>
 
 namespace aliases = baml_sdk::aliases;
-using aliases::RecList;
-using RecItems = std::vector<::baml::Box<RecList>>;
 
 BAML_TEST(round_trip_string_list) {
   const std::vector<std::string> s = {"a", "b"};
   BAML_ASSERT(aliases::round_trip_string_list(s) == s);
-}
-
-BAML_TEST(round_trip_rec_list) {
-  // RecList = int | RecList[]
-  const RecList leaf{int64_t{1}};
-  BAML_ASSERT(aliases::round_trip_rec_list(leaf) == leaf);
-
-  // [1, [2, 3]]
-  const RecList nested{RecItems{
-      RecList{int64_t{1}},
-      RecList{RecItems{RecList{int64_t{2}}, RecList{int64_t{3}}}},
-  }};
-  BAML_ASSERT(aliases::round_trip_rec_list(nested) == nested);
-}
-
-BAML_TEST(round_trip_maybe_rec) {
-  // Nullable reference to a recursive alias: the null folds into the box
-  // (OptionalBox<RecList>), since optional<Box<T>> cannot hold an
-  // incomplete T.
-  const aliases::MaybeRec null_case{{}};
-  BAML_ASSERT(aliases::round_trip_maybe_rec(null_case) == null_case);
-
-  const aliases::MaybeRec set_case{
-      RecList{RecItems{RecList{int64_t{1}}, RecList{int64_t{2}}}}};
-  BAML_ASSERT(aliases::round_trip_maybe_rec(set_case) == set_case);
-}
-
-BAML_TEST(round_trip_alias_container) {
-  const aliases::AliasContainer c{
-      {"x"},
-      RecList{RecItems{RecList{int64_t{1}},
-                       RecList{RecItems{RecList{int64_t{2}}}}}},
-  };
-  BAML_ASSERT(aliases::round_trip_alias_container(c) == c);
 }

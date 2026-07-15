@@ -20,7 +20,6 @@
 #include <baml_test.h>
 
 namespace generic_tests = baml_sdk::generic_tests;
-using generic_tests::ContainerShapes;
 using generic_tests::GenericBox;
 using generic_tests::GenericPair;
 using generic_tests::GenericRecursive;
@@ -93,20 +92,6 @@ BAML_TEST(second_of_infers_from_nested_generic) {
   const StringIntPair pair{"z", 9};
   const GenericPair<int64_t, StringIntPair> p{0, pair};
   BAML_ASSERT(generic_tests::second_of(p) == pair);
-}
-
-BAML_TEST(read_items_infers_from_instance_wire_args) {
-  // T10: ContainerShapes<T> - T deduced from the instance's type arg.
-  // Empty fields don't erase it (T42).
-  const ContainerShapes<int64_t> container{
-      1, {1, 2, 3}, {{"k", 4}}, std::nullopt, std::nullopt};
-  BAML_ASSERT(generic_tests::read_items(container) ==
-              (std::vector<int64_t>{1, 2, 3}));
-
-  const ContainerShapes<int64_t> empty_fields{
-      1, {}, {}, std::nullopt, std::nullopt};
-  BAML_ASSERT(generic_tests::read_items(empty_fields) ==
-              (std::vector<int64_t>{}));
 }
 
 BAML_TEST(list_head_infers_from_recursive_generic) {
@@ -202,16 +187,6 @@ BAML_TEST(named_static_infers_distinct_typevars) {
 // Out-of-scope / must-specify
 // ===========================================================================
 
-BAML_TEST(union_with_concrete_sibling_infers_typevar) {
-  // 02a/G5: a TypeVar beside concrete union members (x: T | string | null).
-  // C++ deduces T from the argument's declared union type (the caller must
-  // spell optional<variant<T, string>>), sending T=int explicitly.
-  BAML_ASSERT_EQ(generic_tests::tag_or_value(
-                     std::optional<std::variant<int64_t, std::string>>{
-                         std::variant<int64_t, std::string>{int64_t{5}}}),
-                 std::string("int"));
-}
-
 // test_union_concrete_sibling_absorbs_value_binds_rust_type: skipped - the
 // $rust_type default requires sending NO binding for T; every C++ call sends
 // T explicitly, so the host-only default is unreachable.
@@ -265,33 +240,8 @@ BAML_TEST(glue_invariant_and_covariant_agree_binds) {
 // true) is a C++ deduction conflict; the engine's n-ary covariant join across
 // separate arguments is unreachable.
 
-BAML_TEST(make_triple_heterogeneous_list_element_unions) {
-  // B8: the mixed list is expressed as vector<variant<int64_t, string>>, so
-  // B deduces to the union from the container's declared element type (the
-  // engine's element join is not exercised). The heterogeneous list
-  // round-trips.
-  using IntOrString = std::variant<int64_t, std::string>;
-  const GenericTriple<int64_t, IntOrString, bool> t =
-      generic_tests::make_triple(
-          int64_t{1}, std::vector<IntOrString>{int64_t{1}, std::string("x")},
-          std::map<std::string, bool>{{"k", true}});
-  BAML_ASSERT(t.second ==
-              (std::vector<IntOrString>{int64_t{1}, std::string("x")}));
-}
-
 // test_choose_divergent_generic_instances_union: skipped - choose(
 // GenericBox<int64_t>, GenericBox<string>) is a C++ deduction conflict.
-
-BAML_TEST(tag_or_value_binds_generic_instance) {
-  // H2: the instance is not absorbed by the string/null siblings; T deduces
-  // to GenericBox<string> from the argument's declared union type.
-  const std::string rendered = generic_tests::tag_or_value(
-      std::optional<std::variant<GenericBox<std::string>, std::string>>{
-          std::variant<GenericBox<std::string>, std::string>{
-              GenericBox<std::string>{"asdf"}}});
-  BAML_ASSERT(rendered.find("GenericBox") != std::string::npos);
-  BAML_ASSERT(rendered.find("string") != std::string::npos);
-}
 
 // ===========================================================================
 // SecB - empty collections on a FREE function
@@ -436,29 +386,10 @@ BAML_TEST(genericbox_get_infers_class_var_from_receiver) {
 // SecB/SecD - heterogeneous array unification
 // ===========================================================================
 
-BAML_TEST(elem_type_heterogeneous_array_unifies) {
-  // The mixed elements are expressed as variant<int64_t, string>, so T
-  // deduces to the union from the declared element type.
-  using IntOrString = std::variant<int64_t, std::string>;
-  BAML_ASSERT_EQ(generic_tests::elem_type(
-                     std::vector<IntOrString>{int64_t{1}, std::string("x")}),
-                 std::string("int | string"));
-}
-
 BAML_TEST(elem_type_homogeneous_array_is_single_type) {
   // The degenerate case: a homogeneous array is a single type.
   BAML_ASSERT_EQ(generic_tests::elem_type(std::vector<int64_t>{1, 2, 3}),
                  std::string("int"));
-}
-
-BAML_TEST(elem_type_three_way_heterogeneous_array_unifies) {
-  // n-ary element union: three distinct element types all merge.
-  using IntStrBool = std::variant<int64_t, std::string, bool>;
-  const std::string rendered = generic_tests::elem_type(
-      std::vector<IntStrBool>{int64_t{1}, std::string("x"), true});
-  BAML_ASSERT(rendered.find("int") != std::string::npos);
-  BAML_ASSERT(rendered.find("string") != std::string::npos);
-  BAML_ASSERT(rendered.find("bool") != std::string::npos);
 }
 
 // ===========================================================================

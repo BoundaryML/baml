@@ -19,21 +19,6 @@
 using baml_sdk::raises_test::ParseError;
 using baml_sdk::throws_test::MyError;
 
-static const char kBadJson[] = "{not valid json";
-
-BAML_TEST(stdlib_error_surfaces_as_baml_error) {
-  // baml.json.parse on bad input -> BamlError whose payload decodes to a
-  // typed baml.json.JsonParseError. Proves stdlib error classes surface
-  // structured, independent of any throws clause.
-  try {
-    baml_sdk::throws_test::ParseJson(kBadJson);
-    baml_test::Fail("ParseJson did not throw");
-  } catch (const baml::BamlError& e) {
-    BAML_ASSERT(e.is<baml_sdk::baml::json::JsonParseError>());
-    (void)e.get<baml_sdk::baml::json::JsonParseError>();
-  }
-}
-
 BAML_TEST(user_throw_surfaces_declared_instance) {
   // A user throw of a declared error -> BamlError carrying the declared
   // user error instance, reachable via the typed accessors.
@@ -97,9 +82,11 @@ BAML_TEST(cancellation_surfaces_as_baml_cancelled) {
 
 BAML_TEST(str_is_non_empty) {
   // what() is non-empty -- guards the telemetry path, which records it.
+  // (ParseJson is unavailable while unions -- and with them baml.json.json
+  // -- are disabled; ThrowMyError stands in.)
   try {
-    baml_sdk::throws_test::ParseJson(kBadJson);
-    baml_test::Fail("ParseJson did not throw");
+    baml_sdk::throws_test::ThrowMyError();
+    baml_test::Fail("ThrowMyError did not throw");
   } catch (const baml::BamlError& e) {
     BAML_ASSERT(std::string(e.what()).size() > 0);
   }

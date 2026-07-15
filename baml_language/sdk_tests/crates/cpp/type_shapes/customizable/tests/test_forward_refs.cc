@@ -15,33 +15,10 @@
 namespace forward_refs = baml_sdk::forward_refs;
 using forward_refs::GNode;
 using forward_refs::Other;
-using forward_refs::RecList;
-using forward_refs::RecListWithOther;
-using RecItems = std::vector<::baml::Box<RecList>>;
-using RecWOItems = std::vector<::baml::Box<RecListWithOther>>;
 
 BAML_TEST(round_trip_other) {
   const Other o{7};
   BAML_ASSERT(forward_refs::round_trip_other(o) == o);
-}
-
-BAML_TEST(round_trip_rec_list) {
-  // [1, [2, 3]]
-  const RecList r{RecItems{
-      RecList{int64_t{1}},
-      RecList{RecItems{RecList{int64_t{2}}, RecList{int64_t{3}}}},
-  }};
-  BAML_ASSERT(forward_refs::round_trip_rec_list(r) == r);
-}
-
-BAML_TEST(round_trip_rec_list_with_other) {
-  // RecListWithOther = int | Other | RecListWithOther[]
-  const RecListWithOther leaf{int64_t{1}};
-  BAML_ASSERT(forward_refs::round_trip_rec_list_with_other(leaf) == leaf);
-
-  const RecListWithOther list{
-      RecWOItems{RecListWithOther{int64_t{1}}, RecListWithOther{int64_t{2}}}};
-  BAML_ASSERT(forward_refs::round_trip_rec_list_with_other(list) == list);
 }
 
 BAML_TEST(round_trip_node_symbol_exists) {

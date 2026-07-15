@@ -19,7 +19,6 @@
 #include <baml_test.h>
 
 namespace generic_tests = baml_sdk::generic_tests;
-using generic_tests::ContainerShapes;
 using generic_tests::GenericBox;
 using generic_tests::GenericPair;
 using generic_tests::GenericRecursive;
@@ -55,24 +54,6 @@ BAML_TEST(identity_explicit) {
 
 BAML_TEST(identity_async_explicit) {
   BAML_ASSERT_EQ(generic_tests::identity_async<int64_t>(7).get(), int64_t{7});
-}
-
-BAML_TEST(tag_or_value_explicit) {
-  // `tag_or_value` reflects its bound `T` back as a string; `x` must inhabit
-  // the substituted `T | string | null`.
-  BAML_ASSERT_EQ(generic_tests::tag_or_value<int64_t>(
-                     std::variant<int64_t, std::string>{int64_t{5}}),
-                 std::string("int"));
-  // T=string makes the parameter variant<string, string>; the duplicate
-  // alternative needs in_place_index (the engine dedups the union).
-  BAML_ASSERT_EQ(generic_tests::tag_or_value<std::string>(
-                     std::variant<std::string, std::string>{
-                         std::in_place_index<0>, "plain"}),
-                 std::string("string"));
-  const StringIntPair pair{"b", 2};
-  const std::string tagged = generic_tests::tag_or_value<StringIntPair>(
-      std::variant<StringIntPair, std::string>{pair});
-  BAML_ASSERT(tagged.find("StringIntPair") != std::string::npos);
 }
 
 BAML_TEST(make_triple_explicit) {
@@ -211,14 +192,6 @@ BAML_TEST(choose_explicit) {
                  std::string("a"));
 }
 
-BAML_TEST(read_items_explicit) {
-  const ContainerShapes<int64_t> container{
-      1, {1, 2, 3}, {{"k", 4}}, std::nullopt, std::nullopt,
-  };
-  BAML_ASSERT(generic_tests::read_items<int64_t>(container) ==
-              (std::vector<int64_t>{1, 2, 3}));
-}
-
 // ===========================================================================
 // outbound generics
 // ===========================================================================
@@ -239,18 +212,6 @@ BAML_TEST(wrap_explicit) {
 BAML_TEST(make_int_box_reified) {
   const GenericBox<int64_t> box = generic_tests::make_int_box();
   BAML_ASSERT_EQ(box.value, int64_t{7});
-}
-
-BAML_TEST(make_int_container_reified) {
-  // The single int binding is reified into every field shape (bare, list,
-  // map, optional, union).
-  const ContainerShapes<int64_t> c = generic_tests::make_int_container();
-  BAML_ASSERT_EQ(c.item, int64_t{1});
-  BAML_ASSERT(c.items == (std::vector<int64_t>{1, 2, 3}));
-  BAML_ASSERT(c.by_key == (std::map<std::string, int64_t>{{"k", 4}}));
-  BAML_ASSERT(!c.maybe.has_value());
-  BAML_ASSERT(c.mixed == (std::optional<std::variant<int64_t, std::string>>{
-                             std::variant<int64_t, std::string>{int64_t{5}}}));
 }
 
 BAML_TEST(make_nested_box_reified) {

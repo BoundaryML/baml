@@ -1250,16 +1250,18 @@ fn translate_ty(
                     other => return other,
                 }
             }
-            // BAML unions are sets (string | int == int | string), so the
-            // C++ spelling must be a function of the member set, not the
-            // declaration sequence: canonical order = sorted rendered types.
-            // Decode order independence is the codec's job (exact-kind pass
-            // before widening pass in Codec<std::variant>).
+            // Multi-member unions (std::variant) are disabled pending a
+            // representation redesign; only the null-normalized single-
+            // member forms (T? and bare T after dedup) emit.
             alternatives.sort();
             let inner = match alternatives.as_slice() {
                 [] => return Translated::Unsupported("empty union".to_string()),
                 [single] => single.clone(),
-                _ => format!("std::variant<{}>", alternatives.join(", ")),
+                _ => {
+                    return Translated::Unsupported(
+                        "union type (disabled pending redesign)".to_string(),
+                    );
+                }
             };
             if had_null {
                 // A nullable boxed recursive edge cannot be optional<Box<T>>
