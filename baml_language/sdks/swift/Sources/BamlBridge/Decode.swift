@@ -300,6 +300,13 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
     case .ok(let value):
         return BamlOutboundValue(value)
     case .error(let error):
+        // Same-process host-callable rehydration: a Swift error thrown
+        // inside a passed-in callback comes back as the ORIGINAL error
+        // object, not a BamlError wrapper (Python re-raises the exact
+        // exception the same way).
+        if let original = rehydrateHostError(error.value) {
+            throw original
+        }
         throw bamlError(from: error.value, trace: error.trace)
     case .panic(let panic):
         if panic.isExitPanic {
@@ -307,7 +314,12 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
             exit(Int32(truncatingIfNeeded: panic.exitCode))
         }
         let (message, className) = describeThrownValue(panic.value)
-        throw BamlPanic(message: message, className: className, bamlTrace: panic.trace)
+        throw BamlPanic(
+            message: message,
+            className: className,
+            bamlTrace: panic.trace,
+            payload: BamlOutboundValue(panic.value)
+        )
     }
 }
 
@@ -316,7 +328,12 @@ private func bamlError(
     trace: [String]
 ) -> BamlError {
     let (message, className) = describeThrownValue(value)
-    return BamlError(message: message, className: className, bamlTrace: trace)
+    return BamlError(
+        message: message,
+        className: className,
+        bamlTrace: trace,
+        payload: BamlOutboundValue(value)
+    )
 }
 
 /// Best-effort human-readable rendering of a thrown value plus its

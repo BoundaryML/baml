@@ -37,7 +37,7 @@ use base64::Engine as _;
 
 use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
 pub use baml_codegen_types::{NamingConvention, OutputType};
-use emit::{RenderedField, indent_lines, render_class, render_enum, render_function,
+use emit::{FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
     render_type_alias, sort_key};
 use translate_ty::{TranslateCtx, normalize_union, translate_ty};
 
@@ -61,14 +61,22 @@ pub fn to_source_code_with_bytecode(
 
     // namespace path -> (sort_key -> rendered decl), BTree-sorted for
     // deterministic output.
+    // Iterate in sorted key order for deterministic output (the pool is
+    // a HashMap).
+    let mut sorted_pool: Vec<(&Name, &Symbol)> = pool.iter().collect();
+    sorted_pool.sort_by_key(|(key, _)| *key);
+
     let mut namespaces: BTreeMap<Vec<String>, BTreeMap<String, String>> = BTreeMap::new();
-    for (key, symbol) in pool {
-        if key.pkg.as_str() != "user" || key.is_stream() {
+    for (key, symbol) in sorted_pool {
+        if key.is_stream() {
             continue;
         }
+        let ns = translate_ty::namespace_for(key);
         let fqn = key.to_string();
         let rendered = match symbol {
-            Symbol::Function(function) => render_function(key, function, &ctx),
+            Symbol::Function(function) => {
+                render_callable(&key.to_string(), function, FnKind::Free, &ctx)
+            }
             Symbol::Class(class) => {
                 if !ctx.supported_classes.contains(&fqn) {
                     None
@@ -86,11 +94,6 @@ pub fn to_source_code_with_bytecode(
             }
         };
         let Some(rendered) = rendered else { continue };
-        let ns: Vec<String> = key
-            .namespace_path
-            .iter()
-            .map(|s| s.as_str().to_string())
-            .collect();
         let bare = key.bare_name().to_string();
         namespaces
             .entry(ns)
@@ -108,7 +111,10 @@ pub fn to_source_code_with_bytecode(
     }
 
     let root_decls = namespaces.remove(&Vec::new()).unwrap_or_default();
-    out.insert(PathBuf::from("Baml.swift"), render_root(&root_decls));
+    // Named `BamlRoot.swift`, NOT `Baml.swift`: the stdlib namespace
+    // emits `baml.swift`, and macOS filesystems are case-insensitive —
+    // the two would clobber each other.
+    out.insert(PathBuf::from("BamlRoot.swift"), render_root(&root_decls));
 
     // One file per top-level namespace segment; deeper segments nest as
     // enums inside it.
@@ -137,7 +143,7 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
     let mut supported_enums: BTreeSet<String> = BTreeSet::new();
 
     for (key, symbol) in pool {
-        if key.pkg.as_str() != "user" || key.is_stream() {
+        if key.is_stream() {
             continue;
         }
         match symbol {
@@ -164,10 +170,11 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
             supported_classes: supported_classes.clone(),
             supported_enums: supported_enums.clone(),
             supported_aliases: supported_aliases.clone(),
+            nullable_aliases: nullable_aliases_for(pool, &supported_aliases),
         };
         let mut changed = false;
         for (key, symbol) in pool {
-            if key.pkg.as_str() != "user" || key.is_stream() {
+            if key.is_stream() {
                 continue;
             }
             let fqn = key.to_string();
@@ -193,10 +200,12 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
             }
         }
         if !changed {
+            let nullable_aliases = nullable_aliases_for(pool, &supported_aliases);
             return TranslateCtx {
                 supported_classes,
                 supported_enums,
                 supported_aliases,
+                nullable_aliases,
             };
         }
     }
@@ -300,7 +309,25 @@ fn render_supported_class(
             doc: prop.docstring.clone(),
         });
     }
-    Some(render_class(class, key, &fields))
+
+    // Methods skip individually when their signature is unsupported —
+    // an unemittable method never drops the class (fields alone decide
+    // supportability, matching Python).
+    let mut methods = Vec::new();
+    for method in &class.static_methods {
+        let method_fqn = format!("{fqn}.{}", method.name.as_str());
+        if let Some(rendered) = render_callable(&method_fqn, method, FnKind::Static, ctx) {
+            methods.push(rendered);
+        }
+    }
+    for method in &class.instance_methods {
+        let method_fqn = format!("{fqn}.{}", method.name.as_str());
+        if let Some(rendered) = render_callable(&method_fqn, method, FnKind::Instance, ctx) {
+            methods.push(rendered);
+        }
+    }
+
+    Some(render_class(class, key, &fields, &methods))
 }
 
 
@@ -308,7 +335,7 @@ fn render_supported_class(
 /// arms after normalization — the shape that gets a nominal
 /// family-surface enum. Null-bearing recursive union aliases are
 /// unsupported (the nominal enum can't carry the `?`; no fixture).
-fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<Vec<Ty>> {
+fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<(Vec<Ty>, bool)> {
     if !alias.recursive {
         return None;
     }
@@ -316,13 +343,33 @@ fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<Vec<Ty>> {
         return None;
     };
     let (non_null, nullable) = normalize_union(members);
-    (!nullable && non_null.len() >= 2 && non_null.len() <= translate_ty::MAX_UNION_ARITY)
-        .then_some(non_null)
+    (non_null.len() >= 2 && non_null.len() <= translate_ty::MAX_UNION_ARITY)
+        .then_some((non_null, nullable))
+}
+
+
+/// Recursive union aliases whose union carries null (stdlib `json`):
+/// their references need a `?` suffix.
+fn nullable_aliases_for(
+    pool: &SymbolPool,
+    supported_aliases: &BTreeSet<String>,
+) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for (key, symbol) in pool {
+        let Symbol::TypeAlias(alias) = symbol else { continue };
+        let fqn = key.to_string();
+        if supported_aliases.contains(&fqn)
+            && matches!(recursive_union_alias_arms(alias), Some((_, true)))
+        {
+            out.insert(fqn);
+        }
+    }
+    out
 }
 
 /// Can this alias's definition be emitted under `ctx`?
 fn alias_definition_ok(alias: &TypeAlias, ctx: &TranslateCtx) -> bool {
-    if let Some(arms) = recursive_union_alias_arms(alias) {
+    if let Some((arms, _)) = recursive_union_alias_arms(alias) {
         return arms.iter().all(|m| translate_ty(m, ctx).is_some());
     }
     !alias.recursive && translate_ty(&alias.resolves_to, ctx).is_some()
@@ -333,7 +380,7 @@ fn alias_definition_ok(alias: &TypeAlias, ctx: &TranslateCtx) -> bool {
 /// everything else is a plain `typealias` (union targets spell as
 /// `BamlUnionN<...>` via translate_ty).
 fn render_alias(alias: &TypeAlias, key: &Name, ctx: &TranslateCtx) -> Option<String> {
-    if let Some(arms) = recursive_union_alias_arms(alias) {
+    if let Some((arms, _)) = recursive_union_alias_arms(alias) {
         return emit::render_recursive_union_alias(key, &arms, ctx);
     }
     render_type_alias(alias, ctx)
@@ -348,6 +395,9 @@ pub(crate) fn escape_ident(name: &str) -> String {
         "defer", "do", "else", "fallthrough", "for", "guard", "if", "in", "repeat", "return",
         "switch", "where", "while", "as", "catch", "false", "is", "nil", "rethrows", "self",
         "Self", "super", "throw", "throws", "true", "try",
+        // Not keywords, but special in type positions when used as
+        // nested type names (metatype syntax, existentials).
+        "Type", "Protocol", "Any",
     ];
     if KEYWORDS.contains(&name) {
         format!("`{name}`")
@@ -476,7 +526,7 @@ mod tests {
             .expect("valid base64");
         assert_eq!(decoded, bytecode);
 
-        assert!(files[&PathBuf::from("Baml.swift")].contains("public enum Baml"));
+        assert!(files[&PathBuf::from("BamlRoot.swift")].contains("public enum Baml"));
     }
 
     #[test]
@@ -485,36 +535,37 @@ mod tests {
             supported_classes: BTreeSet::new(),
             supported_enums: BTreeSet::new(),
             supported_aliases: BTreeSet::new(),
+            nullable_aliases: BTreeSet::new(),
         };
         let t = |ty: &Ty| translate_ty(ty, &ctx);
-        assert_eq!(t(&Ty::Int).as_deref(), Some("Int"));
-        assert_eq!(t(&Ty::Float).as_deref(), Some("Double"));
-        assert_eq!(t(&Ty::List(Box::new(Ty::Int))).as_deref(), Some("[Int]"));
+        assert_eq!(t(&Ty::Int).as_deref(), Some("Swift.Int"));
+        assert_eq!(t(&Ty::Float).as_deref(), Some("Swift.Double"));
+        assert_eq!(t(&Ty::List(Box::new(Ty::Int))).as_deref(), Some("[Swift.Int]"));
         assert_eq!(
             t(&Ty::Map {
                 key: Box::new(Ty::String),
                 value: Box::new(Ty::List(Box::new(Ty::Int)))
             })
             .as_deref(),
-            Some("[String: [Int]]")
+            Some("[Swift.String: [Swift.Int]]")
         );
         // string?[] → [String?]
         assert_eq!(
             t(&Ty::List(Box::new(Ty::Union(vec![Ty::String, Ty::Null])))).as_deref(),
-            Some("[String?]")
+            Some("[Swift.String?]")
         );
         // (int | string)[] — family reference, inline, no registry.
         assert_eq!(
             t(&Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::String])))).as_deref(),
-            Some("[BamlUnion2<Int, String>]")
+            Some("[BamlUnion2<Swift.Int, Swift.String>]")
         );
         // Same shape is the same type everywhere (structural identity).
         assert_eq!(
             t(&Ty::Union(vec![Ty::Int, Ty::String, Ty::Null])).as_deref(),
-            Some("BamlUnion2<Int, String>?")
+            Some("BamlUnion2<Swift.Int, Swift.String>?")
         );
         // int | int → dedup + singleton collapse.
-        assert_eq!(t(&Ty::Union(vec![Ty::Int, Ty::Int])).as_deref(), Some("Int"));
+        assert_eq!(t(&Ty::Union(vec![Ty::Int, Ty::Int])).as_deref(), Some("Swift.Int"));
         // Literal-only unions collapse to their base type — no raw enums.
         assert_eq!(
             t(&Ty::Union(vec![
@@ -522,7 +573,7 @@ mod tests {
                 Ty::Literal(baml_base::Literal::String("sent".into())),
             ]))
             .as_deref(),
-            Some("String")
+            Some("Swift.String")
         );
         // map with non-string key — not yet
         assert_eq!(

@@ -7,8 +7,7 @@
 // passes v. `opt1: int? = 5` has a literal default, `opt2: int? =
 // make_opt2()` an engine-evaluated expression default (99).
 //
-// Not ported: test_opt_box_method_matrix (static/instance methods,
-// Phase 4). test_negative_runtime_cases_reject is Python-only — the
+// test_negative_runtime_cases_reject is Python-only — the
 // unknown-kwarg / missing-required / duplicate-argument cases are all
 // compile errors in Swift, enforced by the generated signature itself.
 import XCTest
@@ -31,6 +30,16 @@ final class TestOptionalArgs: XCTestCase {
         // explicit null". The two must stay distinct within one call.
         XCTAssertEqual(try Baml.optional_args_probe(arg0: 1, opt1: .unset, opt2: nil), [1, 5, nil])
         XCTAssertEqual(try Baml.optional_args_probe(arg0: 1, opt1: nil, opt2: .unset), [1, nil, 99])
+    }
+
+    func test_opt_box_method_matrix() throws {
+        let box = try Baml.OptBox.make(base: 10)
+        XCTAssertEqual(box.base, 17)
+
+        let box2 = try Baml.OptBox.make(base: 10, opt1: .value(0))
+        XCTAssertEqual(box2.base, 10)
+        XCTAssertEqual(try box2.probe(arg0: 1), [10, 1, 5])
+        XCTAssertEqual(try box2.probe(arg0: 1, opt1: .value(8)), [10, 1, 8])
     }
 
     func test_optional_args_async_samples() async throws {

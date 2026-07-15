@@ -73,6 +73,8 @@ public final class BamlRuntime: @unchecked Sendable {
         }
 
         register_callback(bamlGlobalCompletion)
+        register_host_dispatch_callback(bamlHostDispatch)
+        register_host_release_callback(bamlHostRelease)
         initialized = true
     }
 

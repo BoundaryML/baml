@@ -20,11 +20,15 @@ pub(crate) struct TranslateCtx {
     pub supported_enums: BTreeSet<String>,
     /// FQNs of user type aliases that will be emitted.
     pub supported_aliases: BTreeSet<String>,
+    /// Recursive union aliases whose union is null-bearing (stdlib
+    /// `json`): the nominal enum holds the non-null arms, so every
+    /// reference site spells `Name?`.
+    pub nullable_aliases: BTreeSet<String>,
 }
 
 impl TranslateCtx {
     fn named_ref(&self, name: &Name, pool: &BTreeSet<String>) -> Option<String> {
-        if name.pkg.as_str() != "user" || name.is_stream() {
+        if name.is_stream() {
             return None;
         }
         let fqn = name.to_string();
@@ -36,14 +40,31 @@ impl TranslateCtx {
     }
 }
 
+/// Swift namespace segments for a symbol, mirroring Python's routing:
+/// pkg `user` → the namespace path as-is; pkg `baml` (stdlib) → under
+/// `baml`; any other package → under `vendor.<pkg>`.
+pub(crate) fn namespace_for(name: &Name) -> Vec<String> {
+    let mut ns: Vec<String> = Vec::new();
+    match name.pkg.as_str() {
+        "user" => {}
+        "baml" => ns.push("baml".to_string()),
+        other => {
+            ns.push("vendor".to_string());
+            ns.push(other.to_string());
+        }
+    }
+    ns.extend(name.namespace_path.iter().map(|s| s.as_str().to_string()));
+    ns
+}
+
 /// Fully-qualified Swift spelling of a generated type: the `Baml`
 /// namespace-enum tree mirrors the BAML namespace path. Always
 /// qualified so cross-namespace references need no imports.
 pub(crate) fn swift_type_path(name: &Name) -> String {
     let mut out = String::from("Baml");
-    for seg in &name.namespace_path {
+    for seg in namespace_for(name) {
         out.push('.');
-        out.push_str(&crate::escape_ident(seg.as_str()));
+        out.push_str(&crate::escape_ident(&seg));
     }
     out.push('.');
     out.push_str(&crate::escape_ident(name.bare_name()));
@@ -53,22 +74,23 @@ pub(crate) fn swift_type_path(name: &Name) -> String {
 /// Swift spelling of `ty`, or `None` if the type is not yet supported.
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
     match ty {
-        Ty::Int => Some("Int".to_string()),
+        Ty::Int => Some("Swift.Int".to_string()),
         // BAML float is f64.
-        Ty::Float => Some("Double".to_string()),
-        Ty::String => Some("String".to_string()),
-        Ty::Bool => Some("Bool".to_string()),
+        Ty::Float => Some("Swift.Double".to_string()),
+        Ty::String => Some("Swift.String".to_string()),
+        Ty::Bool => Some("Swift.Bool".to_string()),
         // Standalone `null` type: Swift has no untyped nil, so it gets
         // a unit-like runtime type that encodes/decodes as BAML null.
         Ty::Null => Some("BamlNull".to_string()),
-        Ty::Uint8Array => Some("Data".to_string()),
-        // Literal types collapse to their base type; Swift has no
-        // literal types and the engine re-validates values anyway.
+        Ty::Uint8Array => Some("Foundation.Data".to_string()),
+        // Standalone literal types collapse to their base type; Swift
+        // has no literal types and the engine re-validates values.
+        // (Literal-only UNIONS collapse the same way — no raw enums.)
         Ty::Literal(lit) => Some(
             match lit {
-                baml_base::Literal::String(_) => "String",
-                baml_base::Literal::Int(_) => "Int",
-                baml_base::Literal::Bool(_) => "Bool",
+                baml_base::Literal::String(_) => "Swift.String",
+                baml_base::Literal::Int(_) => "Swift.Int",
+                baml_base::Literal::Bool(_) => "Swift.Bool",
                 // Bigint / float literals: unsupported for now.
                 _ => return None,
             }
@@ -82,7 +104,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
             if !matches!(**key, Ty::String) {
                 return None;
             }
-            Some(format!("[String: {}]", translate_ty(value, ctx)?))
+            Some(format!("[Swift.String: {}]", translate_ty(value, ctx)?))
         }
         Ty::Union(members) => translate_union(members, ctx),
         // Generic classes are Phase 5; non-generic references resolve
@@ -94,7 +116,14 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
             ctx.named_ref(name, &ctx.supported_classes)
         }
         Ty::Enum(name) => ctx.named_ref(name, &ctx.supported_enums),
-        Ty::TypeAlias(name) => ctx.named_ref(name, &ctx.supported_aliases),
+        Ty::TypeAlias(name) => {
+            let path = ctx.named_ref(name, &ctx.supported_aliases)?;
+            if ctx.nullable_aliases.contains(&name.to_string()) {
+                Some(format!("{path}?"))
+            } else {
+                Some(path)
+            }
+        }
         // Unit is only meaningful in return position; the emitter
         // special-cases it. Everything else lands in later phases.
         _ => None,
