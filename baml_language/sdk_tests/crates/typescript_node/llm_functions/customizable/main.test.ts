@@ -16,7 +16,7 @@
 // header on `*$build_request`); that's deferred until the nodejs
 // runtime's request-introspection API is settled.
 
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as bamlSdk from "./baml_sdk/index.js";
 import * as lorem from "./baml_sdk/lorem/index.js";
@@ -120,45 +120,31 @@ function lowerCaseHeaders(headers: Record<string, string>): Record<string, strin
 }
 
 describe("llm_functions — shorthand client API keys", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("test_extract_resume_build_request_includes_openai_api_key", () => {
-    const previous = process.env.OPENAI_API_KEY;
-    process.env.OPENAI_API_KEY = "sk-openai-shorthand-test";
-    try {
-      const request = lorem.ExtractResume$build_request("Some resume text");
-      expect(lowerCaseHeaders(request.headers).authorization).toBe(
-        "Bearer sk-openai-shorthand-test",
-      );
-    } finally {
-      if (previous === undefined) delete process.env.OPENAI_API_KEY;
-      else process.env.OPENAI_API_KEY = previous;
-    }
+    vi.stubEnv("OPENAI_API_KEY", "sk-openai-shorthand-test");
+    const request = lorem.ExtractResume$build_request("Some resume text");
+    expect(lowerCaseHeaders(request.headers).authorization).toBe(
+      "Bearer sk-openai-shorthand-test",
+    );
   });
 
   it("test_streaming_extract_build_request_includes_openai_api_key", () => {
-    const previous = process.env.OPENAI_API_KEY;
-    process.env.OPENAI_API_KEY = "sk-openai-responses-test";
-    try {
-      const request = lorem.StreamingExtract$build_request("Some text to summarize");
-      expect(lowerCaseHeaders(request.headers).authorization).toBe(
-        "Bearer sk-openai-responses-test",
-      );
-    } finally {
-      if (previous === undefined) delete process.env.OPENAI_API_KEY;
-      else process.env.OPENAI_API_KEY = previous;
-    }
+    vi.stubEnv("OPENAI_API_KEY", "sk-openai-responses-test");
+    const request = lorem.StreamingExtract$build_request("Some text to summarize");
+    expect(lowerCaseHeaders(request.headers).authorization).toBe(
+      "Bearer sk-openai-responses-test",
+    );
   });
 
   it("test_classify_sentiment_build_request_includes_anthropic_api_key", () => {
-    const previous = process.env.ANTHROPIC_API_KEY;
-    process.env.ANTHROPIC_API_KEY = "sk-ant-shorthand-test";
-    try {
-      const request = ipsum.ClassifySentiment$build_request("I love this!");
-      expect(lowerCaseHeaders(request.headers)["x-api-key"]).toBe(
-        "sk-ant-shorthand-test",
-      );
-    } finally {
-      if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
-      else process.env.ANTHROPIC_API_KEY = previous;
-    }
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-shorthand-test");
+    const request = ipsum.ClassifySentiment$build_request("I love this!");
+    expect(lowerCaseHeaders(request.headers)["x-api-key"]).toBe(
+      "sk-ant-shorthand-test",
+    );
   });
 });

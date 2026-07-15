@@ -219,6 +219,7 @@ describe("generic function calls", () => {
   it("test_generic_static_infers_binding", () => {
     const box = GenericBox.new(5);
     expect(box).toBeInstanceOf(GenericBox);
+    expect(box.$types).toEqual({ T: "int" });
     expect(box.value).toBe(5);
   });
 
