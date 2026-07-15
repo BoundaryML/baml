@@ -1,0 +1,232 @@
+name: BAML Release - Build bridge_cffi
+
+# Builds the standalone `bridge_cffi` engine cdylib, one per target. This is a
+# LANGUAGE-NEUTRAL artifact: every dylib-loader SDK dlopens the same library at
+# runtime (the Rust `baml_bridge` crate today; the Go bridge when it migrates),
+# so it is built once here rather than inside any one language's SDK workflow.
+#
+# Adapts the legacy `libbaml-cffi` job shape (build -> rename to the loader's
+# expected asset name -> `.sha256` sidecar) but repointed at
+# `baml_language/crates/bridge_cffi`, stamped from the frozen plan, and built
+# with `release-bridge-cffi` (`panic = "unwind"` — the dylib loads into the
+# user's process, so `bridge_cffi`'s catch_unwind boundary must be able to
+# unwind). Unlike the legacy engine's `baml_cffi`, `bridge_cffi` vendors protoc
+# and has no Go bindings, so no protoc/protoc-gen-go/Go setup is needed.
+#
+# The smoke is language-neutral too: a stdlib `ctypes` dlopen + `version()`
+# handshake, so this workflow depends on no SDK crate. Full C-ABI invocation is
+# exercised by each SDK's own verify job.
+#
+# Consumer contract (for other bridges): one artifact per target named
+# `bridge-cffi-<target>`, each containing the cdylib plus its `.sha256`. The
+# cdylib filename matches `baml_bridge::loader::target_lib_filename`
+# (`libbaml_cffi-<triple>.{so,dylib}` on Unix, `baml_cffi-<triple>.dll` on
+# Windows); its C ABI `version()` returns the plan's canonical version. A Go
+# (or any) dylib-loader SDK consumes these the same way.
+#
+# NOTE (open question): the filename reuses the legacy `baml_cffi` convention;
+# the two families never collide because new-graph assets live under
+# `baml-language-<version>` tags, but a distinguishing name
+# (`bridge_cffi-<triple>`) is still on the table — it would change the loader
+# and this job together.
+#
+# Cross-compilation status (validate the full matrix with a `workflow_dispatch`
+# dry-run before other bridges depend on this):
+#   - darwin x86_64/aarch64: native cargo, aws-lc-sys cross-compile confirmed.
+#   - linux gnu x86_64/aarch64: `cross` with prebuilt aws-lc-sys bindings.
+#   - linux musl, windows aarch64: experimental until a dry-run confirms
+#     aws-lc-sys builds there (the fallback is the crate's `ring-crypto`
+#     feature, which sidesteps aws-lc-sys entirely).
+#   - windows x86_64: `AWS_LC_SYS_PREBUILT_NASM=1` (below) lets aws-lc-sys use
+#     its prebuilt NASM objects if the runner has no NASM.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        default: ""
+        required: false
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        default: ""
+        required: false
+  # Manual-only standalone trigger for testing this reusable workflow before it
+  # is wired into the release graph (with no inputs it builds a canary-stamped
+  # artifact). It is otherwise invoked via `workflow_call`.
+  workflow_dispatch:
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-bridge-cffi
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            use_cross: true
+            # Built via cross (older-glibc image) but a normal x86_64-linux-gnu
+            # .so, so the x86_64 glibc host can dlopen it for the smoke.
+            smoke: true
+
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            use_cross: true
+
+          # Experimental: aws-lc-sys on musl is unproven here; a leg failing
+          # must not fail the release (see continue-on-error below).
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-22.04
+            use_cross: true
+            experimental: true
+
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-22.04
+            use_cross: true
+            experimental: true
+
+          - target: x86_64-apple-darwin
+            os: macos-14
+
+          - target: aarch64-apple-darwin
+            os: macos-14
+            smoke: true
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-2022
+            smoke: true
+
+          # Experimental until a native arm64-Windows smoke exists.
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
+            smoke: true
+            experimental: true
+
+    name: ${{ matrix._.target }}
+    runs-on: ${{ matrix._.os }}
+    # Experimental targets are built when possible but never block the release.
+    continue-on-error: ${{ matrix._.experimental || false }}
+    env:
+      CARGO: cargo
+      # Let aws-lc-sys use its prebuilt NASM objects on Windows x86-64 if the
+      # runner has no NASM installed (consulted only there; harmless elsewhere).
+      AWS_LC_SYS_PREBUILT_NASM: "1"
+    steps:
+      - name: Setup build environment (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        shell: powershell
+        run: |
+          # rustup is not preinstalled on aarch64 Windows runners
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+              Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
+              .\rustup-init.exe --default-toolchain stable -y
+              Remove-Item "rustup-init.exe"
+              Add-Content -Path "$env:GITHUB_PATH" -Value "$env:USERPROFILE\.cargo\bin" -Encoding utf8
+          }
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Stamp release plan
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_PLAN_JSON:-}" ]]; then
+            printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          else
+            scripts/baml-language-version plan --channel canary --out release-plan.json
+          fi
+          scripts/baml-language-version stamp --plan release-plan.json
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix._.target }}
+          enable-cache: false
+
+      - name: Install cross (Linux targets)
+        if: matrix._.use_cross
+        run: |
+          set -euo pipefail
+          cargo install cross --locked --version 0.2.5
+          echo 'CARGO=cross' >> "$GITHUB_ENV"
+
+      - name: Build bridge_cffi cdylib
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          # `bridge_cffi` is `crate-type = ["cdylib", "lib"]`; the cdylib is the
+          # release artifact. `release-bridge-cffi` = release + panic = "unwind".
+          ${CARGO} build -p bridge_cffi --profile release-bridge-cffi --target "${{ matrix._.target }}"
+
+      - name: Rename and checksum artifact
+        id: artifact
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          target="${{ matrix._.target }}"
+          outdir="target/${target}/release-bridge-cffi"
+          case "$target" in
+            *windows*) base="bridge_cffi.dll";    asset="baml_cffi-${target}.dll" ;;
+            *apple*)   base="libbridge_cffi.dylib"; asset="libbaml_cffi-${target}.dylib" ;;
+            *)         base="libbridge_cffi.so";    asset="libbaml_cffi-${target}.so" ;;
+          esac
+
+          if [[ ! -f "${outdir}/${base}" ]]; then
+            echo "::error::expected cdylib ${outdir}/${base} not found"
+            ls -la "${outdir}" || true
+            exit 1
+          fi
+          mv "${outdir}/${base}" "${outdir}/${asset}"
+
+          # sha256 sidecar in `sha256sum` format (`<hash>  <name>`), which the
+          # loader's checksum parser reads.
+          (
+            cd "${outdir}"
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "${asset}"
+            else
+              shasum -a 256 "${asset}"
+            fi
+          ) > "${outdir}/${asset}.sha256"
+
+          echo "dir=${outdir}" >> "$GITHUB_OUTPUT"
+          echo "asset=${asset}" >> "$GITHUB_OUTPUT"
+          echo "Built ${asset}"
+          cat "${outdir}/${asset}.sha256"
+
+      - name: Smoke test the built library
+        if: matrix._.smoke
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          # Language-neutral smoke: dlopen + C-ABI version() handshake against
+          # the version this commit was stamped to. `release-plan.json` was
+          # written at the repo root by the stamp step.
+          expected="$(jq -r .canonical_version ../release-plan.json)"
+          python3 ../scripts/smoke-bridge-cffi.py \
+            "${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}" \
+            "$expected"
+
+      - name: Upload cdylib artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridge-cffi-${{ matrix._.target }}
+          path: |
+            baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}
+            baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.sha256
+          if-no-files-found: error
