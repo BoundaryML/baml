@@ -491,7 +491,10 @@ def check_release() -> None:
             in RUST_BRIDGE_VERSION_RS.read_text(encoding="utf-8")
         ),
         "rust bridge Cargo.toml version": (
-            f'version = "{expected.canonical_version}"'
+            # stamp() writes this from crates_io_version; check the same
+            # property (identity of canonical today, but the encodings may
+            # diverge as PyPI's already does).
+            f'version = "{expected.crates_io_version}"'
             in RUST_BRIDGE_CARGO_TOML.read_text(encoding="utf-8")
         ),
         "vsix package version": f'"version": "{expected.canonical_version}"' in VSIX_PACKAGE.read_text(encoding="utf-8"),

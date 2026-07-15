@@ -72,9 +72,11 @@ jobs:
           # --allow-dirty: the working tree carries the just-stamped version.
           # `cargo package` verifies by compiling the packaged crate in
           # isolation — its deps are all crates.io deps, so this proves the
-          # published `.crate` builds standalone. --target-dir isolates that
-          # verify build; the `.crate` itself still lands in target/package/.
-          cargo package -p baml_bridge --allow-dirty --target-dir target/package-build
+          # published `.crate` builds standalone. Leave --target-dir at the
+          # default: it relocates the `.crate` output too (to
+          # <dir>/package/), so overriding it would move the artifact away
+          # from the upload path below.
+          cargo package -p baml_bridge --allow-dirty
           crate="$(ls target/package/baml_bridge-*.crate)"
           (cd "$(dirname "$crate")" && sha256sum "$(basename "$crate")" > "$(basename "$crate").sha256")
           echo "Packaged ${crate}"

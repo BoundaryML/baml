@@ -354,6 +354,13 @@ pub fn to_source_code_with_bytecode(
                 quote! {
                     #![allow(non_camel_case_types, non_snake_case)]
 
+                    // BUG: `_inlinedbaml`/`_runtime` are not reserved against
+                    // user symbols. A root-level BAML class/enum named
+                    // `_inlinedbaml` or `_runtime` would emit a same-named
+                    // item that collides with these modules in Rust's type
+                    // namespace. The collision-rename machinery (`analyze.rs`)
+                    // handles namespace-vs-type collisions but not these
+                    // internal module names.
                     mod _inlinedbaml;
                     mod _runtime;
 

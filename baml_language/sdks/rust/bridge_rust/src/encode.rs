@@ -37,6 +37,10 @@ pub fn class(fqn: &str, fields: Vec<(&str, wire::InboundValue)>) -> wire::Inboun
                 .collect(),
             class_ty: Some(wire::BamlTyClass {
                 name: fqn.to_string(),
+                // Empty is correct for the current scope: sdkgen skips generic
+                // classes (`analyze.rs`), so every class routed here is
+                // non-parameterized. When generic classes land, their concrete
+                // type args must be threaded through this helper.
                 type_args: Vec::new(),
             }),
         })),

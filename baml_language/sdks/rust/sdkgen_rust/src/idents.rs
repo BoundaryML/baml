@@ -14,8 +14,16 @@ use proc_macro2::{Ident, Span};
 /// companions): those must be filtered or mangled upstream, so reaching
 /// here with one is a generator bug, never an input-dependent condition.
 pub(crate) fn ident(name: &str) -> Ident {
+    // A Rust identifier starts with a letter or `_` and continues with
+    // letters, digits, or `_`. The leading-character check also rejects the
+    // empty string (`next()` is `None`) and digit-leading names like
+    // `3d_shape`, which would otherwise fall through to a cryptic
+    // proc_macro2/syn panic instead of this generator-bug message.
     assert!(
-        !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_'),
+        name.chars()
+            .next()
+            .is_some_and(|c| c.is_alphabetic() || c == '_')
+            && name.chars().all(|c| c.is_alphanumeric() || c == '_'),
         "generator bug: `{name}` is not representable as a Rust identifier; \
          symbols with such names must be filtered or mangled before emission"
     );
@@ -76,5 +84,13 @@ mod tests {
         assert_eq!(ident("Self").to_string(), "Self_");
         assert_eq!(ident("super").to_string(), "super_");
         assert_eq!(dir_segment("self"), "self_");
+    }
+
+    #[test]
+    #[should_panic(expected = "not representable as a Rust identifier")]
+    fn digit_leading_name_is_a_generator_bug() {
+        // Not a valid Rust identifier — must fail with the generator-bug
+        // message rather than fall through to a proc_macro2/syn panic.
+        let _ = ident("3d_shape");
     }
 }

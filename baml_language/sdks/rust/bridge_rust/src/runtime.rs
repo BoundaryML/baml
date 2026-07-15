@@ -74,6 +74,10 @@ pub fn invoke_sync<R: BamlValue, E: BamlValue>(
         return Err(Error::CalledSyncFromAsync);
     }
     let receiver = dispatch(fqn, kwargs).map_err(Error::Sdk)?;
+    // Blocks until the engine delivers the result envelope via the callback.
+    // There is no timeout: the engine is contracted to complete every call
+    // (success, thrown error, or panic). A caller-facing timeout/cancellation
+    // path lands with the cancellation feature (`cancel_function_call`).
     let bytes = receiver.wait_blocking();
     decode::decode_result(&bytes)
 }

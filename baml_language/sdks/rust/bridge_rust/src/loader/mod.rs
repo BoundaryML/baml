@@ -98,6 +98,14 @@ static EXPLICIT_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 /// the path is ignored with a warning.
 pub fn set_shared_library_path(path: impl Into<PathBuf>) {
     let path = path.into();
+    // Hold the lock across the `engine_loaded()` check and the write. The load
+    // path snapshots `EXPLICIT_PATH` under the same lock (`from_process`), so
+    // this makes the check+write atomic with respect to that snapshot: a
+    // concurrent first load cannot clone `None` in between and silently drop
+    // the path.
+    let mut guard = EXPLICIT_PATH
+        .lock()
+        .expect("explicit library path lock poisoned");
     if crate::capi::engine_loaded() {
         log::warn(&format!(
             "set_shared_library_path called after the BAML library was initialized; \
@@ -106,9 +114,7 @@ pub fn set_shared_library_path(path: impl Into<PathBuf>) {
         ));
         return;
     }
-    *EXPLICIT_PATH
-        .lock()
-        .expect("explicit library path lock poisoned") = Some(path);
+    *guard = Some(path);
 }
 
 /// Initialize the engine now instead of lazily on the first BAML call —
