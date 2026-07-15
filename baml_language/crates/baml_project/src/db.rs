@@ -677,25 +677,17 @@ impl ProjectDatabase {
                     baml_compiler2_ppir::item_data::function_source_map(self, func_loc).span;
                 let body = baml_compiler2_ppir::function_body(self, func_loc);
 
-                // Check if this is an LLM function via declarative_meta (not body variant,
-                // since compiler2 desugars LLM functions to Expr bodies).
-                let is_llm = matches!(
-                    func_data.declarative_meta,
-                    Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(_))
-                );
-
-                result = if is_llm {
-                    let client_name =
-                        if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(ref llm)) =
-                            func_data.declarative_meta
-                        {
-                            llm.client
-                                .as_ref()
-                                .map(|c: &baml_db::Name| c.to_string())
-                                .unwrap_or_else(|| "unknown".to_string())
-                        } else {
-                            "unknown".to_string()
-                        };
+                // LLM functions desugar to Expr bodies, so it is `declarative_meta`
+                // (surfaced span-free by `function_llm_meta`) — not the body variant —
+                // that marks them.
+                result = if let Some(llm_meta) =
+                    baml_compiler2_ppir::item_data::function_llm_meta(self, func_loc)
+                {
+                    let client_name = llm_meta
+                        .client_name
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .unwrap_or_else(|| "unknown".to_string());
                     let mut graph = build_llm_control_flow_graph(function_name, &client_name);
                     if let Some(source_span) = self.source_span_for_range(source_file, func_span) {
                         if let Some(node) = graph.nodes.values_mut().next() {

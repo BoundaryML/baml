@@ -499,20 +499,20 @@ fn discover_legacy_tests(
     db: &ProjectDatabase,
     project: baml_workspace::Project,
 ) -> Vec<LegacyTest> {
-    use baml_db::baml_compiler2_hir;
+    use baml_db::baml_compiler2_ppir::item_data::{file_tests, test_data};
 
     let mut tests = Vec::new();
     let root = project.root(db);
 
     for source_file in db.get_source_files() {
-        let item_tree = baml_compiler2_hir::file_item_tree(db, source_file);
         // Root-relative for display, matching how emit records source paths —
         // keeps `--list` output identical between compiled and
         // bytecode-cache-served runs.
         let file_path = source_file.path(db);
         let file_path = file_path.strip_prefix(&root).unwrap_or(&file_path);
 
-        for test in item_tree.tests.values() {
+        for test_loc in file_tests(db, source_file) {
+            let test = test_data(db, *test_loc);
             for func_ref in &test.function_refs {
                 tests.push(LegacyTest {
                     function_name: func_ref.to_string(),

@@ -67,6 +67,36 @@ pub fn function_source_map<'db>(
     lower(db, function).1
 }
 
+/// The span-free facts a function's `declarative_meta` exposes for an LLM
+/// (`{ client …; prompt … }`) function: its declared client name (itself optional).
+/// [`function_llm_meta`] wraps this in an `Option`, where `None` marks a non-LLM
+/// function — so a client name can never be attached to one.
+///
+/// The full [`ast::LlmBodyDef`] (prompt template, interpolation spans, companion
+/// bodies) carries spans, so it stays behind a body-ish read. Metadata consumers
+/// that only need these facts front the item tree through this projection and get
+/// early cutoff — editing an unrelated function no longer invalidates them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionLlmMeta {
+    pub client_name: Option<Name>,
+}
+
+/// The [`FunctionLlmMeta`] projection for one function, or `None` when it is not an
+/// LLM function. See [`FunctionLlmMeta`] for why the full LLM body is excluded.
+#[salsa::tracked(returns(ref))]
+pub fn function_llm_meta<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Option<FunctionLlmMeta> {
+    let item_tree = crate::file_item_tree(db, function.file(db));
+    item_tree[function.id(db)]
+        .declarative_meta
+        .as_ref()
+        .map(|ast::DeclarativeMeta::Llm(llm)| FunctionLlmMeta {
+            client_name: llm.client.clone(),
+        })
+}
+
 /// Span-free semantic data for a function's *elaborated* signature — the
 /// canonical callable view TIR consumes.
 ///
