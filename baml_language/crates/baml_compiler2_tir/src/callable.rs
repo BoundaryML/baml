@@ -374,7 +374,7 @@ fn callable_throws_cycle_initial<'db>(
 
 #[salsa::tracked(returns(ref), cycle_initial=callable_throws_cycle_initial)]
 pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Ty {
-    // Phase 2c: a seeded value from a previous compile short-circuits body
+    // A seeded value from a previous compile short-circuits body
     // inference for a clean function, returning exactly the `Ty` this query
     // produced last time. `seeds.by_path(db)` is a *tracked* read of the
     // `SeededCallableThrows` input (present-from-construction, empty until

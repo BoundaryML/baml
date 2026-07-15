@@ -592,7 +592,8 @@ pub fn file_interface_fragment(db: &dyn crate::Db, file: SourceFile) -> FileInte
     let pkg_info = file_package::file_package(db, file);
     let ns_path = pkg_info.namespace_path.clone();
     let pkg_id = PackageId::new(db, pkg_info.package);
-    // Same resolution scope the pre-refactor inline lowering used.
+    // Lower against the package's resolved items so a per-file fragment matches
+    // the whole-package fold.
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let contributions = baml_compiler2_ppir::file_symbol_contributions(db, file);
 
@@ -676,9 +677,9 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
 
 /// Fold each file's `file_interface_fragment` into the whole-package interface.
 ///
-/// Driven by the resolved `pkg_items.namespaces` so the deterministic
-/// `contribs[0]` winner selection is untouched — only the per-item *lowering*
-/// moved into `file_interface_fragment`.
+/// Winner selection is driven by the resolved `pkg_items.namespaces` (the
+/// deterministic `contribs[0]` pick); per-item *lowering* lives in
+/// `file_interface_fragment`.
 fn fold_package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> PackageInterface {
     let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 

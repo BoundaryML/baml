@@ -88,7 +88,7 @@ unsafe impl salsa::Update for FileThrowFacts {
 /// Extract throw-analysis facts for every function defined in `file`
 /// (top-level functions and class methods; interface default methods are
 /// package-level defaults handled by the interface machinery, not solver
-/// nodes — mirroring the namespace-driven walk this replaces).
+/// nodes).
 ///
 /// This is the expensive half of throw inference (PPIR bodies + signature
 /// lowering), isolated per file so it can be (a) memoized at file
@@ -146,48 +146,17 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
         let short_name = &func_data.name;
         let key = function_key(db, func_loc, short_name);
-        let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+
+        let (direct, has_declared_contract) = extract_direct_and_declared(
+            db,
+            pkg_items,
+            &func_ns,
+            func_loc,
+            &func_data.generic_params,
+            &func_data.params,
+        );
+
         let body = baml_compiler2_ppir::function_body(db, func_loc);
-
-        // A declared `throws` clause is a *closed* contract (#3983): its lowered
-        // set is exactly what the function exposes to callers, replacing any
-        // body-derived facts (the firewall). There is no `_` open-hole merge.
-        let declared_throws = sig.throws.as_ref().map(|te| {
-            let mut diags = Vec::new();
-            let lowered = crate::lower_type_expr::lower_type_expr(
-                te,
-                &crate::lower_type_expr::ScopeCtx {
-                    db,
-                    package_items: pkg_items,
-                    ns_context: &func_ns,
-                    generic_params: &func_data.generic_params,
-                    bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
-                        db, func_loc,
-                    ),
-                    self_ty: None,
-                },
-                &mut diags,
-            );
-            drop(diags);
-            flatten_ty_to_facts(&lowered)
-        });
-
-        let direct = if let Some(declared) = declared_throws.clone() {
-            declared
-        } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-            let param_types = lower_param_types(
-                db,
-                pkg_items,
-                &func_ns,
-                &func_data.generic_params,
-                crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc),
-                &func_data.params,
-            );
-            collect_direct_throws(db, pkg_items, &func_ns, func_loc, expr_body, &param_types)
-        } else {
-            BTreeSet::new()
-        };
-
         let call_edges =
             if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
                 collect_call_targets(expr_body)
@@ -199,7 +168,7 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
             key,
             direct,
             call_edges,
-            has_declared_contract: declared_throws.is_some(),
+            has_declared_contract,
         });
     }
 
@@ -213,47 +182,16 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
             let method_short = Name::new(format!("{class_name}.{method_name}"));
             let key = function_key(db, func_loc, &method_short);
 
-            let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+            let (direct, has_declared_contract) = extract_direct_and_declared(
+                db,
+                pkg_items,
+                &func_ns,
+                func_loc,
+                &method_data.generic_params,
+                &method_data.params,
+            );
+
             let body = baml_compiler2_ppir::function_body(db, func_loc);
-
-            // Closed contract, same as top-level functions: a declared `throws`
-            // is the exact caller-visible set; no `_` open-hole merge.
-            let declared_throws = sig.throws.as_ref().map(|te| {
-                let mut diags = Vec::new();
-                let lowered = crate::lower_type_expr::lower_type_expr(
-                    te,
-                    &crate::lower_type_expr::ScopeCtx {
-                        db,
-                        package_items: pkg_items,
-                        ns_context: &func_ns,
-                        generic_params: &method_data.generic_params,
-                        bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
-                            db, func_loc,
-                        ),
-                        self_ty: None,
-                    },
-                    &mut diags,
-                );
-                drop(diags);
-                flatten_ty_to_facts(&lowered)
-            });
-
-            let direct = if let Some(declared) = declared_throws.clone() {
-                declared
-            } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                let param_types = lower_param_types(
-                    db,
-                    pkg_items,
-                    &func_ns,
-                    &method_data.generic_params,
-                    crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc),
-                    &method_data.params,
-                );
-                collect_direct_throws(db, pkg_items, &func_ns, func_loc, expr_body, &param_types)
-            } else {
-                BTreeSet::new()
-            };
-
             let call_edges =
                 if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
                     // Rewrite "self.X" call targets to "ClassName.X" so edges
@@ -270,7 +208,7 @@ pub fn file_throw_facts(db: &dyn crate::Db, file: baml_base::SourceFile) -> File
                 key,
                 direct,
                 call_edges,
-                has_declared_contract: declared_throws.is_some(),
+                has_declared_contract,
             });
         }
     }
@@ -301,32 +239,27 @@ pub fn solve_throw_sets<'db>(
     let mut graph: crate::analysis::AnalysisGraph<Name, ThrowFact> =
         crate::analysis::AnalysisGraph::new();
 
-    let mut call_edges: BTreeMap<Name, BTreeSet<Name>> = BTreeMap::new();
-    let mut has_declared_contract: BTreeMap<Name, bool> = BTreeMap::new();
-    // Track direct facts separately so we can merge cross-package facts before adding to graph
+    // Direct facts are enriched with cross-package throws before being added to
+    // the graph, so this is the one map that actually needs mutation; a function's
+    // call edges and declared-contract flag are read straight off `all_facts`.
     let mut direct_facts: BTreeMap<Name, BTreeSet<ThrowFact>> = BTreeMap::new();
     for facts in all_facts {
         direct_facts.insert(facts.key.clone(), facts.direct.clone());
-        call_edges.insert(facts.key.clone(), facts.call_edges.clone());
-        has_declared_contract.insert(facts.key.clone(), facts.has_declared_contract);
     }
 
     // Process call edges: for cross-package targets, merge their throw facts
     // into the caller's direct facts; for same-package targets, add edges.
-    for (from, targets) in &call_edges {
-        if has_declared_contract.get(from).copied().unwrap_or(false) {
+    for facts in all_facts {
+        if facts.has_declared_contract {
             continue;
         }
-        for to in targets {
+        for to in &facts.call_edges {
             if let Some(dep_throws) = lookup_dep_throw_set(&dep_interfaces, to) {
                 // Cross-package: merge dependency's transitive throw facts into caller's direct facts
                 direct_facts
-                    .entry(from.clone())
+                    .entry(facts.key.clone())
                     .or_default()
                     .extend(dep_throws.iter().cloned());
-            } else {
-                // Same-package: will add edge after nodes are added
-                // (edges added below)
             }
         }
     }
@@ -337,13 +270,13 @@ pub fn solve_throw_sets<'db>(
     }
 
     // Add same-package call edges
-    for (from, targets) in &call_edges {
-        if has_declared_contract.get(from).copied().unwrap_or(false) {
+    for facts in all_facts {
+        if facts.has_declared_contract {
             continue;
         }
-        for to in targets {
+        for to in &facts.call_edges {
             if lookup_dep_throw_set(&dep_interfaces, to).is_none() {
-                graph.add_edge(from.clone(), to.clone());
+                graph.add_edge(facts.key.clone(), to.clone());
             }
         }
     }
@@ -394,6 +327,62 @@ pub fn throw_set_key(namespace_path: &[Name], short_name: &Name) -> Name {
         parts.push(short_name.as_str().to_string());
         Name::new(parts.join("."))
     }
+}
+
+/// Compute a function's or method's direct throw set and whether it declares a
+/// `throws` contract. A declared `throws` clause is a *closed* contract (#3983):
+/// its lowered set is exactly what the function exposes to callers and replaces
+/// any body-derived facts (the firewall); otherwise the direct set is collected
+/// from the body. Shared by the top-level-function and class-method passes,
+/// which differ only in which item supplies `generic_params` / `params`.
+fn extract_direct_and_declared<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    ns_context: &[Name],
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    generic_params: &[Name],
+    params: &[baml_compiler2_hir::item_tree::FunctionParam],
+) -> (BTreeSet<ThrowFact>, bool) {
+    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
+    let body = baml_compiler2_ppir::function_body(db, func_loc);
+
+    let declared_throws = sig.throws.as_ref().map(|te| {
+        let mut diags = Vec::new();
+        let lowered = crate::lower_type_expr::lower_type_expr(
+            te,
+            &crate::lower_type_expr::ScopeCtx {
+                db,
+                package_items: pkg_items,
+                ns_context,
+                generic_params,
+                bounds: crate::lower_type_expr::function_in_scope_generic_param_bounds(
+                    db, func_loc,
+                ),
+                self_ty: None,
+            },
+            &mut diags,
+        );
+        drop(diags);
+        flatten_ty_to_facts(&lowered)
+    });
+
+    let direct = if let Some(declared) = declared_throws.clone() {
+        declared
+    } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
+        let param_types = lower_param_types(
+            db,
+            pkg_items,
+            ns_context,
+            generic_params,
+            crate::lower_type_expr::function_in_scope_generic_param_bounds(db, func_loc),
+            params,
+        );
+        collect_direct_throws(db, pkg_items, ns_context, func_loc, expr_body, &param_types)
+    } else {
+        BTreeSet::new()
+    };
+
+    (direct, declared_throws.is_some())
 }
 
 fn function_key<'db>(
