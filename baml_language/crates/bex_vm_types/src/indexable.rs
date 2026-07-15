@@ -533,10 +533,32 @@ pub type StackIndex = Index<StackKind>;
 pub type GlobalIndex = Index<GlobalKind>;
 
 #[cfg(feature = "heap_debug")]
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ObjectIndex {
     raw: usize,
     epoch: u32,
+}
+
+// The borsh wire format must be identical with and without `heap_debug`, so
+// a serialized `Program` (pack envelope, bytecode cache) written by one build
+// is readable by the other — e.g. `baml pack` run from a heap_debug build
+// embeds into a non-heap_debug `baml-pack-host`. `epoch` is a runtime GC-debug
+// tag: every `ObjectIndex` that reaches a serialized payload is a compile-time
+// pool index created via `from_raw` (epoch 0); live epochs exist only inside
+// the heap debugger and never cross serialization. So serialize `raw` alone,
+// exactly matching `Index<ObjectKind>`'s impl below, and rehydrate epoch 0.
+#[cfg(feature = "heap_debug")]
+impl BorshSerialize for ObjectIndex {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.raw, writer)
+    }
+}
+
+#[cfg(feature = "heap_debug")]
+impl BorshDeserialize for ObjectIndex {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        usize::deserialize_reader(reader).map(|raw| Self { raw, epoch: 0 })
+    }
 }
 
 #[cfg(feature = "heap_debug")]
