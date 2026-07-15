@@ -93,13 +93,34 @@ mod tests {
         assert!(e.payload["robot"].is_number(), "payload: {:?}", e.payload);
     }
 
-    /// The set of event names shipped in this build. Update this list and
-    /// `TELEMETRY.md`'s "What is collected" section in the same commit
-    /// whenever a new event is added.
+    /// Every event this build can emit must have a documented name. The
+    /// list below is the contract with `TELEMETRY.md`'s "What is being
+    /// collected?" section; when you add an event constructor, add its
+    /// actual constructed value to `all_shipped_events()` and its name
+    /// here (and the docs), in the same commit.
+    ///
+    /// This is not a tautology: it builds the real events via their
+    /// constructors and checks the names they *actually* produce against
+    /// the documented set, so renaming the wire name (e.g.
+    /// `"cli_invocation"` → `"cli_invoke"`) without updating the list and
+    /// docs fails the build.
     #[test]
-    fn event_names_snapshot() {
-        // Kept as a plain sorted list so a diff at review time is obvious.
-        let known: &[&str] = &["cli_invocation"];
-        assert_eq!(known, &["cli_invocation"]);
+    fn every_shipped_event_name_is_documented() {
+        let documented: &[&str] = &["cli_invocation"];
+        for event in all_shipped_events() {
+            assert!(
+                documented.contains(&event.event_name),
+                "event {:?} is emitted but not in the documented set {documented:?} \
+                 — add it here and to TELEMETRY.md",
+                event.event_name,
+            );
+        }
+    }
+
+    /// One representative value per event constructor in this crate. Add a
+    /// line here whenever you add a constructor to `TelemetryEvent`; the
+    /// test above then holds you to documenting its name.
+    fn all_shipped_events() -> Vec<TelemetryEvent> {
+        vec![TelemetryEvent::cli_invocation("fmt")]
     }
 }
