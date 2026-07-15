@@ -10,10 +10,10 @@ cd "$(dirname "$0")"
 
 WORKSPACE_ROOT="$(cd ../../../../.. && pwd)" # baml_language/
 
+# The generated SDK vendors the bridge headers; only the test harness
+# header comes from outside the generated tree.
 INCLUDES=(
     -I baml_sdk/include
-    -I "$WORKSPACE_ROOT/sdks/cpp/bridge_cpp/include"
-    -I "$WORKSPACE_ROOT/crates/bridge_cffi/include"
     -I "$WORKSPACE_ROOT/sdk_tests/crates/cpp/common"
 )
 LIBDIR="$WORKSPACE_ROOT/target/debug"

@@ -65,14 +65,6 @@ description = "Run clang-format over the hand-written C++ SDK sources"
 run = "scripts/fmt_cpp.sh"
 sources = ["sdks/cpp/**/*.h", "sdks/cpp/**/*.cc", "sdk_tests/crates/cpp/**/*.h", "sdk_tests/crates/cpp/**/*.cc"]
 
-[tasks.package-cpp]
-description = "Build bridge_cffi and assemble the baml-cpp lib/include tarball"
-run = "scripts/package_cpp_tarball.sh"
-
-[tasks.smoke-cpp]
-description = "Compile and run a C++ program against the packaged baml-cpp tarball"
-run = "scripts/smoke_cpp_tarball.sh"
-
 [tasks.insta-update]
 description = "Run all snapshot tests with INSTA_UPDATE=always"
 env = { INSTA_UPDATE = "always" }

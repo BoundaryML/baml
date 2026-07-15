@@ -240,8 +240,95 @@ pub fn to_source_code_with_bytecode(
         PathBuf::from("src/_inlinedbaml.cc"),
         render_inlinedbaml(user_baml_files, baml_bytecode),
     );
+    for (rel, content) in BRIDGE_HEADERS {
+        out.insert(PathBuf::from(rel), (*content).to_string());
+    }
     out
 }
+
+/// The bridge runtime headers, vendored verbatim into every generated SDK
+/// (embedded at emitter build time, so headers and generator are the same
+/// version by construction). The generated tree is self-contained source;
+/// the only external artifact is the shared runtime library the bridge
+/// dlopens at first use.
+const BRIDGE_HEADERS: &[(&str, &str)] = &[
+    (
+        "include/baml_cffi.h",
+        include_str!("../../../../crates/bridge_cffi/include/baml_cffi.h"),
+    ),
+    (
+        "include/baml/arg.h",
+        include_str!("../../bridge_cpp/include/baml/arg.h"),
+    ),
+    (
+        "include/baml/baml.h",
+        include_str!("../../bridge_cpp/include/baml/baml.h"),
+    ),
+    (
+        "include/baml/bigint.h",
+        include_str!("../../bridge_cpp/include/baml/bigint.h"),
+    ),
+    (
+        "include/baml/box.h",
+        include_str!("../../bridge_cpp/include/baml/box.h"),
+    ),
+    (
+        "include/baml/buffer.h",
+        include_str!("../../bridge_cpp/include/baml/buffer.h"),
+    ),
+    (
+        "include/baml/codec.h",
+        include_str!("../../bridge_cpp/include/baml/codec.h"),
+    ),
+    (
+        "include/baml/errors.h",
+        include_str!("../../bridge_cpp/include/baml/errors.h"),
+    ),
+    (
+        "include/baml/future.h",
+        include_str!("../../bridge_cpp/include/baml/future.h"),
+    ),
+    (
+        "include/baml/handle.h",
+        include_str!("../../bridge_cpp/include/baml/handle.h"),
+    ),
+    (
+        "include/baml/runtime.h",
+        include_str!("../../bridge_cpp/include/baml/runtime.h"),
+    ),
+    (
+        "include/baml/ty.h",
+        include_str!("../../bridge_cpp/include/baml/ty.h"),
+    ),
+    (
+        "include/baml/detail/call.h",
+        include_str!("../../bridge_cpp/include/baml/detail/call.h"),
+    ),
+    (
+        "include/baml/detail/host_value.h",
+        include_str!("../../bridge_cpp/include/baml/detail/host_value.h"),
+    ),
+    (
+        "include/baml/detail/json.h",
+        include_str!("../../bridge_cpp/include/baml/detail/json.h"),
+    ),
+    (
+        "include/baml/detail/loader.h",
+        include_str!("../../bridge_cpp/include/baml/detail/loader.h"),
+    ),
+    (
+        "include/baml/detail/proto.h",
+        include_str!("../../bridge_cpp/include/baml/detail/proto.h"),
+    ),
+    (
+        "include/baml/detail/registry.h",
+        include_str!("../../bridge_cpp/include/baml/detail/registry.h"),
+    ),
+    (
+        "include/baml/detail/wire.h",
+        include_str!("../../bridge_cpp/include/baml/detail/wire.h"),
+    ),
+];
 
 // ---------------------------------------------------------------------------
 // Name requests

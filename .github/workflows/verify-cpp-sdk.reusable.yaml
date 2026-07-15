@@ -1,0 +1,156 @@
+name: BAML SDK Release - Verify C++
+
+# The C++ SDK ships no artifact of its own: `baml-cli generate` vendors the
+# bridge headers into the generated source tree, and the runtime library is
+# the shared language-neutral `bridge_cffi` cdylib built once by
+# build2-bridge-cffi.reusable.yaml (invariant: language jobs consume shared
+# artifacts, never rebuild private runtimes).
+#
+# This workflow is therefore verify-only: for every supported target it
+# downloads the final `bridge-cffi-<target>` artifact, renames it to the
+# canonical loader filename, compiles the in-repo bridge consumer smoke
+# (runtime_smoke.cc: load via BAML_RUNTIME_PATH, ABI-table validation,
+# register_bridge, end-to-end calls, host callables), runs it against the
+# artifact, and asserts the canonical version. musl runs inside a real
+# Alpine userspace; Windows compiles with MSVC.
+
+on:
+  workflow_call:
+    inputs:
+      release_plan_json:
+        description: "Frozen BAML language release-plan.json content"
+        type: string
+        required: true
+      source_sha:
+        description: "Exact repository commit to build"
+        type: string
+        required: true
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-verify-cpp-sdk
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Matrices are derived from the repository-owned platform contract so the
+  # target list is not another copied YAML matrix (bridge-release-contract.md).
+  platform-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.derive.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+          sparse-checkout: release
+      - id: derive
+        run: |
+          set -euo pipefail
+          matrix="$(jq -c '{include: [.targets[] | select(.sdks.cpp != null and .sdks.cpp != "unsupported")]}' release/platforms.json)"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: platform-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.platform-matrix.outputs.matrix) }}
+    name: verify ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bridge-cffi-${{ matrix.target }}
+          path: runtime-dist
+
+      - name: Resolve expected version
+        env:
+          RELEASE_PLAN_JSON: ${{ inputs.release_plan_json }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$RELEASE_PLAN_JSON" > release-plan.json
+          expected="$(jq -r .canonical_version release-plan.json)"
+          echo "BAML_EXPECTED_VERSION=$expected" >> "$GITHUB_ENV"
+
+      - name: Verify checksum and stage canonical filename
+        run: |
+          set -euo pipefail
+          cd runtime-dist
+          if command -v sha256sum > /dev/null; then
+            sha256sum -c ./*.sha256
+          else
+            shasum -a 256 -c ./*.sha256
+          fi
+          # The release asset carries the loader's triple-suffixed name;
+          # stage it under the canonical filename the C++ contract uses.
+          case '${{ matrix.target }}' in
+            *apple*)   canonical="libbridge_cffi.dylib" ;;
+            *windows*) canonical="bridge_cffi.dll" ;;
+            *)         canonical="libbridge_cffi.so" ;;
+          esac
+          shopt -s nullglob
+          for lib in libbaml_cffi-*.so libbaml_cffi-*.dylib baml_cffi-*.dll; do
+            cp "$lib" "$canonical"
+          done
+          test -f "$canonical"
+          echo "BAML_RUNTIME_PATH=$PWD/$canonical" >> "$GITHUB_ENV"
+
+      - name: Consumer smoke (unix)
+        if: matrix.libc != 'musl' && !contains(matrix.target, 'windows')
+        run: |
+          set -euo pipefail
+          c++ -std=c++17 -Wall -Wextra -Werror \
+            -Ibaml_language/sdks/cpp/bridge_cpp/include \
+            -Ibaml_language/crates/bridge_cffi/include \
+            baml_language/sdks/cpp/bridge_cpp/tests/runtime_smoke.cc -o smoke
+          out="$(./smoke)"
+          echo "$out"
+          echo "$out" | grep -qx "version: $BAML_EXPECTED_VERSION"
+
+      - name: Consumer smoke (musl container)
+        if: matrix.libc == 'musl'
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/work" -w /work \
+            -e BAML_RUNTIME_PATH=/work/runtime-dist/libbridge_cffi.so \
+            -e BAML_EXPECTED_VERSION \
+            ${{ matrix.smoke_container }} \
+            sh -c 'apk add --no-cache bash g++ && \
+              g++ -std=c++17 -Wall -Wextra -Werror \
+                -Ibaml_language/sdks/cpp/bridge_cpp/include \
+                -Ibaml_language/crates/bridge_cffi/include \
+                baml_language/sdks/cpp/bridge_cpp/tests/runtime_smoke.cc -o smoke && \
+              out="$(./smoke)" && echo "$out" && \
+              echo "$out" | grep -qx "version: $BAML_EXPECTED_VERSION"'
+
+      - name: Consumer smoke (windows)
+        if: contains(matrix.target, 'windows')
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -property installationPath
+          if (-not $vsPath) { throw "no Visual Studio installation found via vswhere" }
+          Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+          Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation `
+            -DevCmdArguments "-arch=${{ matrix.msvc_arch }} -host_arch=${{ matrix.msvc_arch }}"
+          # /TP: cl does not recognize .cc as a C++ source extension on its own.
+          cl /nologo /std:c++17 /EHsc /TP `
+            /I baml_language\sdks\cpp\bridge_cpp\include `
+            /I baml_language\crates\bridge_cffi\include `
+            baml_language\sdks\cpp\bridge_cpp\tests\runtime_smoke.cc /Fesmoke.exe
+          if ($LASTEXITCODE -ne 0) { throw "MSVC compile failed" }
+          $out = & .\smoke.exe
+          if ($LASTEXITCODE -ne 0) { throw "smoke.exe exited with $LASTEXITCODE" }
+          Write-Output $out
+          if (-not ($out -contains "version: $env:BAML_EXPECTED_VERSION")) {
+            throw "expected version $env:BAML_EXPECTED_VERSION not reported"
+          }
