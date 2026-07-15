@@ -15,6 +15,13 @@ use napi_derive::napi;
 
 #[napi_derive::module_init]
 fn init() {
+    if let Err(error) = bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
+        language: bridge_cffi::BridgeLanguage::NodeJs,
+        sdk_version: baml_version::CANONICAL_VERSION.to_string(),
+    }) {
+        eprintln!("failed to register BAML Node.js bridge: {error}");
+    }
+
     // Wire the bridge_cffi C entry points to this bridge's per-process
     // Node host-value registry. First-call-wins inside bridge_cffi, so
     // repeated module loads (rare under napi-rs, which loads each addon

@@ -7,10 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{
-    baml_compiler_diagnostics::{Severity, render},
-    baml_compiler2_emit,
-};
+use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, UserFunctionInfo};
 // `surface_clap_error` is defined later in this file.
@@ -20,8 +17,8 @@ use sys_native::{CallId, SysOpsExt};
 
 use crate::{
     project_load::{
-        find_project_root_from, load_project_for_build, load_project_or_default,
-        resolve_standalone_file, validate_file_from_flags,
+        find_project_root_from, load_project_or_default, resolve_standalone_file,
+        validate_file_from_flags,
     },
     reporter::Reporter,
 };
@@ -206,42 +203,37 @@ impl RunArgs {
         bail_context: &str,
         reporter: &Reporter,
     ) -> Result<()> {
-        let project = db
-            .get_project()
-            .ok_or_else(|| anyhow!("No project context"))?;
-        let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(db, project, &source_files);
+        // The honest full check: every file is re-diagnosed. Used on the
+        // no-cache path and for standalone/expression modes. The cached warm
+        // path narrows this through `collect_diagnostics_incremental`, whose
+        // merged set is byte-identical here.
+        let diagnostics = baml_project::collect_diagnostics(db);
+        self.render_and_bail_on_errors(&diagnostics, db, bail_context, reporter)
+    }
 
+    /// Filter `diagnostics` to errors and, if any, render the full ariadne block
+    /// (sources/paths for every user file plus builtins, since an error may carry
+    /// cross-file spans) and bail with `bail_context`. Warnings are intentionally
+    /// not surfaced.
+    fn render_and_bail_on_errors(
+        &self,
+        diagnostics: &[baml_db::baml_compiler_diagnostics::Diagnostic],
+        db: &ProjectDatabase,
+        bail_context: &str,
+        reporter: &Reporter,
+    ) -> Result<()> {
         let errors: Vec<_> = diagnostics
             .iter()
             .filter(|d| d.severity == Severity::Error)
+            .cloned()
             .collect();
-        let needs_sources = !errors.is_empty();
-        let (sources, file_paths) = if needs_sources {
-            let mut sources = HashMap::new();
-            let mut file_paths = HashMap::new();
-            for sf in &source_files {
-                let file_id = sf.file_id(db);
-                sources.insert(file_id, sf.text(db).to_string());
-                file_paths.insert(file_id, sf.path(db));
-            }
-            (sources, file_paths)
-        } else {
-            (HashMap::new(), HashMap::new())
-        };
-
-        if !errors.is_empty() {
-            let rendered = render::render_diagnostics(
-                &errors.iter().copied().cloned().collect::<Vec<_>>(),
-                &sources,
-                &file_paths,
-                &render::RenderConfig::cli_auto(),
-            );
-            reporter.abandon();
-            eprintln!("{rendered}");
-            anyhow::bail!("{bail_context}");
+        if errors.is_empty() {
+            return Ok(());
         }
-        Ok(())
+        let rendered = crate::check_command::render_project_diagnostics(db, &errors);
+        reporter.abandon();
+        eprintln!("{rendered}");
+        anyhow::bail!("{bail_context}");
     }
 
     /// Compile `db` to bytecode and build a `BexEngine`.
@@ -691,26 +683,122 @@ impl RunArgs {
             return self.load_and_compile_standalone(file, argv, reporter);
         }
 
-        // Per-file `Loading <file>` progress is verbose-only — by default
-        // the single `Compiling N file(s)` line below is the only progress a
-        // run shows.
-        let (db, from, baml_files) = load_project_for_build(self.from.as_deref(), reporter, false)?;
-        self.vlog(format_args!("Loading project from {}", from.display()));
-        if baml_files.is_empty() {
-            anyhow::bail!("No .baml files found in {}", from.display());
+        let resolved = crate::project_load::resolve_project_sources(self.from.as_deref())?;
+        self.vlog(format_args!(
+            "Loading project from {}",
+            resolved.root.display()
+        ));
+        if resolved.files.is_empty() {
+            anyhow::bail!("No .baml files found in {}", resolved.root.display());
         }
-        self.vlog(format_args!("Found {} .baml file(s)", baml_files.len()));
-        let needs_format_hint = baml_files.iter().any(|path| {
-            std::fs::read_to_string(path)
-                .map(|source| source_needs_format_hint(&source))
-                .unwrap_or(false)
-        });
+        self.vlog(format_args!("Found {} .baml file(s)", resolved.files.len()));
+        let needs_format_hint = resolved
+            .files
+            .iter()
+            .any(|(_, source)| source_needs_format_hint(source));
+
+        // Building the database only sets salsa inputs — the expensive work
+        // (typecheck, emit) happens lazily in the queries below, which a
+        // bytecode-cache hit skips entirely.
+        let mut db = crate::project_load::build_db_from_sources(&resolved, |_| {});
+
+        let cache =
+            crate::bytecode_cache::CacheContext::open(&resolved, /* emit_test_cases */ false);
+        if !crate::bytecode_cache::CacheContext::verify_enabled()
+            && let Some(ctx) = &cache
+            && let Some(program) = ctx.load()
+        {
+            self.vlog(format_args!("Bytecode cache hit — skipping compile"));
+            match BexEngine::new(
+                program,
+                Arc::new(sys_native::SysOps::native()),
+                argv.clone(),
+            ) {
+                Ok(engine) => return Ok((db, engine, needs_format_hint)),
+                Err(error) => crate::bytecode_cache::cache_debug(format_args!(
+                    "cached program rejected by VM; recompiling: {error:?}"
+                )),
+            }
+        }
+
+        // Seed the stdlib typed interface before the first typecheck query (a
+        // build constant, so it applies to every compile independent of the reuse
+        // plan and is gated off under verify) and prepare the per-file reuse plan
+        // — the same warm-database setup `check` and `test` run.
+        let (reuse_plan, stdlib_interface_hit) = match &cache {
+            Some(ctx) => {
+                let prep = ctx.prepare_warm_db(&mut db);
+                if let Some(plan) = &prep.reuse_plan {
+                    self.vlog(format_args!(
+                        "Per-file reuse: {} clean, {} dirty",
+                        plan.clean_files.len(),
+                        plan.dirty_files.len()
+                    ));
+                }
+                (prep.reuse_plan, prep.stdlib_interface_hit)
+            }
+            None => (None, false),
+        };
 
         // `baml run` keeps the compile phase silent; the program's output is
         // the point. Compile/count progress belongs to `check` and `generate`.
-        self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
+        //
+        // With a cache, gate diagnostics through the incremental collector: it
+        // checks only the reuse plan's dirty files and serves clean files from
+        // their cached blobs, returning the fresh per-file blobs to persist.
+        // Without a cache, run the honest full check (no blobs to store).
+        let fresh_diagnostics = if let Some(ctx) = &cache {
+            let incremental = ctx.collect_diagnostics_incremental(&db, reuse_plan.as_ref());
+            self.render_and_bail_on_errors(
+                &incremental.merged,
+                &db,
+                "Cannot run: compilation errors found",
+                reporter,
+            )?;
+            Some(incremental.fresh_by_file)
+        } else {
+            self.check_project_diagnostics(&db, "Cannot run: compilation errors found", reporter)?;
+            None
+        };
         self.vlog(format_args!("Compiling..."));
-        let engine = self.compile_to_engine(&db, argv)?;
+        let compiled = crate::bytecode_cache::compile_program_artifacts(
+            &db,
+            &baml_compiler2_emit::CompileOptions {
+                emit_test_cases: false,
+            },
+            cache.as_ref(),
+            reuse_plan.as_ref(),
+        )
+        .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+        if let Some(ctx) = &cache {
+            let fresh = fresh_diagnostics
+                .as_ref()
+                .expect("a cache is present, so fresh diagnostics were computed");
+            ctx.verify_and_store(
+                &db,
+                &compiled,
+                fresh,
+                reuse_plan.as_ref(),
+                stdlib_interface_hit,
+                || crate::project_load::build_db_from_sources(&resolved, |_| {}),
+            )?;
+        }
+        // Warm-incremental evidence: with the diagnostics cache serving clean
+        // files, this counts only the dirty files' scopes; a cold compile walks
+        // every scope.
+        crate::bytecode_cache::cache_debug(format_args!(
+            "scope inferences: {} this process",
+            baml_db::baml_compiler2_tir::inference::scope_inferences()
+        ));
+        // Warm-run evidence: with the stdlib interface seeded, this is 0 (the
+        // seed served every stdlib package); a cold run reports up to 6.
+        crate::bytecode_cache::cache_debug(format_args!(
+            "stdlib interface: {} honest derivation(s) this process",
+            baml_db::baml_compiler2_tir::package_interface::stdlib_honest_derivations()
+        ));
+        let program = compiled.program;
+        let engine = BexEngine::new(program, Arc::new(sys_native::SysOps::native()), argv)
+            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
         self.vlog(format_args!(
             "Compiled {} user function(s)",
             engine.user_functions().len()

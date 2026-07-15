@@ -263,6 +263,29 @@ struct SourceState {
     /// path identity the database uses. Updated in the same transaction as
     /// the text they describe.
     open_documents: HashMap<std::path::PathBuf, i32>,
+    /// Cold-open per-file cache seeds, loaded from disk at construction and
+    /// retained so each full reload can re-evaluate them (whole-project-clean
+    /// gated). Dropped to `None` on the first content edit — from then on the
+    /// project is "live" and every query recomputes honestly. See
+    /// [`crate::seed`].
+    seed_source: Option<crate::seed::PerFileSeeds>,
+    /// Whether per-file throw-facts / `callable_throws` seeds are currently
+    /// installed in the database, so a full reload evicts before re-applying and
+    /// an edit evicts before dropping them.
+    per_file_seeds_active: bool,
+}
+
+impl SourceState {
+    /// Evict any installed per-file seeds and clear the active flag. Called
+    /// before re-applying seeds on a full reload and before dropping them on an
+    /// edit — the seeds hide transitive throws / name-resolution edges, so they
+    /// can never survive a content change soundly.
+    fn deactivate_per_file_seeds(&mut self) {
+        if self.per_file_seeds_active {
+            crate::seed::evict_per_file_seeds(&mut self.db);
+            self.per_file_seeds_active = false;
+        }
+    }
 }
 
 /// Read guard over the source gate. Exposes the database plus the revision
@@ -522,12 +545,26 @@ pub(crate) struct BexProject {
 impl BexProject {
     pub(crate) fn new(root_path: &vfs::VfsPath, sys_ops: Arc<SysOps>) -> Self {
         let mut db = baml_project::ProjectDatabase::new();
-        db.set_project_root(crate::fs::FsPath::from_vfs(root_path).as_path());
+        let root = crate::fs::FsPath::from_vfs(root_path);
+        db.set_project_root(root.as_path());
+
+        // Cold-open cache seeding: load the CLI-written blobs now, at
+        // construction — all disk I/O happens here, before the database goes
+        // behind the source gate (never inside a request). The content-
+        // independent stdlib interface is installed immediately; the per-file
+        // seeds are retained for the first source population (see
+        // `mutate_sources`). Any absence/corruption/opt-out yields no seeds and
+        // today's cold build. See [`crate::seed`].
+        let seed_source = crate::seed::LspSeedCache::load_for_root(root.as_path())
+            .and_then(|seed| seed.install_stdlib(&mut db));
+
         Self {
             source: Mutex::new(SourceState {
                 db,
                 revision: SourceRevision(0),
                 open_documents: HashMap::new(),
+                seed_source,
+                per_file_seeds_active: false,
             }),
             observed_revision: AtomicU64::new(0),
             broken: OnceLock::new(),
@@ -697,6 +734,31 @@ impl BexProject {
                     source.open_documents.remove(&key);
                 }
             }
+        }
+
+        // Cold-open cache seeding / eviction (see [`crate::seed`]). No I/O runs
+        // here — the blobs were decoded at construction — so the source gate is
+        // held no longer than the plain batch apply already required.
+        //
+        // A full reload (`replace_all`: discovery, didOpen, watched-file refresh)
+        // re-evaluates the per-file seeds against the freshly-loaded content,
+        // whole-project-clean gated, so they survive the discovery→didOpen
+        // reload pair and serve the first diagnostics. A content edit
+        // (didChange/didClose) evicts them and drops the seed source — the
+        // project is now "live" and every query must recompute honestly (the
+        // seeds hide transitive throws / name-resolution edges, so no per-file
+        // eviction could keep them sound past an edit).
+        if batch.replace_all {
+            if let Some(seeds) = source.seed_source.take() {
+                source.deactivate_per_file_seeds();
+                if let Some(root) = source.db.get_project().map(|p| p.root(&source.db)) {
+                    source.per_file_seeds_active = seeds.apply(&mut source.db, &root);
+                }
+                source.seed_source = Some(seeds);
+            }
+        } else if source.per_file_seeds_active || source.seed_source.is_some() {
+            source.deactivate_per_file_seeds();
+            source.seed_source = None;
         }
 
         source.revision = SourceRevision(source.revision.0 + 1);

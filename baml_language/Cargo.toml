@@ -69,6 +69,7 @@ baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
+bex_cache = { path = "crates/bex_cache" }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
 sys_glob = { path = "crates/sys_glob" }
@@ -413,5 +414,14 @@ inherits = "release"
 panic = "unwind"
 
 [profile.release-bridge-node]
+inherits = "release"
+panic = "unwind"
+
+# `bridge_cffi` also ships as a standalone prebuilt cdylib (built once per
+# target, language-neutral) that dylib-loader SDKs dlopen at runtime, again
+# *inside the user's process* — so it needs `unwind` for the same reason: its
+# `catch_unwind` -> `SdkPanic` boundary only fires when the stack can unwind.
+# The standalone cdylib matrix selects it via `--profile release-bridge-cffi`.
+[profile.release-bridge-cffi]
 inherits = "release"
 panic = "unwind"

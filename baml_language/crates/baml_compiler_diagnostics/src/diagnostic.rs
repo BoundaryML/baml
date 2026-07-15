@@ -5,6 +5,7 @@
 //! This enables centralized rendering and consistent error handling.
 
 use baml_base::{FileId, Span};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 // ============================================================================
 // DiagnosticPhase - Tracks which compiler phase produced a diagnostic
@@ -14,7 +15,11 @@ use baml_base::{FileId, Span};
 ///
 /// This enables grouping diagnostics by phase for display purposes
 /// (e.g., in `tools_onionskin` TUI or `baml_tests` snapshots).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+///
+/// The Borsh derives serialize the variant as a declaration-order
+/// discriminant for the per-file diagnostics cache; reordering variants is a
+/// wire-format break gated by the cache's `FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, BorshSerialize, BorshDeserialize)]
 pub enum DiagnosticPhase {
     /// Parsing phase errors (syntax errors from the parser)
     #[default]
@@ -40,7 +45,11 @@ impl DiagnosticPhase {
 }
 
 /// Unique identifier for a diagnostic category.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// The Borsh derives serialize the variant as a declaration-order
+/// discriminant for the per-file diagnostics cache; reordering variants is a
+/// wire-format break gated by the cache's `FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum DiagnosticId {
     // Parse errors (E0009, E0010)
     UnexpectedEof,
@@ -536,7 +545,11 @@ impl DiagnosticId {
 }
 
 /// Severity level of a diagnostic.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// The Borsh derives serialize the variant as a declaration-order
+/// discriminant for the per-file diagnostics cache; reordering variants is a
+/// wire-format break gated by the cache's `FORMAT_VERSION`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum Severity {
     /// An error that prevents compilation.
     Error,
@@ -800,6 +813,33 @@ mod tests {
         for id in ids {
             let code = id.code();
             assert!(code.starts_with('E'), "Code should start with E: {code}");
+        }
+    }
+
+    #[test]
+    fn borsh_discriminants_are_stable() {
+        // The per-file diagnostics cache serializes these fieldless enums as a
+        // declaration-order discriminant. A snapshot of the first few variants
+        // guards against a silent reorder (which must instead bump the cache's
+        // `FORMAT_VERSION`). Borsh writes enum discriminants as a single byte.
+        assert_eq!(
+            borsh::to_vec(&DiagnosticId::UnexpectedEof).unwrap(),
+            vec![0]
+        );
+        assert_eq!(borsh::to_vec(&DiagnosticId::TypeMismatch).unwrap(), vec![3]);
+        assert_eq!(borsh::to_vec(&Severity::Error).unwrap(), vec![0]);
+        assert_eq!(borsh::to_vec(&Severity::Warning).unwrap(), vec![1]);
+        assert_eq!(borsh::to_vec(&DiagnosticPhase::Parse).unwrap(), vec![0]);
+        assert_eq!(borsh::to_vec(&DiagnosticPhase::Type).unwrap(), vec![3]);
+
+        // Round-trip every representative id to prove deserialize is the inverse.
+        for id in [
+            DiagnosticId::TypeMismatch,
+            DiagnosticId::DuplicateFieldAlias,
+            DiagnosticId::OverlappingImplements,
+        ] {
+            let bytes = borsh::to_vec(&id).unwrap();
+            assert_eq!(borsh::from_slice::<DiagnosticId>(&bytes).unwrap(), id);
         }
     }
 }

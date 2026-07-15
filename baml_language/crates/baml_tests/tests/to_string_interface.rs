@@ -18,9 +18,7 @@ fn compile_errors(source: &str) -> Vec<String> {
     use baml_compiler_diagnostics::Severity;
     use baml_project::{collect_diagnostics, testing::setup_test_db};
     let db = setup_test_db(source);
-    let project = db.get_project().expect("project");
-    let files = db.get_source_files();
-    collect_diagnostics(&db, project, &files)
+    collect_diagnostics(&db)
         .into_iter()
         .filter(|d| matches!(d.severity, Severity::Error))
         .map(|d| format!("[{}] {}", d.code(), d.message))

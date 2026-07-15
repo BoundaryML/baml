@@ -2468,22 +2468,19 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Build `class_type_tags` by iterating `compiler2_all_files` in the same order as the
-    /// emitter (`generate_project_bytecode` in `baml_compiler2_emit`). This guarantees that
-    /// the integer type tags stored in Switch arms exactly match the `class.type_tag` values
-    /// assigned to runtime Class objects.
+    /// Build `class_type_tags` for every class in the project.
+    ///
+    /// Tags are content-addressed (`typetag::class_type_tag` over the
+    /// fully-qualified name), so they match the `class.type_tag` values the
+    /// emitter assigns by construction — no iteration-order coupling — and a
+    /// class keeps its tag regardless of what other code exists.
     fn build_class_type_tags(db: &'db dyn crate::Db) -> IndexMap<TypeName, i64> {
         let all_files = compiler2_all_files(db);
         let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
-        let mut class_type_tag_counter = 0i64;
 
         for file in &all_files {
             let item_tree = file_item_tree(db, *file);
             let pkg_info = file_package(db, *file);
-
-            // Build module_path: [package] ++ namespace_path
-            let mut module_path: Vec<Name> = vec![pkg_info.package.clone()];
-            module_path.extend(pkg_info.namespace_path.iter().cloned());
 
             for class_data in item_tree.classes.values() {
                 let class_qtn = QualifiedTypeName::new(
@@ -2491,12 +2488,10 @@ impl<'db> LoweringContext<'db> {
                     pkg_info.namespace_path.clone(),
                     class_data.name.clone(),
                 );
-                let tn = class_qtn.clone();
-                let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
-                class_type_tag_counter += 1;
+                let type_tag = baml_type::typetag::class_type_tag(&class_qtn.render_dotted(false));
                 // Use entry to avoid overwriting if the same class appears via multiple paths
                 // (e.g., both FQ and short names). First encounter wins — consistent with emit.rs.
-                class_type_tags.entry(tn).or_insert(type_tag);
+                class_type_tags.entry(class_qtn).or_insert(type_tag);
             }
         }
 

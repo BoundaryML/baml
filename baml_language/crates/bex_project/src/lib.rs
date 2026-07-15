@@ -32,6 +32,7 @@ mod bex;
 mod bex_lsp;
 mod fs;
 mod project;
+mod seed;
 
 pub struct BexArgs(pub HashMap<String, BexExternalValue>);
 
