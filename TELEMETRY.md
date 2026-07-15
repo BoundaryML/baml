@@ -66,24 +66,25 @@ as marketing.
 
 You may opt out by running `baml telemetry disable`:
 
-```
+```bash
 baml telemetry disable
 ```
 
 You may check the status of telemetry collection at any time by running
 `baml telemetry`:
 
-```
+```bash
 baml telemetry
 ```
 
 You may re-enable telemetry if you'd like to re-join the program by
 running:
 
-```
+```bash
 baml telemetry enable
 ```
 
 You may also opt out by setting an environment variable:
 `BAML_TELEMETRY_DISABLED=1`. BAML also honors the cross-tool convention
-`DO_NOT_TRACK=1`.
+`DO_NOT_TRACK=1`. For backwards compatibility, the legacy
+`BAML_TELEMETRY=0` variable is honored as well.

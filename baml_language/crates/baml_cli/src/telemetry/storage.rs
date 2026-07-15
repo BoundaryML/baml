@@ -301,6 +301,11 @@ impl Telemetry {
     /// playground) deliver events within [`queue::ROTATE_INTERVAL`]
     /// instead of hoarding them until exit. Short commands exit before
     /// the first tick; the extra sleeping thread costs nothing.
+    ///
+    /// Each tick first refreshes the config from disk, so a long-running
+    /// process notices a `baml telemetry disable` issued in another
+    /// terminal within one interval and stops recording (its already-queued
+    /// events are then purged by the flush child — see [`queue::drain`]).
     fn spawn_rotation_timer(&self) {
         let this = self.clone();
         let _ = std::thread::Builder::new()
@@ -308,9 +313,27 @@ impl Telemetry {
             .spawn(move || {
                 loop {
                     std::thread::sleep(queue::ROTATE_INTERVAL);
+                    this.refresh_config();
                     this.rotate();
                 }
             });
+    }
+
+    /// Re-read `telemetry.toml` and adopt its current `enabled` state.
+    /// Lets a long-lived process pick up an opt-out (or opt-in) made after
+    /// it started, rather than holding the snapshot taken at [`load`].
+    /// Best-effort: an unreadable/corrupt file leaves the current state
+    /// untouched.
+    fn refresh_config(&self) {
+        let Ok(contents) = std::fs::read_to_string(&self.inner.config_path) else {
+            return;
+        };
+        let Ok(fresh) = toml::from_str::<Config>(&contents) else {
+            return;
+        };
+        if let Ok(mut cfg) = self.inner.config.lock() {
+            *cfg = fresh;
+        }
     }
 
     /// Seal the current live file (if it has events), point new records

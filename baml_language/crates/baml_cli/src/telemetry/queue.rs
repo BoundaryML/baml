@@ -167,6 +167,21 @@ pub(super) fn spawn_flush_child() {
 /// Runs in the detached child, after the parent CLI has already exited,
 /// so nothing here is latency-sensitive.
 pub(super) fn drain(dir: &Path, disabled: bool) {
+    if disabled {
+        // Opt-out wins retroactively and completely: remove *every* queue
+        // file — `live_*` (possibly still being written by a long-running
+        // process with a stale enabled config), `sealed_*`, and
+        // `sending_*` — not just the claimable sealed ones. This ensures
+        // no pre-opt-out data lingers on disk to be sent if telemetry is
+        // later re-enabled. A running writer whose config snapshot is
+        // still stale may append a fresh `live_*` after this, but its own
+        // rotation (≤10 min) refreshes the config and stops it, and the
+        // next flush child purges anything left — so lingering data is
+        // bounded to a single rotation window.
+        purge_all_in(dir);
+        return;
+    }
+
     purge_stale_in(dir);
     seal_orphans_in(dir);
 
@@ -281,6 +296,22 @@ fn purge_stale_in(dir: &Path) {
     }
 }
 
+/// Delete every queue file in any state (`live_*`, `sealed_*`,
+/// `sending_*`). Used when the user has opted out — see [`drain`].
+fn purge_all_in(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("live_") || name.starts_with("sealed_") || name.starts_with("sending_")
+        {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// Whether `path`'s mtime is older than `age`. Unreadable metadata or a
 /// clock anomaly reports `false` (i.e. "not old"), so we never delete a
 /// file we can't reason about.
@@ -365,6 +396,23 @@ mod tests {
         let a = new_live_path_in(dir.path());
         let b = new_live_path_in(dir.path());
         assert_ne!(a, b);
+    }
+
+    /// When opted out, `drain` removes every queue file in every state —
+    /// `live_*` (not yet sealed), `sealed_*`, and `sending_*` — so no
+    /// pre-opt-out data can survive to be sent on a later re-enable.
+    #[test]
+    fn drain_disabled_purges_all_states() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        fs::write(d.join("live_1_aaaa.jsonl"), r#"{"event":"a"}"#).unwrap();
+        fs::write(d.join("sealed_2_bbbb.jsonl"), r#"{"event":"b"}"#).unwrap();
+        fs::write(d.join("sending_3_sealed_4_cccc.jsonl"), r#"{"event":"c"}"#).unwrap();
+
+        drain(d, true);
+
+        let remaining = fs::read_dir(d).unwrap().flatten().count();
+        assert_eq!(remaining, 0, "disabled drain must purge the whole queue");
     }
 
     /// Fresh files survive both sweeps: too young to be orphans, too
