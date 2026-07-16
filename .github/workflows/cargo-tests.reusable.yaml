@@ -319,10 +319,14 @@ jobs:
 
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
       # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
-      # dedicated `sdk-tests` matrix below. Skip both here.
+      # dedicated `sdk-tests` matrix below. Skip both here. Profiling-specific
+      # test binaries opt in explicitly; keeping it off for the general suite
+      # avoids filling the Windows runner with incidental `.bamlprof` files.
       - name: "Run tests"
         run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
         working-directory: baml_language
+        env:
+          BAML_PROFILE: "0"
 
       - name: "Show sccache stats"
         if: always()
