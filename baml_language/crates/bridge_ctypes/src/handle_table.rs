@@ -191,6 +191,21 @@ impl CffiHandleTable {
             .is_some()
     }
 
+    /// Return the number of currently owned handle-table keys in a WebAssembly runtime.
+    #[cfg(target_arch = "wasm32")]
+    pub fn len(&self) -> usize {
+        self.entries
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
+    }
+
+    /// Return whether the WebAssembly handle table currently owns no keys.
+    #[cfg(target_arch = "wasm32")]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Atomically resolve and remove. Returns the entry or None if the
     /// key was already absent.
     pub fn drain(&self, key: u64) -> Option<Arc<CffiHandleTableEntry>> {

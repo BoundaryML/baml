@@ -14,13 +14,81 @@ mod platform;
 #[path = "lib_wasm.rs"]
 mod platform;
 
+#[cfg(target_arch = "wasm32")]
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use bex_project::Bex;
+#[cfg(target_arch = "wasm32")]
+use vfs::error::VfsErrorKind;
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug)]
+struct WasmSourceRootFs;
+
+#[cfg(target_arch = "wasm32")]
+impl vfs::FileSystem for WasmSourceRootFs {
+    fn read_dir(&self, path: &str) -> vfs::VfsResult<Box<dyn Iterator<Item = String> + Send>> {
+        if path.is_empty() {
+            Ok(Box::new(std::iter::empty()))
+        } else {
+            Err(VfsErrorKind::FileNotFound.into())
+        }
+    }
+
+    fn create_dir(&self, _path: &str) -> vfs::VfsResult<()> {
+        Err(VfsErrorKind::NotSupported.into())
+    }
+
+    fn open_file(&self, _path: &str) -> vfs::VfsResult<Box<dyn vfs::SeekAndRead + Send>> {
+        Err(VfsErrorKind::FileNotFound.into())
+    }
+
+    fn create_file(&self, _path: &str) -> vfs::VfsResult<Box<dyn vfs::SeekAndWrite + Send>> {
+        Err(VfsErrorKind::NotSupported.into())
+    }
+
+    fn append_file(&self, _path: &str) -> vfs::VfsResult<Box<dyn vfs::SeekAndWrite + Send>> {
+        Err(VfsErrorKind::NotSupported.into())
+    }
+
+    fn metadata(&self, path: &str) -> vfs::VfsResult<vfs::VfsMetadata> {
+        if path.is_empty() {
+            Ok(vfs::VfsMetadata {
+                file_type: vfs::VfsFileType::Directory,
+                len: 0,
+                created: None,
+                modified: None,
+                accessed: None,
+            })
+        } else {
+            Err(VfsErrorKind::FileNotFound.into())
+        }
+    }
+
+    fn exists(&self, path: &str) -> vfs::VfsResult<bool> {
+        Ok(path.is_empty())
+    }
+
+    fn remove_file(&self, _path: &str) -> vfs::VfsResult<()> {
+        Err(VfsErrorKind::NotSupported.into())
+    }
+
+    fn remove_dir(&self, _path: &str) -> vfs::VfsResult<()> {
+        Err(VfsErrorKind::NotSupported.into())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn source_vfs_root() -> vfs::VfsPath {
+    vfs::VfsPath::new(WasmSourceRootFs)
+}
 
 pub mod baml_to_host;
 pub mod buffer;
 pub mod error;
+#[cfg(target_arch = "wasm32")]
+pub mod handle;
 
 pub use baml_to_host::{call_and_encode, error_to_outbound, result_to_outbound};
 pub use bridge_ctypes::baml_bridge;
@@ -44,6 +112,55 @@ pub fn initialize_runtime_from_bytecode_with_sys_ops(
     sys_ops: sys_ops::SysOps,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
     let runtime: Arc<dyn Bex> = bex_project::new_from_bytecode(bytecode, sys_ops)?;
+    platform::replace_runtime(runtime.clone())?;
+    Ok(runtime)
+}
+
+/// Initialize the WebAssembly runtime from an in-memory BAML source map.
+#[cfg(target_arch = "wasm32")]
+pub fn initialize_runtime_from_files_with_sys_ops(
+    root_path: &str,
+    src_files: HashMap<String, String>,
+    sys_ops: sys_ops::SysOps,
+) -> Result<Arc<dyn Bex>, BridgeError> {
+    let project_root = source_vfs_root().join(root_path).map_err(|error| {
+        bex_project::RuntimeError::InvalidArgument {
+            name: format!("root_path: {error}"),
+        }
+    })?;
+
+    let mut files = HashMap::with_capacity(src_files.len());
+    for (name, contents) in src_files {
+        if name.is_empty() {
+            return Err(bex_project::RuntimeError::InvalidArgument {
+                name: "source filename must not be empty".to_string(),
+            }
+            .into());
+        }
+        let validated_path = project_root.join(&name).map_err(|error| {
+            bex_project::RuntimeError::InvalidArgument {
+                name: format!("source filename {name:?}: {error}"),
+            }
+        })?;
+        let root = project_root.as_str();
+        let inside_root = if root.is_empty() {
+            validated_path.as_str().starts_with('/')
+        } else {
+            validated_path
+                .as_str()
+                .strip_prefix(root)
+                .is_some_and(|suffix| suffix.starts_with('/'))
+        };
+        if !inside_root {
+            return Err(bex_project::RuntimeError::InvalidArgument {
+                name: format!("source filename {name:?} resolves outside the project root"),
+            }
+            .into());
+        }
+        files.insert(bex_project::FsPath::from_str(name), contents);
+    }
+
+    let runtime: Arc<dyn Bex> = bex_project::new(project_root, sys_ops, files)?;
     platform::replace_runtime(runtime.clone())?;
     Ok(runtime)
 }

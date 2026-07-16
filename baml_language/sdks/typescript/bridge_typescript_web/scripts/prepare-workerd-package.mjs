@@ -26,6 +26,15 @@ if (workerdSafeProto === workerdProto) {
 }
 writeFileSync(workerdProtoPath, workerdSafeProto);
 
+const workerdIndexPath = resolve(workerd, "index.js");
+const workerdIndex = readFileSync(workerdIndexPath, "utf8");
+writeFileSync(workerdIndexPath, `import { readFileSync } from "node:fs";
+import { installReadFileSync } from "./native.js";
+
+installReadFileSync((path) => readFileSync(path));
+
+${workerdIndex}`);
+
 const browserCoreImport = 'from "./wasm/bridge_web_core.js";';
 const workerdCoreImport = 'from "../workerd-wasm/bridge_web_core.js";';
 const browserNative = readFileSync(resolve(dist, "native.js"), "utf8");

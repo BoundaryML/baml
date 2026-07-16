@@ -1673,7 +1673,13 @@ dependencies = [
 name = "bridge_typescript_web"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_version",
+ "bex_project",
  "bridge_cffi",
+ "bridge_ctypes",
+ "js-sys",
+ "serde-wasm-bindgen",
+ "sys_wasm",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -7421,6 +7427,25 @@ dependencies = [
  "num-bigint",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "sys_wasm"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_type",
+ "bex_project",
+ "bridge_ctypes",
+ "futures",
+ "indexmap",
+ "js-sys",
+ "log",
+ "num-bigint",
+ "num-traits",
+ "prost",
+ "sys_ops",
+ "sys_types",
+ "wasm-bindgen",
 ]
 
 [[package]]
