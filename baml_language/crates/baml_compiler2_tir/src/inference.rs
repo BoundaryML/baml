@@ -1093,6 +1093,14 @@ pub struct ScopeInference<'db> {
     /// these up (via this owning Function/Let scope) to seed params that have no
     /// HIR binding — see the `ScopeKind::Lambda` arm of `infer_scope_types`.
     template_body_params: FxHashMap<FileScopeId, Vec<FunctionParamTy>>,
+    /// Nested lambda scope → the full inference tables captured during this
+    /// (owning) scope's inline pass over the lambda's body. The standalone
+    /// `ScopeKind::Lambda` query projects its `ScopeInference` out of this map
+    /// instead of re-inferring the body — which previously inferred every lambda
+    /// body a second time and (because both passes emit diagnostics) reported
+    /// diagnostics inside lambdas twice. Populated only on Function/Let owner
+    /// scopes; contains entries for lambdas at every nesting depth.
+    nested_lambda_inference: FxHashMap<FileScopeId, NestedLambdaInference<'db>>,
     /// Lambda/function parameter types by index (name, inferred type).
     /// Populated for lambda scopes so LSP can resolve unannotated lambda
     /// parameter types (e.g. `items.map((item) -> { item. })`).
@@ -1120,6 +1128,32 @@ pub struct ScopeInference<'db> {
     parameter_defaults: DefaultParameterInference<'db>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
+}
+
+/// The complete inference tables of one nested lambda body, captured during
+/// the owning Function/Let scope's inline pass (`infer_lambda_body`).
+///
+/// Before this existed, every lambda body was type-inferred twice: once inline
+/// while inferring the enclosing function (needed to type the lambda expression
+/// itself) and a second time from scratch by the standalone `ScopeKind::Lambda`
+/// arm of `infer_scope_types` (needed by MIR/LSP for the lambda scope's own
+/// tables). Recording the inline results here lets the Lambda arm project them
+/// out instead of re-inferring — and stops the lambda's diagnostics from being
+/// reported twice (they stay with the owner scope's inference).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct NestedLambdaInference<'db> {
+    pub(crate) expressions: FxHashMap<ExprId, Ty>,
+    pub(crate) pattern_types: FxHashMap<PatId, Ty>,
+    pub(crate) resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
+    pub(crate) catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
+    pub(crate) exhaustive_matches: FxHashSet<ExprId>,
+    pub(crate) path_root_types: FxHashMap<ExprId, Ty>,
+    pub(crate) path_segment_types: FxHashMap<(ExprId, usize), Ty>,
+    pub(crate) path_member_resolutions: FxHashMap<ExprId, Vec<MemberResolution<'db>>>,
+    pub(crate) param_types: Vec<(Name, Ty)>,
+    pub(crate) call_plans: FxHashMap<ExprId, CallPlan>,
+    pub(crate) call_type_instantiations: FxHashMap<ExprId, Vec<Ty>>,
+    pub(crate) function_coercions: FxHashMap<ExprId, FunctionCoercion>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1264,6 +1298,17 @@ impl<'db> ScopeInference<'db> {
     /// standalone scope inference to seed params that have no HIR binding.
     pub fn template_body_params(&self, fsi: FileScopeId) -> Option<&[FunctionParamTy]> {
         self.template_body_params.get(&fsi).map(Vec::as_slice)
+    }
+
+    /// The captured inline-inference tables for a nested lambda scope, if this
+    /// scope owns (transitively) that lambda's body. Present only on the owning
+    /// Function/Let scope's inference; the standalone `ScopeKind::Lambda` query
+    /// uses it to avoid re-inferring the body.
+    pub(crate) fn nested_lambda_inference(
+        &self,
+        fsi: FileScopeId,
+    ) -> Option<&NestedLambdaInference<'db>> {
+        self.nested_lambda_inference.get(&fsi)
     }
 
     /// Look up the binding type for a pattern (the type the variable is bound to,
@@ -1615,6 +1660,7 @@ fn infer_scope_types_cycle_initial<'db>(
         path_member_resolutions: FxHashMap::default(),
         nested_lambda_types: FxHashMap::default(),
         template_body_params: FxHashMap::default(),
+        nested_lambda_inference: FxHashMap::default(),
         param_types: Vec::new(),
         call_plans: FxHashMap::default(),
         call_type_instantiations: FxHashMap::default(),
@@ -1644,7 +1690,9 @@ pub fn infer_scope_types<'db>(
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let pkg_items = &res_ctx.own_items;
 
-    let aliases = package_alias_map(db, res_ctx);
+    // Salsa-cached per package (with cycle handling) — previously rebuilt from
+    // scratch on every scope inference.
+    let aliases = package_resolved_aliases(db, pkg_id);
     let context = InferContext::new(db, scope_id);
     let mut builder = TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases);
 
@@ -2132,6 +2180,60 @@ pub fn infer_scope_types<'db>(
             }
         }
         ScopeKind::Lambda => {
+            // Fast path: the owning Function/Let scope's inline pass already
+            // inferred this lambda's body and captured its full tables (see
+            // `NestedLambdaInference`). Project them out instead of re-inferring
+            // the body here. This is what makes lambda-body inference happen
+            // exactly once — the standalone Lambda query used to re-walk the
+            // body from scratch, duplicating both the work AND every diagnostic
+            // reported inside the lambda. The projected `ScopeInference` carries
+            // no `extra`/diagnostics, so the lambda's diagnostics stay with the
+            // owner scope and are reported once.
+            //
+            // Synthetic tagged-template bodies (`is_template_body`) have no
+            // backing `Expr::Lambda` and are never captured, so they fall
+            // through to the standalone inference below; likewise any miss
+            // (e.g. the empty owner inference produced during a Salsa cycle
+            // iteration).
+            if !scope.is_template_body {
+                let owner_fsi =
+                    index
+                        .ancestor_scopes(file_scope)
+                        .into_iter()
+                        .find(|fsi: &FileScopeId| {
+                            matches!(
+                                index.scopes[fsi.index() as usize].kind,
+                                ScopeKind::Function | ScopeKind::Let
+                            )
+                        });
+                if let Some(owner_fsi) = owner_fsi {
+                    let owner_scope_id = index.scope_ids[owner_fsi.index() as usize];
+                    let owner_inference = infer_scope_types(db, owner_scope_id);
+                    if let Some(tables) = owner_inference.nested_lambda_inference(file_scope) {
+                        let tables = tables.clone();
+                        return ScopeInference {
+                            expressions: tables.expressions,
+                            pattern_types: tables.pattern_types,
+                            resolutions: tables.resolutions,
+                            catch_residual_throws: tables.catch_residual_throws,
+                            exhaustive_matches: tables.exhaustive_matches,
+                            path_root_types: tables.path_root_types,
+                            path_segment_types: tables.path_segment_types,
+                            path_member_resolutions: tables.path_member_resolutions,
+                            nested_lambda_types: FxHashMap::default(),
+                            template_body_params: FxHashMap::default(),
+                            nested_lambda_inference: FxHashMap::default(),
+                            param_types: tables.param_types,
+                            call_plans: tables.call_plans,
+                            call_type_instantiations: tables.call_type_instantiations,
+                            function_coercions: tables.function_coercions,
+                            parameter_defaults: DefaultParameterInference::empty(),
+                            extra: None,
+                        };
+                    }
+                }
+            }
+
             // Find the enclosing Function (or Let) scope by walking ancestors.
             // The Lambda scope does not directly store its body — we must find
             // the top-level body (Function or Let) and then locate the lambda
@@ -2846,6 +2948,7 @@ pub fn infer_scope_types<'db>(
         nested_lambda_types,
         template_body_params,
         parameter_defaults,
+        nested_lambda_inference,
     ) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
@@ -2865,6 +2968,7 @@ pub fn infer_scope_types<'db>(
         path_member_resolutions,
         nested_lambda_types,
         template_body_params,
+        nested_lambda_inference,
         param_types,
         call_plans,
         call_type_instantiations,
@@ -2937,13 +3041,41 @@ pub fn enum_variants<'db>(
     Some(enum_data.variants.iter().map(|v| v.name.clone()).collect())
 }
 
-/// Build the type-alias map visible from a package: its own aliases plus those
-/// re-exported by its dependencies. Shared by per-scope inference and throws
-/// analysis so both expand the same aliases (e.g. `testing.TestSetBody`).
-pub(crate) fn package_alias_map<'db>(
-    db: &'db dyn crate::Db,
-    res_ctx: &crate::package_interface::PackageResolutionContext<'db>,
+/// Cycle seed for [`package_resolved_aliases`]: the empty alias environment.
+///
+/// An alias whose RHS contains an associated-type projection (`type A = T.Member`)
+/// resolves through impl resolution and inference, which in turn read this very
+/// alias map — a legitimate Salsa dependency cycle. Salsa resolves it by fixpoint
+/// iteration seeded here with an empty environment (mirroring
+/// [`infer_scope_types`]'s empty [`ScopeInference`] seed and
+/// [`resolve_type_alias`]'s "still inferring" sentinel): the first iteration
+/// resolves every alias it can without the map, and iteration re-runs until the
+/// environment stops changing.
+fn package_resolved_aliases_cycle_initial<'db>(
+    _db: &'db dyn crate::Db,
+    _id: salsa::Id,
+    _pkg_id: PackageId<'db>,
 ) -> HashMap<crate::ty::QualifiedTypeName, Ty> {
+    HashMap::new()
+}
+
+/// The type-alias map visible from a package: its own aliases plus those
+/// re-exported by its dependencies. Shared by per-scope inference, throws
+/// analysis, and impl checking so all expand the same aliases (e.g.
+/// `testing.TestSetBody`).
+///
+/// Salsa-tracked and keyed by package: before this was a query, the map was
+/// rebuilt — a full clone of every alias `Ty` plus a project walk — inside
+/// every `infer_scope_types` execution (~15.6k executions on the test corpus).
+/// Hoisting is safe because the map is a pure function of the package's
+/// declarations (never of any per-scope inference state); the alias-resolution
+/// cycle it sits in is handled by `cycle_initial` above.
+#[salsa::tracked(returns(ref), cycle_initial = package_resolved_aliases_cycle_initial)]
+pub fn package_resolved_aliases<'db>(
+    db: &'db dyn crate::Db,
+    pkg_id: PackageId<'db>,
+) -> HashMap<crate::ty::QualifiedTypeName, Ty> {
+    let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
     let mut aliases = collect_type_aliases(db, &res_ctx.own_items);
     for (_dep_name, dep_iface) in &res_ctx.dep_interfaces {
         for types_in_ns in dep_iface.types.values() {

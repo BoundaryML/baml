@@ -634,6 +634,7 @@ fn phase_for_query(name: &str) -> &'static str {
 
         // HIR (baml_compiler2_hir)
         "file_semantic_index"
+        | "file_ast"
         | "file_item_tree"
         | "file_package"
         | "namespace_items"
@@ -646,7 +647,7 @@ fn phase_for_query(name: &str) -> &'static str {
         | "compiler2_all_files" => "hir",
 
         // PPIR (baml_compiler2_ppir)
-        "ppir_expansion_items" => "ppir",
+        "ppir_expansion_items" | "file_semantic_index_expanded" => "ppir",
 
         // TIR (baml_compiler2_tir)
         "infer_scope_types"
@@ -654,6 +655,9 @@ fn phase_for_query(name: &str) -> &'static str {
         | "resolve_type_alias"
         | "resolve_name_at"
         | "callable_throws"
+        | "callee_generics_for_func"
+        | "package_resolved_aliases"
+        | "package_impl_locs"
         | "impl_data"
         | "impl_data_source_map"
         | "validate_impl_signatures"
@@ -661,7 +665,10 @@ fn phase_for_query(name: &str) -> &'static str {
         | "package_resolution_context" => "tir",
 
         // MIR (baml_compiler2_mir)
-        "lower_function" | "lower_let_body" => "mir",
+        "lower_function"
+        | "lower_let_body"
+        | "package_lowering_data"
+        | "class_type_tags_for_project" => "mir",
 
         // Emit (baml_compiler2_emit)
         "generate_project_bytecode" => "emit",
