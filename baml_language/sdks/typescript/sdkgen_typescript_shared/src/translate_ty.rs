@@ -56,7 +56,8 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
         Ty::Null { .. } => TranslatedType::bare("null"),
         Ty::Uint8Array { .. } => TranslatedType::bare("Uint8Array"),
         Ty::BuiltinUnknown { .. } | Ty::Interface(..) => TranslatedType::bare("unknown"),
-        Ty::Void { .. } | Ty::Never { .. } => TranslatedType::bare("null"),
+        Ty::Void { .. } => TranslatedType::bare("null"),
+        Ty::Never { .. } => TranslatedType::bare("never"),
         // `_BamlHandle` is the runtime opaque-handle type; Phase 4 emits the
         // `import type { BamlHandle as _BamlHandle }` when this token appears.
         Ty::RustType { .. } => TranslatedType::bare("_BamlHandle"),
@@ -148,7 +149,13 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             }
             result
         }
-        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => render_name_ref(name, ctx),
+        Ty::Enum(name, _) => render_name_ref(name, ctx),
+        Ty::EnumVariant(name, variant, _) => {
+            let mut result = render_name_ref(name, ctx);
+            result.expr.push('.');
+            result.expr.push_str(variant.as_str());
+            result
+        }
         Ty::TypeAlias(name, _) => render_name_ref(name, ctx),
         Ty::TypeVar(name, _) => TranslatedType::bare(name.as_str().to_string()),
 
@@ -291,6 +298,9 @@ mod tests {
     }
     fn enum_ty(name: Name) -> Ty {
         Ty::Enum(name, baml_base::TyAttr::EMPTY)
+    }
+    fn enum_variant_ty(name: Name, variant: &str) -> Ty {
+        Ty::EnumVariant(name, BaseName::new(variant), baml_base::TyAttr::EMPTY)
     }
     fn alias_ty(name: Name) -> Ty {
         Ty::TypeAlias(name, baml_base::TyAttr::EMPTY)
@@ -485,6 +495,15 @@ mod tests {
                 },
                 ctx: ctx(&[]),
                 expected_expr: "null",
+                expected_imports: &[],
+            },
+            Case {
+                label: "never",
+                ty: Ty::Never {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                ctx: ctx(&[]),
+                expected_expr: "never",
                 expected_imports: &[],
             },
             Case {
@@ -736,6 +755,13 @@ mod tests {
                 ty: enum_ty(name("user", &["ipsum"], "Sentiment")),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "ipsum.Sentiment",
+                expected_imports: &[&["ipsum"]],
+            },
+            Case {
+                label: "enum_variant_cross_leaf",
+                ty: enum_variant_ty(name("user", &["ipsum"], "Status"), "Active"),
+                ctx: ctx(&["lorem"]),
+                expected_expr: "ipsum.Status.Active",
                 expected_imports: &[&["ipsum"]],
             },
             Case {

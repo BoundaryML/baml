@@ -478,6 +478,7 @@ mod tests {
     fn borsh_round_trips() {
         let t = deep_concrete();
         let rt = RuntimeTy::try_from(&t).unwrap();
+        let cg = CodegenTy::try_from(&t).unwrap();
         let rz = RealizedTy::try_from(&t).unwrap();
         let ct = ConcreteTy::try_from(&rt).unwrap();
         let crz = ConcreteRealizedTy::try_from(&rz).unwrap();
@@ -486,6 +487,10 @@ mod tests {
         assert_eq!(
             RuntimeTy::try_from_slice(&borsh::to_vec(&rt).unwrap()).unwrap(),
             rt
+        );
+        assert_eq!(
+            CodegenTy::try_from_slice(&borsh::to_vec(&cg).unwrap()).unwrap(),
+            cg
         );
         assert_eq!(
             RealizedTy::try_from_slice(&borsh::to_vec(&rz).unwrap()).unwrap(),
@@ -562,12 +567,15 @@ mod tests {
         // `typevar` and `projection` variants before it, yet its tag stays 27.
         assert_eq!(in_memory_tag(&Ty::BuiltinUnknown { attr: a() }), 27);
         assert_eq!(in_memory_tag(&RuntimeTy::BuiltinUnknown { attr: a() }), 27);
+        assert_eq!(in_memory_tag(&CodegenTy::BuiltinUnknown { attr: a() }), 27);
         assert_eq!(in_memory_tag(&RealizedTy::BuiltinUnknown { attr: a() }), 27);
         // `Never` (#28) is shared and tag-stable across the deep members.
         assert_eq!(in_memory_tag(&Ty::Never { attr: a() }), 28);
+        assert_eq!(in_memory_tag(&CodegenTy::Never { attr: a() }), 28);
         assert_eq!(in_memory_tag(&RealizedTy::Never { attr: a() }), 28);
         // A leaf concrete variant present in every member, shallow ones included.
         assert_eq!(in_memory_tag(&Ty::Int { attr: a() }), 0);
+        assert_eq!(in_memory_tag(&CodegenTy::Int { attr: a() }), 0);
         assert_eq!(in_memory_tag(&ConcreteTy::Int { attr: a() }), 0);
         assert_eq!(in_memory_tag(&ConcreteRealizedTy::Int { attr: a() }), 0);
     }
@@ -580,15 +588,20 @@ mod tests {
     fn borrowed_upcast_matches_owned_widening() {
         let t = deep_concrete();
         let rt = RuntimeTy::try_from(&t).unwrap();
+        let cg = CodegenTy::try_from(&t).unwrap();
         let rz = RealizedTy::try_from(&t).unwrap();
 
         // Reinterpreting the narrower value yields the wider value by reference.
         assert_eq!(rt.as_ty(), &t);
+        assert_eq!(cg.as_ty(), &t);
+        assert_eq!(cg.as_runtime_ty(), &rt);
         assert_eq!(rz.as_ty(), &t);
+        assert_eq!(rz.as_codegen_ty(), &cg);
         assert_eq!(rz.as_runtime_ty(), &rt);
 
         // And it agrees with the owned `From` (also a transmute) on equal input.
         assert_eq!(rt.as_ty(), &Ty::from(rt.clone()));
+        assert_eq!(cg.as_runtime_ty(), &RuntimeTy::from(cg.clone()));
         assert_eq!(rz.as_runtime_ty(), &RuntimeTy::from(rz.clone()));
     }
 
@@ -600,15 +613,20 @@ mod tests {
     fn downcast_validates_then_reinterprets() {
         let t = deep_concrete();
         let rt = RuntimeTy::try_from(&t).unwrap();
+        let cg = CodegenTy::try_from(&t).unwrap();
         let rz = RealizedTy::try_from(&t).unwrap();
 
         // Borrow-to-borrow narrowing yields `Ok(&narrower)` at every depth.
         assert_eq!(<&RuntimeTy>::try_from(&t), Ok(&rt));
+        assert_eq!(<&CodegenTy>::try_from(&t), Ok(&cg));
+        assert_eq!(<&CodegenTy>::try_from(&rt), Ok(&cg));
         assert_eq!(<&RealizedTy>::try_from(&t), Ok(&rz));
         assert_eq!(<&RealizedTy>::try_from(&rt), Ok(&rz));
 
         // Owned `TryFrom` (validate + move-transmute, no rebuild) agrees.
         assert_eq!(RuntimeTy::try_from(t.clone()).unwrap(), rt);
+        assert_eq!(CodegenTy::try_from(t.clone()).unwrap(), cg);
+        assert_eq!(CodegenTy::try_from(rt.clone()).unwrap(), cg);
         assert_eq!(RealizedTy::try_from(t.clone()).unwrap(), rz);
         assert_eq!(RealizedTy::try_from(rt.clone()).unwrap(), rz);
     }
@@ -641,6 +659,10 @@ mod tests {
         assert_eq!(
             <&RuntimeTy>::try_from(&bad),
             Err(NotRuntimeTy { variant: "Unknown" })
+        );
+        assert_eq!(
+            <&CodegenTy>::try_from(&bad),
+            Err(NotCodegenTy { variant: "Unknown" })
         );
         assert_eq!(
             <&RealizedTy>::try_from(&bad),
