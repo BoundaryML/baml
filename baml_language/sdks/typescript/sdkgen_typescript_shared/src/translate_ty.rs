@@ -48,50 +48,43 @@ impl TranslatedType {
 
 pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
     match ty {
-        Ty::Int => TranslatedType::bare("number"),
-        Ty::Bigint => TranslatedType::bare("bigint"),
-        Ty::Float => TranslatedType::bare("number"),
-        Ty::String => TranslatedType::bare("string"),
-        Ty::Bool => TranslatedType::bare("boolean"),
-        Ty::Null => TranslatedType::bare("null"),
-        Ty::Uint8Array => TranslatedType::bare("Uint8Array"),
-        Ty::BuiltinUnknown => TranslatedType::bare("unknown"),
-        Ty::Unit => TranslatedType::bare("null"),
-        Ty::BamlOptions => {
-            // `baml.Options` lives in the `baml` namespace; record the import.
-            let mut imports = BTreeSet::new();
-            imports.insert(LeafPath {
-                segments: vec!["baml".to_string()],
-            });
-            TranslatedType {
-                expr: "baml.Options".to_string(),
-                imports,
-            }
-        }
+        Ty::Int { .. } => TranslatedType::bare("number"),
+        Ty::Bigint { .. } => TranslatedType::bare("bigint"),
+        Ty::Float { .. } => TranslatedType::bare("number"),
+        Ty::String { .. } => TranslatedType::bare("string"),
+        Ty::Bool { .. } => TranslatedType::bare("boolean"),
+        Ty::Null { .. } => TranslatedType::bare("null"),
+        Ty::Uint8Array { .. } => TranslatedType::bare("Uint8Array"),
+        Ty::BuiltinUnknown { .. } | Ty::Interface(..) => TranslatedType::bare("unknown"),
+        Ty::Void { .. } => TranslatedType::bare("null"),
+        Ty::Never { .. } => TranslatedType::bare("never"),
         // `_BamlHandle` is the runtime opaque-handle type; Phase 4 emits the
         // `import type { BamlHandle as _BamlHandle }` when this token appears.
-        Ty::RustType => TranslatedType::bare("_BamlHandle"),
+        Ty::RustType { .. } => TranslatedType::bare("_BamlHandle"),
+        Ty::Type { .. } | Ty::Resource { .. } | Ty::PromptAst { .. } | Ty::Future(..) => {
+            TranslatedType::bare("unknown")
+        }
 
-        Ty::Literal(Literal::Int(value)) => TranslatedType::bare(format!("{value}")),
+        Ty::Literal(Literal::Int(value), ..) => TranslatedType::bare(format!("{value}")),
         // `bigint` literal types use the `n` suffix in TypeScript: `42n`.
-        Ty::Literal(Literal::Bigint(value)) => TranslatedType::bare(format!("{value}n")),
-        Ty::Literal(Literal::String(value)) => TranslatedType::bare(ts_string(value)),
-        Ty::Literal(Literal::Bool(true)) => TranslatedType::bare("true"),
-        Ty::Literal(Literal::Bool(false)) => TranslatedType::bare("false"),
+        Ty::Literal(Literal::Bigint(value), ..) => TranslatedType::bare(format!("{value}n")),
+        Ty::Literal(Literal::String(value), ..) => TranslatedType::bare(ts_string(value)),
+        Ty::Literal(Literal::Bool(true), ..) => TranslatedType::bare("true"),
+        Ty::Literal(Literal::Bool(false), ..) => TranslatedType::bare("false"),
         // Float literals have no TS literal-type form; widen to `number`.
-        Ty::Literal(Literal::Float(_)) => TranslatedType::bare("number"),
+        Ty::Literal(Literal::Float(_), ..) => TranslatedType::bare("number"),
 
-        Ty::Media(MediaKind::Image) => media_ref("Image", ctx),
-        Ty::Media(MediaKind::Audio) => media_ref("Audio", ctx),
-        Ty::Media(MediaKind::Video) => media_ref("Video", ctx),
-        Ty::Media(MediaKind::Pdf) => media_ref("Pdf", ctx),
-        Ty::Media(MediaKind::Generic) => TranslatedType::bare("unknown"),
+        Ty::Media(MediaKind::Image, _) => media_ref("Image", ctx),
+        Ty::Media(MediaKind::Audio, _) => media_ref("Audio", ctx),
+        Ty::Media(MediaKind::Video, _) => media_ref("Video", ctx),
+        Ty::Media(MediaKind::Pdf, _) => media_ref("Pdf", ctx),
+        Ty::Media(MediaKind::Generic, _) => TranslatedType::bare("unknown"),
 
-        Ty::List(inner) => {
+        Ty::List(inner, _) => {
+            let needs_parentheses = matches!(inner.as_ref(), Ty::Union(..) | Ty::Function { .. });
             let inner = translate_ty(inner, ctx);
-            // Postfix `[]` binds tighter than `|`, so a union/optional element
-            // must be parenthesized: `(string | null)[]`.
-            let elem = if inner.expr.contains(" | ") {
+            // Postfix `[]` binds tighter than unions and function arrows.
+            let elem = if needs_parentheses {
                 format!("({})", inner.expr)
             } else {
                 inner.expr
@@ -101,7 +94,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
                 imports: inner.imports,
             }
         }
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             let key = translate_ty(key, ctx);
             let value = translate_ty(value, ctx);
             let mut imports = key.imports;
@@ -119,14 +112,18 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             };
             TranslatedType { expr, imports }
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             let mut imports = BTreeSet::new();
             let parts: Vec<String> = items
                 .iter()
                 .map(|item| {
                     let t = translate_ty(item, ctx);
                     imports.extend(t.imports);
-                    t.expr
+                    if matches!(item, Ty::Function { .. }) {
+                        format!("({})", t.expr)
+                    } else {
+                        t.expr
+                    }
                 })
                 .collect();
             TranslatedType {
@@ -135,7 +132,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             }
         }
 
-        Ty::Class(name, args) => {
+        Ty::Class(name, args, _) => {
             let mut result = render_name_ref(name, ctx);
             if !args.is_empty() {
                 let mut arg_imports = BTreeSet::new();
@@ -152,11 +149,17 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             }
             result
         }
-        Ty::Enum(name) => render_name_ref(name, ctx),
-        Ty::TypeAlias(name) => render_name_ref(name, ctx),
-        Ty::TypeVar(name) => TranslatedType::bare(name.as_str().to_string()),
+        Ty::Enum(name, _) => render_name_ref(name, ctx),
+        Ty::EnumVariant(name, variant, _) => {
+            let mut result = render_name_ref(name, ctx);
+            result.expr.push('.');
+            result.expr.push_str(variant.as_str());
+            result
+        }
+        Ty::TypeAlias(name, _) => render_name_ref(name, ctx),
+        Ty::TypeVar(name, _) => TranslatedType::bare(name.as_str().to_string()),
 
-        Ty::Callable { params, ret } => {
+        Ty::Function { params, ret, .. } => {
             let ret_t = translate_ty(ret, ctx);
             let mut imports = ret_t.imports;
             // Required params stay positional; optional params are grouped into
@@ -236,7 +239,7 @@ pub(crate) const ROOT_ALIAS: &str = "_bamlRoot";
 ///   `LeafPath` in `imports`.
 fn render_name_ref(name: &Name, ctx: &TranslateCtx) -> TranslatedType {
     let routed = route_class_ref(name);
-    let ident = name.name.as_str();
+    let ident = name.name().as_str();
     if routed == ctx.current_leaf {
         return TranslatedType::bare(ident.to_string());
     }
@@ -290,6 +293,50 @@ mod tests {
             BaseName::new(bare_name),
         )
     }
+    fn class_ty(name: Name, args: Vec<Ty>) -> Ty {
+        Ty::Class(name, args, baml_base::TyAttr::EMPTY)
+    }
+    fn enum_ty(name: Name) -> Ty {
+        Ty::Enum(name, baml_base::TyAttr::EMPTY)
+    }
+    fn enum_variant_ty(name: Name, variant: &str) -> Ty {
+        Ty::EnumVariant(name, BaseName::new(variant), baml_base::TyAttr::EMPTY)
+    }
+    fn alias_ty(name: Name) -> Ty {
+        Ty::TypeAlias(name, baml_base::TyAttr::EMPTY)
+    }
+    fn type_var(name: BaseName) -> Ty {
+        Ty::TypeVar(name, baml_base::TyAttr::EMPTY)
+    }
+    fn list(inner: Box<Ty>) -> Ty {
+        Ty::List(inner, baml_base::TyAttr::EMPTY)
+    }
+    fn union(members: Vec<Ty>) -> Ty {
+        Ty::Union(members, baml_base::TyAttr::EMPTY)
+    }
+    fn media(kind: MediaKind) -> Ty {
+        Ty::Media(kind, baml_base::TyAttr::EMPTY)
+    }
+    fn literal(value: Literal) -> Ty {
+        Ty::Literal(
+            value,
+            baml_codegen_types::Freshness::Regular,
+            baml_base::TyAttr::EMPTY,
+        )
+    }
+    fn baml_options() -> Ty {
+        class_ty(name("baml", &[], "Options"), Vec::new())
+    }
+    fn callable(params: Vec<baml_codegen_types::CallableParam>, ret: Box<Ty>) -> Ty {
+        Ty::Function {
+            params,
+            ret,
+            throws: Box::new(Ty::Never {
+                attr: baml_base::TyAttr::EMPTY,
+            }),
+            attr: baml_base::TyAttr::EMPTY,
+        }
+    }
     fn callable_param(ty: Ty) -> baml_codegen_types::CallableParam {
         baml_codegen_types::CallableParam {
             name: None,
@@ -308,27 +355,33 @@ mod tests {
     /// Forces this test file to be updated whenever a `Ty` variant is added.
     fn check_exhaustive(ty: &Ty) {
         match ty {
-            Ty::Int
-            | Ty::Bigint
-            | Ty::Float
-            | Ty::String
-            | Ty::Bool
-            | Ty::Null
-            | Ty::Literal(_)
-            | Ty::Uint8Array
-            | Ty::Media(_)
-            | Ty::Class(_, _)
-            | Ty::Enum(_)
-            | Ty::TypeAlias(_)
-            | Ty::TypeVar(_)
-            | Ty::List(_)
+            Ty::Int { .. }
+            | Ty::Bigint { .. }
+            | Ty::Float { .. }
+            | Ty::String { .. }
+            | Ty::Bool { .. }
+            | Ty::Null { .. }
+            | Ty::Literal(..)
+            | Ty::Uint8Array { .. }
+            | Ty::Media(..)
+            | Ty::Class(..)
+            | Ty::Interface(..)
+            | Ty::Enum(..)
+            | Ty::EnumVariant(..)
+            | Ty::TypeAlias(..)
+            | Ty::TypeVar(..)
+            | Ty::List(..)
             | Ty::Map { .. }
-            | Ty::Union(_)
-            | Ty::BuiltinUnknown
-            | Ty::Callable { .. }
-            | Ty::Unit
-            | Ty::BamlOptions
-            | Ty::RustType => {}
+            | Ty::Union(..)
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Function { .. }
+            | Ty::Future(..)
+            | Ty::Void { .. }
+            | Ty::Never { .. }
+            | Ty::RustType { .. }
+            | Ty::Type { .. }
+            | Ty::Resource { .. }
+            | Ty::PromptAst { .. } => {}
         }
     }
 
@@ -360,82 +413,111 @@ mod tests {
 
     #[test]
     fn translate_ty_matrix() {
-        let cls = |pkg, ns: &[&str], n| Ty::Class(name(pkg, ns, n), vec![]);
+        let cls = |pkg, ns: &[&str], n| class_ty(name(pkg, ns, n), vec![]);
         let cases: Vec<Case> = vec![
             // ── Primitives ──
             Case {
                 label: "int",
-                ty: Ty::Int,
+                ty: Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "number",
                 expected_imports: &[],
             },
             Case {
                 label: "bigint",
-                ty: Ty::Bigint,
+                ty: Ty::Bigint {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "bigint",
                 expected_imports: &[],
             },
             Case {
                 label: "float",
-                ty: Ty::Float,
+                ty: Ty::Float {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "number",
                 expected_imports: &[],
             },
             Case {
                 label: "string",
-                ty: Ty::String,
+                ty: Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "string",
                 expected_imports: &[],
             },
             Case {
                 label: "bool",
-                ty: Ty::Bool,
+                ty: Ty::Bool {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "boolean",
                 expected_imports: &[],
             },
             Case {
                 label: "null",
-                ty: Ty::Null,
+                ty: Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "null",
                 expected_imports: &[],
             },
             Case {
                 label: "uint8array",
-                ty: Ty::Uint8Array,
+                ty: Ty::Uint8Array {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "Uint8Array",
                 expected_imports: &[],
             },
             Case {
                 label: "builtin_unknown",
-                ty: Ty::BuiltinUnknown,
+                ty: Ty::BuiltinUnknown {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "unknown",
                 expected_imports: &[],
             },
             Case {
                 label: "unit",
-                ty: Ty::Unit,
+                ty: Ty::Void {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "null",
                 expected_imports: &[],
             },
             Case {
+                label: "never",
+                ty: Ty::Never {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                ctx: ctx(&[]),
+                expected_expr: "never",
+                expected_imports: &[],
+            },
+            Case {
                 label: "baml_options",
-                ty: Ty::BamlOptions,
+                ty: baml_options(),
                 ctx: ctx(&[]),
                 expected_expr: "baml.Options",
                 expected_imports: &[&["baml"]],
             },
             Case {
                 label: "rust_type",
-                ty: Ty::RustType,
+                ty: Ty::RustType {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 ctx: ctx(&[]),
                 expected_expr: "_BamlHandle",
                 expected_imports: &[],
@@ -443,42 +525,42 @@ mod tests {
             // ── Literals ──
             Case {
                 label: "lit_int",
-                ty: Ty::Literal(Literal::Int(42)),
+                ty: literal(Literal::Int(42)),
                 ctx: ctx(&[]),
                 expected_expr: "42",
                 expected_imports: &[],
             },
             Case {
                 label: "lit_bigint",
-                ty: Ty::Literal(Literal::Bigint(42i64.into())),
+                ty: literal(Literal::Bigint(42i64.into())),
                 ctx: ctx(&[]),
                 expected_expr: "42n",
                 expected_imports: &[],
             },
             Case {
                 label: "lit_string",
-                ty: Ty::Literal(Literal::String("hi \"x\"".into())),
+                ty: literal(Literal::String("hi \"x\"".into())),
                 ctx: ctx(&[]),
                 expected_expr: "\"hi \\\"x\\\"\"",
                 expected_imports: &[],
             },
             Case {
                 label: "lit_true",
-                ty: Ty::Literal(Literal::Bool(true)),
+                ty: literal(Literal::Bool(true)),
                 ctx: ctx(&[]),
                 expected_expr: "true",
                 expected_imports: &[],
             },
             Case {
                 label: "lit_false",
-                ty: Ty::Literal(Literal::Bool(false)),
+                ty: literal(Literal::Bool(false)),
                 ctx: ctx(&[]),
                 expected_expr: "false",
                 expected_imports: &[],
             },
             Case {
                 label: "lit_float",
-                ty: Ty::Literal(Literal::Float("3.14".into())),
+                ty: literal(Literal::Float("3.14".into())),
                 ctx: ctx(&[]),
                 expected_expr: "number",
                 expected_imports: &[],
@@ -486,42 +568,42 @@ mod tests {
             // ── Media ──
             Case {
                 label: "media_image_from_user",
-                ty: Ty::Media(MediaKind::Image),
+                ty: media(MediaKind::Image),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "baml.media.Image",
                 expected_imports: &[&["baml", "media"]],
             },
             Case {
                 label: "media_audio_from_user",
-                ty: Ty::Media(MediaKind::Audio),
+                ty: media(MediaKind::Audio),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "baml.media.Audio",
                 expected_imports: &[&["baml", "media"]],
             },
             Case {
                 label: "media_video_from_user",
-                ty: Ty::Media(MediaKind::Video),
+                ty: media(MediaKind::Video),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "baml.media.Video",
                 expected_imports: &[&["baml", "media"]],
             },
             Case {
                 label: "media_pdf_from_user",
-                ty: Ty::Media(MediaKind::Pdf),
+                ty: media(MediaKind::Pdf),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "baml.media.Pdf",
                 expected_imports: &[&["baml", "media"]],
             },
             Case {
                 label: "media_image_same_leaf",
-                ty: Ty::Media(MediaKind::Image),
+                ty: media(MediaKind::Image),
                 ctx: ctx(&["baml", "media"]),
                 expected_expr: "Image",
                 expected_imports: &[],
             },
             Case {
                 label: "media_generic",
-                ty: Ty::Media(MediaKind::Generic),
+                ty: media(MediaKind::Generic),
                 ctx: ctx(&[]),
                 expected_expr: "unknown",
                 expected_imports: &[],
@@ -529,28 +611,63 @@ mod tests {
             // ── Containers ──
             Case {
                 label: "optional_string",
-                ty: Ty::Union(vec![Ty::String, Ty::Null]),
+                ty: union(vec![
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]),
                 ctx: ctx(&[]),
                 expected_expr: "string | null",
                 expected_imports: &[],
             },
             Case {
                 label: "list_int",
-                ty: Ty::List(boxed(Ty::Int)),
+                ty: list(boxed(Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                })),
                 ctx: ctx(&[]),
                 expected_expr: "number[]",
                 expected_imports: &[],
             },
             Case {
                 label: "list_optional_string",
-                ty: Ty::List(boxed(Ty::Union(vec![Ty::String, Ty::Null]))),
+                ty: list(boxed(union(vec![
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]))),
                 ctx: ctx(&[]),
                 expected_expr: "(string | null)[]",
                 expected_imports: &[],
             },
             Case {
+                label: "list_callback",
+                ty: list(boxed(callable(
+                    Vec::new(),
+                    boxed(Ty::Bool {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                ))),
+                ctx: ctx(&[]),
+                expected_expr: "(() => boolean)[]",
+                expected_imports: &[],
+            },
+            Case {
                 label: "optional_list_string",
-                ty: Ty::Union(vec![Ty::List(boxed(Ty::String)), Ty::Null]),
+                ty: union(vec![
+                    list(boxed(Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    })),
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]),
                 ctx: ctx(&[]),
                 expected_expr: "string[] | null",
                 expected_imports: &[],
@@ -558,8 +675,13 @@ mod tests {
             Case {
                 label: "map_string_int",
                 ty: Ty::Map {
-                    key: boxed(Ty::String),
-                    value: boxed(Ty::Int),
+                    key: boxed(Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                    value: boxed(Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                    attr: baml_base::TyAttr::EMPTY,
                 },
                 ctx: ctx(&[]),
                 expected_expr: "{ [key: string]: number }",
@@ -567,9 +689,36 @@ mod tests {
             },
             Case {
                 label: "union_three",
-                ty: Ty::Union(vec![Ty::Int, Ty::String, Ty::Bool]),
+                ty: union(vec![
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                    Ty::Bool {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]),
                 ctx: ctx(&[]),
                 expected_expr: "number | string | boolean",
+                expected_imports: &[],
+            },
+            Case {
+                label: "nullable_callback",
+                ty: union(vec![
+                    callable(
+                        Vec::new(),
+                        boxed(Ty::Bool {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                    ),
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                ]),
+                ctx: ctx(&[]),
+                expected_expr: "(() => boolean) | null",
                 expected_imports: &[],
             },
             // ── Name refs (same / cross leaf) ──
@@ -603,14 +752,21 @@ mod tests {
             },
             Case {
                 label: "enum_cross_leaf",
-                ty: Ty::Enum(name("user", &["ipsum"], "Sentiment")),
+                ty: enum_ty(name("user", &["ipsum"], "Sentiment")),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "ipsum.Sentiment",
                 expected_imports: &[&["ipsum"]],
             },
             Case {
+                label: "enum_variant_cross_leaf",
+                ty: enum_variant_ty(name("user", &["ipsum"], "Status"), "Active"),
+                ctx: ctx(&["lorem"]),
+                expected_expr: "ipsum.Status.Active",
+                expected_imports: &[&["ipsum"]],
+            },
+            Case {
                 label: "alias_cross_leaf",
-                ty: Ty::TypeAlias(name("user", &["aliases"], "Json")),
+                ty: alias_ty(name("user", &["aliases"], "Json")),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "aliases.Json",
                 expected_imports: &[&["aliases"]],
@@ -659,7 +815,7 @@ mod tests {
             },
             Case {
                 label: "typevar",
-                ty: Ty::TypeVar(BaseName::new("T")),
+                ty: type_var(BaseName::new("T")),
                 ctx: ctx(&[]),
                 expected_expr: "T",
                 expected_imports: &[],
@@ -667,23 +823,35 @@ mod tests {
             // ── Generics ──
             Case {
                 label: "generic_same_leaf",
-                ty: Ty::Class(name("user", &["lorem"], "Box"), vec![Ty::Int]),
+                ty: class_ty(
+                    name("user", &["lorem"], "Box"),
+                    vec![Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }],
+                ),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "Box<number>",
                 expected_imports: &[],
             },
             Case {
                 label: "generic_cross_leaf",
-                ty: Ty::Class(name("user", &["lorem"], "Box"), vec![Ty::Int]),
+                ty: class_ty(
+                    name("user", &["lorem"], "Box"),
+                    vec![Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }],
+                ),
                 ctx: ctx(&["ipsum"]),
                 expected_expr: "lorem.Box<number>",
                 expected_imports: &[&["lorem"]],
             },
             Case {
                 label: "generic_list_arg",
-                ty: Ty::Class(
+                ty: class_ty(
                     name("user", &["lorem"], "Box"),
-                    vec![Ty::List(boxed(Ty::Int))],
+                    vec![list(boxed(Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }))],
                 ),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "Box<number[]>",
@@ -691,9 +859,14 @@ mod tests {
             },
             Case {
                 label: "generic_nested",
-                ty: Ty::Class(
+                ty: class_ty(
                     name("user", &["lorem"], "Box"),
-                    vec![Ty::Class(name("user", &["lorem"], "Box"), vec![Ty::Int])],
+                    vec![class_ty(
+                        name("user", &["lorem"], "Box"),
+                        vec![Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }],
+                    )],
                 ),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "Box<Box<number>>",
@@ -701,9 +874,9 @@ mod tests {
             },
             Case {
                 label: "generic_typevar_arg",
-                ty: Ty::Class(
+                ty: class_ty(
                     name("user", &["lorem"], "Box"),
-                    vec![Ty::TypeVar(BaseName::new("T"))],
+                    vec![type_var(BaseName::new("T"))],
                 ),
                 ctx: ctx(&["lorem"]),
                 expected_expr: "Box<T>",
@@ -712,8 +885,11 @@ mod tests {
             Case {
                 label: "map_typevar_value",
                 ty: Ty::Map {
-                    key: boxed(Ty::String),
-                    value: boxed(Ty::TypeVar(BaseName::new("V"))),
+                    key: boxed(Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                    value: boxed(type_var(BaseName::new("V"))),
+                    attr: baml_base::TyAttr::EMPTY,
                 },
                 ctx: ctx(&[]),
                 expected_expr: "{ [key: string]: V }",
@@ -722,57 +898,93 @@ mod tests {
             // ── Callable ──
             Case {
                 label: "callable_zero",
-                ty: Ty::Callable {
-                    params: vec![],
-                    ret: boxed(Ty::Bool),
-                },
+                ty: callable(
+                    vec![],
+                    boxed(Ty::Bool {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                ),
                 ctx: ctx(&[]),
                 expected_expr: "() => boolean",
                 expected_imports: &[],
             },
             Case {
                 label: "callable_required",
-                ty: Ty::Callable {
-                    params: vec![callable_param(Ty::Int), callable_param(Ty::String)],
-                    ret: boxed(Ty::Bool),
-                },
+                ty: callable(
+                    vec![
+                        callable_param(Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                        callable_param(Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                    ],
+                    boxed(Ty::Bool {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                ),
                 ctx: ctx(&[]),
                 expected_expr: "(arg0: number, arg1: string) => boolean",
                 expected_imports: &[],
             },
             Case {
                 label: "callable_optional_only",
-                ty: Ty::Callable {
-                    params: vec![optional_callable_param("x", Ty::Int)],
-                    ret: boxed(Ty::Bool),
-                },
+                ty: callable(
+                    vec![optional_callable_param(
+                        "x",
+                        Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    )],
+                    boxed(Ty::Bool {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                ),
                 ctx: ctx(&[]),
                 expected_expr: "($opts?: { x?: number | undefined } | undefined) => boolean",
                 expected_imports: &[],
             },
             Case {
                 label: "callable_required_and_optional",
-                ty: Ty::Callable {
-                    params: vec![
+                ty: callable(
+                    vec![
                         baml_codegen_types::CallableParam {
                             name: Some(BaseName::new("x")),
-                            ty: Ty::Int,
+                            ty: Ty::Int {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
                             mode: CodegenFunctionParamMode::Required,
                         },
-                        optional_callable_param("y", Ty::Int),
+                        optional_callable_param(
+                            "y",
+                            Ty::Int {
+                                attr: baml_base::TyAttr::EMPTY,
+                            },
+                        ),
                     ],
-                    ret: boxed(Ty::String),
-                },
+                    boxed(Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    }),
+                ),
                 ctx: ctx(&[]),
                 expected_expr: "(x: number, $opts?: { y?: number | undefined } | undefined) => string",
                 expected_imports: &[],
             },
             Case {
                 label: "callable_generic_arg",
-                ty: Ty::Callable {
-                    params: vec![callable_param(Ty::List(boxed(Ty::Int)))],
-                    ret: boxed(Ty::Union(vec![Ty::String, Ty::Null])),
-                },
+                ty: callable(
+                    vec![callable_param(list(boxed(Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY,
+                    })))],
+                    boxed(union(vec![
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                        Ty::Null {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    ])),
+                ),
                 ctx: ctx(&[]),
                 expected_expr: "(arg0: number[]) => string | null",
                 expected_imports: &[],

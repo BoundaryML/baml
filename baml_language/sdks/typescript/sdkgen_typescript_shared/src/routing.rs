@@ -84,7 +84,7 @@ pub(crate) fn route_class_ref(name: &Name) -> LeafPath {
 fn route_inner(name: &Name) -> LeafPath {
     let mut segs: Vec<String> = Vec::new();
 
-    match name.pkg.as_str() {
+    match name.package().as_str() {
         "user" => {}
         "baml" => segs.push("baml".to_string()),
         other => {
@@ -93,7 +93,7 @@ fn route_inner(name: &Name) -> LeafPath {
         }
     }
 
-    for seg in &name.namespace_path {
+    for seg in name.namespace() {
         segs.push(sanitize_module_segment(seg.as_str()));
     }
 
