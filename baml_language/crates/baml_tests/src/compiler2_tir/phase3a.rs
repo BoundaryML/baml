@@ -500,7 +500,8 @@ function unknown_named() -> string { search(q = "cats") }
     );
     let tir = render_tir(&db, file);
     insta::assert_snapshot!("optional_param_call_binding_diagnostics", tir);
-    assert!(tir.contains("defaulted parameter `max` must be passed by name"));
+    assert!(tir.contains("search(\"cats\", 5) : string"));
+    assert!(!tir.contains("defaulted parameter `max` must be passed by name"));
     assert!(tir.contains("positional arguments cannot appear after named arguments"));
     assert!(tir.contains("duplicate named argument `max`"));
     assert!(tir.contains("unknown named argument `q`"));

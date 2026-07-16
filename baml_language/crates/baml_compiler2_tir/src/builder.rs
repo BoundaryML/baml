@@ -2428,18 +2428,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 continue;
             }
 
-            let param = &effective_params[next_positional];
-            if param.is_optional() {
-                self.context.report_simple(
-                    TirTypeError::DefaultedParamPassedPositionally {
-                        name: param
-                            .name
-                            .clone()
-                            .expect("optional function parameters must be named"),
-                    },
-                    arg_expr,
-                );
-            }
             bindings[next_positional] = Some(arg_expr);
             provided_args.insert(arg_expr);
             next_positional += 1;
