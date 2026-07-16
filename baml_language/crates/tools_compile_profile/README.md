@@ -76,8 +76,9 @@ The cold-vs-warm table then makes three failure modes visible:
 2. **Warm executes 0 queries but still spends real wall-clock time.**
    That work lives outside any Salsa query. Salsa can't cache it — the
    wrapper (`db.check()` / `db.get_bytecode()`) is doing per-invocation
-   materialization / walking / cloning. **This is what we see on the
-   test corpus today for `emit`: cold 13.6s, warm 12.1s.**
+   materialization / walking / cloning. **This is what the pre-audit
+   test corpus showed for `emit`: cold 13.6s, warm 12.1s (historical
+   numbers — see the audit section below).**
 3. **Warm total ≈ 0.** Salsa is fully caching this workload; nothing
    further to chase in the caching layer.
 
