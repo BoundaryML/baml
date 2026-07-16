@@ -10,7 +10,7 @@ this exercises the full host->engine round-trip for both flavors:
 each with its ``_async`` sibling. ``asyncio_mode = "auto"`` (set in build.rs)
 runs ``async def test_*`` without an explicit decorator.
 
-Node counterpart: ``crates/typescript_node/function_calls/customizable/methods_on_classes.test.ts``.
+Node counterpart: ``crates/typescript/function_calls/customizable/methods_on_classes.test.ts``.
 """
 
 import baml_sdk  # noqa: F401  — initializes the BAML runtime

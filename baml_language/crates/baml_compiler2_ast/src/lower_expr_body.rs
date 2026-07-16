@@ -22,7 +22,9 @@ use crate::{
 };
 
 /// A reference to an environment variable found in source code (`env.VAR_NAME`).
-#[derive(Debug, Clone)]
+// `PartialEq`/`Eq` let this participate in `FileAst`'s value equality, which
+// gives the `file_ast` Salsa query early-cutoff (see `baml_compiler2_hir`).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnvVarRef {
     /// The variable name (e.g., `"OPENAI_API_KEY"`).
     pub name: String,

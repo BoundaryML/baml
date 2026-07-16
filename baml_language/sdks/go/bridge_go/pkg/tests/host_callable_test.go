@@ -1,5 +1,5 @@
 // host_callable_test.go — Go equivalent of
-// `crates/bridge_nodejs/tests/host_callable.test.ts` and
+// `sdks/typescript/bridge_typescript/tests/host_callable.test.ts` and
 // `sdks/python/tests/test_host_callable.py`.
 //
 // Exercises the Go host-callable bridge end-to-end: encoder auto-registration

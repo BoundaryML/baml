@@ -40,7 +40,7 @@ impl BamlFqn {
     }
 
     fn leaf(&self) -> &baml_base::Name {
-        self.members.last().unwrap_or(&self.symbol.name)
+        self.members.last().unwrap_or(self.symbol.name())
     }
 }
 
@@ -195,7 +195,7 @@ impl NameRequest {
             | GoNameKind::Class
             | GoNameKind::Enum
             | GoNameKind::EnumVariant
-            | GoNameKind::TypeAlias => NameScope::Package(self.fqn.symbol.pkg.clone()),
+            | GoNameKind::TypeAlias => NameScope::Package(self.fqn.symbol.package().clone()),
             GoNameKind::Parameter => NameScope::Function(
                 self.fqn
                     .parent()
@@ -341,7 +341,7 @@ impl GoNames {
             .collect();
         Self::allocate(
             requests,
-            |request| packages.get(&request.fqn.symbol.pkg).go_name().clone(),
+            |request| packages.get(request.fqn.symbol.package()).go_name().clone(),
             &generated_package_aliases,
         )
     }
@@ -415,31 +415,31 @@ fn project_base(package: GoPackageName, request: &NameRequest) -> GoIdent {
     let mut value = String::new();
     match request.kind {
         GoNameKind::Function | GoNameKind::Class | GoNameKind::Enum | GoNameKind::TypeAlias => {
-            for segment in &request.fqn.symbol.namespace_path {
+            for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
             }
-            push_upper_component(&mut value, &request.fqn.symbol.name);
+            push_upper_component(&mut value, request.fqn.symbol.name());
         }
         GoNameKind::FunctionOptionType => {
-            for segment in &request.fqn.symbol.namespace_path {
+            for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
             }
-            push_upper_component(&mut value, &request.fqn.symbol.name);
+            push_upper_component(&mut value, request.fqn.symbol.name());
             value.push_str("Option");
         }
         GoNameKind::FunctionOptionSetter => {
             value.push_str("With");
-            for segment in &request.fqn.symbol.namespace_path {
+            for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
             }
-            push_upper_component(&mut value, &request.fqn.symbol.name);
+            push_upper_component(&mut value, request.fqn.symbol.name());
             push_upper_component(&mut value, request.fqn.leaf());
         }
         GoNameKind::EnumVariant => {
-            for segment in &request.fqn.symbol.namespace_path {
+            for segment in request.fqn.symbol.namespace() {
                 push_upper_component(&mut value, segment);
             }
-            push_upper_component(&mut value, &request.fqn.symbol.name);
+            push_upper_component(&mut value, request.fqn.symbol.name());
             push_upper_component(&mut value, request.fqn.leaf());
         }
         GoNameKind::Parameter | GoNameKind::Field => {
@@ -505,12 +505,12 @@ fn lowercase_first(value: &mut String) {
 
 fn short_hash(request: &NameRequest) -> String {
     let mut hash = StableFnv::new();
-    hash.component(request.fqn.symbol.pkg.as_str());
-    hash.usize(request.fqn.symbol.namespace_path.len());
-    for segment in &request.fqn.symbol.namespace_path {
+    hash.component(request.fqn.symbol.package().as_str());
+    hash.usize(request.fqn.symbol.namespace().len());
+    for segment in request.fqn.symbol.namespace() {
         hash.component(segment.as_str());
     }
-    hash.component(request.fqn.symbol.name.as_str());
+    hash.component(request.fqn.symbol.name().as_str());
     hash.usize(request.fqn.members.len());
     for member in &request.fqn.members {
         hash.component(member.as_str());

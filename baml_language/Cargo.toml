@@ -3,15 +3,15 @@ members = [
   "crates/*",
   "forks/*",
   "sdks/go/sdkgen_go",
-  "sdks/nodejs/bridge_nodejs",
-  "sdks/nodejs/sdkgen_typescript_node",
+  "sdks/typescript/bridge_typescript",
+  "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
   "sdk_tests/harness_setup",
   "sdk_tests/harness_runner",
   "sdk_tests/harness/llm_recordings",
   "sdk_tests/crates/python_pydantic2",
   "sdk_tests/crates/go",
-  # `sdk_tests/crates/typescript_node`'s build.rs runs codegen +
+  # `sdk_tests/crates/typescript`'s build.rs runs codegen +
   # `pnpm install` but soft-fails into `$OUT_DIR/build_diagnostics.txt`
   # if pnpm is missing or install fails (see
   # `sdk_tests/harness_setup/src/lib.rs::BuildDiagnostics` —
@@ -19,7 +19,7 @@ members = [
   # `cargo build` / `cargo doc` succeeds without pnpm installed.
   # The failures surface via `cargo test`'s
   # `build_diagnostics::no_build_failures` test.
-  "sdk_tests/crates/typescript_node",
+  "sdk_tests/crates/typescript",
   # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
   # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
   "tools_sccache",
@@ -56,7 +56,7 @@ baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
-sdkgen_typescript_node = { path = "sdks/nodejs/sdkgen_typescript_node" }
+sdkgen_typescript_shared = { path = "sdks/typescript/sdkgen_typescript_shared" }
 sdkgen_python_pydantic2 = { path = "sdks/python/rust/sdkgen_python_pydantic2" }
 sdkgen_go = { path = "sdks/go/sdkgen_go" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
@@ -143,6 +143,7 @@ bitflags = "2"
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
 cargo_metadata = { version = "0.23.1" }
+cbindgen = "=0.29.0"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
 console = "0.16"
 console_error_panic_hook = "0.1"
@@ -205,6 +206,7 @@ bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }
+mimalloc = { version = "0.1.52" }
 rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"

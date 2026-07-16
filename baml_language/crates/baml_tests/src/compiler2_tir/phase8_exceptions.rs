@@ -792,7 +792,7 @@ fn alias_hidden_omitted_lambda_reports_local_violation() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        r#"type HiddenHandler = (value: int) -> int
+        r#"type HiddenHandler = (value: int) -> int throws never
 
 function store(handler: HiddenHandler) -> int throws never {
   return handler(1)
@@ -840,7 +840,7 @@ fn function_type_throws_alias_hidden_callback_rejects_throwing_value() {
     let mut db = make_db();
     let file = db.add_file(
         "test.baml",
-        r#"type HiddenHandler = (value: int) -> int
+        r#"type HiddenHandler = (value: int) -> int throws never
 
 function store(handler: HiddenHandler) -> int throws never {
   return handler(1)

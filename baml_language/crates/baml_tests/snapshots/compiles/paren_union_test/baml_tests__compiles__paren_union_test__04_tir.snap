@@ -26,7 +26,7 @@ class user.Union {
   arr_opt_arr_fun_opt_opt_opt_arr_arr_opt_arr: ((((user.Union | (user.Union[] | null)[] | user.Union | user.Union) -> user.Union | (user.Union[] | null)[] | user.Union | user.Union throws never) | null)[][] | null)[]
   opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr: ((((user.Union | (user.Union | null)[] | null | user.Union | user.Union) -> user.Union | (user.Union | null)[] | null | user.Union | user.Union throws never) | null)[][] | null)[]
 }
-  !! 0..1669: class cycle: user.Union
+  !! 0..1773: class cycle: user.Union
 class user.Union$stream {
   u: user.Union$stream | user.Union$stream | user.Union$stream | user.Union$stream | null
   u_arr: (user.Union$stream | user.Union$stream | user.Union$stream | user.Union$stream)[]

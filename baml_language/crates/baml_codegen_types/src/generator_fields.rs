@@ -19,6 +19,9 @@ pub enum OutputType {
     /// Go SDK using the `baml_go` runtime.
     #[strum(serialize = "go")]
     Go,
+    /// TypeScript + Web/WASM SDK (`@boundaryml/baml-bridge-web` runtime).
+    #[strum(serialize = "typescript/web")]
+    TypescriptWeb,
 }
 
 /// Identifier-casing policy a code generator must respect. Surfaces as

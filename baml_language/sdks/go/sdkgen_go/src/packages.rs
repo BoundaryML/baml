@@ -47,7 +47,7 @@ impl GoPackages {
     pub(crate) fn for_pool(pool: &SymbolPool) -> Self {
         let mut baml_names = pool
             .keys()
-            .map(|name| name.pkg.clone())
+            .map(|name| name.package().clone())
             .collect::<BTreeSet<_>>();
         baml_names.insert(Name::new("user"));
 

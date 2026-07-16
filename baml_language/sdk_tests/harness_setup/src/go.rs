@@ -13,6 +13,7 @@ use baml_codegen_types::{
     Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, NamingConvention,
     Origin, Symbol, SymbolPool, Ty, TypeAlias,
 };
+use baml_type::TyAttr;
 
 use crate::{
     BuildDiagnostics, copy_customizable, emit_cargo_line, fixtures_root_from_manifest,
@@ -27,6 +28,36 @@ const FIXTURES: &[&str] = &[
     "unsupported_only",
     "package_edges",
 ];
+
+fn ty_string() -> Ty {
+    Ty::String {
+        attr: TyAttr::default(),
+    }
+}
+
+fn ty_int() -> Ty {
+    Ty::Int {
+        attr: TyAttr::default(),
+    }
+}
+
+fn ty_bool() -> Ty {
+    Ty::Bool {
+        attr: TyAttr::default(),
+    }
+}
+
+fn ty_enum(name: Name) -> Ty {
+    Ty::Enum(name, TyAttr::default())
+}
+
+fn ty_class(name: Name, arguments: Vec<Ty>) -> Ty {
+    Ty::Class(name, arguments, TyAttr::default())
+}
+
+fn ty_alias(name: Name) -> Ty {
+    Ty::TypeAlias(name, TyAttr::default())
+}
 
 pub fn run_all() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -137,32 +168,25 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
         BaseName::new("round_trip_thing_alias"),
     );
     let pool = SymbolPool::from([
-        synthetic_class(context.clone(), vec![("value", Ty::String)]),
-        synthetic_class(dashed.clone(), vec![("value", Ty::Int)]),
-        synthetic_class(snake.clone(), vec![("value", Ty::Bool)]),
-        synthetic_class(models.clone(), vec![("value", Ty::String)]),
+        synthetic_class(context.clone(), vec![("value", ty_string())]),
+        synthetic_class(dashed.clone(), vec![("value", ty_int())]),
+        synthetic_class(snake.clone(), vec![("value", ty_bool())]),
+        synthetic_class(models.clone(), vec![("value", ty_string())]),
         synthetic_enum(status.clone(), &["ready", "done"]),
-        synthetic_type_alias(status_alias.clone(), Ty::Enum(status), false),
-        synthetic_type_alias(
-            thing_alias.clone(),
-            Ty::Class(models.clone(), vec![]),
-            false,
-        ),
+        synthetic_type_alias(status_alias.clone(), ty_enum(status), false),
+        synthetic_type_alias(thing_alias.clone(), ty_class(models.clone(), vec![]), false),
         synthetic_class(
             holder.clone(),
             vec![
-                ("context_thing", Ty::Class(context.clone(), vec![])),
-                ("dashed_thing", Ty::Class(dashed, vec![])),
-                ("snake_thing", Ty::Class(snake, vec![])),
+                ("context_thing", ty_class(context.clone(), vec![])),
+                ("dashed_thing", ty_class(dashed, vec![])),
+                ("snake_thing", ty_class(snake, vec![])),
             ],
         ),
-        synthetic_class(
-            envelope.clone(),
-            vec![("holder", Ty::Class(holder, vec![]))],
-        ),
+        synthetic_class(envelope.clone(), vec![("holder", ty_class(holder, vec![]))]),
         synthetic_class(
             enum_holder.clone(),
-            vec![("status", Ty::TypeAlias(status_alias.clone()))],
+            vec![("status", ty_alias(status_alias.clone()))],
         ),
         (
             round_trip,
@@ -173,10 +197,10 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
                 arguments: vec![FunctionArgument {
                     name: BaseName::new("value"),
                     docstring: None,
-                    ty: Ty::Class(context.clone(), vec![]),
+                    ty: ty_class(context.clone(), vec![]),
                     default: None,
                 }],
-                return_type: Ty::Class(context, vec![]),
+                return_type: ty_class(context, vec![]),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -195,17 +219,17 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
                     FunctionArgument {
                         name: BaseName::new("models"),
                         docstring: None,
-                        ty: Ty::String,
+                        ty: ty_string(),
                         default: None,
                     },
                     FunctionArgument {
                         name: BaseName::new("value"),
                         docstring: None,
-                        ty: Ty::Class(models.clone(), vec![]),
+                        ty: ty_class(models.clone(), vec![]),
                         default: None,
                     },
                 ],
-                return_type: Ty::Class(models, vec![]),
+                return_type: ty_class(models, vec![]),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -223,10 +247,10 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
                 arguments: vec![FunctionArgument {
                     name: BaseName::new("value"),
                     docstring: None,
-                    ty: Ty::Class(envelope.clone(), vec![]),
+                    ty: ty_class(envelope.clone(), vec![]),
                     default: None,
                 }],
-                return_type: Ty::Class(envelope, vec![]),
+                return_type: ty_class(envelope, vec![]),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -244,10 +268,10 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
                 arguments: vec![FunctionArgument {
                     name: BaseName::new("value"),
                     docstring: None,
-                    ty: Ty::Class(enum_holder.clone(), vec![]),
+                    ty: ty_class(enum_holder.clone(), vec![]),
                     default: None,
                 }],
-                return_type: Ty::Class(enum_holder, vec![]),
+                return_type: ty_class(enum_holder, vec![]),
                 throws: None,
                 watchers: vec![],
                 origin: Origin {
@@ -256,8 +280,8 @@ fn stage_package_edges(manifest_dir: &std::path::Path) {
                 },
             }),
         ),
-        round_trip_function(status_alias_round_trip, Ty::TypeAlias(status_alias)),
-        round_trip_function(thing_alias_round_trip, Ty::TypeAlias(thing_alias)),
+        round_trip_function(status_alias_round_trip, ty_alias(status_alias)),
+        round_trip_function(thing_alias_round_trip, ty_alias(thing_alias)),
     ]);
     let output = sdkgen_go::to_source_code_with_bytecode(
         &pool,
@@ -327,7 +351,7 @@ fn synthetic_type_alias(name: Name, resolves_to: Ty, recursive: bool) -> (Name, 
 
 fn round_trip_function(name: Name, ty: Ty) -> (Name, Symbol) {
     let function = Function {
-        name: name.name.clone(),
+        name: name.name().clone(),
         generic_params: vec![],
         docstring: None,
         arguments: vec![FunctionArgument {

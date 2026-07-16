@@ -22,6 +22,7 @@ use baml_codegen_types::{
     Class, ClassProperty, Enum, Function, FunctionArgument, Name, NamingConvention, Symbol,
     SymbolPool, Ty, TypeAlias,
 };
+use baml_type::TyAttr;
 
 mod names;
 mod packages;
@@ -114,7 +115,7 @@ fn generated_functions<'a>(
         .iter()
         .filter_map(|(name, symbol)| match symbol {
             Symbol::Function(function)
-                if name.pkg == *package.baml_name()
+                if name.package() == package.baml_name()
                     && supported_function(function, pool, wireable_classes) =>
             {
                 Some((name, function))
@@ -313,26 +314,26 @@ fn collect_codec_types_inner(
     if primitive_kind(ty).is_some() {
         return;
     }
-    if let Ty::Union(items) = ty {
+    if let Ty::Union(items, _) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
         collect_codec_types_inner(inner, pool, class_names, enum_names, aliases);
         return;
     }
     match ty {
-        Ty::List(inner) => {
+        Ty::List(inner, _) => {
             collect_codec_types_inner(inner, pool, class_names, enum_names, aliases);
             return;
         }
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             collect_codec_types_inner(key, pool, class_names, enum_names, aliases);
             collect_codec_types_inner(value, pool, class_names, enum_names, aliases);
             return;
         }
-        Ty::Enum(name) => {
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
             enum_names.insert(name.clone());
             return;
         }
-        Ty::TypeAlias(name) => {
+        Ty::TypeAlias(name, _) => {
             if !aliases.insert(name.clone()) {
                 return;
             }
@@ -348,7 +349,7 @@ fn collect_codec_types_inner(
         }
         _ => {}
     }
-    let Ty::Class(name, arguments) = ty else {
+    let Ty::Class(name, arguments, _) = ty else {
         return;
     };
     debug_assert!(arguments.is_empty());
@@ -373,7 +374,7 @@ fn generated_classes<'a>(
         .iter()
         .filter_map(|(name, symbol)| match symbol {
             Symbol::Class(class)
-                if name.pkg == *package.baml_name() && renderable.contains(name) =>
+                if name.package() == package.baml_name() && renderable.contains(name) =>
             {
                 Some((name, class))
             }
@@ -418,7 +419,7 @@ fn generated_enums<'a>(
     let mut enums = pool
         .iter()
         .filter_map(|(name, symbol)| match symbol {
-            Symbol::Enum(enum_) if name.pkg == *package.baml_name() => Some((name, enum_)),
+            Symbol::Enum(enum_) if name.package() == package.baml_name() => Some((name, enum_)),
             _ => None,
         })
         .collect::<Vec<_>>();
@@ -461,7 +462,7 @@ fn generated_aliases<'a>(
         .iter()
         .filter_map(|(name, symbol)| match symbol {
             Symbol::TypeAlias(alias)
-                if name.pkg == *package.baml_name() && renderable.contains(name) =>
+                if name.package() == package.baml_name() && renderable.contains(name) =>
             {
                 Some((name, alias))
             }
@@ -542,9 +543,9 @@ fn supported_declared_type(
         return true;
     }
     match ty {
-        Ty::Enum(_) => true,
-        Ty::Class(name, arguments) => arguments.is_empty() && classes.contains(name),
-        Ty::TypeAlias(name) => {
+        Ty::Enum(..) | Ty::EnumVariant(..) => true,
+        Ty::Class(name, arguments, _) => arguments.is_empty() && classes.contains(name),
+        Ty::TypeAlias(name, _) => {
             if !aliases.insert(name.clone()) {
                 return false;
             }
@@ -557,12 +558,12 @@ fn supported_declared_type(
             aliases.remove(name);
             supported
         }
-        Ty::List(inner) => supported_declared_type(inner, pool, classes, aliases),
-        Ty::Map { key, value } => {
+        Ty::List(inner, _) => supported_declared_type(inner, pool, classes, aliases),
+        Ty::Map { key, value, .. } => {
             declared_map_key_is_string(key, pool, aliases)
                 && supported_declared_type(value, pool, classes, aliases)
         }
-        Ty::Union(items) => nullable_inner(items)
+        Ty::Union(items, _) => nullable_inner(items)
             .is_some_and(|inner| supported_declared_type(inner, pool, classes, aliases)),
         _ => false,
     }
@@ -570,8 +571,8 @@ fn supported_declared_type(
 
 fn declared_map_key_is_string(ty: &Ty, pool: &SymbolPool, aliases: &mut HashSet<Name>) -> bool {
     match ty {
-        Ty::String => true,
-        Ty::TypeAlias(name) if aliases.insert(name.clone()) => {
+        Ty::String { .. } => true,
+        Ty::TypeAlias(name, _) if aliases.insert(name.clone()) => {
             let is_string = match &pool[name] {
                 Symbol::TypeAlias(alias) if !alias.recursive => {
                     declared_map_key_is_string(&alias.resolves_to, pool, aliases)
@@ -647,8 +648,8 @@ fn class_targets<'a>(
     aliases: &mut HashSet<Name>,
 ) -> Vec<&'a Name> {
     match ty {
-        Ty::Class(name, arguments) if arguments.is_empty() => vec![name],
-        Ty::TypeAlias(name) => {
+        Ty::Class(name, arguments, _) if arguments.is_empty() => vec![name],
+        Ty::TypeAlias(name, _) => {
             if !aliases.insert(name.clone()) {
                 return Vec::new();
             }
@@ -661,9 +662,9 @@ fn class_targets<'a>(
             aliases.remove(name);
             result
         }
-        Ty::List(inner) => class_targets(inner, pool, aliases),
+        Ty::List(inner, _) => class_targets(inner, pool, aliases),
         Ty::Map { value, .. } => class_targets(value, pool, aliases),
-        Ty::Union(items) => nullable_inner(items)
+        Ty::Union(items, _) => nullable_inner(items)
             .map(|inner| class_targets(inner, pool, aliases))
             .unwrap_or_default(),
         _ => Vec::new(),
@@ -680,8 +681,8 @@ fn direct_required_class_target_inner<'a>(
     aliases: &mut HashSet<Name>,
 ) -> Option<&'a Name> {
     match ty {
-        Ty::Class(name, arguments) if arguments.is_empty() => Some(name),
-        Ty::TypeAlias(name) if aliases.insert(name.clone()) => match &pool[name] {
+        Ty::Class(name, arguments, _) if arguments.is_empty() => Some(name),
+        Ty::TypeAlias(name, _) if aliases.insert(name.clone()) => match &pool[name] {
             Symbol::TypeAlias(alias) if !alias.recursive => {
                 direct_required_class_target_inner(&alias.resolves_to, pool, aliases)
             }
@@ -692,10 +693,16 @@ fn direct_required_class_target_inner<'a>(
 }
 
 fn nullable_inner(items: &[Ty]) -> Option<&Ty> {
-    if items.len() != 2 || items.iter().filter(|item| matches!(item, Ty::Null)).count() != 1 {
+    if items.len() != 2
+        || items
+            .iter()
+            .filter(|item| matches!(item, Ty::Null { .. }))
+            .count()
+            != 1
+    {
         return None;
     }
-    items.iter().find(|item| !matches!(item, Ty::Null))
+    items.iter().find(|item| !matches!(item, Ty::Null { .. }))
 }
 
 fn cyclic_class_edges(pool: &SymbolPool, classes: &BTreeSet<Name>) -> BTreeSet<(Name, Name)> {
@@ -760,7 +767,7 @@ fn supported_function(
             pool,
             wireable_classes,
             &mut HashSet::new(),
-        ) || matches!(function.return_type, Ty::Unit))
+        ) || matches!(function.return_type, Ty::Void { .. }))
 }
 
 fn supported_wire_type(
@@ -770,17 +777,17 @@ fn supported_wire_type(
     aliases: &mut HashSet<Name>,
 ) -> bool {
     primitive_kind(ty).is_some()
-        || matches!(ty, Ty::Enum(_))
-        || matches!(ty, Ty::Class(name, arguments) if arguments.is_empty() && wireable_classes.contains(name))
-        || matches!(ty, Ty::TypeAlias(name) if aliases.insert(name.clone()) && matches!(
+        || matches!(ty, Ty::Enum(..) | Ty::EnumVariant(..))
+        || matches!(ty, Ty::Class(name, arguments, _) if arguments.is_empty() && wireable_classes.contains(name))
+        || matches!(ty, Ty::TypeAlias(name, _) if aliases.insert(name.clone()) && matches!(
             &pool[name],
             Symbol::TypeAlias(alias)
                 if !alias.recursive
                     && supported_wire_type(&alias.resolves_to, pool, wireable_classes, aliases)
         ))
-        || matches!(ty, Ty::List(inner) if supported_wire_type(inner, pool, wireable_classes, aliases))
-        || matches!(ty, Ty::Map { key, value } if declared_map_key_is_string(key, pool, aliases) && supported_wire_type(value, pool, wireable_classes, aliases))
-        || matches!(ty, Ty::Union(items) if nullable_inner(items).is_some_and(|inner| supported_wire_type(inner, pool, wireable_classes, aliases)))
+        || matches!(ty, Ty::List(inner, _) if supported_wire_type(inner, pool, wireable_classes, aliases))
+        || matches!(ty, Ty::Map { key, value, .. } if declared_map_key_is_string(key, pool, aliases) && supported_wire_type(value, pool, wireable_classes, aliases))
+        || matches!(ty, Ty::Union(items, _) if nullable_inner(items).is_some_and(|inner| supported_wire_type(inner, pool, wireable_classes, aliases)))
 }
 
 #[derive(Clone, Copy)]
@@ -796,14 +803,14 @@ enum PrimitiveKind {
 
 fn primitive_kind(ty: &Ty) -> Option<PrimitiveKind> {
     match ty {
-        Ty::String => Some(PrimitiveKind::String),
-        Ty::Int => Some(PrimitiveKind::Int),
-        Ty::Bigint => Some(PrimitiveKind::Bigint),
-        Ty::Float => Some(PrimitiveKind::Float),
-        Ty::Bool => Some(PrimitiveKind::Bool),
-        Ty::Null => Some(PrimitiveKind::Null),
-        Ty::Uint8Array => Some(PrimitiveKind::Uint8Array),
-        Ty::Literal(literal) => match literal {
+        Ty::String { .. } => Some(PrimitiveKind::String),
+        Ty::Int { .. } => Some(PrimitiveKind::Int),
+        Ty::Bigint { .. } => Some(PrimitiveKind::Bigint),
+        Ty::Float { .. } => Some(PrimitiveKind::Float),
+        Ty::Bool { .. } => Some(PrimitiveKind::Bool),
+        Ty::Null { .. } => Some(PrimitiveKind::Null),
+        Ty::Uint8Array { .. } => Some(PrimitiveKind::Uint8Array),
+        Ty::Literal(literal, _, _) => match literal {
             Literal::String(_) => Some(PrimitiveKind::String),
             Literal::Int(_) => Some(PrimitiveKind::Int),
             Literal::Bigint(_) => Some(PrimitiveKind::Bigint),
@@ -909,7 +916,7 @@ fn render_functions(
             ));
         }
 
-        if matches!(function.return_type, Ty::Unit) {
+        if matches!(function.return_type, Ty::Void { .. }) {
             let _ = writeln!(
                 out,
                 "\nfunc {go_name}({}) {error_type} {{",
@@ -927,7 +934,7 @@ fn render_functions(
             out,
             "\tif {error_local} := {bootstrap_package}.Ensure(); {error_local} != nil {{"
         );
-        if matches!(function.return_type, Ty::Unit) {
+        if matches!(function.return_type, Ty::Void { .. }) {
             let _ = writeln!(out, "\t\treturn {error_local}\n\t}}");
         } else {
             let _ = writeln!(
@@ -973,7 +980,7 @@ fn render_functions(
             out.push_str("\t\t}\n\t}\n");
         }
 
-        if matches!(function.return_type, Ty::Unit) {
+        if matches!(function.return_type, Ty::Void { .. }) {
             let _ = write!(
                 out,
                 "\t_, {error_local} := {runtime_package}.Call({context_parameter}, "
@@ -1005,7 +1012,7 @@ fn render_functions(
             }
             out.push_str("})\n");
         }
-        if matches!(function.return_type, Ty::Unit) {
+        if matches!(function.return_type, Ty::Void { .. }) {
             let _ = writeln!(out, "\treturn {error_local}");
         } else {
             let _ = writeln!(out, "\tif {error_local} != nil {{");
@@ -1090,10 +1097,10 @@ fn add_wire_type_imports(
     imports: &mut GoImports,
     visited: &mut HashSet<Name>,
 ) {
-    if primitive_kind(ty).is_some() || matches!(ty, Ty::Unit) {
+    if primitive_kind(ty).is_some() || matches!(ty, Ty::Void { .. }) {
         return;
     }
-    if let Ty::Union(items) = ty {
+    if let Ty::Union(items, _) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
         add_wire_type_imports(
             inner,
@@ -1107,7 +1114,7 @@ fn add_wire_type_imports(
         return;
     }
     match ty {
-        Ty::List(inner) => {
+        Ty::List(inner, _) => {
             add_wire_type_imports(
                 inner,
                 current_package,
@@ -1119,7 +1126,7 @@ fn add_wire_type_imports(
             );
             return;
         }
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             add_wire_type_imports(
                 key,
                 current_package,
@@ -1140,8 +1147,8 @@ fn add_wire_type_imports(
             );
             return;
         }
-        Ty::Enum(name) => {
-            let target_package = packages.get(&name.pkg);
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
+            let target_package = packages.get(name.package());
             if target_package.go_name() != current_package {
                 imports.add_package(
                     target_package.go_name(),
@@ -1150,8 +1157,8 @@ fn add_wire_type_imports(
             }
             return;
         }
-        Ty::TypeAlias(name) => {
-            let target_package = packages.get(&name.pkg);
+        Ty::TypeAlias(name, _) => {
+            let target_package = packages.get(name.package());
             if target_package.go_name() != current_package {
                 imports.add_package(
                     target_package.go_name(),
@@ -1177,14 +1184,14 @@ fn add_wire_type_imports(
         }
         _ => {}
     }
-    let Ty::Class(name, arguments) = ty else {
+    let Ty::Class(name, arguments, _) = ty else {
         unreachable!("function was filtered to supported wire types")
     };
     debug_assert!(arguments.is_empty());
     if !visited.insert(name.clone()) {
         return;
     }
-    let target_package = packages.get(&name.pkg);
+    let target_package = packages.get(name.package());
     if target_package.go_name() != current_package {
         imports.add_package(
             target_package.go_name(),
@@ -1216,7 +1223,7 @@ fn function_go_type(
     if primitive_kind(ty).is_some() {
         return go_type(ty);
     }
-    if let Ty::Union(items) = ty {
+    if let Ty::Union(items, _) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
         let rendered = function_go_type(inner, current_package, names, codecs);
         return if wire_type_has_pointer_representation(inner, codecs) {
@@ -1226,20 +1233,20 @@ fn function_go_type(
         };
     }
     match ty {
-        Ty::List(inner) => {
+        Ty::List(inner, _) => {
             return format!(
                 "[]{}",
                 function_go_type(inner, current_package, names, codecs)
             );
         }
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             return format!(
                 "map[{}]{}",
                 function_go_type(key, current_package, names, codecs),
                 function_go_type(value, current_package, names, codecs)
             );
         }
-        Ty::Enum(name) => {
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
             return names
                 .project(
                     &BamlFqn::symbol(name),
@@ -1249,7 +1256,7 @@ fn function_go_type(
                 .identifier(current_package)
                 .to_string();
         }
-        Ty::TypeAlias(name) => {
+        Ty::TypeAlias(name, _) => {
             return names
                 .project(
                     &BamlFqn::symbol(name),
@@ -1261,7 +1268,7 @@ fn function_go_type(
         }
         _ => {}
     }
-    let Ty::Class(name, arguments) = ty else {
+    let Ty::Class(name, arguments, _) = ty else {
         unreachable!("function was filtered to supported wire types")
     };
     debug_assert!(arguments.is_empty());
@@ -1277,44 +1284,44 @@ fn function_go_type(
 
 fn wire_type_is_bigint(ty: &Ty, codecs: &WireCodecs) -> bool {
     matches!(primitive_kind(ty), Some(PrimitiveKind::Bigint))
-        || matches!(ty, Ty::TypeAlias(name) if wire_type_is_bigint(codecs.alias_target(name), codecs))
+        || matches!(ty, Ty::TypeAlias(name, _) if wire_type_is_bigint(codecs.alias_target(name), codecs))
 }
 
 fn wire_map_key_is_string(ty: &Ty, codecs: &WireCodecs) -> bool {
-    matches!(ty, Ty::String)
-        || matches!(ty, Ty::TypeAlias(name) if wire_map_key_is_string(codecs.alias_target(name), codecs))
+    matches!(ty, Ty::String { .. })
+        || matches!(ty, Ty::TypeAlias(name, _) if wire_map_key_is_string(codecs.alias_target(name), codecs))
 }
 
 fn wire_type_has_pointer_representation(ty: &Ty, codecs: &WireCodecs) -> bool {
     wire_type_is_bigint(ty, codecs)
-        || matches!(ty, Ty::Union(_))
-        || matches!(ty, Ty::TypeAlias(name) if wire_type_has_pointer_representation(codecs.alias_target(name), codecs))
+        || matches!(ty, Ty::Union(..))
+        || matches!(ty, Ty::TypeAlias(name, _) if wire_type_has_pointer_representation(codecs.alias_target(name), codecs))
 }
 
 fn wire_type_is_nullable_alias(ty: &Ty, codecs: &WireCodecs) -> bool {
-    matches!(ty, Ty::TypeAlias(name) if {
+    matches!(ty, Ty::TypeAlias(name, _) if {
         let target = codecs.alias_target(name);
-        matches!(target, Ty::Union(_)) || wire_type_is_nullable_alias(target, codecs)
+        matches!(target, Ty::Union(..)) || wire_type_is_nullable_alias(target, codecs)
     })
 }
 
 fn function_type_uses_bigint(ty: &Ty, codecs: &WireCodecs) -> bool {
     matches!(primitive_kind(ty), Some(PrimitiveKind::Bigint))
-        || matches!(ty, Ty::TypeAlias(name) if function_type_uses_bigint(codecs.alias_target(name), codecs))
-        || matches!(ty, Ty::List(inner) if function_type_uses_bigint(inner, codecs))
-        || matches!(ty, Ty::Map { key, value } if function_type_uses_bigint(key, codecs) || function_type_uses_bigint(value, codecs))
-        || matches!(ty, Ty::Union(items) if nullable_inner(items).is_some_and(|inner| function_type_uses_bigint(inner, codecs)))
+        || matches!(ty, Ty::TypeAlias(name, _) if function_type_uses_bigint(codecs.alias_target(name), codecs))
+        || matches!(ty, Ty::List(inner, _) if function_type_uses_bigint(inner, codecs))
+        || matches!(ty, Ty::Map { key, value, .. } if function_type_uses_bigint(key, codecs) || function_type_uses_bigint(value, codecs))
+        || matches!(ty, Ty::Union(items, _) if nullable_inner(items).is_some_and(|inner| function_type_uses_bigint(inner, codecs)))
 }
 
 fn input_expression(ty: &Ty, value: &str, codecs: &WireCodecs) -> String {
-    if let Ty::TypeAlias(name) = ty {
+    if let Ty::TypeAlias(name, _) = ty {
         return input_expression(codecs.alias_target(name), value, codecs);
     }
     let runtime_package = GeneratorIdent::RuntimePackage;
     if primitive_kind(ty).is_some() {
         return format!("{runtime_package}.{}({value})", input_constructor(ty));
     }
-    if let Ty::Union(items) = ty {
+    if let Ty::Union(items, _) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
         if wire_type_is_nullable_alias(inner, codecs) {
             return input_expression(inner, value, codecs);
@@ -1331,7 +1338,7 @@ fn input_expression(ty: &Ty, value: &str, codecs: &WireCodecs) -> String {
 }
 
 fn input_encoder(ty: &Ty, codecs: &WireCodecs) -> String {
-    if let Ty::TypeAlias(name) = ty {
+    if let Ty::TypeAlias(name, _) = ty {
         return input_encoder(codecs.alias_target(name), codecs);
     }
     if primitive_kind(ty).is_some() {
@@ -1341,7 +1348,7 @@ fn input_encoder(ty: &Ty, codecs: &WireCodecs) -> String {
             input_constructor(ty)
         );
     }
-    if let Ty::Union(items) = ty {
+    if let Ty::Union(items, _) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
         if wire_type_is_nullable_alias(inner, codecs) {
             return input_encoder(inner, codecs);
@@ -1356,14 +1363,14 @@ fn input_encoder(ty: &Ty, codecs: &WireCodecs) -> String {
         );
     }
     match ty {
-        Ty::List(inner) => {
+        Ty::List(inner, _) => {
             return format!(
                 "{}.ListEncoder({})",
                 GeneratorIdent::RuntimePackage,
                 input_encoder(inner, codecs)
             );
         }
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             debug_assert!(wire_map_key_is_string(key, codecs));
             return format!(
                 "{}.MapEncoder({})",
@@ -1371,14 +1378,14 @@ fn input_encoder(ty: &Ty, codecs: &WireCodecs) -> String {
                 input_encoder(value, codecs)
             );
         }
-        Ty::Enum(name) => {
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
             return codecs
                 .enum_ident(name, EnumCodecDirection::Encode)
                 .to_string();
         }
         _ => {}
     }
-    let Ty::Class(name, arguments) = ty else {
+    let Ty::Class(name, arguments, _) = ty else {
         unreachable!("wire type was not primitive, enum, container, or class")
     };
     debug_assert!(arguments.is_empty());
@@ -1386,14 +1393,14 @@ fn input_encoder(ty: &Ty, codecs: &WireCodecs) -> String {
 }
 
 fn output_expression(ty: &Ty, value: &str, codecs: &WireCodecs) -> String {
-    if let Ty::TypeAlias(name) = ty {
+    if let Ty::TypeAlias(name, _) = ty {
         return output_expression(codecs.alias_target(name), value, codecs);
     }
     let runtime_package = GeneratorIdent::RuntimePackage;
     if primitive_kind(ty).is_some() {
         return format!("{value}.{}()", output_method(ty));
     }
-    if let Ty::Union(items) = ty {
+    if let Ty::Union(items, _) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
         if wire_type_is_nullable_alias(inner, codecs) {
             return output_expression(inner, value, codecs);
@@ -1410,7 +1417,7 @@ fn output_expression(ty: &Ty, value: &str, codecs: &WireCodecs) -> String {
 }
 
 fn output_decoder(ty: &Ty, codecs: &WireCodecs) -> String {
-    if let Ty::TypeAlias(name) = ty {
+    if let Ty::TypeAlias(name, _) = ty {
         return output_decoder(codecs.alias_target(name), codecs);
     }
     if primitive_kind(ty).is_some() {
@@ -1420,7 +1427,7 @@ fn output_decoder(ty: &Ty, codecs: &WireCodecs) -> String {
             output_method(ty)
         );
     }
-    if let Ty::Union(items) = ty {
+    if let Ty::Union(items, _) = ty {
         let inner = nullable_inner(items).expect("function was filtered to nullable wire types");
         if wire_type_is_nullable_alias(inner, codecs) {
             return output_decoder(inner, codecs);
@@ -1435,14 +1442,14 @@ fn output_decoder(ty: &Ty, codecs: &WireCodecs) -> String {
         );
     }
     match ty {
-        Ty::List(inner) => {
+        Ty::List(inner, _) => {
             return format!(
                 "{}.ListDecoder({})",
                 GeneratorIdent::RuntimePackage,
                 output_decoder(inner, codecs)
             );
         }
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             debug_assert!(wire_map_key_is_string(key, codecs));
             return format!(
                 "{}.MapDecoder({})",
@@ -1450,14 +1457,14 @@ fn output_decoder(ty: &Ty, codecs: &WireCodecs) -> String {
                 output_decoder(value, codecs)
             );
         }
-        Ty::Enum(name) => {
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
             return codecs
                 .enum_ident(name, EnumCodecDirection::Decode)
                 .to_string();
         }
         _ => {}
     }
-    let Ty::Class(name, arguments) = ty else {
+    let Ty::Class(name, arguments, _) = ty else {
         unreachable!("wire type was not primitive, enum, container, or class")
     };
     debug_assert!(arguments.is_empty());
@@ -1484,7 +1491,12 @@ fn render_enum_codecs(
         };
         let enum_fqn = BamlFqn::symbol(name);
         let enum_name = names.project(&enum_fqn, GoNameKind::Enum, GoVisibility::Exported);
-        let go_type = function_go_type(&Ty::Enum(name.clone()), current_package, names, codecs);
+        let go_type = function_go_type(
+            &Ty::Enum(name.clone(), TyAttr::default()),
+            current_package,
+            names,
+            codecs,
+        );
         let encoder = codecs.enum_ident(name, EnumCodecDirection::Encode);
         let decoder = codecs.enum_ident(name, EnumCodecDirection::Decode);
         let wire_variants = enum_
@@ -1549,12 +1561,12 @@ fn render_class_codecs(
         let class_fqn = BamlFqn::symbol(name);
         let class_name = names.project(&class_fqn, GoNameKind::Class, GoVisibility::Exported);
         let go_type = function_go_type(
-            &Ty::Class(name.clone(), vec![]),
+            &Ty::Class(name.clone(), vec![], TyAttr::default()),
             current_package,
             names,
             codecs,
         );
-        let owner_package = packages.get(&name.pkg).go_name();
+        let owner_package = packages.get(name.package()).go_name();
         let encoder = codecs.ident(name, ClassCodecDirection::Encode);
         let decoder = codecs.ident(name, ClassCodecDirection::Decode);
 
@@ -1631,7 +1643,7 @@ fn class_field_output_expression(
     field_wire: &str,
     codecs: &WireCodecs,
 ) -> String {
-    if let Ty::TypeAlias(name) = ty {
+    if let Ty::TypeAlias(name, _) = ty {
         return class_field_output_expression(
             codecs.alias_target(name),
             class_value,
@@ -1643,7 +1655,7 @@ fn class_field_output_expression(
     if primitive_kind(ty).is_some() {
         return format!("{class_value}.{}({field_wire:?})", output_method(ty));
     }
-    if let Ty::Union(items) = ty {
+    if let Ty::Union(items, _) = ty {
         let inner = nullable_inner(items).expect("class was filtered to nullable wire types");
         if wire_type_is_nullable_alias(inner, codecs) {
             return class_field_output_expression(inner, class_value, field_wire, codecs);
@@ -1658,13 +1670,16 @@ fn class_field_output_expression(
             output_decoder(inner, codecs)
         );
     }
-    if matches!(ty, Ty::Enum(_) | Ty::List(_) | Ty::Map { .. }) {
+    if matches!(
+        ty,
+        Ty::Enum(..) | Ty::EnumVariant(..) | Ty::List(..) | Ty::Map { .. }
+    ) {
         return format!(
             "{runtime_package}.DecodeField({class_value}, {field_wire:?}, {})",
             output_decoder(ty, codecs)
         );
     }
-    let Ty::Class(name, arguments) = ty else {
+    let Ty::Class(name, arguments, _) = ty else {
         unreachable!("wireable class field was not primitive, enum, container, class, or nullable")
     };
     debug_assert!(arguments.is_empty());
@@ -1779,8 +1794,8 @@ impl ClassTypeRenderer<'_> {
         }
 
         match ty {
-            Ty::TypeAlias(target) => {
-                let target_package = self.packages.get(&target.pkg);
+            Ty::TypeAlias(target, _) => {
+                let target_package = self.packages.get(target.package());
                 if target_package.go_name() != self.current_package {
                     self.imports.add_package(
                         target_package.go_name(),
@@ -1807,8 +1822,8 @@ impl ClassTypeRenderer<'_> {
                     target_name
                 })
             }
-            Ty::Enum(target) => {
-                let target_package = self.packages.get(&target.pkg);
+            Ty::Enum(target, _) | Ty::EnumVariant(target, _, _) => {
+                let target_package = self.packages.get(target.package());
                 if target_package.go_name() != self.current_package {
                     self.imports.add_package(
                         target_package.go_name(),
@@ -1830,7 +1845,7 @@ impl ClassTypeRenderer<'_> {
                     target_name
                 })
             }
-            Ty::List(inner) => {
+            Ty::List(inner, _) => {
                 let element = self.render(inner, owner, false)?;
                 let rendered = format!("[]{element}");
                 Some(if optional {
@@ -1839,7 +1854,7 @@ impl ClassTypeRenderer<'_> {
                     rendered
                 })
             }
-            Ty::Map { key, value }
+            Ty::Map { key, value, .. }
                 if declared_map_key_is_string(key, self.pool, &mut HashSet::new()) =>
             {
                 let key = self.render(key, owner, false)?;
@@ -1851,8 +1866,8 @@ impl ClassTypeRenderer<'_> {
                     rendered
                 })
             }
-            Ty::Class(target, arguments) if arguments.is_empty() => {
-                let target_package = self.packages.get(&target.pkg);
+            Ty::Class(target, arguments, _) if arguments.is_empty() => {
+                let target_package = self.packages.get(target.package());
                 if target_package.go_name() != self.current_package {
                     self.imports.add_package(
                         target_package.go_name(),
@@ -1876,7 +1891,7 @@ impl ClassTypeRenderer<'_> {
                     target_name
                 })
             }
-            Ty::Union(items) => self.render(nullable_inner(items)?, owner, true),
+            Ty::Union(items, _) => self.render(nullable_inner(items)?, owner, true),
             _ => None,
         }
     }
@@ -1890,8 +1905,8 @@ fn alias_target_is_pointer(name: &Name, pool: &SymbolPool, visited: &mut HashSet
         unreachable!("type alias reference did not resolve to a type alias symbol")
     };
     match &alias.resolves_to {
-        Ty::Bigint | Ty::Union(_) => true,
-        Ty::TypeAlias(target) => alias_target_is_pointer(target, pool, visited),
+        Ty::Bigint { .. } | Ty::Union(..) => true,
+        Ty::TypeAlias(target, _) => alias_target_is_pointer(target, pool, visited),
         _ => false,
     }
 }
@@ -1958,11 +1973,91 @@ fn output_method(ty: &Ty) -> &'static str {
 mod tests {
     use baml_base::Name as BaseName;
     use baml_codegen_types::{
-        Class, ClassProperty, DefaultLiteral, EnumVariant, FunctionArgument,
+        Class, ClassProperty, DefaultLiteral, EnumVariant, Freshness, FunctionArgument,
         FunctionArgumentDefault, Name, Origin,
     };
 
     use super::*;
+
+    fn ty_int() -> Ty {
+        Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn ty_bigint() -> Ty {
+        Ty::Bigint {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn ty_float() -> Ty {
+        Ty::Float {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn ty_string() -> Ty {
+        Ty::String {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn ty_bool() -> Ty {
+        Ty::Bool {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn ty_null() -> Ty {
+        Ty::Null {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn ty_bytes() -> Ty {
+        Ty::Uint8Array {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn ty_void() -> Ty {
+        Ty::Void {
+            attr: TyAttr::default(),
+        }
+    }
+
+    fn ty_union(members: Vec<Ty>) -> Ty {
+        Ty::Union(members, TyAttr::default())
+    }
+
+    fn ty_list_boxed(inner: Box<Ty>) -> Ty {
+        Ty::List(inner, TyAttr::default())
+    }
+
+    fn ty_enum(name: Name) -> Ty {
+        Ty::Enum(name, TyAttr::default())
+    }
+
+    fn ty_class(name: Name, arguments: Vec<Ty>) -> Ty {
+        Ty::Class(name, arguments, TyAttr::default())
+    }
+
+    fn ty_alias(name: Name) -> Ty {
+        Ty::TypeAlias(name, TyAttr::default())
+    }
+
+    fn ty_literal(literal: Literal) -> Ty {
+        Ty::Literal(literal, Freshness::Regular, TyAttr::default())
+    }
+
+    fn ty_type_var(name: BaseName) -> Ty {
+        Ty::TypeVar(name, TyAttr::default())
+    }
+
+    fn ty_media(kind: baml_base::MediaKind) -> Ty {
+        Ty::Media(kind, TyAttr::default())
+    }
 
     fn origin() -> Origin {
         Origin {
@@ -2020,7 +2115,7 @@ mod tests {
 
     fn round_trip_function(name: Name, argument: &str, ty: Ty) -> (Name, Symbol) {
         let function = Function {
-            name: name.name.clone(),
+            name: name.name().clone(),
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
@@ -2047,10 +2142,10 @@ mod tests {
             arguments: vec![FunctionArgument {
                 name: BaseName::new("value"),
                 docstring: None,
-                ty: Ty::String,
+                ty: ty_string(),
                 default: None,
             }],
-            return_type: Ty::String,
+            return_type: ty_string(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2086,13 +2181,13 @@ mod tests {
                 FunctionArgument {
                     name: BaseName::new("options"),
                     docstring: None,
-                    ty: Ty::String,
+                    ty: ty_string(),
                     default: None,
                 },
                 FunctionArgument {
                     name: BaseName::new("opt1"),
                     docstring: None,
-                    ty: Ty::Union(vec![Ty::Int, Ty::Null]),
+                    ty: ty_union(vec![ty_int(), ty_null()]),
                     default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                         Literal::Int(5),
                     ))),
@@ -2100,13 +2195,13 @@ mod tests {
                 FunctionArgument {
                     name: BaseName::new("opt2"),
                     docstring: None,
-                    ty: Ty::String,
+                    ty: ty_string(),
                     default: Some(FunctionArgumentDefault::Expression {
                         source: Some("make_default()".to_string()),
                     }),
                 },
             ],
-            return_type: Ty::Int,
+            return_type: ty_int(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2142,12 +2237,12 @@ mod tests {
         let pool = SymbolPool::from([class(
             name,
             vec![
-                ("invoice_id", Ty::String),
-                ("total", Ty::Int),
-                ("ratio", Ty::Float),
-                ("settled", Ty::Bool),
-                ("payload", Ty::Uint8Array),
-                ("nothing", Ty::Null),
+                ("invoice_id", ty_string()),
+                ("total", ty_int()),
+                ("ratio", ty_float()),
+                ("settled", ty_bool()),
+                ("payload", ty_bytes()),
+                ("nothing", ty_null()),
             ],
         )]);
 
@@ -2189,15 +2284,15 @@ mod tests {
             class(
                 envelope.clone(),
                 vec![
-                    ("state", Ty::Enum(status.clone())),
+                    ("state", ty_enum(status.clone())),
                     (
                         "optional",
-                        Ty::Union(vec![Ty::Enum(status.clone()), Ty::Null]),
+                        ty_union(vec![ty_enum(status.clone()), ty_null()]),
                     ),
-                    ("items", Ty::List(Box::new(Ty::Enum(status)))),
+                    ("items", ty_list_boxed(Box::new(ty_enum(status)))),
                 ],
             ),
-            round_trip_function(function, "value", Ty::Class(envelope, vec![])),
+            round_trip_function(function, "value", ty_class(envelope, vec![])),
         ]);
 
         let files = to_source_code_with_bytecode(
@@ -2270,24 +2365,24 @@ mod tests {
             BaseName::new("round_trip_recursive"),
         );
         let pool = SymbolPool::from([
-            alias(text.clone(), Ty::String, false),
-            alias(text_chain.clone(), Ty::TypeAlias(text), false),
-            alias(bigint.clone(), Ty::Bigint, false),
+            alias(text.clone(), ty_string(), false),
+            alias(text_chain.clone(), ty_alias(text), false),
+            alias(bigint.clone(), ty_bigint(), false),
             alias(
                 recursive.clone(),
-                Ty::Union(vec![
-                    Ty::Int,
-                    Ty::List(Box::new(Ty::TypeAlias(recursive.clone()))),
+                ty_union(vec![
+                    ty_int(),
+                    ty_list_boxed(Box::new(ty_alias(recursive.clone()))),
                 ]),
                 true,
             ),
-            round_trip_function(round_trip, "value", Ty::TypeAlias(text_chain)),
+            round_trip_function(round_trip, "value", ty_alias(text_chain)),
             round_trip_function(
                 optional_bigint,
                 "value",
-                Ty::Union(vec![Ty::TypeAlias(bigint), Ty::Null]),
+                ty_union(vec![ty_alias(bigint), ty_null()]),
             ),
-            round_trip_function(recursive_function, "value", Ty::TypeAlias(recursive)),
+            round_trip_function(recursive_function, "value", ty_alias(recursive)),
         ]);
 
         let files = to_source_code_with_bytecode(
@@ -2333,10 +2428,10 @@ mod tests {
             arguments: vec![FunctionArgument {
                 name: BaseName::new("ctx"),
                 docstring: None,
-                ty: Ty::Class(person.clone(), vec![]),
+                ty: ty_class(person.clone(), vec![]),
                 default: None,
             }],
-            return_type: Ty::Class(person.clone(), vec![]),
+            return_type: ty_class(person.clone(), vec![]),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2344,7 +2439,7 @@ mod tests {
         let pool = SymbolPool::from([
             class(
                 person,
-                vec![("class_value", Ty::String), ("result", Ty::Int)],
+                vec![("class_value", ty_string()), ("result", ty_int())],
             ),
             (function_name, Symbol::Function(function)),
         ]);
@@ -2373,8 +2468,8 @@ mod tests {
         let widget = Name::new(BaseName::new("models"), vec![], BaseName::new("widget"));
         let holder = Name::new(BaseName::new("user"), vec![], BaseName::new("holder"));
         let pool = SymbolPool::from([
-            class(widget.clone(), vec![("label", Ty::String)]),
-            class(holder, vec![("widget", Ty::Class(widget, vec![]))]),
+            class(widget.clone(), vec![("label", ty_string())]),
+            class(holder, vec![("widget", ty_class(widget, vec![]))]),
         ]);
 
         let files = to_source_code_with_bytecode(
@@ -2392,7 +2487,7 @@ mod tests {
     #[test]
     fn direct_recursive_class_edges_are_pointers() {
         let node = Name::new(BaseName::new("user"), vec![], BaseName::new("node"));
-        let pool = SymbolPool::from([class(node.clone(), vec![("next", Ty::Class(node, vec![]))])]);
+        let pool = SymbolPool::from([class(node.clone(), vec![("next", ty_class(node, vec![]))])]);
 
         let files = to_source_code_with_bytecode(
             &pool,
@@ -2409,10 +2504,10 @@ mod tests {
         let pool = SymbolPool::from([class(
             mixed,
             vec![
-                ("supported", Ty::String),
+                ("supported", ty_string()),
                 (
                     "deferred",
-                    Ty::List(Box::new(Ty::Union(vec![Ty::String, Ty::Int]))),
+                    ty_list_boxed(Box::new(ty_union(vec![ty_string(), ty_int()]))),
                 ),
             ],
         )]);
@@ -2442,21 +2537,21 @@ mod tests {
             arguments: vec![FunctionArgument {
                 name: BaseName::new("outer"),
                 docstring: None,
-                ty: Ty::Class(outer.clone(), vec![]),
+                ty: ty_class(outer.clone(), vec![]),
                 default: None,
             }],
-            return_type: Ty::Class(outer.clone(), vec![]),
+            return_type: ty_class(outer.clone(), vec![]),
             throws: None,
             watchers: vec![],
             origin: origin(),
         };
         let pool = SymbolPool::from([
-            class(inner.clone(), vec![("value", Ty::String)]),
+            class(inner.clone(), vec![("value", ty_string())]),
             class(
                 outer,
                 vec![
-                    ("inner", Ty::Class(inner, vec![])),
-                    ("optional", Ty::Union(vec![Ty::String, Ty::Null])),
+                    ("inner", ty_class(inner, vec![])),
+                    ("optional", ty_union(vec![ty_string(), ty_null()])),
                 ],
             ),
             (function_name, Symbol::Function(function)),
@@ -2481,8 +2576,8 @@ mod tests {
             vec![],
             BaseName::new("round_trip_optional_items"),
         );
-        let nullable_string = Ty::Union(vec![Ty::String, Ty::Null]);
-        let nullable_list = Ty::Union(vec![Ty::List(Box::new(nullable_string)), Ty::Null]);
+        let nullable_string = ty_union(vec![ty_string(), ty_null()]);
+        let nullable_list = ty_union(vec![ty_list_boxed(Box::new(nullable_string)), ty_null()]);
         let pool = SymbolPool::from([round_trip_function(function, "items", nullable_list)]);
 
         let files = to_source_code_with_bytecode(
@@ -2514,9 +2609,9 @@ mod tests {
             BaseName::new("round_trip_outer"),
         );
         let pool = SymbolPool::from([
-            class(inner.clone(), vec![("value", Ty::Int)]),
-            class(outer.clone(), vec![("inner", Ty::Class(inner, vec![]))]),
-            round_trip_function(function, "outer", Ty::Class(outer, vec![])),
+            class(inner.clone(), vec![("value", ty_int())]),
+            class(outer.clone(), vec![("inner", ty_class(inner, vec![]))]),
+            round_trip_function(function, "outer", ty_class(outer, vec![])),
         ]);
 
         let files = to_source_code_with_bytecode(
@@ -2541,11 +2636,8 @@ mod tests {
             BaseName::new("round_trip_node"),
         );
         let pool = SymbolPool::from([
-            class(
-                node.clone(),
-                vec![("next", Ty::Class(node.clone(), vec![]))],
-            ),
-            round_trip_function(function, "node", Ty::Class(node, vec![])),
+            class(node.clone(), vec![("next", ty_class(node.clone(), vec![]))]),
+            round_trip_function(function, "node", ty_class(node, vec![])),
         ]);
 
         let files = to_source_code_with_bytecode(
@@ -2573,7 +2665,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![],
-            return_type: Ty::String,
+            return_type: ty_string(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2600,7 +2692,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![],
-            return_type: Ty::String,
+            return_type: ty_string(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2633,7 +2725,7 @@ mod tests {
             generic_params,
             docstring: None,
             arguments: vec![],
-            return_type: Ty::String,
+            return_type: ty_string(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2677,10 +2769,10 @@ mod tests {
             arguments: vec![FunctionArgument {
                 name: BaseName::new("value"),
                 docstring: None,
-                ty: Ty::TypeVar(BaseName::new("T")),
+                ty: ty_type_var(BaseName::new("T")),
                 default: None,
             }],
-            return_type: Ty::TypeVar(BaseName::new("T")),
+            return_type: ty_type_var(BaseName::new("T")),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2713,11 +2805,11 @@ mod tests {
                 .map(|name| FunctionArgument {
                     name: BaseName::new(name),
                     docstring: None,
-                    ty: Ty::String,
+                    ty: ty_string(),
                     default: None,
                 })
                 .collect(),
-            return_type: Ty::String,
+            return_type: ty_string(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2741,7 +2833,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![],
-            return_type: Ty::String,
+            return_type: ty_string(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2777,18 +2869,18 @@ mod tests {
     #[test]
     fn maps_every_in_scope_primitive_and_literal_to_go() {
         let cases = [
-            (Ty::Int, "int64"),
-            (Ty::Bigint, "*big.Int"),
-            (Ty::Float, "float64"),
-            (Ty::String, "string"),
-            (Ty::Bool, "bool"),
-            (Ty::Null, "baml_go.Null"),
-            (Ty::Uint8Array, "[]byte"),
-            (Ty::Literal(Literal::Int(42)), "int64"),
-            (Ty::Literal(Literal::Bigint(42.into())), "*big.Int"),
-            (Ty::Literal(Literal::Float("3.14".to_string())), "float64"),
-            (Ty::Literal(Literal::String("draft".to_string())), "string"),
-            (Ty::Literal(Literal::Bool(true)), "bool"),
+            (ty_int(), "int64"),
+            (ty_bigint(), "*big.Int"),
+            (ty_float(), "float64"),
+            (ty_string(), "string"),
+            (ty_bool(), "bool"),
+            (ty_null(), "baml_go.Null"),
+            (ty_bytes(), "[]byte"),
+            (ty_literal(Literal::Int(42)), "int64"),
+            (ty_literal(Literal::Bigint(42.into())), "*big.Int"),
+            (ty_literal(Literal::Float("3.14".to_string())), "float64"),
+            (ty_literal(Literal::String("draft".to_string())), "string"),
+            (ty_literal(Literal::Bool(true)), "bool"),
         ];
 
         for (ty, expected) in cases {
@@ -2796,7 +2888,7 @@ mod tests {
         }
 
         assert!(
-            primitive_kind(&Ty::Media(baml_base::MediaKind::Image)).is_none(),
+            primitive_kind(&ty_media(baml_base::MediaKind::Image)).is_none(),
             "media is deliberately deferred to the resource-type stage"
         );
     }
@@ -2809,7 +2901,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![],
-            return_type: Ty::Unit,
+            return_type: ty_void(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -2826,10 +2918,10 @@ mod tests {
             arguments: vec![FunctionArgument {
                 name: BaseName::new("value"),
                 docstring: None,
-                ty: Ty::Bigint,
+                ty: ty_bigint(),
                 default: None,
             }],
-            return_type: Ty::Bigint,
+            return_type: ty_bigint(),
             throws: None,
             watchers: vec![],
             origin: origin(),

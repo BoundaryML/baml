@@ -33,7 +33,7 @@ bex_engine = { workspace = true }
 bex_vm_types = { workspace = true }
 sdkgen_go = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
-sdkgen_typescript_node = { workspace = true }
+sdkgen_typescript_shared = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
 borsh = { workspace = true }
@@ -45,6 +45,7 @@ hex = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }
+mimalloc = { workspace = true }
 object = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [ "blocking", "json", "rustls" ] }

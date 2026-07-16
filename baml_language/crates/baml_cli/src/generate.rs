@@ -169,11 +169,20 @@ impl GenerateArgs {
                         generator.naming_convention,
                     )
                 }
-                OutputType::TypescriptNode => sdkgen_typescript_node::to_source_code_with_bytecode(
-                    &pool,
-                    &baml_bytecode,
-                    generator.naming_convention,
-                ),
+                OutputType::TypescriptNode => {
+                    sdkgen_typescript_shared::sdkgen_typescript::to_source_code_with_bytecode(
+                        &pool,
+                        &baml_bytecode,
+                        generator.naming_convention,
+                    )
+                }
+                OutputType::TypescriptWeb => {
+                    sdkgen_typescript_shared::sdkgen_typescript_web::to_source_code_with_bytecode(
+                        &pool,
+                        &baml_bytecode,
+                        generator.naming_convention,
+                    )
+                }
                 OutputType::Go => sdkgen_go::to_source_code_with_bytecode(
                     &pool,
                     &baml_bytecode,
@@ -269,7 +278,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "go""#,
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "go""#,
             table_range,
             &mut diags,
         );

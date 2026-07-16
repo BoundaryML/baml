@@ -24,7 +24,7 @@ function test_higher_order_return() -> int {
 // Lambda calling another lambda
 function test_lambda_calling_lambda() -> int {
     let double = (x: int) -> int { x * 2 }
-    let apply_twice = (f: (int) -> int, x: int) -> int {
+    let apply_twice = (f: (int) -> int throws never, x: int) -> int {
         f(f(x))
     }
     apply_twice(double, 3)
@@ -184,7 +184,7 @@ function test_higher_order_inferred() -> int {
 // ── Lambda calling lambda: no return annotations ─────────────────
 function test_apply_twice_inferred() -> int {
     let double = (x: int) -> { x * 2 }
-    let apply_twice = (f: (int) -> int, x: int) -> { f(f(x)) }
+    let apply_twice = (f: (int) -> int throws never, x: int) -> { f(f(x)) }
     apply_twice(double, 3)
 }
 
@@ -200,7 +200,7 @@ function test_deep_capture_inferred() -> int {
 
 // ── Multiple lambda args: all inferred ───────────────────────────
 function test_two_transforms_inferred() -> int {
-    let apply_both = (f: (int) -> int, g: (int) -> int, x: int) -> { g(f(x)) }
+    let apply_both = (f: (int) -> int throws never, g: (int) -> int throws never, x: int) -> { g(f(x)) }
     apply_both(
         (x: int) -> { x * 2 },
         (x: int) -> { x + 10 },

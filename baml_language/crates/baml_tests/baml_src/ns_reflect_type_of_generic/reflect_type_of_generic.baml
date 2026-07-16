@@ -88,7 +88,7 @@ test "described_type_neq_different" {
 
 // ─── Closure captures type args ───────────────────────────────────────────────
 
-function make_describer<T>() -> () -> string {
+function make_describer<T>() -> () -> string throws never {
     return () -> string { reflect.type_of<T>().to_string() }
 }
 
@@ -174,7 +174,7 @@ test "three_level_forwarding_to_string" {
 
 // ─── Closure capturing composite type ─────────────────────────────────────────
 
-function make_array_describer<T>() -> () -> string {
+function make_array_describer<T>() -> () -> string throws never {
     return () -> string { reflect.type_of<T[]>().to_string() }
 }
 
@@ -187,7 +187,7 @@ test "closure_captures_type_arg_array_of_user" {
     assert.is_true(baml.deep_equals(closure_captures_type_arg_array_of_user_fn(), "reflect_type_of_generic.User[]"))
 }
 
-function make_opt_describer<T>() -> () -> string {
+function make_opt_describer<T>() -> () -> string throws never {
     return () -> string { reflect.type_of<T?>().to_string() }
 }
 
