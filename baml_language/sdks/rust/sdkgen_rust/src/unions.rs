@@ -81,7 +81,7 @@ fn shape_key(arms: &[Ty]) -> String {
 pub(crate) fn strip_null(items: &[Ty]) -> (Vec<Ty>, bool) {
     let non_null: Vec<Ty> = items
         .iter()
-        .filter(|t| !matches!(t, Ty::Null))
+        .filter(|t| !matches!(t, Ty::Null { .. }))
         .cloned()
         .collect();
     let had_null = non_null.len() != items.len();
@@ -148,7 +148,7 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
 /// Walk a type and register every representable multi-arm union in it.
 fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &mut UnionRegistry) {
     match ty {
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             let (arms, _) = strip_null(items);
             if arms.len() >= 2
                 && let Some(union_enum) = synthesize(&arms, analysis)
@@ -164,8 +164,8 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
                 register_unions_in(item, leaf, analysis, registry);
             }
         }
-        Ty::List(inner) => register_unions_in(inner, leaf, analysis, registry),
-        Ty::Map { key: _, value } => register_unions_in(value, leaf, analysis, registry),
+        Ty::List(inner, _) => register_unions_in(inner, leaf, analysis, registry),
+        Ty::Map { key: _, value, .. } => register_unions_in(value, leaf, analysis, registry),
         _ => {}
     }
 }
@@ -181,14 +181,14 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
     let mut seen = HashSet::new();
     for arm in arms {
         match arm {
-            Ty::Literal(baml_base::Literal::String(_)) => has_string_literal_arm = true,
+            Ty::Literal(baml_base::Literal::String(_), ..) => has_string_literal_arm = true,
             // Non-string literal arms have no variant-name story yet.
-            Ty::Literal(lit) => {
+            Ty::Literal(lit, ..) => {
                 return Some(format!(
                     "unsupported union arm: non-string literal ({lit:?})"
                 ));
             }
-            Ty::String => has_bare_string_arm = true,
+            Ty::String { .. } => has_bare_string_arm = true,
             _ => {}
         }
         let Some(variant) = variant_name(arm) else {
@@ -225,7 +225,7 @@ fn synthesize(arms: &[Ty], analysis: &Analysis) -> Option<UnionEnum> {
     let mut built = Vec::new();
     for arm in arms {
         let kind = match arm {
-            Ty::Literal(baml_base::Literal::String(value)) => {
+            Ty::Literal(baml_base::Literal::String(value), ..) => {
                 UnionArmKind::StringLiteral(value.clone())
             }
             supported if arm_is_representable(supported, analysis) => {
@@ -253,29 +253,41 @@ fn synthesize(arms: &[Ty], analysis: &Analysis) -> Option<UnionEnum> {
 /// (the structural checks live in [`shape_error`]).
 fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
     match ty {
-        Ty::Int | Ty::Bigint | Ty::Float | Ty::String | Ty::Bool | Ty::Uint8Array => true,
-        Ty::Class(name, args) => args.is_empty() && analysis.is_emitted(name),
-        Ty::Enum(name) | Ty::TypeAlias(name) => analysis.is_emitted(name),
-        Ty::List(inner) => arm_is_representable(inner, analysis),
-        Ty::Map { key, value } => {
-            matches!(key.as_ref(), Ty::String) && arm_is_representable(value, analysis)
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Uint8Array { .. } => true,
+        Ty::Class(name, args, _) => args.is_empty() && analysis.is_emitted(name),
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) | Ty::TypeAlias(name, _) => {
+            analysis.is_emitted(name)
+        }
+        Ty::List(inner, _) => arm_is_representable(inner, analysis),
+        Ty::Map { key, value, .. } => {
+            matches!(key.as_ref(), Ty::String { .. }) && arm_is_representable(value, analysis)
         }
         // A nested union arm inside a list/map arm collapses to its only
         // non-null member here; real multi-arm nesting is rejected
         // upstream by `Ty::validate`.
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             let (arms, _) = strip_null(items);
             arms.len() == 1 && arm_is_representable(&arms[0], analysis)
         }
-        Ty::Null
-        | Ty::Unit
-        | Ty::Literal(_)
-        | Ty::Media(_)
-        | Ty::TypeVar(_)
-        | Ty::BuiltinUnknown
-        | Ty::Callable { .. }
-        | Ty::BamlOptions
-        | Ty::RustType => false,
+        Ty::Null { .. }
+        | Ty::Void { .. }
+        | Ty::Literal(..)
+        | Ty::Media(..)
+        | Ty::TypeVar(..)
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Function { .. }
+        | Ty::Future(..)
+        | Ty::Interface(..)
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Never { .. }
+        | Ty::RustType { .. } => false,
     }
 }
 
@@ -283,18 +295,19 @@ fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
 /// can be derived.
 fn variant_name(arm: &Ty) -> Option<String> {
     match arm {
-        Ty::Int => Some("Int".to_string()),
-        Ty::Bigint => Some("Bigint".to_string()),
-        Ty::Float => Some("Float".to_string()),
-        Ty::String => Some("String".to_string()),
-        Ty::Bool => Some("Bool".to_string()),
-        Ty::Uint8Array => Some("Uint8Array".to_string()),
-        Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
-            Some(name.name.as_str().to_string())
-        }
-        Ty::List(inner) => Some(format!("{}List", variant_name(inner)?)),
-        Ty::Map { key: _, value } => Some(format!("{}Map", variant_name(value)?)),
-        Ty::Literal(baml_base::Literal::String(value)) => {
+        Ty::Int { .. } => Some("Int".to_string()),
+        Ty::Bigint { .. } => Some("Bigint".to_string()),
+        Ty::Float { .. } => Some("Float".to_string()),
+        Ty::String { .. } => Some("String".to_string()),
+        Ty::Bool { .. } => Some("Bool".to_string()),
+        Ty::Uint8Array { .. } => Some("Uint8Array".to_string()),
+        Ty::Class(name, _, _)
+        | Ty::Enum(name, _)
+        | Ty::EnumVariant(name, _, _)
+        | Ty::TypeAlias(name, _) => Some(name.name().as_str().to_string()),
+        Ty::List(inner, _) => Some(format!("{}List", variant_name(inner)?)),
+        Ty::Map { key: _, value, .. } => Some(format!("{}Map", variant_name(value)?)),
+        Ty::Literal(baml_base::Literal::String(value), ..) => {
             let mut chars = value.chars();
             let first = chars.next()?;
             if !first.is_ascii_alphabetic() {
@@ -306,7 +319,7 @@ fn variant_name(arm: &Ty) -> Option<String> {
             }
             Some(format!("{}{rest}", first.to_ascii_uppercase()))
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             // Only reachable for the degenerate single-arm nested case.
             let (arms, _) = strip_null(items);
             match arms.as_slice() {
@@ -314,14 +327,19 @@ fn variant_name(arm: &Ty) -> Option<String> {
                 _ => None,
             }
         }
-        Ty::Null
-        | Ty::Unit
-        | Ty::Literal(_)
-        | Ty::Media(_)
-        | Ty::TypeVar(_)
-        | Ty::BuiltinUnknown
-        | Ty::Callable { .. }
-        | Ty::BamlOptions
-        | Ty::RustType => None,
+        Ty::Null { .. }
+        | Ty::Void { .. }
+        | Ty::Literal(..)
+        | Ty::Media(..)
+        | Ty::TypeVar(..)
+        | Ty::BuiltinUnknown { .. }
+        | Ty::Function { .. }
+        | Ty::Future(..)
+        | Ty::Interface(..)
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Never { .. }
+        | Ty::RustType { .. } => None,
     }
 }

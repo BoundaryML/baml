@@ -14,11 +14,17 @@ use crate::Buffer;
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BamlCffiStatus {
+    /// The operation completed successfully and all documented outputs exist.
     Ok = 0,
+    /// The key does not identify a live owned engine handle.
     InvalidHandle = 1,
+    /// The supplied handle-type discriminator disagrees with the stored value.
     TypeMismatch = 2,
+    /// The handle or media kind is recognized by the wire format but unsupported here.
     UnsupportedHandleType = 3,
+    /// The operation failed internally, including invalid UTF-8 string input.
     InternalError = 4,
+    /// A required input or output pointer was null.
     UnexpectedNullptr = 5,
 }
 

@@ -10,10 +10,10 @@ build.rs for both targets and lives in a per-crate `setup.sh`
 [`crates/python_pydantic2/setup.sh`](./crates/python_pydantic2/setup.sh)
 (the `--reinstall-package` forces the maturin rebuild of
 baml_bridge's `.so` that a plain `uv sync` skips on incremental Rust
-edits), typescript_node's per-fixture `pnpm install` + the
-prereq `pnpm build:debug` of bridge_nodejs's native `.node` addon
-live in
-[`crates/typescript_node/setup.sh`](./crates/typescript_node/setup.sh),
+edits), the TypeScript matrix's per-fixture `pnpm install` + the
+prereq build of the native bridge (Web/Wasm activation lands in a
+child change) live in
+[`crates/typescript/setup.sh`](./crates/typescript/setup.sh),
 and rust's serial per-fixture `cargo test --no-run` pre-warm of the
 shared `target/sdk-rust-target` build dir lives in
 [`crates/rust/setup.sh`](./crates/rust/setup.sh).
@@ -36,7 +36,7 @@ codegen + project-loading deps only land where they're needed:
 
 - **`sdk_test_harness_setup`** (`[build-dependencies]`) holds the build.rs
   logic -- fixture discovery, codegen, install, scaffold emission,
-  `BuildDiagnostics`. Depends on `sdkgen_python_pydantic2`, `sdkgen_typescript_node`,
+  `BuildDiagnostics`. Depends on `sdkgen_python_pydantic2`, `sdkgen_typescript_shared`,
   `sdkgen_rust`, `baml_project`, `baml_db`, `baml_workspace`, `baml_codegen_types`.
 - **`sdk_test_harness_runner`** (`[dev-dependencies]`) holds every emitted
   test's runtime side -- `run_test_cmd` / `run_test_cmd_with_env`,
@@ -59,7 +59,7 @@ sdk_tests/
 |       |-- lib.rs                        # generator-agnostic helpers + BuildDiagnostics
 |       |-- python_pydantic2.rs           # python+pydantic2 codegen + scaffold emit (run_all)
 |       |-- rust.rs                       # rust codegen + scaffold emit + TEST_MODS port gating
-|       `-- typescript_node.rs            # nodejs+typescript codegen + scaffold emit
+|       `-- typescript.rs                 # Node/Web codegen + Node/Chromium/workerd scaffold emit
 |-- harness_runner/                       # test-side crate (std only)
 |   |-- Cargo.toml                        # name = "sdk_test_harness_runner"
 |   `-- src/
@@ -75,14 +75,14 @@ sdk_tests/
     |   |-- setup.sh                      # per-fixture `uv sync --reinstall-package baml_bridge` (.so rebuild) (Unix)
     |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
     |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::python_pydantic2::test_suite!()
-    |-- typescript_node/
+    |-- typescript/
     |   |-- Cargo.toml                    # name = "sdk_test_typescript_node"
     |   |                                 # [build-dependencies] sdk_test_harness_setup
     |   |                                 # [dev-dependencies]   sdk_test_harness_runner
-    |   |-- build.rs                      # one-liner -> sdk_test_harness_setup::typescript_node::run_all()
-    |   |-- setup.sh                      # pnpm build:debug (bridge_nodejs) + per-fixture pnpm install (Unix)
+    |   |-- build.rs                      # one-liner -> sdk_test_harness_setup::typescript::run_all()
+    |   |-- setup.sh                      # build the native bridge + install packages (Unix)
     |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
-    |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript_node::test_suite!()
+    |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript::test_suite!()
     `-- rust/
         |-- Cargo.toml                    # name = "sdk_test_rust"
         |                                 # [build-dependencies] sdk_test_harness_setup
@@ -102,8 +102,7 @@ sdk_tests/
    - For each fixture: loads `.baml` files into a `ProjectDatabase`,
      gates on `Severity::Error` diagnostics, builds the codegen
      `SymbolPool`, calls the target's `to_source_code(...)`, and
-     writes the result to
-     `crates/<generator>/<fixture>/generated/baml_sdk/`.
+     writes the result to the target runtime directories under `crates/<generator>/<fixture>/generated/`.
    - Symlinks each file in
      `crates/<generator>/<fixture>/customizable/` into
      `crates/<generator>/<fixture>/generated/` (python) -- or
@@ -116,10 +115,10 @@ sdk_tests/
      which ported files compile (see the `TEST_MODS` table in
      `harness_setup/src/rust.rs`).
    - Writes `crates/<generator>/<fixture>/generated/pyproject.toml`
-     (or `package.json` + `tsconfig.json` for `typescript_node`)
-     with the per-fixture package name. The rust target's
-     `generated/Cargo.toml` instead comes from `sdkgen_rust` itself
-     (the generated SDK is a complete Cargo crate); the harness
+     (or `package.json` + per-runtime TypeScript/Vitest configs for
+     `typescript_node`) with the per-fixture package name. The rust
+     target's `generated/Cargo.toml` instead comes from `sdkgen_rust`
+     itself (the generated SDK is a complete Cargo crate); the harness
      injects the per-fixture package name, the `bridge_rust` path
      dep, and the test-suite `[dev-dependencies]` via
      `RustGenOptions`.
@@ -137,11 +136,11 @@ sdk_tests/
      plain `uv sync` is a no-op on incremental Rust edits -- uv
      doesn't track the Rust sources behind the editable install,
      so the `.so` would stay stale.
-   - For typescript_node: the setup script runs the per-fixture
-     `pnpm install` and the prereq `pnpm build:debug` of
-     bridge_nodejs's native `.node` addon. Populates `node_modules/`
-     from the shared `target/pnpm-store/`. Tests then only do
-     read-only work against the populated tree.
+   - For typescript_node: the setup script builds `bridge_typescript`
+     and runs one `pnpm install` per fixture. Node checks run
+     immediately; the emitted Web and Workers checks remain ignored
+     until the Web implementation change supplies their bridge and
+     runtime dependencies.
    - For rust: the setup script runs a serial `cargo test --no-run`
      per fixture into the shared `target/sdk-rust-target` build dir
      (threaded to the tests as `CARGO_TARGET_DIR`), so the
@@ -185,17 +184,9 @@ aborting). `uv sync` / `pnpm install` failures hard-fail in the
 respective `setup.sh` instead. The `sdk_test_harness_runner::build_diagnostics!` macro expands
 to a `mod build_diagnostics { #[test] fn no_build_failures }` that
 reads the file and fails with the records. `sdk_test_harness_setup`'s
-scaffold emitter stamps one invocation per generator scaffold --
-`::sdk_test_harness_runner::build_diagnostics!()` for python and
-`::sdk_test_harness_runner::build_diagnostics!(ignore = "...")` for
-typescript_node (while `sdkgen_typescript_node` is a stub).
+scaffold emitter stamps one invocation per generator scaffold.
 
-Outcome: `cargo doc` / `cargo check` succeed without `uv` / `pnpm`
-installed; `cargo nextest run` surfaces the same failures it would
-have hit before, just routed through a test rather than build.rs. The
-`typescript_node` crate `#[ignore]`s `build_diagnostics` plus
-every per-fixture test until `sdkgen_typescript_node` is real -- see
-`IGNORE_REASON` in `sdk_tests/harness_setup/src/typescript_node.rs`.
+Outcome: `cargo doc` / `cargo check` succeed without `uv` / `pnpm` installed; `cargo nextest run` surfaces the same failures it would have hit before, just routed through a test rather than build.rs.
 
 ### setup.sh guard (`setup_guard::ran`)
 
@@ -230,10 +221,7 @@ a file would persist across runs and false-pass after the `.so` /
 `node_modules` went stale, and checking `NEXTEST=1` alone would only
 prove "under nextest", not "this script ran". Under plain
 `cargo test` there's no `$NEXTEST_ENV`, so the guard does not enforce
-the breadcrumb; the generated fixture tests are still free to fail if
-the local setup is missing or stale. typescript_node's guard is
-`#[ignore]`d alongside its other tests while `sdkgen_typescript_node` is a
-stub.
+the breadcrumb; the generated fixture tests are still free to fail if the local setup is missing or stale.
 
 Hard panics are retained for repo/author bugs: missing `fixtures/`
 directory, fixtures with zero `.baml` files, `.baml` files with

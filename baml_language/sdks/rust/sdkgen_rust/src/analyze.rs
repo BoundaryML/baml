@@ -73,7 +73,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         match symbol {
             Symbol::Class(class) => classes.push((name, class)),
             Symbol::Enum(_) => {
-                if name.name.as_str().contains('$') {
+                if name.name().as_str().contains('$') {
                     warnings.push(SkipWarning {
                         fqn: name.to_string(),
                         reason: "companion types ($stream, …) are not emitted yet".to_string(),
@@ -98,7 +98,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         // `$`-suffixed companion types ($stream partials, …) are not
         // representable as Rust identifiers and are not emitted yet —
         // same filter the function emitter applies.
-        if name.name.as_str().contains('$') {
+        if name.name().as_str().contains('$') {
             warnings.push(SkipWarning {
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
@@ -136,7 +136,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     // types; only recursive aliases (unrepresentable as a plain Rust
     // `type`) and structurally unsupported right-hand sides skip.
     for (name, alias) in &aliases {
-        if name.name.as_str().contains('$') {
+        if name.name().as_str().contains('$') {
             warnings.push(SkipWarning {
                 fqn: name.to_string(),
                 reason: "companion types ($stream, …) are not emitted yet".to_string(),
@@ -228,7 +228,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             type_names_by_leaf
                 .entry(leaf)
                 .or_default()
-                .insert(name.name.as_str().to_string());
+                .insert(name.name().as_str().to_string());
         }
     }
 
@@ -250,24 +250,24 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
 /// than emitting broken code.
 fn field_deps(ty: &Ty, deps: &mut Vec<Name>) -> Result<(), String> {
     match ty {
-        Ty::Int
-        | Ty::Bigint
-        | Ty::Float
-        | Ty::String
-        | Ty::Bool
-        | Ty::Null
-        | Ty::Unit
-        | Ty::Literal(_)
-        | Ty::Uint8Array => Ok(()),
-        Ty::List(inner) => field_deps(inner, deps),
-        Ty::Map { key, value } => {
+        Ty::Int { .. }
+        | Ty::Bigint { .. }
+        | Ty::Float { .. }
+        | Ty::String { .. }
+        | Ty::Bool { .. }
+        | Ty::Null { .. }
+        | Ty::Void { .. }
+        | Ty::Literal(..)
+        | Ty::Uint8Array { .. } => Ok(()),
+        Ty::List(inner, _) => field_deps(inner, deps),
+        Ty::Map { key, value, .. } => {
             match key.as_ref() {
-                Ty::String => {}
+                Ty::String { .. } => {}
                 other => return Err(format!("unsupported map key type: {other}")),
             }
             field_deps(value, deps)
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             let (arms, _) = crate::unions::strip_null(items);
             match arms.as_slice() {
                 // Pure optionality (or the degenerate all-null union).
@@ -284,7 +284,7 @@ fn field_deps(ty: &Ty, deps: &mut Vec<Name>) -> Result<(), String> {
                 }
             }
         }
-        Ty::Class(name, args) => {
+        Ty::Class(name, args, _) => {
             if args.is_empty() {
                 deps.push(name.clone());
                 Ok(())
@@ -292,23 +292,30 @@ fn field_deps(ty: &Ty, deps: &mut Vec<Name>) -> Result<(), String> {
                 Err("unsupported type: generic class".to_string())
             }
         }
-        Ty::Enum(name) => {
+        // An enum-variant type (`Sentiment.Positive`) drops its tag to the
+        // enum, so it depends on the same enum item.
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
             deps.push(name.clone());
             Ok(())
         }
         // Opaque alias references (the pool builder inlines in-package
         // non-recursive aliases, so these are recursive or cross-package
         // ones): representable iff the alias item itself is emitted.
-        Ty::TypeAlias(name) => {
+        Ty::TypeAlias(name, _) => {
             deps.push(name.clone());
             Ok(())
         }
-        Ty::TypeVar(_) => Err("unsupported type: type variable (generics)".to_string()),
-        Ty::Media(kind) => Err(format!("unsupported type: media ({kind})")),
-        Ty::BuiltinUnknown => Err("unsupported type: unknown".to_string()),
-        Ty::Callable { .. } => Err("unsupported type: callable".to_string()),
-        Ty::BamlOptions => Err("unsupported type: baml.Options".to_string()),
-        Ty::RustType => Err("unsupported type: $rust_type handle".to_string()),
+        Ty::TypeVar(..) => Err("unsupported type: type variable (generics)".to_string()),
+        Ty::Media(kind, _) => Err(format!("unsupported type: media ({kind})")),
+        Ty::BuiltinUnknown { .. } => Err("unsupported type: unknown".to_string()),
+        Ty::Function { .. } => Err("unsupported type: function".to_string()),
+        Ty::Future(..) => Err("unsupported type: future handle".to_string()),
+        Ty::Interface(..) => Err("unsupported type: interface".to_string()),
+        Ty::Type { .. } => Err("unsupported type: type metatype".to_string()),
+        Ty::Resource { .. } => Err("unsupported type: resource handle".to_string()),
+        Ty::PromptAst { .. } => Err("unsupported type: prompt AST".to_string()),
+        Ty::Never { .. } => Err("unsupported type: never".to_string()),
+        Ty::RustType { .. } => Err("unsupported type: $rust_type handle".to_string()),
     }
 }
 
@@ -321,23 +328,23 @@ fn non_heap_class_refs<'a>(
     out: &mut Vec<&'a Name>,
 ) {
     match ty {
-        Ty::Class(name, args) if args.is_empty() => {
+        Ty::Class(name, args, _) if args.is_empty() => {
             if emitted.contains(name) && !enums.contains(name) {
                 out.push(name);
             }
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             for item in items {
                 non_heap_class_refs(item, emitted, enums, out);
             }
         }
         // Heap-indirected containers end the walk.
-        Ty::List(_) | Ty::Map { .. } => {}
+        Ty::List(..) | Ty::Map { .. } => {}
         // Opaque alias references contribute no containment edges: an
         // in-package non-recursive alias is inlined before it reaches
         // codegen, and a cross-package alias cannot sit on a class cycle
         // because package dependencies are acyclic.
-        Ty::TypeAlias(_) => {}
+        Ty::TypeAlias(..) => {}
         _ => {}
     }
 }
@@ -460,7 +467,7 @@ fn compute_renames(
             types_in
                 .entry(path.clone())
                 .or_default()
-                .insert(name.name.as_str().to_string());
+                .insert(name.name().as_str().to_string());
         }
     }
 

@@ -17,9 +17,10 @@ use baml_compiler2_hir::{
 use baml_compiler2_tir::{
     lower_type_expr,
     normalize::find_recursive_aliases,
-    ty::{FunctionParamMode, MediaKind, QualifiedTypeName, Ty as TirTy},
+    ty::{QualifiedTypeName, Ty as TirTy},
 };
 use baml_db::Name;
+use baml_type::{Freshness, TyAttr};
 
 use crate::ProjectDatabase;
 
@@ -30,11 +31,7 @@ use crate::ProjectDatabase;
 /// Build a `cg::Name` from a `QualifiedTypeName`. Preserves `pkg`, the full
 /// namespace path, and the bare name (including any `$stream` suffix).
 fn name_from_qtn(qtn: &QualifiedTypeName) -> cg::Name {
-    cg::Name {
-        pkg: qtn.package().clone(),
-        namespace_path: qtn.namespace().clone(),
-        name: qtn.name().clone(),
-    }
+    qtn.clone()
 }
 
 fn lower_codegen_default(
@@ -160,11 +157,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
         // Classes
         for class in item_tree.classes.values() {
-            let cg_name = cg::Name {
-                pkg: pkg.clone(),
-                namespace_path: ns_path.clone(),
-                name: class.name.clone(),
-            };
+            let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), class.name.clone());
             let class_generic_params: Vec<Name> = class.generic_params.clone();
             let properties = class
                 .fields
@@ -268,7 +261,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                     alias_map,
                     recursive_aliases,
                 )
-                .unwrap_or(cg::Ty::Unit);
+                .unwrap_or(cg::Ty::Void {
+                    attr: TyAttr::default(),
+                });
 
                 let cg_method = cg::Function {
                     name: method.name.clone(),
@@ -310,11 +305,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
 
         // Enums
         for enum_def in item_tree.enums.values() {
-            let cg_name = cg::Name {
-                pkg: pkg.clone(),
-                namespace_path: ns_path.clone(),
-                name: enum_def.name.clone(),
-            };
+            let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), enum_def.name.clone());
             let variants = enum_def
                 .variants
                 .iter()
@@ -349,11 +340,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 alias_map,
                 recursive_aliases,
             ) {
-                let cg_name = cg::Name {
-                    pkg: pkg.clone(),
-                    namespace_path: ns_path.clone(),
-                    name: alias.name.clone(),
-                };
+                let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), alias.name.clone());
 
                 let qtn = QualifiedTypeName::new(
                     pkg_info.package.clone(),
@@ -446,7 +433,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 alias_map,
                 recursive_aliases,
             )
-            .unwrap_or(cg::Ty::Unit);
+            .unwrap_or(cg::Ty::Void {
+                attr: TyAttr::default(),
+            });
 
             let cg_func = cg::Function {
                 name: func.name.clone(),
@@ -462,11 +451,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase) -> SymbolPool {
                 },
             };
 
-            let cg_name = cg::Name {
-                pkg: pkg.clone(),
-                namespace_path: ns_path.clone(),
-                name: func.name.clone(),
-            };
+            let cg_name = cg::Name::new(pkg.clone(), ns_path.clone(), func.name.clone());
             pool.insert(cg_name, cg::Symbol::Function(cg_func));
         }
     }
@@ -544,232 +529,106 @@ fn resolve_throws<'db>(
     }
 }
 
-/// Convert a TIR `Ty` to a `baml_codegen_types::Ty`, simplifying as we go.
+/// Convert a TIR type to the compiler-owned codegen family.
 ///
-/// Simplification (analogous to `simplify_sap` but for codegen, without attrs):
-/// - Optional → union with null
-/// - Flatten nested unions
-/// - Deduplicate variants (structural equality)
-/// - Push null to end
-/// - Unwrap singleton unions
+/// Public alias references remain nominal. The corresponding `TypeAlias`
+/// symbol stores the separately resolved target, so alias chains survive all
+/// the way to generators. Canonicalization is centralized on `CodegenTy` and
+/// recursively normalizes every container.
 fn convert_tir_to_codegen_ty(
     ty: &TirTy,
-    alias_map: &HashMap<QualifiedTypeName, TirTy>,
-    recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
+    _alias_map: &HashMap<QualifiedTypeName, TirTy>,
+    _recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
 ) -> cg::Ty {
-    let converted = convert_tir_leaf(ty, alias_map, recursive_aliases);
-    // Simplify unions that were built during conversion.
-    simplify_codegen_ty(converted)
+    convert_tir_leaf(ty).canonicalize()
 }
 
-/// Convert a single TIR type node without simplifying unions yet.
-fn convert_tir_leaf(
-    ty: &TirTy,
-    alias_map: &HashMap<QualifiedTypeName, TirTy>,
-    recursive_aliases: &std::collections::HashSet<QualifiedTypeName>,
-) -> cg::Ty {
+fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
+    // Each recursive invocation reads the attribute from its own source node,
+    // so nested SAP/streaming annotations survive the codegen boundary.
+    let attr = || ty.attr().clone();
+    let convert = |ty: &TirTy| convert_tir_leaf(ty);
     match ty {
-        // Primitives
-        TirTy::Int { .. } => cg::Ty::Int,
-        TirTy::Bigint { .. } => cg::Ty::Bigint,
-        TirTy::Float { .. } => cg::Ty::Float,
-        TirTy::String { .. } => cg::Ty::String,
-        TirTy::Bool { .. } => cg::Ty::Bool,
-        TirTy::Null { .. } => cg::Ty::Null,
-        TirTy::Uint8Array { .. } => cg::Ty::Uint8Array,
-        TirTy::Media(MediaKind::Image, _) => cg::Ty::Media(baml_db::MediaKind::Image),
-        TirTy::Media(MediaKind::Audio, _) => cg::Ty::Media(baml_db::MediaKind::Audio),
-        TirTy::Media(MediaKind::Video, _) => cg::Ty::Media(baml_db::MediaKind::Video),
-        TirTy::Media(MediaKind::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
-        // `MediaKind::Generic` is never produced by TIR; handled defensively.
-        TirTy::Media(MediaKind::Generic, _) => cg::Ty::BuiltinUnknown,
-
-        // Named class types — preserve full QualifiedTypeName via name_from_qtn.
+        TirTy::Int { .. } => cg::Ty::Int { attr: attr() },
+        TirTy::Bigint { .. } => cg::Ty::Bigint { attr: attr() },
+        TirTy::Float { .. } => cg::Ty::Float { attr: attr() },
+        TirTy::String { .. } => cg::Ty::String { attr: attr() },
+        TirTy::Bool { .. } => cg::Ty::Bool { attr: attr() },
+        TirTy::Null { .. } => cg::Ty::Null { attr: attr() },
+        TirTy::Uint8Array { .. } => cg::Ty::Uint8Array { attr: attr() },
+        TirTy::Media(kind, _) => cg::Ty::Media(*kind, attr()),
+        TirTy::Literal(literal, _, _) => {
+            cg::Ty::Literal(literal.clone(), Freshness::Regular, attr())
+        }
         TirTy::Class(qtn, type_args, _) => cg::Ty::Class(
             name_from_qtn(qtn),
-            type_args
-                .iter()
-                .map(|t| convert_tir_to_codegen_ty(t, alias_map, recursive_aliases))
-                .collect(),
+            type_args.iter().map(convert).collect(),
+            attr(),
         ),
-        // Interfaces are BAML-side contracts, not serializable host SDK
-        // models. Until codegen grows a structural interface representation,
-        // surface interface-typed boundary positions as opaque values instead
-        // of emitting references to types the SDK does not define.
-        TirTy::Interface(_, _, _, _) => cg::Ty::BuiltinUnknown,
-        TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(qtn)),
-        TirTy::EnumVariant(qtn, _variant, _) => cg::Ty::Enum(name_from_qtn(qtn)),
-
-        // Type aliases: if recursive, keep as TypeAlias (opaque); otherwise inline.
-        TirTy::TypeAlias(qtn, _) => {
-            if recursive_aliases.contains(qtn) {
-                cg::Ty::TypeAlias(name_from_qtn(qtn))
-            } else if let Some(target) = alias_map.get(qtn) {
-                // Inline non-recursive aliases.
-                convert_tir_to_codegen_ty(target, alias_map, recursive_aliases)
-            } else {
-                // Unknown alias (e.g. from another package) — keep opaque as TypeAlias.
-                cg::Ty::TypeAlias(name_from_qtn(qtn))
-            }
+        TirTy::Interface(qtn, generics, associated_types, _) => cg::Ty::Interface(
+            name_from_qtn(qtn),
+            generics.iter().map(convert).collect(),
+            associated_types
+                .iter()
+                .map(|(name, ty)| (name.clone(), convert(ty)))
+                .collect(),
+            attr(),
+        ),
+        TirTy::Enum(qtn, _) => cg::Ty::Enum(name_from_qtn(qtn), attr()),
+        TirTy::EnumVariant(qtn, variant, _) => {
+            cg::Ty::EnumVariant(name_from_qtn(qtn), variant.clone(), attr())
         }
-
-        // Containers — recurse via convert_tir_to_codegen_ty so children are simplified.
-        TirTy::List(inner, _) | TirTy::EvolvingList(inner, _) => cg::Ty::List(Box::new(
-            convert_tir_to_codegen_ty(inner, alias_map, recursive_aliases),
-        )),
+        TirTy::TypeAlias(qtn, _) => cg::Ty::TypeAlias(name_from_qtn(qtn), attr()),
+        TirTy::List(inner, _) | TirTy::EvolvingList(inner, _) => {
+            cg::Ty::List(Box::new(convert(inner)), attr())
+        }
         TirTy::Map {
             key: k, value: v, ..
         }
         | TirTy::EvolvingMap(k, v, _) => cg::Ty::Map {
-            key: Box::new(convert_tir_to_codegen_ty(k, alias_map, recursive_aliases)),
-            value: Box::new(convert_tir_to_codegen_ty(v, alias_map, recursive_aliases)),
+            key: Box::new(convert(k)),
+            value: Box::new(convert(v)),
+            attr: attr(),
         },
-        // Unions: convert children, then let simplify_codegen_ty handle them.
-        // Nullable types (`T | null`) are just unions whose members include null.
-        TirTy::Union(members, _) => cg::Ty::Union(
-            members
-                .iter()
-                .map(|m| convert_tir_to_codegen_ty(m, alias_map, recursive_aliases))
-                .collect(),
-        ),
-        TirTy::Literal(lit, _freshness, _) => cg::Ty::Literal(lit.clone()),
-
-        // BEP-030: BAML's `unknown` top type → BuiltinUnknown.
-        TirTy::BuiltinUnknown { .. } => cg::Ty::BuiltinUnknown,
-        TirTy::AssociatedTypeProjection { .. } => cg::Ty::BuiltinUnknown,
-
-        // BEP-030: Function types → Callable.
-        TirTy::Function { params, ret, .. } => cg::Ty::Callable {
+        TirTy::Union(members, _) => cg::Ty::Union(members.iter().map(convert).collect(), attr()),
+        TirTy::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => cg::Ty::Function {
             params: params
                 .iter()
                 .map(|param| cg::CallableParam {
                     name: param.name.clone(),
-                    ty: convert_tir_to_codegen_ty(&param.ty, alias_map, recursive_aliases),
-                    mode: match param.mode {
-                        FunctionParamMode::Required => cg::CodegenFunctionParamMode::Required,
-                        FunctionParamMode::Optional => cg::CodegenFunctionParamMode::Optional,
-                    },
+                    ty: convert(&param.ty),
+                    mode: param.mode,
                 })
                 .collect(),
-            ret: Box::new(convert_tir_to_codegen_ty(ret, alias_map, recursive_aliases)),
+            ret: Box::new(convert(ret)),
+            throws: Box::new(convert(throws)),
+            attr: attr(),
         },
-
-        // Type variable — codegen-side `Ty::TypeVar` mirrors TIR.
-        TirTy::TypeVar(name, _) => cg::Ty::TypeVar(name.clone()),
-
-        // `$rust_type` — opaque Rust-managed state. Surfaces as
-        // `BamlPyHandle` in Python codegen; other languages will pick
-        // their own opaque-handle mapping.
-        TirTy::RustType { .. } => cg::Ty::RustType,
-
-        // Bottom / sentinel / error recovery — map to Unit. An inference hole
-        // (`_`) should have been filled before codegen; map defensively to Unit.
-        //
-        // BUG: `Never` does not belong in this defensive arm. Unlike the
-        // recovery sentinels around it, `never` is a legitimate,
-        // user-writable type: a `-> never` function reaches every codegen
-        // backend as if it were `-> void` (python emits `-> None` for a
-        // function that never returns normally). Throws contracts are
-        // unaffected (`resolve_throws` special-cases `Never` to "throws
-        // nothing" before conversion), and union arms collapse in TIR
-        // normalization, so the erasure only bites direct slot positions.
-        // The faithful fix is a `Ty::Never` variant in `baml_codegen_types`
-        // mapped per backend (python `typing.Never`, typescript `never`,
-        // rust `::core::convert::Infallible`); deferred so in-flight bridge
-        // work doesn't have to absorb a shared-enum change.
-        TirTy::Void { .. }
-        | TirTy::Never { .. }
-        | TirTy::Unknown { .. }
-        | TirTy::Error { .. }
-        | TirTy::Infer { .. }
-        | TirTy::Type { .. } => cg::Ty::Unit,
-
-        // BEP-034: surface a `Future<T, E>` as the codegen-side `Unit`
-        // for v1 — codegen for the host-side `Future` shape is a
-        // follow-up. The error path is acceptable since BAML code that
-        // returns futures must `await` them before crossing the host
-        // boundary in v1.
-        TirTy::Future(_, _, _) => cg::Ty::Unit,
-        // `Resource`/`PromptAst` are never produced by TIR; the
-        // arms exist only so the match stays exhaustive over the shared
-        // `baml_type::Ty`.
-        TirTy::Resource { .. } | TirTy::PromptAst { .. } => cg::Ty::BuiltinUnknown,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Codegen type simplification
-// ---------------------------------------------------------------------------
-
-/// Simplify a codegen type: flatten unions, dedup, null-to-end, unwrap singletons.
-fn simplify_codegen_ty(ty: cg::Ty) -> cg::Ty {
-    match ty {
-        cg::Ty::Union(variants) => simplify_union(variants),
-        // Recurse into containers.
-        cg::Ty::List(inner) => cg::Ty::List(Box::new(simplify_codegen_ty(*inner))),
-        cg::Ty::Map { key, value } => cg::Ty::Map {
-            key: Box::new(simplify_codegen_ty(*key)),
-            value: Box::new(simplify_codegen_ty(*value)),
-        },
-        // Leaf types pass through unchanged.
-        other => other,
-    }
-}
-
-fn simplify_union(variants: Vec<cg::Ty>) -> cg::Ty {
-    // 1. Flatten nested unions.
-    let variants = flatten_union(variants);
-
-    // 2. Deduplicate (structural equality).
-    let variants = dedup_variants(variants);
-
-    // 3. Push null to end.
-    let variants = null_to_end(variants);
-
-    // 4. Unwrap singleton.
-    if variants.len() == 1 {
-        variants.into_iter().next().unwrap()
-    } else {
-        cg::Ty::Union(variants)
-    }
-}
-
-/// Flatten nested unions into a single level.
-fn flatten_union(variants: Vec<cg::Ty>) -> Vec<cg::Ty> {
-    let mut out = Vec::new();
-    for v in variants {
-        match v {
-            cg::Ty::Union(inner) => out.extend(flatten_union(inner)),
-            other => out.push(other),
+        TirTy::Future(value, error, _) => {
+            cg::Ty::Future(Box::new(convert(value)), Box::new(convert(error)), attr())
         }
-    }
-    out
-}
+        TirTy::RustType { .. } => cg::Ty::RustType { attr: attr() },
+        TirTy::Type { .. } => cg::Ty::Type { attr: attr() },
+        TirTy::Resource { .. } => cg::Ty::Resource { attr: attr() },
+        TirTy::PromptAst { .. } => cg::Ty::PromptAst { attr: attr() },
+        TirTy::Void { .. } => cg::Ty::Void { attr: attr() },
+        TirTy::TypeVar(name, _) => cg::Ty::TypeVar(name.clone(), attr()),
+        TirTy::BuiltinUnknown { .. } => cg::Ty::BuiltinUnknown { attr: attr() },
+        TirTy::Never { .. } => cg::Ty::Never { attr: attr() },
 
-/// Remove structurally duplicate variants.
-fn dedup_variants(variants: Vec<cg::Ty>) -> Vec<cg::Ty> {
-    let mut result: Vec<cg::Ty> = Vec::new();
-    for candidate in variants {
-        if !result.contains(&candidate) {
-            result.push(candidate);
+        // These are compiler recovery/inference states, not public API types.
+        // Diagnostics have already been emitted; retain the historical opaque
+        // fallback so code generation remains total in error-tolerant flows.
+        TirTy::AssociatedTypeProjection { .. } | TirTy::Unknown { .. } | TirTy::Error { .. } => {
+            cg::Ty::BuiltinUnknown { attr: attr() }
         }
+        TirTy::Infer { .. } => cg::Ty::Void { attr: attr() },
     }
-    result
-}
-
-/// Push `Null` variants to the end.
-fn null_to_end(variants: Vec<cg::Ty>) -> Vec<cg::Ty> {
-    let mut non_null = Vec::new();
-    let mut nulls = Vec::new();
-    for v in variants {
-        if matches!(v, cg::Ty::Null) {
-            nulls.push(v);
-        } else {
-            non_null.push(v);
-        }
-    }
-    non_null.extend(nulls);
-    non_null
 }
 
 // ---------------------------------------------------------------------------
@@ -780,8 +639,49 @@ fn null_to_end(variants: Vec<cg::Ty>) -> Vec<cg::Ty> {
 mod tests {
     use std::path::Path;
 
+    use baml_type::TyAttrValue;
+
     use super::*;
     use crate::ProjectDatabase;
+
+    fn codegen_attr() -> TyAttr {
+        TyAttr::default()
+    }
+
+    fn codegen_alias(name: cg::Name) -> cg::Ty {
+        cg::Ty::TypeAlias(name, codegen_attr())
+    }
+
+    fn codegen_list(inner: cg::Ty) -> cg::Ty {
+        cg::Ty::List(Box::new(inner), codegen_attr())
+    }
+
+    fn codegen_union(members: Vec<cg::Ty>) -> cg::Ty {
+        cg::Ty::Union(members, codegen_attr())
+    }
+
+    #[test]
+    fn tir_attributes_survive_recursive_codegen_lowering() {
+        let outer_attr = TyAttr {
+            sap_pending_never: TyAttrValue::Set,
+            ..TyAttr::default()
+        };
+        let inner_attr = TyAttr {
+            sap_parse_without_null: TyAttrValue::Set,
+            ..TyAttr::default()
+        };
+        let tir = TirTy::List(
+            Box::new(TirTy::String {
+                attr: inner_attr.clone(),
+            }),
+            outer_attr.clone(),
+        );
+
+        assert_eq!(
+            convert_tir_to_codegen_ty(&tir, &HashMap::new(), &std::collections::HashSet::new(),),
+            cg::Ty::List(Box::new(cg::Ty::String { attr: inner_attr }), outer_attr,)
+        );
+    }
 
     // ── Unit tests for pure helpers ─────────────────────────────────────────
 
@@ -819,14 +719,14 @@ mod tests {
             Name::new("Sentiment"),
         );
         let cg_name = name_from_qtn(&qtn);
-        assert_eq!(cg_name.pkg.as_str(), "user");
+        assert_eq!(cg_name.package().as_str(), "user");
         assert_eq!(
-            cg_name.namespace_path,
-            vec![Name::new("foo")],
+            cg_name.namespace(),
+            &vec![Name::new("foo")],
             "namespace_path mismatch: {:?}",
-            cg_name.namespace_path,
+            cg_name.namespace(),
         );
-        assert_eq!(cg_name.name.as_str(), "Sentiment");
+        assert_eq!(cg_name.name().as_str(), "Sentiment");
         assert!(!cg_name.is_stream());
     }
 
@@ -867,7 +767,7 @@ mod tests {
         ] {
             let key = pool
                 .keys()
-                .find(|k| k.name.as_str() == expected)
+                .find(|k| k.name().as_str() == expected)
                 .unwrap_or_else(|| panic!("{expected} must be in the pool"));
             assert!(
                 matches!(pool.get(key), Some(cg::Symbol::Function(_))),
@@ -912,11 +812,7 @@ function ExtractResume(resume: string) -> Resume {
             ("ExtractResume$parse", &["json"][..]),
             ("ExtractResume$parse_stream", &["sse"][..]),
         ] {
-            let key = cg::Name {
-                pkg: Name::new("user"),
-                namespace_path: vec![],
-                name: Name::new(bare),
-            };
+            let key = cg::Name::new(Name::new("user"), vec![], Name::new(bare));
             let Some(cg::Symbol::Function(func)) = pool.get(&key) else {
                 panic!("missing function {bare}");
             };
@@ -936,7 +832,7 @@ function ExtractResume(resume: string) -> Resume {
                 "client default for {bare}",
             );
             match &client_arg.ty {
-                cg::Ty::Class(name, args) => {
+                cg::Ty::Class(name, args, _) => {
                     assert_eq!(name.to_string(), "baml.llm.Client");
                     assert!(args.is_empty());
                 }
@@ -999,7 +895,7 @@ function Extract(client: string, text: string) -> string {
 
         let doc_key = pool
             .keys()
-            .find(|k| k.name.as_str() == "Doc")
+            .find(|k| k.name().as_str() == "Doc")
             .expect("Doc class missing from pool");
         let cg::Symbol::Class(doc) = &pool[doc_key] else {
             panic!("Doc must be a Class");
@@ -1022,7 +918,7 @@ function Extract(client: string, text: string) -> string {
 
         let enum_key = pool
             .keys()
-            .find(|k| k.name.as_str() == "Sentiment")
+            .find(|k| k.name().as_str() == "Sentiment")
             .expect("Sentiment enum missing");
         let cg::Symbol::Enum(en) = &pool[enum_key] else {
             panic!("Sentiment must be an Enum");
@@ -1053,10 +949,10 @@ function Extract(client: string, text: string) -> string {
     fn test_throws_reaches_symbol_pool() {
         fn walk(ty: &cg::Ty, out: &mut Vec<String>) {
             match ty {
-                cg::Ty::Class(n, _) | cg::Ty::Enum(n) | cg::Ty::TypeAlias(n) => {
-                    out.push(n.name.as_str().to_string());
+                cg::Ty::Class(n, _, _) | cg::Ty::Enum(n, _) | cg::Ty::TypeAlias(n, _) => {
+                    out.push(n.name().as_str().to_string());
                 }
-                cg::Ty::Union(ms) => ms.iter().for_each(|m| walk(m, out)),
+                cg::Ty::Union(ms, _) => ms.iter().for_each(|m| walk(m, out)),
                 _ => {}
             }
         }
@@ -1083,7 +979,7 @@ function Extract(client: string, text: string) -> string {
         let throws_names = |fn_name: &str| -> Vec<String> {
             let key = pool
                 .keys()
-                .find(|k| k.name.as_str() == fn_name)
+                .find(|k| k.name().as_str() == fn_name)
                 .unwrap_or_else(|| panic!("{fn_name} missing from pool"));
             let cg::Symbol::Function(f) = &pool[key] else {
                 panic!("{fn_name} must be a Function");
@@ -1194,7 +1090,7 @@ function Extract(client: string, text: string) -> string {
 
         let key = pool
             .keys()
-            .find(|k| k.name.as_str() == "Counter")
+            .find(|k| k.name().as_str() == "Counter")
             .expect("Counter class missing from pool");
         let Some(cg::Symbol::Class(class)) = pool.get(key) else {
             panic!("Counter must be a Class");
@@ -1235,16 +1131,16 @@ function Extract(client: string, text: string) -> string {
 
         let pool = build_symbol_pool(&db);
 
-        let sentiment_key = pool.keys().find(|k| k.name.as_str() == "Sentiment");
+        let sentiment_key = pool.keys().find(|k| k.name().as_str() == "Sentiment");
         assert!(sentiment_key.is_some(), "Sentiment must be in the pool");
 
         let key = sentiment_key.unwrap();
-        assert_eq!(key.pkg.as_str(), "user", "pkg mismatch: {:?}", key.pkg);
+        assert_eq!(key.package().as_str(), "user", "pkg mismatch: {key:?}");
         assert_eq!(
-            key.namespace_path,
-            vec![Name::new("foo")],
+            key.namespace(),
+            &vec![Name::new("foo")],
             "namespace_path mismatch: {:?}",
-            key.namespace_path,
+            key.namespace(),
         );
         assert!(!key.is_stream(), "Sentiment must not be marked as stream");
     }
@@ -1268,7 +1164,7 @@ function Extract(client: string, text: string) -> string {
 
         let key = pool
             .keys()
-            .find(|k| k.name.as_str() == "ReturnInt")
+            .find(|k| k.name().as_str() == "ReturnInt")
             .expect("ReturnInt must be in the pool");
         assert!(
             matches!(pool.get(key), Some(cg::Symbol::Function(_))),
@@ -1308,12 +1204,12 @@ function top() -> int { 0 }
         assert!(
             !pool
                 .keys()
-                .any(|k| k.name.as_str() == "run" && k.namespace_path.is_empty()),
+                .any(|k| k.name().as_str() == "run" && k.namespace().is_empty()),
             "interface/default-impl methods must not become free SDK functions"
         );
         let key = pool
             .keys()
-            .find(|k| k.name.as_str() == "top")
+            .find(|k| k.name().as_str() == "top")
             .expect("top must be in the pool");
         assert!(
             matches!(pool.get(key), Some(cg::Symbol::Function(_))),
@@ -1322,7 +1218,7 @@ function top() -> int { 0 }
     }
 
     #[test]
-    fn test_interface_typed_sdk_boundaries_are_opaque() {
+    fn test_interface_typed_sdk_boundaries_preserve_compiler_type() {
         let root = Path::new("/tmp/interface_typed_sdk_boundaries_are_opaque");
         let mut db = ProjectDatabase::new();
         db.set_project_root(root);
@@ -1345,21 +1241,242 @@ function passthrough(x: Marker) -> Marker { x }
         let pool = build_symbol_pool(&db);
         let key = pool
             .keys()
-            .find(|k| k.name.as_str() == "passthrough")
+            .find(|k| k.name().as_str() == "passthrough")
             .expect("passthrough must be in the pool");
         let Some(cg::Symbol::Function(function)) = pool.get(key) else {
             panic!("passthrough must be a function");
         };
 
-        assert_eq!(
-            function.arguments[0].ty,
-            cg::Ty::BuiltinUnknown,
-            "interface parameters should be opaque at the SDK boundary"
+        for ty in [&function.arguments[0].ty, &function.return_type] {
+            assert!(
+                matches!(ty, cg::Ty::Interface(name, generics, associated, _)
+                    if name.bare_name() == "Marker"
+                        && generics.is_empty()
+                        && associated.is_empty()),
+                "interface identity should survive in shared codegen IR: {ty:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn aliases_keep_identity_chains_and_canonical_targets_in_codegen() {
+        let root = Path::new("/tmp/codegen_alias_identity");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("main.baml").as_path(),
+            r#"
+type Text = string
+type TextChain = Text
+type MaybeText = null | TextChain | null
+type Rec = int | Rec[]
+
+class Holder {
+  direct Text
+  chain TextChain
+  maybe MaybeText
+  nested MaybeText[]
+  mapped map<string, TextChain[]>
+}
+
+function normalize(value: null | string | null) -> null | string | null { value }
+"#,
         );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+
+        let pool = build_symbol_pool(&db);
+        let name = |name: &str| cg::Name::new(Name::new("user"), vec![], Name::new(name));
+        let text = name("Text");
+        let text_chain = name("TextChain");
+        let maybe_text = name("MaybeText");
+        let rec = name("Rec");
+
+        let cg::Symbol::TypeAlias(text_decl) = &pool[&text] else {
+            panic!("Text must be an alias")
+        };
         assert_eq!(
-            function.return_type,
-            cg::Ty::BuiltinUnknown,
-            "interface returns should be opaque at the SDK boundary"
+            text_decl.resolves_to,
+            cg::Ty::String {
+                attr: codegen_attr()
+            }
         );
+
+        let cg::Symbol::TypeAlias(chain_decl) = &pool[&text_chain] else {
+            panic!("TextChain must be an alias")
+        };
+        assert_eq!(chain_decl.resolves_to, codegen_alias(text.clone()));
+
+        let cg::Symbol::TypeAlias(maybe_decl) = &pool[&maybe_text] else {
+            panic!("MaybeText must be an alias")
+        };
+        assert_eq!(
+            maybe_decl.resolves_to,
+            codegen_union(vec![
+                codegen_alias(text_chain.clone()),
+                cg::Ty::Null {
+                    attr: codegen_attr()
+                }
+            ])
+        );
+
+        let cg::Symbol::TypeAlias(rec_decl) = &pool[&rec] else {
+            panic!("Rec must be an alias")
+        };
+        assert!(rec_decl.recursive);
+        assert_eq!(
+            rec_decl.resolves_to,
+            codegen_union(vec![
+                cg::Ty::Int {
+                    attr: codegen_attr()
+                },
+                codegen_list(codegen_alias(rec.clone())),
+            ])
+        );
+
+        let cg::Symbol::Class(holder) = &pool[&name("Holder")] else {
+            panic!("Holder must be a class")
+        };
+        let property = |property_name: &str| {
+            &holder
+                .properties
+                .iter()
+                .find(|property| property.name.as_str() == property_name)
+                .unwrap_or_else(|| panic!("missing Holder.{property_name}"))
+                .ty
+        };
+        assert_eq!(property("direct"), &codegen_alias(text));
+        assert_eq!(property("chain"), &codegen_alias(text_chain.clone()));
+        assert_eq!(property("maybe"), &codegen_alias(maybe_text.clone()));
+        assert_eq!(property("nested"), &codegen_list(codegen_alias(maybe_text)));
+        assert_eq!(
+            property("mapped"),
+            &cg::Ty::Map {
+                key: Box::new(cg::Ty::String {
+                    attr: codegen_attr()
+                }),
+                value: Box::new(codegen_list(codegen_alias(text_chain))),
+                attr: codegen_attr(),
+            }
+        );
+
+        let cg::Symbol::Function(normalize) = &pool[&name("normalize")] else {
+            panic!("normalize must be a function")
+        };
+        let nullable_string = codegen_union(vec![
+            cg::Ty::String {
+                attr: codegen_attr(),
+            },
+            cg::Ty::Null {
+                attr: codegen_attr(),
+            },
+        ]);
+        assert_eq!(normalize.arguments[0].ty, nullable_string);
+        assert_eq!(normalize.return_type, nullable_string);
+        cg::validate_symbol_pool_map_keys(&pool).expect("canonical alias map keys must validate");
+    }
+
+    #[test]
+    fn aliased_map_keys_are_checked_through_resolved_targets() {
+        use baml_compiler_diagnostics::diagnostic::DiagnosticId;
+
+        let legal_root = Path::new("/tmp/codegen_legal_alias_map_key");
+        let mut legal_db = ProjectDatabase::new();
+        legal_db.set_project_root(legal_root);
+        legal_db.add_or_update_file(
+            legal_root.join("main.baml").as_path(),
+            "type Key = \"first\" | \"second\"\ntype KeyChain = Key\nclass Lookup { values map<KeyChain, int> }\n",
+        );
+        let diagnostics = crate::collect_compiler2_diagnostics(&legal_db);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+        let legal_pool = build_symbol_pool(&legal_db);
+        let lookup_name = cg::Name::new(Name::new("user"), vec![], Name::new("Lookup"));
+        let key_chain = cg::Name::new(Name::new("user"), vec![], Name::new("KeyChain"));
+        let cg::Symbol::Class(lookup) = &legal_pool[&lookup_name] else {
+            panic!("Lookup must be a class")
+        };
+        assert_eq!(
+            lookup.properties[0].ty,
+            cg::Ty::Map {
+                key: Box::new(codegen_alias(key_chain)),
+                value: Box::new(cg::Ty::Int {
+                    attr: codegen_attr()
+                }),
+                attr: codegen_attr(),
+            }
+        );
+        cg::validate_symbol_pool_map_keys(&legal_pool)
+            .expect("string-denoting alias key must validate");
+
+        let illegal_root = Path::new("/tmp/codegen_illegal_alias_map_key");
+        let mut illegal_db = ProjectDatabase::new();
+        illegal_db.set_project_root(illegal_root);
+        illegal_db.add_or_update_file(
+            illegal_root.join("main.baml").as_path(),
+            "type BadKey = int\nclass Lookup { values map<BadKey, string> }\n",
+        );
+        let diagnostics = crate::collect_compiler2_diagnostics(&illegal_db);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.id == DiagnosticId::InvalidMapKeyType),
+            "the compiler must reject an int-denoting alias map key: {diagnostics:#?}"
+        );
+        let illegal_pool = build_symbol_pool(&illegal_db);
+        assert!(matches!(
+            cg::validate_symbol_pool_map_keys(&illegal_pool),
+            Err(cg::CodegenTypeError::InvalidMapKey(key))
+                if matches!(key.as_ref(), cg::Ty::TypeAlias(..))
+        ));
+    }
+
+    #[test]
+    fn same_alias_name_in_different_namespaces_stays_qualified() {
+        let root = Path::new("/tmp/codegen_namespaced_alias_identity");
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(root);
+        db.add_or_update_file(
+            root.join("ns_left/types.baml").as_path(),
+            "type Shared = string\nclass Left { value Shared }\n",
+        );
+        db.add_or_update_file(
+            root.join("ns_right/types.baml").as_path(),
+            "type Shared = int\nclass Right { value Shared }\n",
+        );
+
+        let diagnostics = crate::collect_compiler2_diagnostics(&db);
+        assert!(diagnostics.is_empty(), "diagnostics: {diagnostics:#?}");
+        let pool = build_symbol_pool(&db);
+        let qualified = |namespace: &str, name: &str| {
+            cg::Name::new(
+                Name::new("user"),
+                vec![Name::new(namespace)],
+                Name::new(name),
+            )
+        };
+        let left_alias = qualified("left", "Shared");
+        let right_alias = qualified("right", "Shared");
+        assert_ne!(left_alias, right_alias);
+        assert!(matches!(
+            &pool[&left_alias],
+            cg::Symbol::TypeAlias(alias)
+                if alias.resolves_to == cg::Ty::String { attr: codegen_attr() }
+        ));
+        assert!(matches!(
+            &pool[&right_alias],
+            cg::Symbol::TypeAlias(alias)
+                if alias.resolves_to == cg::Ty::Int { attr: codegen_attr() }
+        ));
+
+        for (class_name, alias_name) in [
+            (qualified("left", "Left"), left_alias),
+            (qualified("right", "Right"), right_alias),
+        ] {
+            let cg::Symbol::Class(class) = &pool[&class_name] else {
+                panic!("{class_name} must be a class")
+            };
+            assert_eq!(class.properties[0].ty, codegen_alias(alias_name));
+        }
     }
 }

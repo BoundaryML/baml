@@ -24,7 +24,7 @@ pub(crate) fn emit(
         reason,
     };
 
-    if name.name.as_str().contains('$') {
+    if name.name().as_str().contains('$') {
         return Err(skip(
             "companion functions ($stream, $build_request, …) are not emitted yet".to_string(),
         ));
@@ -85,8 +85,8 @@ pub(crate) fn emit(
     }
 
     let doc_attrs = doc_attrs(function.docstring.as_deref());
-    let sync_name = idents::ident(name.name.as_str());
-    let async_name = format_ident!("{}_async", idents::dir_segment(name.name.as_str()));
+    let sync_name = idents::ident(name.name().as_str());
+    let async_name = format_ident!("{}_async", idents::dir_segment(name.name().as_str()));
     let result_ty = quote! { ::std::result::Result<#ret, ::baml_bridge::Error<#throws>> };
 
     Ok(quote! {
@@ -118,7 +118,7 @@ pub(crate) fn emit(
 /// which parameters accept via `impl Into<_>`.
 fn is_multi_arm_union(ty: &baml_codegen_types::Ty) -> bool {
     match ty {
-        baml_codegen_types::Ty::Union(items) => crate::unions::strip_null(items).0.len() >= 2,
+        baml_codegen_types::Ty::Union(items, _) => crate::unions::strip_null(items).0.len() >= 2,
         _ => false,
     }
 }

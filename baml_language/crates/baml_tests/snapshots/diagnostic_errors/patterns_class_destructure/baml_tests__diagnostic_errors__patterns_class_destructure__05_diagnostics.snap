@@ -320,13 +320,3 @@ source: crates/baml_tests/src/generated_tests.rs
      │ 
      │ Note: Error code: E0001
 ─────╯
-
-  [type] error: type mismatch: expected int, got string
-     ╭─[ patterns_class_destructure.baml:283:38 ]
-     │
- 283 │         let Person { age: string } = p;
-     │                                      ┬  
-     │                                      ╰── type mismatch: expected int, got string
-     │ 
-     │ Note: Error code: E0001
-─────╯

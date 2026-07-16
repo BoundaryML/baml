@@ -13,9 +13,10 @@ name: BAML Release - Build bridge_cffi
 # unwind). Unlike the legacy engine's `baml_cffi`, `bridge_cffi` vendors protoc
 # and has no Go bindings, so no protoc/protoc-gen-go/Go setup is needed.
 #
-# The smoke is language-neutral too: a stdlib `ctypes` dlopen + `version()`
-# handshake, so this workflow depends on no SDK crate. Full C-ABI invocation is
-# exercised by each SDK's own verify job.
+# The smoke is language-neutral too: strict C11 and C++17 programs include only
+# the checked-in public header, load the artifact, resolve `baml_get_api_v1`,
+# validate the append-only table prefix, and call/free `version()` while also
+# asserting the product version stamped into the release plan.
 #
 # Consumer contract (for other bridges): one artifact per target named
 # `bridge-cffi-<target>`, each containing the cdylib plus its `.sha256`. The
@@ -219,16 +220,13 @@ jobs:
           echo "Built ${asset}"
           cat "${outdir}/${asset}.sha256"
 
-      - name: Smoke test the built library
+      - name: Smoke test the public C and C++ ABI
         if: matrix._.smoke
         working-directory: baml_language
         run: |
           set -euo pipefail
-          # Language-neutral smoke: dlopen + C-ABI version() handshake against
-          # the version this commit was stamped to. `release-plan.json` was
-          # written at the repo root by the stamp step.
           expected="$(jq -r .canonical_version ../release-plan.json)"
-          python3 ../scripts/smoke-bridge-cffi.py \
+          python3 crates/bridge_cffi/tests/run_abi_smoke.py \
             "${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}" \
             "$expected"
 

@@ -14,9 +14,11 @@ cargo nextest run -p sdk_test_python_pydantic2
 cargo nextest run -p sdk_test_typescript_node
 cargo nextest run -p sdk_test_rust
 
-# Or run the python/nodejs/rust tests specifically
+# Or run one host-language runner specifically.
 cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
-cargo nextest run -p sdk_test_typescript_node function_calls::vitest
+cargo nextest run -p sdk_test_typescript_node function_calls::vitest_node
+cargo nextest list -p sdk_test_typescript_node function_calls::vitest_web
+cargo nextest list -p sdk_test_typescript_node function_calls::vitest_workers
 cargo nextest run -p sdk_test_rust function_calls::cargo_test
 ```
 
@@ -36,9 +38,11 @@ fixture's `generated/` directory, then run the host-language test directly:
 cargo nextest run -p sdk_test_python_pydantic2 function_calls::pytest
 (cd sdk_tests/crates/python_pydantic2/function_calls/generated && uv run pytest -v -k optional_args)
 
-# vitest: run tests matching a test-name pattern.
-cargo nextest run -p sdk_test_typescript_node function_calls::vitest
-(cd sdk_tests/crates/typescript_node/function_calls/generated && pnpm exec vitest run -t optional_args)
+# vitest: run tests matching a test-name pattern in one runtime.
+cargo nextest run -p sdk_test_typescript_node function_calls::vitest_node
+(cd sdk_tests/crates/typescript/function_calls/generated && pnpm exec vitest run --config vitest.node.config.ts -t optional_args)
+(cd sdk_tests/crates/typescript/function_calls/generated && pnpm exec vitest run --config vitest.web.config.ts -t optional_args)
+(cd sdk_tests/crates/typescript/function_calls/generated && pnpm exec vitest run --config vitest.workers.config.ts -t optional_args)
 
 # rust: run tests matching a name filter (set CARGO_TARGET_DIR to reuse the
 # shared build cache the nextest-driven runs populate).
@@ -68,8 +72,9 @@ Each SDK is implemented in two parts: an FFI to provide core runtime bindings an
 
 `sdk_test_typescript_node` provides coverage for
 
-  - `sdks/nodejs/bridge_nodejs`
-  - `sdks/nodejs/sdkgen_typescript_node`
+  - `sdks/typescript/bridge_typescript`
+  - `sdks/typescript/bridge_typescript_web` once the Web implementation change is applied
+  - `sdks/typescript/sdkgen_typescript_shared`
 
 `sdk_test_rust` provides coverage for
 
@@ -83,7 +88,7 @@ There are two dimensions for SDK tests: generators and fixtures.
 There is one Rust crate per SDK generator:
 
   - `sdk_test_python_pydantic2` for the `python/pydantic2` generator
-  - `sdk_test_typescript_node` for the `typescript/node` generator
+  - `sdk_test_typescript_node` for the `typescript/node` and `typescript/web` generators across Node, browser, and Workers runtimes
   - `sdk_test_rust` for the `rust` generator
 
 Each crate fans out over every **fixture** in `sdk_tests/fixtures/`.
@@ -115,22 +120,19 @@ sdk_tests/
     |   `-- type_shapes/
     |       |-- customizable/
     |       `-- generated/
-    |-- typescript_node/
+    |-- typescript/
     |   |-- Cargo.toml                    # name = "sdk_test_typescript_node"
     |   |-- function_calls/
-    |   |   |-- customizable/             # tracked: *.test.ts -- copied into generated/
+    |   |   |-- customizable/             # tracked: shared and runtime-qualified *.test.ts
     |   |   `-- generated/                # gitignored: build output
-    |   |       |-- baml_sdk/             # empty until sdkgen_typescript_node lands
-    |   |       |-- package.json          # name = "sdk-tests-nodejs-typescript-docstrings-etc"
-    |   |       |-- tsconfig.json
+    |   |       |-- node/baml_sdk/        # Node generator + selected tests
+    |   |       |-- web/baml_sdk/         # Web generator + Chromium tests
+    |   |       |-- workers/baml_sdk/     # Web generator + workerd tests
+    |   |       |-- package.json          # both local bridges + all runner tools
+    |   |       |-- tsconfig.*.json
+    |   |       |-- vitest.*.config.ts
     |   |       |-- node_modules/         # pnpm install output
-    |   |       `-- *.test.ts             # copied from ../customizable/
-    |   |-- llm_functions/
-    |   |   |-- customizable/
-    |   |   `-- generated/
-    |   `-- type_shapes/
-    |       |-- customizable/
-    |       `-- generated/
+    |   |       `-- wrangler.jsonc
     `-- rust/
         |-- Cargo.toml                    # name = "sdk_test_rust"
         |-- function_calls/
@@ -158,9 +160,14 @@ sdk_tests/
   trees -- `fixtures/<F>/baml_src/` is the input;
   `crates/<G>/<F>/` is the output for one generator.
 - **Generator directory** (under `crates/`): lowercase snake
-  matching the generator key (`python_pydantic2`,
-  `typescript_node`, `rust`).
+  (`python_pydantic2`, `typescript`, `rust`). The TypeScript crate
+  keeps the Cargo package name `sdk_test_typescript_node` because it
+  still tests the Node target.
 - **Rust crate name**: `sdk_test_<generator>` -- one per generator.
+
+### TypeScript runtime selection
+
+Unqualified `*.test.ts` and helper `*.ts` files are selected for Node, Chromium, and workerd. Use `.node.test.ts` or `.node.ts`, `.web.test.ts` or `.web.ts`, and `.workers.test.ts` or `.workers.ts` for intentional runtime-specific coverage. The Web and Workers runners remain ignored until the Web implementation change is applied.
 
 ## Adding a Fixture
 
@@ -173,9 +180,8 @@ sdk_tests/
    containing the host-language tests, e.g.
    `sdk_tests/crates/python_pydantic2/<name>/customizable/test_main.py`
    and/or
-   `sdk_tests/crates/typescript_node/<name>/customizable/main.test.ts`.
-3. `cargo nextest run -p sdk_test_python_pydantic2 <name>::` to run
-   (nextest fires `setup.sh` to sync the new fixture's venv).
+   `sdk_tests/crates/typescript/<name>/customizable/main.test.ts`.
+3. Run `cargo nextest run -p sdk_test_python_pydantic2 <name>::` for Python or `cargo nextest run -p sdk_test_typescript_node <name>::` for the full TypeScript runtime matrix.
 
 No code edits needed in `build.rs` or `src/lib.rs` -- the fixture
 list is discovered at build time from `sdk_tests/fixtures/` and

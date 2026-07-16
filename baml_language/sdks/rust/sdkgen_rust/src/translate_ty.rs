@@ -55,47 +55,47 @@ pub(crate) fn type_path(name: &Name, analysis: &Analysis) -> TokenStream {
     let routed = routing::route(name).segments;
     let segments = analysis.renamed(&routed);
     let mods = segments.iter().map(|seg| idents::ident(seg));
-    let type_ident = idents::ident(name.name.as_str());
+    let type_ident = idents::ident(name.name().as_str());
     quote! { crate::#(#mods::)*#type_ident }
 }
 
 fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenStream, Unsupported> {
     match ty {
-        Ty::Int => Ok(quote! { ::core::primitive::i64 }),
-        Ty::Bigint => Ok(quote! { ::baml_bridge::BigInt }),
-        Ty::Float => Ok(quote! { ::core::primitive::f64 }),
-        Ty::String => Ok(quote! { ::std::string::String }),
-        Ty::Bool => Ok(quote! { ::core::primitive::bool }),
+        Ty::Int { .. } => Ok(quote! { ::core::primitive::i64 }),
+        Ty::Bigint { .. } => Ok(quote! { ::baml_bridge::BigInt }),
+        Ty::Float { .. } => Ok(quote! { ::core::primitive::f64 }),
+        Ty::String { .. } => Ok(quote! { ::std::string::String }),
+        Ty::Bool { .. } => Ok(quote! { ::core::primitive::bool }),
         // BAML `null` (as a type) and `void` both surface as unit: null
         // rides the wire as an absent value, a void function returns null.
-        Ty::Null | Ty::Unit => Ok(quote! { () }),
+        Ty::Null { .. } | Ty::Void { .. } => Ok(quote! { () }),
         // Rust cannot refine value-level literals in types; a literal type
         // widens to its base primitive (the same widening TS applies going
         // from `Literal[42]`-style types to `number`).
-        Ty::Literal(lit) => Ok(match lit {
+        Ty::Literal(lit, ..) => Ok(match lit {
             baml_base::Literal::Int(_) => quote! { ::core::primitive::i64 },
             baml_base::Literal::Bigint(_) => quote! { ::baml_bridge::BigInt },
             baml_base::Literal::Float(_) => quote! { ::core::primitive::f64 },
             baml_base::Literal::String(_) => quote! { ::std::string::String },
             baml_base::Literal::Bool(_) => quote! { ::core::primitive::bool },
         }),
-        Ty::Uint8Array => Ok(quote! { ::std::vec::Vec<::core::primitive::u8> }),
-        Ty::List(inner) => {
+        Ty::Uint8Array { .. } => Ok(quote! { ::std::vec::Vec<::core::primitive::u8> }),
+        Ty::List(inner, _) => {
             let inner = translate_inner(inner, ctx, true)?;
             Ok(quote! { ::std::vec::Vec<#inner> })
         }
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             // The language restricts map keys to strings (E0067); the
             // codegen-facing Ty is more permissive, so fail closed on
             // anything else rather than guessing a wire stringification.
             match key.as_ref() {
-                Ty::String => {}
+                Ty::String { .. } => {}
                 other => return Err(unsupported(&format!("map key type ({other})"))),
             }
             let value = translate_inner(value, ctx, true)?;
             Ok(quote! { ::baml_bridge::Map<::std::string::String, #value> })
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             // A `null` arm is optionality: strip it and wrap the rest in
             // `Option`. One remaining arm is the arm itself; several
             // become the leaf's synthesized union enum.
@@ -120,7 +120,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                     let boxed = !under_heap
                         && ctx.boxing_for.is_some_and(|owner| {
                             arms.iter().any(|arm| match arm {
-                                Ty::Class(name, _) => ctx.analysis.needs_box(owner, name),
+                                Ty::Class(name, _, _) => ctx.analysis.needs_box(owner, name),
                                 _ => false,
                             })
                         });
@@ -137,7 +137,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                 Ok(inner)
             }
         }
-        Ty::Class(name, args) => {
+        Ty::Class(name, args, _) => {
             if !args.is_empty() {
                 return Err(unsupported("generic class"));
             }
@@ -157,7 +157,10 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                 Ok(path)
             }
         }
-        Ty::Enum(name) => {
+        // A specific enum variant used as a type (`Sentiment.Positive`)
+        // drops its variant tag and translates to the enum itself — Rust
+        // has no variant-level types, and the value is a `Sentiment`.
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => {
             if !ctx.analysis.is_emitted(name) {
                 return Err(Unsupported {
                     reason: format!("references skipped or unknown type `{name}`"),
@@ -165,14 +168,14 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
             Ok(type_path(name, ctx.analysis))
         }
-        Ty::Media(kind) => Err(unsupported(&format!("media ({kind})"))),
+        Ty::Media(kind, _) => Err(unsupported(&format!("media ({kind})"))),
         // Opaque alias references (in-package non-recursive aliases are
         // inlined upstream, so these are recursive or cross-package ones).
         // A Rust `type` alias is transparent, so the reference resolves to
         // the underlying type's conversions; no boxing is needed because
         // package dependencies are acyclic, so a cross-package alias can
         // never sit on a containment cycle.
-        Ty::TypeAlias(name) => {
+        Ty::TypeAlias(name, _) => {
             if !ctx.analysis.is_emitted(name) {
                 return Err(Unsupported {
                     reason: format!("references skipped or unknown type `{name}`"),
@@ -180,11 +183,18 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             }
             Ok(type_path(name, ctx.analysis))
         }
-        Ty::TypeVar(_) => Err(unsupported("type variable (generics)")),
-        Ty::BuiltinUnknown => Err(unsupported("unknown")),
-        Ty::Callable { .. } => Err(unsupported("callable")),
-        Ty::BamlOptions => Err(unsupported("baml.Options")),
-        Ty::RustType => Err(unsupported("$rust_type handle")),
+        Ty::TypeVar(..) => Err(unsupported("type variable (generics)")),
+        Ty::BuiltinUnknown { .. } => Err(unsupported("unknown")),
+        Ty::Function { .. } => Err(unsupported("function")),
+        Ty::Future(..) => Err(unsupported("future handle")),
+        Ty::Interface(..) => Err(unsupported("interface")),
+        Ty::Type { .. } => Err(unsupported("type metatype")),
+        Ty::Resource { .. } => Err(unsupported("resource handle")),
+        Ty::PromptAst { .. } => Err(unsupported("prompt AST")),
+        // The uninhabited type: never appears as a field/param/return type
+        // (throws-nothing is `throws: None`, handled before translation).
+        Ty::Never { .. } => Err(unsupported("never")),
+        Ty::RustType { .. } => Err(unsupported("$rust_type handle")),
     }
 }
 
@@ -251,13 +261,40 @@ mod tests {
 
     #[test]
     fn primitives() {
-        assert_eq!(rendered(&Ty::Int), ":: core :: primitive :: i64");
-        assert_eq!(rendered(&Ty::String), ":: std :: string :: String");
-        assert_eq!(rendered(&Ty::Unit), "()");
-        assert_eq!(rendered(&Ty::Null), "()");
-        assert_eq!(rendered(&Ty::Bigint), ":: baml_bridge :: BigInt");
         assert_eq!(
-            rendered(&Ty::Uint8Array),
+            rendered(&Ty::Int {
+                attr: baml_base::TyAttr::EMPTY
+            }),
+            ":: core :: primitive :: i64"
+        );
+        assert_eq!(
+            rendered(&Ty::String {
+                attr: baml_base::TyAttr::EMPTY
+            }),
+            ":: std :: string :: String"
+        );
+        assert_eq!(
+            rendered(&Ty::Void {
+                attr: baml_base::TyAttr::EMPTY
+            }),
+            "()"
+        );
+        assert_eq!(
+            rendered(&Ty::Null {
+                attr: baml_base::TyAttr::EMPTY
+            }),
+            "()"
+        );
+        assert_eq!(
+            rendered(&Ty::Bigint {
+                attr: baml_base::TyAttr::EMPTY
+            }),
+            ":: baml_bridge :: BigInt"
+        );
+        assert_eq!(
+            rendered(&Ty::Uint8Array {
+                attr: baml_base::TyAttr::EMPTY
+            }),
             ":: std :: vec :: Vec < :: core :: primitive :: u8 >"
         );
     }
@@ -265,13 +302,19 @@ mod tests {
     #[test]
     fn literals_widen_to_their_base_primitive() {
         assert_eq!(
-            rendered(&Ty::Literal(baml_base::Literal::String(
-                "hello world".into()
-            ))),
+            rendered(&Ty::Literal(
+                baml_base::Literal::String("hello world".into()),
+                baml_codegen_types::Freshness::Regular,
+                baml_base::TyAttr::EMPTY
+            )),
             ":: std :: string :: String"
         );
         assert_eq!(
-            rendered(&Ty::Literal(baml_base::Literal::Int(42))),
+            rendered(&Ty::Literal(
+                baml_base::Literal::Int(42),
+                baml_codegen_types::Freshness::Regular,
+                baml_base::TyAttr::EMPTY
+            )),
             ":: core :: primitive :: i64"
         );
     }
@@ -279,16 +322,47 @@ mod tests {
     #[test]
     fn null_union_is_option_in_either_arm_order() {
         let expected = ":: std :: option :: Option < :: core :: primitive :: i64 >";
-        assert_eq!(rendered(&Ty::Union(vec![Ty::Int, Ty::Null])), expected);
-        assert_eq!(rendered(&Ty::Union(vec![Ty::Null, Ty::Int])), expected);
+        assert_eq!(
+            rendered(&Ty::Union(
+                vec![
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY
+                    },
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY
+                    }
+                ],
+                baml_base::TyAttr::EMPTY
+            )),
+            expected
+        );
+        assert_eq!(
+            rendered(&Ty::Union(
+                vec![
+                    Ty::Null {
+                        attr: baml_base::TyAttr::EMPTY
+                    },
+                    Ty::Int {
+                        attr: baml_base::TyAttr::EMPTY
+                    }
+                ],
+                baml_base::TyAttr::EMPTY
+            )),
+            expected
+        );
     }
 
     #[test]
     fn string_keyed_maps_translate_and_other_keys_fail_closed() {
         assert_eq!(
             rendered(&Ty::Map {
-                key: Box::new(Ty::String),
-                value: Box::new(Ty::Int),
+                key: Box::new(Ty::String {
+                    attr: baml_base::TyAttr::EMPTY
+                }),
+                value: Box::new(Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY
+                }),
+                attr: baml_base::TyAttr::EMPTY,
             }),
             ":: baml_bridge :: Map < :: std :: string :: String , :: core :: primitive :: i64 >"
         );
@@ -300,8 +374,14 @@ mod tests {
             boxing_for: None,
         };
         let enum_keyed = Ty::Map {
-            key: Box::new(Ty::Enum(name("user", &[], "Color"))),
-            value: Box::new(Ty::Int),
+            key: Box::new(Ty::Enum(
+                name("user", &[], "Color"),
+                baml_base::TyAttr::EMPTY,
+            )),
+            value: Box::new(Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            }),
+            attr: baml_base::TyAttr::EMPTY,
         };
         assert!(translate(&enum_keyed, &ctx).is_err());
     }
@@ -315,15 +395,60 @@ mod tests {
             leaf: &[],
             boxing_for: None,
         };
-        assert!(translate(&Ty::Union(vec![Ty::Int, Ty::String]), &ctx).is_err());
-        assert!(translate(&Ty::Union(vec![Ty::Int, Ty::String, Ty::Null]), &ctx).is_err());
+        assert!(
+            translate(
+                &Ty::Union(
+                    vec![
+                        Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY
+                        },
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY
+                        }
+                    ],
+                    baml_base::TyAttr::EMPTY
+                ),
+                &ctx
+            )
+            .is_err()
+        );
+        assert!(
+            translate(
+                &Ty::Union(
+                    vec![
+                        Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY
+                        },
+                        Ty::String {
+                            attr: baml_base::TyAttr::EMPTY
+                        },
+                        Ty::Null {
+                            attr: baml_base::TyAttr::EMPTY
+                        }
+                    ],
+                    baml_base::TyAttr::EMPTY
+                ),
+                &ctx
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn emitted_nominals_render_as_absolute_paths() {
         let resume = name("user", &["lorem"], "Resume");
-        let pool =
-            SymbolPool::from([(resume.clone(), class(&resume, vec![("title", Ty::String)]))]);
+        let pool = SymbolPool::from([(
+            resume.clone(),
+            class(
+                &resume,
+                vec![(
+                    "title",
+                    Ty::String {
+                        attr: baml_base::TyAttr::EMPTY,
+                    },
+                )],
+            ),
+        )]);
         let (analysis, warnings) = analyze(&pool);
         assert!(warnings.is_empty());
         let ctx = TyCtx {
@@ -333,9 +458,12 @@ mod tests {
             boxing_for: None,
         };
         assert_eq!(
-            translate(&Ty::Class(resume, Vec::new()), &ctx)
-                .unwrap()
-                .to_string(),
+            translate(
+                &Ty::Class(resume, Vec::new(), baml_base::TyAttr::EMPTY),
+                &ctx
+            )
+            .unwrap()
+            .to_string(),
             "crate :: lorem :: Resume"
         );
     }
@@ -347,7 +475,13 @@ mod tests {
         let bad = name("user", &[], "Bad");
         let pool = SymbolPool::from([(
             bad.clone(),
-            class(&bad, vec![("m", Ty::Media(baml_base::MediaKind::Image))]),
+            class(
+                &bad,
+                vec![(
+                    "m",
+                    Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY),
+                )],
+            ),
         )]);
         let (analysis, warnings) = analyze(&pool);
         assert_eq!(warnings.len(), 1);
@@ -357,7 +491,7 @@ mod tests {
             leaf: &[],
             boxing_for: None,
         };
-        assert!(translate(&Ty::Class(bad, Vec::new()), &ctx).is_err());
+        assert!(translate(&Ty::Class(bad, Vec::new(), baml_base::TyAttr::EMPTY), &ctx).is_err());
     }
 
     #[test]
@@ -365,8 +499,23 @@ mod tests {
         // tree.left: tree? boxes; tree.items: tree[] does not (Vec is
         // already heap-indirected).
         let tree = name("user", &[], "Tree");
-        let optional_self = Ty::Union(vec![Ty::Class(tree.clone(), Vec::new()), Ty::Null]);
-        let self_list = Ty::List(Box::new(Ty::Class(tree.clone(), Vec::new())));
+        let optional_self = Ty::Union(
+            vec![
+                Ty::Class(tree.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let self_list = Ty::List(
+            Box::new(Ty::Class(
+                tree.clone(),
+                Vec::new(),
+                baml_base::TyAttr::EMPTY,
+            )),
+            baml_base::TyAttr::EMPTY,
+        );
         let pool = SymbolPool::from([(
             tree.clone(),
             class(
@@ -399,8 +548,24 @@ mod tests {
     fn mutually_recursive_classes_box_in_both_directions() {
         let a = name("user", &[], "A");
         let b = name("user", &[], "B");
-        let a_field = Ty::Union(vec![Ty::Class(b.clone(), Vec::new()), Ty::Null]);
-        let b_field = Ty::Union(vec![Ty::Class(a.clone(), Vec::new()), Ty::Null]);
+        let a_field = Ty::Union(
+            vec![
+                Ty::Class(b.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let b_field = Ty::Union(
+            vec![
+                Ty::Class(a.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
         let pool = SymbolPool::from([
             (a.clone(), class(&a, vec![("b", a_field)])),
             (b.clone(), class(&b, vec![("a", b_field)])),
@@ -416,12 +581,26 @@ mod tests {
         let inner = name("user", &[], "Inner");
         let outer = name("user", &[], "Outer");
         let pool = SymbolPool::from([
-            (inner.clone(), class(&inner, vec![("x", Ty::Int)])),
+            (
+                inner.clone(),
+                class(
+                    &inner,
+                    vec![(
+                        "x",
+                        Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    )],
+                ),
+            ),
             (
                 outer.clone(),
                 class(
                     &outer,
-                    vec![("inner", Ty::Class(inner.clone(), Vec::new()))],
+                    vec![(
+                        "inner",
+                        Ty::Class(inner.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                    )],
                 ),
             ),
         ]);
@@ -437,11 +616,23 @@ mod tests {
         let pool = SymbolPool::from([
             (
                 bad.clone(),
-                class(&bad, vec![("m", Ty::Media(baml_base::MediaKind::Image))]),
+                class(
+                    &bad,
+                    vec![(
+                        "m",
+                        Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY),
+                    )],
+                ),
             ),
             (
                 holder.clone(),
-                class(&holder, vec![("bad", Ty::Class(bad.clone(), Vec::new()))]),
+                class(
+                    &holder,
+                    vec![(
+                        "bad",
+                        Ty::Class(bad.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                    )],
+                ),
             ),
         ]);
         let (analysis, warnings) = analyze(&pool);
@@ -475,11 +666,29 @@ mod tests {
         let pool = SymbolPool::from([
             (
                 plain.clone(),
-                alias(&plain, Ty::List(Box::new(Ty::String)), false),
+                alias(
+                    &plain,
+                    Ty::List(
+                        Box::new(Ty::String {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                        baml_base::TyAttr::EMPTY,
+                    ),
+                    false,
+                ),
             ),
             (
                 recursive.clone(),
-                alias(&recursive, Ty::List(Box::new(Ty::Int)), true),
+                alias(
+                    &recursive,
+                    Ty::List(
+                        Box::new(Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                        baml_base::TyAttr::EMPTY,
+                    ),
+                    true,
+                ),
             ),
         ]);
         let (analysis, warnings) = analyze(&pool);
@@ -495,10 +704,12 @@ mod tests {
             boxing_for: None,
         };
         assert_eq!(
-            translate(&Ty::TypeAlias(plain), &ctx).unwrap().to_string(),
+            translate(&Ty::TypeAlias(plain, baml_base::TyAttr::EMPTY), &ctx)
+                .unwrap()
+                .to_string(),
             "crate :: aliases :: StringList"
         );
-        assert!(translate(&Ty::TypeAlias(recursive), &ctx).is_err());
+        assert!(translate(&Ty::TypeAlias(recursive, baml_base::TyAttr::EMPTY), &ctx).is_err());
     }
 
     #[test]
@@ -506,10 +717,28 @@ mod tests {
         let rec = name("user", &[], "RecList");
         let container = name("user", &[], "AliasContainer");
         let pool = SymbolPool::from([
-            (rec.clone(), alias(&rec, Ty::List(Box::new(Ty::Int)), true)),
+            (
+                rec.clone(),
+                alias(
+                    &rec,
+                    Ty::List(
+                        Box::new(Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        }),
+                        baml_base::TyAttr::EMPTY,
+                    ),
+                    true,
+                ),
+            ),
             (
                 container.clone(),
-                class(&container, vec![("rec_field", Ty::TypeAlias(rec.clone()))]),
+                class(
+                    &container,
+                    vec![(
+                        "rec_field",
+                        Ty::TypeAlias(rec.clone(), baml_base::TyAttr::EMPTY),
+                    )],
+                ),
             ),
         ]);
         let (analysis, warnings) = analyze(&pool);
@@ -529,14 +758,36 @@ mod tests {
         let foo_type = name("user", &[], "foo");
         let in_foo_ns = name("user", &["foo"], "X");
         let pool = SymbolPool::from([
-            (foo_type.clone(), class(&foo_type, vec![("x", Ty::Int)])),
-            (in_foo_ns.clone(), class(&in_foo_ns, vec![("y", Ty::Int)])),
+            (
+                foo_type.clone(),
+                class(
+                    &foo_type,
+                    vec![(
+                        "x",
+                        Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    )],
+                ),
+            ),
+            (
+                in_foo_ns.clone(),
+                class(
+                    &in_foo_ns,
+                    vec![(
+                        "y",
+                        Ty::Int {
+                            attr: baml_base::TyAttr::EMPTY,
+                        },
+                    )],
+                ),
+            ),
         ]);
         let (analysis, warnings) = analyze(&pool);
         assert!(warnings.is_empty());
         assert_eq!(
             translate(
-                &Ty::Class(in_foo_ns, Vec::new()),
+                &Ty::Class(in_foo_ns, Vec::new(), baml_base::TyAttr::EMPTY),
                 &TyCtx {
                     analysis: &analysis,
                     unions: &NO_UNIONS,

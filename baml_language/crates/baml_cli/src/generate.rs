@@ -172,14 +172,26 @@ impl GenerateArgs {
                     .map(|(path, content)| (path, content.into_bytes()))
                     .collect()
                 }
-                OutputType::TypescriptNode => sdkgen_typescript_node::to_source_code_with_bytecode(
-                    &pool,
-                    &baml_bytecode,
-                    generator.naming_convention,
-                )
-                .into_iter()
-                .map(|(path, content)| (path, content.into_bytes()))
-                .collect(),
+                OutputType::TypescriptNode => {
+                    sdkgen_typescript_shared::sdkgen_typescript::to_source_code_with_bytecode(
+                        &pool,
+                        &baml_bytecode,
+                        generator.naming_convention,
+                    )
+                    .into_iter()
+                    .map(|(path, content)| (path, content.into_bytes()))
+                    .collect()
+                }
+                OutputType::TypescriptWeb => {
+                    sdkgen_typescript_shared::sdkgen_typescript_web::to_source_code_with_bytecode(
+                        &pool,
+                        &baml_bytecode,
+                        generator.naming_convention,
+                    )
+                    .into_iter()
+                    .map(|(path, content)| (path, content.into_bytes()))
+                    .collect()
+                }
                 OutputType::Rust => {
                     let generated = sdkgen_rust::to_source_code_with_bytecode(
                         &pool,
@@ -289,7 +301,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "rust""#,
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web", "rust""#,
             table_range,
             &mut diags,
         );

@@ -527,11 +527,13 @@ mod tests {
 
     fn nullary_string_fn(n: &Name) -> Function {
         Function {
-            name: n.name.clone(),
+            name: n.name().clone(),
             generic_params: Vec::new(),
             docstring: None,
             arguments: Vec::new(),
-            return_type: Ty::String,
+            return_type: Ty::String {
+                attr: baml_base::TyAttr::EMPTY,
+            },
             throws: None,
             watchers: Vec::new(),
             origin: Origin {
@@ -558,7 +560,17 @@ mod tests {
     #[test]
     fn multi_arm_unions_synthesize_an_enum_with_from_and_into_params() {
         let n = name("user", &[], "f");
-        let union = Ty::Union(vec![Ty::Int, Ty::String]);
+        let union = Ty::Union(
+            vec![
+                Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
         let pool = SymbolPool::from([(
             n.clone(),
             Symbol::Function(unary_fn(&n, union.clone(), union)),
@@ -580,7 +592,20 @@ mod tests {
     #[test]
     fn nullable_multi_arm_unions_wrap_the_enum_in_option() {
         let n = name("user", &[], "f");
-        let union = Ty::Union(vec![Ty::Int, Ty::String, Ty::Null]);
+        let union = Ty::Union(
+            vec![
+                Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::Null {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
         let pool = SymbolPool::from([(
             n.clone(),
             Symbol::Function(unary_fn(&n, union.clone(), union)),
@@ -597,12 +622,29 @@ mod tests {
     #[test]
     fn string_arm_with_string_literal_arm_skips_fail_closed() {
         let n = name("user", &[], "f");
-        let union = Ty::Union(vec![
-            Ty::String,
-            Ty::Literal(baml_base::Literal::String("draft".to_string())),
-        ]);
-        let pool =
-            SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, union, Ty::String)))]);
+        let union = Ty::Union(
+            vec![
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+                Ty::Literal(
+                    baml_base::Literal::String("draft".to_string()),
+                    baml_codegen_types::Freshness::Regular,
+                    baml_base::TyAttr::EMPTY,
+                ),
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
+        let pool = SymbolPool::from([(
+            n.clone(),
+            Symbol::Function(unary_fn(
+                &n,
+                union,
+                Ty::String {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            )),
+        )]);
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
         assert_eq!(generated.warnings.len(), 1);
         assert!(
@@ -615,7 +657,15 @@ mod tests {
     #[test]
     fn recursion_through_a_union_boxes_the_enum_reference() {
         let a = name("user", &[], "A");
-        let union_field = Ty::Union(vec![Ty::Class(a.clone(), Vec::new()), Ty::Int]);
+        let union_field = Ty::Union(
+            vec![
+                Ty::Class(a.clone(), Vec::new(), baml_base::TyAttr::EMPTY),
+                Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
+            ],
+            baml_base::TyAttr::EMPTY,
+        );
         let pool = SymbolPool::from([(
             a.clone(),
             Symbol::Class(baml_codegen_types::Class {
@@ -696,7 +746,7 @@ mod tests {
     fn unsupported_symbols_skip_with_a_warning() {
         let n = name("user", &[], "needs_media");
         let mut f = nullary_string_fn(&n);
-        f.return_type = Ty::Media(baml_base::MediaKind::Image);
+        f.return_type = Ty::Media(baml_base::MediaKind::Image, baml_base::TyAttr::EMPTY);
         let pool = SymbolPool::from([(n, Symbol::Function(f))]);
         let generated = to_source_code_with_bytecode(&pool, &[], &options());
         assert_eq!(generated.warnings.len(), 1);
