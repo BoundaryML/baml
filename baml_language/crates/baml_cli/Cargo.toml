@@ -30,6 +30,7 @@ baml_version = { workspace = true }
 baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
 bex_vm_types = { workspace = true }
+sdkgen_java = { workspace = true }
 sdkgen_python_pydantic2 = { workspace = true }
 sdkgen_typescript_node = { workspace = true }
 sys_native = { workspace = true }

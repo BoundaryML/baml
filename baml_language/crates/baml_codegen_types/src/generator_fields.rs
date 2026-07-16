@@ -16,6 +16,9 @@ pub enum OutputType {
     /// TypeScript + Node.js SDK (`@boundaryml/baml-bridge` runtime).
     #[strum(serialize = "typescript/node")]
     TypescriptNode,
+    /// Java SDK (`com.boundaryml.baml:baml-bridge` runtime).
+    #[strum(serialize = "java")]
+    Java,
 }
 
 /// Identifier-casing policy a code generator must respect. Surfaces as
