@@ -221,12 +221,12 @@ pub(crate) fn union_ident(arms: &[&Ty]) -> String {
         if i > 0 {
             out.push_str("Or");
         }
-        out.push_str(&arm_token(arm));
+        out.push_str(&union_arm_token(arm));
     }
     out
 }
 
-fn arm_token(ty: &Ty) -> String {
+pub(crate) fn union_arm_token(ty: &Ty) -> String {
     match ty {
         Ty::Int => "Int".to_string(),
         Ty::Bigint => "Bigint".to_string(),
@@ -240,8 +240,8 @@ fn arm_token(ty: &Ty) -> String {
             java_identifier(name.name.as_str())
         }
         Ty::TypeVar(name) => java_identifier(name.as_str()),
-        Ty::List(inner) => format!("{}List", arm_token(inner)),
-        Ty::Map { value, .. } => format!("{}Map", arm_token(value)),
+        Ty::List(inner) => format!("{}List", union_arm_token(inner)),
+        Ty::Map { value, .. } => format!("{}Map", union_arm_token(value)),
         Ty::Literal(lit) => match lit {
             baml_base::Literal::String(s) => format!("K{}", java_identifier(s)),
             baml_base::Literal::Int(v) => {

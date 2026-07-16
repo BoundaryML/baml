@@ -1,26 +1,26 @@
-//! Java SDK emitter. Produces a structurally correct `baml_sdk/` tree
-//! from a `SymbolPool`: one `.java` file per generated top (Java allows
-//! one public type per file), a per-package `Fns` holder for free
-//! functions, a root `Baml.java` runtime anchor, and the compiled BAML
+//! Java SDK emitter. Produces a `baml_sdk/` tree from a `SymbolPool`:
+//! one `.java` file per generated top (Java allows one public type per
+//! file), a per-package `Fns` holder binding free functions to the
+//! `baml_bridge.BamlFfi` runtime entry points, minted sealed-union
+//! types, a root `Baml.java` runtime anchor, and the compiled BAML
 //! bytecode as a base64 classpath resource (`inlinedbaml.b64` — Java
 //! caps a static initializer at 64KB of JVM bytecode, so a
 //! `new byte[]{...}` literal like TS's `_inlinedbaml.ts` cannot work).
 //!
-//! Phase-2 scope (mirroring `sdkgen_typescript_node`'s phase
-//! progression): placement, packages, and placeholder bodies — real
-//! names, empty members. `translate_ty`, fields/constructors, `Fns`
-//! bindings, unions, and the typemap land in later phases. Unlike TS,
-//! Java needs no barrel/`index` files: a package exists by virtue of
-//! its directory, so container namespaces emit nothing.
+//! Unlike TS, Java needs no barrel/`index` files: a package exists by
+//! virtue of its directory, so container namespaces emit nothing.
+//! Type expressions come from `translate_ty` and are fully qualified,
+//! so no import machinery exists either.
+//!
+//! Not yet emitted (later capabilities): class static/instance
+//! methods, optional-arg configurators, explicit generic type-args
+//! overloads, the typemap, runtime init in `Baml.java`.
 //!
 //! Generated-API conventions live in
 //! `sdks/agent-docs/bridge-ref/ref-java-codegen-conventions.md`.
 
 mod emit;
 mod routing;
-// Wired into the emitters in phase 4 (fields, constructors, Fns
-// bindings); until then only the unit-test matrix exercises it.
-#[allow(dead_code)]
 mod translate_ty;
 
 use std::{
@@ -28,12 +28,13 @@ use std::{
     path::PathBuf,
 };
 
+use baml_codegen_types::{Function, Symbol, SymbolPool, Ty};
 pub use baml_codegen_types::{NamingConvention, OutputType};
-use baml_codegen_types::{Symbol, SymbolPool};
 
 use crate::{
-    emit::{render_class, render_enum, render_fns_holder},
+    emit::{render_class, render_enum, render_fns_holder, render_union},
     routing::{PackagePath, java_identifier, route},
+    translate_ty::{AliasTable, TranslateCtx, UnionSink},
 };
 
 /// A user BAML source file as it should appear in the emitter's
@@ -83,11 +84,22 @@ pub fn to_source_code(
     );
     let mut out: HashMap<PathBuf, String> = HashMap::new();
 
+    // Alias table for translate_ty: non-recursive aliases erase at
+    // use sites; recursive ones keep a nominal name.
+    let mut aliases = AliasTable::new();
+    for (name, symbol) in pool {
+        if let Symbol::TypeAlias(alias) = symbol {
+            aliases.insert(name.clone(), (alias.resolves_to.clone(), alias.recursive));
+        }
+    }
+
     // Group symbols per package. BTreeMap/BTreeSet for deterministic
     // output independent of the pool's HashMap iteration order.
-    let mut fns_packages: BTreeSet<PackagePath> = BTreeSet::new();
+    let mut sink = UnionSink::default();
+    let mut fns_per_package: BTreeMap<PackagePath, Vec<(u32, String, &Function)>> = BTreeMap::new();
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
+    let mut recursive_aliases: Vec<(PackagePath, String, &Ty)> = Vec::new();
 
     for (name, symbol) in pool {
         let pkg = route(name);
@@ -102,6 +114,10 @@ pub fn to_source_code(
             s
         };
         let is_runtime_owned = RUNTIME_OWNED_FQNS.contains(&symbol_fqn.as_str());
+        let ctx = TranslateCtx {
+            current_package: pkg.clone(),
+            aliases: &aliases,
+        };
 
         match symbol {
             Symbol::Class(class) => {
@@ -113,7 +129,7 @@ pub fn to_source_code(
                     .entry(pkg.clone())
                     .or_default()
                     .insert(ident.clone());
-                type_files.push((pkg, ident, render_class(class)));
+                type_files.push((pkg, ident, render_class(class, &ctx, &mut sink)));
             }
             Symbol::Enum(enum_) => {
                 let ident = java_identifier(enum_.name.name.as_str());
@@ -123,11 +139,23 @@ pub fn to_source_code(
                     .insert(ident.clone());
                 type_files.push((pkg, ident, render_enum(enum_)));
             }
-            Symbol::Function(_) => {
-                fns_packages.insert(pkg);
+            Symbol::Function(function) => {
+                fns_per_package.entry(pkg).or_default().push((
+                    function.origin.span_start,
+                    symbol_fqn,
+                    function,
+                ));
             }
-            // Java has no type-alias mechanism; aliases are erased to
-            // their underlying type at every use site by translate_ty.
+            // Non-recursive aliases erase at every use site; recursive
+            // aliases mint a nominal type (emitted below).
+            Symbol::TypeAlias(alias) if alias.recursive => {
+                let ident = java_identifier(name.name.as_str());
+                type_idents_per_package
+                    .entry(pkg.clone())
+                    .or_default()
+                    .insert(ident.clone());
+                recursive_aliases.push((pkg, ident, &alias.resolves_to));
+            }
             Symbol::TypeAlias(_) => {}
         }
     }
@@ -138,23 +166,84 @@ pub fn to_source_code(
 
     // Per-package free-function holders. `Fns$` when a generated type
     // in the same package is already named `Fns`.
-    for pkg in &fns_packages {
-        let taken = type_idents_per_package.get(pkg);
+    for (pkg, mut entries) in fns_per_package {
+        entries.sort_by(|a, b| (a.0, a.1.as_str()).cmp(&(b.0, b.1.as_str())));
+        let functions: Vec<(String, &Function)> =
+            entries.into_iter().map(|(_, fqn, f)| (fqn, f)).collect();
+        let taken = type_idents_per_package.get(&pkg);
         let holder = if taken.is_some_and(|set| set.contains("Fns")) {
             "Fns$"
         } else {
             "Fns"
         };
+        let ctx = TranslateCtx {
+            current_package: pkg.clone(),
+            aliases: &aliases,
+        };
         out.insert(
-            java_file_path(pkg, holder),
-            with_package(pkg, &render_fns_holder(holder, &pkg.java_package())),
+            java_file_path(&pkg, holder),
+            with_package(
+                &pkg,
+                &render_fns_holder(holder, &pkg.java_package(), &functions, &ctx, &mut sink),
+            ),
         );
     }
 
-    // Root runtime anchor. Loading any generated class must (in later
-    // phases) trigger idempotent runtime initialization from the
+    // Recursive aliases: a recursive alias over a union renders as a
+    // minted union under the alias's own name; other recursive shapes
+    // get a reserved placeholder until the aliases capability lands.
+    for (pkg, ident, resolves_to) in recursive_aliases {
+        let ctx = TranslateCtx {
+            current_package: pkg.clone(),
+            aliases: &aliases,
+        };
+        let body = if let Ty::Union(items) = resolves_to {
+            let arms: Vec<Ty> = items
+                .iter()
+                .filter(|t| !matches!(t, Ty::Null))
+                .cloned()
+                .collect();
+            render_union(&ident, &arms, &ctx, &mut sink)
+        } else {
+            format!(
+                "/** Recursive type alias — full support lands with the aliases capability. */\npublic final class {ident} {{\n    private {ident}() {{}}\n}}\n"
+            )
+        };
+        out.insert(java_file_path(&pkg, &ident), with_package(&pkg, &body));
+    }
+
+    // Minted union files. Rendering a union can itself mint more
+    // unions (e.g. a `(int | string)[]` arm), so drain to a fixpoint.
+    let mut emitted_unions: BTreeSet<(PackagePath, String)> = BTreeSet::new();
+    loop {
+        let pending: Vec<((PackagePath, String), Vec<Ty>)> = sink
+            .unions
+            .iter()
+            .filter(|(key, _)| !emitted_unions.contains(key))
+            .map(|(key, arms)| (key.clone(), arms.clone()))
+            .collect();
+        if pending.is_empty() {
+            break;
+        }
+        for ((pkg, ident), arms) in pending {
+            let ctx = TranslateCtx {
+                current_package: pkg.clone(),
+                aliases: &aliases,
+            };
+            let body = render_union(&ident, &arms, &ctx, &mut sink);
+            // A generated type may already own this identifier (e.g. a
+            // recursive alias that named the same union) — first writer
+            // wins, and the alias/type pass ran first.
+            out.entry(java_file_path(&pkg, &ident))
+                .or_insert_with(|| with_package(&pkg, &body));
+            emitted_unions.insert((pkg, ident));
+        }
+    }
+
+    // Root runtime anchor. Loading any generated class must (in a
+    // later phase) trigger idempotent runtime initialization from the
     // embedded bytecode — the Java analog of Python's root-package
-    // import side effect. Phase 2 reserves the name.
+    // import side effect.
     let root = PackagePath {
         segments: Vec::new(),
     };
@@ -243,7 +332,8 @@ fn base64_encode(data: &[u8]) -> String {
 mod tests {
     use baml_base::Name as BaseName;
     use baml_codegen_types::{
-        Class, Enum, EnumVariant, Function, FunctionArgument, Name, Origin, Symbol, SymbolPool, Ty,
+        Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, Origin, Symbol,
+        SymbolPool, Ty,
     };
 
     use super::*;
@@ -263,16 +353,32 @@ mod tests {
         }
     }
 
-    fn class_sym(n: &Name, generic_params: &[&str], span: u32) -> Symbol {
+    fn class_sym_with_props(
+        n: &Name,
+        generic_params: &[&str],
+        props: Vec<(&str, Ty)>,
+        span: u32,
+    ) -> Symbol {
         Symbol::Class(Class {
             name: n.clone(),
             generic_params: generic_params.iter().map(|p| BaseName::new(*p)).collect(),
             docstring: None,
-            properties: Vec::new(),
+            properties: props
+                .into_iter()
+                .map(|(p_name, ty)| ClassProperty {
+                    name: BaseName::new(p_name),
+                    docstring: None,
+                    ty,
+                })
+                .collect(),
             static_methods: Vec::new(),
             instance_methods: Vec::new(),
             origin: origin(span),
         })
+    }
+
+    fn class_sym(n: &Name, generic_params: &[&str], span: u32) -> Symbol {
+        class_sym_with_props(n, generic_params, Vec::new(), span)
     }
 
     fn enum_sym(n: &Name, span: u32) -> Symbol {
@@ -329,26 +435,56 @@ mod tests {
     }
 
     #[test]
-    fn class_renders_as_own_file_with_package() {
+    fn class_renders_fields_ctor_accessors_equality() {
         let mut pool = SymbolPool::new();
-        let n = name("user", &["lorem"], "Resume");
-        pool.insert(n.clone(), class_sym(&n, &[], 0));
+        let n = name("user", &["primitives"], "Primitives");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(
+                &n,
+                &[],
+                vec![
+                    ("int_field", Ty::Int),
+                    ("string_field", Ty::String),
+                    ("uint8array_field", Ty::Uint8Array),
+                ],
+                0,
+            ),
+        );
         let out = emit_sdk(&pool);
-        let file = &out[&PathBuf::from("lorem/Resume.java")];
-        assert!(file.contains("package baml_sdk.lorem;"));
-        assert!(file.contains("public class Resume {"));
-        // Java needs no barrel files.
-        assert!(!out.keys().any(|p| p.to_string_lossy().contains("index")));
+        let file = &out[&PathBuf::from("primitives/Primitives.java")];
+        assert!(file.contains("private final long int_field;"));
+        assert!(file.contains("private final java.lang.String string_field;"));
+        assert!(file.contains(
+            "public Primitives(long int_field, java.lang.String string_field, byte[] uint8array_field)"
+        ));
+        assert!(file.contains("public long int_field() {"));
+        assert!(file.contains("this.int_field == other.int_field"));
+        assert!(
+            file.contains("java.util.Arrays.equals(this.uint8array_field, other.uint8array_field)")
+        );
+        assert!(file.contains("java.util.Objects.equals(this.string_field, other.string_field)"));
+        assert!(file.contains("java.util.Arrays.hashCode(this.uint8array_field)"));
     }
 
     #[test]
     fn generic_class_declares_type_params() {
         let mut pool = SymbolPool::new();
         let n = name("user", &["generics"], "Wrapper");
-        pool.insert(n.clone(), class_sym(&n, &["T"], 0));
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(
+                &n,
+                &["T"],
+                vec![("value", Ty::TypeVar(BaseName::new("T")))],
+                0,
+            ),
+        );
         let out = emit_sdk(&pool);
         let file = &out[&PathBuf::from("generics/Wrapper.java")];
         assert!(file.contains("public class Wrapper<T> {"));
+        assert!(file.contains("private final T value;"));
+        assert!(file.contains("Wrapper<?> other = (Wrapper<?>) o;"));
     }
 
     #[test]
@@ -364,13 +500,20 @@ mod tests {
     }
 
     #[test]
-    fn function_emits_fns_holder() {
+    fn function_emits_sync_and_async_bindings() {
         let mut pool = SymbolPool::new();
         pool.insert(name("user", &["lorem"], "extract_resume"), func_sym(0));
         let out = emit_sdk(&pool);
         let file = &out[&PathBuf::from("lorem/Fns.java")];
-        assert!(file.contains("package baml_sdk.lorem;"));
         assert!(file.contains("public final class Fns {"));
+        assert!(file.contains("public static long extract_resume(long x) {"));
+        assert!(file.contains(
+            "return (java.lang.Long) baml_bridge.BamlFfi.callSync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x});"
+        ));
+        assert!(file.contains(
+            "public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x) {"
+        ));
+        assert!(file.contains("thenApply(v -> (java.lang.Long) v)"));
     }
 
     #[test]
@@ -383,6 +526,36 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("lorem/Fns.java"))); // the user class
         let holder = &out[&PathBuf::from("lorem/Fns$.java")];
         assert!(holder.contains("public final class Fns$ {"));
+    }
+
+    #[test]
+    fn union_field_mints_sealed_union_file() {
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["unions"], "UnionContainer");
+        pool.insert(
+            n.clone(),
+            class_sym_with_props(
+                &n,
+                &[],
+                vec![("value", Ty::Union(vec![Ty::Int, Ty::String]))],
+                0,
+            ),
+        );
+        let out = emit_sdk(&pool);
+        let container = &out[&PathBuf::from("unions/UnionContainer.java")];
+        assert!(container.contains("private final baml_sdk.unions.UnionIntOrString value;"));
+        let union = &out[&PathBuf::from("unions/UnionIntOrString.java")];
+        assert!(union.contains(
+            "public sealed interface UnionIntOrString permits UnionIntOrString.IntValue, UnionIntOrString.StringValue {"
+        ));
+        assert!(
+            union.contains("record IntValue(java.lang.Long value) implements UnionIntOrString {}")
+        );
+        assert!(
+            union.contains(
+                "record StringValue(java.lang.String value) implements UnionIntOrString {}"
+            )
+        );
     }
 
     #[test]
