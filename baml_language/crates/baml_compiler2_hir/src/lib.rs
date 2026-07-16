@@ -98,6 +98,60 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
     files
 }
 
+// ── file_ast ──────────────────────────────────────────────────────────────────
+
+/// The CST → AST lowering output for one file: top-level items plus the
+/// lowering diagnostics and `env.*` references produced along the way.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileAst {
+    pub items: Vec<baml_compiler2_ast::Item>,
+    pub diagnostics: Vec<baml_compiler2_ast::LoweringDiagnostic>,
+    pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
+}
+
+// Safety: `FileAst` holds only plain (non-`'db`) data, so storing it by value
+// in a Salsa slot is sound. This manual `Update` impl uses `PartialEq` so the
+// query gets early-cutoff (dependents skip re-running when the AST is
+// unchanged) rather than the always-`true` behavior of a no-eq value.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for FileAst {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// CST → AST lowering for one file, computed once and shared.
+///
+/// Salsa-tracked because several different consumers need a file's AST items:
+/// both `file_semantic_index` queries (HIR + PPIR), `ppir_expansion_items`,
+/// PPIR's two project-wide expansion-map collectors, and the LSP check pass.
+/// Before this query existed each of them re-lowered the syntax tree from
+/// scratch; the repeated CST traversal was ~31% of cold-compile CPU on the
+/// test corpus (see `crates/tools_compile_profile/README.md`, July 2026 audit).
+#[salsa::tracked(returns(ref))]
+pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let path = file.path(db);
+    let (items, diagnostics, env_var_refs) =
+        baml_compiler2_ast::lower_file_with_path(&tree, Some(path.as_path()));
+    FileAst {
+        items,
+        diagnostics,
+        env_var_refs,
+    }
+}
+
 // ── file_semantic_index ───────────────────────────────────────────────────────
 
 /// Coarse per-file query — always re-runs on file change (`no_eq`).
@@ -108,15 +162,14 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
-    let path = file.path(db);
-    let (items, lowering_diags, env_var_refs) =
-        baml_compiler2_ast::lower_file_with_path(&tree, Some(path.as_path()));
+    // CST → AST lowering is shared via `file_ast` instead of being redone here.
+    let ast = file_ast(db, file);
 
     let builder = SemanticIndexBuilder::new(db, file);
     builder
-        .with_lowering_diagnostics(lowering_diags)
-        .with_env_var_refs(env_var_refs)
-        .build(&items, file_range)
+        .with_lowering_diagnostics(ast.diagnostics.clone())
+        .with_env_var_refs(ast.env_var_refs.clone())
+        .build(&ast.items, file_range)
 }
 
 // ── Projection helpers ────────────────────────────────────────────────────────
