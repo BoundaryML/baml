@@ -316,7 +316,10 @@ async fn associated_type_projection_in_throws_position_runs() {
             let generic_result = call_value(AlwaysFails {}) catch (e) {
                 Boom => "generic:" + e.message
             }
-            return default_result + "|" + generic_result
+            // The catch arms make these `int | string` (the int is the
+            // non-throwing value); render explicitly — a mixed union is not
+            // a valid concat operand.
+            return default_result.to_string() + "|" + generic_result.to_string()
         }
         "#
     );
