@@ -29,13 +29,13 @@ use std::{
 };
 
 use baml_codegen_types::{Class, Enum, Function, Name, Symbol, SymbolPool, Ty};
-pub use baml_codegen_types::{NamingConvention, OutputType};
 
 use crate::naming::{BamlFqn, CppName, CppNameKind, CppNames, GeneratorIdent, NameRequest};
 
-/// A user BAML source file as it should appear in the emitter's
-/// inlined-baml output. `rel_path` is relative to the `baml_src/` root.
-pub type UserBamlFile = (PathBuf, String);
+/// A user BAML source path as it should appear in the emitter's
+/// inlined-baml output, relative to the `baml_src/` root. Only the path is
+/// embedded (as a reference comment); the runtime payload is bytecode.
+pub type UserBamlFile = PathBuf;
 
 /// Build the C++ SDK output tree for `pool`. Returned paths are relative to
 /// the `baml_sdk/` output root.
@@ -43,7 +43,6 @@ pub fn to_source_code_with_bytecode(
     pool: &SymbolPool,
     user_baml_files: &[UserBamlFile],
     baml_bytecode: &[u8],
-    _naming_convention: NamingConvention,
 ) -> HashMap<PathBuf, String> {
     let mut skipped: Vec<String> = Vec::new();
 
@@ -68,10 +67,9 @@ pub fn to_source_code_with_bytecode(
         }
     }
 
-    // Pass 2: class fields (and recursive-alias wrapper structs), to a
-    // fixed point so field dependencies resolve in emission (= declaration)
-    // order. `$stream` companions emit like any class; the naming layer
-    // routes them under stream_types::.
+    // Pass 2: classes, recursive-alias wrapper structs, and `using`
+    // aliases, to a fixed point so declaration dependencies resolve in
+    // emission (= declaration) order.
     let emit_type = |name: &Name,
                      emitted_types: &BTreeSet<Name>,
                      boxed: &BTreeSet<Name>|
@@ -676,7 +674,7 @@ fn emit_alias_using(
 }
 
 // ---------------------------------------------------------------------------
-// Callables (free functions and methods share this shape)
+// Callables (free functions)
 // ---------------------------------------------------------------------------
 
 struct EmittedParam {
@@ -808,11 +806,10 @@ enum Translated {
     Unsupported(String),
 }
 
-/// Slice-1..4 type table: primitives, containers, null-normalized optionals,
-/// variants, emitted classes/enums (with generic instantiations), transparent
-/// aliases, boxed cycle references, and in-scope `TypeVars`. Everything else is
-/// unsupported here and the surrounding symbol is skipped (reported, not
-/// silently dropped).
+/// The step-8 type table: primitives, containers, null-normalized
+/// optionals, emitted classes/enums, named aliases, and boxed cycle
+/// references. Everything else is unsupported here and the surrounding
+/// symbol is skipped (reported, not silently dropped).
 fn translate_ty(
     pool: &SymbolPool,
     names: &CppNames,
@@ -903,12 +900,12 @@ fn translate_ty(
             };
         }
         Ty::Class(name, args, _) => {
-            let mut translated_args = Vec::new();
-            for arg in args {
-                match translate_ty(pool, names, arg, emitted_types, boxed) {
-                    Translated::Cpp(t) => translated_args.push(t),
-                    other => return other,
-                }
+            // Type args occur only on generic-class instantiations, and
+            // generic classes never emit this slice.
+            if !args.is_empty() {
+                return Translated::Unsupported(
+                    "generic class instantiation (post-step-8)".to_string(),
+                );
             }
             // Cycle members box their in-cycle class references: a Box only
             // needs the forward declaration, so no ordering constraint.
@@ -920,15 +917,10 @@ fn translate_ty(
             } else {
                 return Translated::NotYet;
             };
-            let spelled = if translated_args.is_empty() {
-                base
-            } else {
-                format!("{base}<{}>", translated_args.join(", "))
-            };
             if boxed.contains(name) {
-                return Translated::Cpp(format!("::baml::Box<{spelled}>"));
+                return Translated::Cpp(format!("::baml::Box<{base}>"));
             }
-            return Translated::Cpp(spelled);
+            return Translated::Cpp(base);
         }
         Ty::List(inner, _) => match translate_ty(pool, names, inner, emitted_types, boxed) {
             Translated::Cpp(inner) => format!("std::vector<{inner}>"),
@@ -1092,10 +1084,8 @@ fn render_opts_struct(buf: &mut String, indent: &str, f: &EmittedFn) {
     let _ = writeln!(buf, "{indent}}};");
 }
 
-/// Emits one binding body: runtime init, type args (class params first, then
-/// the callable's own — De Bruijn order), self (for instance methods),
-/// required args, set optional args, then the call. `self_type` is the
-/// receiver's parameterized C++ spelling for instance methods.
+/// Emits one binding body: runtime init, required args, set optional args,
+/// then the synchronous call.
 fn render_body(buf: &mut String, indent: &str, f: &EmittedFn) {
     let args = GeneratorIdent::ArgsLocal.token();
     let w = GeneratorIdent::WriterParam.token();
@@ -1146,9 +1136,7 @@ fn render_header(
         "// Generated by sdkgen_cpp - do not edit.\n\
          #ifndef BAML_SDK_H_\n\
          #define BAML_SDK_H_\n\n\
-         #include <array>\n\
          #include <cstdint>\n\
-         #include <functional>\n\
          #include <unordered_map>\n\
          #include <optional>\n\
          #include <string>\n\
@@ -1504,7 +1492,7 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) ->
     let mut buf = String::new();
     buf.push_str(
         "// Generated by sdkgen_cpp - do not edit. Embedded BAML bytecode (the\n\
-         // runtime payload), the original sources (reference only), and lazy\n\
+         // runtime payload), the source file list (reference only), and lazy\n\
          // runtime initialization.\n\
          #include <cstddef>\n\
          #include <cstdint>\n\
@@ -1515,7 +1503,7 @@ fn render_inlinedbaml(user_baml_files: &[UserBamlFile], baml_bytecode: &[u8]) ->
     );
     let detail = GeneratorIdent::DetailNamespace.token();
     let _ = writeln!(buf, "namespace {detail} {{");
-    for (rel_path, _) in user_baml_files {
+    for rel_path in user_baml_files {
         let path = rel_path.to_string_lossy().replace('\\', "/");
         let _ = writeln!(buf, "// source: {path}");
     }

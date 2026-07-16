@@ -4,7 +4,6 @@
 #include <baml/detail/loader.h>
 #include <baml_cffi.h>
 
-#include <cstdint>
 #include <string>
 
 namespace baml {
@@ -31,10 +30,6 @@ class OwnedBuffer {
 
   ~OwnedBuffer() { Release(); }
 
-  const uint8_t* data() const {
-    return reinterpret_cast<const uint8_t*>(buf_.ptr);
-  }
-  size_t size() const { return buf_.len; }
   bool empty() const { return buf_.ptr == nullptr || buf_.len == 0; }
 
   std::string to_string() const {

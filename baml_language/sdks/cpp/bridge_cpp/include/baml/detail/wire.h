@@ -76,7 +76,6 @@ class Writer {
   }
 
   const std::string& bytes() const { return buf_; }
-  bool empty() const { return buf_.empty(); }
 
  private:
   std::string buf_;

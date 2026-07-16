@@ -213,8 +213,6 @@ inline void* ResolveSymbol(void* library, const char* name) {
 
 struct LoadedApi {
   const BamlApiV1* table = nullptr;
-  void* library = nullptr;
-  std::string path;
 };
 
 // Loads the runtime and resolves the v1 table. Runs once; throws
@@ -310,7 +308,9 @@ inline const LoadedApi& LoadApi() {
     }
 
     ApiLoadedFlag() = true;
-    return LoadedApi{table, library, chosen};
+    // The library handle is deliberately dropped: the runtime is never
+    // dlclosed (engine threads may outlive any unload point).
+    return LoadedApi{table};
   }();
   return loaded;
 }

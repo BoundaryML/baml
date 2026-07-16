@@ -10,15 +10,14 @@ Headers use `.h`, sources use `.cc`, include guards use the Google
 Functions are PascalCase except the following, all sanctioned by the Google
 guide itself:
 
-1. Accessors returning stored state keep snake_case: `key()`,
-   `handle_type()`, `hex()`, `message()`, `class_name()`, `baml_trace()`,
-   `payload()`, `call_id()`, `bytes()`.
+1. Accessors returning stored state keep snake_case: `message()`,
+   `class_name()`, `baml_trace()`, `payload()`, `bytes()`, `code()`.
 2. std-mimicking vocabulary API keeps std spelling: `Arg` (`is_set`,
    `is_unset`, `value`), `Box`/`OptionalBox` (`has_value`, `operator*`,
    `operator->`), `OwnedBuffer` (`data`, `size`, `empty`, `to_string`),
    `BamlError` (`is<T>`, `get<T>`, `what`), `unset_t`/`unset`.
-3. Type traits keep std spelling: `is_std_optional`, `is_arg`, `arg_inner`,
-   `has_set_opt1`, `has_set_opt3`.
+3. Type traits keep std spelling: `is_std_optional`, `has_set_opt1`,
+   `has_set_opt3`.
 4. `extern "C"` symbols keep snake_case (C ABI): `baml_cpp_result_trampoline`.
 5. Generated identifiers derived from BAML source names are unchanged,
    including derived names: the opts struct for function `probe` is

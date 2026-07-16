@@ -9,10 +9,7 @@
 #include <sstream>
 #include <string>
 
-using baml_sdk::docs::Doc;
-using baml_sdk::docs::Note;
 using baml_sdk::docs::Priority;
-using baml_sdk::docs::Sentiment;
 
 static std::string HeaderText() {
   std::ifstream in("baml_sdk/include/baml_sdk.h");

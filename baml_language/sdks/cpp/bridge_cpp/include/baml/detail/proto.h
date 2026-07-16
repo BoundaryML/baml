@@ -50,16 +50,6 @@ struct OutboundValue {
   std::vector<std::pair<std::string, OutboundValue>> fields;  // Class / Map
   std::vector<OutboundValue> items;                           // List
 
-  uint64_t handle_key = 0;
-  int32_t handle_type = 0;
-
-  // Media: which source variant is set is encoded in media_source.
-  enum class MediaSource { None, Url, Base64, File };
-  int32_t media_kind = 0;
-  std::string media_mime;
-  MediaSource media_source = MediaSource::None;
-  std::string media_value;
-
   const char* KindName() const {
     switch (kind) {
       case Kind::Null:
@@ -199,7 +189,6 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
         wire::Reader cls = r.LenPayload();
         uint32_t cf;
         wire::WireType cwt;
-        std::string raw;
         // Re-walk: name = 1, fields (entries) = 2, type_args = 3.
         std::vector<std::pair<std::string, OutboundValue>> fields;
         while (cls.Next(cf, cwt)) {
@@ -230,8 +219,8 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
               break;
             }
             default:
-              cls.Skip(cwt);
-              break;  // type_args: consumed by codegen later
+              cls.Skip(cwt);  // incl. type_args (unused this slice)
+              break;
           }
         }
         v.fields = std::move(fields);
@@ -297,58 +286,15 @@ inline OutboundValue ParseOutboundValue(wire::Reader r) {
         }
         break;
       }
-      case 16: {  // handle_value { key = 1, handle_type = 2, ty = 3 }
+      case 16:  // handle_value: no handle-typed surface this slice; the
+                // kind is kept so a mismatch reports "handle", not "null".
         v.kind = OutboundValue::Kind::Handle;
-        wire::Reader h = r.LenPayload();
-        uint32_t hf;
-        wire::WireType hwt;
-        while (h.Next(hf, hwt)) {
-          switch (hf) {
-            case 1:
-              v.handle_key = h.Varint();
-              break;
-            case 2:
-              v.handle_type = static_cast<int32_t>(h.Varint());
-              break;
-            default:
-              h.Skip(hwt);
-              break;
-          }
-        }
+        r.Skip(wt);
         break;
-      }
-      case 17: {  // media_value
+      case 17:  // media_value: same tag-and-skip treatment as handles.
         v.kind = OutboundValue::Kind::Media;
-        wire::Reader m = r.LenPayload();
-        uint32_t mf;
-        wire::WireType mwt;
-        while (m.Next(mf, mwt)) {
-          switch (mf) {
-            case 1:
-              v.media_kind = static_cast<int32_t>(m.Varint());
-              break;
-            case 2:
-              v.media_mime = m.LenString();
-              break;
-            case 3:
-              v.media_source = OutboundValue::MediaSource::Url;
-              v.media_value = m.LenString();
-              break;
-            case 4:
-              v.media_source = OutboundValue::MediaSource::Base64;
-              v.media_value = m.LenString();
-              break;
-            case 5:
-              v.media_source = OutboundValue::MediaSource::File;
-              v.media_value = m.LenString();
-              break;
-            default:
-              m.Skip(mwt);
-              break;
-          }
-        }
+        r.Skip(wt);
         break;
-      }
       case 19: {  // uint8array_value
         wire::Reader b = r.LenPayload();
         v.kind = OutboundValue::Kind::Bytes;
@@ -460,11 +406,6 @@ class ArgsEncoder {
     entry.StringField(1, name);
     entry.MessageField(6, value_msg);
     args_.MessageField(1, entry);  // CallFunctionArgs.kwargs
-  }
-
-  // Adds an argument whose value is BAML null (absent oneof).
-  void AddNullArg(const std::string& name) {
-    AddArg(name, [](wire::Writer&) {});
   }
 
   std::string Finish(uint64_t call_id) {

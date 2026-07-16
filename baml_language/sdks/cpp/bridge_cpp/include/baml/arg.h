@@ -13,7 +13,6 @@ namespace baml {
 // std::optional, so nullability uses only std vocabulary:
 //   null         -> std::monostate
 //   T | null     -> std::optional<T>
-//   A | B | null -> std::optional<std::variant<A, B>>
 
 // Explicit spelling for the unset state of an optional argument (Python's
 // UNSET analog). Omitting the setter is equivalent.

@@ -1,17 +1,12 @@
-// Roundtrip coverage for the aliases suite -- type aliases (incl. recursive).
+// Roundtrip coverage for the aliases suite.
 // Port of type_shapes/customizable/roundtrip_tests/test_aliases.py.
-//
-// Non-recursive aliases resolve transparently (StringList is
-// std::vector<std::string>); recursive aliases become named wrapper
-// structs whose self-references are boxed, so `RecList = int | RecList[]`
-// is `struct RecList { variant<int64_t, vector<Box<RecList>>> value; }`.
+// Non-recursive aliases emit `using` declarations; the fixture's recursive
+// alias (RecList) has a union body, so it is skipped this slice.
 #include <baml_sdk.h>
 #include <baml_test.h>
 
-#include <cstdint>
 #include <string>
 #include <type_traits>
-#include <variant>
 #include <vector>
 
 namespace aliases = baml_sdk::aliases;

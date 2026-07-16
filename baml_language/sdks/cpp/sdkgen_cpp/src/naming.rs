@@ -18,7 +18,7 @@
 //! Rendering policy (decision 2a): namespace-scoped identifiers always
 //! render fully qualified (`::baml_sdk::ns::X`), which is immune to
 //! shadowing and ADL; owner-scoped identifiers (parameters, fields, enum
-//! variants, methods in their declaration scope, `TypeVar`s) render bare.
+//! variants) render bare.
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -54,7 +54,7 @@ pub(crate) fn source_ns(symbol: &Name) -> Vec<Box<str>> {
 // ---------------------------------------------------------------------------
 
 /// A BAML identity: the owning symbol plus member path (parameter, field,
-/// variant, method, or synthesized member such as an opts struct).
+/// variant, or synthesized member such as an opts struct).
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct BamlFqn {
     pub(crate) symbol: Name,
@@ -206,8 +206,7 @@ impl NameRequest {
 pub(crate) enum BamlWireName {
     /// A symbol identity: renders as the full BAML FQN (`user.ns.fn`).
     Symbol(Name),
-    /// A member key (parameter name, field name, enum variant value,
-    /// `TypeVar` name).
+    /// A member key (parameter name, field name, enum variant value).
     Key(Box<str>),
 }
 

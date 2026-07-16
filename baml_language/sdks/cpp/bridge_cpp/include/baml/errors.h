@@ -2,7 +2,6 @@
 #define BAML_ERRORS_H_
 
 #include <cstdint>
-#include <exception>
 #include <stdexcept>
 #include <string>
 #include <utility>

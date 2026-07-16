@@ -10,7 +10,7 @@ name: BAML SDK Release - Verify C++
 # downloads the final `bridge-cffi-<target>` artifact, renames it to the
 # canonical loader filename, compiles the in-repo bridge consumer smoke
 # (runtime_smoke.cc: load via BAML_RUNTIME_PATH, ABI-table validation,
-# register_bridge, end-to-end calls, host callables), runs it against the
+# register_bridge, bytecode-init error surface), runs it against the
 # artifact, and asserts the canonical version. musl runs inside a real
 # Alpine userspace; Windows compiles with MSVC.
 

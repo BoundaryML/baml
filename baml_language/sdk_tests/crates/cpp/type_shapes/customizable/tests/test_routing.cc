@@ -1,6 +1,6 @@
 // Cross-namespace routing-rules coverage: root, a, a::b, lorem, ipsum.
 // Port of roundtrip_tests/test_routing.py (the baml.http.Response round
-// trips stay with the streams/handles slice, as in Python).
+// trips are post-step-8, as in Python).
 #include <baml_sdk.h>
 #include <baml_test.h>
 

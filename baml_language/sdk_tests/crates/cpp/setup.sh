@@ -6,7 +6,7 @@
 # sdk_test_cpp test. For plain `cargo test` (no nextest) run this manually.
 #
 # One responsibility: build the dev-profile bridge_cffi cdylib that every
-# fixture's test.sh links against (target/debug/libbridge_cffi.*). The dev
+# fixture's test.sh dlopens at run time (target/debug/libbridge_cffi.*). The dev
 # profile has panic=unwind by default, matching the release-bridge-cffi
 # shipping profile's unwind requirement. Features mirror the workspace test
 # convention (ring-crypto instead of the default aws-crypto).

@@ -10,7 +10,6 @@
 #include <baml/detail/proto.h>
 #include <baml/detail/wire.h>
 #include <baml/errors.h>
-#include <baml_cffi.h>
 
 #include <cstdint>
 #include <cstdlib>

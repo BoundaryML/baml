@@ -19,8 +19,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use sdkgen_cpp::NamingConvention;
-
 use crate::{
     BuildDiagnostics, discover_fixtures, emit_cargo_line, fixtures_root_from_manifest,
     load_fixture, symlink_customizable, watch_dir,
@@ -88,15 +86,14 @@ fn codegen_fixture(
     fs::create_dir_all(&baml_sdk).unwrap();
 
     let pool = loaded.pool;
-    let user_baml_files = loaded.user_baml_files;
+    let user_baml_paths: Vec<sdkgen_cpp::UserBamlFile> = loaded
+        .user_baml_files
+        .into_iter()
+        .map(|(rel, _)| rel)
+        .collect();
     let baml_bytecode = loaded.baml_bytecode;
     let codegen_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        sdkgen_cpp::to_source_code_with_bytecode(
-            &pool,
-            &user_baml_files,
-            &baml_bytecode,
-            NamingConvention::PreserveCase,
-        )
+        sdkgen_cpp::to_source_code_with_bytecode(&pool, &user_baml_paths, &baml_bytecode)
     }));
     match codegen_result {
         Ok(output) => {

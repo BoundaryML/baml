@@ -13,7 +13,6 @@
 
 #include <cstdint>
 #include <string>
-#include <utility>
 
 namespace baml {
 namespace detail {

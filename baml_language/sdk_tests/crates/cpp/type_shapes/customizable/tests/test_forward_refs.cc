@@ -8,8 +8,6 @@
 #include <baml_sdk.h>
 #include <baml_test.h>
 
-#include <variant>
-
 namespace forward_refs = baml_sdk::forward_refs;
 using forward_refs::Other;
 
