@@ -1,13 +1,26 @@
 // Roundtrip coverage for `Baml.lists` — port of python_pydantic2
 // `roundtrip_tests/test_lists.py`.
 //
-// Not yet ported (arrive with their phases): test_round_trip_union_list
-// (generated union enums, Phase 3), test_round_trip_list_container
-// (classes, Phase 2).
 import XCTest
 import Baml
+import BamlBridge
 
 final class TestLists: XCTestCase {
+    func test_round_trip_union_list() throws {
+        // `(int | string)[]` → `[BamlUnion2<Int, String>]`.
+        let xs: [BamlUnion2<Int, String>] = [.t0(1), .t1("two"), .t0(3)]
+        XCTAssertEqual(try Baml.lists.round_trip_union_list(xs: xs), xs)
+    }
+
+    func test_round_trip_list_container() throws {
+        let c = Baml.lists.ListContainer(
+            ints: [1, 2],
+            optional_strings: [nil, "z"],
+            union_list: [.t0(1), .t1("x")]
+        )
+        XCTAssertEqual(try Baml.lists.round_trip_list_container(c: c), c)
+    }
+
     func test_round_trip_ints() throws {
         XCTAssertEqual(try Baml.lists.round_trip_ints(xs: [1, 2, 3]), [1, 2, 3])
     }

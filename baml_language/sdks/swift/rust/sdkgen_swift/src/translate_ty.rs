@@ -84,7 +84,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
             }
             Some(format!("[String: {}]", translate_ty(value, ctx)?))
         }
-        Ty::Union(members) => translate_null_union(members, ctx),
+        Ty::Union(members) => translate_union(members, ctx),
         // Generic classes are Phase 5; non-generic references resolve
         // against the fixpoint's supported set.
         Ty::Class(name, args) => {
@@ -101,16 +101,62 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
     }
 }
 
-/// Collapse a null-bearing union with exactly one other supported
-/// member into `T?`. Any other union shape is unsupported until the
-/// generated-union-enum phase.
-fn translate_null_union(members: &[Ty], ctx: &TranslateCtx) -> Option<String> {
-    let (nulls, non_nulls): (Vec<&Ty>, Vec<&Ty>) =
-        members.iter().partition(|t| matches!(t, Ty::Null));
-    if nulls.is_empty() || non_nulls.len() != 1 {
-        return None;
+/// Largest `BamlUnionN` shipped in the BamlBridge runtime. Wider
+/// unions are unsupported (symbol skipped, soft) until the family is
+/// extended — an additive runtime-library change.
+pub(crate) const MAX_UNION_ARITY: usize = 8;
+
+/// Normalize a union: drop nulls (remembering they were there), dedup
+/// structurally equal members, preserve declaration order — the
+/// canonical arm order every bridge shares.
+pub(crate) fn normalize_union(members: &[Ty]) -> (Vec<Ty>, bool) {
+    let mut nullable = false;
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut non_null: Vec<Ty> = Vec::new();
+    for member in members {
+        if matches!(member, Ty::Null) {
+            nullable = true;
+            continue;
+        }
+        if seen.insert(format!("{member:?}")) {
+            non_null.push(member.clone());
+        }
     }
-    Some(format!("{}?", translate_ty(non_nulls[0], ctx)?))
+    (non_null, nullable)
+}
+
+/// Swift spelling of a union: `BamlUnionN<...>` from the runtime
+/// family — never a generated named type. Null members strip into a
+/// trailing `?`; a single surviving arm collapses to that member.
+fn translate_union(members: &[Ty], ctx: &TranslateCtx) -> Option<String> {
+    let (non_null, nullable) = normalize_union(members);
+    let suffix = if nullable { "?" } else { "" };
+    let arms = translate_union_arms(&non_null, ctx)?;
+    match arms.len() {
+        0 => Some("BamlNull".to_string()),
+        1 => Some(format!("{}{suffix}", arms[0])),
+        n if n <= MAX_UNION_ARITY => {
+            Some(format!("BamlUnion{n}<{}>{suffix}", arms.join(", ")))
+        }
+        _ => None,
+    }
+}
+
+/// Translate each non-null arm, then dedup identical *translated*
+/// types. Structural dedup already ran; translated duplicates only
+/// arise from literal arms sharing a base today (`"draft" | "sent"` →
+/// String, String) — no generics yet — so collapsing loses nothing
+/// host-side (the engine validates values). Revisit when generic
+/// projections can alias distinct arms.
+pub(crate) fn translate_union_arms(non_null: &[Ty], ctx: &TranslateCtx) -> Option<Vec<String>> {
+    let mut arms: Vec<String> = Vec::new();
+    for member in non_null {
+        let ty = translate_ty(member, ctx)?;
+        if !arms.contains(&ty) {
+            arms.push(ty);
+        }
+    }
+    Some(arms)
 }
 
 /// For an optional-argument slot: the `T` in `BamlOptional<T>`. A
@@ -118,9 +164,17 @@ fn translate_null_union(members: &[Ty], ctx: &TranslateCtx) -> Option<String> {
 /// case covers the rest); a non-nullable defaulted type is used as-is.
 pub(crate) fn translate_optional_arg_inner(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
     if let Ty::Union(members) = ty {
-        let non_nulls: Vec<&Ty> = members.iter().filter(|t| !matches!(t, Ty::Null)).collect();
-        if members.len() != non_nulls.len() && non_nulls.len() == 1 {
-            return translate_ty(non_nulls[0], ctx);
+        let (non_null, nullable) = normalize_union(members);
+        if nullable {
+            let arms = translate_union_arms(&non_null, ctx)?;
+            return match arms.len() {
+                0 => Some("BamlNull".to_string()),
+                1 => Some(arms[0].clone()),
+                n if n <= MAX_UNION_ARITY => {
+                    Some(format!("BamlUnion{n}<{}>", arms.join(", ")))
+                }
+                _ => None,
+            };
         }
     }
     translate_ty(ty, ctx)

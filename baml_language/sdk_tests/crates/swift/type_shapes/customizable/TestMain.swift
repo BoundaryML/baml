@@ -5,8 +5,7 @@
 // Python touches every generated namespace module; Swift touches each
 // namespace enum's metatype, which fails to compile if the symbol
 // vanishes. Not yet reachable (no supported symbols emitted, so no
-// namespace enum exists): `media` (media types, Phase 5) and
-// `aliases_consumer` (recursive-union alias field, Phase 3).
+// namespace enum exists): `media` (media types, Phase 5).
 import XCTest
 import Baml
 
@@ -17,6 +16,7 @@ final class TestMain: XCTestCase {
         _ = Baml.literals.self
         _ = Baml.class_refs.self
         _ = Baml.aliases.self
+        _ = Baml.aliases_consumer.self
         _ = Baml.optional.self
         _ = Baml.lists.self
         _ = Baml.maps.self

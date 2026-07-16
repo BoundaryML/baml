@@ -68,7 +68,8 @@ pub(crate) fn render_enum(enum_: &Enum, key: &Name) -> String {
     }
     let _ = write!(
         out,
-        "\n\tpublic func _bamlEncode() -> BamlInboundValue {{\n\
+        "\n\tpublic static var _bamlArmIdentity: String? {{ \"{fqn}\" }}\n\n\
+         \tpublic func _bamlEncode() -> BamlInboundValue {{\n\
          \t\t.baml_enum(\"{fqn}\", rawValue)\n\
          \t}}\n\n\
          \tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{\n\
@@ -144,7 +145,8 @@ pub(crate) fn render_class(
         .join(", ");
     let _ = write!(
         out,
-        "\n\tpublic func _bamlEncode() -> BamlInboundValue {{\n\
+        "\n\tpublic static var _bamlArmIdentity: String? {{ \"{fqn}\" }}\n\n\
+         \tpublic func _bamlEncode() -> BamlInboundValue {{\n\
          \t\t.baml_class(\"{fqn}\", [{field_pairs}])\n\
          \t}}\n"
     );
@@ -321,4 +323,107 @@ pub(crate) fn indent_lines(block: &str, depth: usize) -> String {
         }
     }
     out
+}
+
+/// A recursive union alias (`type RecList = int | RecList[]`) can't be
+/// a `typealias` (no self-reference), so it becomes a nominal
+/// `indirect enum` under the USER'S name with the exact BamlUnionN
+/// surface: positional cases, type-directed inits, accessors, `match`,
+/// `value(as:)`/`holds`/`anyValue`, and the same metadata-first codec.
+pub(crate) fn render_recursive_union_alias(
+    key: &Name,
+    arms: &[Ty],
+    ctx: &TranslateCtx,
+) -> Option<String> {
+    let name = escape_ident(key.bare_name());
+    let arm_tys: Vec<String> = {
+        let mut tys = Vec::new();
+        for arm in arms {
+            let ty = translate_ty(arm, ctx)?;
+            if !tys.contains(&ty) {
+                tys.push(ty);
+            }
+        }
+        tys
+    };
+    let n = arm_tys.len();
+    if n < 2 {
+        return None;
+    }
+
+    let mut out = format!(
+        "/// Recursive union alias — nominal stand-in for BamlUnion{n} (a\n\
+         /// `typealias` can't self-reference); same surface, same codec.\n\
+         public indirect enum {name}: Equatable, Sendable, BamlEncodable, BamlDecodable {{\n"
+    );
+    for (i, ty) in arm_tys.iter().enumerate() {
+        let _ = writeln!(out, "\tcase t{i}({ty})");
+    }
+    out.push('\n');
+    for (i, ty) in arm_tys.iter().enumerate() {
+        let _ = writeln!(out, "\tpublic init(_ value: {ty}) {{ self = .t{i}(value) }}");
+    }
+    out.push('\n');
+    out.push_str("\tpublic var anyValue: Any {\n\t\tswitch self {\n");
+    for i in 0..n {
+        let _ = writeln!(out, "\t\tcase .t{i}(let v): return v");
+    }
+    out.push_str("\t\t}\n\t}\n\n");
+    for (i, ty) in arm_tys.iter().enumerate() {
+        let _ = writeln!(
+            out,
+            "\tpublic var t{i}: {ty}? {{ if case .t{i}(let v) = self {{ return v }} else {{ return nil }} }}"
+        );
+    }
+    out.push('\n');
+    out.push_str("\tpublic func value<T>(as type: T.Type) -> T? { anyValue as? T }\n");
+    out.push_str("\tpublic func holds<T>(_ type: T.Type) -> Bool { value(as: type) != nil }\n\n");
+
+    let match_params = arm_tys
+        .iter()
+        .enumerate()
+        .map(|(i, ty)| format!("t{i} onT{i}: ({ty}) throws -> R"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let _ = writeln!(out, "\tpublic func match<R>({match_params}) rethrows -> R {{");
+    out.push_str("\t\tswitch self {\n");
+    for i in 0..n {
+        let _ = writeln!(out, "\t\tcase .t{i}(let v): return try onT{i}(v)");
+    }
+    out.push_str("\t\t}\n\t}\n\n");
+
+    out.push_str("\tpublic func _bamlEncode() -> BamlInboundValue {\n\t\tswitch self {\n");
+    for i in 0..n {
+        let _ = writeln!(out, "\t\tcase .t{i}(let v): return v._bamlEncode()");
+    }
+    out.push_str("\t\t}\n\t}\n\n");
+
+    let _ = writeln!(
+        out,
+        "\tpublic static func _bamlDecode(_ v: BamlOutboundValue) throws -> {name} {{"
+    );
+    out.push_str("\t\tif let fqn = v.wireClassFQN() {\n");
+    for (i, arm) in arms.iter().enumerate() {
+        if let Ty::Class(class_name, _) = arm {
+            let _ = writeln!(
+                out,
+                "\t\t\tif fqn == \"{class_name}\" {{ return .t{i}(try {}._bamlDecode(v)) }}",
+                arm_tys[i]
+            );
+        }
+    }
+    out.push_str("\t\t}\n");
+    for (i, ty) in arm_tys.iter().enumerate() {
+        let _ = writeln!(
+            out,
+            "\t\tif let value = try? {ty}._bamlDecode(v) {{ return .t{i}(value) }}"
+        );
+    }
+    let _ = write!(
+        out,
+        "\t\tthrow BamlDecodeError.typeMismatch(expected: \"{name}\", got: \"unmatched union value\")\n\
+         \t}}\n\
+         }}\n"
+    );
+    Some(out)
 }

@@ -35,11 +35,11 @@ use std::{
 
 use base64::Engine as _;
 
-use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty};
+use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
 pub use baml_codegen_types::{NamingConvention, OutputType};
 use emit::{RenderedField, indent_lines, render_class, render_enum, render_function,
     render_type_alias, sort_key};
-use translate_ty::{TranslateCtx, translate_ty};
+use translate_ty::{TranslateCtx, normalize_union, translate_ty};
 
 /// Build the Swift SDK output tree using precompiled BAML bytecode as
 /// the runtime payload. Returned paths are relative to the generated
@@ -79,7 +79,7 @@ pub fn to_source_code_with_bytecode(
             Symbol::Enum(enum_) => Some(render_enum(enum_, key)),
             Symbol::TypeAlias(alias) => {
                 if ctx.supported_aliases.contains(&fqn) {
-                    render_type_alias(alias, &ctx)
+                    render_alias(alias, key, &ctx)
                 } else {
                     None
                 }
@@ -147,7 +147,12 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
             Symbol::Enum(_) => {
                 supported_enums.insert(key.to_string());
             }
-            Symbol::TypeAlias(alias) if !alias.recursive => {
+            // Non-recursive aliases become `typealias`; recursive ones
+            // are representable only when union-backed (a nominal
+            // family-shaped enum — `typealias` can't self-reference).
+            Symbol::TypeAlias(alias)
+                if !alias.recursive || recursive_union_alias_arms(alias).is_some() =>
+            {
                 supported_aliases.insert(key.to_string());
             }
             _ => {}
@@ -179,9 +184,7 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
                     }
                 }
                 Symbol::TypeAlias(alias) => {
-                    if supported_aliases.contains(&fqn)
-                        && translate_ty(&alias.resolves_to, &ctx).is_none()
-                    {
+                    if supported_aliases.contains(&fqn) && !alias_definition_ok(alias, &ctx) {
                         supported_aliases.remove(&fqn);
                         changed = true;
                     }
@@ -211,8 +214,12 @@ fn direct_class_targets<'p>(
     match ty {
         Ty::Class(name, args) if args.is_empty() => out.push(name.to_string()),
         Ty::Union(members) => {
-            for member in members {
-                direct_class_targets(member, pool, out);
+            let (non_null, _) = normalize_union(members);
+            // A >=2-arm union renders as an `indirect` BamlUnionN — its
+            // payload is heap-boxed, so it breaks cycles on its own.
+            // Only the Optional collapse (1 arm) stores inline.
+            if non_null.len() == 1 {
+                direct_class_targets(&non_null[0], pool, out);
             }
         }
         Ty::TypeAlias(name) => {
@@ -294,6 +301,42 @@ fn render_supported_class(
         });
     }
     Some(render_class(class, key, &fields))
+}
+
+
+/// `Some(non-null arms)` when this alias is a recursive union with >=2
+/// arms after normalization — the shape that gets a nominal
+/// family-surface enum. Null-bearing recursive union aliases are
+/// unsupported (the nominal enum can't carry the `?`; no fixture).
+fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<Vec<Ty>> {
+    if !alias.recursive {
+        return None;
+    }
+    let Ty::Union(members) = &alias.resolves_to else {
+        return None;
+    };
+    let (non_null, nullable) = normalize_union(members);
+    (!nullable && non_null.len() >= 2 && non_null.len() <= translate_ty::MAX_UNION_ARITY)
+        .then_some(non_null)
+}
+
+/// Can this alias's definition be emitted under `ctx`?
+fn alias_definition_ok(alias: &TypeAlias, ctx: &TranslateCtx) -> bool {
+    if let Some(arms) = recursive_union_alias_arms(alias) {
+        return arms.iter().all(|m| translate_ty(m, ctx).is_some());
+    }
+    !alias.recursive && translate_ty(&alias.resolves_to, ctx).is_some()
+}
+
+/// Emit one supported alias: recursive unions get a nominal enum with
+/// the exact BamlUnionN surface under the USER'S name (never invented);
+/// everything else is a plain `typealias` (union targets spell as
+/// `BamlUnionN<...>` via translate_ty).
+fn render_alias(alias: &TypeAlias, key: &Name, ctx: &TranslateCtx) -> Option<String> {
+    if let Some(arms) = recursive_union_alias_arms(alias) {
+        return emit::render_recursive_union_alias(key, &arms, ctx);
+    }
+    render_type_alias(alias, ctx)
 }
 
 /// Backtick-escape Swift keywords that can appear as BAML identifiers.
@@ -460,10 +503,26 @@ mod tests {
             t(&Ty::List(Box::new(Ty::Union(vec![Ty::String, Ty::Null])))).as_deref(),
             Some("[String?]")
         );
-        // (int | string)[] — not yet
+        // (int | string)[] — family reference, inline, no registry.
         assert_eq!(
-            t(&Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::String])))),
-            None
+            t(&Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::String])))).as_deref(),
+            Some("[BamlUnion2<Int, String>]")
+        );
+        // Same shape is the same type everywhere (structural identity).
+        assert_eq!(
+            t(&Ty::Union(vec![Ty::Int, Ty::String, Ty::Null])).as_deref(),
+            Some("BamlUnion2<Int, String>?")
+        );
+        // int | int → dedup + singleton collapse.
+        assert_eq!(t(&Ty::Union(vec![Ty::Int, Ty::Int])).as_deref(), Some("Int"));
+        // Literal-only unions collapse to their base type — no raw enums.
+        assert_eq!(
+            t(&Ty::Union(vec![
+                Ty::Literal(baml_base::Literal::String("draft".into())),
+                Ty::Literal(baml_base::Literal::String("sent".into())),
+            ]))
+            .as_deref(),
+            Some("String")
         );
         // map with non-string key — not yet
         assert_eq!(

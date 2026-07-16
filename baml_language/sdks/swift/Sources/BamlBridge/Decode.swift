@@ -10,16 +10,34 @@ public struct BamlOutboundValue: Sendable {
         self.raw = raw
     }
 
-    /// Union wrappers never survive into host values (Python discards
-    /// the metadata the same way; Swift's generated union enums will
-    /// consume it in a later phase). Literal wrappers likewise unwrap
-    /// to their base value.
+    /// Union wrappers unwrap for non-union decode paths (Python
+    /// discards the metadata the same way). Union decode reads the
+    /// wrapper FIRST via `unionSelectedArm()` — the metadata names the
+    /// selected arm and is authoritative there.
     var normalized: BamlBridge_Cffi_V1_BamlOutboundValue {
         var current = raw
         while case .unionVariantValue(let variant) = current.value {
             current = variant.value
         }
         return current
+    }
+
+    /// The wire's name for the selected union arm (`value_option_name`
+    /// on the outermost `union_variant_value` wrapper), or nil when the
+    /// value arrived without a wrapper / with an empty name.
+    public func unionSelectedArm() -> String? {
+        guard case .unionVariantValue(let variant) = raw.value else { return nil }
+        let name = variant.valueOptionName
+        return name.isEmpty ? nil : name
+    }
+
+    /// The wire class FQN if this value's arm is a class, else nil.
+    /// Used by union decode to pick class arms by identity.
+    public func wireClassFQN() -> String? {
+        if case .classValue(let cls) = normalized.value {
+            return cls.name
+        }
+        return nil
     }
 }
 
@@ -46,6 +64,18 @@ public enum BamlDecodeError: Error, CustomStringConvertible {
 /// on `BamlRuntime.call` picks the conformance.
 public protocol BamlDecodable {
     static func _bamlDecode(_ value: BamlOutboundValue) throws -> Self
+
+    /// Canonical BAML identity of this type when it appears as a union
+    /// arm — matched against the wire's selected-arm name so union
+    /// decode is metadata-driven, not guessed. `nil` opts into the
+    /// structural fallback. A protocol REQUIREMENT (not just an
+    /// extension member) so generic union decode dispatches to the
+    /// concrete type's witness.
+    static var _bamlArmIdentity: String? { get }
+}
+
+extension BamlDecodable {
+    public static var _bamlArmIdentity: String? { nil }
 }
 
 private func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
@@ -72,6 +102,8 @@ private func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
 }
 
 extension Int: BamlDecodable {
+    public static var _bamlArmIdentity: String? { "int" }
+
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Int {
         let raw = value.normalized
         switch raw.value {
@@ -92,6 +124,8 @@ extension Int: BamlDecodable {
 }
 
 extension Double: BamlDecodable {
+    public static var _bamlArmIdentity: String? { "float" }
+
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Double {
         let raw = value.normalized
         if case .floatValue(let f) = raw.value { return f }
@@ -100,6 +134,8 @@ extension Double: BamlDecodable {
 }
 
 extension Bool: BamlDecodable {
+    public static var _bamlArmIdentity: String? { "bool" }
+
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Bool {
         let raw = value.normalized
         switch raw.value {
@@ -114,6 +150,8 @@ extension Bool: BamlDecodable {
 }
 
 extension String: BamlDecodable {
+    public static var _bamlArmIdentity: String? { "string" }
+
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> String {
         let raw = value.normalized
         switch raw.value {
@@ -128,6 +166,8 @@ extension String: BamlDecodable {
 }
 
 extension Data: BamlDecodable {
+    public static var _bamlArmIdentity: String? { "uint8array" }
+
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Data {
         let raw = value.normalized
         if case .uint8ArrayValue(let d) = raw.value { return d }
