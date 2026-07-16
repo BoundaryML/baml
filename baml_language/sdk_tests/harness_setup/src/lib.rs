@@ -230,7 +230,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
 }
 
 /// Copy every file in `customizable_dir` into `dst_dir`. Used by
-/// the typescript_node target: symlinks would force every parallel
+/// the TypeScript target: symlinks would force every parallel
 /// test process to either set `NODE_OPTIONS=--preserve-symlinks`
 /// (which breaks the pnpm CLI, itself a symlinked node script) or
 /// let node follow the symlink and resolve `node_modules` from

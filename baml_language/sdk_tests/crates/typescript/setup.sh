@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Per-fixture pnpm setup for the sdk_test_typescript_node crate — Unix.
+# Per-fixture pnpm setup for the sdk_test_typescript crate — Unix.
 # Windows uses the parallel `setup.ps1`; keep the two in sync.
 #
 # Invoked automatically by `cargo nextest run` via the setup-script
 # binding in `baml_language/.config/nextest.toml` — whenever the run
-# selects any sdk_test_typescript_node test. Run the suite with
+# selects any sdk_test_typescript test. Run the suite with
 # `cargo nextest run`, not `cargo test`: plain `cargo test` skips this
 # script and can't pass `setup_guard::ran` (see ../../README.md).
 #
 # This script turns those generated/ dirs into a real `node_modules/`
-# tree and builds the native TypeScript bridge. Idempotent — re-runs are
-# no-ops in steady state. Web runtime activation lands in a child change.
+# tree, builds both TypeScript bridges, and installs the Chromium used by
+# the browser runner. Idempotent — re-runs are no-ops in steady state.
 
 set -euo pipefail
 
@@ -19,6 +19,7 @@ cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/typescript
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 REPO_ROOT="$(cd "$WORKSPACE_ROOT/.." && pwd)"
 BRIDGE_TYPESCRIPT="$WORKSPACE_ROOT/sdks/typescript/bridge_typescript"
+BRIDGE_TYPESCRIPT_WEB="$WORKSPACE_ROOT/sdks/typescript/bridge_typescript_web"
 
 # Shared pnpm store under target/ so per-fixture installs hardlink from
 # one location rather than fetching N copies.
@@ -45,7 +46,13 @@ echo "==> pnpm install in sdks/typescript/bridge_typescript"
 echo "==> pnpm build:debug in sdks/typescript/bridge_typescript"
 (cd "$BRIDGE_TYPESCRIPT" && pnpm build:debug)
 
-# 4. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
+# 4. Web/Wasm bridge used by both the browser and workerd runners.
+echo "==> pnpm install in sdks/typescript/bridge_typescript_web"
+(cd "$BRIDGE_TYPESCRIPT_WEB" && pnpm install --ignore-workspace --ignore-scripts)
+echo "==> pnpm build:debug in sdks/typescript/bridge_typescript_web"
+(cd "$BRIDGE_TYPESCRIPT_WEB" && pnpm build:debug)
+
+# 5. Per-fixture `pnpm install`. `--ignore-workspace` is required so pnpm
 #    doesn't walk up to the repo-root workspace and skip the install.
 #    The per-fixture `package.json` `file:`-points at bridge_typescript, so
 #    the install resolves the dev toolchain (vitest, typescript)
@@ -62,7 +69,15 @@ for fixture_dir in */generated; do
     # runtime). Without this flag pnpm 9+ exits non-zero with
     # ERR_PNPM_IGNORED_BUILDS, which `set -e` would treat as a fatal abort.
     (cd "$fixture_dir" && pnpm install --force --ignore-workspace --ignore-scripts)
-    (cd "$fixture_dir" && pnpm update @boundaryml/baml-bridge --force --ignore-workspace --ignore-scripts)
+    (cd "$fixture_dir" && pnpm update @boundaryml/baml-bridge @boundaryml/baml-bridge-web --force --ignore-workspace --ignore-scripts)
+done
+
+# 6. Install the browser once from any generated fixture package.
+for fixture_dir in */generated; do
+    [[ -d "$fixture_dir" ]] || continue
+    echo "==> playwright install chromium"
+    (cd "$fixture_dir" && pnpm exec playwright install chromium)
+    break
 done
 
 # Per-run breadcrumb for the `setup_guard::ran` test. See the
@@ -70,5 +85,5 @@ done
 # rationale. Keep the var name in sync with SETUP_ENV_VAR in
 # harness_setup/src/typescript.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
-    echo "SDK_TEST_TYPESCRIPT_NODE_SETUP=1" >> "$NEXTEST_ENV"
+    echo "SDK_TEST_TYPESCRIPT_SETUP=1" >> "$NEXTEST_ENV"
 fi

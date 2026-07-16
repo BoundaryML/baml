@@ -5,6 +5,7 @@ members = [
   "sdks/cpp/sdkgen_cpp",
   "sdks/go/sdkgen_go",
   "sdks/typescript/bridge_typescript",
+  "sdks/typescript/bridge_typescript_web",
   "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
   "sdk_tests/harness_setup",

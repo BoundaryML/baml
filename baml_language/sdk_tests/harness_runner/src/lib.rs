@@ -434,7 +434,7 @@ pub fn __check_setup_ran(env_var: &str) {
 ///
 /// // An optional setup guard may be ignored with the same reason as its suite.
 /// ::sdk_test_harness_runner::setup_guard!(
-///     ignore = "target temporarily disabled", "SDK_TEST_TYPESCRIPT_NODE_SETUP");
+///     ignore = "target temporarily disabled", "SDK_TEST_TYPESCRIPT_SETUP");
 /// ```
 #[macro_export]
 macro_rules! setup_guard {
@@ -527,19 +527,19 @@ pub mod cpp {
     pub use crate::cpp_test_suite as test_suite;
 }
 
-/// Node.js + TypeScript generator's test-side glue. Invoked from
+/// TypeScript runtime matrix test-side glue. Invoked from
 /// `crates/typescript/src/lib.rs` as
-/// `sdk_test_harness_runner::typescript_node::test_suite!()`.
-pub mod typescript_node {
-    /// `include!`s `OUT_DIR/typescript_node_tests.rs` — the
+/// `sdk_test_harness_runner::typescript::test_suite!()`.
+pub mod typescript {
+    /// `include!`s `OUT_DIR/typescript_tests.rs` — the
     /// per-fixture scaffold emitted by
     /// `sdk_test_harness_setup::typescript::run_all`.
     #[macro_export]
-    macro_rules! typescript_node_test_suite {
+    macro_rules! typescript_test_suite {
         () => {
-            include!(concat!(env!("OUT_DIR"), "/typescript_node_tests.rs"));
+            include!(concat!(env!("OUT_DIR"), "/typescript_tests.rs"));
         };
     }
 
-    pub use crate::typescript_node_test_suite as test_suite;
+    pub use crate::typescript_test_suite as test_suite;
 }

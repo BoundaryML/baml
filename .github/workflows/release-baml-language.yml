@@ -392,6 +392,16 @@ jobs:
       release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
       source_sha: ${{ needs.plan.outputs.source_sha }}
 
+  build-web-sdk:
+    name: Build Web SDK
+    needs: [plan]
+    uses: ./.github/workflows/build2-web-sdk.reusable.yaml
+    permissions:
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+
   # Language-neutral engine cdylib, shared by every dylib-loader SDK.
   build-bridge-cffi:
     name: Build bridge_cffi cdylib
@@ -425,6 +435,7 @@ jobs:
       - build-wrapper
       - build-python-sdk
       - build-nodejs-sdk
+      - build-web-sdk
       - build-bridge-cffi
       - verify-cpp-sdk
     steps:
@@ -471,6 +482,20 @@ jobs:
     if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
     # npm OIDC is pinned to release-baml-language.yml
     uses: ./.github/workflows/publish2-nodejs-sdk.yaml
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      release_plan_json: ${{ needs.plan.outputs.release_plan_json }}
+      source_sha: ${{ needs.plan.outputs.source_sha }}
+      channel: ${{ needs.plan.outputs.channel }}
+
+  publish-web-sdk:
+    name: Publish Web npm
+    needs: [plan, build-web-sdk, all-builds]
+    if: ${{ needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    # npm OIDC is pinned to release-baml-language.yml
+    uses: ./.github/workflows/publish2-web-sdk.yaml
     permissions:
       id-token: write
       contents: read
@@ -618,8 +643,8 @@ jobs:
 
   publish-pkg-boundaryml-com:
     name: Publish pkg.boundaryml.com manifests
-    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-wrapper-release, publish-homebrew, publish-aur]
-    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
+    needs: [plan, all-builds, publish-pypi, publish-nodejs-sdk, publish-web-sdk, publish-toolchain-release, publish-bridge-cffi-release, publish-wrapper-release, publish-homebrew, publish-aur]
+    if: ${{ always() && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' && needs.publish-pypi.result == 'success' && needs.publish-nodejs-sdk.result == 'success' && needs.publish-web-sdk.result == 'success' && needs.publish-toolchain-release.result == 'success' && needs.publish-bridge-cffi-release.result == 'success' && (needs.plan.outputs.wrapper_changed != 'true' || (needs.publish-wrapper-release.result == 'success' && needs.publish-homebrew.result == 'success' && needs.publish-aur.result == 'success')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
