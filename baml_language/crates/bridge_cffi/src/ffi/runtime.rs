@@ -2,9 +2,10 @@
 
 use std::{collections::HashMap, ffi::CStr, panic::AssertUnwindSafe, sync::OnceLock};
 
+use super::super::panic::ffi_safe_ptr;
 use crate::{
     Buffer, initialize_runtime,
-    initialize_runtime_from_bytecode as initialize_runtime_from_bytecode_impl, panic::ffi_safe_ptr,
+    initialize_runtime_from_bytecode as initialize_runtime_from_bytecode_impl,
 };
 
 /// Returns the BAML version as a Buffer containing raw UTF-8 bytes.

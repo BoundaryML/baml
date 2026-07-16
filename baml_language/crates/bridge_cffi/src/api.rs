@@ -6,10 +6,11 @@
 
 use bex_project::HostReleaseFn;
 
-use crate::{
-    BamlBridgeInfoV1, Buffer,
+use super::{
+    BamlBridgeInfoV1,
     ffi::{callbacks::CallbackFn, handle::BamlCffiStatus, host_value::HostDispatchFn},
 };
+use crate::Buffer;
 
 /// First version of the shared BAML C API.
 ///
