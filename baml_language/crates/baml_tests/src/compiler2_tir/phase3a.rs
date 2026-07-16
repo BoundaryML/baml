@@ -99,7 +99,7 @@ fn explicit_local_id_has_targeted_call_diagnostics() {
         (
             "missing_ordinary_arg",
             "target($id = id)",
-            "missing required argument `x`",
+            "expected 1 argument(s), got 0",
         ),
     ];
 
@@ -120,6 +120,30 @@ function main(id: boundary.LocalId) -> int {{
             "[{label}] expected {expected:?}, got:\n{rendered}"
         );
     }
+}
+
+#[test]
+fn explicit_local_id_preserves_real_named_argument_diagnostics() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+function target(a: int, b: int) -> int { a + b }
+function main(id: boundary.LocalId) -> int {
+  target(a = 1, $id = id)
+}
+"#,
+    );
+
+    let rendered = render_tir(&db, file);
+    assert!(
+        rendered.contains("missing required argument `b`"),
+        "a real named argument must retain per-parameter diagnostics:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("expected 2 argument(s), got 1"),
+        "the trailing LocalId must not hide the real named argument:\n{rendered}"
+    );
 }
 
 #[test]

@@ -2393,8 +2393,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 })
                 .count()
         });
-        let has_named_args =
-            call_args.is_some_and(|call_args| call_args.iter().any(|arg| arg.label.is_some()));
+        let has_named_args = call_args.is_some_and(|call_args| {
+            call_args.iter().any(|arg| {
+                arg.label
+                    .as_ref()
+                    .is_some_and(|label| label.as_str() != "$id")
+            })
+        });
         for (arg_index, arg_expr) in args.iter().copied().enumerate() {
             let label = call_args
                 .and_then(|call_args| call_args.get(arg_index))

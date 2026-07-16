@@ -32,12 +32,12 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] error: missing required argument `x`
+  [type] error: expected 1 argument(s), got 0
     ╭─[ runtime_id.baml:31:5 ]
     │
  31 │     takes_int($id = boundary.id())
     │     ───────────────┬──────────────  
-    │                    ╰──────────────── missing required argument `x`
+    │                    ╰──────────────── expected 1 argument(s), got 0
     │ 
     │ Note: Error code: E0005
 ────╯

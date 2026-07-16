@@ -31,7 +31,7 @@ function user.call_site_label() -> int throws never {
   { : int
     takes_int($id = boundary.id()) : int
   }
-  !! 843..873: missing required argument `x`
+  !! 843..873: expected 1 argument(s), got 0
 }
 function user.shadowing_let() -> int throws never {
   { : 2
