@@ -322,8 +322,16 @@ jobs:
       # dedicated `sdk-tests` matrix below. Skip both here. Profiling-specific
       # test binaries opt in explicitly; keeping it off for the general suite
       # avoids filling the Windows runner with incidental `.bamlprof` files.
+      # As on Linux, run `pack_e2e` separately so its process-global OnceLock
+      # builds and shares one `baml-pack-host` instead of one per nextest case.
       - name: "Run tests"
-        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/)'
+        run: cargo nextest run --all-features -E 'not package(baml_tests) and not package(/^sdk_test_/) and not binary(=pack_e2e)'
+        working-directory: baml_language
+        env:
+          BAML_PROFILE: "0"
+
+      - name: "Run pack e2e tests (windows)"
+        run: cargo test -p baml_cli --test pack_e2e --all-features
         working-directory: baml_language
         env:
           BAML_PROFILE: "0"
