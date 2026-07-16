@@ -96,6 +96,13 @@ pub fn to_source_code(
     // Group symbols per package. BTreeMap/BTreeSet for deterministic
     // output independent of the pool's HashMap iteration order.
     let mut sink = UnionSink::default();
+    // Typemap entries generated into Baml.java's static initializer:
+    // (BAML FQN, Java binary name, per-kind payload). Field order is
+    // carried explicitly because the JVM does not guarantee
+    // getDeclaredFields() order and the decoder constructs via the
+    // canonical constructor positionally.
+    let mut class_registry: Vec<(String, String, Vec<String>)> = Vec::new();
+    let mut enum_registry: Vec<(String, String, Vec<(String, String)>)> = Vec::new();
     let mut fns_per_package: BTreeMap<PackagePath, Vec<(u32, String, &Function)>> = BTreeMap::new();
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
@@ -129,6 +136,15 @@ pub fn to_source_code(
                     .entry(pkg.clone())
                     .or_default()
                     .insert(ident.clone());
+                class_registry.push((
+                    symbol_fqn.clone(),
+                    format!("{}.{}", pkg.java_package(), ident),
+                    class
+                        .properties
+                        .iter()
+                        .map(|prop| java_identifier(prop.name.as_str()))
+                        .collect(),
+                ));
                 type_files.push((
                     pkg,
                     ident,
@@ -141,6 +157,20 @@ pub fn to_source_code(
                     .entry(pkg.clone())
                     .or_default()
                     .insert(ident.clone());
+                enum_registry.push((
+                    symbol_fqn.clone(),
+                    format!("{}.{}", pkg.java_package(), ident),
+                    enum_
+                        .variants
+                        .iter()
+                        .map(|v| {
+                            (
+                                java_identifier(v.name.as_str()),
+                                v.name.as_str().to_string(),
+                            )
+                        })
+                        .collect(),
+                ));
                 type_files.push((pkg, ident, render_enum(enum_)));
             }
             Symbol::Function(function) => {
@@ -251,12 +281,31 @@ pub fn to_source_code(
     let root = PackagePath {
         segments: Vec::new(),
     };
+    class_registry.sort();
+    enum_registry.sort();
+    let mut registrations = String::new();
+    for (fqn, java_name, fields) in &class_registry {
+        let field_list: Vec<String> = fields.iter().map(|f| format!("{f:?}")).collect();
+        registrations.push_str(&format!(
+            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}});\n",
+            field_list.join(", ")
+        ));
+    }
+    for (fqn, java_name, variants) in &enum_registry {
+        let consts: Vec<String> = variants.iter().map(|(c, _)| format!("{c:?}")).collect();
+        let wires: Vec<String> = variants.iter().map(|(_, w)| format!("{w:?}")).collect();
+        registrations.push_str(&format!(
+            "        baml_bridge.TypeRegistry.registerEnum({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new java.lang.String[] {{{}}});\n",
+            consts.join(", "),
+            wires.join(", ")
+        ));
+    }
+    let anchor_body = format!(
+        "/**\n * Runtime anchor for the generated SDK: loading this class registers\n * the type map (BAML FQN \u{2194} generated class, with field declaration\n * order) and initializes the BAML runtime from the embedded bytecode\n * resource (idempotent) \u{2014} the Java analog of Python's root-package\n * import side effect. Every generated binding holder forces this via\n * {{@link #ensure()}}.\n */\npublic final class Baml {{\n    private Baml() {{}}\n\n    static {{\n{registrations}        try (java.io.InputStream in = Baml.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {{\n            if (in == null) {{\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath \u{2014} is the generated resource root registered?\");\n            }}\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        }} catch (java.io.IOException e) {{\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }}\n    }}\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {{}}\n}}\n"
+    );
     out.insert(
         java_file_path(&root, "Baml"),
-        with_package(
-            &root,
-            "/**\n * Runtime anchor for the generated SDK: loading this class initializes\n * the BAML runtime from the embedded bytecode resource (idempotent) —\n * the Java analog of Python's root-package import side effect. Every\n * generated binding holder forces this via {@link #ensure()}.\n */\npublic final class Baml {\n    private Baml() {}\n\n    static {\n        try (java.io.InputStream in = Baml.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {\n            if (in == null) {\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath — is the generated resource root registered?\");\n            }\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        } catch (java.io.IOException e) {\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }\n    }\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {}\n}\n",
-        ),
+        with_package(&root, &anchor_body),
     );
 
     // Compiled BAML bytecode as a base64 text resource. Base64 keeps
