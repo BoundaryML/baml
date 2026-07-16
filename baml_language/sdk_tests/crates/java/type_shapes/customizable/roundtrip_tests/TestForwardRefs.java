@@ -39,10 +39,10 @@ class TestForwardRefs {
     @Test
     void test_round_trip_rec_list() {
         RecList r =
-                new RecList.ListValue(
+                new RecList.RecListListValue(
                         List.of(
                                 new RecList.IntValue(1L),
-                                new RecList.ListValue(
+                                new RecList.RecListListValue(
                                         List.of(
                                                 new RecList.IntValue(2L),
                                                 new RecList.IntValue(3L)))));
@@ -57,7 +57,7 @@ class TestForwardRefs {
                 Fns.round_trip_rec_list_with_other(new RecListWithOther.IntValue(1L)));
 
         RecListWithOther r =
-                new RecListWithOther.ListValue(
+                new RecListWithOther.RecListWithOtherListValue(
                         List.of(
                                 new RecListWithOther.IntValue(1L),
                                 new RecListWithOther.IntValue(2L)));

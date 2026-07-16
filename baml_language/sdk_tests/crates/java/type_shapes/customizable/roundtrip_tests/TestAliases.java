@@ -11,7 +11,7 @@
 // infinite), so it must still emit a real type; this port assumes it gets
 // the same treatment as an ad-hoc union (see TestUnions.java) — a generated
 // sealed interface named after the alias itself (`RecList`), one record arm
-// per union member (`RecList.IntValue`, `RecList.ListValue`). Neither the
+// per union member (`RecList.IntValue`, `RecList.RecListListValue`). Neither the
 // non-recursive-alias erasure nor the recursive-alias-as-named-union shape
 // is pinned down in the conventions doc; both are invented here.
 package roundtrip_tests;
@@ -38,10 +38,10 @@ class TestAliases {
                 new RecList.IntValue(1L), Fns.round_trip_rec_list(new RecList.IntValue(1L)));
 
         RecList nested =
-                new RecList.ListValue(
+                new RecList.RecListListValue(
                         List.of(
                                 new RecList.IntValue(1L),
-                                new RecList.ListValue(
+                                new RecList.RecListListValue(
                                         List.of(
                                                 new RecList.IntValue(2L),
                                                 new RecList.IntValue(3L)))));
@@ -53,10 +53,10 @@ class TestAliases {
         AliasContainer c =
                 new AliasContainer(
                         List.of("x"),
-                        new RecList.ListValue(
+                        new RecList.RecListListValue(
                                 List.of(
                                         new RecList.IntValue(1L),
-                                        new RecList.ListValue(List.of(new RecList.IntValue(2L))))));
+                                        new RecList.RecListListValue(List.of(new RecList.IntValue(2L))))));
         assertEquals(c, Fns.round_trip_alias_container(c));
     }
 }

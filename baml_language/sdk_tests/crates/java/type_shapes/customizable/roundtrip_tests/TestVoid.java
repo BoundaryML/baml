@@ -4,7 +4,6 @@
 // test_void.py — same test names, cases, inputs, assertions.
 package roundtrip_tests;
 
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +19,8 @@ class TestVoid {
         // (`Fns` -> `Fns$`), this port assumes codegen escapes the
         // namespace package itself to `void$`. This is an extrapolation
         // beyond the doc and needs confirmation.
-        assertNull(baml_sdk.void$.Fns.no_op());
+        // java-port note: BAML `-> void` maps to Java `void` (Python gets None);
+        // the strongest expressible assertion is that the call completes.
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> baml_sdk.void$.Fns.no_op());
     }
 }

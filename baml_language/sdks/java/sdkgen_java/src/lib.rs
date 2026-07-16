@@ -106,7 +106,7 @@ pub fn to_source_code(
     let mut fns_per_package: BTreeMap<PackagePath, Vec<(u32, String, &Function)>> = BTreeMap::new();
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
-    let mut recursive_aliases: Vec<(PackagePath, String, &Ty)> = Vec::new();
+    let mut recursive_aliases: Vec<(PackagePath, String, String, &Ty)> = Vec::new();
     // (signature, union binary name, per-arm (token, record binary name))
     let mut union_registry: Vec<(String, String, Vec<(String, String)>)> = Vec::new();
 
@@ -190,7 +190,7 @@ pub fn to_source_code(
                     .entry(pkg.clone())
                     .or_default()
                     .insert(ident.clone());
-                recursive_aliases.push((pkg, ident, &alias.resolves_to));
+                recursive_aliases.push((pkg, ident, symbol_fqn.clone(), &alias.resolves_to));
             }
             Symbol::TypeAlias(_) => {}
         }
@@ -228,7 +228,7 @@ pub fn to_source_code(
     // Recursive aliases: a recursive alias over a union renders as a
     // minted union under the alias's own name; other recursive shapes
     // get a reserved placeholder until the aliases capability lands.
-    for (pkg, ident, resolves_to) in recursive_aliases {
+    for (pkg, ident, alias_fqn, resolves_to) in recursive_aliases {
         let ctx = TranslateCtx {
             current_package: pkg.clone(),
             aliases: &aliases,
@@ -239,7 +239,12 @@ pub fn to_source_code(
                 .filter(|t| !matches!(t, Ty::Null))
                 .cloned()
                 .collect();
+            let (_, union_binary, arm_entries) = union_registration(&pkg, &ident, &arms, &aliases);
+            // Structural signature AND the alias's own FQN: the engine may
+            // send self_type either resolved (the member union) or as the
+            // alias node, depending on how the declared type was spelled.
             union_registry.push(union_registration(&pkg, &ident, &arms, &aliases));
+            union_registry.push((alias_fqn.clone(), union_binary, arm_entries));
             render_union(&ident, &arms, &ctx, &mut sink)
         } else {
             format!(

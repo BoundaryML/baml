@@ -105,6 +105,7 @@ public final class ProtoReader {
     private static final int TY_OPTIONAL = 6;
     private static final int TY_UNION = 7;
     private static final int TY_LITERAL = 8;
+    private static final int TY_TYPE_ALIAS = 9;
     private static final int TY_UNKNOWN = 10;
     private static final int TY_MEDIA = 11;
     private static final int TY_FUNCTION = 14;
@@ -461,7 +462,10 @@ public final class ProtoReader {
         switch (field) {
             case TY_PRIMITIVE:
                 return primitiveToken(r.readMessage());
-            case TY_CLASS, TY_ENUM:
+            case TY_CLASS, TY_ENUM, TY_TYPE_ALIAS:
+                // Class/enum arms token as their canonical FQN; a type_alias
+                // node does too (recursive aliases keep a nominal identity —
+                // the emitter registers them under the same FQN token).
                 return nameField(r.readMessage());
             case TY_LIST:
                 return "list<" + tyToken(subTy(r.readMessage(), TY_LIST_ITEM)) + ">";
