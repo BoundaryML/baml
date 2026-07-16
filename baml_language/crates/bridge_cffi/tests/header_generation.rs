@@ -21,11 +21,21 @@ fn generated_bytes() -> Vec<u8> {
     bytes
 }
 
+fn normalize_line_endings(text: String) -> String {
+    text.replace("\r\n", "\n")
+}
+
+fn read_normalized(path: PathBuf) -> String {
+    normalize_line_endings(fs::read_to_string(path).expect("source file must be UTF-8"))
+}
+
 #[test]
 fn checked_in_header_matches_rust_abi() {
     let path = crate_dir().join("include/baml_cffi.h");
-    let actual = fs::read(&path).expect("checked-in public header must exist");
-    let expected = generated_bytes();
+    let actual = read_normalized(path.clone());
+    let expected = normalize_line_endings(
+        String::from_utf8(generated_bytes()).expect("generated header must be UTF-8"),
+    );
     assert_eq!(
         actual,
         expected,
@@ -42,10 +52,9 @@ fn generation_is_byte_for_byte_deterministic() {
 #[test]
 fn public_structs_explicitly_use_c_layout() {
     let root = crate_dir();
-    let api = fs::read_to_string(root.join("src/api.rs")).expect("read API declarations");
-    let buffer = fs::read_to_string(root.join("src/buffer.rs")).expect("read buffer declaration");
-    let runtime =
-        fs::read_to_string(root.join("src/ffi/runtime.rs")).expect("read bridge-info declaration");
+    let api = read_normalized(root.join("src/api.rs"));
+    let buffer = read_normalized(root.join("src/buffer.rs"));
+    let runtime = read_normalized(root.join("src/ffi/runtime.rs"));
 
     assert!(api.contains("#[repr(C)]\npub struct BamlApiV1"));
     assert!(buffer.contains("#[repr(C)]\npub struct Buffer"));
@@ -57,5 +66,5 @@ fn public_structs_explicitly_use_c_layout() {
 fn regenerate() {
     let path = crate_dir().join("include/baml_cffi.h");
     fs::create_dir_all(path.parent().unwrap()).expect("create public include directory");
-    generate().write_to_file(&path);
+    fs::write(path, generated_bytes()).expect("write checked-in public header");
 }

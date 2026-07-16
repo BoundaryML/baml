@@ -5,6 +5,7 @@ no_includes = true
 documentation_style = "doxy"
 line_length = 100
 tab_width = 2
+line_endings = "LF"
 braces = "SameLine"
 include_version = true
 
