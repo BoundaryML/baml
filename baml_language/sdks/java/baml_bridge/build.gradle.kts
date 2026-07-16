@@ -154,9 +154,16 @@ publishing {
                 url.set("https://github.com/BoundaryML/baml")
                 developers {
                     developer {
-                        id.set("boundaryml")
-                        name.set("Boundary ML")
-                        email.set("contact@boundaryml.com")
+                        id.set("antoniosarosi")
+                        name.set("Antonio Sarosi")
+                        email.set("antonio@boundaryml.com")
+                        organization.set("Boundary ML")
+                        organizationUrl.set("https://www.boundaryml.com")
+                    }
+                    developer {
+                        id.set("hellovai")
+                        name.set("Vaibhav Gupta")
+                        email.set("vbv@boundaryml.com")
                         organization.set("Boundary ML")
                         organizationUrl.set("https://www.boundaryml.com")
                     }
