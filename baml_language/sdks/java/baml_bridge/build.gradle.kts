@@ -152,6 +152,15 @@ publishing {
                         "bridge_java engine (encode/decode + JNI). Ships with per-platform " +
                         "native jars carrying the bridge_java cdylib.")
                 url.set("https://github.com/BoundaryML/baml")
+                developers {
+                    developer {
+                        id.set("boundaryml")
+                        name.set("Boundary ML")
+                        email.set("contact@boundaryml.com")
+                        organization.set("Boundary ML")
+                        organizationUrl.set("https://www.boundaryml.com")
+                    }
+                }
                 licenses {
                     license {
                         name.set("Apache License 2.0")
