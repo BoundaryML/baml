@@ -8,7 +8,7 @@
 //! answer the nominal facts the structural algebra cannot derive on its own.
 //! Most methods are wired to real runtime data:
 //! - `implements_interface` → the open-world resolver
-//!   (`package_baml::type_implements`) over the per-package `impl_rules`.
+//!   (`ImplResolver::type_implements`) over the per-package `impl_rules`.
 //! - `alias_def` → the VM's recursive type aliases (via the `packages` index).
 //! - `enum_variants` → the `Object::Enum` on the heap (via `vm.lookup_type`, the
 //!   `packages` index).

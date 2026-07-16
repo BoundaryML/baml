@@ -1033,10 +1033,11 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
 //         `HostContractViolation` panic.
 //
 //         Pins the fix that routes the contract check through the canonical,
-//         program-aware type algebra (`BexVm::runtime_subtype`), which resolves
-//         interface membership. The prior context-free `RuntimeTy::is_subtype_of`
-//         fork saw no membership — `Class <: Interface` was simply `false` — and
-//         would have wrongly rejected this throw as a contract violation.
+//         program-aware type algebra (`baml_type::normalize::is_subtype` over the
+//         VM as its `TypeContext`), which resolves interface membership. The prior
+//         context-free `RuntimeTy::is_subtype_of` fork saw no membership —
+//         `Class <: Interface` was simply `false` — and would have wrongly
+//         rejected this throw as a contract violation.
 // ============================================================================
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

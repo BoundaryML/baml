@@ -12708,19 +12708,20 @@ impl LoweringContext<'_> {
         failure: BlockId,
     ) {
         // BEP-044/BEP-057: testing a value against an *interface* type means "is
-        // its runtime class an implementor" — emitted as a single `IsType` on the
-        // interface existential itself, which the VM resolves through the
-        // canonical membership check against the impl registry. The bytecode
-        // never enumerates implementors: a compile-time list is closed-world (an
-        // implementor loaded from a later package would silently fail the test).
-        // Interface types used to lower to `RuntimeTy::Class`; re-tag the legacy
-        // shape so it takes the same membership test.
-        let ty = match ty {
-            RuntimeTy::Class(tn, args, attr) if self.interface_implementors.contains_key(&tn) => {
-                RuntimeTy::Interface(tn, args, Vec::new(), attr)
-            }
-            other => other,
-        };
+        // its concrete runtime type an implementor" — emitted as a single `IsType` on the
+        // interface existential itself, which the VM resolves through the canonical
+        // membership check against the impl registry (`type_implements`, at the
+        // requested instantiation: type args and associated bindings validated
+        // exactly). The bytecode never enumerates implementors: a compile-time list
+        // is closed-world (an implementor loaded from a later package would silently
+        // fail the test).
+        //
+        // Interfaces reach here already tagged `RuntimeTy::Interface`: TIR resolves
+        // an interface reference to `Ty::Interface` (never `Ty::Class`), and
+        // `lower_to_runtime` preserves the tag and its instantiation. So no
+        // name-based re-tag is needed — matching a `RuntimeTy::Class` against
+        // `interface_implementors` would both miss declaration-only interfaces and
+        // drop the instantiation.
         if let RuntimeTy::Union(members, _) = ty {
             // For union A | B | C: check A → success, else check B → success,
             // else check C → success, else failure.
@@ -13505,10 +13506,13 @@ impl LoweringContext<'_> {
                     //
                     // `Self`-carrying patterns are excluded: `Self` has no frame
                     // slot yet, so the guard builder would lower it to a
-                    // match-anything `Wildcard` — over-matching is strictly worse
-                    // than today's constant-false. The `Self` units replace this
-                    // (class bodies substitute the enclosing class; interface
-                    // default methods gain a frame slot).
+                    // match-anything `Wildcard`. Keeping them on the erased path
+                    // loses no precision — there a bare `Self` is constant-false
+                    // (`Wildcard` → `emit_false`), while a nested `Self` (e.g.
+                    // `Box<Self>`) already over-matches its container through the
+                    // same residual-typevar `Wildcard` bandaid. The `Self` units
+                    // replace this (class bodies substitute the enclosing class;
+                    // interface default methods gain a frame slot).
                     if baml_compiler2_tir::generics::contains_typevar(&pat_tir_ty)
                         && !baml_compiler2_tir::generics::contains_typevar_where(
                             &pat_tir_ty,

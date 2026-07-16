@@ -384,7 +384,8 @@ pub struct NoFacts;
 
 #[expect(
     deprecated,
-    reason = "the deprecated type's own trait impl; not a use site"
+    reason = "naming `NoFacts` to define its own trait impl fires the lint; this is \
+              the type's definition, not a consumer site to migrate off it"
 )]
 impl TypeContext for NoFacts {
     fn alias_def(&self, _name: &QualifiedTypeName) -> Option<Ty> {
