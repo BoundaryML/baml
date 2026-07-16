@@ -533,6 +533,9 @@ mod tests {
     fn t_alias(n: Name) -> Ty {
         Ty::TypeAlias(n, a())
     }
+    fn t_class(n: Name) -> Ty {
+        Ty::Class(n, Vec::new(), a())
+    }
 
     fn class_sym_with_props(
         n: &Name,
@@ -742,6 +745,80 @@ mod tests {
         assert!(file.contains(
             "baml_bridge.BamlFfi.callAsync(\"user.lorem.extract_resume\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, \"int\").thenApply(v$ -> (java.lang.Long) v$)"
         ));
+    }
+
+    #[test]
+    fn throwing_function_renders_throws_tags_on_both_siblings() {
+        // A free function that throws `ParseError | TimeoutError` documents
+        // one `@throws <UnqualifiedName>` tag per arm, in source order, on
+        // both the sync binding and its `_async` sibling; the summary
+        // precedes the tags.
+        let mut pool = SymbolPool::new();
+        let f = Function {
+            name: BaseName::new("LoadDoc"),
+            generic_params: Vec::new(),
+            docstring: Some("Load a document from a path.".to_string()),
+            arguments: vec![FunctionArgument {
+                name: BaseName::new("path"),
+                docstring: None,
+                ty: t_string(),
+                default: None,
+            }],
+            return_type: t_string(),
+            throws: Some(t_union(vec![
+                t_class(name("user", &["raises_test"], "ParseError")),
+                t_class(name("user", &["raises_test"], "TimeoutError")),
+            ])),
+            watchers: Vec::new(),
+            origin: origin(0),
+        };
+        pool.insert(
+            name("user", &["raises_test"], "LoadDoc"),
+            Symbol::Function(f),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("raises_test/Fns.java")];
+
+        // Both arms, unqualified (FQN leaf only), one tag per line.
+        assert!(file.contains(" * @throws ParseError\n"), "{file}");
+        assert!(file.contains(" * @throws TimeoutError\n"), "{file}");
+        // Sync + async binding each carry both tags → two of each.
+        assert_eq!(file.matches("@throws ParseError").count(), 2, "{file}");
+        assert_eq!(file.matches("@throws TimeoutError").count(), 2, "{file}");
+        // The summary precedes the `@throws` block.
+        let summary = file.find("Load a document from a path.").unwrap();
+        let throws = file.find("@throws").unwrap();
+        assert!(summary < throws, "{file}");
+    }
+
+    #[test]
+    fn non_throwing_function_has_no_throws_tags() {
+        // `func_sym` has no throws contract → no `@throws` tag anywhere.
+        let mut pool = SymbolPool::new();
+        pool.insert(name("user", &["lorem"], "extract_resume"), func_sym(0));
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("lorem/Fns.java")];
+        assert!(!file.contains("@throws"), "{file}");
+    }
+
+    #[test]
+    fn throwing_methods_render_throws_tags() {
+        // Both a static and an instance method surface their single-arm
+        // throws contract as an `@throws` tag on the generated class.
+        let mut pool = SymbolPool::new();
+        let n = name("user", &["raises_test"], "DocLoader");
+        let mut load = method_fn("load", ("path", t_string()), t_string(), 2);
+        load.throws = Some(t_class(name("user", &["raises_test"], "ParseError")));
+        let mut create = method_fn("create", ("root", t_string()), t_string(), 1);
+        create.throws = Some(t_class(name("user", &["raises_test"], "TimeoutError")));
+        pool.insert(
+            n.clone(),
+            class_sym_with_methods(&n, vec![create], vec![load], 0),
+        );
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("raises_test/DocLoader.java")];
+        assert!(file.contains("@throws ParseError"), "{file}");
+        assert!(file.contains("@throws TimeoutError"), "{file}");
     }
 
     #[test]

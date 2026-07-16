@@ -78,7 +78,7 @@ const SETUP_ENV_VAR: &str = "SDK_TEST_JAVA_SETUP";
 /// Fixtures whose generated + test sources compile green — their
 /// `javac` gate runs for real (CI enforcement); everything else stays
 /// `#[ignore]`d until its API surface lands.
-const GREEN_JAVAC_FIXTURES: &[&str] = &["type_shapes"];
+const GREEN_JAVAC_FIXTURES: &[&str] = &["type_shapes", "function_calls"];
 
 const IGNORE_REASON: &str =
     "generated Java API not complete enough for this fixture yet — un-ignore as capabilities land";

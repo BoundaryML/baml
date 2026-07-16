@@ -54,22 +54,83 @@ use crate::{
 /// Render a `///` docstring as a Javadoc block. Returns an empty
 /// string when there is no docstring.
 pub(crate) fn render_javadoc(docstring: Option<&str>, indent: &str) -> String {
-    let Some(doc) = docstring else {
+    render_javadoc_with_throws(docstring, &[], indent)
+}
+
+/// Render a `///` docstring plus the callable's thrown-type contract as
+/// a Javadoc block, one `@throws <UnqualifiedName>` tag per thrown type
+/// (`throws_names`, in source order). The completeness doc commits the
+/// throws contract to Javadoc `@throws` tags — there are no checked
+/// exceptions on the JVM side (see ref-java-state-of-completeness.md).
+///
+/// The summary (when present) precedes the tags, separated by a blank
+/// Javadoc line. Returns an empty string when there is neither a
+/// docstring nor any thrown type, so a non-throwing, undocumented
+/// callable renders no comment at all.
+pub(crate) fn render_javadoc_with_throws(
+    docstring: Option<&str>,
+    throws_names: &[String],
+    indent: &str,
+) -> String {
+    if docstring.is_none() && throws_names.is_empty() {
         return String::new();
-    };
+    }
     let mut out = String::new();
     out.push_str(indent);
     out.push_str("/**\n");
-    for line in doc.lines() {
-        out.push_str(indent);
-        out.push_str(" * ");
-        // A literal `*/` inside the docstring would terminate the
-        // Javadoc block early.
-        out.push_str(&line.replace("*/", "* /"));
-        out.push('\n');
+    if let Some(doc) = docstring {
+        for line in doc.lines() {
+            out.push_str(indent);
+            out.push_str(" * ");
+            // A literal `*/` inside the docstring would terminate the
+            // Javadoc block early.
+            out.push_str(&line.replace("*/", "* /"));
+            out.push('\n');
+        }
+    }
+    if !throws_names.is_empty() {
+        // Blank separator between the summary and the `@throws` tags,
+        // only when a summary precedes them.
+        if docstring.is_some() {
+            out.push_str(indent);
+            out.push_str(" *\n");
+        }
+        for name in throws_names {
+            out.push_str(indent);
+            out.push_str(" * @throws ");
+            out.push_str(name);
+            out.push('\n');
+        }
     }
     out.push_str(indent);
     out.push_str(" */\n");
+    out
+}
+
+/// Collect the unqualified leaf names of the thrown types in a `throws`
+/// `Ty`, in source order, de-duping exact-equal names. `Class`/`Enum`/
+/// `TypeAlias` contribute their unqualified leaf name; a union contributes
+/// each member's; anything else (primitives) contributes nothing. Mirrors
+/// the Python generator's `collect_raises_names` so both SDKs surface the
+/// same names.
+pub(crate) fn collect_raises_names(throws: Option<&Ty>) -> Vec<String> {
+    fn walk(ty: &Ty, out: &mut Vec<String>) {
+        match ty {
+            Ty::Class(name, ..) | Ty::Enum(name, ..) | Ty::TypeAlias(name, ..) => {
+                let n = name.name().as_str().to_string();
+                if !out.contains(&n) {
+                    out.push(n);
+                }
+            }
+            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
+            _ => {}
+        }
+    }
+
+    let mut out = Vec::new();
+    if let Some(ty) = throws {
+        walk(ty, &mut out);
+    }
     out
 }
 
@@ -370,7 +431,12 @@ fn render_callable_pair(
     let names_literal = format!("new java.lang.String[] {{{}}}", param_names_java.join(", "));
     let args_literal = format!("new java.lang.Object[] {{{}}}", arg_exprs.join(", "));
 
-    let doc = render_javadoc(function.docstring.as_deref(), "    ");
+    // The thrown-type contract renders as `@throws <UnqualifiedName>`
+    // tags shared by the sync binding, its `_async` sibling, and any
+    // optional-configurator overloads, so every entry point documents
+    // the same contract.
+    let raises = collect_raises_names(function.throws.as_ref());
+    let doc = render_javadoc_with_throws(function.docstring.as_deref(), &raises, "    ");
     let static_kw = if is_static { "static " } else { "" };
 
     // Method-level generic parameters (`fn map<U>(...)`) must be
