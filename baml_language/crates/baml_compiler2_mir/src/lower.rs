@@ -6625,6 +6625,24 @@ impl LoweringContext<'_> {
             return;
         }
 
+        // Arithmetic over non-primitive operands (a user type, or a union /
+        // interface-existential / type variable involving one) dispatches through
+        // the matching `baml.ops` interface, resolved at runtime from the
+        // operands' concrete types by the `__union_*` driver. Primitive operands
+        // keep the specialized/`exec_binop` fast path below.
+        if matches!(
+            op,
+            AstBinaryOp::Add
+                | AstBinaryOp::Sub
+                | AstBinaryOp::Mul
+                | AstBinaryOp::Div
+                | AstBinaryOp::Mod
+        ) && !self.arithmetic_uses_primitive_opcode(lhs, rhs)
+        {
+            self.lower_arithmetic_via_driver(expr_id, op, lhs, rhs, dest);
+            return;
+        }
+
         // Mixed `int OP bigint` (or `bigint OP int`) operators resolve the
         // `int` operand to a small local `BigInt` in the VM (the specialized
         // `*Bigint`/`CmpBigint` opcodes accept a lone `int` operand), without
@@ -6684,51 +6702,175 @@ impl LoweringContext<'_> {
     ) {
         let lhs_op = self.lower_to_operand(lhs);
         let rhs_op = self.lower_to_operand(rhs);
+        let bool_ty = RuntimeTy::Bool {
+            attr: TyAttr::default(),
+        };
+        if matches!(op, AstBinaryOp::Eq) {
+            self.lower_via_ops_driver("equals_equals", vec![lhs_op, rhs_op], bool_ty, dest);
+            return;
+        }
+        // `!=`: call into a bool temp, then negate into `dest` (`assign` handles
+        // projection destinations, so this covers both local and projection cases).
+        let eq_dest = Place::local(self.builder.temp(bool_ty.clone()));
+        self.lower_via_ops_driver(
+            "equals_equals",
+            vec![lhs_op, rhs_op],
+            bool_ty,
+            eq_dest.clone(),
+        );
+        self.builder.assign(
+            dest,
+            Rvalue::UnaryOp {
+                op: crate::UnaryOp::Not,
+                operand: Operand::Copy(eq_dest),
+            },
+        );
+    }
+
+    /// Emit `dest = baml.ops.<driver>(args)` — the shared shape of the operator
+    /// dispatch drivers (`equals_equals`, `__union_add`, …, `__union_neg`). A
+    /// driver may yield (it can call user bytecode), so the call splits the block
+    /// and lowering resumes in a fresh one. The call terminator's destination
+    /// must be a `Place::Local` (the emitter stores its result with
+    /// `emit_store_place`, which only handles locals), so a projection/capture
+    /// `dest` is routed through a `result_ty`-typed temp and copied through.
+    fn lower_via_ops_driver(
+        &mut self,
+        driver: &str,
+        args: Vec<Operand>,
+        result_ty: RuntimeTy,
+        dest: Place,
+    ) {
         let callee = Operand::Constant(Constant::Function(ItemRef::Free {
             package: Name::new("baml"),
             namespace: vec![Name::new("ops")],
-            name: Name::new("equals_equals"),
+            name: Name::new(driver),
         }));
         let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
-        // The driver call's destination must be a `Place::Local` (the emitter
-        // stores its result with `emit_store_place`, which only handles locals).
-        // Route through a bool temp whenever we must post-process the result —
-        // always for `!=` (we negate into `dest`), and for `==` when `dest` is a
-        // projection/capture (we copy into it after the call). When `op == Eq`
-        // and `dest` is already a local, the call writes straight into it.
-        let is_ne = matches!(op, AstBinaryOp::Ne);
-        let needs_temp = is_ne || !matches!(dest, Place::Local(_));
-        let eq_dest = if needs_temp {
-            Place::local(self.builder.temp(RuntimeTy::Bool {
-                attr: TyAttr::default(),
-            }))
+        let needs_temp = !matches!(dest, Place::Local(_));
+        let call_dest = if needs_temp {
+            Place::local(self.builder.temp(result_ty))
         } else {
             dest.clone()
         };
         let resume = self.builder.create_block();
-        self.builder.call(
-            callee,
-            vec![lhs_op, rhs_op],
-            eq_dest.clone(),
-            resume,
-            unwind,
-        );
+        self.builder
+            .call(callee, args, call_dest.clone(), resume, unwind);
         self.builder.set_current_block(resume);
-        if is_ne {
-            // `assign` handles projection destinations, so negating into `dest`
-            // covers both local and projection cases.
-            self.builder.assign(
-                dest,
-                Rvalue::UnaryOp {
-                    op: crate::UnaryOp::Not,
-                    operand: Operand::Copy(eq_dest),
-                },
-            );
-        } else if needs_temp {
-            // `op == Eq` with a projection/capture `dest`: copy the temp through.
+        if needs_temp {
             self.builder
-                .assign(dest, Rvalue::Use(Operand::Copy(eq_dest)));
+                .assign(dest, Rvalue::Use(Operand::Copy(call_dest)));
         }
+    }
+
+    /// Whether `ty` is a primitive the specialized arithmetic opcodes /
+    /// `exec_binop` handle directly — int/bigint/float, plus `string` when
+    /// `include_string` (binary `+` concatenates; unary `-` has no string form).
+    /// A literal counts as its base; a union counts only when every member is
+    /// the SAME primitive kind (`int | 3`): a mixed-kind union (`int | float`)
+    /// would let emit pick a single-kind opcode for a value of the other kind —
+    /// UB in the specialized handlers — so it goes through the `__union_*`
+    /// interface driver, as does anything else (a user type, or a union /
+    /// existential / type variable involving one). Must stay aligned with TIR's
+    /// `infer_arithmetic` union rule, which types those operands via the
+    /// interface path.
+    fn arith_primitive(ty: &RuntimeTy, include_string: bool) -> bool {
+        use baml_base::Literal;
+        /// The primitive kind of a non-union member, literal widened to base.
+        /// The builtin wrapper classes (`baml.Float` …) count as their
+        /// primitive — `self` inside their method bodies is class-typed but
+        /// primitive-valued (mirrors TIR's `infer_arithmetic`).
+        fn kind(ty: &RuntimeTy, include_string: bool) -> Option<u8> {
+            match ty {
+                RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => Some(0),
+                RuntimeTy::Bigint { .. } | RuntimeTy::Literal(Literal::Bigint(_), _, _) => Some(1),
+                RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => Some(2),
+                RuntimeTy::String { .. } | RuntimeTy::Literal(Literal::String(_), _, _) => {
+                    include_string.then_some(3)
+                }
+                RuntimeTy::Class(name, args, _)
+                    if args.is_empty()
+                        && name.package().as_str() == "baml"
+                        && name.namespace().is_empty() =>
+                {
+                    match name.name().as_str() {
+                        "Int" => Some(0),
+                        "Bigint" => Some(1),
+                        "Float" => Some(2),
+                        "String" => include_string.then_some(3),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        }
+        match ty {
+            RuntimeTy::Union(members, _) => {
+                // `null` members are transparent: only a chain-narrowed
+                // compound-assign target still carries `| null` here (its
+                // null case never reaches the op — the `?.` guard skips it),
+                // and binary operands with a possible `null` are rejected by
+                // TIR before lowering.
+                let mut first = None;
+                members
+                    .iter()
+                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
+                    .all(|m| match kind(m, include_string) {
+                        Some(k) => *first.get_or_insert(k) == k,
+                        None => false,
+                    })
+                    && first.is_some()
+            }
+            _ => kind(ty, include_string).is_some(),
+        }
+    }
+
+    /// Whether both arithmetic operands are [`Self::arith_primitive`] (string
+    /// included: `+` concatenates, and TIR rejects strings under the other ops
+    /// before lowering).
+    fn arithmetic_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> bool {
+        Self::arith_primitive(&self.expr_ty(lhs), true)
+            && Self::arith_primitive(&self.expr_ty(rhs), true)
+    }
+
+    /// Lower `a OP b` through the `baml.ops.__union_<op>` driver — the general
+    /// case for operands whose static types don't pin a single impl. The driver
+    /// resolves `<typeof a as Op<typeof b>>` at runtime and tail-calls it; its
+    /// `unknown` result is the operator's value, re-typed by `dest`.
+    fn lower_arithmetic_via_driver(
+        &mut self,
+        expr_id: AstExprId,
+        op: AstBinaryOp,
+        lhs: AstExprId,
+        rhs: AstExprId,
+        dest: Place,
+    ) {
+        let driver = match op {
+            AstBinaryOp::Add => "__union_add",
+            AstBinaryOp::Sub => "__union_sub",
+            AstBinaryOp::Mul => "__union_mul",
+            AstBinaryOp::Div => "__union_div",
+            AstBinaryOp::Mod => "__union_rem",
+            _ => unreachable!("lower_arithmetic_via_driver: non-arithmetic op {op:?}"),
+        };
+        let lhs_op = self.lower_to_operand(lhs);
+        let rhs_op = self.lower_to_operand(rhs);
+        let result_ty = self.expr_ty(expr_id);
+        self.lower_via_ops_driver(driver, vec![lhs_op, rhs_op], result_ty, dest);
+    }
+
+    /// Whether the negation operand is [`Self::arith_primitive`] (the `Neg`
+    /// opcode has no string form).
+    fn negate_uses_primitive_opcode(&self, operand: AstExprId) -> bool {
+        Self::arith_primitive(&self.expr_ty(operand), false)
+    }
+
+    /// Lower `-a` through the `baml.ops.__union_neg` driver (single dispatch on
+    /// `a`'s runtime type). Mirrors [`Self::lower_arithmetic_via_driver`].
+    fn lower_negate_via_driver(&mut self, expr_id: AstExprId, operand: AstExprId, dest: Place) {
+        let operand_op = self.lower_to_operand(operand);
+        let result_ty = self.expr_ty(expr_id);
+        self.lower_via_ops_driver("__union_neg", vec![operand_op], result_ty, dest);
     }
 
     fn lower_short_circuit(
@@ -6888,21 +7030,7 @@ impl LoweringContext<'_> {
         self.chain_null_exits.push(bb_null);
 
         let place = self.lower_lvalue(inner_target);
-        let current = Operand::Copy(place.clone());
-        // Mixed `bigint OP= int` does NOT widen the int rhs: the specialized
-        // `*Bigint` opcodes accept a lone `int` operand and resolve it in the
-        // VM without allocating a heap bigint (mirrors the plain `AssignOp`
-        // path). Lower the value naturally.
-        let rhs = self.lower_to_operand(value);
-        let mir_op = Self::convert_assign_op(op);
-        self.builder.assign(
-            place,
-            Rvalue::BinaryOp {
-                op: mir_op,
-                left: current,
-                right: rhs,
-            },
-        );
+        self.emit_assign_op(place, inner_target, op, value);
 
         self.chain_null_exits.pop();
 
@@ -6914,6 +7042,51 @@ impl LoweringContext<'_> {
         self.builder.goto(bb_join);
 
         self.builder.set_current_block(bb_join);
+    }
+
+    /// Emit `place = place OP value` — the shared body of both `AssignOp`
+    /// lowerings (plain and `?.`-chain targets). An arithmetic op whose
+    /// operands aren't primitive routes through the `__union_*` driver, exactly
+    /// like the binary-expression form (`v += w` and `v = v + w` must agree);
+    /// everything else emits the raw opcode. Mixed `bigint OP= int` does NOT
+    /// widen the int rhs on the opcode path: the specialized `*Bigint` opcodes
+    /// accept a lone `int` operand and resolve it in the VM without allocating
+    /// a heap bigint.
+    fn emit_assign_op(
+        &mut self,
+        place: Place,
+        target: AstExprId,
+        op: AstAssignOp,
+        value: AstExprId,
+    ) {
+        let mir_op = Self::convert_assign_op(op);
+        let driver = match mir_op {
+            BinOp::Add => Some("__union_add"),
+            BinOp::Sub => Some("__union_sub"),
+            BinOp::Mul => Some("__union_mul"),
+            BinOp::Div => Some("__union_div"),
+            BinOp::Mod => Some("__union_rem"),
+            _ => None,
+        };
+        if let Some(driver) = driver
+            && !self.arithmetic_uses_primitive_opcode(target, value)
+        {
+            let current = Operand::Copy(place.clone());
+            let rhs = self.lower_to_operand(value);
+            let result_ty = self.expr_ty(target);
+            self.lower_via_ops_driver(driver, vec![current, rhs], result_ty, place);
+            return;
+        }
+        let current = Operand::Copy(place.clone());
+        let rhs = self.lower_to_operand(value);
+        self.builder.assign(
+            place,
+            Rvalue::BinaryOp {
+                op: mir_op,
+                left: current,
+                right: rhs,
+            },
+        );
     }
 
     /// Lower `obj?.member` — null-check obj, then access member or produce null.
@@ -7110,6 +7283,13 @@ impl LoweringContext<'_> {
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
                 return;
             }
+        }
+        // Negation of a non-primitive operand (a user type, or a union /
+        // existential / type variable involving one) dispatches through
+        // `baml.ops.Negate`, resolved at runtime from the operand's concrete type.
+        if matches!(op, AstUnaryOp::Neg) && !self.negate_uses_primitive_opcode(expr) {
+            self.lower_negate_via_driver(expr_id, expr, dest);
+            return;
         }
         let operand = self.lower_to_operand(expr);
         let mir_op = match op {
@@ -11565,21 +11745,7 @@ impl LoweringContext<'_> {
                     self.lower_assign_op_optional_chain(inner, op, value);
                 } else {
                     let place = self.lower_lvalue(target);
-                    let current = Operand::Copy(place.clone());
-                    // Mixed `bigint OP= int` does NOT widen the int rhs: the
-                    // specialized `*Bigint` opcodes accept a lone `int` operand
-                    // and resolve it in the VM without allocating a heap bigint.
-                    // Lower the value naturally.
-                    let rhs = self.lower_to_operand(value);
-                    let mir_op = Self::convert_assign_op(op);
-                    self.builder.assign(
-                        place,
-                        Rvalue::BinaryOp {
-                            op: mir_op,
-                            left: current,
-                            right: rhs,
-                        },
-                    );
+                    self.emit_assign_op(place, target, op, value);
                 }
             }
 

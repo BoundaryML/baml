@@ -13,8 +13,8 @@
 //! including the shared `build_diagnostics::no_build_failures`,
 //! lives in the sibling `sdk_test_harness_runner` crate.
 //!
-//! Generator-specific entry points (`run_all`) live in submodules
-//! like [`python_pydantic2`] and [`typescript`].
+//! Generator-specific entry points live in submodules like
+//! [`python_pydantic2`], [`typescript`], and [`typescript_web`].
 //!
 //! Layout the helpers assume:
 //!
@@ -38,6 +38,7 @@ use baml_project::ProjectDatabase;
 
 pub mod python_pydantic2;
 pub mod typescript;
+pub mod typescript_web;
 
 /// Emit one Cargo build-script line. Cargo consumes directives and
 /// warnings from stdout, so this intentionally writes there.
@@ -229,7 +230,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
 }
 
 /// Copy every file in `customizable_dir` into `dst_dir`. Used by
-/// the typescript_node target: symlinks would force every parallel
+/// the TypeScript target: symlinks would force every parallel
 /// test process to either set `NODE_OPTIONS=--preserve-symlinks`
 /// (which breaks the pnpm CLI, itself a symlinked node script) or
 /// let node follow the symlink and resolve `node_modules` from

@@ -33,7 +33,7 @@ use super::{
     BamlClassOpsCompare_for_string, BamlClassOpsEquals_for_bigint, BamlClassOpsEquals_for_bool,
     BamlClassOpsEquals_for_float, BamlClassOpsEquals_for_int, BamlClassOpsEquals_for_string,
     BamlClassOpsEquals_for_uint8array, BamlNamespaceOps, Continuation, NativeCallResult,
-    PackageBamlImpl, resolve,
+    PackageBamlImpl, PassThroughContinuation, resolve,
 };
 use crate::BexVm;
 
@@ -156,6 +156,100 @@ impl BamlNamespaceOps for PackageBamlImpl {
     // The broad `==` operator (`baml.ops.equals_equals`, may-yield). See `EqualsDriver`.
     fn equals_equals(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
         EqualsDriver::new(*a, *b).drive(vm)
+    }
+
+    // Binary-operator dispatch drivers — see [`drive_binary_op`]. The compiler
+    // emits these only when a single `implement` can't be pinned at compile time
+    // (an operand erased to a union / interface-existential / type variable), so
+    // the impl is selected from the operands' runtime types.
+    fn __union_add(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Add", "add", *a, *b)
+    }
+    fn __union_sub(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Subtract", "sub", *a, *b)
+    }
+    fn __union_mul(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Multiply", "mul", *a, *b)
+    }
+    fn __union_div(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Divide", "div", *a, *b)
+    }
+    fn __union_rem(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
+        drive_binary_op(vm, "Remainder", "rem", *a, *b)
+    }
+    fn __union_neg(vm: &mut BexVm, a: &Value) -> NativeCallResult {
+        // Negation is single dispatch on `a` (`Negate` has no `Rhs`), so the
+        // interface request carries no args.
+        dispatch_op(vm, "Negate", "neg", vec![*a], &[])
+    }
+}
+
+/// Binary operator dispatch: `a OP b` selects `<typeof a as iface<typeof b>>`
+/// and tail-calls its `method(self, rhs)` with `[a, b]`. This is the double
+/// dispatch a single-receiver virtual call cannot express — the impl depends on
+/// *both* operand types.
+fn drive_binary_op(
+    vm: &mut BexVm,
+    iface: &str,
+    method: &str,
+    a: Value,
+    b: Value,
+) -> NativeCallResult {
+    // Operator operands always have a concrete BAML type (the type checker
+    // proved they implement the interface); a value without one (a raw
+    // function/future) reaching here is an engine invariant break.
+    let Some(rhs_ty) = vm.value_concrete_ty(b) else {
+        return NativeCallResult::from(unresolved_op(iface, method));
+    };
+    dispatch_op(vm, iface, method, vec![a, b], &[rhs_ty.into()])
+}
+
+/// Resolve `<typeof args[0] as baml.ops.<iface><iface_args>>::<method>` from the
+/// receiver's runtime concrete type and the (runtime-derived) interface args,
+/// then tail-call it with `args`. The type checker has already proved the
+/// operand types implement the operator, so a missing impl is an engine
+/// invariant break, surfaced as an internal error.
+fn dispatch_op(
+    vm: &mut BexVm,
+    iface: &str,
+    method: &str,
+    args: Vec<Value>,
+    iface_args: &[RealizedTy],
+) -> NativeCallResult {
+    let op_qtn = TypeName::new(Name::new("baml"), vec![Name::new("ops")], Name::new(iface));
+    let Some(self_ty) = vm.value_concrete_ty(args[0]) else {
+        return NativeCallResult::from(unresolved_op(iface, method));
+    };
+    let Some((rule, bound_args)) =
+        resolve::resolve_implements_rule_exact(vm, &self_ty.into(), &op_qtn, iface_args)
+    else {
+        return NativeCallResult::from(unresolved_op(iface, method));
+    };
+    let Some(method_impl) = rule.methods.get(method) else {
+        return NativeCallResult::from(unresolved_op(iface, method));
+    };
+    // The resolved impl's frame realizes fully against its bound args; a failure
+    // is a broken compiler/VM invariant, surfaced rather than swallowed.
+    let type_args = match resolve::realize_frame(vm, &method_impl.frame, &bound_args) {
+        Ok(type_args) => type_args,
+        Err(e) => return NativeCallResult::from(e),
+    };
+    NativeCallResult::YieldToCall {
+        // `fqn` is the resolved callee's heap pointer, baked at emit time.
+        callee: method_impl.fqn,
+        args,
+        type_args,
+        // The operator's value *is* the impl method's return value — forward it.
+        continuation: Box::new(PassThroughContinuation),
+    }
+}
+
+/// The internal error for an operator dispatch the type checker promised could
+/// not miss: no concrete receiver type, no applicable impl, or a rule without
+/// the method.
+fn unresolved_op(iface: &str, method: &str) -> VmInternalError {
+    VmInternalError::UnresolvedVirtualCall {
+        method: format!("baml.ops.{iface}.{method}"),
     }
 }
 

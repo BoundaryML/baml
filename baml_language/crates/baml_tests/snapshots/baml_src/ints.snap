@@ -590,6 +590,102 @@ function ints.$init_test_ns_ints_ints(registry: testing.TestCollector) -> null {
     load_const null
     call testing.TestCollector.register_test
     pop 1
+    load_var registry
+    load_const "int_hex_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 98)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_hex_lowercase_digits"
+    make_closure .<lambda($init_test_ns_ints_ints, 99)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_hex_mixed_case_digits"
+    make_closure .<lambda($init_test_ns_ints_ints, 100)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_octal_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 101)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_binary_literal"
+    make_closure .<lambda($init_test_ns_ints_ints, 102)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_prefixed_zero"
+    make_closure .<lambda($init_test_ns_ints_ints, 103)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_negative_prefixed"
+    make_closure .<lambda($init_test_ns_ints_ints, 104)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_underscore_separators"
+    make_closure .<lambda($init_test_ns_ints_ints, 105)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_trailing_underscore"
+    make_closure .<lambda($init_test_ns_ints_ints, 106)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_hex_underscores"
+    make_closure .<lambda($init_test_ns_ints_ints, 107)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_binary_underscores"
+    make_closure .<lambda($init_test_ns_ints_ints, 108)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_octal_underscores"
+    make_closure .<lambda($init_test_ns_ints_ints, 109)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_underscore_after_prefix"
+    make_closure .<lambda($init_test_ns_ints_ints, 110)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_hex_max_value"
+    make_closure .<lambda($init_test_ns_ints_ints, 111)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_hex_bitwise"
+    make_closure .<lambda($init_test_ns_ints_ints, 112)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
+    load_var registry
+    load_const "int_hex_bare_literal_method"
+    make_closure .<lambda($init_test_ns_ints_ints, 113)>, 0
+    load_const null
+    call testing.TestCollector.register_test
+    pop 1
     load_const null
     return
 }

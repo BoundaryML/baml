@@ -4,6 +4,7 @@ members = [
   "forks/*",
   "sdks/go/sdkgen_go",
   "sdks/typescript/bridge_typescript",
+  "sdks/typescript/bridge_typescript_web",
   "sdks/typescript/sdkgen_typescript_shared",
   "sdks/python/rust/*",
   "sdk_tests/harness_setup",
@@ -19,6 +20,7 @@ members = [
   # The failures surface via `cargo test`'s
   # `build_diagnostics::no_build_failures` test.
   "sdk_tests/crates/typescript",
+  "sdk_tests/crates/typescript_web",
   # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
   # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
   "tools_sccache",

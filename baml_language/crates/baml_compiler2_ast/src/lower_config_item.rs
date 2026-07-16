@@ -132,13 +132,15 @@ fn lower_config_value_node(
     let scalar_text = cst::ConfigValue::cast(cv_node.clone()).and_then(|cv| cv.scalar_text());
 
     if is_float && let Some(text) = &scalar_text {
-        return alloc(Expr::Literal(Literal::Float(text.clone())));
+        return alloc(Expr::Literal(Literal::Float(
+            baml_base::num_lit::normalize_float_literal(text),
+        )));
     }
 
     if is_int
         && let Some(value) = non_trivia()
             .find(|token| token.kind() == SyntaxKind::INTEGER_LITERAL)
-            .and_then(|token| token.text().parse::<i64>().ok())
+            .and_then(|token| baml_base::num_lit::parse_int_literal(token.text()).ok())
     {
         return alloc(Expr::Literal(Literal::Int(value)));
     }
