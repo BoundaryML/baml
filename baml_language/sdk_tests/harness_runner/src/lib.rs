@@ -53,6 +53,27 @@ pub fn run_test_cmd(fixture: &str, cmd: &str, cache_subdir: &str, cache_env_var:
     run_test_cmd_with_env(fixture, cmd, cache_subdir, cache_env_var, &[]);
 }
 
+/// Same as [`run_test_cmd`], but treats the listed process exit codes as
+/// successful outcomes. This lets a harness model tool-specific non-error
+/// statuses explicitly—for example, pytest uses exit code 5 when collection
+/// succeeds but finds no tests.
+pub fn run_test_cmd_allowing_exit_codes(
+    fixture: &str,
+    cmd: &str,
+    cache_subdir: &str,
+    cache_env_var: &str,
+    allowed_exit_codes: &[i32],
+) {
+    run_test_cmd_with_env_allowing_exit_codes(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        &[],
+        allowed_exit_codes,
+    );
+}
+
 /// Run the Go toolchain against one generated fixture. Prefer the repository's
 /// mise-managed Go binary so a globally installed `go` cannot accidentally use
 /// a different GOROOT than the pinned compiler.
@@ -140,6 +161,24 @@ pub fn run_test_cmd_with_env(
     cache_env_var: &str,
     extra_env: &[(&str, &str)],
 ) {
+    run_test_cmd_with_env_allowing_exit_codes(
+        fixture,
+        cmd,
+        cache_subdir,
+        cache_env_var,
+        extra_env,
+        &[],
+    );
+}
+
+fn run_test_cmd_with_env_allowing_exit_codes(
+    fixture: &str,
+    cmd: &str,
+    cache_subdir: &str,
+    cache_env_var: &str,
+    extra_env: &[(&str, &str)],
+    allowed_exit_codes: &[i32],
+) {
     let manifest = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set; run via `cargo test`"),
     );
@@ -165,8 +204,13 @@ pub fn run_test_cmd_with_env(
 
     let output = run_test_process(prog, &args, &dir, &cache_dir, cache_env_var, extra_env)
         .unwrap_or_else(|e| panic!("failed to spawn `{cmd}` for fixture `{fixture}`: {e}"));
+    let accepted = output.status.success()
+        || output
+            .status
+            .code()
+            .is_some_and(|code| allowed_exit_codes.contains(&code));
     assert!(
-        output.status.success(),
+        accepted,
         "fixture `{fixture}` `{cmd}` failed:\nstdout: {}\nstderr: {}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)

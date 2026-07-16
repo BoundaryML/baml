@@ -221,7 +221,13 @@ mod {fixture} {{
 
     #[test]
     fn pytest() {{
-        cmd("uv run pytest -v");
+        ::sdk_test_harness_runner::run_test_cmd_allowing_exit_codes(
+            "{fixture}",
+            "uv run pytest -v",
+            "{cache_subdir}",
+            "{cache_env_var}",
+            &[5],
+        );
     }}
 }}
 "#,
