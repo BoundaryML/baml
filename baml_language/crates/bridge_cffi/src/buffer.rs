@@ -1,9 +1,12 @@
 //! `Buffer` type for returning owned byte data across the FFI boundary.
 
-/// Buffer type for returning data across FFI boundary.
-/// Caller must free with `free_buffer()`.
+/// Owned byte buffer returned by the BAML runtime.
 ///
-/// This matches the Buffer struct expected by baml-sys.
+/// The bytes are not NUL-terminated. A zero length may have either a null or
+/// non-null pointer. The receiver must pass the original pair exactly once to
+/// the `free_buffer` function in the same API table that allocated it. The
+/// pointer is invalid after release. Never use a host allocator or a different
+/// loaded BAML library instance to release it.
 #[repr(C)]
 pub struct Buffer {
     pub ptr: *const i8,
