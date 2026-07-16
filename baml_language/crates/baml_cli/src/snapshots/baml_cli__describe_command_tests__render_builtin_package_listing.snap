@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
-class            baml.Bigint                      <builtin>/baml/bigint.baml:26
+class            baml.Bigint                      <builtin>/baml/bigint.baml:30
 class            baml.Bool                        <builtin>/baml/bool.baml:2
 interface        baml.Comparable                  <builtin>/baml/comparable.baml:29
 interface        baml.Sortable                    <builtin>/baml/comparable.baml:62
@@ -32,7 +32,7 @@ function         baml.deep_equals                 <builtin>/baml/core.baml:9
 class            baml.TaggedString                <builtin>/baml/core.baml:20
 class            baml.Float                       <builtin>/baml/float.baml:8
 function         baml._trunc_to_int               <builtin>/baml/float.baml:461
-class            baml.Int                         <builtin>/baml/int.baml:11
+class            baml.Int                         <builtin>/baml/int.baml:14
 class            baml.Null                        <builtin>/baml/null.baml:2
 class            baml.String                      <builtin>/baml/string.baml:5
 class            baml.TypeValue                   <builtin>/baml/type_class.baml:9
