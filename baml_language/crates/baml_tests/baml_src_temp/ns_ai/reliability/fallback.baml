@@ -13,12 +13,18 @@ implements Provider for Fallback {
 }
 
 implements GenerationProvider for Fallback {
-  function generate<T>(self, task: Task<T>) -> Response<T> throws baml.errors.UnknownError {
+  function generate<T>(self, task: Task<T>) -> Response<T>
+      throws baml.errors.CallError | baml.errors.UnknownError {
+    let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
     for (let member in self.members) {
       match (member) {
         let provider: GenerationProvider => {
           let response = provider.generate<T>(task.with_provider(member)) catch (e) {
-            _ => continue,
+            let failure: baml.errors.Failure => {
+              if (may_replay(policy, failure)) { continue; }
+              throw e;
+            },
+            _ => throw e,
           };
           return response;
         },
@@ -31,18 +37,22 @@ implements GenerationProvider for Fallback {
 
 implements DriveProvider for Fallback {
   function drive<T>(self, task: Task<T>) -> Response<T>
-      throws baml.errors.UnknownError | baml.errors.Unsupported {
+      throws baml.errors.CallError | baml.errors.UnknownError {
     for (let member in self.members) {
       match (member) {
         let provider: DriveProvider => {
           let policy = provider.replay_policy<T>(task.with_provider(member));
-          if (!can_replay(policy)) {
-            throw baml.errors.Unsupported {
-              message: "fallback refuses a provider without a replay-safe policy",
-            };
-          }
           let response = provider.drive<T>(task.with_provider(member)) catch (e) {
-            _ => continue,
+            let failure: baml.errors.Failure => {
+              if (may_replay(policy, failure)) { continue; }
+              if (failure.is_retryable()) {
+                throw baml.errors.CannotRetry {
+                  message: "fallback refused to replay " + member.name(),
+                };
+              }
+              throw e;
+            },
+            _ => throw e,
           };
           return response;
         },
@@ -53,6 +63,17 @@ implements DriveProvider for Fallback {
   }
 
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {
+    for (let member in self.members) {
+      match (member) {
+        let provider: DriveProvider => {
+          let policy = provider.replay_policy<T>(task.with_provider(member));
+          if (policy.kind != ReplayKind.Safe) {
+            return ReplayPolicy { kind: ReplayKind.Never, idempotency_key: null };
+          }
+        },
+        _ => return ReplayPolicy { kind: ReplayKind.Never, idempotency_key: null },
+      }
+    }
     ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null }
   }
 }

@@ -28,7 +28,7 @@ function InvestigateRepository_task(
 function InvestigateRepository_manual(
   ticket: SupportTicket,
   harness: root.ai.Provider,
-) -> Resolution throws baml.errors.UnknownError | baml.errors.Unsupported {
+) -> Resolution throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.drivers.drive<Resolution>(InvestigateRepository_task(ticket, harness))
 }
 

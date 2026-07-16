@@ -23,10 +23,7 @@ let fake = ai.testing.FakeToolProvider {
 ```baml
 let flaky = ai.testing.FakeDriveProvider {
   attempts: [
-    ai.testing.failure(
-      baml.errors.FailureKind.RateLimit,
-      baml.errors.CommitState.NotCommitted,
-    ),
+    ai.testing.retryable_failure("rate limited"),
     ai.testing.success(expected_resolution),
   ],
 }
@@ -52,4 +49,3 @@ constructors remain standard-library design work.
 
 - Fake providers appear throughout scenarios 01–42; scenarios 29 and 39 cover
   failure and hook behavior particularly well.
-

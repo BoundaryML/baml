@@ -2,12 +2,8 @@ class NamedHarness {
   inner: root.ai.ModelHarness,
 }
 
-implements root.ai.Provider for NamedHarness {
-  function name(self) -> string throws never { "custom-coding-harness" }
-  function render_shorthand(self) -> string throws never { self.inner.render_shorthand() }
-}
-
-implements root.ai.HarnessProvider for NamedHarness {
+implements root.ai.Harness for NamedHarness {
+  function label(self) -> string throws never { "custom-coding-harness" }
   function open(self, options: root.ai.HarnessOptions) -> root.ai.HarnessSession
       { self.inner.open(options) }
   function run<T>(self, session: root.ai.HarnessSession, task: root.ai.Task<T>) -> root.ai.HarnessRun<T>
@@ -20,15 +16,15 @@ implements root.ai.HarnessProvider for NamedHarness {
       throws baml.errors.UnknownError { self.inner.steer(session, instruction) }
   function interrupt(self, session: root.ai.HarnessSession) -> null
       throws baml.errors.UnknownError { self.inner.interrupt(session) }
-  function destroy(self, session: root.ai.HarnessSession) -> null
-      throws baml.errors.UnknownError { self.inner.destroy(session) }
 }
 
 test "guide 08.06: a custom harness composes through out-of-body implements" {
   let harness = NamedHarness { inner: fake_model_harness() };
-  let run = root.ai.drivers.run_harness<Resolution>(
-    InvestigateRepository_task(sample_ticket(), harness), harness_options(),
+  let run = root.ai.drivers.submit_harness<Resolution>(
+    harness,
+    InvestigateRepository_task(sample_ticket(), harness.inner.inner),
+    harness_options(),
   );
-  assert.equal(harness.name(), "custom-coding-harness")
+  assert.equal(harness.label(), "custom-coding-harness")
   assert.equal(run.value.category, "billing")
 }

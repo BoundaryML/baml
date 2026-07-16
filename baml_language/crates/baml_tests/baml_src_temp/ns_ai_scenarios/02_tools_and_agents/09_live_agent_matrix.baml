@@ -1,19 +1,20 @@
 testset "integ-test-guide-02-agent-capabilities" {
   test "guide 02 live OpenAI: dynamic tools, hooks, events, and parallel-capable dispatch" {
     let provider = root.ai.OpenAi {
+      ...root.ai.openai(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
-      base_url: null, extra_headers: null, extra_body: null,
     };
     let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
-    let hooks = no_op_hooks();
-    hooks.registry = registry;
-    hooks.tool_to_add = account_tool();
+    let hooks = GuideHooks { ...no_op_hooks(), tool_to_add: account_tool() };
     let observer = GuideObserver { kinds: [] };
-    let options = guide_agent_options([], guide_dispatch);
-    options.tool_registry = registry;
-    options.hooks = hooks;
-    options.observers = [observer];
+    let options = guide_agent_options(
+      [],
+      guide_dispatch,
+      tool_registry = registry,
+      hooks = hooks,
+      observers = [observer],
+    );
     let outcome = root.ai.drivers.run_agent<Resolution>(
       ResolveTicketWithTools_task(sample_ticket(), provider, []),
       options,
@@ -31,9 +32,9 @@ testset "integ-test-guide-02-agent-capabilities" {
 
   test "guide 02 live OpenAI: handoff stops before application dispatch" {
     let provider = root.ai.OpenAi {
+      ...root.ai.openai(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
-      base_url: null, extra_headers: null, extra_body: null,
     };
     let handoff = account_tool().as_handoff();
     let outcome = root.ai.drivers.run_agent<Resolution>(
@@ -46,4 +47,3 @@ testset "integ-test-guide-02-agent-capabilities" {
     }
   }
 }
-

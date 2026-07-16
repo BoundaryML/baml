@@ -233,7 +233,7 @@ class TranscriptImport {
 interface ToolCallingProvider requires Provider {
   function begin<T>(self, task: Task<T>) -> Transcript
     throws baml.errors.ToolError | baml.errors.UnknownError
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> T | ToolCalls
+  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
     throws baml.errors.ToolError | baml.errors.UnknownError
   function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript
     throws baml.errors.ToolError | baml.errors.UnknownError
@@ -253,6 +253,7 @@ class Tool { name: string, description: string, parameters: type }
 class ToolCall { id: string, name: string, args: json }
 class ToolResult { id: string, output: json, is_error: bool }
 class ToolCalls { calls: ToolCall[] }
+class ModelStep<T> { outcome: T | ToolCalls, meta: Meta }
 ```
 
 `ToolCallingProvider` does not imply a native vendor tool API. Native adapters
@@ -266,18 +267,27 @@ the per-step tool roster is resolved.
 ```baml
 class Budget { max_steps: int?, max_cost_usd: float? }
 class Done<T> { value: T, meta: Meta, transcript: Transcript }
-class BudgetReached { transcript: Transcript, steps_taken: int }
+class BudgetReached { transcript: Transcript, steps_taken: int, reason: string }
 class Handoff { to: string, args: json, transcript: Transcript, steps_taken: int }
 type AgentRun<T> = Done<T> | BudgetReached | Handoff
 
 interface AgentHooks {
-  function prepare_step(self, context: StepContext) -> StepPlan throws never
+  function prepare_step(self, context: StepContext) -> StepPlan
+    throws baml.errors.ToolError
   function before_tool_call(self, event: BeforeToolCall) -> ToolDecision throws never
   function after_tool_call(self, event: AfterToolCall) -> void throws never
   function on_event(self, event: AgentEvent) -> void throws never
 }
 
 class StepPlan { provider: Provider?, tools: Tool[]?, stop: AgentStop? }
+class StepContext {
+  provider: Provider,
+  tools: Tool[],
+  tool_registry: ToolRegistry,
+  usage: Usage,
+  state: map<string, unknown>,
+  transcript: Transcript,
+}
 class AgentOptions {
   budget: Budget?,
   // null inherits task tools; [] intentionally clears application tools.
@@ -286,6 +296,7 @@ class AgentOptions {
   hooks: AgentHooks?,
   observers: AgentObserver[],
   recorders: AgentRecorder[],
+  state: map<string, unknown>,
 }
 ```
 
@@ -323,6 +334,11 @@ interface RealtimeProvider requires Provider {
 interface ManagedCacheProvider requires Provider {
   function create_cache(self, content: Messages, options: CacheOptions) -> Cache
 }
+
+interface Resource {
+  // Idempotent: repeated calls have no additional effect.
+  function cleanup(self) -> void
+}
 ```
 
 `Job<T>`, `Batch<T>`, `Session`, `Live`, and `Cache` are resource interfaces
@@ -356,6 +372,9 @@ function drivers.open_session<P extends SessionProvider>(provider: P, options: S
 function drivers.run_in_session<T>(session: Session, task: Task<T>) -> Response<T>
 function drivers.open_live<T, P extends RealtimeProvider>(task: Task<T, P>, channel: Channel) -> Live
 function drivers.create_cache<P extends ManagedCacheProvider>(provider: P, content: Messages, options: CacheOptions) -> Cache
+function drivers.transcribe<P extends TranscriptionProvider>(provider: P, stream: AudioStream, options: TranscriptionOptions) -> string
+function drivers.transcribe_with_meta<P extends TranscriptionProvider>(provider: P, stream: AudioStream, options: TranscriptionOptions) -> Response<string>
+function drivers.submit_harness<H extends Harness, T>(harness: H, task: Task<T>, options: HarnessOptions) -> HarnessRun<T>
 ```
 
 Initial specialized provider families use the same naming rule:
@@ -401,12 +420,18 @@ may define their own wrapper interfaces and blanket implementations.
 
 ```baml
 interface Failure {
-  function kind(self) -> FailureKind throws never
-  function commit_state(self) -> CommitState throws never
-  function retry_after(self) -> baml.time.Duration? throws never
+  function is_retryable(self) -> bool throws never
+  function is_effectful(self) -> bool throws never
+  function is_policy_refusal(self) -> bool throws never
+  function is_resumable(self) -> bool throws never
+  function is_unsupported(self) -> bool throws never
 }
 
-interface CallError requires Failure {}
+interface CallError requires Failure {
+  function is_network_error(self) -> bool throws never
+  function is_rate_limit(self) -> bool throws never
+  function is_parse_error(self) -> bool throws never
+}
 interface StreamError requires Failure {}
 interface ToolError requires Failure {}
 interface TranscriptError requires Failure {}

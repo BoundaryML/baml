@@ -13,13 +13,14 @@ class FakeToolTranscript {
 }
 
 class FakeToolProvider {
+  provider_name: string,
   tool_calls: ToolCall[],
   final_output: string,
   provider_tools: ProviderTool[],
 }
 
 implements Provider for FakeToolProvider {
-  function name(self) -> string throws never { "fake-tools" }
+  function name(self) -> string throws never { self.provider_name }
   function render_shorthand(self) -> string throws never { "openai/gpt-5.6-luna" }
 }
 
@@ -31,7 +32,7 @@ implements GenerationProvider for FakeToolProvider {
     Response<T> {
       value: value,
       meta: Meta {
-        provider: "fake-tools", model: "fake", request_id: null,
+        provider: self.provider_name, model: "fake", request_id: null,
         finish_reason: "stop", usage: null, attributes: {}, raw: null,
       },
       transcript: null,
@@ -50,7 +51,7 @@ implements ToolCallingProvider for FakeToolProvider {
     }
   }
 
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> T | ToolCalls
+  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
       throws baml.errors.UnknownError {
     let state = match (transcript) {
       let value: FakeToolTranscript => value,
@@ -60,10 +61,17 @@ implements ToolCallingProvider for FakeToolProvider {
     state.last_provider_tools = self.provider_tools;
     if (state.turn == 0 && self.tool_calls.length() > 0) {
       state.turn = 1;
-      return ToolCalls { calls: self.tool_calls };
+      return ModelStep<T> {
+        outcome: ToolCalls { calls: self.tool_calls },
+        meta: fake_tool_step_meta(self.name(), state.turn),
+      };
     }
-    baml.sap.parse<T>(self.final_output) catch (e) {
+    let value = baml.sap.parse<T>(self.final_output) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["fake tool final parse failed"] },
+    };
+    ModelStep<T> {
+      outcome: value,
+      meta: fake_tool_step_meta(self.name(), state.turn + 1),
     }
   }
 
@@ -85,5 +93,117 @@ implements TranscriptImportProvider for FakeToolProvider {
       fidelity: TranscriptFidelity.MessagesOnly,
       warnings: [],
     }
+  }
+}
+
+class ScriptedToolTranscript {
+  owner: ScriptedToolProvider,
+  history: Conversation,
+  turn: int,
+  observed_tool_rosters: string[][],
+  submitted_results: ToolResult[][],
+
+  implements Transcript {
+    function provider(self) -> Provider throws never { self.owner }
+    function messages(self) -> Messages throws never { self.history }
+    function conversation(self) -> Conversation throws never { self.history }
+  }
+}
+
+class ScriptedToolProvider {
+  turns: ToolCalls[],
+  final_output: string,
+  usage_per_step: Usage?,
+}
+
+implements Provider for ScriptedToolProvider {
+  function name(self) -> string throws never { "scripted-tools" }
+  function render_shorthand(self) -> string throws never { "openai/gpt-5.6-luna" }
+}
+
+implements ToolCallingProvider for ScriptedToolProvider {
+  function begin<T>(self, task: Task<T>) -> Transcript throws never {
+    ScriptedToolTranscript {
+      owner: self,
+      history: task.messages().to_conversation(),
+      turn: 0,
+      observed_tool_rosters: [],
+      submitted_results: [],
+    }
+  }
+
+  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
+      throws baml.errors.UnknownError {
+    let state = match (transcript) {
+      let value: ScriptedToolTranscript => value,
+      _ => throw baml.errors.UnknownError {
+        data: null,
+        message: ["wrong scripted tool transcript"],
+      },
+    };
+    state.observed_tool_rosters.push(
+      tools.map((tool: Tool) -> string { tool.name }),
+    );
+    if (state.turn < self.turns.length()) {
+      let calls = self.turns[state.turn];
+      state.turn = state.turn + 1;
+      return ModelStep<T> {
+        outcome: calls,
+        meta: scripted_tool_step_meta(self, state.turn),
+      };
+    }
+    let value = baml.sap.parse<T>(self.final_output) catch (e) {
+      _ => throw baml.errors.UnknownError {
+        data: e,
+        message: ["scripted tool final parse failed"],
+      },
+    };
+    ModelStep<T> {
+      outcome: value,
+      meta: scripted_tool_step_meta(self, state.turn + 1),
+    }
+  }
+
+  function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript
+      throws baml.errors.UnknownError {
+    let state = match (transcript) {
+      let value: ScriptedToolTranscript => value,
+      _ => throw baml.errors.UnknownError {
+        data: null,
+        message: ["wrong scripted tool transcript"],
+      },
+    };
+    state.submitted_results.push(results);
+    state
+  }
+}
+
+function fake_tool_step_meta(provider: string, turn: int) -> Meta throws never {
+  Meta {
+    provider: provider,
+    model: "fake",
+    request_id: "fake-tool-" + turn.to_string(),
+    finish_reason: null,
+    usage: Usage {
+      input_tokens: 1,
+      output_tokens: 1,
+      cached_input_tokens: 0,
+      reasoning_tokens: 0,
+      cost_usd: 0.0,
+    },
+    attributes: {},
+    raw: null,
+  }
+}
+
+function scripted_tool_step_meta(provider: ScriptedToolProvider, turn: int) -> Meta throws never {
+  Meta {
+    provider: provider.name(),
+    model: "fake",
+    request_id: "scripted-tool-" + turn.to_string(),
+    finish_reason: null,
+    usage: provider.usage_per_step,
+    attributes: {},
+    raw: null,
   }
 }

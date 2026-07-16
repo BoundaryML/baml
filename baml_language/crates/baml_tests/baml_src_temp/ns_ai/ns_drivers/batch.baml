@@ -1,6 +1,6 @@
 function submit_batch<T>(
-  tasks: root.ai.Task<T>[],
   provider: root.ai.Provider,
+  tasks: root.ai.Task<T>[],
   options: root.ai.BatchOptions,
 ) -> root.ai.Batch<T> throws baml.errors.UnknownError | baml.errors.Unsupported {
   match (provider) {
@@ -8,4 +8,3 @@ function submit_batch<T>(
     _ => throw baml.errors.Unsupported { message: "provider cannot submit batches" },
   }
 }
-

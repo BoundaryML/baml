@@ -15,7 +15,7 @@ enum JobStatus {
   Cancelled
 }
 
-interface Job<T> {
+interface Job<T> requires Resource {
   function status(self) -> JobStatus throws never
   function poll(self) -> Response<T>? throws baml.errors.UnknownError
   function cancel(self) -> null throws baml.errors.UnknownError
@@ -44,6 +44,9 @@ class FakeJob<T> {
     function cancel(self) -> null throws never { self.cancelled = true; null }
     function token(self) -> JobToken throws never { self.job_token }
   }
+  implements Resource {
+    function cleanup(self) -> null throws never { self.cancel() }
+  }
 }
 
 class FakeBackgroundProvider {
@@ -64,7 +67,12 @@ implements BackgroundProvider for FakeBackgroundProvider {
         id: options.idempotency_key ?? "fake-job",
         sealed: self.inner.output,
       },
-      response: self.inner.generate<T>(task.with_provider(self.inner)),
+      response: self.inner.generate<T>(task.with_provider(self.inner)) catch (e) {
+        _ => throw baml.errors.UnknownError {
+          data: e,
+          message: ["fake background generation failed"],
+        },
+      },
       cancelled: false,
     }
   }
@@ -76,4 +84,3 @@ implements BackgroundProvider for FakeBackgroundProvider {
     self.submit<T>(task, BackgroundOptions { idempotency_key: token.id })
   }
 }
-

@@ -225,13 +225,13 @@ These are different operations and must not be collapsed into one generic
 “try another client” example:
 
 - **retry** repeats the same operation on the same provider when replay policy
-  and failure commit state permit it;
+  and typed failure predicates permit it;
 - **fallback** rebinds a bounded task to another provider before observable
   output or committed effects make replay unsafe;
 - **planned mid-loop switching** uses `prepare_step`, transcript conversion,
   and a `ProviderChanged` event; and
 - **failure-driven mid-loop switching** needs an explicit driver decision that
-  checks replay policy, commit state, observed output, and transcript-import
+  checks replay policy, effectfulness, observed output, and transcript-import
   fidelity before continuing.
 
 The current BEP specifies planned switching but does not yet give

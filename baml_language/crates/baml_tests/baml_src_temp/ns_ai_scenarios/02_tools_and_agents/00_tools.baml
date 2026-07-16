@@ -15,9 +15,22 @@ function account_tool() -> root.ai.Tool throws never {
 function guide_dispatch(calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never {
   calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
     if (call.name == "search_knowledge") {
-      root.ai.ToolResult.ok(call, { "article": "Duplicate charges are normally pending authorizations." })
+      let args = baml.json.from_json<KnowledgeLookupArgs>(call.args) catch (e) {
+        _ => return root.ai.ToolResult.error(call, "invalid search_knowledge arguments"),
+      };
+      root.ai.ToolResult.ok(call, {
+        "query": args.query,
+        "article": "Duplicate charges are normally pending authorizations.",
+      })
     } else if (call.name == "lookup_account") {
-      root.ai.ToolResult.ok(call, { "status": "active", "tier": "pro" })
+      let args = baml.json.from_json<AccountLookupArgs>(call.args) catch (e) {
+        _ => return root.ai.ToolResult.error(call, "invalid lookup_account arguments"),
+      };
+      root.ai.ToolResult.ok(call, {
+        "customer_id": args.customer_id,
+        "status": "active",
+        "tier": "pro",
+      })
     } else {
       root.ai.ToolResult.error(call, "unknown tool")
     }
@@ -58,21 +71,25 @@ function ResolveTicketWithTools_manual(
   ticket: SupportTicket,
   agent: root.ai.Provider,
   tools: root.ai.Tool[],
-) -> Resolution throws baml.errors.UnknownError | baml.errors.Unsupported {
+) -> Resolution throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.drivers.drive<Resolution>(ResolveTicketWithTools_task(ticket, agent, tools))
 }
 
 function guide_agent_options(
   tools: root.ai.Tool[],
   dispatch: (root.ai.ToolCall[]) -> root.ai.ToolResult[] throws never,
+  tool_registry: root.ai.ToolRegistry? = null,
+  hooks: root.ai.AgentHooks? = null,
+  observers: root.ai.AgentObserver[] = [],
 ) -> root.ai.AgentOptions throws never {
   root.ai.AgentOptions {
     budget: root.ai.Budget { max_steps: 5, max_cost_usd: null },
     tools: tools,
-    tool_registry: null,
-    hooks: null,
-    observers: [],
+    tool_registry: tool_registry,
+    hooks: hooks,
+    observers: observers,
     recorders: [],
+    state: {},
     dispatch: dispatch,
     run_id: "guide-agent",
   }
@@ -89,7 +106,6 @@ class GuideObserver {
 }
 
 class GuideHooks {
-  registry: root.ai.ToolRegistry?,
   tool_to_add: root.ai.Tool?,
   block_name: string?,
   replace_name: string?,
@@ -98,15 +114,13 @@ class GuideHooks {
   hook_events: string[],
 
   implements root.ai.AgentHooks {
-    function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan throws never {
+    function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan
+        throws baml.errors.ToolError {
       if (context.step == 0) {
-        match (self.registry) {
-          let registry: root.ai.ToolRegistry => match (self.tool_to_add) {
-            let tool: root.ai.Tool => registry.add(tool),
-            null => null,
-          },
+        match (self.tool_to_add) {
+          let tool: root.ai.Tool => context.tool_registry.add(tool),
           null => null,
-        };
+        }
       }
       root.ai.StepPlan {
         provider: if (context.step == 1) { self.switch_after_step } else { null },
@@ -143,7 +157,6 @@ class GuideHooks {
 
 function no_op_hooks() -> GuideHooks throws never {
   GuideHooks {
-    registry: null,
     tool_to_add: null,
     block_name: null,
     replace_name: null,
@@ -153,10 +166,14 @@ function no_op_hooks() -> GuideHooks throws never {
   }
 }
 
-function fake_tool_provider(calls: root.ai.ToolCall[]) -> root.ai.FakeToolProvider throws never {
+function fake_tool_provider(
+  calls: root.ai.ToolCall[],
+  provider_tools: root.ai.ProviderTool[] = [],
+) -> root.ai.FakeToolProvider throws never {
   root.ai.FakeToolProvider {
+    provider_name: "fake-tools",
     tool_calls: calls,
-    provider_tools: [],
+    provider_tools: provider_tools,
     final_output: `{
       "category":"billing",
       "priority":"Urgent",
@@ -170,9 +187,7 @@ function fake_tool_provider_with_builtins(
   calls: root.ai.ToolCall[],
   provider_tools: root.ai.ProviderTool[],
 ) -> root.ai.FakeToolProvider throws never {
-  let provider = fake_tool_provider(calls);
-  provider.provider_tools = provider_tools;
-  provider
+  fake_tool_provider(calls, provider_tools = provider_tools)
 }
 
 function one_knowledge_call() -> root.ai.ToolCall throws never {

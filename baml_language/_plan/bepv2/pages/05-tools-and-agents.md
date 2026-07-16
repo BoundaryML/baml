@@ -177,17 +177,23 @@ The provider step protocol consumes the shared transcript interface:
 ```baml
 interface ToolCallingProvider requires Provider {
   function begin<T>(self, task: Task<T>) -> Transcript
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> T | ToolCalls
+  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
   function submit(
     self,
     transcript: Transcript,
     results: ToolResult[],
   ) -> Transcript
 }
+
+class ModelStep<T> {
+  outcome: T | ToolCalls,
+  meta: Meta,
+}
 ```
 
 `ToolCallingProvider` does not require `GenerationProvider`. Its `step<T>`
-already defines the model-turn operation needed by an agent loop, and a
+already defines the model-turn operation and returns the per-turn metadata
+needed for usage events and cost budgets. A
 provider may honestly support a tool loop without exposing a separate one-shot
 generation API. Concrete OpenAI and Anthropic adapters normally implement both
 capabilities; drivers depend only on the one they actually call.
@@ -311,7 +317,7 @@ result so the provider protocol remains complete.
 `prepare_step` may select a new provider:
 
 ```baml
-function prepare_step(self, ctx: StepContext) -> StepPlan {
+function prepare_step(self, ctx: StepContext) -> StepPlan throws baml.errors.ToolError {
   if (ctx.usage.cost_usd > 0.25) {
     StepPlan { provider: CheapModel, tools: null, stop: null }
   } else {
@@ -340,7 +346,7 @@ function prepare_step(self, ctx: StepContext) -> StepPlan {
     let mcp = baml.mcp.connect(ctx.state.get_or_panic("mcp_url"))
     ctx.tool_registry.add_all(mcp.tools())
   }
-  StepPlan { provider: null, tools: ctx.tool_registry.snapshot(), stop: null }
+  StepPlan { provider: null, tools: null, stop: null }
 }
 ```
 

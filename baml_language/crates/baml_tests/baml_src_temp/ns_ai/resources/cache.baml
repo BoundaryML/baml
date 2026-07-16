@@ -2,7 +2,7 @@ class CacheOptions {
   ttl: baml.time.Duration,
 }
 
-interface Cache {
+interface Cache requires Resource {
   function key(self) -> string throws never
   function delete(self) -> null throws never
 }
@@ -19,6 +19,9 @@ class FakeCache {
     function key(self) -> string throws never { self.cache_key }
     function delete(self) -> null throws never { self.deleted = true; null }
   }
+  implements Resource {
+    function cleanup(self) -> null throws never { self.delete() }
+  }
 }
 
 class FakeCacheProvider {
@@ -32,4 +35,3 @@ class FakeCacheProvider {
     }
   }
 }
-

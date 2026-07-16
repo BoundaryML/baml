@@ -68,29 +68,94 @@ class ToolCalls {
   calls: ToolCall[],
 }
 
+class ToolRegistryError {
+  name: string,
+  message: string,
+}
+
+implements baml.errors.Failure for ToolRegistryError {
+  function is_retryable(self) -> bool throws never { false }
+  function is_effectful(self) -> bool throws never { false }
+  function is_policy_refusal(self) -> bool throws never { false }
+  function is_resumable(self) -> bool throws never { false }
+  function is_unsupported(self) -> bool throws never { false }
+}
+
+implements baml.errors.ToolError for ToolRegistryError {
+  function is_network_error(self) -> bool throws never { false }
+}
+
 class ToolRegistry {
   roster: Tool[],
+  version: int,
 
-  function new(tools: Tool[]) -> ToolRegistry throws never {
-    ToolRegistry { roster: tools }
+  function new(tools: Tool[]) -> ToolRegistry throws baml.errors.ToolError {
+    let registry = ToolRegistry { roster: [], version: 0 };
+    for (let tool in tools) { registry.add(tool); }
+    registry
   }
 
-  function add(self, tool: Tool) -> null throws never {
+  function add(self, tool: Tool) -> null throws baml.errors.ToolError {
     for (let existing in self.roster) {
-      if (existing.name == tool.name) { return null; }
+      if (existing.name == tool.name) {
+        throw ToolRegistryError {
+          name: tool.name,
+          message: "tool name is already registered: " + tool.name,
+        };
+      }
     }
     self.roster.push(tool);
+    self.version = self.version + 1;
+    null
+  }
+
+  function add_all(self, tools: Tool[]) -> null throws baml.errors.ToolError {
+    let combined = self.snapshot();
+    for (let tool in tools) { combined.push(tool); }
+    let replacement = ToolRegistry.new(combined);
+    self.roster = replacement.roster;
+    self.version = self.version + 1;
+    null
+  }
+
+  function contains(self, name: string) -> bool throws never {
+    self.roster.filter((tool: Tool) -> bool { tool.name == name }).length() == 1
+  }
+
+  function replace(self, tool: Tool) -> bool throws never {
+    let replaced = false;
+    self.roster = self.roster.map((existing: Tool) -> Tool {
+      if (existing.name == tool.name) {
+        replaced = true;
+        tool
+      } else {
+        existing
+      }
+    });
+    if (replaced) { self.version = self.version + 1; }
+    replaced
+  }
+
+  function replace_all(self, tools: Tool[]) -> null throws baml.errors.ToolError {
+    let replacement = ToolRegistry.new(tools);
+    self.roster = replacement.roster;
+    self.version = self.version + 1;
     null
   }
 
   function remove(self, name: string) -> bool throws never {
     let before = self.roster.length();
     self.roster = self.roster.filter((tool: Tool) -> bool { tool.name != name });
-    self.roster.length() != before
+    let removed = self.roster.length() != before;
+    if (removed) { self.version = self.version + 1; }
+    removed
   }
 
   function clear(self) -> null throws never {
-    self.roster = [];
+    if (self.roster.length() > 0) {
+      self.roster = [];
+      self.version = self.version + 1;
+    }
     null
   }
 

@@ -6,7 +6,7 @@ not application message reconstruction, owns exact continuation.
 ## Start
 
 ```baml
-let session = CodeHarness.open(ai.SessionOptions {
+let session = CodeHarness.open(ai.HarnessOptions {
   cwd: "/workspace",
   permission_mode: "accept-edits",
 })

@@ -11,6 +11,7 @@ class AgentOptions {
   hooks: AgentHooks?,
   observers: AgentObserver[],
   recorders: AgentRecorder[],
+  state: map<string, unknown>,
   dispatch: (ToolCall[]) -> ToolResult[] throws never,
   run_id: string?,
 }
@@ -24,6 +25,7 @@ class Done<T> {
 class BudgetReached {
   transcript: Transcript,
   steps_taken: int,
+  reason: string,
 }
 
 class Handoff {
@@ -48,8 +50,18 @@ function emit_agent_event(event: AgentEvent, options: AgentOptions) -> null thro
   publish(event, options.observers, options.recorders)
 }
 
+function add_usage(total: Usage, next: Usage) -> null throws never {
+  total.input_tokens = total.input_tokens + next.input_tokens;
+  total.output_tokens = total.output_tokens + next.output_tokens;
+  total.cached_input_tokens = (total.cached_input_tokens ?? 0) + (next.cached_input_tokens ?? 0);
+  total.reasoning_tokens = (total.reasoning_tokens ?? 0) + (next.reasoning_tokens ?? 0);
+  total.cost_usd = (total.cost_usd ?? 0.0) + (next.cost_usd ?? 0.0);
+  null
+}
+
 function run_tool_calls(
   calls: ToolCall[],
+  active_tools: Tool[],
   options: AgentOptions,
   step: int,
 ) -> ToolResult[] throws never {
@@ -59,6 +71,18 @@ function run_tool_calls(
     emit_agent_event(ToolCallEvent {
       id: options.run_id, phase: "proposed", call: original, result: null,
     }, options);
+    let known = active_tools.filter((tool: Tool) -> bool { tool.name == original.name });
+    if (known.length() != 1) {
+      let unavailable = ToolResult.error(original, "tool is not in the active registry");
+      results.push(unavailable);
+      emit_agent_event(ToolCallEvent {
+        id: options.run_id,
+        phase: "blocked",
+        call: original,
+        result: unavailable,
+      }, options);
+      continue;
+    }
     let decision = match (options.hooks) {
       let hooks: AgentHooks => hooks.before_tool_call(BeforeToolCall {
         run_id: options.run_id, step: step, call: original,
@@ -117,9 +141,28 @@ function run_tool_calls(
 
 function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetReached | Handoff
     throws baml.errors.ToolError | baml.errors.UnknownError | baml.errors.Unsupported {
-  let selected: Provider = task.provider;
+  // A provider transcript is authoritative continuation state. Switching its
+  // owner requires explicit import; display names are not identity keys.
+  let selected: Provider = match (task.transcript) {
+    let existing: Transcript => existing.provider(),
+    null => task.provider,
+  };
   let provider = tool_calling_provider(selected);
-  let transcript = provider.begin<T>(task);
+  let transcript = match (task.transcript) {
+    let existing: Transcript => existing,
+    null => provider.begin<T>(task),
+  };
+  let registry = match (options.tool_registry) {
+    let existing: ToolRegistry => existing,
+    null => ToolRegistry.new(options.tools ?? task.tools),
+  };
+  let usage = Usage {
+    input_tokens: 0,
+    output_tokens: 0,
+    cached_input_tokens: 0,
+    reasoning_tokens: 0,
+    cost_usd: 0.0,
+  };
   let steps = 0;
   while (true) {
     // A step is one provider.step call, including the final value-producing
@@ -129,13 +172,20 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
       let max: int if steps >= max => return BudgetReached {
         transcript: transcript,
         steps_taken: steps,
+        reason: "max_steps",
       },
       _ => {},
     }
-    let tools = match (options.tool_registry) {
-      let registry: ToolRegistry => registry.snapshot(),
-      null => options.tools ?? task.tools,
-    };
+    match (options.budget?.max_cost_usd) {
+      let max: float if (usage.cost_usd ?? 0.0) >= max => return BudgetReached {
+        transcript: transcript,
+        steps_taken: steps,
+        reason: "max_cost_usd",
+      },
+      _ => {},
+    }
+    let tools = registry.snapshot();
+    let roster_version = registry.version;
     match (options.hooks) {
       let hooks: AgentHooks => {
         let plan = hooks.prepare_step(StepContext {
@@ -143,17 +193,21 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
           step: steps,
           provider: selected,
           tools: tools,
+          tool_registry: registry,
+          usage: usage,
+          state: options.state,
           transcript: transcript,
         });
         match (plan.stop) {
           let stop: AgentStop => return BudgetReached {
             transcript: transcript,
             steps_taken: steps,
+            reason: stop.reason,
           },
           null => {},
         }
         match (plan.tools) {
-          let replacement: Tool[] => { tools = replacement; },
+          let replacement: Tool[] => registry.replace_all(replacement),
           null => {},
         }
         match (plan.provider) {
@@ -165,21 +219,44 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
               },
             };
             let imported = importer.import_conversation(transcript.conversation());
+            let previous = selected.name();
             selected = next;
             provider = importer;
             transcript = imported.transcript;
+            emit_agent_event(ProviderChangedEvent {
+              id: options.run_id,
+              from_provider: previous,
+              to_provider: selected.name(),
+              fidelity: imported.fidelity,
+              warnings: imported.warnings,
+            }, options);
           },
           null => {},
         }
       },
       null => {},
     }
+    if (registry.version != roster_version) {
+      emit_agent_event(ToolRosterChangedEvent {
+        id: options.run_id,
+        step: steps,
+        tools: registry.snapshot().map((tool: Tool) -> string { tool.name }),
+      }, options);
+    }
+    tools = registry.snapshot();
     emit_agent_event(ModelStartedEvent {
       id: options.run_id, provider: selected.name(),
     }, options);
     let step_result = provider.step<T>(transcript, tools);
     steps = steps + 1;
-    match (step_result) {
+    match (step_result.meta.usage) {
+      let step_usage: Usage => {
+        add_usage(usage, step_usage);
+        emit_agent_event(UsageEvent { id: options.run_id, usage: usage }, options);
+      },
+      null => {},
+    }
+    match (step_result.outcome) {
       let calls: ToolCalls => {
         for (let call in calls.calls) {
           if (is_handoff(tools, call)) {
@@ -194,7 +271,7 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
             };
           }
         }
-        let results = run_tool_calls(calls.calls, options, steps);
+        let results = run_tool_calls(calls.calls, tools, options, steps);
         transcript = provider.submit(transcript, results);
       },
       let value: T => {
@@ -203,7 +280,7 @@ function run_agent<T>(task: Task<T>, options: AgentOptions) -> Done<T> | BudgetR
           model: null,
           request_id: options.run_id,
           finish_reason: "agent_complete",
-          usage: null,
+          usage: usage,
           attributes: { "steps": steps },
           raw: null,
         };
@@ -239,6 +316,7 @@ implements DriveProvider for Agent {
       hooks: self.hooks ?? task.options.hooks,
       observers: task.options.observers,
       recorders: task.options.recorders,
+      state: {},
       dispatch: task.options.dispatch ?? self.dispatch,
       run_id: task.options.run_id,
     }) catch (e) {

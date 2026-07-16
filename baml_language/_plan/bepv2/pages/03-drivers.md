@@ -28,7 +28,8 @@ The initial standard library should ship the following families.
 | `open_live` | `Task<T>` + channel/options | `Live` | realtime duplex resource |
 | `create_cache` | provider + messages/options | `Cache` | provider-managed context cache |
 | `generate_image` | image task/options | `ImageResult` | image generation/editing |
-| `transcribe` | transcription task/options | `TranscriptionResult` | speech-to-text |
+| `transcribe` | provider + finite audio/options | `string` | speech-to-text |
+| `transcribe_with_meta` | provider + finite audio/options | `Response<string>` | speech-to-text plus metadata |
 | `generate_speech` | speech task/options | `SpeechResult` | text-to-speech |
 | `embed` | embedding task/options | `EmbeddingResult` | embeddings |
 | `rerank` | rerank task/options | `RerankResult` | ranking |
@@ -130,7 +131,8 @@ step without owning the transcript:
 
 ```baml
 interface AgentHooks {
-  function prepare_step(self, context: StepContext) -> StepPlan throws never
+  function prepare_step(self, context: StepContext) -> StepPlan
+    throws baml.errors.ToolError
   function before_tool_call(self, event: BeforeToolCall) -> ToolDecision throws never
   function after_tool_call(self, event: AfterToolCall) -> void throws never
   function on_event(self, event: AgentEvent) -> void throws never

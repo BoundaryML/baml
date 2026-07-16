@@ -7,10 +7,10 @@ private implementation choices.
 ## Capability shape
 
 ```baml
-interface Harness requires ai.Provider {
+interface Harness {
   type HarnessSession = unknown
 
-  function open(self, options: ai.SessionOptions) -> Self.HarnessSession
+  function open(self, options: ai.HarnessOptions) -> Self.HarnessSession
   function run<T>(self, session: Self.HarnessSession, task: ai.Task<T>)
     -> ai.AgentRun<T>
   function stream<T>(self, session: Self.HarnessSession, task: ai.Task<T>)
@@ -20,7 +20,6 @@ interface Harness requires ai.Provider {
   function restore_session(self, token: ai.HarnessSessionToken)
     -> Self.HarnessSession
   function stop(self, session: Self.HarnessSession) -> void
-  function destroy(self, session: Self.HarnessSession) -> void
 }
 ```
 
@@ -30,18 +29,20 @@ interface Harness requires ai.Provider {
 class ClaudeJsonl {
   binary: string,
   workspace: string,
-  implements ai.Provider {}
 }
 
 class ClaudeSession {
   process_id: string,
   conversation_id: string,
+  implements ai.Resource {
+    function cleanup(self) -> void { /* idempotently stop and release */ }
+  }
 }
 
 implements Harness for ClaudeJsonl {
   type HarnessSession = ClaudeSession
 
-  function open(self, options: ai.SessionOptions) -> ClaudeSession {
+  function open(self, options: ai.HarnessOptions) -> ClaudeSession {
     // Ask the host transport to spawn the process and negotiate the protocol.
   }
 
@@ -50,7 +51,7 @@ implements Harness for ClaudeJsonl {
     // Render task, write JSONL, decode frames, preserve tool IDs and metadata.
   }
 
-  // run/save/restore/stop/destroy follow the same owned session.
+  // run/save/restore/stop follow the same owned session.
 }
 ```
 
@@ -73,7 +74,7 @@ owned transport instead of inventing a nonexistent `baml.process` API.
 ## Test it
 
 Use a scripted transport to verify framing, event order, typed terminal parse,
-session token round-trip, stop/destroy behavior, and malformed-frame failures.
+session token round-trip, stop/cleanup behavior, and malformed-frame failures.
 
 ## Related design and scenarios
 

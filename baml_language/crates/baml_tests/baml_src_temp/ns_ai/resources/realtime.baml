@@ -35,7 +35,7 @@ class LiveClosed {
   }
 }
 
-interface Live {
+interface Live requires Resource {
   function events(self) -> LiveEvent[] throws never
   function cancel_response(self) -> null throws baml.errors.UnknownError
   function truncate_assistant_audio(self, played_ms: int) -> null throws baml.errors.UnknownError
@@ -50,11 +50,21 @@ interface RealtimeProvider requires Provider {
 class BufferedLive {
   items: LiveEvent[],
   channel: Channel,
+  is_closed: bool,
   implements Live {
     function events(self) -> LiveEvent[] throws never { self.items }
     function cancel_response(self) -> null throws never { null }
     function truncate_assistant_audio(self, played_ms: int) -> null throws never { null }
-    function close(self) -> null throws never { self.channel.close() }
+    function close(self) -> null throws never {
+      if (!self.is_closed) {
+        self.channel.close();
+        self.is_closed = true;
+      }
+      null
+    }
+  }
+  implements Resource {
+    function cleanup(self) -> null throws never { self.close() }
   }
 }
 
@@ -70,6 +80,7 @@ class FakeRealtimeProvider {
       BufferedLive {
         items: [TranscriptDelta { text: self.transcript }, LiveClosed {}],
         channel: channel,
+        is_closed: false,
       }
     }
   }
@@ -135,6 +146,7 @@ implements RealtimeProvider for OpenAiRealtime {
     BufferedLive {
       items: [TranscriptDelta { text: text }, LiveClosed {}],
       channel: channel,
+      is_closed: false,
     }
   }
 }

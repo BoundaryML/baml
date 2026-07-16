@@ -17,6 +17,6 @@ call for every local policy assertion:
 - production: real-provider task paths; resource-wire gaps are D-007
 - external harnesses: the harness adapter over both OpenAI and Anthropic
 
-All live declarations start with `integ-test-`. They are compile-checked now
-and intentionally not executed until separately authorized.
-
+All live declarations start with `integ-test-`. They are compile-checked with
+the offline suite and can be selected independently with `baml test -i`; live
+execution requires the corresponding provider credentials.

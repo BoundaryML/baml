@@ -10,21 +10,21 @@ implements Provider for Retry {
 
 implements GenerationProvider for Retry {
   function generate<T>(self, task: Task<T>) -> Response<T>
-      throws baml.errors.UnknownError | baml.errors.Unsupported {
+      throws baml.errors.CallError | baml.errors.UnknownError {
     let provider = match (self.inner) {
       let capability: GenerationProvider => capability,
       _ => throw baml.errors.Unsupported { message: "retry inner cannot generate" },
     };
+    let policy = ReplayPolicy { kind: ReplayKind.Safe, idempotency_key: null };
     let attempt = 1;
     while (attempt <= self.max_attempts) {
       let result = provider.generate<T>(task.with_provider(self.inner)) catch (e) {
-        _ => {
-          if (attempt < self.max_attempts) {
-            attempt = attempt + 1;
-            continue;
-          }
-          throw e;
+        let failure: baml.errors.Failure => {
+          if (attempt >= self.max_attempts || !may_replay(policy, failure)) { throw e; }
+          attempt = attempt + 1;
+          continue;
         },
+        _ => throw e,
       };
       return result;
     }
@@ -34,27 +34,29 @@ implements GenerationProvider for Retry {
 
 implements DriveProvider for Retry {
   function drive<T>(self, task: Task<T>) -> Response<T>
-      throws baml.errors.UnknownError | baml.errors.Unsupported {
+      throws baml.errors.CallError | baml.errors.UnknownError {
     let provider = match (self.inner) {
       let capability: DriveProvider => capability,
       _ => throw baml.errors.Unsupported { message: "retry inner cannot drive" },
     };
     let policy = provider.replay_policy<T>(task.with_provider(self.inner));
-    if (!can_replay(policy)) {
-      throw baml.errors.Unsupported {
-        message: "retry requires a safe or idempotent replay policy",
-      };
-    }
     let attempt = 1;
     while (attempt <= self.max_attempts) {
       let result = provider.drive<T>(task.with_provider(self.inner)) catch (e) {
-        _ => {
-          if (attempt < self.max_attempts) {
-            attempt = attempt + 1;
-            continue;
+        let failure: baml.errors.Failure => {
+          if (attempt >= self.max_attempts) { throw e; }
+          if (!may_replay(policy, failure)) {
+            if (failure.is_retryable()) {
+              throw baml.errors.CannotRetry {
+                message: "retry refused to replay " + self.inner.name(),
+              };
+            }
+            throw e;
           }
-          throw e;
+          attempt = attempt + 1;
+          continue;
         },
+        _ => throw e,
       };
       return result;
     }
@@ -70,5 +72,8 @@ implements DriveProvider for Retry {
 }
 
 function retry(provider: Provider, max_attempts: int) -> Retry throws never {
-  Retry { inner: provider, max_attempts: max_attempts }
+  Retry {
+    inner: provider,
+    max_attempts: if (max_attempts < 1) { 1 } else { max_attempts },
+  }
 }

@@ -4,7 +4,13 @@ test "guide 05.02: AudioStream means finite input, not a live channel" {
     sample_rate_hz: 24000,
     channels: 1,
   };
-  let task = TranscribeAudio_task(stream, root.ai.fake(`"hello"`));
-  assert.equal(task.arguments["chunks"], 1)
-  assert.equal(root.ai.drivers.drive<string>(task), "hello")
+  let provider = root.ai.FakeTranscriptionProvider { output: "hello", received_chunks: [] };
+  let response = root.ai.drivers.transcribe_with_meta(
+    provider,
+    stream,
+    root.ai.TranscriptionOptions { language: "en", prompt: null },
+  );
+  assert.equal(response.value, "hello")
+  assert.equal(provider.received_chunks.length(), 1)
+  assert.equal(response.meta.attributes["sample_rate_hz"], 24000)
 }

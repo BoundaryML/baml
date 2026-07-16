@@ -1,23 +1,111 @@
-test "guide 02.07: an MCP schema can become a runtime tool" {
-  let mcp_tool = root.ai.Tool.from_json_schema(
-    "mcp__orders__lookup_order",
-    "Look up an order discovered from MCP.",
-    {
-      "type": "object",
-      "properties": { "order_id": { "type": "string" } },
-      "required": ["order_id"],
-    },
-  );
+class McpLookupOrderArgs {
+  order_id: string,
+}
+
+class FakeMcpConnection {
+  discoveries: int,
+  looked_up_orders: string[],
+
+  function tools(self) -> root.ai.Tool[] throws never {
+    self.discoveries = self.discoveries + 1;
+    [root.ai.Tool.from_json_schema(
+      "mcp__orders__lookup_order",
+      "Look up an order discovered from MCP.",
+      {
+        "type": "object",
+        "properties": { "order_id": { "type": "string" } },
+        "required": ["order_id"],
+      },
+    )]
+  }
+
+  function call(self, call: root.ai.ToolCall) -> root.ai.ToolResult throws never {
+    let args = baml.json.from_json<McpLookupOrderArgs>(call.args) catch (e) {
+      _ => return root.ai.ToolResult.error(call, "invalid MCP lookup_order arguments"),
+    };
+    self.looked_up_orders.push(args.order_id);
+    root.ai.ToolResult.ok(call, { "order_id": args.order_id, "status": "shipped" })
+  }
+}
+
+class McpDiscoveryHooks {
+  connection: FakeMcpConnection,
+
+  implements root.ai.AgentHooks {
+    function prepare_step(self, context: root.ai.StepContext) -> root.ai.StepPlan
+        throws baml.errors.ToolError {
+      if (context.step == 1) {
+        for (let tool in self.connection.tools()) {
+          context.tool_registry.add(tool);
+        }
+      }
+      root.ai.StepPlan { provider: null, tools: null, stop: null }
+    }
+  }
+}
+
+function dispatch_with_mcp(
+  connection: FakeMcpConnection,
+  calls: root.ai.ToolCall[],
+) -> root.ai.ToolResult[] throws never {
+  calls.map((call: root.ai.ToolCall) -> root.ai.ToolResult {
+    if (call.name == "mcp__orders__lookup_order") {
+      connection.call(call)
+    } else {
+      guide_dispatch([call])[0]
+    }
+  })
+}
+
+test "guide 02.07: MCP discovery changes the roster between model steps" {
+  let connection = FakeMcpConnection { discoveries: 0, looked_up_orders: [] };
   let registry = root.ai.ToolRegistry.new([knowledge_tool()]);
-  let hooks = no_op_hooks();
-  hooks.registry = registry;
-  hooks.tool_to_add = mcp_tool;
-  let options = guide_agent_options([], guide_dispatch);
-  options.tool_registry = registry;
-  options.hooks = hooks;
-  root.ai.drivers.run_agent<Resolution>(
-    ResolveTicketWithTools_task(sample_ticket(), fake_tool_provider([one_knowledge_call()]), []),
+  let provider = root.ai.ScriptedToolProvider {
+    turns: [
+      root.ai.ToolCalls { calls: [one_knowledge_call()] },
+      root.ai.ToolCalls { calls: [root.ai.ToolCall {
+        id: "call-2",
+        name: "mcp__orders__lookup_order",
+        args: { "order_id": "O-42" },
+      }] },
+    ],
+    final_output: `{
+      "category":"billing",
+      "priority":"Urgent",
+      "summary":"Order checked through MCP",
+      "reply":"Order O-42 has shipped."
+    }`,
+    usage_per_step: null,
+  };
+  let options = guide_agent_options(
+    [],
+    (calls: root.ai.ToolCall[]) -> root.ai.ToolResult[] {
+      dispatch_with_mcp(connection, calls)
+    },
+    tool_registry = registry,
+    hooks = McpDiscoveryHooks { connection: connection },
+  );
+
+  let outcome = root.ai.drivers.run_agent<Resolution>(
+    ResolveTicketWithTools_task(sample_ticket(), provider, []),
     options,
   );
-  assert.equal(registry.snapshot().length(), 2)
+
+  assert.equal(connection.discoveries, 1)
+  assert.equal(connection.looked_up_orders, ["O-42"])
+  match (outcome) {
+    let done: root.ai.Done<Resolution> => match (done.transcript) {
+      let transcript: root.ai.ScriptedToolTranscript => {
+        assert.equal(transcript.observed_tool_rosters[0], ["search_knowledge"]);
+        assert.equal(
+          transcript.observed_tool_rosters[1],
+          ["search_knowledge", "mcp__orders__lookup_order"],
+        );
+        assert.equal(transcript.submitted_results.length(), 2);
+        assert.is_true(!transcript.submitted_results[1][0].is_error);
+      },
+      _ => assert.is_true(false),
+    },
+    _ => assert.is_true(false),
+  }
 }

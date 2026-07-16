@@ -7,7 +7,7 @@ interface Provider {
 
 interface DriveProvider requires Provider {
   function drive<T>(self, task: Task<T>) -> Response<T>
-    throws baml.errors.UnknownError | baml.errors.Unsupported
+    throws baml.errors.CallError | baml.errors.UnknownError
   function replay_policy<T>(self, task: Task<T>) -> ReplayPolicy throws never {
     ReplayPolicy { kind: ReplayKind.Never, idempotency_key: null }
   }
@@ -15,7 +15,7 @@ interface DriveProvider requires Provider {
 
 interface GenerationProvider requires Provider {
   function generate<T>(self, task: Task<T>) -> Response<T>
-    throws baml.errors.UnknownError | baml.errors.Unsupported
+    throws baml.errors.CallError | baml.errors.UnknownError
 }
 
 interface StreamingProvider requires Provider {

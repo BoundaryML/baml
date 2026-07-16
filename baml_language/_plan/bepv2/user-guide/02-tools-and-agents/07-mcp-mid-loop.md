@@ -16,7 +16,8 @@ class McpDiscoveryHooks {
   // ...connection policy and retained MCP resources...
 
   implements ai.AgentHooks {
-    function prepare_step(self, ctx: ai.StepContext) -> ai.StepPlan throws never {
+    function prepare_step(self, ctx: ai.StepContext) -> ai.StepPlan
+        throws baml.errors.ToolError {
       if (ctx.step == 2 && !ctx.tool_registry.contains("search_policy")) {
         let server = baml.mcp.connect(ctx.state.get_or_panic("policy_mcp_url"))
         ctx.state.set("policy_mcp", server)
@@ -25,7 +26,7 @@ class McpDiscoveryHooks {
 
       ai.StepPlan {
         provider: null,
-        tools: ctx.tool_registry.snapshot(),
+        tools: null,
         stop: null,
       }
     }

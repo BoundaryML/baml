@@ -21,7 +21,7 @@ function InspectImage_task(
 }
 
 function InspectImage_manual(value: image, provider: root.ai.Provider) -> string
-    throws baml.errors.UnknownError | baml.errors.Unsupported {
+    throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.drivers.drive<string>(InspectImage_task(value, provider))
 }
 
@@ -40,31 +40,8 @@ function InspectPdf_task(value: pdf, provider: root.ai.Provider) -> root.ai.Task
 }
 
 function InspectPdf_manual(value: pdf, provider: root.ai.Provider) -> string
-    throws baml.errors.UnknownError | baml.errors.Unsupported {
+    throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.drivers.drive<string>(InspectPdf_task(value, provider))
-}
-
-// Future compiler lowering for a bounded AudioStream argument. The stream is
-// finite task input; an unbounded microphone belongs to RealtimeProvider.
-function TranscribeAudio_task(
-  stream: root.ai.AudioStream,
-  provider: root.ai.Provider,
-) -> root.ai.Task<string> throws never {
-  root.ai.task_named<string>(
-    provider,
-    "TranscribeAudio",
-    { "chunks": stream.chunks.length(), "sample_rate_hz": stream.sample_rate_hz },
-    [],
-    default_task_options(),
-    (ctx: baml.llm.Context) -> baml.llm.PromptAst {
-      baml.llm.assemble_prompt_ast(["Transcribe the supplied bounded audio stream."], [])
-    },
-  )
-}
-
-function TranscribeAudio_manual(stream: root.ai.AudioStream, provider: root.ai.Provider) -> string
-    throws baml.errors.UnknownError | baml.errors.Unsupported {
-  root.ai.drivers.drive<string>(TranscribeAudio_task(stream, provider))
 }
 
 // Future compiler lowering:
@@ -90,6 +67,6 @@ function VoiceSupport_task(
 // The ordinary direct-call lowering exists, but a realtime-only provider will
 // fail capability checking; callers use root.ai.drivers.open_live instead.
 function VoiceSupport_manual(instructions: string, provider: root.ai.Provider) -> string
-    throws baml.errors.UnknownError | baml.errors.Unsupported {
+    throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.drivers.drive<string>(VoiceSupport_task(instructions, provider))
 }

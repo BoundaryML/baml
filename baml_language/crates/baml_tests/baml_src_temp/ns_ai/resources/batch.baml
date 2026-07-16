@@ -2,7 +2,7 @@ class BatchOptions {
   idempotency_key: string?,
 }
 
-interface Batch<T> {
+interface Batch<T> requires Resource {
   function status(self) -> JobStatus throws never
   function results(self) -> Response<T>[] throws baml.errors.UnknownError
   function cancel(self) -> null throws baml.errors.UnknownError
@@ -23,6 +23,9 @@ class FakeBatch<T> {
     function results(self) -> Response<T>[] throws never { self.responses }
     function cancel(self) -> null throws never { self.cancelled = true; null }
   }
+  implements Resource {
+    function cleanup(self) -> null throws never { self.cancel() }
+  }
 }
 
 class FakeBatchProvider {
@@ -36,10 +39,15 @@ class FakeBatchProvider {
         throws baml.errors.UnknownError {
       let responses: Response<T>[] = [];
       for (let task in tasks) {
-        responses.push(self.inner.generate<T>(task.with_provider(self.inner)));
+        let response = self.inner.generate<T>(task.with_provider(self.inner)) catch (e) {
+          _ => throw baml.errors.UnknownError {
+            data: e,
+            message: ["fake batch generation failed"],
+          },
+        };
+        responses.push(response);
       }
       FakeBatch<T> { responses: responses, cancelled: false }
     }
   }
 }
-

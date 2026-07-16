@@ -7,24 +7,19 @@ test "guide 01.01: a direct typed call returns the declared class" {
 testset "integ-test-guide-01-direct-typed-call" {
   test "guide 01.01 live OpenAI: direct typed call" {
     let result = ResolveTicket_manual(sample_ticket(), root.ai.OpenAi {
+      ...root.ai.openai(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
-      base_url: null,
-      extra_headers: null,
-      extra_body: null,
     });
     assert.is_true(result.reply.length() > 0)
   }
 
   test "guide 01.01 live Anthropic: same task and return type" {
     let result = ResolveTicket_manual(sample_ticket(), root.ai.Anthropic {
+      ...root.ai.anthropic(),
       model: "claude-sonnet-4-6",
       api_key: baml.env.get_or_panic("ANTHROPIC_API_KEY"),
-      base_url: null,
-      extra_headers: null,
-      extra_body: null,
     });
     assert.is_true(result.summary.length() > 0)
   }
 }
-

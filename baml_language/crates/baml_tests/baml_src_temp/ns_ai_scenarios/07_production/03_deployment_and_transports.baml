@@ -1,5 +1,6 @@
 test "guide 07.03: transport configuration stays on the provider" {
   let provider = root.ai.OpenAi {
+    ...root.ai.openai(),
     model: "gpt-5.6-luna",
     api_key: "gateway-token",
     base_url: "https://gateway.example/v1",
@@ -10,4 +11,3 @@ test "guide 07.03: transport configuration stays on the provider" {
   assert.equal(task.provider_name(), "openai")
   assert.equal(provider.base_url, "https://gateway.example/v1")
 }
-

@@ -39,13 +39,16 @@ implements DriveProvider for ModelHarness {
   }
 }
 
-implements HarnessProvider for ModelHarness {
+implements Harness for ModelHarness {
+  function label(self) -> string throws never { "model-harness(" + self.inner.name() + ")" }
   function open(self, options: HarnessOptions) -> HarnessSession throws never {
     let session = LocalHarnessSession {
       session_id: "session-" + (self.sessions.length() + 1).to_string(),
       history: Conversation.empty(),
       is_stopped: false,
+      is_cleaned: false,
       steering: [],
+      cleanup_count: 0,
     };
     self.sessions.push(session);
     session
@@ -79,7 +82,7 @@ implements HarnessProvider for ModelHarness {
 
   function save_session(self, session: HarnessSession) -> HarnessSessionToken throws never {
     HarnessSessionToken {
-      provider: self.name(),
+      provider: self.label(),
       runtime: "baml",
       session_id: session.id(),
       version: 1,
@@ -89,6 +92,12 @@ implements HarnessProvider for ModelHarness {
 
   function restore_session(self, token: HarnessSessionToken) -> HarnessSession
       throws baml.errors.UnknownError {
+    if (token.provider != self.label() || token.runtime != "baml" || token.version != 1) {
+      throw baml.errors.UnknownError {
+        data: token,
+        message: ["harness token does not belong to this harness/runtime/version"],
+      };
+    }
     for (let session in self.sessions) {
       if (session.session_id == token.session_id) { return session; }
     }
@@ -112,9 +121,5 @@ implements HarnessProvider for ModelHarness {
     };
     local.is_stopped = true;
     null
-  }
-
-  function destroy(self, session: HarnessSession) -> null throws baml.errors.UnknownError {
-    self.interrupt(session)
   }
 }

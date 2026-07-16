@@ -8,14 +8,21 @@ driver-owned `ToolRegistry` may grow or shrink between provider turns.
 ```baml
 let registry = ai.ToolRegistry.new([lookup_order])
 
+let options = ai.AgentOptions {
+  ...default_agent_options(),
+  tools: [],
+  tool_registry: registry,
+}
+
 let run = ai.drivers.run_agent(
   ResolveTicket.task(ticket, $provider = ToolModel),
-  ai.AgentOptions {
-    tools: [],
-    tool_registry: registry,
-  },
+  options,
 )
 ```
+
+`AgentOptions` is configuration, so construct the complete value once. The
+registry itself is intentionally stateful and is the object hooks mutate
+between steps.
 
 ## Update the next step
 
@@ -24,14 +31,15 @@ class DynamicToolHooks {
   // ...policy fields and helper methods...
 
   implements ai.AgentHooks {
-    function prepare_step(self, ctx: ai.StepContext) -> ai.StepPlan throws never {
+    function prepare_step(self, ctx: ai.StepContext) -> ai.StepPlan
+        throws baml.errors.ToolError {
       if (ctx.step == 2 && refund_permission_granted(ctx)) {
         ctx.tool_registry.add(issue_refund)
       }
 
       ai.StepPlan {
         provider: null,
-        tools: ctx.tool_registry.snapshot(),
+        tools: null,
         stop: null,
       }
     }

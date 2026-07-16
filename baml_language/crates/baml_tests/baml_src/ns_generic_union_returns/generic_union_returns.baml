@@ -6,6 +6,10 @@ class PendingCalls {
   calls: string[],
 }
 
+class ModelStep<T> {
+  outcome: T | PendingCalls,
+}
+
 class ParsedToolMessage {
   tool_calls: json[]?,
 }
@@ -18,6 +22,10 @@ class ParsedNullableContainers {
   empty_json: json[]?,
   metadata: map<string, json>?,
   children: ParsedChild[]?,
+}
+
+class ParsedOptionalJson {
+  details: json?,
 }
 
 interface GenericUnionProvider {
@@ -87,6 +95,44 @@ function sap_parsed_json_array_branch<T>(fallback: T) -> T | PendingCalls throws
   }
 }
 
+function parse_model_step<T>(raw: string) -> ModelStep<T> throws unknown {
+  ModelStep<T> {
+    outcome: baml.sap.parse<T | PendingCalls>(raw),
+  }
+}
+
+function model_step_flattens_union_type_arg() -> bool throws unknown {
+  let step = parse_model_step<FinalValue | string>(`"done"`);
+  match (step.outcome) {
+    let value: string => value == "done",
+    let value: FinalValue => value.value == "never",
+    let calls: PendingCalls => calls.calls.length() == 99,
+  }
+}
+
+function sap_parses_optional_json_null() -> bool throws unknown {
+  let parsed = baml.sap.parse<json?>(`null`);
+  match (parsed) {
+    null => true,
+    let value: json => baml.json.stringify(value) == "never",
+  }
+}
+
+function sap_parses_optional_json_value() -> bool throws unknown {
+  let parsed = baml.sap.parse<json?>(`true`);
+  baml.json.stringify(parsed) == "true"
+}
+
+function sap_parses_optional_json_class_field() -> bool throws unknown {
+  let null_value = baml.sap.parse<ParsedOptionalJson>(`{"details": null}`);
+  let object_value = baml.sap.parse<ParsedOptionalJson>(`{"details": {"ok": true}}`);
+  let null_ok = match (null_value.details) {
+    null => true,
+    let value: json => false,
+  };
+  null_ok && baml.json.path_or<bool>(object_value.details, ".ok", false)
+}
+
 function generic_union_sap_parsed_json_array_branch() -> bool throws unknown {
   let result = sap_parsed_json_array_branch<FinalValue>(FinalValue { value: "done" });
   match (result) {
@@ -132,6 +178,22 @@ test "generic union generic branch through an erased interface" {
 
 test "generic union concrete branch after SAP parsed json array" {
   assert.is_true(generic_union_sap_parsed_json_array_branch())
+}
+
+test "ModelStep flattens a union type argument before SAP conversion" {
+  assert.is_true(model_step_flattens_union_type_arg())
+}
+
+test "SAP parses null as optional json" {
+  assert.is_true(sap_parses_optional_json_null())
+}
+
+test "SAP parses a non-null optional json value" {
+  assert.is_true(sap_parses_optional_json_value())
+}
+
+test "SAP parses optional json in a class field" {
+  assert.is_true(sap_parses_optional_json_class_field())
 }
 
 test "SAP preserves declared types for nullable containers" {

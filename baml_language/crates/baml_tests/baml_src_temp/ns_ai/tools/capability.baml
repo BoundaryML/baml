@@ -1,7 +1,12 @@
+class ModelStep<T> {
+  outcome: T | ToolCalls,
+  meta: Meta,
+}
+
 interface ToolCallingProvider requires Provider {
   function begin<T>(self, task: Task<T>) -> Transcript
     throws baml.errors.ToolError | baml.errors.UnknownError
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> T | ToolCalls
+  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
     throws baml.errors.ToolError | baml.errors.UnknownError
   function submit(self, transcript: Transcript, results: ToolResult[]) -> Transcript
     throws baml.errors.ToolError | baml.errors.UnknownError

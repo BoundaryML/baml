@@ -6,7 +6,7 @@ events instead of projecting the harness response to final text.
 ## Open a streamed run
 
 ```baml
-let session = CodeHarness.open(ai.SessionOptions { cwd: "/workspace" })
+let session = CodeHarness.open(ai.HarnessOptions { cwd: "/workspace" })
 defer { CodeHarness.destroy(session) }
 
 let stream = CodeHarness.stream<Patch>(

@@ -63,14 +63,48 @@ let Debugging = ai.OpenAi {
 }
 ```
 
-Spread is **same-class only**, and that is a feature, not a limitation:
-"`Fast` but on Anthropic" is not a field tweak — Anthropic has different
-fields, different auth, different option semantics. Cross-vendor moves are a
-new declaration, which is exactly the review-visibility they deserve:
+Normatively, spread is **same nominal class only**, with compatible generic
+arguments. That is a feature, not a limitation: "`Fast` but on Anthropic" is
+not a field tweak — Anthropic has different fields, different auth, and
+different option semantics. Cross-vendor moves are a new declaration, which
+is exactly the review visibility they deserve:
 
 ```baml
 let CarefulVariant = ai.Anthropic { ...Careful, model: "claude-haiku-5" } // ok: same class
 ```
+
+The compiler validates every ordinary class-spread operand against the
+destination's full nominal type, including generic arguments.
+
+## Construct configuration atomically
+
+Configuration values are complete at construction time. Do not construct a
+provider, hook policy, task, or options value and then immediately assign its
+fields. Derive an exact-class variant with typed spread, where later fields
+win:
+
+```baml
+let hooks = MyHooks {
+  ...no_op_hooks(),
+  tool_to_add: lookup_account,
+}
+
+let options = ai.AgentOptions {
+  ...default_agent_options(),
+  tool_registry: registry,
+  hooks: hooks,
+  observers: [observer],
+}
+```
+
+An API-owned factory may expose named default parameters when that reads more
+clearly than repeated spread. Homogeneous maps such as `map<string, T>` are not
+a substitute for a heterogeneous typed configuration class.
+
+Mutation is reserved for types whose contract is stateful: `ToolRegistry`,
+provider transcripts, sessions/resources, counters, and observer/event
+buffers. Configuration classes are init-only by design even where today's
+language does not yet enforce immutability.
 
 For families of variants, write a function — providers compose with plain
 code:

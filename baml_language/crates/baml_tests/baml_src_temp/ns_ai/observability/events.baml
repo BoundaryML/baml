@@ -13,6 +13,28 @@ class ModelStartedEvent {
   }
 }
 
+class ToolRosterChangedEvent {
+  id: string?,
+  step: int,
+  tools: string[],
+  implements AgentEvent {
+    function kind(self) -> string throws never { "tool_roster_changed" }
+    function run_id(self) -> string? throws never { self.id }
+  }
+}
+
+class ProviderChangedEvent {
+  id: string?,
+  from_provider: string,
+  to_provider: string,
+  fidelity: TranscriptFidelity,
+  warnings: string[],
+  implements AgentEvent {
+    function kind(self) -> string throws never { "provider_changed" }
+    function run_id(self) -> string? throws never { self.id }
+  }
+}
+
 class TextDeltaEvent {
   id: string?,
   text: string,
@@ -73,4 +95,3 @@ function publish(event: AgentEvent, observers: AgentObserver[], recorders: Agent
   for (let recorder in recorders) { recorder.record(event); }
   null
 }
-

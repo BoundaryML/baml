@@ -18,7 +18,7 @@ FastModel
   success                         -> return
   replay-safe transport failure  -> rebind task to CarefulModel
   invalid request or refusal      -> surface failure
-  unsafe/unknown committed effect -> surface failure
+  effectful or unknown failure     -> surface failure
 ```
 
 Every attempt receives `task.with_provider(member)`, so provider-sensitive
@@ -40,4 +40,3 @@ explicit transcript export/import with fidelity reporting.
 
 - [Fallback](../../pages/08-reliability-and-errors.md#fallback)
 - Scenarios 29 reliability, 30 cascades and routing
-

@@ -133,7 +133,7 @@ implements ToolCallingProvider for PromptToolProvider {
     }
   }
 
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> T | ToolCalls
+  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
       throws baml.errors.ToolError | baml.errors.UnknownError {
     let state = match (transcript) {
       let value: PromptToolTranscript => value,
@@ -149,13 +149,23 @@ implements ToolCallingProvider for PromptToolProvider {
       },
     };
     if (tools.length() == 0) {
-      let response = generation.generate<T>(prompt_tool_turn<T>(self, state, [], ""));
-      return response.value;
+      let response = generation.generate<T>(prompt_tool_turn<T>(self, state, [], "")) catch (e) {
+        _ => throw baml.errors.UnknownError {
+          data: e,
+          message: ["prompt tool generation failed"],
+        },
+      };
+      return ModelStep<T> { outcome: response.value, meta: response.meta };
     }
     let suffix = prompt_tool_output_suffix(tools);
     let response = generation.generate<T | ToolCalls>(
       prompt_tool_turn<T | ToolCalls>(self, state, tools, suffix),
-    );
+    ) catch (e) {
+      _ => throw baml.errors.UnknownError {
+        data: e,
+        message: ["prompt tool generation failed"],
+      },
+    };
     match (response.value) {
       let calls: ToolCalls => {
         state.history.entries.push(ChatMessage.assistant(baml.json.stringify({
@@ -163,9 +173,9 @@ implements ToolCallingProvider for PromptToolProvider {
             { "id": call.id, "name": call.name, "args": call.args }
           }),
         })));
-        calls
+        ModelStep<T> { outcome: calls, meta: response.meta }
       },
-      let value: T => value,
+      let value: T => ModelStep<T> { outcome: value, meta: response.meta },
     }
   }
 

@@ -1,7 +1,7 @@
 enum ReplayKind {
-  Never
   Safe
-  Idempotent
+  RequiresIdempotencyKey
+  Never
 }
 
 class ReplayPolicy {
@@ -9,7 +9,16 @@ class ReplayPolicy {
   idempotency_key: string?,
 }
 
-function can_replay(policy: ReplayPolicy) -> bool throws never {
-  policy.kind == ReplayKind.Safe || policy.kind == ReplayKind.Idempotent
+function may_replay(policy: ReplayPolicy, failure: baml.errors.Failure) -> bool throws never {
+  if (!failure.is_retryable()
+      || failure.is_effectful()
+      || failure.is_policy_refusal()
+      || failure.is_unsupported()) {
+    return false;
+  }
+  match (policy.kind) {
+    ReplayKind.Safe => true,
+    ReplayKind.RequiresIdempotencyKey => policy.idempotency_key != null,
+    ReplayKind.Never => false,
+  }
 }
-

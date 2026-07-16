@@ -36,7 +36,7 @@ function sample_ticket() -> SupportTicket throws never {
 }
 
 function fake_resolution() -> root.ai.FakeProvider throws never {
-  root.ai.fake(`{
+  root.ai.fake_output_provider(`{
     "category": "billing",
     "priority": "Urgent",
     "summary": "Duplicate charge",
@@ -87,7 +87,7 @@ function ResolveTicket_task(
 function ResolveTicket_manual(
   ticket: SupportTicket,
   provider: root.ai.Provider,
-) -> Resolution throws baml.errors.UnknownError | baml.errors.Unsupported {
+) -> Resolution throws baml.errors.CallError | baml.errors.UnknownError {
   root.ai.drivers.drive<Resolution>(ResolveTicket_task(ticket, provider))
 }
 

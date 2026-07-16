@@ -13,8 +13,9 @@ match the design.
   numbered provider-scenario list.
 - Every LLM-function example has a hand-written `Name_task(...)` companion.
   The comment immediately above it shows the future `Name.task(...)` lowering.
-- Integration testsets are declarations only during this phase. They are not
-  run until the user explicitly authorizes live calls.
+- Integration testsets remain opt-in because they make live provider calls.
+  The reconciliation run executes them only when credentials are available
+  and reports credential/provider failures separately from offline failures.
 
 ## Language and runtime improvement backlog
 
@@ -210,3 +211,20 @@ prompt-tool implementation that concrete providers can adopt out of body, and
 make the safe driver reject providers that declare neither native nor
 prompt-backed `ToolCallingProvider`. Keep the unsafe runtime-negotiated driver
 as the explicit erased escape hatch.
+
+### D-012: `stream_agent` needs a real incremental runtime
+
+**Normative design:** `stream_agent` yields lifecycle, tool, usage, provider,
+and partial-output events as they occur.
+
+**Reference-code spelling:** `run_agent` publishes the same lifecycle events
+to hooks, observers, and recorders, but the temp package does not expose a
+buffered object under the misleading name `stream_agent`.
+
+**Why:** the current `ToolCallingProvider.step` boundary is request/response.
+Returning an eagerly populated event list would compile but would not provide
+streaming semantics.
+
+**Follow-up:** add an incremental agent-event transport that can multiplex
+provider deltas with tool lifecycle events, then implement both `Task` and
+`StreamTask` overloads.

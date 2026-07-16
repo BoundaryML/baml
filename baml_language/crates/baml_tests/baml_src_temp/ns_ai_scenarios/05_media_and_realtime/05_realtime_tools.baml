@@ -7,9 +7,9 @@ test "guide 05.05: realtime tasks retain the same tool roster" {
 testset "integ-test-guide-05-realtime-tools-pending-adapter" {
   test "guide 05.05 live OpenAI: equivalent tool contract through the tool-call adapter" {
     let provider = root.ai.OpenAi {
+      ...root.ai.openai(),
       model: "gpt-5.6-luna",
       api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
-      base_url: null, extra_headers: null, extra_body: null,
     };
     let outcome = root.ai.drivers.run_agent<Resolution>(
       ResolveTicketWithTools_task(sample_ticket(), provider, [account_tool()]),

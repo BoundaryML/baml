@@ -3,6 +3,9 @@ class StepContext {
   step: int,
   provider: Provider,
   tools: Tool[],
+  tool_registry: ToolRegistry,
+  usage: Usage,
+  state: map<string, unknown>,
   transcript: Transcript,
 }
 
@@ -47,13 +50,10 @@ class ToolDecision {
 }
 
 interface AgentHooks {
-  function prepare_step(self, context: StepContext) -> StepPlan throws never {
-    StepPlan { provider: null, tools: null, stop: null }
-  }
+  function prepare_step(self, context: StepContext) -> StepPlan throws baml.errors.ToolError
   function before_tool_call(self, event: BeforeToolCall) -> ToolDecision throws never {
     ToolDecision.allow(event.call)
   }
   function after_tool_call(self, event: AfterToolCall) -> null throws never { null }
   function on_event(self, event: AgentEvent) -> null throws never { null }
 }
-

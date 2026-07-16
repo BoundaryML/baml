@@ -87,6 +87,8 @@ operations return resources.
   themed recipes built around one running application
 - [Executable-reference deviations](./v2_deviations.md) — exact differences
   between the normative design and `crates/baml_tests/baml_src_temp`
+- [Reconciliation task list](./reconciliation_task_list.md) — decisions,
+  implementation work, and executable verification gates
 
 Prior efforts are recorded in [previous_work.md](./previous_work.md).
 
@@ -443,7 +445,7 @@ dispatch and replay.
 
 ## Reliability and fluent sugar
 
-Errors report failure kind and commit state; operation replay policy decides
+Errors report retry/effect/refusal predicates; operation replay policy decides
 whether retry is safe. Retry, fallback, and tracing are provider wrappers.
 
 Dot syntax is supplied through out-of-body blanket implementations, not by

@@ -988,3 +988,32 @@ fn narrowed_nullable_index_is_accepted() {
         "a nullable index narrowed to non-null must stay allowed"
     );
 }
+
+#[test]
+fn class_spread_requires_the_same_nominal_class_and_generic_arguments() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class Left<T> { value T }
+class Right<T> { value T }
+
+function wrong_class() -> Left<int> {
+  Left<int> { ...Right<int> { value: 1 } }
+}
+
+function wrong_type_argument() -> Left<int> {
+  Left<int> { ...Left<string> { value: "bad" } }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("type mismatch: expected Left<int>, got Right<int>"),
+        "{tir}"
+    );
+    assert!(
+        tir.contains("type mismatch: expected Left<int>, got Left<string>"),
+        "{tir}"
+    );
+}

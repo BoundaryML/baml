@@ -20,7 +20,7 @@ class EffectfulProvider {
   }
   implements root.ai.DriveProvider {
     function drive<T>(self, task: root.ai.Task<T>) -> root.ai.Response<T>
-        throws baml.errors.UnknownError {
+        throws baml.errors.CallError | baml.errors.UnknownError {
       self.inner.drive<T>(task.with_provider(self.inner))
     }
     function replay_policy<T>(self, task: root.ai.Task<T>) -> root.ai.ReplayPolicy throws never {
@@ -28,4 +28,3 @@ class EffectfulProvider {
     }
   }
 }
-

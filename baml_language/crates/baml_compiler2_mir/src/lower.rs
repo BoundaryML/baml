@@ -2588,6 +2588,35 @@ impl<'db> LoweringContext<'db> {
                         continue;
                     }
                 }
+
+                // HACK: Keep concrete out-of-body class impls (for example
+                // `implements ToolCallingProvider for OpenAi`) working with
+                // MIR's current class-candidate interface lowering. This is a
+                // stopgap, not a sound interface-membership implementation:
+                // `interface_implementors` cannot represent primitive,
+                // container, or arbitrary generic implementors. Interface
+                // `is`/match lowering should ultimately use the VM's directed
+                // runtime impl-rule lookup instead of enumerating classes.
+                if let baml_compiler2_tir::ty::Ty::Class(class_qtn, _, _) = &target_ty_tir {
+                    let root_iface_args_tir = lower_interface_target_args(
+                        db,
+                        &imp.interface_target,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &imp_generic_params,
+                        impl_bounds,
+                        &mut diags,
+                    );
+                    if let Some(class_tn) = class_type_name_from_qtn(db, class_qtn) {
+                        register_class_for_interface_closure(
+                            db,
+                            root_iface_loc,
+                            &root_iface_args_tir,
+                            &class_tn,
+                            out.interface_implementors,
+                        );
+                    }
+                }
             }
         }
     }

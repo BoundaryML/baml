@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_compiler2_mir::{
-    BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
+    AggregateKind, BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
+    Terminator,
 };
 use baml_type::{Literal, RuntimeTy, TyTemplate};
 
@@ -807,6 +808,22 @@ fn simulate_rvalue_pull_stack(
         simulate_aggregate_operand_pull_stack(rvalue, sim, carried_local, classifications, def_use)
     {
         return result;
+    }
+
+    // Class aggregates containing field-copy operands are emitted incrementally
+    // as `AllocInstance; InitField/InitSpread`, not as the generic
+    // stack-consuming aggregate modeled by `walk_rvalue_pull`. A call result
+    // carried into that sequence would sit below the newly allocated instance,
+    // reversing the `InitField` operands and treating the call result as the
+    // destination object. Reject stack carry for this shape.
+    if matches!(
+        rvalue,
+        Rvalue::Aggregate {
+            kind: AggregateKind::Class { .. },
+            fields,
+        } if fields.iter().any(is_class_field_copy_operand)
+    ) {
+        return false;
     }
 
     // The emitter pulls binary operands left-to-right. If the right operand is
@@ -1684,6 +1701,37 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn class_spread_rejects_call_result_immediate_before_incremental_init() {
+        let carried = Local(1);
+        let spread_base = Local(2);
+        let rvalue = Rvalue::Aggregate {
+            kind: AggregateKind::Class {
+                name: "GuideHooks".to_string(),
+                type_arg_templates: vec![],
+            },
+            fields: vec![
+                Operand::copy_local(carried),
+                Operand::Copy(Place::Field {
+                    base: Box::new(Place::Local(spread_base)),
+                    field: 1,
+                }),
+            ],
+        };
+        let body = body_with_locals(vec![int_ty(), int_ty(), int_ty()]);
+        let mut sim = StackCarrySim::new();
+
+        assert!(!simulate_rvalue_pull_stack(
+            &rvalue,
+            &mut sim,
+            carried,
+            &body,
+            &HashMap::new(),
+            &HashMap::new(),
+        ));
+        assert!(!sim.used);
     }
 
     #[test]

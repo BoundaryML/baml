@@ -62,8 +62,11 @@ class ModeratedResponse<T> {
 class ModerationRefused {
   categories: string[],
   implements baml.errors.Failure {
-    function kind(self) -> baml.errors.FailureKind { baml.errors.FailureKind.Refusal }
-    function commit_state(self) -> baml.errors.CommitState { baml.errors.CommitState.NotCommitted }
+    function is_retryable(self) -> bool { false }
+    function is_effectful(self) -> bool { false }
+    function is_policy_refusal(self) -> bool { true }
+    function is_resumable(self) -> bool { false }
+    function is_unsupported(self) -> bool { false }
   }
 }
 
@@ -77,7 +80,8 @@ interface ModeratedGenerationProvider requires ai.Provider {
 ```
 
 Note the error class implements the shared `Failure` model truthfully
-(page 8): a refusal is `kind: Refusal`, `commit_state: NotCommitted`. To be
+(page 8): a refusal is a non-retryable policy refusal with no committed
+effect. To be
 precise about what that buys: any *catch site* and any code that already
 handles your capability can triage your error without knowing its concrete
 class, and `may_replay` correctly refuses to re-drive it. It does **not**

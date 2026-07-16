@@ -14,7 +14,7 @@ class SwitchOnRateLimit {
   implements ai.AgentFailureHooks {
     function on_model_failure(self, ctx: ai.ModelFailureContext)
       -> ai.FailureDecision throws never {
-      if (ctx.failure.kind() == baml.errors.FailureKind.RateLimit) {
+      if (ctx.failure.is_rate_limit() && ctx.failure.is_retryable()) {
         return ai.FailureDecision.switch_to(CarefulToolModel)
       }
       ai.FailureDecision.stop()
@@ -32,7 +32,7 @@ class SwitchOnRateLimit {
 2. Ask the failed operation for ReplayPolicy.
 3. Refuse if ai.may_replay returns false.
 4. Refuse after observable output that cannot be retracted.
-5. Refuse after an unkeyed or unknown-commit side effect.
+5. Refuse after an unkeyed or effectful failure.
 6. Export the current Conversation.
 7. Import it into the target provider and report fidelity.
 8. Re-render the task and continue with a ProviderChanged event.
@@ -50,7 +50,7 @@ planned switch: prepare_step before the next turn
 failure switch: replay decision after a failed turn
 ```
 
-The latter needs failure, commit, transcript, and observed-output context that
+The latter needs typed failure, replay-policy, transcript, and observed-output context that
 ordinary `prepare_step` does not currently receive.
 
 ## Related design and scenarios

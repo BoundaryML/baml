@@ -5,10 +5,21 @@ class OpenAiToolMessage {
 
 class OpenAiToolChoice {
   message: OpenAiToolMessage,
+  finish_reason: string?,
+}
+
+class OpenAiToolUsage {
+  prompt_tokens: int,
+  completion_tokens: int,
+  prompt_tokens_details: json?,
+  completion_tokens_details: json?,
 }
 
 class OpenAiToolResponse {
+  id: string?,
+  model: string?,
   choices: OpenAiToolChoice[],
+  usage: OpenAiToolUsage?,
 }
 
 class OpenAiToolTranscript {
@@ -60,7 +71,7 @@ implements ToolCallingProvider for OpenAi {
     }
   }
 
-  function step<T>(self, transcript: Transcript, tools: Tool[]) -> T | ToolCalls
+  function step<T>(self, transcript: Transcript, tools: Tool[]) -> ModelStep<T>
       throws baml.errors.ToolError | baml.errors.UnknownError {
     let state = match (transcript) {
       let value: OpenAiToolTranscript => value,
@@ -112,9 +123,28 @@ implements ToolCallingProvider for OpenAi {
     let wire: OpenAiToolResponse = baml.sap.parse<OpenAiToolResponse>(text) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["openai tools parse failed"] },
     };
-    let message = match (wire.choices.at(0)) {
-      let choice: OpenAiToolChoice => choice.message,
+    let choice = match (wire.choices.at(0)) {
+      let value: OpenAiToolChoice => value,
       null => throw baml.errors.UnknownError { data: text, message: ["openai tools returned no choice"] },
+    };
+    let message = choice.message;
+    let meta = Meta {
+      provider: self.name(),
+      model: wire.model ?? self.model,
+      request_id: wire.id,
+      finish_reason: choice.finish_reason,
+      usage: match (wire.usage) {
+        let value: OpenAiToolUsage => Usage {
+          input_tokens: value.prompt_tokens,
+          output_tokens: value.completion_tokens,
+          cached_input_tokens: baml.json.path_or<int>(value.prompt_tokens_details, ".cached_tokens", 0),
+          reasoning_tokens: baml.json.path_or<int>(value.completion_tokens_details, ".reasoning_tokens", 0),
+          cost_usd: null,
+        },
+        null => null,
+      },
+      attributes: {},
+      raw: text,
     };
     match (message.tool_calls) {
       let raw_calls: json[] => {
@@ -124,7 +154,7 @@ implements ToolCallingProvider for OpenAi {
           content: [ProviderDataPart { provider: "openai", data: { "tool_calls": raw_calls } }],
           metadata: null,
         });
-        ToolCalls {
+        let calls = ToolCalls {
           calls: raw_calls.map((raw: json) -> ToolCall {
             let args_text = baml.json.path_or(raw, ".function.arguments", "{}");
             ToolCall {
@@ -133,13 +163,15 @@ implements ToolCallingProvider for OpenAi {
               args: baml.json.parse(args_text) catch (e) { _ => null },
             }
           }),
-        }
+        };
+        ModelStep<T> { outcome: calls, meta: meta }
       },
       null => {
         state.history.entries.push(ChatMessage.assistant(message.content ?? ""));
-        baml.sap.parse<T>(message.content ?? "") catch (e) {
+        let value = baml.sap.parse<T>(message.content ?? "") catch (e) {
           _ => throw baml.errors.UnknownError { data: e, message: ["openai agent final parse failed"] },
-        }
+        };
+        ModelStep<T> { outcome: value, meta: meta }
       },
     }
   }
@@ -222,6 +254,12 @@ implements ResumableToolCallingProvider for OpenAi {
 
   function restore_transcript(self, token: TranscriptToken) -> Transcript
       throws baml.errors.UnknownError {
+    if (token.provider != self.name() || token.version != 1) {
+      throw baml.errors.UnknownError {
+        data: token,
+        message: ["OpenAI transcript token has the wrong provider or version"],
+      };
+    }
     let state = baml.json.parse(token.sealed) catch (e) {
       _ => throw baml.errors.UnknownError { data: e, message: ["invalid OpenAI transcript token"] },
     };

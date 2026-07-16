@@ -20,12 +20,11 @@ testset "integ-test-guide-05-image-input" {
     let value = root.ai.drivers.drive<string>(InspectImage_task(
       image.from_url("https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg", "image/jpeg"),
       root.ai.OpenAi {
+        ...root.ai.openai(),
         model: "gpt-5.6-luna",
         api_key: baml.env.get_or_panic("OPENAI_API_KEY"),
-        base_url: null, extra_headers: null, extra_body: null,
       },
     ));
     assert.is_true(value.length() > 0)
   }
 }
-

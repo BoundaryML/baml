@@ -13,7 +13,7 @@ class HarnessSessionToken {
   sealed: string,
 }
 
-interface HarnessSession {
+interface HarnessSession requires Resource {
   function id(self) -> string throws never
   function conversation(self) -> Conversation throws never
   function stopped(self) -> bool throws never
@@ -23,12 +23,24 @@ class LocalHarnessSession {
   session_id: string,
   history: Conversation,
   is_stopped: bool,
+  is_cleaned: bool,
   steering: string[],
+  cleanup_count: int,
 
   implements HarnessSession {
     function id(self) -> string throws never { self.session_id }
     function conversation(self) -> Conversation throws never { self.history }
     function stopped(self) -> bool throws never { self.is_stopped }
+  }
+  implements Resource {
+    function cleanup(self) -> null throws never {
+      if (!self.is_cleaned) {
+        self.is_cleaned = true;
+        self.is_stopped = true;
+        self.cleanup_count = self.cleanup_count + 1;
+      }
+      null
+    }
   }
 }
 
@@ -39,7 +51,8 @@ class HarnessRun<T> {
   conversation: Conversation,
 }
 
-interface HarnessProvider requires Provider {
+interface Harness {
+  function label(self) -> string throws never { "harness" }
   function open(self, options: HarnessOptions) -> HarnessSession
     throws baml.errors.UnknownError
   function run<T>(self, session: HarnessSession, task: Task<T>) -> HarnessRun<T>
@@ -52,7 +65,4 @@ interface HarnessProvider requires Provider {
     throws baml.errors.UnknownError
   function interrupt(self, session: HarnessSession) -> null
     throws baml.errors.UnknownError
-  function destroy(self, session: HarnessSession) -> null
-    throws baml.errors.UnknownError
 }
-

@@ -6,67 +6,53 @@ over a conversation that cannot move. This page defines the two mechanisms
 that keep composition honest — a **failure classifier axis** on errors and a
 **replay policy** on operations — and the wrappers built on them.
 
-## The failure model: what happened, and did it commit
+## The failure model: error facts plus operation policy
 
-Every capability error interface requires one shared base. It answers two
-orthogonal questions — *what kind of failure was this* and *did the
-operation's effect commit* — and deliberately does **not** answer "should
-you retry," because no error can know that alone:
+Every capability error interface requires the current shared
+`baml.errors.Failure` base. Its predicates are assertions made by the error
+author. They are necessary but not sufficient for replay: retry and fallback
+must also consult the attempted operation's `ReplayPolicy`.
 
 ```baml
-enum baml.errors.FailureKind {
-  Transport,        // request may not have arrived; socket dropped
-  RateLimit,        // explicit backpressure
-  InvalidRequest,   // the request itself is wrong; retrying is futile
-  Refusal,          // deliberate decline: model refusal, guardrail, budget policy
-  Parse,            // the response arrived but did not match the schema
-  Unsupported,      // the backend cannot do this operation at all
-  Cancelled,        // caller- or server-initiated cancellation
-}
-
-enum baml.errors.CommitState {
-  NotCommitted,     // known: no effect happened (request never left, 429 at the door)
-  Committed,        // known: the effect happened (job billed, message appended)
-  Unknown,          // the dangerous default: a 500 after the server may have acted
-}
-
 interface baml.errors.Failure {
-  function kind(self) -> FailureKind throws never
-  function commit_state(self) -> CommitState throws never
-  function retry_after(self) -> baml.time.Duration? throws never   // default null
-  function is_resumable(self) -> bool throws never                 // default false
+  function is_retryable(self) -> bool throws never
+  function is_effectful(self) -> bool throws never
+  function is_policy_refusal(self) -> bool throws never
+  function is_resumable(self) -> bool throws never
+  function is_unsupported(self) -> bool throws never
 }
 
-interface baml.errors.CallError requires baml.errors.Failure {}
-interface baml.errors.StreamError requires baml.errors.Failure {}
-interface baml.errors.BackgroundError requires baml.errors.Failure {
-  function is_terminal(self) -> bool throws never   // server killed the job vs poll hiccup
+interface baml.errors.CallError requires baml.errors.Failure {
+  function is_network_error(self) -> bool throws never
+  function is_rate_limit(self) -> bool throws never
+  function is_parse_error(self) -> bool throws never
 }
+interface baml.errors.StreamError requires baml.errors.Failure {}
+interface baml.errors.ToolError requires baml.errors.Failure {}
 ```
 
-Why two axes instead of one `is_retryable` bool on the error: the same
-failure can be safe or unsafe to replay depending on *what was being
-attempted*. A `Transport`/`Unknown` error during a read-only generation is
-worth retrying; the identical error after a tool executed a payment is not.
-The error reports facts it can know (`kind`, `commit_state`); the retry
-decision belongs to the layer that also knows the operation (below).
+`is_retryable()` means only that repeating could plausibly help. It does not
+mean this operation may be repeated. `is_effectful()` is the error author's
+conservative assertion that effects may already have happened. Unknown or
+foreign errors implement neither interface and never enter automatic replay.
 
-Because the base is `require`d, no capability's error channel can drop it —
-any `catch` can triage without knowing the concrete class:
+Because the base is `require`d, no capability's typed error channel can drop
+it. A catch can still use a narrower capability predicate:
 
 ```baml
 let r = ExtractInvoice(doc) catch (e) {
-  let f: baml.errors.Failure => match (f.kind()) {
-    Refusal   => escalate_to_human(doc),
-    RateLimit => retry_later(doc, f.retry_after()),
-    _         => throw e,
+  let f: baml.errors.CallError => {
+    if (f.is_rate_limit()) { retry_later(doc) } else { throw e }
+  },
+  let f: baml.errors.Failure => {
+    if (f.is_policy_refusal()) { escalate_to_human(doc) } else { throw e }
   },
   _ => throw e,   // UnknownError: no classification, no assumptions
 }
 ```
 
-Truthful classification is a hard rule for error authors. A budget stop is
-`kind: Refusal, commit_state: NotCommitted` — never a fake `Transport`.
+Truthful predicates are a hard rule for error authors. A budget stop is a
+policy refusal, never a fake network error.
 
 ## Replay policy: the operation-level half
 
@@ -96,19 +82,15 @@ instead of improvising:
 
 ```baml
 function may_replay(policy: ReplayPolicy, failure: baml.errors.Failure) -> bool {
-  // futile regardless of safety:
-  match (failure.kind()) {
-    InvalidRequest => { return false; },
-    Refusal        => { return false; },
-    Unsupported    => { return false; },
-    Cancelled      => { return false; },
-    _ => {},
+  if (!failure.is_retryable()
+      || failure.is_effectful()
+      || failure.is_policy_refusal()
+      || failure.is_unsupported()) {
+    return false;
   }
-  // safe only if the operation tolerates a duplicate of a maybe-committed effect:
   match (policy.kind) {
-    Safe                   => true,                          // idempotent: even Committed is fine
-    RequiresIdempotencyKey => policy.idempotency_key != null // keyed: duplicate collapses server-side
-                              && failure.commit_state() != CommitState.Committed,
+    Safe                   => true,
+    RequiresIdempotencyKey => policy.idempotency_key != null,
     Never                  => false,
   }
 }
@@ -142,8 +124,7 @@ claims the standard capabilities and forwards each with its own rules:
   default is `Never`, so an agentic default is not restarted after tool side
   effects. A simple provider may report `Safe` and receive ordinary retries.
 - **generate**: the retry loop consults `may_replay(policy, failure)` per
-  error — a rate limit (`NotCommitted`) re-drives with backoff; a 500 with
-  `Unknown` commit state on an unkeyed operation surfaces immediately.
+  error. Unknown or foreign failures surface immediately.
 - **stream**: retries *initiation only*; after the first observable chunk,
   failures surface (the consumer has seen data; silent restart would lie).
 - **background**: forwards only with an idempotency key; refuses otherwise
@@ -184,8 +165,8 @@ class Retry {
             if (attempt >= self.policy.max_attempts || !ai.may_replay(replay, f)) {
               throw e;                        // futile, unsafe, or out of budget: surface it
             }
-            baml.sys.sleep(self.policy.backoff(attempt, f.retry_after()));
-            continue;                         // kind + commit state + policy all permit
+            baml.sys.sleep(self.policy.backoff(attempt));
+            continue;                         // failure predicates + policy permit
           },
           _ => throw e,
         };
@@ -241,7 +222,7 @@ Rules that make fallback safe rather than merely convenient:
 
 - Members are tried per classified error and replay policy — a policy
   refusal does **not** fail over (the second model would happily produce
-  what the first was told not to), an unknown-commit-state error does not
+  what the first was told not to), an effectful or unclassified error does not
   re-drive.
 - Each member gets the task rebound via `task.with_provider(member)`,
   so provider-sensitive prompt context re-renders per attempt.
@@ -419,5 +400,5 @@ compose with routing and wrapping. Declarative sugar can lower to
 
 **Catching and classifying in user code** (no wrappers; everyone writes
 retry loops). The classifier axis makes this *possible* — it is not the
-recommendation. Hand-rolled loops forget backoff, forget commit state, and
+recommendation. Hand-rolled loops forget backoff, forget effect boundaries, and
 forget streams; the wrappers encode the rules once.

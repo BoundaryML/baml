@@ -850,8 +850,7 @@ activity. For `RequiresIdempotencyKey`, the executor constructs the policy
 with `activity.idempotency_key()`. A failure retries only when:
 
 1. the failure implements `baml.errors.Failure`;
-2. `ai.may_replay` accepts its
-   `FailureKind × CommitState` and the activity policy;
+2. `ai.may_replay` accepts its failure predicates and the activity policy;
 3. `max_attempts` has not been reached.
 
 An unclassified error never retries automatically. `max_attempts` includes
@@ -860,8 +859,8 @@ cannot prove that the activity never started.
 
 `StepOptions.timeout` requests cooperative cancellation, but cancellation of
 an arbitrary external effect is best effort. A timeout is conservatively
-`Transport × Unknown` unless the activity reports `NotCommitted`. A later
-attempt may overlap a timed-out one, so `Safe` or
+retryable but effectful unless the activity can assert that no effect happened.
+A later attempt may overlap a timed-out one, so `Safe` or
 `RequiresIdempotencyKey` is mandatory for retry. A late completion is
 accepted only while its attempt still owns the command's compare-and-set;
 otherwise it is retained as an audit event and cannot overwrite the chosen
@@ -877,8 +876,11 @@ failure is always persisted as data:
 class baml.workflow.FailureSnapshot {
   kind: string,
   message: string[],
-  commit_state: baml.errors.CommitState,
-  retry_after: baml.time.Duration?,
+  retryable: bool,
+  effectful: bool,
+  policy_refusal: bool,
+  resumable: bool,
+  unsupported: bool,
   attributes: map<string, string>,
 }
 ```
@@ -1533,12 +1535,11 @@ interface baml.errors.WorkflowError requires baml.errors.Failure {
 }
 ```
 
-The inherited `Failure.kind()` remains the coarse cross-system classifier:
-engine/journal/unknown-commit failures map to `Transport`, decode failures
-to `Parse`, version/nondeterminism/signal-rejection failures to
-`InvalidRequest`, and cancellation to `Cancelled`. `workflow_kind()` carries
-the workflow-specific decision. `commit_state()` describes the boundary
-whose outcome is in doubt.
+The inherited `Failure` predicates remain the cross-system decision axis.
+Engine/journal failures may be retryable; unknown-commit failures are
+effectful; decode/version/nondeterminism/signal-rejection failures are
+terminal; cancellation is a policy refusal. `workflow_kind()` carries the
+workflow-specific diagnostic.
 
 Examples:
 

@@ -40,6 +40,26 @@ async fn concrete_union_branch_after_sap_parsed_json_array() {
 }
 
 #[tokio::test]
+async fn model_step_flattens_union_type_arg_before_sap_conversion() {
+    assert_true("model_step_flattens_union_type_arg").await;
+}
+
+#[tokio::test]
+async fn sap_parses_null_as_optional_json() {
+    assert_true("sap_parses_optional_json_null").await;
+}
+
+#[tokio::test]
+async fn sap_parses_non_null_optional_json_value() {
+    assert_true("sap_parses_optional_json_value").await;
+}
+
+#[tokio::test]
+async fn sap_parses_optional_json_class_field() {
+    assert_true("sap_parses_optional_json_class_field").await;
+}
+
+#[tokio::test]
 async fn sap_preserves_declared_types_for_nullable_containers() {
     assert_true("sap_nullable_container_types_are_preserved").await;
 }

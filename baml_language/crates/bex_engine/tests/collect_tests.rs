@@ -201,6 +201,21 @@ async fn run_named_testset(
         .await
 }
 
+/// Helper: run every registered child through the stdlib's parallel test path.
+async fn run_all_tests(
+    engine: &Arc<BexEngine>,
+    registry: BexExternalValue,
+) -> Result<BexExternalValue, bex_engine::EngineError> {
+    engine
+        .call_function(
+            "testing.TestRegistry.run_all",
+            vec![registry],
+            bex_engine::FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await
+}
+
 fn unwrap_union(value: &BexExternalValue) -> &BexExternalValue {
     match value {
         BexExternalValue::Union { value, .. } => unwrap_union(value),
@@ -1095,6 +1110,103 @@ async fn test_body_let_local_resolves_to_binding() {
         .await
         .expect("run_test should not crash on a let-bound local");
     assert_outcome(&report, "pass");
+}
+
+/// Exact-class spreads inside concurrently spawned test bodies must retain a
+/// valid frame-local region. This is the execution shape used by `baml test`:
+/// `TestRegistry.run_all` spawns every child, and each child in turn races its
+/// body against a timeout future.
+#[tokio::test]
+async fn collect_tests_run_all_parallel_class_spreads_keep_local_slots_in_bounds() {
+    let source = r#"
+        class Tool {
+            name: string,
+        }
+
+        class Budget {
+            max_steps: int?,
+            max_cost: float?,
+        }
+
+        class Options {
+            budget: Budget?,
+            tools: Tool[]?,
+            registry: Tool?,
+            hook: Tool?,
+            observers: Tool[],
+            recorders: Tool[],
+            state: map<string, unknown>,
+            dispatch: (int[]) -> int[] throws never,
+            run_id: string?,
+        }
+
+        function tool() -> Tool {
+            Tool { name: "knowledge" }
+        }
+
+        function dispatch(values: int[]) -> int[] throws never {
+            values
+        }
+
+        function defaults(
+            tools: Tool[],
+            callback: (int[]) -> int[] throws never,
+            registry: Tool? = null,
+            hook: Tool? = null,
+            observers: Tool[] = [],
+        ) -> Options {
+            Options {
+                budget: Budget { max_steps: 5, max_cost: null },
+                tools: tools,
+                registry: registry,
+                hook: hook,
+                observers: observers,
+                recorders: [],
+                state: {},
+                dispatch: callback,
+                run_id: "run",
+            }
+        }
+
+        test "spread 1" {
+            let options = Options {
+                ...defaults([tool()], dispatch),
+                budget: Budget { max_steps: 1, max_cost: null },
+            };
+            assert.not_null(options.budget);
+            assert.equal(options.dispatch([1]).length(), 1);
+        }
+
+        test "spread 2" {
+            let options = Options {
+                ...defaults([tool()], dispatch),
+                budget: Budget { max_steps: 2, max_cost: null },
+            };
+            assert.not_null(options.budget);
+            assert.equal(options.dispatch([2]).length(), 1);
+        }
+
+        test "spread 3" {
+            let options = Options {
+                ...defaults([tool()], dispatch),
+                budget: Budget { max_steps: 3, max_cost: null },
+            };
+            assert.not_null(options.budget);
+            assert.equal(options.dispatch([3]).length(), 1);
+        }
+    "#;
+
+    let engine = make_engine(source);
+    let registry = engine
+        .collect_tests("user", CallId::next(), CancellationToken::default())
+        .await
+        .expect("collect_tests should succeed");
+
+    let report = run_all_tests(&engine, registry)
+        .await
+        .expect("parallel class-spread tests should not corrupt VM local slots");
+    assert_eq!(outcome(&report), "pass");
+    assert_eq!(int_field(&report, "total"), 3);
 }
 
 /// Extract the `outcome` string from a `testing.TestReport` instance.

@@ -3,22 +3,22 @@
 An audio stream can be a useful task argument without implying a realtime
 conversation. The natural bounded completion event is end-of-stream.
 
-> **Design status:** `AudioStream` is a guide-level proposal; its exact
-> normative interface is not yet defined by BEP-064.
+`AudioStream` is finite input for `TranscriptionProvider`; it is not encoded as
+chunk counts in an LLM prompt.
 
 ## Desired use
 
 ```baml
-function TranscribeMeeting(audio: ai.AudioStream) -> MeetingTranscript {
-  provider: StreamingTranscriber
-  prompt: `Transcribe this meeting. ${ctx.output_format}`
-}
-
-let transcript = TranscribeMeeting(recording_stream)
+let transcript = ai.drivers.transcribe(
+  StreamingTranscriber,
+  recording_stream,
+  ai.TranscriptionOptions { language: "en" },
+)
 ```
 
 The provider consumes frames until EOF, finalizes decoding, and returns one
-`MeetingTranscript`. That gives `drive<T>` a bounded completion rule.
+transcript. The specialized driver gives the operation a bounded completion
+rule without pretending audio transcription is prompt-shaped generation.
 
 ## Resource properties
 
@@ -49,4 +49,3 @@ open_live answers:   who owns an interactive duplex lifecycle?
 
 - Scenario 25 voice pipelines
 - See [realtime channel](./03-realtime-channel.md) for duplex interaction.
-
