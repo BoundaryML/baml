@@ -1,3 +1,5 @@
+#![cfg(not(target_os = "windows"))]
+
 use std::{fs, path::PathBuf};
 
 fn crate_dir() -> PathBuf {
