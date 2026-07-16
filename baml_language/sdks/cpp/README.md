@@ -1,31 +1,38 @@
 # BAML C++ SDK
 
 `baml-cli generate` emits a self-contained C++ source tree (`baml_sdk/`):
-the typed API, the embedded BAML bytecode, and the vendored bridge runtime
-headers. There is no C++ package to install and no link-time library
-dependency; the bridge `dlopen`s the shared BAML runtime at first use.
+the typed API, the embedded BAML bytecode, the vendored bridge runtime
+headers, and generated protobuf bindings for the wire schema. There is no
+C++ package to install; the bridge `dlopen`s the shared BAML runtime at
+first use.
 
 ## Usage
-
-CMake:
 
 ```cmake
 add_subdirectory(baml_sdk)
 target_link_libraries(app PRIVATE baml::sdk)
 ```
 
-Or any other build system -- one include path, two generated sources:
-
 ```sh
-c++ -std=c++17 -pthread -Ibaml_sdk/include \
-  main.cc baml_sdk/src/bindings.cc baml_sdk/src/_inlinedbaml.cc -o app -ldl
 BAML_RUNTIME_PATH=/path/to/libbridge_cffi.dylib ./app
 ```
 
-(`-pthread`/`-ldl` cover std::future and dlopen on older glibc; both are
-no-ops where libc already provides them.)
+The SDK's wire layer uses protobuf-lite, built from source at a pinned
+version by `baml_sdk/cmake/fetch_protobuf.cmake` (FetchContent; first
+configure clones protobuf + abseil, first build adds ~30-60s, cached
+thereafter). Building from source with your compiler and C++ standard is
+deliberate: it removes every protobuf ABI/version-mismatch failure mode,
+and the lite runtime has no global descriptor pool, so it cannot collide
+with a host application's own protobuf.
 
-Supported compilers: clang, gcc, MSVC (C++17 or later).
+Offline / air-gapped builds use standard FetchContent overrides:
+
+```sh
+cmake -DFETCHCONTENT_SOURCE_DIR_PROTOBUF=/path/to/protobuf-31.1 \
+      -DFETCHCONTENT_SOURCE_DIR_ABSL=/path/to/abseil-cpp ...
+```
+
+Requirements: CMake 3.16+, clang/gcc/MSVC with C++17 or later.
 
 ## Runtime resolution
 

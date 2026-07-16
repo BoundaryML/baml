@@ -9,8 +9,9 @@ name: BAML SDK Release - Verify C++
 # This workflow is therefore verify-only: for every supported target it
 # downloads the final `bridge-cffi-<target>` artifact, renames it to the
 # canonical loader filename, compiles the in-repo bridge consumer smoke
-# (runtime_smoke.cc: load via BAML_RUNTIME_PATH, ABI-table validation,
-# register_bridge, bytecode-init error surface), runs it against the
+# (runtime_smoke.cc via CMake: load via BAML_RUNTIME_PATH, ABI-table
+# validation, register_bridge, bytecode-init error surface, decode over the
+# pinned protobuf-lite runtime), runs it against the
 # artifact, and asserts the canonical version. musl runs inside a real
 # Alpine userspace; Windows compiles with MSVC.
 
@@ -108,11 +109,9 @@ jobs:
         if: matrix.libc != 'musl' && !contains(matrix.target, 'windows')
         run: |
           set -euo pipefail
-          c++ -std=c++17 -Wall -Wextra -Werror \
-            -Ibaml_language/sdks/cpp/bridge_cpp/include \
-            -Ibaml_language/crates/bridge_cffi/include \
-            baml_language/sdks/cpp/bridge_cpp/tests/runtime_smoke.cc -o smoke
-          out="$(./smoke)"
+          cmake -S baml_language/sdks/cpp/bridge_cpp/tests -B smoke-build
+          cmake --build smoke-build -j
+          out="$(./smoke-build/runtime_smoke)"
           echo "$out"
           echo "$out" | grep -qx "version: $BAML_EXPECTED_VERSION"
 
@@ -124,12 +123,10 @@ jobs:
             -e BAML_RUNTIME_PATH=/work/runtime-dist/libbridge_cffi.so \
             -e BAML_EXPECTED_VERSION \
             ${{ matrix.smoke_container }} \
-            sh -c 'apk add --no-cache bash g++ && \
-              g++ -std=c++17 -Wall -Wextra -Werror \
-                -Ibaml_language/sdks/cpp/bridge_cpp/include \
-                -Ibaml_language/crates/bridge_cffi/include \
-                baml_language/sdks/cpp/bridge_cpp/tests/runtime_smoke.cc -o smoke && \
-              out="$(./smoke)" && echo "$out" && \
+            sh -c 'apk add --no-cache bash g++ cmake make git linux-headers && \
+              cmake -S baml_language/sdks/cpp/bridge_cpp/tests -B smoke-build && \
+              cmake --build smoke-build -j && \
+              out="$(./smoke-build/runtime_smoke)" && echo "$out" && \
               echo "$out" | grep -qx "version: $BAML_EXPECTED_VERSION"'
 
       - name: Consumer smoke (windows)
@@ -142,14 +139,13 @@ jobs:
           Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
           Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation `
             -DevCmdArguments "-arch=${{ matrix.msvc_arch }} -host_arch=${{ matrix.msvc_arch }}"
-          # /TP: cl does not recognize .cc as a C++ source extension on its own.
-          cl /nologo /std:c++17 /EHsc /TP `
-            /I baml_language\sdks\cpp\bridge_cpp\include `
-            /I baml_language\crates\bridge_cffi\include `
-            baml_language\sdks\cpp\bridge_cpp\tests\runtime_smoke.cc /Fesmoke.exe
-          if ($LASTEXITCODE -ne 0) { throw "MSVC compile failed" }
-          $out = & .\smoke.exe
-          if ($LASTEXITCODE -ne 0) { throw "smoke.exe exited with $LASTEXITCODE" }
+          cmake -S baml_language\sdks\cpp\bridge_cpp\tests -B smoke-build
+          if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
+          # Debug config: the smoke asserts must stay compiled in (NDEBUG off).
+          cmake --build smoke-build -j --config Debug
+          if ($LASTEXITCODE -ne 0) { throw "cmake build failed" }
+          $out = & .\smoke-build\Debug\runtime_smoke.exe
+          if ($LASTEXITCODE -ne 0) { throw "runtime_smoke exited with $LASTEXITCODE" }
           Write-Output $out
           if (-not ($out -contains "version: $env:BAML_EXPECTED_VERSION")) {
             throw "expected version $env:BAML_EXPECTED_VERSION not reported"

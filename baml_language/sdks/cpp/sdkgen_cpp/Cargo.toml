@@ -20,3 +20,7 @@ doctest = false
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+protoc-bin-vendored.workspace = true
+tempfile.workspace = true

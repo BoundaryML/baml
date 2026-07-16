@@ -6669,6 +6669,8 @@ dependencies = [
  "baml_base",
  "baml_codegen_types",
  "baml_version",
+ "protoc-bin-vendored",
+ "tempfile",
 ]
 
 [[package]]

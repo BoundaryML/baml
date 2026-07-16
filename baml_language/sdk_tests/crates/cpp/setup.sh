@@ -23,6 +23,25 @@ WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 echo "==> cargo build -p bridge_cffi (dev cdylib for cpp sdk tests)"
 (cd "$WORKSPACE_ROOT" && cargo build -p bridge_cffi --no-default-features --features ring-crypto,bundle-http)
 
+# Pre-clone the pinned protobuf + abseil sources once. Every build tree
+# consumes them via FETCHCONTENT_SOURCE_DIR_* overrides (see cpp_test.sh /
+# tests/run.sh), which skips FetchContent population entirely: concurrent
+# cmake configures never race and fixtures need no network. Tags must match
+# bridge_cpp/cmake/fetch_protobuf.cmake and protobuf's own
+# cmake/dependencies.cmake abseil pin.
+PROTOBUF_SRC="$WORKSPACE_ROOT/target/cpp-protobuf-src"
+ABSL_SRC="$WORKSPACE_ROOT/target/cpp-absl-src"
+if [[ ! -d "$PROTOBUF_SRC" ]]; then
+    echo "==> clone pinned protobuf v31.1"
+    git clone --quiet --depth 1 --branch v31.1 \
+        https://github.com/protocolbuffers/protobuf.git "$PROTOBUF_SRC"
+fi
+if [[ ! -d "$ABSL_SRC" ]]; then
+    echo "==> clone pinned abseil 20250127.0"
+    git clone --quiet --depth 1 --branch 20250127.0 \
+        https://github.com/abseil/abseil-cpp.git "$ABSL_SRC"
+fi
+
 # Per-run breadcrumb for the in-test guard; see setup_guard in
 # harness_runner and SETUP_ENV_VAR in harness_setup/src/cpp.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
