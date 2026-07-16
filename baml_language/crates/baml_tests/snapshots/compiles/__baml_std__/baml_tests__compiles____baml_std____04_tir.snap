@@ -446,7 +446,7 @@ function baml.csv.CsvReader.next(self: baml.csv.CsvReader) -> baml.csv.CsvRecord
               match (self._on_skip : ((baml.csv.CsvError) -> null throws never) | null) : null
                 null =>
                   null : null
-                cb: (CsvError) -> null =>
+                cb: (CsvError) -> null throws never =>
                   cb(s.error) : null
             }
           CsvNeedData =>
@@ -482,7 +482,7 @@ function baml.csv.CsvRows.next(self: baml.csv.CsvRows<T>) -> T | baml.iter.Done 
                     match (self.reader._on_skip : ((baml.csv.CsvError) -> null throws never) | null) : null
                       null =>
                         null : null
-                      cb: (CsvError) -> null =>
+                      cb: (CsvError) -> null throws never =>
                         cb(s.error) : null
                   }
                 v: T =>
@@ -2390,7 +2390,7 @@ function baml.llm.PrimitiveClient.render_specialized_prompt(self: baml.llm.Primi
       match (prompt_closure : ((baml.llm.Context) -> baml.llm.PromptAst throws never) | null) : baml.llm.PromptAst
         null =>
           self.render_prompt(template, args, return_type) : baml.llm.PromptAst
-        closure: (Context) -> PromptAst =>
+        closure: (Context) -> PromptAst throws never =>
           closure(build_prompt_context(self, return_type)) : baml.llm.PromptAst
     self.specialize_prompt(prompt) : baml.llm.PromptAst
   }

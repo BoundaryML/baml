@@ -1,6 +1,6 @@
 //! Java sdk-test target — build-script side.
 //!
-//! Mirrors [`crate::typescript_node`] but for the JVM toolchain
+//! Mirrors [`crate::typescript`] but for the JVM toolchain
 //! (Gradle + javac + JUnit 5).
 //!
 //! `sdkgen_java::to_source_code_with_bytecode` runs directly (no

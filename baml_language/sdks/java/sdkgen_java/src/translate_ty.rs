@@ -82,23 +82,23 @@ pub(crate) fn translate_ty(
     sink: &mut UnionSink,
 ) -> String {
     match ty {
-        Ty::Int => primitive(pos, "long", "java.lang.Long"),
-        Ty::Bigint => "java.math.BigInteger".to_string(),
-        Ty::Float => primitive(pos, "double", "java.lang.Double"),
-        Ty::String => "java.lang.String".to_string(),
-        Ty::Bool => primitive(pos, "boolean", "java.lang.Boolean"),
+        Ty::Int { .. } => primitive(pos, "long", "java.lang.Long"),
+        Ty::Bigint { .. } => "java.math.BigInteger".to_string(),
+        Ty::Float { .. } => primitive(pos, "double", "java.lang.Double"),
+        Ty::String { .. } => "java.lang.String".to_string(),
+        Ty::Bool { .. } => primitive(pos, "boolean", "java.lang.Boolean"),
         // Only `null` inhabits the BAML `null` type.
-        Ty::Null => "java.lang.Void".to_string(),
+        Ty::Null { .. } => "java.lang.Void".to_string(),
         // Java has no literal types; a literal erases to its base.
-        Ty::Literal(lit) => match lit {
+        Ty::Literal(lit, ..) => match lit {
             baml_base::Literal::Int(_) => primitive(pos, "long", "java.lang.Long"),
             baml_base::Literal::Bigint(_) => "java.math.BigInteger".to_string(),
             baml_base::Literal::Float(_) => primitive(pos, "double", "java.lang.Double"),
             baml_base::Literal::String(_) => "java.lang.String".to_string(),
             baml_base::Literal::Bool(_) => primitive(pos, "boolean", "java.lang.Boolean"),
         },
-        Ty::Uint8Array => "byte[]".to_string(),
-        Ty::Media(kind) => match kind {
+        Ty::Uint8Array { .. } => "byte[]".to_string(),
+        Ty::Media(kind, _) => match kind {
             baml_base::MediaKind::Image => "baml_sdk.baml.media.Image".to_string(),
             baml_base::MediaKind::Audio => "baml_sdk.baml.media.Audio".to_string(),
             baml_base::MediaKind::Video => "baml_sdk.baml.media.Video".to_string(),
@@ -106,7 +106,7 @@ pub(crate) fn translate_ty(
             // Any-media has no dedicated wrapper type.
             baml_base::MediaKind::Generic => "java.lang.Object".to_string(),
         },
-        Ty::Class(name, args) => {
+        Ty::Class(name, args, _) => {
             let mut out = qualified_type(name);
             if !args.is_empty() {
                 let rendered: Vec<String> = args
@@ -119,8 +119,11 @@ pub(crate) fn translate_ty(
             }
             out
         }
-        Ty::Enum(name) => qualified_type(name),
-        Ty::TypeAlias(name) => {
+        // An enum-variant type denotes a value of its enum; render it as
+        // the enum's FQN (mirrors python treating `Enum` / `EnumVariant`
+        // identically).
+        Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => qualified_type(name),
+        Ty::TypeAlias(name, _) => {
             match ctx.aliases.get(name) {
                 // Recursive aliases mint a nominal type named after the
                 // alias (erasure would recurse forever); the emitter
@@ -129,8 +132,8 @@ pub(crate) fn translate_ty(
                 Some((resolved, false)) => translate_ty(resolved, pos, ctx, sink),
             }
         }
-        Ty::TypeVar(name) => java_identifier(name.as_str()),
-        Ty::List(inner) => format!(
+        Ty::TypeVar(name, _) => java_identifier(name.as_str()),
+        Ty::List(inner, _) => format!(
             "java.util.List<{}>",
             translate_ty(inner, TyPosition::Boxed, ctx, sink)
         ),
@@ -140,15 +143,23 @@ pub(crate) fn translate_ty(
             "java.util.Map<java.lang.String, {}>",
             translate_ty(value, TyPosition::Boxed, ctx, sink)
         ),
-        Ty::Union(items) => translate_union(items, ctx, sink),
-        Ty::BuiltinUnknown => "java.lang.Object".to_string(),
-        Ty::Callable { params, ret } => translate_callable(params, ret, ctx, sink),
-        Ty::Unit => match pos {
+        Ty::Union(items, _) => translate_union(items, ctx, sink),
+        Ty::BuiltinUnknown { .. } => "java.lang.Object".to_string(),
+        Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
+        Ty::Void { .. } => match pos {
             TyPosition::TopLevel => "void".to_string(),
             TyPosition::Boxed => "java.lang.Void".to_string(),
         },
-        Ty::BamlOptions => "baml_bridge.BamlOptions".to_string(),
-        Ty::RustType => "baml_bridge.BamlHandle".to_string(),
+        Ty::RustType { .. } => "baml_bridge.BamlHandle".to_string(),
+        // Types the Java SDK does not model yet: fall back to the opaque
+        // `java.lang.Object` (mirrors python's `typing.Any` / TS's
+        // `unknown` stance for these variants).
+        Ty::Interface(..)
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Never { .. }
+        | Ty::Future(..) => "java.lang.Object".to_string(),
     }
 }
 
@@ -166,10 +177,10 @@ fn primitive(pos: TyPosition, unboxed: &str, boxed: &str) -> String {
 /// `baml_sdk.baml.media.*` paths because the runtime jar provides
 /// classes at exactly those packages).
 fn qualified_type(name: &Name) -> String {
-    if name.pkg.as_str() == "baml"
-        && name.namespace_path.len() == 1
-        && name.namespace_path[0].as_str() == "llm"
-        && name.name.as_str() == "Stream"
+    if name.package().as_str() == "baml"
+        && name.namespace().len() == 1
+        && name.namespace()[0].as_str() == "llm"
+        && name.name().as_str() == "Stream"
     {
         return "baml_bridge.BamlStream".to_string();
     }
@@ -177,7 +188,7 @@ fn qualified_type(name: &Name) -> String {
     format!(
         "{}.{}",
         pkg.java_package(),
-        java_identifier(name.name.as_str())
+        java_identifier(name.name().as_str())
     )
 }
 
@@ -185,7 +196,10 @@ fn qualified_type(name: &Name) -> String {
 /// union over one base erases to the base; anything else mints a
 /// nominal sealed type in the current package.
 fn translate_union(items: &[Ty], ctx: &TranslateCtx<'_>, sink: &mut UnionSink) -> String {
-    let non_null: Vec<&Ty> = items.iter().filter(|t| !matches!(t, Ty::Null)).collect();
+    let non_null: Vec<&Ty> = items
+        .iter()
+        .filter(|t| !matches!(t, Ty::Null { .. }))
+        .collect();
 
     match non_null.len() {
         0 => "java.lang.Void".to_string(),
@@ -225,7 +239,9 @@ fn translate_union(items: &[Ty], ctx: &TranslateCtx<'_>, sink: &mut UnionSink) -
 fn common_literal_base(arms: &[&Ty]) -> Option<String> {
     let mut base: Option<&'static str> = None;
     for arm in arms {
-        let Ty::Literal(lit) = arm else { return None };
+        let Ty::Literal(lit, ..) = arm else {
+            return None;
+        };
         let this = match lit {
             baml_base::Literal::Int(_) => "java.lang.Long",
             baml_base::Literal::Bigint(_) => "java.math.BigInteger",
@@ -247,28 +263,28 @@ fn common_literal_base(arms: &[&Ty]) -> Option<String> {
 /// generic over exactly this list.
 pub(crate) fn collect_type_vars(ty: &Ty, out: &mut Vec<String>) {
     match ty {
-        Ty::TypeVar(name) => {
+        Ty::TypeVar(name, _) => {
             let id = java_identifier(name.as_str());
             if !out.contains(&id) {
                 out.push(id);
             }
         }
-        Ty::Class(_, args) => {
+        Ty::Class(_, args, _) => {
             for a in args {
                 collect_type_vars(a, out);
             }
         }
-        Ty::List(inner) => collect_type_vars(inner, out),
-        Ty::Map { key, value } => {
+        Ty::List(inner, _) => collect_type_vars(inner, out),
+        Ty::Map { key, value, .. } => {
             collect_type_vars(key, out);
             collect_type_vars(value, out);
         }
-        Ty::Union(items) => {
+        Ty::Union(items, _) => {
             for i in items {
                 collect_type_vars(i, out);
             }
         }
-        Ty::Callable { params, ret } => {
+        Ty::Function { params, ret, .. } => {
             for p in params {
                 collect_type_vars(&p.ty, out);
             }
@@ -287,15 +303,18 @@ pub(crate) fn collect_type_vars(ty: &Ty, out: &mut Vec<String>) {
 /// (nullability never affects decode).
 pub(crate) fn descriptor_token(ty: &Ty, aliases: &AliasTable) -> String {
     match ty {
-        Ty::Union(items) => {
-            let non_null: Vec<&Ty> = items.iter().filter(|t| !matches!(t, Ty::Null)).collect();
+        Ty::Union(items, _) => {
+            let non_null: Vec<&Ty> = items
+                .iter()
+                .filter(|t| !matches!(t, Ty::Null { .. }))
+                .collect();
             match non_null.len() {
                 0 => "null".to_string(),
                 1 => descriptor_token(non_null[0], aliases),
                 _ => {
                     if common_literal_base(&non_null).is_some() {
                         // Erased literal union: decodes as its base type.
-                        if let Ty::Literal(lit) = non_null[0] {
+                        if let Ty::Literal(lit, ..) = non_null[0] {
                             return match lit {
                                 baml_base::Literal::Int(_) => "int".to_string(),
                                 baml_base::Literal::Bigint(_) => "bigint".to_string(),
@@ -313,12 +332,12 @@ pub(crate) fn descriptor_token(ty: &Ty, aliases: &AliasTable) -> String {
                 }
             }
         }
-        Ty::TypeAlias(name) => match aliases.get(name) {
+        Ty::TypeAlias(name, _) => match aliases.get(name) {
             Some((resolved, false)) => descriptor_token(resolved, aliases),
             _ => crate::signature_token(ty, aliases),
         },
-        Ty::List(inner) => format!("list<{}>", descriptor_token(inner, aliases)),
-        Ty::Map { key, value } => format!(
+        Ty::List(inner, _) => format!("list<{}>", descriptor_token(inner, aliases)),
+        Ty::Map { key, value, .. } => format!(
             "map<{},{}>",
             descriptor_token(key, aliases),
             descriptor_token(value, aliases)
@@ -334,21 +353,22 @@ pub(crate) fn descriptor_token(ty: &Ty, aliases: &AliasTable) -> String {
 /// `BoolKTrue`.
 pub(crate) fn union_arm_token(ty: &Ty) -> String {
     match ty {
-        Ty::Int => "Int".to_string(),
-        Ty::Bigint => "Bigint".to_string(),
-        Ty::Float => "Float".to_string(),
-        Ty::String => "String".to_string(),
-        Ty::Bool => "Boolean".to_string(),
-        Ty::Null => "Null".to_string(),
-        Ty::Uint8Array => "Uint8Array".to_string(),
-        Ty::Media(kind) => format!("{kind:?}"),
-        Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
-            java_identifier(name.name.as_str())
-        }
-        Ty::TypeVar(name) => java_identifier(name.as_str()),
-        Ty::List(inner) => format!("{}List", union_arm_token(inner)),
+        Ty::Int { .. } => "Int".to_string(),
+        Ty::Bigint { .. } => "Bigint".to_string(),
+        Ty::Float { .. } => "Float".to_string(),
+        Ty::String { .. } => "String".to_string(),
+        Ty::Bool { .. } => "Boolean".to_string(),
+        Ty::Null { .. } => "Null".to_string(),
+        Ty::Uint8Array { .. } => "Uint8Array".to_string(),
+        Ty::Media(kind, _) => format!("{kind:?}"),
+        Ty::Class(name, _, _)
+        | Ty::Enum(name, _)
+        | Ty::EnumVariant(name, _, _)
+        | Ty::TypeAlias(name, _) => java_identifier(name.name().as_str()),
+        Ty::TypeVar(name, _) => java_identifier(name.as_str()),
+        Ty::List(inner, _) => format!("{}List", union_arm_token(inner)),
         Ty::Map { value, .. } => format!("{}Map", union_arm_token(value)),
-        Ty::Literal(lit) => match lit {
+        Ty::Literal(lit, ..) => match lit {
             baml_base::Literal::String(s) => format!("K{}", java_identifier(s)),
             baml_base::Literal::Int(v) => {
                 format!("IntK{}", v.to_string().replace('-', "Neg"))
@@ -365,13 +385,18 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
                 }
             }
         },
-        Ty::BuiltinUnknown => "Unknown".to_string(),
-        Ty::Callable { .. } => "Callable".to_string(),
-        Ty::Unit => "Void".to_string(),
-        Ty::BamlOptions => "BamlOptions".to_string(),
-        Ty::RustType => "Handle".to_string(),
+        Ty::BuiltinUnknown { .. } => "Unknown".to_string(),
+        Ty::Function { .. } => "Callable".to_string(),
+        Ty::Void { .. } => "Void".to_string(),
+        Ty::Never { .. } => "Never".to_string(),
+        Ty::RustType { .. } => "Handle".to_string(),
+        Ty::Interface(..) => "Interface".to_string(),
+        Ty::Type { .. } => "Type".to_string(),
+        Ty::Resource { .. } => "Resource".to_string(),
+        Ty::PromptAst { .. } => "PromptAst".to_string(),
+        Ty::Future(..) => "Future".to_string(),
         // validate() bans nested unions; unreachable in valid pools.
-        Ty::Union(_) => "Union".to_string(),
+        Ty::Union(..) => "Union".to_string(),
     }
 }
 
@@ -392,7 +417,7 @@ fn translate_callable(
     if has_optional || params.len() > 2 {
         return "java.lang.Object".to_string();
     }
-    let ret_is_unit = matches!(ret, Ty::Unit);
+    let ret_is_unit = matches!(ret, Ty::Void { .. });
     let p: Vec<String> = params
         .iter()
         .map(|p| translate_ty(&p.ty, TyPosition::Boxed, ctx, sink))
@@ -435,58 +460,125 @@ mod tests {
         translate_ty(ty, pos, &ctx, &mut sink)
     }
 
+    // Leaf-type constructors: the codegen `Ty` is now a re-export of
+    // `baml_type::CodegenTy`, whose variants carry a `TyAttr` (and
+    // literals a `Freshness`). These keep the assertions readable.
+    fn a() -> baml_base::TyAttr {
+        baml_base::TyAttr::EMPTY
+    }
+    fn int() -> Ty {
+        Ty::Int { attr: a() }
+    }
+    fn bigint() -> Ty {
+        Ty::Bigint { attr: a() }
+    }
+    fn float() -> Ty {
+        Ty::Float { attr: a() }
+    }
+    fn string() -> Ty {
+        Ty::String { attr: a() }
+    }
+    fn bool_() -> Ty {
+        Ty::Bool { attr: a() }
+    }
+    fn null() -> Ty {
+        Ty::Null { attr: a() }
+    }
+    fn uint8array() -> Ty {
+        Ty::Uint8Array { attr: a() }
+    }
+    fn void() -> Ty {
+        Ty::Void { attr: a() }
+    }
+    fn unknown() -> Ty {
+        Ty::BuiltinUnknown { attr: a() }
+    }
+    fn rust_type() -> Ty {
+        Ty::RustType { attr: a() }
+    }
+    fn media(kind: baml_base::MediaKind) -> Ty {
+        Ty::Media(kind, a())
+    }
+    fn literal(lit: baml_base::Literal) -> Ty {
+        Ty::Literal(lit, baml_codegen_types::Freshness::Regular, a())
+    }
+    fn list(inner: Ty) -> Ty {
+        Ty::List(Box::new(inner), a())
+    }
+    fn map(key: Ty, value: Ty) -> Ty {
+        Ty::Map {
+            key: Box::new(key),
+            value: Box::new(value),
+            attr: a(),
+        }
+    }
+    fn union(items: Vec<Ty>) -> Ty {
+        Ty::Union(items, a())
+    }
+    fn class_ty(n: Name, args: Vec<Ty>) -> Ty {
+        Ty::Class(n, args, a())
+    }
+    fn enum_ty(n: Name) -> Ty {
+        Ty::Enum(n, a())
+    }
+    fn alias_ty(n: Name) -> Ty {
+        Ty::TypeAlias(n, a())
+    }
+    fn typevar(n: BaseName) -> Ty {
+        Ty::TypeVar(n, a())
+    }
+    fn callable(params: Vec<CallableParam>, ret: Ty) -> Ty {
+        Ty::Function {
+            params,
+            ret: Box::new(ret),
+            throws: Box::new(Ty::Never { attr: a() }),
+            attr: a(),
+        }
+    }
+
     #[test]
     fn primitives_positional_boxing() {
-        assert_eq!(tr(&Ty::Int, TyPosition::TopLevel), "long");
-        assert_eq!(tr(&Ty::Int, TyPosition::Boxed), "java.lang.Long");
-        assert_eq!(tr(&Ty::Float, TyPosition::TopLevel), "double");
-        assert_eq!(tr(&Ty::Bool, TyPosition::Boxed), "java.lang.Boolean");
-        assert_eq!(tr(&Ty::String, TyPosition::TopLevel), "java.lang.String");
-        assert_eq!(
-            tr(&Ty::Bigint, TyPosition::TopLevel),
-            "java.math.BigInteger"
-        );
-        assert_eq!(tr(&Ty::Uint8Array, TyPosition::TopLevel), "byte[]");
-        assert_eq!(tr(&Ty::Null, TyPosition::TopLevel), "java.lang.Void");
+        assert_eq!(tr(&int(), TyPosition::TopLevel), "long");
+        assert_eq!(tr(&int(), TyPosition::Boxed), "java.lang.Long");
+        assert_eq!(tr(&float(), TyPosition::TopLevel), "double");
+        assert_eq!(tr(&bool_(), TyPosition::Boxed), "java.lang.Boolean");
+        assert_eq!(tr(&string(), TyPosition::TopLevel), "java.lang.String");
+        assert_eq!(tr(&bigint(), TyPosition::TopLevel), "java.math.BigInteger");
+        assert_eq!(tr(&uint8array(), TyPosition::TopLevel), "byte[]");
+        assert_eq!(tr(&null(), TyPosition::TopLevel), "java.lang.Void");
     }
 
     #[test]
     fn unit_is_void_only_at_top_level() {
-        assert_eq!(tr(&Ty::Unit, TyPosition::TopLevel), "void");
-        assert_eq!(tr(&Ty::Unit, TyPosition::Boxed), "java.lang.Void");
+        assert_eq!(tr(&void(), TyPosition::TopLevel), "void");
+        assert_eq!(tr(&void(), TyPosition::Boxed), "java.lang.Void");
     }
 
     #[test]
     fn containers_box_their_elements() {
         assert_eq!(
-            tr(&Ty::List(Box::new(Ty::Int)), TyPosition::TopLevel),
+            tr(&list(int()), TyPosition::TopLevel),
             "java.util.List<java.lang.Long>"
         );
         assert_eq!(
-            tr(
-                &Ty::Map {
-                    key: Box::new(Ty::String),
-                    value: Box::new(Ty::Bool),
-                },
-                TyPosition::TopLevel
-            ),
+            tr(&map(string(), bool_()), TyPosition::TopLevel),
             "java.util.Map<java.lang.String, java.lang.Boolean>"
         );
     }
 
     #[test]
     fn class_and_enum_are_fqn() {
-        let c = Ty::Class(name("user", &["lorem"], "Resume"), vec![]);
+        let c = class_ty(name("user", &["lorem"], "Resume"), vec![]);
         assert_eq!(tr(&c, TyPosition::TopLevel), "baml_sdk.lorem.Resume");
-        let e = Ty::Enum(name("user", &["ipsum"], "Sentiment"));
+        let e = enum_ty(name("user", &["ipsum"], "Sentiment"));
         assert_eq!(tr(&e, TyPosition::TopLevel), "baml_sdk.ipsum.Sentiment");
-        let s = Ty::Class(name("user", &["lorem"], "Resume$stream"), vec![]);
+        let s = class_ty(name("user", &["lorem"], "Resume$stream"), vec![]);
         assert_eq!(tr(&s, TyPosition::TopLevel), "baml_sdk.lorem.Resume$stream");
     }
 
     #[test]
     fn generic_class_args_box() {
-        let c = Ty::Class(name("user", &["generics"], "Wrapper"), vec![Ty::Int]);
+        let c = class_ty(name("user", &["generics"], "Wrapper"), vec![int()]);
         assert_eq!(
             tr(&c, TyPosition::TopLevel),
             "baml_sdk.generics.Wrapper<java.lang.Long>"
@@ -495,37 +587,28 @@ mod tests {
 
     #[test]
     fn typevar_renders_bare() {
-        assert_eq!(
-            tr(&Ty::TypeVar(BaseName::new("T")), TyPosition::TopLevel),
-            "T"
-        );
+        assert_eq!(tr(&typevar(BaseName::new("T")), TyPosition::TopLevel), "T");
     }
 
     #[test]
     fn media_types() {
         assert_eq!(
-            tr(
-                &Ty::Media(baml_base::MediaKind::Image),
-                TyPosition::TopLevel
-            ),
+            tr(&media(baml_base::MediaKind::Image), TyPosition::TopLevel),
             "baml_sdk.baml.media.Image"
         );
         assert_eq!(
-            tr(
-                &Ty::Media(baml_base::MediaKind::Generic),
-                TyPosition::TopLevel
-            ),
+            tr(&media(baml_base::MediaKind::Generic), TyPosition::TopLevel),
             "java.lang.Object"
         );
     }
 
     #[test]
     fn optional_collapses_to_boxed_inner() {
-        let opt_int = Ty::Union(vec![Ty::Int, Ty::Null]);
+        let opt_int = union(vec![int(), null()]);
         assert_eq!(tr(&opt_int, TyPosition::TopLevel), "java.lang.Long");
-        let opt_class = Ty::Union(vec![
-            Ty::Class(name("user", &["lorem"], "Resume"), vec![]),
-            Ty::Null,
+        let opt_class = union(vec![
+            class_ty(name("user", &["lorem"], "Resume"), vec![]),
+            null(),
         ]);
         assert_eq!(
             tr(&opt_class, TyPosition::TopLevel),
@@ -541,7 +624,7 @@ mod tests {
         let aliases = AliasTable::new();
         let ctx = ctx_in(&aliases);
         let mut sink = UnionSink::default();
-        let u = Ty::Union(vec![Ty::Int, Ty::String]);
+        let u = union(vec![int(), string()]);
         let expr = translate_ty(&u, TyPosition::TopLevel, &ctx, &mut sink);
         assert_eq!(expr, "baml_bridge.Union2<java.lang.Long, java.lang.String>");
         assert!(sink.unions.is_empty());
@@ -549,7 +632,7 @@ mod tests {
 
     #[test]
     fn nullable_multi_arm_union_strips_null_arm() {
-        let u = Ty::Union(vec![Ty::Int, Ty::String, Ty::Null]);
+        let u = union(vec![int(), string(), null()]);
         assert_eq!(
             tr(&u, TyPosition::TopLevel),
             "baml_bridge.Union2<java.lang.Long, java.lang.String>"
@@ -558,8 +641,8 @@ mod tests {
 
     #[test]
     fn union_arms_render_in_declaration_order() {
-        let t = Ty::Class(name("user", &["unions"], "T"), vec![]);
-        let u = Ty::Union(vec![t, Ty::String]);
+        let t = class_ty(name("user", &["unions"], "T"), vec![]);
+        let u = union(vec![t, string()]);
         assert_eq!(
             tr(&u, TyPosition::TopLevel),
             "baml_bridge.Union2<baml_sdk.unions.T, java.lang.String>"
@@ -572,17 +655,17 @@ mod tests {
         // threshold/alias policy lands the emitter falls back to Object
         // (the decoder then uses the wire-driven path).
         let arms: Vec<Ty> = (0..11)
-            .map(|i| Ty::Class(name("user", &["unions"], &format!("C{i}")), vec![]))
+            .map(|i| class_ty(name("user", &["unions"], &format!("C{i}")), vec![]))
             .collect();
-        let u = Ty::Union(arms);
+        let u = union(arms);
         assert_eq!(tr(&u, TyPosition::TopLevel), "java.lang.Object");
     }
 
     #[test]
     fn literal_union_same_base_erases() {
-        let u = Ty::Union(vec![
-            Ty::Literal(baml_base::Literal::String("draft".into())),
-            Ty::Literal(baml_base::Literal::String("sent".into())),
+        let u = union(vec![
+            literal(baml_base::Literal::String("draft".into())),
+            literal(baml_base::Literal::String("sent".into())),
         ]);
         assert_eq!(tr(&u, TyPosition::TopLevel), "java.lang.String");
     }
@@ -591,9 +674,9 @@ mod tests {
     fn literal_union_mixed_base_renders_generic_arity_family() {
         // Mixed-base literal unions don't erase; each literal arm boxes
         // to its base type inside the arity family.
-        let u = Ty::Union(vec![
-            Ty::Literal(baml_base::Literal::Int(1)),
-            Ty::Literal(baml_base::Literal::String("draft".into())),
+        let u = union(vec![
+            literal(baml_base::Literal::Int(1)),
+            literal(baml_base::Literal::String("draft".into())),
         ]);
         assert_eq!(
             tr(&u, TyPosition::TopLevel),
@@ -605,62 +688,46 @@ mod tests {
     fn alias_erases_nonrecursive_and_names_recursive() {
         let alias_name = name("user", &["aliases"], "StringList");
         let mut aliases = AliasTable::new();
-        aliases.insert(alias_name.clone(), (Ty::List(Box::new(Ty::String)), false));
+        aliases.insert(alias_name.clone(), (list(string()), false));
         let rec_name = name("user", &["aliases"], "RecList");
         aliases.insert(
             rec_name.clone(),
-            (
-                Ty::Union(vec![
-                    Ty::Int,
-                    Ty::List(Box::new(Ty::TypeAlias(rec_name.clone()))),
-                ]),
-                true,
-            ),
+            (union(vec![int(), list(alias_ty(rec_name.clone()))]), true),
         );
         let ctx = ctx_in(&aliases);
         let mut sink = UnionSink::default();
         assert_eq!(
-            translate_ty(
-                &Ty::TypeAlias(alias_name),
-                TyPosition::TopLevel,
-                &ctx,
-                &mut sink
-            ),
+            translate_ty(&alias_ty(alias_name), TyPosition::TopLevel, &ctx, &mut sink),
             "java.util.List<java.lang.String>"
         );
         assert_eq!(
-            translate_ty(
-                &Ty::TypeAlias(rec_name),
-                TyPosition::TopLevel,
-                &ctx,
-                &mut sink
-            ),
+            translate_ty(&alias_ty(rec_name), TyPosition::TopLevel, &ctx, &mut sink),
             "baml_sdk.aliases.RecList"
         );
     }
 
     #[test]
     fn callable_maps_to_java_util_function() {
-        let f = Ty::Callable {
-            params: vec![CallableParam {
+        let f = callable(
+            vec![CallableParam {
                 name: Some(BaseName::new("x")),
-                ty: Ty::Int,
+                ty: int(),
                 mode: CodegenFunctionParamMode::Required,
             }],
-            ret: Box::new(Ty::String),
-        };
+            string(),
+        );
         assert_eq!(
             tr(&f, TyPosition::TopLevel),
             "java.util.function.Function<java.lang.Long, java.lang.String>"
         );
-        let c = Ty::Callable {
-            params: vec![CallableParam {
+        let c = callable(
+            vec![CallableParam {
                 name: Some(BaseName::new("x")),
-                ty: Ty::Int,
+                ty: int(),
                 mode: CodegenFunctionParamMode::Required,
             }],
-            ret: Box::new(Ty::Unit),
-        };
+            void(),
+        );
         assert_eq!(
             tr(&c, TyPosition::TopLevel),
             "java.util.function.Consumer<java.lang.Long>"
@@ -669,21 +736,14 @@ mod tests {
 
     #[test]
     fn misc_types() {
+        assert_eq!(tr(&unknown(), TyPosition::TopLevel), "java.lang.Object");
         assert_eq!(
-            tr(&Ty::BuiltinUnknown, TyPosition::TopLevel),
-            "java.lang.Object"
-        );
-        assert_eq!(
-            tr(&Ty::RustType, TyPosition::TopLevel),
+            tr(&rust_type(), TyPosition::TopLevel),
             "baml_bridge.BamlHandle"
         );
         assert_eq!(
-            tr(&Ty::BamlOptions, TyPosition::TopLevel),
-            "baml_bridge.BamlOptions"
-        );
-        assert_eq!(
             tr(
-                &Ty::Literal(baml_base::Literal::String("draft".into())),
+                &literal(baml_base::Literal::String("draft".into())),
                 TyPosition::TopLevel
             ),
             "java.lang.String"
@@ -693,23 +753,23 @@ mod tests {
     #[test]
     fn descriptor_union_return_is_ordered() {
         let aliases = AliasTable::new();
-        let u = Ty::Union(vec![Ty::Int, Ty::String]);
+        let u = union(vec![int(), string()]);
         assert_eq!(descriptor_token(&u, &aliases), "union[int;string]");
     }
 
     #[test]
     fn descriptor_nullable_collapses_to_inner() {
         let aliases = AliasTable::new();
-        let opt_int = Ty::Union(vec![Ty::Int, Ty::Null]);
+        let opt_int = union(vec![int(), null()]);
         assert_eq!(descriptor_token(&opt_int, &aliases), "int");
     }
 
     #[test]
     fn descriptor_erased_literal_union_is_base() {
         let aliases = AliasTable::new();
-        let u = Ty::Union(vec![
-            Ty::Literal(baml_base::Literal::String("draft".into())),
-            Ty::Literal(baml_base::Literal::String("sent".into())),
+        let u = union(vec![
+            literal(baml_base::Literal::String("draft".into())),
+            literal(baml_base::Literal::String("sent".into())),
         ]);
         assert_eq!(descriptor_token(&u, &aliases), "string");
     }

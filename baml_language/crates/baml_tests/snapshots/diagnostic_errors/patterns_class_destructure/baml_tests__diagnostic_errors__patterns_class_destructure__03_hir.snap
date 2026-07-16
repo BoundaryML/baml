@@ -84,7 +84,7 @@ function user.generic_class_type_pattern_requires_type_args(boxed: user.Box<int>
   {  } match (boxed) { user.Box => 1 }
 }
 function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int  [expr] {
-  { let f: (user.Person) -> int = (p: user.Person) -> int { { let Person { age: string } = p } 1 } } f(user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } })
+  { let f: (user.Person) -> int throws never = (p: user.Person) -> int { { let Person { age: string } = p } 1 } } f(user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } })
 }
 function user.let_class_field_literal_narrower_than_field_is_refutable() -> int  [expr] {
   { let Person { age: 1 } = user.Person { age: 1, flexible_age: 2, address: user.Address { zip: 3 } } } 1

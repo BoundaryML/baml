@@ -220,6 +220,20 @@ pub trait TypeContext {
     where
         Self: Sized,
     {
+        // Reflexivity fast path: structurally identical spellings (attrs
+        // included) trivially canonicalize to the same form.
+        if a == b {
+            return true;
+        }
+        // Cheap definite-mismatch filter. MIR impl dispatch probes every
+        // candidate impl's pattern against the receiver through `equivalent`
+        // (`match_ty_pattern_into`), so the overwhelmingly common case is a
+        // miss between two nominal types with different names — decidable from
+        // the outermost constructor alone, without the two allocation-heavy
+        // canonicalization walks below.
+        if heads_definitely_differ(a, b) {
+            return false;
+        }
         NormalTy::canonical(a, self) == NormalTy::canonical(b, self)
     }
 
@@ -342,6 +356,38 @@ pub fn equivalent<C: TypeContext>(a: &Ty, b: &Ty, ctx: &C) -> bool {
 /// Pending removal once every caller uses the method form.
 pub fn is_subtype<C: TypeContext>(sub: &Ty, sup: &Ty, ctx: &C) -> bool {
     ctx.is_subtype(sub, sup)
+}
+
+/// True only when `a` and `b` provably canonicalize to different forms, judged
+/// from their outermost constructor alone — a cheap reject for [`TypeContext::
+/// equivalent`] that skips the two canonicalization walks on the common
+/// nominal-mismatch case (e.g. probing an `impl for Foo` pattern against a
+/// receiver of an unrelated class).
+///
+/// Soundness rests on `NormalTy::from_ty` being *head-stable* for the variants
+/// decided here: a `Class`/`Interface`/`Enum`/`EnumVariant` maps to the same
+/// constructor carrying the *verbatim* qualified name (only its type arguments
+/// are rewritten), and equality is nominal, so two of the same kind with
+/// different names can never share a canonical form.
+///
+/// This is deliberately *conservative* — it decides only same-kind pairs whose
+/// heads are stable and never uses a cross-kind "different discriminant ⇒
+/// differ" catch-all. That catch-all would be unsound under the current
+/// normalization: `List`/`EvolvingList` and `Map`/`EvolvingMap` are distinct
+/// `Ty` constructors that canonicalize to the *same* `NormalTy` head, and
+/// `TypeAlias` / `Union` / `AssociatedTypeProjection` / generic `Media` /
+/// `Infer` heads can be rewritten into any other shape. Leaving every such case
+/// undecided (`false`) preserves correctness; only the unambiguous nominal
+/// misses are fast-rejected. Context-independent: canonicalization preserves
+/// these nominal heads regardless of the `TypeContext`.
+fn heads_definitely_differ(a: &Ty, b: &Ty) -> bool {
+    match (a, b) {
+        (Ty::Class(q1, ..), Ty::Class(q2, ..))
+        | (Ty::Interface(q1, ..), Ty::Interface(q2, ..))
+        | (Ty::Enum(q1, ..), Ty::Enum(q2, ..)) => q1 != q2,
+        (Ty::EnumVariant(q1, v1, ..), Ty::EnumVariant(q2, v2, ..)) => q1 != q2 || v1 != v2,
+        _ => false,
+    }
 }
 
 /// Free-function form of [`TypeContext::definitely_disjoint`], for a context held
@@ -1056,10 +1102,6 @@ impl NormalTy {
         ctx: &C,
         assumptions: &mut HashSet<(NormalTy, NormalTy)>,
     ) -> bool {
-        let pair = (self.clone(), sup.clone());
-        if assumptions.contains(&pair) {
-            return true;
-        }
         if self == sup {
             return true;
         }
@@ -1082,8 +1124,57 @@ impl NormalTy {
             return true;
         }
 
+        // ── Termination argument ──────────────────────────────────────────
+        // The co-inductive assumption set exists *only* to terminate cycles,
+        // and a cycle can only arise through an arm that *expands* (regenerates)
+        // a type rather than descending into a strictly-smaller subterm:
+        //   * μ-unfolding — `body.substitute(var, self)` can reproduce the same
+        //     pair (`(_, Mu)` on the right, `(Mu, _)` on the left);
+        //   * a `TypeVar` / `AssociatedTypeProjection` on the left — its bound is
+        //     looked up through the context and may mention the variable itself.
+        // Every *structural* arm (unions, invariant containers, functions,
+        // literals, enum-variant, the nominal interface facts) either recurses
+        // into a strictly-smaller subterm of a finite regular tree or is
+        // terminal, so those arms terminate WITHOUT any assumption bookkeeping.
+        // Any infinite derivation must therefore pass through an expanding arm
+        // infinitely often, and the pairs seen at those arms are drawn from the
+        // finite subterm closure of the (regular) operands — so recording pairs
+        // only at the expanding arms still guarantees a repeat is detected and
+        // the recursion is capped. Restricting the bookkeeping this way spares
+        // the deep `NormalTy` clone + full-tree hash on the millions of purely
+        // structural steps, which profiling showed dominated subtype-checking
+        // cost (this is now the *only* equivalence path post-unification).
+        let expanding = matches!(
+            self,
+            NormalTy::Mu { .. } | NormalTy::TypeVar(_) | NormalTy::AssociatedTypeProjection { .. }
+        ) || matches!(sup, NormalTy::Mu { .. });
+        if !expanding {
+            return self.is_subtype_of_inner(sup, ctx, assumptions);
+        }
+        // On the (few) expanding arms, probe by linear scan rather than cloning
+        // to hash: the pairs on the current path are bounded by the
+        // expanding-arm recursion depth, so a scan beats hashing the whole tree.
+        if assumptions.iter().any(|(a, b)| a == self && b == sup) {
+            return true;
+        }
+        let pair = (self.clone(), sup.clone());
         assumptions.insert(pair.clone());
-        let result = match (self, sup) {
+        let result = self.is_subtype_of_inner(sup, ctx, assumptions);
+        assumptions.remove(&pair);
+        result
+    }
+
+    /// The structural rules of [`Self::is_subtype_of`]. Callers MUST go through
+    /// `is_subtype_of`, which owns the reflexivity / sentinel fast paths and the
+    /// co-inductive assumption bookkeeping (only performed on the expanding
+    /// arms — see the termination argument there).
+    fn is_subtype_of_inner<C: TypeContext>(
+        &self,
+        sup: &NormalTy,
+        ctx: &C,
+        assumptions: &mut HashSet<(NormalTy, NormalTy)>,
+    ) -> bool {
+        match (self, sup) {
             // μ-unfolding (equirecursive).
             (NormalTy::Mu { var, body }, _) => {
                 body.substitute(var, self)
@@ -1240,9 +1331,7 @@ impl NormalTy {
             }
 
             _ => false,
-        };
-        assumptions.remove(&pair);
-        result
+        }
     }
 
     // ── conversion out: NormalTy → Ty ──────────────────────────────────────

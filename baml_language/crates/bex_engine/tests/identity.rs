@@ -142,7 +142,7 @@ async fn boundary_id_current_matches_root_id() {
 #[tokio::test]
 async fn call_callable_with_trace_surfaces_callable_entry_call_ref() {
     let source = r#"
-        function get_callable() -> () -> string {
+        function get_callable() -> () -> string throws never {
             callable
         }
 

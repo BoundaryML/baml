@@ -141,7 +141,7 @@ pub(crate) fn java_identifier(seg: &str) -> String {
 pub(crate) fn route(name: &Name) -> PackagePath {
     let mut segs: Vec<String> = Vec::new();
 
-    match name.pkg.as_str() {
+    match name.package().as_str() {
         "user" => {}
         "baml" => segs.push("baml".to_string()),
         other => {
@@ -150,7 +150,7 @@ pub(crate) fn route(name: &Name) -> PackagePath {
         }
     }
 
-    for seg in &name.namespace_path {
+    for seg in name.namespace() {
         segs.push(java_identifier(seg.as_str()));
     }
 

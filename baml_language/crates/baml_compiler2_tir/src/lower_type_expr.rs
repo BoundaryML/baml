@@ -921,6 +921,22 @@ pub fn lower_type_expr(
         } => {
             // A function type carries no generics of its own; its type variables
             // come from the enclosing context.
+            //
+            // The `throws` clause is required here (`TYPE_SYSTEM.md` rule 5): the only
+            // positions that may omit it never reach this lowering with `None` — a
+            // declaration's immediate callback parameter is opened to a synthetic effect
+            // parameter by HIR signature elaboration, and lambda literals infer their
+            // own throws from the body. Recover with `never` so downstream checking
+            // doesn't cascade.
+            let throws_ty = match throws.as_deref() {
+                Some(throws) => lower_type_expr(throws, ctx, diagnostics),
+                None => {
+                    diagnostics.push(TirTypeError::FunctionTypeMissingThrows);
+                    Ty::Never {
+                        attr: TyAttr::default(),
+                    }
+                }
+            };
             Ty::Function {
                 params: params
                     .iter()
@@ -935,14 +951,7 @@ pub fn lower_type_expr(
                     })
                     .collect(),
                 ret: Box::new(lower_type_expr(ret, ctx, diagnostics)),
-                throws: Box::new(
-                    throws
-                        .as_deref()
-                        .map(|throws| lower_type_expr(throws, ctx, diagnostics))
-                        .unwrap_or(Ty::Never {
-                            attr: TyAttr::default(),
-                        }),
-                ),
+                throws: Box::new(throws_ty),
                 attr: TyAttr::default(),
             }
         }
@@ -1431,12 +1440,12 @@ mod tests {
         let db = compile("interface Bar {}\ninterface Foo {\n  type Assoc extends Bar\n}\n");
         let user = PackageId::new(&db, Name::new("user"));
         let res_ctx = crate::package_interface::package_resolution_context(&db, user);
-        let aliases = crate::inference::package_alias_map(&db, res_ctx);
+        let aliases = crate::inference::package_resolved_aliases(&db, user);
         let bounds = TypeVarBoundsMap::default();
         let gctx = crate::type_context::GlobalTypeContext {
             db: &db,
             res_ctx,
-            aliases: &aliases,
+            aliases,
             bounds: &bounds,
         };
         let foo = baml_type::Interface::new(
@@ -1473,12 +1482,12 @@ mod tests {
         ));
         let user = PackageId::new(&db, Name::new("user"));
         let res_ctx = crate::package_interface::package_resolution_context(&db, user);
-        let aliases = crate::inference::package_alias_map(&db, res_ctx);
+        let aliases = crate::inference::package_resolved_aliases(&db, user);
         let bounds = TypeVarBoundsMap::default();
         let gctx = crate::type_context::GlobalTypeContext {
             db: &db,
             res_ctx,
-            aliases: &aliases,
+            aliases,
             bounds: &bounds,
         };
         let foo = baml_type::Interface::new(
@@ -3101,7 +3110,9 @@ mod tests {
                 },
             ],
             ret: Box::new(TypeExprKind::Bool { attrs: vec![] }.at(text_size::TextRange::default())),
-            throws: None,
+            throws: Some(Box::new(
+                TypeExprKind::Never { attrs: vec![] }.at(text_size::TextRange::default()),
+            )),
             attrs: vec![],
         }
         .at(text_size::TextRange::default());
@@ -3170,7 +3181,7 @@ mod tests {
         let pkg = baml_compiler2_hir::file_package::file_package(&db, file).package;
         let pkg_id = baml_compiler2_hir::package::PackageId::new(&db, pkg);
         let mut out = Vec::new();
-        for impl_loc in crate::interfaces::package_impl_locs(&db, pkg_id) {
+        for &impl_loc in crate::interfaces::package_impl_locs(&db, pkg_id) {
             match crate::interfaces::impl_data(&db, impl_loc) {
                 Ok(data) => out.extend(data.diagnostics.iter().map(|(e, _)| e.clone())),
                 Err(crate::interfaces::ImplDataError::InterfaceUnresolved { diagnostics }) => {

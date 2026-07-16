@@ -374,6 +374,33 @@ fn callable_throws_cycle_initial<'db>(
 
 #[salsa::tracked(returns(ref), cycle_initial=callable_throws_cycle_initial)]
 pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Ty {
+    // A seeded value from a previous compile short-circuits body
+    // inference for a clean function, returning exactly the `Ty` this query
+    // produced last time. `seeds.by_path(db)` is a *tracked* read of the
+    // `SeededCallableThrows` input (present-from-construction, empty until
+    // seeded), so a later seed reliably invalidates this memo. The seed is
+    // keyed by (source path, item-tree `LocalItemId`) — process-independent for
+    // byte-identical files. Only functions the reuse plan proved clean are
+    // seeded, so a converged fixpoint value is returned without re-entering the
+    // callee body; a dirty function is never in the map and infers below.
+    if let Some(seeds) = db.seeded_callable_throws() {
+        // `by_path(db)` is the tracked read (kept unconditional so a later seed
+        // still invalidates this memo), but the path-display allocation and the
+        // lookup are skipped whenever no seeds were injected — the LSP and every
+        // cold CLI compile hold the empty map, so this guard avoids a per-eval
+        // `String` allocation on the hot `callable_throws` path.
+        let by_path = seeds.by_path(db);
+        if !by_path.is_empty() {
+            let path = function.file(db).path(db).display().to_string();
+            if let Some(ty) = by_path
+                .get(&path)
+                .and_then(|by_id| by_id.get(&function.id(db).as_u32()))
+            {
+                return ty.clone();
+            }
+        }
+    }
+
     if let Some(declared_throws) = lowered_declared_callable_throws(db, function) {
         return declared_throws;
     }
@@ -390,15 +417,15 @@ pub fn callable_throws<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) 
                 };
             };
             let inference = infer_scope_types(db, scope_id);
-            let res_ctx = package_resolution_context(db, pkg_id);
-            let aliases = crate::inference::package_alias_map(db, res_ctx);
+            // Salsa-cached per package — previously rebuilt for every callable.
+            let aliases = crate::inference::package_resolved_aliases(db, pkg_id);
             let facts = crate::throws_analysis::collect_escaping_throws(
                 &CallableThrowsAnalysis {
                     db,
                     pkg_id,
                     ns_context: &pkg_info.namespace_path,
                     inference,
-                    aliases: &aliases,
+                    aliases,
                 },
                 body,
             );

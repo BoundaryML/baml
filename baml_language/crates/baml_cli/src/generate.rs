@@ -58,10 +58,6 @@ impl GenerateArgs {
             ));
             return Ok(crate::ExitCode::Other);
         }
-        let project = db
-            .get_project()
-            .ok_or_else(|| anyhow!("No project context"))?;
-
         // Compile-time diagnostics — same shape as run/pack: render the
         // ariadne block after abandoning the spinner so the colored
         // source-snippet output doesn't fight with the lamb. No "Checking"
@@ -69,7 +65,7 @@ impl GenerateArgs {
         // carry the progress, and a "Checking N file(s)" would just duplicate
         // the "Compiling N file(s)" count.
         let source_files = db.get_source_files();
-        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+        let diagnostics = baml_project::collect_diagnostics(&db);
         let errors: Vec<_> = diagnostics
             .iter()
             .filter(|d| d.severity == Severity::Error)
@@ -170,11 +166,20 @@ impl GenerateArgs {
                         generator.naming_convention,
                     )
                 }
-                OutputType::TypescriptNode => sdkgen_typescript_node::to_source_code_with_bytecode(
-                    &pool,
-                    &baml_bytecode,
-                    generator.naming_convention,
-                ),
+                OutputType::TypescriptNode => {
+                    sdkgen_typescript_shared::sdkgen_typescript::to_source_code_with_bytecode(
+                        &pool,
+                        &baml_bytecode,
+                        generator.naming_convention,
+                    )
+                }
+                OutputType::TypescriptWeb => {
+                    sdkgen_typescript_shared::sdkgen_typescript_web::to_source_code_with_bytecode(
+                        &pool,
+                        &baml_bytecode,
+                        generator.naming_convention,
+                    )
+                }
                 OutputType::Java => sdkgen_java::to_source_code_with_bytecode(
                     &pool,
                     &baml_bytecode,
@@ -266,7 +271,7 @@ fn discover_generators(root: &Path) -> (Vec<GeneratorDef>, Vec<Diagnostic>) {
             name,
             "output_type",
             generator.output_type.as_ref(),
-            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node""#,
+            r#"one of: "python/pydantic", "python/pydantic/v1", "typescript/node", "typescript/web""#,
             table_range,
             &mut diags,
         );

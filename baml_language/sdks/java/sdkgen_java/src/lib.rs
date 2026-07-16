@@ -125,13 +125,13 @@ pub fn to_source_code(
     for (name, symbol) in pool {
         let pkg = route(name);
         let symbol_fqn = {
-            let mut s = String::from(name.pkg.as_str());
-            for seg in &name.namespace_path {
+            let mut s = String::from(name.package().as_str());
+            for seg in name.namespace() {
                 s.push('.');
                 s.push_str(seg.as_str());
             }
             s.push('.');
-            s.push_str(name.name.as_str());
+            s.push_str(name.name().as_str());
             s
         };
         let is_runtime_owned = RUNTIME_OWNED_FQNS.contains(&symbol_fqn.as_str());
@@ -142,7 +142,7 @@ pub fn to_source_code(
                 if is_runtime_owned {
                     continue;
                 }
-                let ident = java_identifier(class.name.name.as_str());
+                let ident = java_identifier(class.name.name().as_str());
                 type_idents_per_package
                     .entry(pkg.clone())
                     .or_default()
@@ -168,7 +168,7 @@ pub fn to_source_code(
                 ));
             }
             Symbol::Enum(enum_) => {
-                let ident = java_identifier(enum_.name.name.as_str());
+                let ident = java_identifier(enum_.name.name().as_str());
                 type_idents_per_package
                     .entry(pkg.clone())
                     .or_default()
@@ -199,7 +199,7 @@ pub fn to_source_code(
             // Non-recursive aliases erase at every use site; recursive
             // aliases mint a nominal type (emitted below).
             Symbol::TypeAlias(alias) if alias.recursive => {
-                let ident = java_identifier(name.name.as_str());
+                let ident = java_identifier(name.name().as_str());
                 type_idents_per_package
                     .entry(pkg.clone())
                     .or_default()
@@ -241,10 +241,10 @@ pub fn to_source_code(
     // get a reserved placeholder until the aliases capability lands.
     for (pkg, ident, alias_fqn, resolves_to) in recursive_aliases {
         let ctx = TranslateCtx { aliases: &aliases };
-        let body = if let Ty::Union(items) = resolves_to {
+        let body = if let Ty::Union(items, _) = resolves_to {
             let arms: Vec<Ty> = items
                 .iter()
-                .filter(|t| !matches!(t, Ty::Null))
+                .filter(|t| !matches!(t, Ty::Null { .. }))
                 .cloned()
                 .collect();
             let (_, union_binary, arm_entries) = union_registration(&pkg, &ident, &arms, &aliases);
@@ -355,49 +355,56 @@ pub fn to_source_code_with_bytecode(
 /// with `baml_bridge.TypeRegistry`'s `BamlTy` tokenizer.
 pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
     fn fqn(name: &baml_codegen_types::Name) -> String {
-        let mut s = String::from(name.pkg.as_str());
-        for seg in &name.namespace_path {
+        let mut s = String::from(name.package().as_str());
+        for seg in name.namespace() {
             s.push('.');
             s.push_str(seg.as_str());
         }
         s.push('.');
-        s.push_str(name.name.as_str());
+        s.push_str(name.name().as_str());
         s
     }
     match ty {
-        Ty::Int => "int".to_string(),
-        Ty::Bigint => "bigint".to_string(),
-        Ty::Float => "float".to_string(),
-        Ty::String => "string".to_string(),
-        Ty::Bool => "bool".to_string(),
-        Ty::Null => "null".to_string(),
-        Ty::Uint8Array => "uint8array".to_string(),
-        Ty::Unit => "void".to_string(),
-        Ty::BuiltinUnknown => "unknown".to_string(),
-        Ty::Class(name, _) | Ty::Enum(name) => fqn(name),
-        Ty::TypeAlias(name) => match aliases.get(name) {
+        Ty::Int { .. } => "int".to_string(),
+        Ty::Bigint { .. } => "bigint".to_string(),
+        Ty::Float { .. } => "float".to_string(),
+        Ty::String { .. } => "string".to_string(),
+        Ty::Bool { .. } => "bool".to_string(),
+        Ty::Null { .. } => "null".to_string(),
+        Ty::Uint8Array { .. } => "uint8array".to_string(),
+        Ty::Void { .. } => "void".to_string(),
+        Ty::BuiltinUnknown { .. } => "unknown".to_string(),
+        Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::EnumVariant(name, _, _) => fqn(name),
+        Ty::TypeAlias(name, _) => match aliases.get(name) {
             Some((resolved, false)) => signature_token(resolved, aliases),
             _ => fqn(name),
         },
-        Ty::TypeVar(name) => format!("tv:{}", name.as_str()),
-        Ty::List(inner) => format!("list<{}>", signature_token(inner, aliases)),
-        Ty::Map { key, value } => format!(
+        Ty::TypeVar(name, _) => format!("tv:{}", name.as_str()),
+        Ty::List(inner, _) => format!("list<{}>", signature_token(inner, aliases)),
+        Ty::Map { key, value, .. } => format!(
             "map<{},{}>",
             signature_token(key, aliases),
             signature_token(value, aliases)
         ),
-        Ty::Literal(lit) => match lit {
+        Ty::Literal(lit, ..) => match lit {
             baml_base::Literal::Int(v) => format!("lit:int:{v}"),
             baml_base::Literal::Bigint(v) => format!("lit:bigint:{v}"),
             baml_base::Literal::Float(v) => format!("lit:float:{v}"),
             baml_base::Literal::String(v) => format!("lit:string:{v}"),
             baml_base::Literal::Bool(v) => format!("lit:bool:{v}"),
         },
-        Ty::Media(kind) => format!("media:{}", format!("{kind:?}").to_lowercase()),
-        Ty::Callable { .. } => "callable".to_string(),
-        Ty::RustType => "handle".to_string(),
-        Ty::BamlOptions => "options".to_string(),
-        Ty::Union(_) => "union".to_string(), // banned by validate(); defensive
+        Ty::Media(kind, _) => format!("media:{}", format!("{kind:?}").to_lowercase()),
+        Ty::Function { .. } => "callable".to_string(),
+        Ty::RustType { .. } => "handle".to_string(),
+        // Types the Java SDK does not model yet collapse to the opaque
+        // `unknown` token (the conservative "?"-token fallback).
+        Ty::Interface(..)
+        | Ty::Type { .. }
+        | Ty::Resource { .. }
+        | Ty::PromptAst { .. }
+        | Ty::Never { .. }
+        | Ty::Future(..) => "unknown".to_string(),
+        Ty::Union(..) => "union".to_string(), // banned by validate(); defensive
     }
 }
 
@@ -500,6 +507,33 @@ mod tests {
         }
     }
 
+    // Leaf-type constructors: the codegen `Ty` variants now carry a
+    // `TyAttr`, so these keep the fixture builders readable.
+    fn a() -> baml_base::TyAttr {
+        baml_base::TyAttr::EMPTY
+    }
+    fn t_int() -> Ty {
+        Ty::Int { attr: a() }
+    }
+    fn t_string() -> Ty {
+        Ty::String { attr: a() }
+    }
+    fn t_uint8array() -> Ty {
+        Ty::Uint8Array { attr: a() }
+    }
+    fn t_typevar(n: &str) -> Ty {
+        Ty::TypeVar(BaseName::new(n), a())
+    }
+    fn t_union(items: Vec<Ty>) -> Ty {
+        Ty::Union(items, a())
+    }
+    fn t_list(inner: Ty) -> Ty {
+        Ty::List(Box::new(inner), a())
+    }
+    fn t_alias(n: Name) -> Ty {
+        Ty::TypeAlias(n, a())
+    }
+
     fn class_sym_with_props(
         n: &Name,
         generic_params: &[&str],
@@ -556,10 +590,10 @@ mod tests {
             arguments: vec![FunctionArgument {
                 name: BaseName::new("x"),
                 docstring: None,
-                ty: Ty::Int,
+                ty: t_int(),
                 default: None,
             }],
-            return_type: Ty::Int,
+            return_type: t_int(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(span),
@@ -609,7 +643,7 @@ mod tests {
     fn recursive_alias_sym(n: &Name, span: u32) -> Symbol {
         Symbol::TypeAlias(TypeAlias {
             name: n.clone(),
-            resolves_to: Ty::Union(vec![Ty::Int, Ty::List(Box::new(Ty::TypeAlias(n.clone())))]),
+            resolves_to: t_union(vec![t_int(), t_list(t_alias(n.clone()))]),
             recursive: true,
             origin: origin(span),
         })
@@ -640,9 +674,9 @@ mod tests {
                 &n,
                 &[],
                 vec![
-                    ("int_field", Ty::Int),
-                    ("string_field", Ty::String),
-                    ("uint8array_field", Ty::Uint8Array),
+                    ("int_field", t_int()),
+                    ("string_field", t_string()),
+                    ("uint8array_field", t_uint8array()),
                 ],
                 0,
             ),
@@ -669,12 +703,7 @@ mod tests {
         let n = name("user", &["generics"], "Wrapper");
         pool.insert(
             n.clone(),
-            class_sym_with_props(
-                &n,
-                &["T"],
-                vec![("value", Ty::TypeVar(BaseName::new("T")))],
-                0,
-            ),
+            class_sym_with_props(&n, &["T"], vec![("value", t_typevar("T"))], 0),
         );
         let out = emit_sdk(&pool);
         let file = &out[&PathBuf::from("generics/Wrapper.java")];
@@ -723,8 +752,8 @@ mod tests {
             n.clone(),
             class_sym_with_methods(
                 &n,
-                vec![method_fn("create", ("name", Ty::String), Ty::String, 1)],
-                vec![method_fn("greet", ("greeting", Ty::String), Ty::String, 2)],
+                vec![method_fn("create", ("name", t_string()), t_string(), 1)],
+                vec![method_fn("greet", ("greeting", t_string()), t_string(), 2)],
                 0,
             ),
         );
@@ -767,13 +796,13 @@ mod tests {
                 FunctionArgument {
                     name: BaseName::new("x"),
                     docstring: None,
-                    ty: Ty::Int,
+                    ty: t_int(),
                     default: None,
                 },
                 FunctionArgument {
                     name: BaseName::new("opt1"),
                     docstring: None,
-                    ty: Ty::Int,
+                    ty: t_int(),
                     default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                         baml_base::Literal::Int(5),
                     ))),
@@ -781,13 +810,13 @@ mod tests {
                 FunctionArgument {
                     name: BaseName::new("opt2"),
                     docstring: None,
-                    ty: Ty::String,
+                    ty: t_string(),
                     default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                         baml_base::Literal::String("hi".into()),
                     ))),
                 },
             ],
-            return_type: Ty::Int,
+            return_type: t_int(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(0),
@@ -847,19 +876,19 @@ mod tests {
                 FunctionArgument {
                     name: BaseName::new("arg0"),
                     docstring: None,
-                    ty: Ty::Int,
+                    ty: t_int(),
                     default: None,
                 },
                 FunctionArgument {
                     name: BaseName::new("opt1"),
                     docstring: None,
-                    ty: Ty::Int,
+                    ty: t_int(),
                     default: Some(FunctionArgumentDefault::Literal(DefaultLiteral::Scalar(
                         baml_base::Literal::Int(5),
                     ))),
                 },
             ],
-            return_type: Ty::Int,
+            return_type: t_int(),
             throws: None,
             watchers: Vec::new(),
             origin: origin(1),
@@ -906,7 +935,7 @@ mod tests {
             class_sym_with_props(
                 &n,
                 &[],
-                vec![("value", Ty::Union(vec![Ty::Int, Ty::String]))],
+                vec![("value", t_union(vec![t_int(), t_string()]))],
                 0,
             ),
         );

@@ -102,7 +102,7 @@ pub(crate) fn render_class(
     sink: &mut UnionSink,
 ) -> String {
     let mut out = render_javadoc(class.docstring.as_deref(), "");
-    let ident = java_identifier(class.name.name.as_str());
+    let ident = java_identifier(class.name.name().as_str());
     let generics = if class.generic_params.is_empty() {
         String::new()
     } else {
@@ -246,7 +246,7 @@ pub(crate) fn render_class(
 /// constants with variant spellings lands with the enum capability.
 pub(crate) fn render_enum(enum_: &Enum) -> String {
     let mut out = render_javadoc(enum_.docstring.as_deref(), "");
-    let ident = java_identifier(enum_.name.name.as_str());
+    let ident = java_identifier(enum_.name.name().as_str());
     out.push_str("public enum ");
     out.push_str(&ident);
     out.push_str(" {\n");

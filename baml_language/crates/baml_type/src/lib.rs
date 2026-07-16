@@ -1,8 +1,11 @@
 //! Unified type system for BAML.
 //!
-//! Includes five main type representations:
+//! Includes six main type representations:
 //! - [`Ty`]: the full type representation containing all compiler and runtime types.
 //! - [`RuntimeTy`]: the runtime-facing deep subset of [`Ty`] that excludes type inference helper types.
+//! - [`CodegenTy`]: the generator-independent deep subset used for public API
+//!   declarations. It preserves aliases and generic type variables, but excludes
+//!   compiler-only inference states and unresolved associated-type projections.
 //! - [`ConcreteTy`]: like [`RuntimeTy`] but only the concrete-layout variants (plus `never`).
 //!   Not deep: parameter types are [`RuntimeTy`]s.
 //! - [`RealizedTy`]: the realized deep subset of [`RuntimeTy`] that excludes type variables.
@@ -13,9 +16,11 @@
 //! ```text
 //!     `Ty`
 //!      ↑
-//!  `RuntimeTy` <- `RealizedTy`
-//!      ↑               ↑
-//! `ConcreteTy` <- `ConcreteRealizedTy`
+//!  `RuntimeTy` <- `CodegenTy`
+//!      ↑              ↑
+//! `ConcreteTy`    `RealizedTy`
+//!      ↑              ↑
+//!      `ConcreteRealizedTy`
 //! ```
 
 use std::fmt;
@@ -26,6 +31,7 @@ pub use baml_base::{Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
 mod attr;
+mod codegen_ty;
 mod defs;
 mod family;
 mod names;
@@ -35,6 +41,7 @@ mod realized_ty;
 mod runtime_ty;
 pub mod simplify_sap;
 pub mod template;
+pub mod throw_facts;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;

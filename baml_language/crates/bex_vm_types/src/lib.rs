@@ -15,9 +15,12 @@ pub mod errors;
 pub mod heap_ptr;
 pub mod indexable;
 pub mod lazy_biased_mutex;
+pub mod link;
+pub mod relink;
 mod roots;
 pub mod task_group;
 pub mod types;
+pub mod unit;
 
 pub use bex_str::BexStr;
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
@@ -25,6 +28,7 @@ pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
+pub use link::LinkError;
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
 pub use types::{
@@ -37,6 +41,10 @@ pub use types::{
     SysOpPanicCategory, TestArgValue, TestCase, Uint8ArrayContainer, Uint8ArrayReadGuard,
     Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
     sys_op_for_path, type_tags,
+};
+pub use unit::{
+    CompilationUnit, ExportTable, GenericFnKey, InitTail, LocalRef, ProgramImplRuleFrag,
+    ProgramMethodImplFrag, ProgramPackageFrag, Symbol, SymbolKind,
 };
 
 /// Used to check if the VM should yield early.

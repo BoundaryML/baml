@@ -247,7 +247,7 @@ function user.class_destructure_unknown_renamed_field_span() -> int throws never
 }
 function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int throws never {
   { : int
-    let f: (Person) -> int = : (p: user.Person) -> int throws never -> (user.Person) -> int throws never
+    let f: (Person) -> int throws never = : (p: user.Person) -> int throws never -> (user.Person) -> int throws never
       (p: Person) -> int { ... } : (p: user.Person) -> int throws never
         {
           let Person { age: string } = p
@@ -255,10 +255,9 @@ function user.lambda_class_destructure_field_pattern_type_mismatch_span() -> int
         }
     f(Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) : int
   }
-  !! 6917..6923: type mismatch: expected int, got string
+  !! 6930..6936: type mismatch: expected int, got string
 }
 lambda user.lambda_class_destructure_field_pattern_type_mismatch_span {
-  !! 6928..6929: type mismatch: expected int, got string
 }
 function user.class_destructure_formatter_trivia_preserved() -> int throws never {
   { : int

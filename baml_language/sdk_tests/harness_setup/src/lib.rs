@@ -14,7 +14,7 @@
 //! lives in the sibling `sdk_test_harness_runner` crate.
 //!
 //! Generator-specific entry points (`run_all`) live in submodules
-//! like [`python_pydantic2`] and [`typescript_node`].
+//! like [`python_pydantic2`] and [`typescript`].
 //!
 //! Layout the helpers assume:
 //!
@@ -38,7 +38,7 @@ use baml_project::ProjectDatabase;
 
 pub mod java;
 pub mod python_pydantic2;
-pub mod typescript_node;
+pub mod typescript;
 
 /// Emit one Cargo build-script line. Cargo consumes directives and
 /// warnings from stdout, so this intentionally writes there.
@@ -192,9 +192,8 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
         db.add_or_update_file(file_path, &content);
     }
 
-    let project = db.get_project().expect("no project context");
     let source_files = db.get_source_files();
-    let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+    let diagnostics = baml_project::collect_diagnostics(&db);
     let errors: Vec<_> = diagnostics
         .iter()
         .filter(|d| d.severity == Severity::Error)

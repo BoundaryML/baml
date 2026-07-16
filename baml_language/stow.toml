@@ -115,7 +115,7 @@ reason = "Only compiler_emit and baml_project crates should depend on bex_vm_typ
 # tools namespace configuration
 [[namespaces]]
 name = "tools"
-approved_prefixes = ["sap", "semantic"]
+approved_prefixes = ["sap", "semantic", "compile"]
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
 name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
 
@@ -163,9 +163,9 @@ link_crates = ["baml_type",  "bex_heap", "bex_vm_types"]
 
 [[namespaces]]
 name = "sdkgen"
-# Each SDK generator targets a specific language + runtime, so the whole tail
-# is meaningful and validated as a unit rather than by sub-prefix.
-approved_suffixes = ["python_pydantic2", "typescript_node"]
+# Each SDK generator has a meaningful language-specific tail that is validated
+# as a unit rather than by sub-prefix.
+approved_suffixes = ["python_pydantic2", "typescript_shared"]
 
 [[namespaces]]
 name = "surface"
