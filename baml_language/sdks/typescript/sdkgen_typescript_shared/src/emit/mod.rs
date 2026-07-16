@@ -55,7 +55,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
         // identifier char, so a `$stream` companion class is emitted as
         // e.g. `Resume$stream` (not stripped to `Resume`). Non-stream
         // symbols are unaffected (their name carries no `$stream`).
-        let bare = key.name.as_str().to_string();
+        let bare = key.name().as_str().to_string();
 
         match symbol {
             Symbol::Class(c) => {
@@ -150,7 +150,7 @@ fn expand_function(
     out: &mut Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) {
     let fqn_root = key.to_string();
-    let bare = bare_callable_name(key.name.as_str());
+    let bare = bare_callable_name(key.name().as_str());
     let func_generic_params: Vec<String> = f
         .generic_params
         .iter()
@@ -193,13 +193,13 @@ fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> 
 
     fn walk(ty: &Ty, out: &mut Vec<String>) {
         match ty {
-            Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
-                let n = name.name.as_str().to_string();
+            Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
+                let n = name.name().as_str().to_string();
                 if !out.contains(&n) {
                     out.push(n);
                 }
             }
-            Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
+            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
             _ => {}
         }
     }

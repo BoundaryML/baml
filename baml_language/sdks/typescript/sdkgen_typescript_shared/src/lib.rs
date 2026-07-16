@@ -289,10 +289,14 @@ mod tests {
             arguments: vec![FunctionArgument {
                 name: BaseName::new("x"),
                 docstring: None,
-                ty: Ty::Int,
+                ty: Ty::Int {
+                    attr: baml_base::TyAttr::EMPTY,
+                },
                 default: None,
             }],
-            return_type: Ty::Int,
+            return_type: Ty::Int {
+                attr: baml_base::TyAttr::EMPTY,
+            },
             throws: None,
             watchers: Vec::new(),
             origin: origin(span),
