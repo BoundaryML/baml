@@ -99,7 +99,9 @@ pub(crate) fn render_class(
     fields: &[RenderedField],
     methods: &[String],
 ) -> String {
-    let name = escape_ident(class.name.name.as_str());
+    // `$stream` companion classes strip the suffix (they route under
+    // the stream_types namespace, so no collision with the base type).
+    let name = escape_ident(key.bare_name());
     let fqn = key.to_string();
     let doc = class
         .docstring
@@ -107,8 +109,25 @@ pub(crate) fn render_class(
         .map(render_docstring)
         .unwrap_or_default();
 
+    // Generic classes: `class Wrapper<T>` → `struct Wrapper<T:
+    // BamlCodableValue>`. Type args are NOT sent on the wire; the
+    // engine infers them from values (inbound inference).
+    let generics = if class.generic_params.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<{}>",
+            class
+                .generic_params
+                .iter()
+                .map(|p| format!("{}: BamlCodableValue", escape_ident(p.as_str())))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
+
     let mut out = format!(
-        "{doc}public struct {name}: Equatable, Sendable, BamlEncodable, BamlDecodable {{\n"
+        "{doc}public struct {name}{generics}: Equatable, Sendable, BamlEncodable, BamlDecodable {{\n"
     );
     for field in fields {
         if let Some(fdoc) = &field.doc {
@@ -228,12 +247,45 @@ pub(crate) fn render_callable(
     kind: FnKind,
     ctx: &TranslateCtx,
 ) -> Option<String> {
-    let bare = function.name.as_str();
-    // `$stream` / `$build_request` companions come with their own
-    // phases; `$` is not a Swift identifier character anyway.
-    if bare.contains('$') || !function.generic_params.is_empty() {
-        return None;
-    }
+    let raw_name = function.name.as_str();
+    // `$` is not a Swift identifier character. Companion names map it
+    // to `_`: `classify$stream` → `classify_stream`, `$build_request`
+    // → `_build_request`, `$parse$stream` → `_parse_stream`. The wire
+    // FQN keeps the `$` names verbatim. A `$stream` companion is an
+    // ordinary function whose return type is `baml.llm.Stream<P, F>`
+    // (→ BamlStream) — no special streaming emission exists.
+    let bare: String = raw_name.replace('$', "_");
+    let bare = bare.as_str();
+
+    // Generic functions/methods: emit a Swift generic signature when
+    // every TypeVar appears in a required-parameter position — the
+    // engine infers bindings from argument values (inbound inference),
+    // so nothing rides the wire. A TypeVar visible only in the return
+    // type (`parse_as<T>`) has no value to infer from and needs an
+    // explicit wire type hint — unsupported until that hook exists
+    // (Python requires `_types=` for those calls too).
+    let generic_sig = if function.generic_params.is_empty() {
+        String::new()
+    } else {
+        for param in &function.generic_params {
+            let covered = function
+                .arguments
+                .iter()
+                .any(|arg| arg.default.is_none() && ty_contains_type_var(&arg.ty, param.as_str()));
+            if !covered {
+                return None;
+            }
+        }
+        format!(
+            "<{}>",
+            function
+                .generic_params
+                .iter()
+                .map(|p| format!("{}: BamlCodableValue", escape_ident(p.as_str())))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
 
     enum Param {
         Required { name: String, ty: String },
@@ -352,11 +404,11 @@ pub(crate) fn render_callable(
         Some(ret_ty) => {
             let _ = write!(
                 out,
-                "{doc}public {static_kw}func {fn_name}({param_list}) throws -> {ret_ty} {{\n\
+                "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                  \t_ = Baml._initialized\n\
                  {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr})\n\
                  }}\n\n\
-                 {doc}public {static_kw}func {async_name}({param_list}) async throws -> {ret_ty} {{\n\
+                 {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                  \t_ = Baml._initialized\n\
                  {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr})\n\
                  }}\n"
@@ -365,11 +417,11 @@ pub(crate) fn render_callable(
         None => {
             let _ = write!(
                 out,
-                "{doc}public {static_kw}func {fn_name}({param_list}) throws {{\n\
+                "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws {{\n\
                  \t_ = Baml._initialized\n\
                  {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr})\n\
                  }}\n\n\
-                 {doc}public {static_kw}func {async_name}({param_list}) async throws {{\n\
+                 {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws {{\n\
                  \t_ = Baml._initialized\n\
                  {args_setup}\ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_expr})\n\
                  }}\n"
@@ -377,6 +429,24 @@ pub(crate) fn render_callable(
         }
     }
     Some(out)
+}
+
+/// Does `ty` mention TypeVar `name` in a position the engine can infer
+/// from a VALUE? Deliberately does NOT recurse into `Callable` — host
+/// callables are opaque handles, so their parameter/return types carry
+/// no inferable value (Python's `apply<T, R>` needs `_types=` for the
+/// same reason).
+fn ty_contains_type_var(ty: &Ty, name: &str) -> bool {
+    match ty {
+        Ty::TypeVar(v) => v.as_str() == name,
+        Ty::List(inner) => ty_contains_type_var(inner, name),
+        Ty::Map { key, value } => {
+            ty_contains_type_var(key, name) || ty_contains_type_var(value, name)
+        }
+        Ty::Union(members) => members.iter().any(|m| ty_contains_type_var(m, name)),
+        Ty::Class(_, args) => args.iter().any(|a| ty_contains_type_var(a, name)),
+        _ => false,
+    }
 }
 
 pub(crate) fn indent_lines(block: &str, depth: usize) -> String {

@@ -87,6 +87,27 @@ public final class BamlRuntime: @unchecked Sendable {
         try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args)))
     }
 
+    /// Undecoded ok-value variants — for callers that interpret the
+    /// wire value themselves (BamlStream's next(), which must
+    /// distinguish the StreamFinished sentinel from a partial).
+    public func callRawSync(
+        _ fqn: String,
+        args: [(String, (any BamlEncodable)?)]
+    ) throws -> BamlOutboundValue {
+        try unwrapEnvelope(invokeSync(fqn, args: args))
+    }
+
+    public func callRaw(
+        _ fqn: String,
+        args: [(String, (any BamlEncodable)?)]
+    ) async throws -> BamlOutboundValue {
+        do {
+            return try unwrapEnvelope(await invokeAsync(fqn, args: args))
+        } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
+            throw CancellationError()
+        }
+    }
+
     public func callSyncVoid(
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
@@ -98,14 +119,25 @@ public final class BamlRuntime: @unchecked Sendable {
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
     ) async throws -> R {
-        try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args)))
+        do {
+            return try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args)))
+        } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
+            // Engine-confirmed cancellation surfaces as Swift's native
+            // cancellation error (Python maps it to asyncio.CancelledError
+            // the same way). Async-only — sync calls have no cancel path.
+            throw CancellationError()
+        }
     }
 
     public func callVoid(
         _ fqn: String,
         args: [(String, (any BamlEncodable)?)]
     ) async throws {
-        _ = try unwrapEnvelope(await invokeAsync(fqn, args: args))
+        do {
+            _ = try unwrapEnvelope(await invokeAsync(fqn, args: args))
+        } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
+            throw CancellationError()
+        }
     }
 
     // MARK: - Invocation plumbing

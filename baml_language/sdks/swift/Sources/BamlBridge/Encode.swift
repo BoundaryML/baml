@@ -27,6 +27,14 @@ public protocol BamlEncodable {
     func _bamlEncode() -> BamlInboundValue
 }
 
+/// Constraint bundle for generic parameters of generated generic types
+/// and functions (`class Wrapper<T>`, `function deep_copy<T>`): a `T`
+/// must cross the boundary both ways and satisfy the struct
+/// conformances. Type arguments are NOT sent on the wire — the engine
+/// infers them from values (inbound inference is first-class; an
+/// uninferable TypeVar is an engine-side error).
+public typealias BamlCodableValue = BamlEncodable & BamlDecodable & Equatable & Sendable
+
 extension Int: BamlEncodable {
     public func _bamlEncode() -> BamlInboundValue {
         // Swift Int is 64-bit on all Apple targets, so it always fits

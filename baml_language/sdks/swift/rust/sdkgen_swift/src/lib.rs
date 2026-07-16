@@ -68,11 +68,19 @@ pub fn to_source_code_with_bytecode(
 
     let mut namespaces: BTreeMap<Vec<String>, BTreeMap<String, String>> = BTreeMap::new();
     for (key, symbol) in sorted_pool {
-        if key.is_stream() {
+        let fqn = key.to_string();
+        // `baml.llm.Stream` is runtime-owned (BamlStream wraps the
+        // engine handle) — never emitted as a generated struct.
+        if fqn == "baml.llm.Stream" {
             continue;
         }
-        let ns = translate_ty::namespace_for(key);
-        let fqn = key.to_string();
+        let mut ns = translate_ty::namespace_for(key);
+        if key.is_stream() && matches!(symbol, Symbol::Function(_)) {
+            // Only `$stream` CLASSES route under stream_types;
+            // `$stream` FUNCTION companions sit beside their parent
+            // (Python's routing rule, mirrored).
+            ns.remove(0);
+        }
         let rendered = match symbol {
             Symbol::Function(function) => {
                 render_callable(&key.to_string(), function, FnKind::Free, &ctx)
@@ -94,7 +102,10 @@ pub fn to_source_code_with_bytecode(
             }
         };
         let Some(rendered) = rendered else { continue };
-        let bare = key.bare_name().to_string();
+        // Sort key uses the RAW name: bare_name() strips `$stream`, so
+        // a base function and its `$stream` companion would collide in
+        // the decl map and silently overwrite each other.
+        let bare = key.name.as_str().to_string();
         namespaces
             .entry(ns)
             .or_default()
@@ -160,11 +171,8 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
     let mut supported_enums: BTreeSet<String> = BTreeSet::new();
 
     for (key, symbol) in pool {
-        if key.is_stream() {
-            continue;
-        }
         match symbol {
-            Symbol::Class(class) if class.generic_params.is_empty() => {
+            Symbol::Class(_) => {
                 supported_classes.insert(key.to_string());
             }
             Symbol::Enum(_) => {
@@ -191,9 +199,6 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
         };
         let mut changed = false;
         for (key, symbol) in pool {
-            if key.is_stream() {
-                continue;
-            }
             let fqn = key.to_string();
             match symbol {
                 Symbol::Class(class) => {
@@ -238,7 +243,10 @@ fn direct_class_targets<'p>(
     out: &mut Vec<String>,
 ) {
     match ty {
-        Ty::Class(name, args) if args.is_empty() => out.push(name.to_string()),
+        // Parameterized targets box exactly like bare ones —
+        // `GenericLinkedList<T>` self-references store inline via
+        // Optional the same way.
+        Ty::Class(name, _) => out.push(name.to_string()),
         Ty::Union(members) => {
             let (non_null, _) = normalize_union(members);
             // A >=2-arm union renders as an `indirect` BamlUnionN — its

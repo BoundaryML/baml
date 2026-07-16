@@ -28,9 +28,6 @@ pub(crate) struct TranslateCtx {
 
 impl TranslateCtx {
     fn named_ref(&self, name: &Name, pool: &BTreeSet<String>) -> Option<String> {
-        if name.is_stream() {
-            return None;
-        }
         let fqn = name.to_string();
         if pool.contains(&fqn) {
             Some(swift_type_path(name))
@@ -42,9 +39,15 @@ impl TranslateCtx {
 
 /// Swift namespace segments for a symbol, mirroring Python's routing:
 /// pkg `user` → the namespace path as-is; pkg `baml` (stdlib) → under
-/// `baml`; any other package → under `vendor.<pkg>`.
+/// `baml`; any other package → under `vendor.<pkg>`. `$stream`
+/// companion CLASSES route under a `stream_types` prefix (Python's
+/// `baml_sdk.stream_types.<ns>`) — the suffix strips from the type
+/// name, so `Resume$stream` is `Baml.stream_types.lorem.Resume`.
 pub(crate) fn namespace_for(name: &Name) -> Vec<String> {
     let mut ns: Vec<String> = Vec::new();
+    if name.is_stream() {
+        ns.push("stream_types".to_string());
+    }
     match name.pkg.as_str() {
         "user" => {}
         "baml" => ns.push("baml".to_string()),
@@ -83,6 +86,19 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         // a unit-like runtime type that encodes/decodes as BAML null.
         Ty::Null => Some("BamlNull".to_string()),
         Ty::Uint8Array => Some("Foundation.Data".to_string()),
+        // Media primitives are the handle-backed stdlib classes
+        // (already emitted as generated structs; construction via
+        // BamlMedia over the C ABI).
+        Ty::Media(kind) => {
+            let name = match format!("{kind:?}").as_str() {
+                "Image" => "Image",
+                "Audio" => "Audio",
+                "Video" => "Video",
+                "Pdf" => "Pdf",
+                _ => return None, // generic media shape → unsupported
+            };
+            Some(format!("Baml.baml.media.{name}"))
+        }
         // Standalone literal types collapse to their base type; Swift
         // has no literal types and the engine re-validates values.
         // (Literal-only UNIONS collapse the same way — no raw enums.)
@@ -107,14 +123,34 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
             Some(format!("[Swift.String: {}]", translate_ty(value, ctx)?))
         }
         Ty::Union(members) => translate_union(members, ctx),
-        // Generic classes are Phase 5; non-generic references resolve
-        // against the fixpoint's supported set.
         Ty::Class(name, args) => {
-            if !args.is_empty() {
-                return None;
+            // `baml.llm.Stream<Partial, Final>` is runtime-owned: it
+            // translates to the BamlBridge `BamlStream` wrapper, never
+            // a generated struct (its state is an engine handle).
+            if name.to_string() == "baml.llm.Stream" {
+                if args.len() != 2 {
+                    return None;
+                }
+                let partial = translate_ty(&args[0], ctx)?;
+                let final_ty = translate_ty(&args[1], ctx)?;
+                return Some(format!("BamlStream<{partial}, {final_ty}>"));
             }
-            ctx.named_ref(name, &ctx.supported_classes)
+            let path = ctx.named_ref(name, &ctx.supported_classes)?;
+            if args.is_empty() {
+                return Some(path);
+            }
+            // Parameterized generic reference: `Wrapper<int>` →
+            // `Baml.ns.Wrapper<Swift.Int>`.
+            let translated: Vec<String> = args
+                .iter()
+                .map(|a| translate_ty(a, ctx))
+                .collect::<Option<_>>()?;
+            Some(format!("{path}<{}>", translated.join(", ")))
         }
+        // A generic parameter reference (`T`) — spelled bare; only
+        // valid inside the generic declaration that binds it, which is
+        // the only place the pool produces it.
+        Ty::TypeVar(name) => Some(crate::escape_ident(name.as_str())),
         Ty::Enum(name) => ctx.named_ref(name, &ctx.supported_enums),
         Ty::TypeAlias(name) => {
             let path = ctx.named_ref(name, &ctx.supported_aliases)?;
