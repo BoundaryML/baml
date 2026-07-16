@@ -12,6 +12,9 @@ import baml_bridge.internal.WireReader;
 import baml_sdk.baml.media.Image;
 
 import java.io.File;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -64,6 +67,40 @@ class BamlFfiSmokeTest {
         assertNotNull(err.class_name());
         assertTrue(err.class_name().startsWith("baml.errors."),
                 "expected a baml.errors.* class name, got " + err.class_name());
+    }
+
+    @Test
+    void callAsync_on_uninitialized_runtime_completes_with_baml_error() throws Exception {
+        // The real async path end to end: callAsync mints a call id, registers
+        // the future, and nativeCallAsync spawns the call — capturing the JVM +
+        // BamlFfi class ref, then (no runtime initialized) encoding a pre-call
+        // BridgeError::NotInitialized as an `error` arm and delivering it back
+        // through the JNI completeCall route. The thenApply decode then raises
+        // BamlError: the async sibling of
+        // callSync_on_uninitialized_runtime_surfaces_baml_error.
+        CompletableFuture<Object> future =
+                BamlFfi.callAsync("does.not.exist", new String[0], new Object[0]);
+        assertNotNull(future, "callAsync must hand back a future rather than block");
+
+        ExecutionException ex = assertThrows(
+                ExecutionException.class,
+                () -> future.get(10, TimeUnit.SECONDS));
+        assertTrue(ex.getCause() instanceof BamlError,
+                "expected a BamlError cause, got " + ex.getCause());
+        BamlError err = (BamlError) ex.getCause();
+        assertNotNull(err.class_name());
+        assertTrue(err.class_name().startsWith("baml.errors."),
+                "expected a baml.errors.* class name, got " + err.class_name());
+    }
+
+    @Test
+    void completeCall_with_unknown_call_id_is_ignored() {
+        // No future is registered under this id, so a late/stale delivery must be
+        // a harmless no-op — the removal-on-completion property a future
+        // cancel_function_call depends on. (Also references BamlFfi, so it loads
+        // the native library under the same @BeforeAll assumption guard.)
+        long unusedId = BamlFfi.nativeNewCallId();
+        BamlFfi.completeCall(unusedId, new byte[0]);
     }
 
     // -- media (baml.media.*) native round-trip ------------------------------

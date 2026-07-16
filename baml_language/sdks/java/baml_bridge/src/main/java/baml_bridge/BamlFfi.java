@@ -5,8 +5,7 @@ import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -36,17 +35,16 @@ public final class BamlFfi {
     public static final String LIB_PROPERTY = "baml.bridge.lib";
 
     /**
-     * Interim executor for {@link #callAsync}. Daemon threads so the pool never
-     * keeps the JVM alive. TODO(bridge-java): replace the supplyAsync-over-sync
-     * shim with the real async path (a {@code nativeCallAsync} that completes
-     * the future from the engine's result callback, and threads cancellation
-     * through {@code cancel_function_call}).
+     * In-flight async calls, keyed by their process-unique {@code call_id}.
+     * {@link #callAsync} registers a raw-bytes future here before dispatching
+     * {@link #nativeCallAsync}; the engine resolves it from {@link #completeCall}
+     * on an engine thread, which removes the entry. Keyed by {@code call_id} (not
+     * an opaque token) and cleared on completion, so a future
+     * {@code cancel_function_call} can target the same id — cancellation is not
+     * wired yet, but the map is already compatible with it.
      */
-    private static final ExecutorService ASYNC_POOL = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "baml-async");
-        t.setDaemon(true);
-        return t;
-    });
+    private static final ConcurrentHashMap<Long, CompletableFuture<byte[]>> PENDING =
+            new ConcurrentHashMap<>();
 
     /**
      * Fallback call-id source, used only if the native counter is somehow
@@ -76,6 +74,18 @@ public final class BamlFfi {
      * bytes; a thrown {@code RuntimeException} means a JNI-glue failure).
      */
     static native byte[] nativeCallSync(String fqn, byte[] encodedCallFunctionArgs);
+
+    /**
+     * Run a BAML function asynchronously. Encodes the identical
+     * {@code CallFunctionArgs} payload as {@link #nativeCallSync} but returns
+     * immediately after spawning the engine call on the shared tokio runtime; the
+     * {@code BamlOutboundResult} envelope is delivered later to
+     * {@link #completeCall} on an engine thread, keyed by {@code callId}. The id
+     * is passed explicitly (as well as being embedded in the encoded args) so the
+     * completion is routed even if the args fail to decode. A thrown
+     * {@code RuntimeException} means a JNI-glue failure before hand-off.
+     */
+    static native void nativeCallAsync(long callId, String fqn, byte[] encodedCallFunctionArgs);
 
     /** Mint a process-unique, nonzero function-call id from the engine counter. */
     static native long nativeNewCallId();
@@ -147,13 +157,12 @@ public final class BamlFfi {
     public static Object callSync(String fqn, String[] names, Object[] args, String returnDesc) {
         byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, newCallId());
         byte[] response = nativeCallSync(fqn, request);
-        return ProtoReader.decodeOutboundResult(response, returnDesc);
+        return decodeResult(response, returnDesc);
     }
 
     /**
-     * Asynchronous sibling of {@link #callSync(String, String[], Object[])}. For
-     * now this runs the sync path on a background daemon thread; see
-     * {@link #ASYNC_POOL} for the real async-path TODO.
+     * Asynchronous sibling of {@link #callSync(String, String[], Object[])}. See
+     * {@link #callAsync(String, String[], Object[], String)}.
      */
     public static CompletableFuture<Object> callAsync(String fqn, String[] names, Object[] args) {
         return callAsync(fqn, names, args, null);
@@ -161,12 +170,67 @@ public final class BamlFfi {
 
     /**
      * Asynchronous sibling of
-     * {@link #callSync(String, String[], Object[], String)}, threading the same
-     * type-directed return descriptor through the background decode.
+     * {@link #callSync(String, String[], Object[], String)}: the real async path.
+     * A process-unique {@code call_id} is minted, a raw-bytes future registered
+     * in {@link #PENDING}, and {@link #nativeCallAsync} spawns the engine call and
+     * returns without blocking. When the engine completes it delivers the
+     * {@code BamlOutboundResult} envelope to {@link #completeCall} (on an engine
+     * thread — {@link CompletableFuture} makes that safe, so no custom executor is
+     * introduced), and the {@code thenApply} stage runs the SAME
+     * {@link #decodeResult} the sync path uses, so the two cannot drift. A thrown
+     * error/panic surfaces as this future completing exceptionally with
+     * {@link BamlError} / {@link BamlPanic}.
      */
     public static CompletableFuture<Object> callAsync(
             String fqn, String[] names, Object[] args, String returnDesc) {
-        return CompletableFuture.supplyAsync(() -> callSync(fqn, names, args, returnDesc), ASYNC_POOL);
+        long callId = newCallId();
+        CompletableFuture<byte[]> raw = new CompletableFuture<>();
+        PENDING.put(callId, raw);
+        try {
+            byte[] request = ProtoWriter.encodeCallFunctionArgs(names, args, callId);
+            nativeCallAsync(callId, fqn, request);
+        } catch (Throwable t) {
+            // Arg-encode / JNI-glue failure before the engine took ownership of
+            // the call: it will never call completeCall for this id, so
+            // unregister and fail the future here rather than leak it. (A pre-call
+            // *engine* failure — uninitialized runtime, bad args — instead rides
+            // an error envelope through completeCall, exactly like callSync.)
+            if (PENDING.remove(callId) != null) {
+                raw.completeExceptionally(t);
+            }
+        }
+        return raw.thenApply(bytes -> decodeResult(bytes, returnDesc));
+    }
+
+    /**
+     * Engine-thread completion callback for {@link #nativeCallAsync}: resolves the
+     * future registered under {@code callId} with the raw
+     * {@code BamlOutboundResult} envelope bytes (the identical bytes
+     * {@link #nativeCallSync} returns), then removes it from {@link #PENDING}.
+     * Invoked by the native bridge after attaching the completing engine thread to
+     * the JVM. Never throws: an unknown / already-removed id (a double delivery,
+     * or a future cancellation once wired) is ignored — the property a later
+     * {@code cancel_function_call} relies on. The {@code ok}/{@code error}/
+     * {@code panic} decode runs later in the {@code thenApply} stage
+     * {@link #callAsync} attached.
+     */
+    static void completeCall(long callId, byte[] resultEnvelope) {
+        CompletableFuture<byte[]> future = PENDING.remove(callId);
+        if (future != null) {
+            future.complete(resultEnvelope);
+        }
+    }
+
+    /**
+     * The single result decode shared by {@link #callSync} and {@link #callAsync}:
+     * the wire-and-descriptor-driven
+     * {@link ProtoReader#decodeOutboundResult(byte[], String)} that turns the
+     * {@code BamlOutboundResult} envelope into the decoded value, or throws
+     * {@link BamlError} / {@link BamlPanic}. Factored so the sync and async paths
+     * cannot diverge in how they interpret an identical envelope.
+     */
+    private static Object decodeResult(byte[] response, String returnDesc) {
+        return ProtoReader.decodeOutboundResult(response, returnDesc);
     }
 
     private static long newCallId() {

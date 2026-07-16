@@ -16,14 +16,14 @@
 //! `baml_bridge.BamlFfi`. JNI mangles the package `baml_bridge` as
 //! `baml_1bridge` (an underscore in a Java name is escaped `_1`).
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use bex_project::{BexArgs, BexExternalAdt, CallId, MediaKind, MediaValue, RuntimeTy};
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, kwargs_to_bex_values};
 use indexmap::IndexMap;
 use jni::{
-    JNIEnv,
-    objects::{JByteArray, JClass, JString},
+    JNIEnv, JavaVM,
+    objects::{GlobalRef, JByteArray, JClass, JString, JValue},
     sys::{jint, jlong},
 };
 use prost::Message;
@@ -174,6 +174,209 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallSync<'local>(
             JByteArray::default()
         }
     }
+}
+
+// ===========================================================================
+// Async call path — the JVM analog of bridge_cffi's `call_function` C ABI
+// (`lib_native.rs`) and bridge_python's async `call_function` (`runtime.rs`).
+//
+// `nativeCallAsync` spawns the engine call on the shared tokio runtime and
+// returns immediately; the completing engine thread attaches to the JVM and
+// invokes the static `baml_bridge.BamlFfi.completeCall(long, byte[])`, resolving
+// the `CompletableFuture` the Java side registered under the same call id. The
+// delivered bytes are the *identical* `BamlOutboundResult` envelope the sync
+// path returns, so an async result decodes + raises through the exact same
+// `ProtoReader.decodeOutboundResult` path (see `BamlFfi.decodeResult`) — ok,
+// error and panic arms alike. There is no separate error/panic channel.
+// ===========================================================================
+
+/// The host JVM, captured once (from the first `nativeCallAsync`). A tokio
+/// worker thread must attach to this before it can call back into Java.
+static JVM: OnceLock<JavaVM> = OnceLock::new();
+
+/// A global reference to the `baml_bridge.BamlFfi` class, captured once from a
+/// JVM application thread. A bare `FindClass` on an attached tokio worker would
+/// resolve against the system class loader and miss this application class, so
+/// the class object the JVM hands to every static native method on `BamlFfi` is
+/// promoted to a `GlobalRef` here and reused for the completion callback.
+static BAML_FFI_CLASS: OnceLock<GlobalRef> = OnceLock::new();
+
+/// The Java completion route: `static void completeCall(long, byte[])`.
+const COMPLETE_CALL_METHOD: &str = "completeCall";
+const COMPLETE_CALL_SIG: &str = "(J[B)V";
+
+/// Capture the JVM handle and a `GlobalRef` to the `BamlFfi` class (idempotent,
+/// first-call-wins). `class` is the `baml_bridge.BamlFfi` class object the JVM
+/// passes to this static native method, so no `FindClass` is needed and the
+/// application class loader is implicitly correct.
+fn ensure_completion_route(
+    env: &mut JNIEnv<'_>,
+    class: &JClass<'_>,
+) -> Result<(), jni::errors::Error> {
+    if JVM.get().is_none() {
+        let _ = JVM.set(env.get_java_vm()?);
+    }
+    if BAML_FFI_CLASS.get().is_none() {
+        let _ = BAML_FFI_CLASS.set(env.new_global_ref(class)?);
+    }
+    Ok(())
+}
+
+/// `baml_bridge.BamlFfi.nativeCallAsync(long callId, String fqn, byte[] encodedCallFunctionArgs)`.
+///
+/// Non-blocking sibling of [`Java_baml_1bridge_BamlFfi_nativeCallSync`]: it
+/// decodes/dispatches the identical `CallFunctionArgs` payload but spawns the
+/// engine call on the shared tokio runtime and returns at once. `call_id` is
+/// passed explicitly (it is also embedded in the encoded args) so the completion
+/// route stays keyed even if the args fail to decode. Completion — ok value,
+/// thrown error, panic, or a pre-call host-boundary failure — is delivered as
+/// one `BamlOutboundResult` envelope to `completeCall(call_id, bytes)`. A
+/// `RuntimeException` is thrown only for JNI-glue failures (bad UTF-8 fqn, array
+/// read) that happen before the call is handed off.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCallAsync<'local>(
+    mut env: JNIEnv<'local>,
+    class: JClass<'local>,
+    call_id: jlong,
+    fqn: JString<'local>,
+    encoded_args: JByteArray<'local>,
+) {
+    if let Err(e) = ensure_completion_route(&mut env, &class) {
+        throw_runtime_exception(
+            &mut env,
+            &format!("failed to wire async completion route: {e}"),
+        );
+        return;
+    }
+
+    let function_name: String = match env.get_string(&fqn) {
+        Ok(js) => String::from(js),
+        Err(e) => {
+            throw_runtime_exception(&mut env, &format!("failed to read fqn string: {e}"));
+            return;
+        }
+    };
+
+    let args_proto = match env.convert_byte_array(&encoded_args) {
+        Ok(b) => b,
+        Err(e) => {
+            throw_runtime_exception(&mut env, &format!("failed to read args array: {e}"));
+            return;
+        }
+    };
+
+    spawn_async_call(call_id as u64, function_name, args_proto);
+}
+
+/// Spawn the engine call and route its `BamlOutboundResult` envelope back to
+/// `completeCall`. Mirrors `bridge_cffi::lib_native::call_function_inner`, but
+/// delivers over JNI instead of the C result callback. Pre-call host-boundary
+/// failures (uninitialized runtime, malformed args, no tokio runtime) are
+/// encoded into the same envelope and delivered immediately, so they decode +
+/// raise identically to a sync pre-call failure.
+fn spawn_async_call(call_id: u64, function_name: String, args_proto: Vec<u8>) {
+    let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
+        let runtime = bridge_cffi::get_runtime()?;
+        let decoded = decode_args(&args_proto)?;
+        let rt = bridge_cffi::get_tokio_runtime()?;
+        Ok((runtime, decoded, rt))
+    })();
+
+    let (runtime, decoded, rt) = match prepared {
+        Ok(v) => v,
+        Err(e) => {
+            // Same envelope bytes the sync path returns, delivered on this
+            // (JVM) thread — the Java future is already registered.
+            deliver_completion(call_id, bridge_cffi::error_to_outbound(e));
+            return;
+        }
+    };
+
+    let DecodedCallArgs {
+        kwargs,
+        call_id: engine_call_id,
+        type_args,
+    } = decoded;
+    let call_ctx = bridge_cffi::function_call_context_builder(engine_call_id)
+        .with_type_args(type_args)
+        .build();
+
+    rt.spawn(async move {
+        // Inner task so a panic during result *encoding* is caught (via the
+        // JoinError) and still delivered as an SdkPanic envelope, rather than
+        // silently dropping the task and hanging the future. `call_and_encode`
+        // already turns an engine-call panic into that envelope itself; this
+        // guards the rarer encode-time panic, exactly as the C-ABI path does.
+        let inner = tokio::spawn(bridge_cffi::call_and_encode(
+            runtime,
+            function_name,
+            kwargs,
+            call_ctx,
+        ));
+        let bytes = match inner.await {
+            Ok(bytes) => bytes,
+            Err(join_err) => encode_task_failure(join_err),
+        };
+        deliver_completion(call_id, bytes);
+    });
+}
+
+/// Encode a spawned-task failure (a panic escaping result encoding, or — once
+/// cancellation is wired — a cancelled task) as `BamlOutboundResult` SdkPanic
+/// envelope bytes, so even this path decodes + raises uniformly on the Java side.
+fn encode_task_failure(err: tokio::task::JoinError) -> Vec<u8> {
+    if err.is_panic() {
+        bridge_cffi::baml_to_host::panic_to_outbound(err.into_panic().as_ref())
+    } else {
+        let msg = String::from("BAML async call task ended without producing a result");
+        bridge_cffi::baml_to_host::panic_to_outbound(&msg)
+    }
+}
+
+/// Resolve the Java `CompletableFuture` registered under `call_id` with the
+/// encoded `BamlOutboundResult` envelope. Attaches the current (engine) thread
+/// to the JVM as a daemon — a cheap no-op on a thread that is already attached
+/// (e.g. the JVM caller thread for a pre-call failure), and self-detaching when
+/// a reused tokio worker exits — then invokes the static `completeCall`.
+fn deliver_completion(call_id: u64, bytes: Vec<u8>) {
+    if let Err(e) = deliver_completion_inner(call_id, &bytes) {
+        // The only failure modes here (attach failure, unwired route) leave the
+        // future unresolved, which can be neither retried nor surfaced across
+        // the already-returned native call. Log so it is at least diagnosable.
+        eprintln!("bridge_java: failed to deliver async completion for call {call_id}: {e}");
+    }
+}
+
+fn deliver_completion_inner(call_id: u64, bytes: &[u8]) -> Result<(), String> {
+    let vm = JVM
+        .get()
+        .ok_or("JavaVM was not captured before completion")?;
+    let class = BAML_FFI_CLASS
+        .get()
+        .ok_or("BamlFfi class ref was not captured before completion")?;
+
+    let mut env = vm
+        .attach_current_thread_as_daemon()
+        .map_err(|e| format!("attach failed: {e}"))?;
+
+    let payload = env
+        .byte_array_from_slice(bytes)
+        .map_err(|e| format!("result array alloc failed: {e}"))?;
+
+    let outcome = env.call_static_method(
+        class,
+        COMPLETE_CALL_METHOD,
+        COMPLETE_CALL_SIG,
+        &[JValue::Long(call_id as jlong), JValue::from(&payload)],
+    );
+
+    if let Err(e) = outcome {
+        // `completeCall` is written never to throw; clear any pending exception
+        // so the (reused) daemon worker thread is left in a clean state.
+        let _ = env.exception_clear();
+        return Err(format!("completeCall invocation failed: {e}"));
+    }
+    Ok(())
 }
 
 /// `baml_bridge.BamlFfi.nativeNewCallId() -> long`.
