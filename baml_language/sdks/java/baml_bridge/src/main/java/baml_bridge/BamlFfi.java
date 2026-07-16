@@ -1,5 +1,6 @@
 package baml_bridge;
 
+import baml_bridge.internal.NativeLibraryLoader;
 import baml_bridge.internal.ProtoReader;
 import baml_bridge.internal.ProtoWriter;
 
@@ -18,9 +19,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * }</pre>
  *
  * <p>The native library ({@code libbridge_java.so} — the {@code bridge_java}
- * Rust cdylib) is loaded once, from the path in the system property
- * {@code baml.bridge.lib} or, failing that, the environment variable
- * {@code BAML_JAVA_BRIDGE_LIB}. This is the JVM analog of Python's
+ * Rust cdylib) is loaded once via {@link NativeLibraryLoader}, following a
+ * first-hit-wins ladder: (1) the system property {@code baml.bridge.lib} (dev
+ * override), (2) the environment variable {@code BAML_JAVA_BRIDGE_LIB} (dev/test
+ * override), then (3) the bundled per-platform classpath resource
+ * {@code /native/{os}-{arch}/{libname}} (extracted to a temp file and loaded) —
+ * so a published {@code baml-bridge} + its {@code natives-*} jar is
+ * self-contained with no environment setup. This is the JVM analog of Python's
  * {@code bridge_python} extension module: bytes-in / bytes-out over the shared
  * {@code baml_bridge.cffi.v1} protobuf envelopes, with all encode/decode on
  * this (Java) side.
@@ -52,24 +57,12 @@ public final class BamlFfi {
     private static final AtomicLong FALLBACK_CALL_ID = new AtomicLong(1);
 
     static {
-        System.load(resolveLibraryPath());
+        // First-hit-wins ladder: system property → env var → bundled classpath
+        // resource. See NativeLibraryLoader for the resolution + extraction logic.
+        NativeLibraryLoader.load(LIB_PROPERTY, LIB_ENV_VAR);
     }
 
     private BamlFfi() {}
-
-    private static String resolveLibraryPath() {
-        String path = System.getProperty(LIB_PROPERTY);
-        if (path == null || path.isEmpty()) {
-            path = System.getenv(LIB_ENV_VAR);
-        }
-        if (path == null || path.isEmpty()) {
-            throw new IllegalStateException(
-                    "bridge_java native library path is not set: define the system property '"
-                            + LIB_PROPERTY + "' or the environment variable " + LIB_ENV_VAR
-                            + " pointing at libbridge_java.so (target/debug/libbridge_java.so)");
-        }
-        return path;
-    }
 
     // ---- Native methods (implemented in sdks/java/bridge_java) --------------
 
