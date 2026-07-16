@@ -5734,6 +5734,27 @@ function baml.net._timeout_nanos(timeout: baml.time.Duration | null) -> bigint {
     return
 }
 
+function baml.ops.Add<bigint>$for$bigint.add(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Add<bigint>$for$int.add(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Add<float>$for$float.add(self: float, rhs: float) -> float {
+}
+
+function baml.ops.Add<float>$for$int.add(self: int, rhs: float) -> float {
+}
+
+function baml.ops.Add<int>$for$bigint.add(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.Add<int>$for$float.add(self: float, rhs: int) -> float {
+}
+
+function baml.ops.Add<int>$for$int.add(self: int, rhs: int) -> int {
+}
+
 function baml.ops.Compare$for$bigint.lt(self: bigint, other: bigint) -> bool {
 }
 
@@ -5829,6 +5850,27 @@ function baml.ops.Compare.le(self: baml.ops.Compare, other: Self) -> bool {
     return
 }
 
+function baml.ops.Divide<bigint>$for$bigint.div(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Divide<bigint>$for$int.div(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Divide<float>$for$float.div(self: float, rhs: float) -> float {
+}
+
+function baml.ops.Divide<float>$for$int.div(self: int, rhs: float) -> float {
+}
+
+function baml.ops.Divide<int>$for$bigint.div(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.Divide<int>$for$float.div(self: float, rhs: int) -> float {
+}
+
+function baml.ops.Divide<int>$for$int.div(self: int, rhs: int) -> int {
+}
+
 function baml.ops.Equals$for$T[].eq(self: T[], other: T[]) -> bool {
     load_var2 1 2
     call baml.ops.equals_equals
@@ -5878,6 +5920,96 @@ function baml.ops.Equals.neq(self: baml.ops.Equals, other: Self) -> bool {
     load_var _3
     unary_op !
     return
+}
+
+function baml.ops.Multiply<bigint>$for$bigint.mul(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Multiply<bigint>$for$int.mul(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Multiply<float>$for$float.mul(self: float, rhs: float) -> float {
+}
+
+function baml.ops.Multiply<float>$for$int.mul(self: int, rhs: float) -> float {
+}
+
+function baml.ops.Multiply<int>$for$bigint.mul(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.Multiply<int>$for$float.mul(self: float, rhs: int) -> float {
+}
+
+function baml.ops.Multiply<int>$for$int.mul(self: int, rhs: int) -> int {
+}
+
+function baml.ops.Negate$for$bigint.neg(self: bigint) -> bigint {
+}
+
+function baml.ops.Negate$for$float.neg(self: float) -> float {
+}
+
+function baml.ops.Negate$for$int.neg(self: int) -> int {
+}
+
+function baml.ops.Remainder<bigint>$for$bigint.rem(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Remainder<bigint>$for$int.rem(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Remainder<float>$for$float.rem(self: float, rhs: float) -> float {
+}
+
+function baml.ops.Remainder<float>$for$int.rem(self: int, rhs: float) -> float {
+}
+
+function baml.ops.Remainder<int>$for$bigint.rem(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.Remainder<int>$for$float.rem(self: float, rhs: int) -> float {
+}
+
+function baml.ops.Remainder<int>$for$int.rem(self: int, rhs: int) -> int {
+}
+
+function baml.ops.Subtract<bigint>$for$bigint.sub(self: bigint, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Subtract<bigint>$for$int.sub(self: int, rhs: bigint) -> bigint {
+}
+
+function baml.ops.Subtract<float>$for$float.sub(self: float, rhs: float) -> float {
+}
+
+function baml.ops.Subtract<float>$for$int.sub(self: int, rhs: float) -> float {
+}
+
+function baml.ops.Subtract<int>$for$bigint.sub(self: bigint, rhs: int) -> bigint {
+}
+
+function baml.ops.Subtract<int>$for$float.sub(self: float, rhs: int) -> float {
+}
+
+function baml.ops.Subtract<int>$for$int.sub(self: int, rhs: int) -> int {
+}
+
+function baml.ops.__union_add(a: unknown, b: unknown) -> unknown {
+}
+
+function baml.ops.__union_div(a: unknown, b: unknown) -> unknown {
+}
+
+function baml.ops.__union_mul(a: unknown, b: unknown) -> unknown {
+}
+
+function baml.ops.__union_neg(a: unknown) -> unknown {
+}
+
+function baml.ops.__union_rem(a: unknown, b: unknown) -> unknown {
+}
+
+function baml.ops.__union_sub(a: unknown, b: unknown) -> unknown {
 }
 
 function baml.ops.equals_equals(a: unknown, b: unknown) -> bool {
