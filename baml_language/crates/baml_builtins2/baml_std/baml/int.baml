@@ -5,6 +5,9 @@
 /// runtime's pointer/value tag, so the usable range is 63-bit, not 64-bit. Use
 /// `bigint` for arbitrary-precision integers.
 ///
+/// Literals may be written in decimal (`42`), hex (`0xFF`), octal (`0o755`),
+/// or binary (`0b1010`), with `_` digit separators allowed (`1_000_000`).
+///
 /// Arithmetic (`+`, `-`, `*`, `/`, unary `-`) that would leave this range
 /// throws a catchable `baml.panics.IntegerOverflow` rather than wrapping or
 /// crashing; `/` and `%` by zero throw `baml.panics.DivisionByZero`.

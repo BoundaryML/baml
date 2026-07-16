@@ -411,39 +411,26 @@ impl UnionMemberParts {
             .cloned()
     }
 
-    /// Check if this member has a `BIGINT_LITERAL` token, optionally preceded by a
-    /// single `MINUS` token (for negative literals like `-7n`). Returns the numeric
-    /// digit string (without the trailing `n`) with an optional leading `-`.
-    pub fn bigint_literal(&self) -> Option<String> {
-        let (negated, tok) =
-            scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::BIGINT_LITERAL)?;
-        let text = tok.text();
-        // Strip the trailing `n` suffix.
-        let digits = text.strip_suffix('n').unwrap_or(text);
-        Some(if negated {
-            format!("-{digits}")
-        } else {
-            digits.to_string()
-        })
+    /// Check if this member has a `BIGINT_LITERAL` token, optionally preceded
+    /// by a single `MINUS` token (for negative literals like `-7n`). Returns
+    /// `(negated, token)`; the token text still carries the trailing `n`.
+    /// Value parsing happens in `baml_compiler2_ast` where diagnostics can be
+    /// emitted.
+    pub fn bigint_literal(&self) -> Option<(bool, SyntaxToken)> {
+        scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::BIGINT_LITERAL)
     }
 
     /// Check if this member has an `INTEGER_LITERAL` token, optionally
     /// preceded by a single `MINUS` token (for negative literals like `-42`).
-    /// Rejects `--42` and any other shape.
-    pub fn integer_literal(&self) -> Option<i64> {
-        let (negated, tok) =
-            scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::INTEGER_LITERAL)?;
-        let v = tok.text().parse::<i64>().ok()?;
-        Some(if negated { -v } else { v })
+    /// Rejects `--42` and any other shape. Returns `(negated, token)`.
+    pub fn integer_literal(&self) -> Option<(bool, SyntaxToken)> {
+        scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::INTEGER_LITERAL)
     }
 
     /// Check if this member has a `FLOAT_LITERAL` token. A single leading
-    /// `MINUS` negates (returned as text with a `-` prefix).
-    pub fn float_literal(&self) -> Option<String> {
-        let (negated, tok) =
-            scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::FLOAT_LITERAL)?;
-        let text = tok.text().to_string();
-        Some(if negated { format!("-{text}") } else { text })
+    /// `MINUS` negates. Returns `(negated, token)`.
+    pub fn float_literal(&self) -> Option<(bool, SyntaxToken)> {
+        scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::FLOAT_LITERAL)
     }
 
     /// Get ATTRIBUTE child nodes from this union member.
@@ -732,46 +719,37 @@ impl TypeExpr {
             .map(|n| decode_regular_string_literal_text(&n.text().to_string()))
     }
 
-    /// Check if this is a bigint literal type like `42n` or `-7n`. A single leading
-    /// `MINUS` negates. Returns the digit string (without the trailing `n`) with an
-    /// optional leading `-`.
-    pub fn bigint_literal(&self) -> Option<String> {
+    /// Check if this is a bigint literal type like `42n` or `-7n`. A single
+    /// leading `MINUS` negates. Returns `(negated, token)`; the token text
+    /// still carries the trailing `n`. Value parsing happens in
+    /// `baml_compiler2_ast` where diagnostics can be emitted.
+    pub fn bigint_literal(&self) -> Option<(bool, SyntaxToken)> {
         let tokens = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token);
-        let (negated, tok) = scan_signed_literal_token(tokens, SyntaxKind::BIGINT_LITERAL)?;
-        let text = tok.text();
-        let digits = text.strip_suffix('n').unwrap_or(text);
-        Some(if negated {
-            format!("-{digits}")
-        } else {
-            digits.to_string()
-        })
+        scan_signed_literal_token(tokens, SyntaxKind::BIGINT_LITERAL)
     }
 
     /// Check if this is an integer literal type like `200` or `-42`. A
     /// single leading `MINUS` negates; `--42` and other shapes return `None`.
-    pub fn integer_literal(&self) -> Option<i64> {
+    /// Returns `(negated, token)`.
+    pub fn integer_literal(&self) -> Option<(bool, SyntaxToken)> {
         let tokens = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token);
-        let (negated, tok) = scan_signed_literal_token(tokens, SyntaxKind::INTEGER_LITERAL)?;
-        let v = tok.text().parse::<i64>().ok()?;
-        Some(if negated { -v } else { v })
+        scan_signed_literal_token(tokens, SyntaxKind::INTEGER_LITERAL)
     }
 
     /// Check if this is a float literal type like `3.14` or `-3.14`. A
-    /// single leading `MINUS` negates the value (returned as `-3.14` text).
-    pub fn float_literal(&self) -> Option<String> {
+    /// single leading `MINUS` negates. Returns `(negated, token)`.
+    pub fn float_literal(&self) -> Option<(bool, SyntaxToken)> {
         let tokens = self
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token);
-        let (negated, tok) = scan_signed_literal_token(tokens, SyntaxKind::FLOAT_LITERAL)?;
-        let text = tok.text().to_string();
-        Some(if negated { format!("-{text}") } else { text })
+        scan_signed_literal_token(tokens, SyntaxKind::FLOAT_LITERAL)
     }
 
     /// Check if this is a boolean literal (`true` or `false`).

@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Invalid numeric literals: every case must produce E0152 from
+// baml_base::num_lit validation (except the i63-range case, which is the
+// pre-existing E0150 at type inference). Layout mirrors rustc's
+// tests/ui/lexer/lex-bad-numeric-literals.rs.
+
+function bad_literals() -> int {
+    // No valid digits after the base prefix.
+    let no_digits_hex = 0x;
+    let no_digits_octal = 0o;
+    let no_digits_binary = 0b;
+    let no_digits_underscores = 0b__;
+
+    // Digits invalid for the base: one error per offending digit.
+    let bad_binary = 0b123;
+    let bad_binary_underscores = 0b10_10301;
+    let bad_octal = 0o18;
+    let bad_octal_underscores = 0o1234_9_5670;
+
+    // Base prefixes are lowercase.
+    let upper_hex = 0X1F;
+    let upper_binary = 0B10;
+    let upper_octal = 0O7;
+
+    // Magnitude exceeds i64::MAX (this used to silently lower to 0).
+    let too_large_decimal = 9223372036854775808;
+    let too_large_decimal_wide = 99999999999999999999;
+    let too_large_hex = 0x8000_0000_0000_0000;
+    let too_large_binary = 0b11111111111111111111111111111111111111111111111111111111111111111;
+    let too_large_octal = 0o2_000_000_000_000_000_000_000;
+
+    // Fits i64 but not the VM's i63 `int`: existing E0150, not E0152.
+    let beyond_int_range = 0x4000_0000_0000_0000;
+
+    // Bigint literals validate the same way.
+    let bigint_no_digits = 0xn;
+    let bigint_bad_digit = 0b2n;
+
+    0
+}
+
+// Type-level literals go through the same validation.
+type BadHexFlag = 0X1F | 0b12;
