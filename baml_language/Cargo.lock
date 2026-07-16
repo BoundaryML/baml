@@ -747,6 +747,7 @@ dependencies = [
  "indicatif",
  "insta",
  "libsui",
+ "mimalloc",
  "object 0.36.3",
  "regex",
  "reqwest",
