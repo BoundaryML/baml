@@ -1523,7 +1523,7 @@ use baml_compiler2_tir::{
     inference::infer_scope_types,
     resolve::{ResolvedName, resolve_name_at_in_scope},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 type ClassFieldIndices = IndexMap<TypeName, IndexMap<String, usize>>;
 type ClassFieldTypes = IndexMap<TypeName, IndexMap<String, RuntimeTy>>;
@@ -1646,6 +1646,12 @@ struct PackageLoweringData {
     enum_variants: EnumVariantIndices,
     interface_implementors: ImplementorsByInterface,
     resolved_aliases: ResolvedAliases,
+    /// Every method name any in-scope interface (own package + dependency
+    /// closure) declares, required or default. Fast pre-filter for
+    /// [`LoweringContext::dispatch_target_for_concrete`]: a member name absent
+    /// here can never dispatch through an interface impl, so the (hot) impl
+    /// enumeration is skipped for the overwhelmingly common plain-method case.
+    interface_method_names: FxHashSet<Name>,
 }
 
 /// # Safety
@@ -1720,12 +1726,50 @@ fn package_lowering_data<'db>(
         );
     }
 
+    // Collect every interface-declared method name in scope (own package +
+    // dependency closure). `dispatch_target_for_concrete` previously enumerated
+    // every impl block in the closure for EVERY method call and field access
+    // just to conclude "no impl provides this member" for the overwhelmingly
+    // common non-interface member; this set lets it answer that in one hash
+    // lookup. Names are collected package-wide (not per receiver type), so the
+    // filter is a pure fast path: any name declared by ANY reachable interface
+    // still goes through the full impl enumeration.
+    let mut interface_method_names = FxHashSet::default();
+    let mut all_pkgs = vec![pkg_id];
+    all_pkgs.extend(
+        baml_compiler2_hir::package::package_dependency_closure(db, pkg_id)
+            .iter()
+            .copied(),
+    );
+    for pkg in all_pkgs {
+        let items = package_items(db, pkg);
+        for ns in items.namespaces.values() {
+            for def in ns.types.values() {
+                let baml_compiler2_hir::contributions::Definition::Interface(iface_loc) = def
+                else {
+                    continue;
+                };
+                let itree = file_item_tree(db, iface_loc.file(db));
+                let Some(iface_data) = itree.interfaces.get(&iface_loc.id(db)) else {
+                    continue;
+                };
+                for sig in &iface_data.required_methods {
+                    interface_method_names.insert(sig.name.clone());
+                }
+                for &fn_id in &iface_data.default_methods {
+                    interface_method_names.insert(itree[fn_id].name.clone());
+                }
+            }
+        }
+    }
+
     PackageLoweringData {
         class_fields,
         class_field_types,
         enum_variants,
         interface_implementors,
         resolved_aliases,
+        interface_method_names,
     }
 }
 
@@ -1852,6 +1896,10 @@ struct LoweringContext<'db> {
     // Borrowed from `package_lowering_data` (shared across every function in
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
+
+    /// All method names declared by in-scope interfaces — see
+    /// [`PackageLoweringData::interface_method_names`].
+    interface_method_names: &'db FxHashSet<Name>,
 
     /// Stack of pending `defer` block bodies (BEP-042), parallel to
     /// lexical scopes. Each entry is the `AstExprId` of a defer body
@@ -2736,6 +2784,7 @@ impl<'db> LoweringContext<'db> {
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
+            interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             chain_null_exits: Vec::new(),
@@ -2821,6 +2870,7 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             interface_implementors: &pkg_data.interface_implementors,
             resolved_aliases: &pkg_data.resolved_aliases,
+            interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
@@ -3565,6 +3615,14 @@ impl<'db> LoweringContext<'db> {
                 | Tir2Ty::Map { .. }
                 | Tir2Ty::Future(..)
         ) {
+            return None;
+        }
+        // Fast pre-filter: a name no in-scope interface declares can never
+        // dispatch through an impl. Skips the per-call impl enumeration
+        // (`l1_impls_for_recv` probes every impl block's pattern against the
+        // receiver, invoking alias normalization / subtype checks per probe)
+        // for plain method calls and field accesses.
+        if !self.interface_method_names.contains(method) {
             return None;
         }
         for resolved in self.l1_impls_for_recv(recv_ty) {
