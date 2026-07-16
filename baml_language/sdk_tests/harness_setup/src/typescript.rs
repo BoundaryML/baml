@@ -15,7 +15,7 @@
 //!
 //! ```sh
 //! cd baml_language
-//! cargo nextest run -p sdk_test_typescript_node
+//! cargo nextest run -p sdk_test_typescript
 //! ```
 //!
 //! For plain `cargo test` (no nextest), run setup.sh (or setup.ps1
@@ -26,9 +26,9 @@
 //! the setup script consumes.
 //!
 //! Auto-discovery story: build.rs emits
-//! `OUT_DIR/typescript_node_tests.rs` (a sequence of
+//! `OUT_DIR/typescript_tests.rs` (a sequence of
 //! `::sdk_test_harness_runner::*` invocations), the
-//! `sdk_test_harness_runner::typescript_node::test_suite!()` macro
+//! `sdk_test_harness_runner::typescript::test_suite!()` macro
 //! `include!`s it, and adding a new fixture is `mkdir
 //! sdk_tests/fixtures/<name>/baml_src/` + dropping a
 //! `customizable/` directory under
@@ -83,7 +83,7 @@ const CACHE_ENV_VAR: &str = "npm_config_store_dir";
 /// `setup_guard::ran` test checks for — the per-run breadcrumb that
 /// the pnpm install + native build actually ran. Must stay in sync
 /// with both `crates/typescript/setup.sh` and `setup.ps1`.
-const SETUP_ENV_VAR: &str = "SDK_TEST_TYPESCRIPT_NODE_SETUP";
+const SETUP_ENV_VAR: &str = "SDK_TEST_TYPESCRIPT_SETUP";
 
 /// Entry point for `crates/typescript/build.rs`. Discovers
 /// fixtures, runs codegen for each (best-effort — see module docs),
@@ -360,7 +360,7 @@ fn rewrite_test_bridge_imports(dir: &Path) {
     }
 }
 
-/// Emit `OUT_DIR/typescript_node_tests.rs` — a sequence of
+/// Emit `OUT_DIR/typescript_tests.rs` — a sequence of
 /// `::sdk_test_harness_runner::*` invocations. No test bodies authored here;
 /// `build_diagnostics!` and `run_test_cmd` live in `sdk_test_harness_runner`.
 fn write_fixtures_tests_rs(out_dir: &Path, fixtures: &[FixtureTests]) {
@@ -479,7 +479,7 @@ mod {fixture} {{
 "#,
         );
     }
-    let target = out_dir.join("typescript_node_tests.rs");
+    let target = out_dir.join("typescript_tests.rs");
     fs::write(&target, buf).unwrap();
 }
 

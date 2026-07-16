@@ -14,7 +14,7 @@
 // exact content. The class-typed tests are the bridge-level regression guard for
 // the class-typed streaming bug (bridge-generics/streaming, doc 00).
 //
-// Run: cargo nextest run -p sdk_test_typescript_node llm_functions::vitest
+// Run: cargo nextest run -p sdk_test_typescript llm_functions::vitest
 
 import { describe, it, expect } from "vitest";
 
