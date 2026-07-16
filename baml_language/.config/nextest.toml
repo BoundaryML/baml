@@ -58,9 +58,13 @@ filter = 'package(=sdk_test_rust)'
 platform = { host = 'cfg(windows)' }
 setup = 'rust_cargo_win'
 
-# baml_bridge is dylib-only: its tests load the engine cdylib at run time
+# baml_bridge is dylib-only: its live-engine integration tests (the
+# `live_engine` + `conversions` binaries) load the engine cdylib at run time
 # (located next to the test binary in <target>/<profile>/). Build it before
-# any of its tests run. fire only when a baml_bridge test is selected.
+# they run. Fire ONLY for those two binaries — baml_bridge's other (pure
+# loader/encode) unit tests don't touch the engine, so gating the whole
+# package here would force the non-cacheable cdylib build even for the fast
+# unit tests (and stall the general cargo-test jobs, which run those).
 [scripts.setup.rust_bridge_engine_unix]
 command = './sdks/rust/bridge_rust/build-engine.sh'
 
@@ -68,12 +72,12 @@ command = './sdks/rust/bridge_rust/build-engine.sh'
 command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', './sdks/rust/bridge_rust/build-engine.ps1']
 
 [[profile.default.scripts]]
-filter = 'package(=baml_bridge)'
+filter = 'package(=baml_bridge) and (binary(=live_engine) or binary(=conversions))'
 platform = { host = 'cfg(unix)' }
 setup = 'rust_bridge_engine_unix'
 
 [[profile.default.scripts]]
-filter = 'package(=baml_bridge)'
+filter = 'package(=baml_bridge) and (binary(=live_engine) or binary(=conversions))'
 platform = { host = 'cfg(windows)' }
 setup = 'rust_bridge_engine_win'
 
