@@ -84,6 +84,20 @@ public abstract class GenerateBamlTask extends DefaultTask {
             throw new GradleException(missingExecutableMessage(executable));
         }
 
+        // A bare executable name is resolved against PATH ourselves (Gradle's
+        // exec does not reliably search PATH for the child process), so the
+        // default `bamlExecutable = "baml"` works. Path-qualified names are
+        // handed to Gradle verbatim (it resolves them against the project dir).
+        String resolvedExecutable = executable;
+        if (!isPathQualified(executable)) {
+            File onPath = findOnPath(executable);
+            if (onPath == null) {
+                throw new GradleException(missingExecutableMessage(executable));
+            }
+            resolvedExecutable = onPath.getAbsolutePath();
+        }
+        final String executablePath = resolvedExecutable;
+
         File outputRoot = getOutputDir().get().getAsFile();
 
         // Clean the output dir before generation (stale-file hazard: generate
@@ -102,12 +116,34 @@ public abstract class GenerateBamlTask extends DefaultTask {
         File from = getSrcDir().get().getAsFile();
 
         getExecOperations().exec(spec -> {
-            spec.setExecutable(executable);
+            spec.setExecutable(executablePath);
             spec.args(
                 "generate",
                 "--from", from.getAbsolutePath(),
                 "-o", sdkDir.getAbsolutePath());
         });
+    }
+
+    private static boolean isPathQualified(String executable) {
+        return new File(executable).isAbsolute() || executable.contains(File.separator);
+    }
+
+    /** Locates a bare executable name on {@code PATH}, or {@code null} if absent. */
+    private static File findOnPath(String executable) {
+        String path = System.getenv("PATH");
+        if (path == null) {
+            return null;
+        }
+        for (String dir : path.split(File.pathSeparator)) {
+            if (dir.isEmpty()) {
+                continue;
+            }
+            File candidate = new File(dir, executable);
+            if (candidate.isFile() && candidate.canExecute()) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private static String missingExecutableMessage(String executable) {

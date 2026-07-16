@@ -82,7 +82,7 @@ Three placement patterns, in order of adoption:
   with one-time boilerplate `build.gradle.kts`; the app depends on
   `project(":baml-sdk")`. Keeps app `src/` pristine; generated code
   gets its own compilation unit.
-- **C (target state): a Gradle plugin** (`com.boundaryml`), the
+- **C (SHIPPED 2026-07-16): a Gradle plugin** (`com.boundaryml.baml`, at `sdks/java/gradle-plugin/`), the
   protobuf-gradle-plugin model: a `generateBaml` task with declared
   inputs (`baml_src/**`, `baml.toml`, toolchain version) and outputs
   (`build/generated/sources/baml/java/main`), wired into
