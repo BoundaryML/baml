@@ -137,6 +137,92 @@ fn function_generic_param_bounds_exprs(
     item_tree[func_loc.id(db)].generic_param_bounds.clone()
 }
 
+/// Per-callee generic-parameter facts consumed at every call site:
+/// the enclosing class's generic params (empty for free functions), the
+/// callee's user-declared params, their lowered interface bounds, and the
+/// callee's name for diagnostics.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct CalleeGenerics {
+    pub(crate) class_params: Vec<Name>,
+    pub(crate) user_params: Vec<Name>,
+    pub(crate) user_bounds: Vec<Option<Ty>>,
+    pub(crate) name: Name,
+}
+
+// Safety: `CalleeGenerics` holds only plain (non-`'db`) data. Manual `Update`
+// impl uses `PartialEq` for Salsa early-cutoff.
+#[allow(unsafe_code)]
+unsafe impl salsa::Update for CalleeGenerics {
+    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
+        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
+        #[allow(unsafe_code)]
+        let old = unsafe { &*old_pointer };
+        if old == &new_value {
+            false
+        } else {
+            #[allow(unsafe_code)]
+            unsafe {
+                std::ptr::drop_in_place(old_pointer);
+                std::ptr::write(old_pointer, new_value);
+            }
+            true
+        }
+    }
+}
+
+/// The declared generic params and lowered bounds of a callable, memoized per
+/// function. Every call site used to redo this from scratch — an item-tree
+/// scan for the enclosing class plus a re-lowering of the bound type
+/// expressions — even though it is a pure function of the callee's
+/// declaration, so memoizing per `FunctionLoc` is safe.
+#[salsa::tracked(returns(ref))]
+pub(crate) fn callee_generics_for_func<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> CalleeGenerics {
+    let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
+    // The enclosing class's generic params (`[]` for a free function). These
+    // are always in scope when lowering the method's *bounds* — a bound may
+    // reference a class generic (`<U extends Eq<C>>` on a method of
+    // `class Box<C>`) regardless of how the class args are supplied — so they
+    // must be visible or `C` would resolve to `unknown`.
+    let file = func_loc.file(db);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let class_params: Vec<Name> = item_tree
+        .classes
+        .values()
+        .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
+        .map(|class_data| class_data.generic_params.clone())
+        .unwrap_or_default();
+
+    // Lower the user generic params' interface bounds in the callee's own
+    // package/namespace, with the class params in scope (see above). The
+    // bounds were already validated at the declaration site, so discard
+    // re-lowering diagnostics here.
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let mut bound_scope = class_params.clone();
+    bound_scope.extend(sig.user_generic_params.iter().cloned());
+    let mut diags = Vec::new();
+    let user_bounds = lower_generic_param_bounds(
+        db,
+        &function_generic_param_bounds_exprs(db, func_loc),
+        pkg_items,
+        &pkg_info.namespace_path,
+        &bound_scope,
+        None,
+        &mut diags,
+    );
+
+    CalleeGenerics {
+        class_params,
+        user_params: sig.user_generic_params.clone(),
+        user_bounds,
+        name: sig.name.clone(),
+    }
+}
+
 pub(crate) fn lower_generic_param_bounds(
     db: &dyn crate::Db,
     bounds: &[Option<TypeExpr>],
@@ -544,7 +630,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         GlobalTypeContext {
             db: self.context.db(),
             res_ctx: self.res_ctx,
-            aliases: &self.aliases,
+            aliases: self.aliases,
             bounds: &self.generic_param_bounds,
         }
     }
@@ -664,8 +750,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// Declared return type for the function (used to check return statements).
     declared_return_ty: Option<Ty>,
     /// Resolved type alias map: alias qualified name → expanded Ty.
-    /// Used by the normalizer for structural subtype checking.
-    aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+    /// Used by the normalizer for structural subtype checking. Held by
+    /// reference to the Salsa-cached `package_resolved_aliases` value so it is
+    /// not cloned per scope (it used to be rebuilt for every scope inference).
+    aliases: &'db HashMap<crate::ty::QualifiedTypeName, Ty>,
     /// Namespace path for the file being analyzed (e.g. `["env"]` for `baml/env.baml`).
     ns_context: Vec<Name>,
     /// BEP-044: when this body is the override of an interface method
@@ -967,7 +1055,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         res_ctx: &'db PackageResolutionContext<'db>,
         package_id: PackageId<'db>,
         scope: ScopeId<'db>,
-        aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+        aliases: &'db HashMap<crate::ty::QualifiedTypeName, Ty>,
     ) -> Self {
         let db = context.db();
         let package_items = &res_ctx.own_items;
@@ -1319,7 +1407,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn expand_alias_chains(&self, ty: Ty) -> Ty {
-        crate::inference::expand_alias_chains(ty, &self.aliases)
+        crate::inference::expand_alias_chains(ty, self.aliases)
     }
 
     /// Pattern-matrix-internal normalization of a scrutinee type.
@@ -2001,20 +2089,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             _ => return None,
         };
         let db = self.context.db();
-        let sig = baml_compiler2_ppir::elaborated_function_signature(db, func_loc);
-        // The enclosing class's generic params (`[]` for a free function). These
-        // are always in scope when lowering the method's *bounds* — a bound may
-        // reference a class generic (`<U extends Eq<C>>` on a method of
-        // `class Box<C>`) regardless of how the class args are supplied — so they
-        // must be visible or `C` would resolve to `unknown`.
-        let file = func_loc.file(db);
-        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-        let enclosing_class_params: Vec<Name> = item_tree
-            .classes
-            .values()
-            .find(|class_data| class_data.methods.contains(&func_loc.id(db)))
-            .map(|class_data| class_data.generic_params.clone())
-            .unwrap_or_default();
+        // The callee's declared params and lowered bounds are a pure function
+        // of its declaration — previously re-derived here (item-tree scan +
+        // bound re-lowering) at every call site; now Salsa-memoized per callee.
+        let data = callee_generics_for_func(db, func_loc);
         // Only user-declared generic params are *supplied at the call site*;
         // synthetic effect params are always inferred. For static-method-on-
         // generic-class calls, the class params are also supplied (`Class<...>.m`)
@@ -2023,41 +2101,21 @@ impl<'db> TypeInferenceBuilder<'db> {
         // params (their own bounds, where any, are enforced at receiver
         // specialization).
         let class_params: &[Name] = if treat_as_static_method {
-            &enclosing_class_params
+            &data.class_params
         } else {
             &[]
         };
 
-        // Lower the user generic params' interface bounds in the callee's own
-        // package/namespace, with the class params in scope (see above). The
-        // bounds were already validated at the declaration site, so discard
-        // re-lowering diagnostics here.
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
-        let mut bound_scope = enclosing_class_params.clone();
-        bound_scope.extend(sig.user_generic_params.iter().cloned());
-        let mut diags = Vec::new();
-        let user_bounds = lower_generic_param_bounds(
-            db,
-            &function_generic_param_bounds_exprs(db, func_loc),
-            pkg_items,
-            &pkg_info.namespace_path,
-            &bound_scope,
-            None,
-            &mut diags,
-        );
-
         let mut declared_params: Vec<Name> = class_params.to_vec();
-        declared_params.extend(sig.user_generic_params.iter().cloned());
+        declared_params.extend(data.user_params.iter().cloned());
         let mut declared_bounds: Vec<Option<Ty>> = vec![None; class_params.len()];
-        declared_bounds.extend(user_bounds);
+        declared_bounds.extend(data.user_bounds.iter().cloned());
         // A user bound that references an enclosing class param (`<U extends
         // Eq<C>>` on a method of `class Box<C>`) is lowered with `C` as a type
         // variable here; on a bound-method call the receiver's value for `C` is
         // seeded into the call-site bindings (see `owner_type_arg_binding_seed`) so
         // the bound resolves to e.g. `Eq<int>` before it is checked.
-        Some((declared_params, declared_bounds, sig.name.clone()))
+        Some((declared_params, declared_bounds, data.name.clone()))
     }
 
     /// Resolve explicit type arguments written at a call site (e.g. `foo<int, string>(x)`).
@@ -5906,7 +5964,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self.package_id,
                         &inferred,
                         expected,
-                        &self.aliases,
+                        self.aliases,
                         |a, b| self.is_subtype(a, b),
                     )
                 } else {

@@ -1048,13 +1048,13 @@ pub fn validate_impl_signatures<'db>(
 
     // The canonical algebra context — fully usable in this phase (see the fn doc).
     let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
-    let aliases = crate::inference::package_alias_map(db, res_ctx);
+    let aliases = crate::inference::package_resolved_aliases(db, pkg_id);
     let bounds: crate::lower_type_expr::TypeVarBoundsMap =
         data.generic_params.iter().cloned().collect();
     let ctx = crate::type_context::GlobalTypeContext {
         db,
         res_ctx,
-        aliases: &aliases,
+        aliases,
         bounds: &bounds,
     };
 
@@ -1349,7 +1349,7 @@ pub fn validate_impl_signatures<'db>(
                 generics: generics.clone(),
                 associated_types: assoc.clone(),
             };
-            if !implements_interface(db, &for_ty, &required_iface, &aliases, |a, b| {
+            if !implements_interface(db, &for_ty, &required_iface, aliases, |a, b| {
                 baml_type::normalize::is_subtype(a, b, &ctx)
             }) {
                 diags.push((
@@ -1423,6 +1423,13 @@ pub struct ResolvedImpl<'db> {
 /// Uniform over in-body and out-of-body impls (both live in
 /// [`file_item_tree`](baml_compiler2_hir::file_item_tree)`.impls`). Public so MIR can enumerate
 /// a package's impls to rebuild the runtime interface-implementor tables on the L1 substrate.
+///
+/// Salsa-tracked: this walks *every file in the project* (to find the
+/// package's files) and is called from every impl-resolution loop, coherence
+/// checking, and type-expression lowering, so an untracked version re-scanned
+/// the whole project on each call. The result is a pure function of the
+/// project's files and their item trees, so memoizing per package is safe.
+#[salsa::tracked(returns(ref))]
 pub fn package_impl_locs<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
@@ -1716,7 +1723,7 @@ pub fn type_implements_interface<'db>(
         db, pkg_id,
     ));
     for pkg in packages {
-        for impl_loc in package_impl_locs(db, pkg) {
+        for &impl_loc in package_impl_locs(db, pkg) {
             let Ok(data) = impl_data(db, impl_loc).as_ref() else {
                 continue;
             };
@@ -1754,7 +1761,7 @@ pub(crate) fn get_implements_block_symbolic<'db>(
     ));
     let mut found: Option<ResolvedImpl<'db>> = None;
     for pkg in packages {
-        for impl_loc in package_impl_locs(db, pkg) {
+        for &impl_loc in package_impl_locs(db, pkg) {
             let Ok(data) = impl_data(db, impl_loc).as_ref() else {
                 continue;
             };
@@ -1809,7 +1816,7 @@ fn get_implements_block_within_depth<'db>(
     ));
 
     for pkg in packages {
-        for impl_loc in package_impl_locs(db, pkg) {
+        for &impl_loc in package_impl_locs(db, pkg) {
             let Ok(data) = impl_data(db, impl_loc).as_ref() else {
                 continue;
             };
@@ -1971,7 +1978,7 @@ pub fn impls_for_type<'db>(
     ));
     let mut out = Vec::new();
     for pkg in packages {
-        for impl_loc in package_impl_locs(db, pkg) {
+        for &impl_loc in package_impl_locs(db, pkg) {
             let Ok(data) = impl_data(db, impl_loc).as_ref() else {
                 continue;
             };
@@ -2024,7 +2031,7 @@ pub(crate) fn first_failing_impl_bound<'db>(
         db, pkg_id,
     ));
     for pkg in packages {
-        for impl_loc in package_impl_locs(db, pkg) {
+        for &impl_loc in package_impl_locs(db, pkg) {
             let Ok(data) = impl_data(db, impl_loc).as_ref() else {
                 continue;
             };
