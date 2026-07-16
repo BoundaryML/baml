@@ -31,3 +31,14 @@ impl Buffer {
         self.len == 0
     }
 }
+
+/// Free a buffer returned by an exported bridge function.
+#[unsafe(no_mangle)]
+pub extern "C" fn free_buffer(buf: Buffer) {
+    if !buf.ptr.is_null() {
+        unsafe {
+            // Buffer is created from a boxed slice, so length and capacity match.
+            let _ = Vec::from_raw_parts(buf.ptr as *mut u8, buf.len, buf.len);
+        }
+    }
+}
