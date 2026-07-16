@@ -8451,6 +8451,94 @@ fn baml.ops.Equals$for$null.neq(self: null, other: Self) -> bool {
     }
 }
 
+fn baml.ops.__union_add = builtin(vm)
+
+fn baml.ops.__union_div = builtin(vm)
+
+fn baml.ops.__union_mul = builtin(vm)
+
+fn baml.ops.__union_neg = builtin(vm)
+
+fn baml.ops.__union_rem = builtin(vm)
+
+fn baml.ops.__union_sub = builtin(vm)
+
+fn baml.ops.Add<float>$for$float.add = builtin(vm)
+
+fn baml.ops.Add<bigint>$for$bigint.add = builtin(vm)
+
+fn baml.ops.Add<int>$for$int.add = builtin(vm)
+
+fn baml.ops.Add<float>$for$int.add = builtin(vm)
+
+fn baml.ops.Add<bigint>$for$int.add = builtin(vm)
+
+fn baml.ops.Add<int>$for$float.add = builtin(vm)
+
+fn baml.ops.Add<int>$for$bigint.add = builtin(vm)
+
+fn baml.ops.Divide<int>$for$int.div = builtin(vm)
+
+fn baml.ops.Divide<float>$for$int.div = builtin(vm)
+
+fn baml.ops.Divide<bigint>$for$int.div = builtin(vm)
+
+fn baml.ops.Divide<int>$for$float.div = builtin(vm)
+
+fn baml.ops.Divide<int>$for$bigint.div = builtin(vm)
+
+fn baml.ops.Divide<float>$for$float.div = builtin(vm)
+
+fn baml.ops.Divide<bigint>$for$bigint.div = builtin(vm)
+
+fn baml.ops.Multiply<bigint>$for$int.mul = builtin(vm)
+
+fn baml.ops.Multiply<int>$for$float.mul = builtin(vm)
+
+fn baml.ops.Multiply<int>$for$bigint.mul = builtin(vm)
+
+fn baml.ops.Multiply<float>$for$float.mul = builtin(vm)
+
+fn baml.ops.Multiply<bigint>$for$bigint.mul = builtin(vm)
+
+fn baml.ops.Multiply<int>$for$int.mul = builtin(vm)
+
+fn baml.ops.Multiply<float>$for$int.mul = builtin(vm)
+
+fn baml.ops.Negate$for$bigint.neg = builtin(vm)
+
+fn baml.ops.Negate$for$float.neg = builtin(vm)
+
+fn baml.ops.Negate$for$int.neg = builtin(vm)
+
+fn baml.ops.Remainder<int>$for$float.rem = builtin(vm)
+
+fn baml.ops.Remainder<int>$for$bigint.rem = builtin(vm)
+
+fn baml.ops.Remainder<float>$for$float.rem = builtin(vm)
+
+fn baml.ops.Remainder<bigint>$for$bigint.rem = builtin(vm)
+
+fn baml.ops.Remainder<int>$for$int.rem = builtin(vm)
+
+fn baml.ops.Remainder<float>$for$int.rem = builtin(vm)
+
+fn baml.ops.Remainder<bigint>$for$int.rem = builtin(vm)
+
+fn baml.ops.Subtract<int>$for$float.sub = builtin(vm)
+
+fn baml.ops.Subtract<int>$for$bigint.sub = builtin(vm)
+
+fn baml.ops.Subtract<float>$for$float.sub = builtin(vm)
+
+fn baml.ops.Subtract<bigint>$for$bigint.sub = builtin(vm)
+
+fn baml.ops.Subtract<int>$for$int.sub = builtin(vm)
+
+fn baml.ops.Subtract<float>$for$int.sub = builtin(vm)
+
+fn baml.ops.Subtract<bigint>$for$int.sub = builtin(vm)
+
 fn baml.spawn.TaskGroup.active_count = builtin(vm)
 
 fn baml.spawn.CancelToken.any = builtin(vm)

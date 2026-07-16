@@ -11,6 +11,7 @@ export default defineConfig({
     exclude: ["@boundaryml/baml-bridge-web"],
   },
   test: {
+    env: { BAML_TEST_RUNTIME: "workers" },
     include: ["workers/**/*.test.ts"],
   },
 });

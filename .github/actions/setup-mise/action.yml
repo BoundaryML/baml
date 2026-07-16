@@ -19,13 +19,13 @@ inputs:
   install_args:
     description: |
       Space-separated list of tool names passed through to `mise install`,
-      restricting installation to just those tools (e.g. "cargo:wasm-pack"
+      restricting installation to just those tools (e.g. "github:rustwasm/wasm-pack"
       for a wasm-pack-only job). If empty, every tool in mise.toml is
       installed.
 
       Callers should pass the narrowest set their job actually uses —
       mise.toml has a lot of `cargo:*` entries (cargo-watch, ripgrep,
-      just, bacon, cross, prek, wasm-pack) and even with binstall some
+      just, bacon, cross, and prek) and even with binstall some
       of them fall back to source compiles or hit crates.io rate limits.
       Skipping them when they aren't needed is the cheapest win.
     required: false
@@ -39,7 +39,7 @@ runs:
     # backend silently falls back to `cargo install` (compile from
     # source). With `cargo_binstall = true` set in mise.toml's [settings]
     # and cargo-binstall on PATH here, every `cargo:bacon`, `cargo:cross`,
-    # `cargo:wasm-pack`, `cargo:prek`, ... in mise.toml installs from a
+    # `cargo:prek`, ... in mise.toml installs from a
     # prebuilt binary in seconds instead of minutes.
     #
     # Skipped when the job's install_args has no `cargo:*` entries
@@ -64,7 +64,7 @@ runs:
         # `sccache --version` verify step, or cargo using RUSTC_WRAPPER=sccache)
         # makes mise materialize the *whole* mise.toml environment, and with
         # MISE_YES=1 (set by mise-action) it auto-installs every other tool in
-        # the config — cargo:bacon/cross/wasm-pack/..., protoc, pnpm, etc. That
+        # the config — cargo:bacon/cross/..., protoc, pnpm, etc. That
         # defeats install_args entirely and, on Windows where those cargo:*
         # tools fall back to failing source compiles, it breaks the job.
         add_shims_to_path: false

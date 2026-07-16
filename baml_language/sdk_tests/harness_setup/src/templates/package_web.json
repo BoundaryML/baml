@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest run --config vitest.node.config.ts"
+    "test:web": "vitest run --config vitest.web.config.ts",
+    "test:workers": "vitest run --config vitest.workers.config.ts"
   },
   "dependencies": {
-    "@boundaryml/baml-bridge": "file:../../../../../sdks/typescript/bridge_typescript"
+    "@boundaryml/baml-bridge-web": "file:../../../../../sdks/typescript/bridge_typescript_web"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.18.4",

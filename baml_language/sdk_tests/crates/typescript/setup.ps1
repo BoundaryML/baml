@@ -1,4 +1,4 @@
-# Per-fixture pnpm setup for the sdk_test_typescript_node crate — Windows.
+# Per-fixture pnpm setup for the sdk_test_typescript crate — Windows.
 #
 # Windows counterpart of setup.sh. Invoked automatically by
 # `cargo nextest run` via the setup-script binding in
@@ -85,5 +85,5 @@ Get-ChildItem -Directory | ForEach-Object {
 # rationale. Keep the var name in sync with SETUP_ENV_VAR in
 # harness_setup/src/typescript.rs.
 if ($env:NEXTEST_ENV) {
-    Add-Content -Path $env:NEXTEST_ENV -Value 'SDK_TEST_TYPESCRIPT_NODE_SETUP=1'
+    Add-Content -Path $env:NEXTEST_ENV -Value 'SDK_TEST_TYPESCRIPT_SETUP=1'
 }

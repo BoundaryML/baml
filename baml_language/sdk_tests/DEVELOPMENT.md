@@ -10,10 +10,7 @@ build.rs for both targets and lives in a per-crate `setup.sh`
 [`crates/python_pydantic2/setup.sh`](./crates/python_pydantic2/setup.sh)
 (the `--reinstall-package` forces the maturin rebuild of
 baml_bridge's `.so` that a plain `uv sync` skips on incremental Rust
-edits), and the TypeScript matrix's per-fixture `pnpm install` + the
-prereq build of the native bridge; Web/Wasm activation lands in a child change
-live in
-[`crates/typescript/setup.sh`](./crates/typescript/setup.sh).
+edits). The TypeScript setup is split by runtime family: [`crates/typescript/setup.sh`](./crates/typescript/setup.sh) builds only the native bridge, while [`crates/typescript_web/setup.sh`](./crates/typescript_web/setup.sh) builds the Web/Wasm bridge and installs Chromium.
 `cargo nextest run` fires the matching setup script automatically
 via platform-filtered (`cfg(unix)` / `cfg(windows)`) setup-script
 bindings in
@@ -55,7 +52,8 @@ sdk_tests/
 |   `-- src/
 |       |-- lib.rs                        # generator-agnostic helpers + BuildDiagnostics
 |       |-- python_pydantic2.rs           # python+pydantic2 codegen + scaffold emit (run_all)
-|       `-- typescript.rs                 # Node/Web codegen + Node/Chromium/workerd scaffold emit
+|       |-- typescript.rs                 # Node codegen + Node scaffold emit
+|       `-- typescript_web.rs             # Web codegen + Chromium/workerd scaffold emit from canonical TypeScript tests
 |-- harness_runner/                       # test-side crate (std only)
 |   |-- Cargo.toml                        # name = "sdk_test_harness_runner"
 |   `-- src/
@@ -71,14 +69,20 @@ sdk_tests/
     |   |-- setup.sh                      # per-fixture `uv sync --reinstall-package baml_bridge` (.so rebuild) (Unix)
     |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
     |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::python_pydantic2::test_suite!()
-    `-- typescript/
-        |-- Cargo.toml                    # name = "sdk_test_typescript_node"
-        |                                 # [build-dependencies] sdk_test_harness_setup
-        |                                 # [dev-dependencies]   sdk_test_harness_runner
-        |-- build.rs                      # one-liner -> sdk_test_harness_setup::typescript::run_all()
-        |-- setup.sh                      # build the native bridge + install packages (Unix)
-        |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
-        `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript_node::test_suite!()
+    |-- typescript/
+    |   |-- Cargo.toml                    # name = "sdk_test_typescript"
+    |   |                                 # [build-dependencies] sdk_test_harness_setup
+    |   |                                 # [dev-dependencies]   sdk_test_harness_runner
+    |   |-- build.rs                      # one-liner -> sdk_test_harness_setup::typescript::run_all()
+    |   |-- setup.sh                      # build the native bridge + install packages (Unix)
+    |   |-- setup.ps1                     # parallel script for Windows; nextest picks one by host cfg
+    |   `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript::test_suite!()
+    `-- typescript_web/
+        |-- Cargo.toml                    # name = "sdk_test_typescript_web"
+        |-- build.rs                      # reads ../typescript/*/customizable; emits only local generated trees
+        |-- setup.sh                      # build Web/Wasm bridge + install packages/Chromium (Unix)
+        |-- setup.ps1                     # Windows equivalent
+        `-- src/lib.rs                    # invokes sdk_test_harness_runner::typescript_web::test_suite!()
 ```
 
 ## How It Works
@@ -94,11 +98,9 @@ sdk_tests/
    - Symlinks each file in
      `crates/<generator>/<fixture>/customizable/` into
      `crates/<generator>/<fixture>/generated/` (python) -- or
-     copies (`typescript_node`, because Node.js follows
-     symlinks during module resolution and can break out of the
-     generated dir's `node_modules`).
+     copies (`typescript` and `typescript_web`, because Node.js follows symlinks during module resolution and can break out of the generated dir's `node_modules`). The Web crate reads its complete test corpus from the sibling `typescript` crate and never writes into it.
    - Writes `crates/<generator>/<fixture>/generated/pyproject.toml`
-     (or `package.json` + per-runtime TypeScript/Vitest configs for `typescript_node`)
+     (or `package.json` + per-runtime TypeScript/Vitest configs for `typescript`)
      with the per-fixture package name.
    - For BOTH targets: the toolchain install is OUT of build.rs and
      lives in `crates/<generator>/setup.sh` (Unix) or `setup.ps1`
@@ -114,7 +116,8 @@ sdk_tests/
      plain `uv sync` is a no-op on incremental Rust edits -- uv
      doesn't track the Rust sources behind the editable install,
      so the `.so` would stay stale.
-   - For typescript_node: the setup script builds `bridge_typescript` and runs one `pnpm install` per fixture. Node checks run immediately; the emitted Web and Workers checks remain ignored until the Web implementation change supplies their bridge and runtime dependencies.
+   - For Node TypeScript: `sdk_test_typescript` builds only `bridge_typescript`, installs Node-only fixture manifests, and runs `esm_node`, `tsc_node`, `vitest_node`, and `attw`.
+   - For Web TypeScript: `sdk_test_typescript_web` builds only `bridge_typescript_web`, copies the canonical sibling tests into local generated Web/Workers trees, installs Chromium, and runs the Web and Workers ESM and TypeScript checks. The Web and Workers Vitest checks remain ignored until the Web implementation change is applied.
    - Emits `OUT_DIR/<generator>_tests.rs` -- a generated source file
      containing a `::sdk_test_harness_runner::build_diagnostics!(...)` macro
      invocation at the top followed by one `mod <fixture> { ... }`
@@ -176,7 +179,7 @@ SDK_TEST_<GEN>_SETUP=1
 
 `<GEN>` is the upper-cased generator key:
 `SDK_TEST_PYTHON_PYDANTIC2_SETUP=1` for python_pydantic2 and
-`SDK_TEST_TYPESCRIPT_NODE_SETUP=1` for typescript_node. The
+`SDK_TEST_TYPESCRIPT_SETUP=1` for TypeScript. The
 canonical name is the `SETUP_ENV_VAR` const in each
 `harness_setup/src/<generator>.rs` (the setup scripts and the
 emitted `setup_guard!(...)` invocation must agree on it). nextest

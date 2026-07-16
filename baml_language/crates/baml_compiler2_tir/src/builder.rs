@@ -7484,6 +7484,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
                 let result_ty =
                     self.infer_binary_op(binary_op, &effective_target_ty, &value_ty, *target);
+                // `t OP= v` stores the operator result back into `t`, so the
+                // result must be assignable to the target — not a given once
+                // operators dispatch through `baml.ops` impls whose `Output`
+                // can differ from `Self` (`Counter += 1` with `Output = int`
+                // would leave an `int` in a `Counter` slot). The target is
+                // widened to its base first so a literal-flow-typed local
+                // (`let x = 1; x += 2`) compares against `int`, not `1`.
+                let widened_target = Self::widen_literal_base(&effective_target_ty);
+                if !self.reassignment_is_compatible(&result_ty, &widened_target) {
+                    self.context.report_simple(
+                        TirTypeError::TypeMismatch {
+                            expected: widened_target,
+                            got: result_ty.clone(),
+                        },
+                        *value,
+                    );
+                }
                 // Re-record the value expression with the result type so the
                 // display shows the operation result, not the raw RHS literal.
                 self.record_expr_type(*value, result_ty);
@@ -13663,23 +13680,44 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             },
 
-            // Arithmetic: result type depends on operands
+            // Arithmetic: valid iff `lhs` implements `baml.ops.{Add,Subtract,…}`
+            // for `rhs`; the result is that impl's `Output` (unioned over operand
+            // alternatives). Primitive numeric promotion and `string` concatenation
+            // stay on the fast classifier (`infer_arithmetic`) — the primitive
+            // interfaces back the same result, and `string`'s concat interface is
+            // deferred — and everything else dispatches through the interface.
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 let result = Self::infer_arithmetic(op, lhs, rhs);
-                if matches!(result, Ty::Unknown { .. })
-                    && !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
-                    && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                if !matches!(result, Ty::Unknown { .. }) {
+                    result
+                } else if matches!(self.normalize(lhs), Ty::Never { .. })
+                    || matches!(self.normalize(rhs), Ty::Never { .. })
                 {
-                    self.context.report_simple(
-                        TirTypeError::InvalidBinaryOp {
-                            op,
-                            lhs: lhs.clone(),
-                            rhs: rhs.clone(),
-                        },
-                        at,
-                    );
+                    // A `never` operand makes the operation unreachable (e.g.
+                    // an unreachable catch arm's binding): bottom propagates,
+                    // no diagnostic.
+                    Ty::Never {
+                        attr: TyAttr::default(),
+                    }
+                } else if let Some(ty) = self.infer_arithmetic_via_interface(op, lhs, rhs) {
+                    ty
+                } else {
+                    if !matches!(lhs, Ty::Unknown { .. } | Ty::Error { .. })
+                        && !matches!(rhs, Ty::Unknown { .. } | Ty::Error { .. })
+                    {
+                        self.context.report_simple(
+                            TirTypeError::InvalidBinaryOp {
+                                op,
+                                lhs: lhs.clone(),
+                                rhs: rhs.clone(),
+                            },
+                            at,
+                        );
+                    }
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    }
                 }
-                result
             }
 
             // Bitwise: result type depends on operands (int or bigint).
@@ -13751,19 +13789,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn infer_arithmetic(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Ty {
-        fn promote(a: PrimitiveType, b: &PrimitiveType) -> Option<PrimitiveType> {
-            if a == *b {
-                return Some(a);
-            }
-            match (&a, &b) {
-                (PrimitiveType::Int, PrimitiveType::Float)
-                | (PrimitiveType::Float, PrimitiveType::Int) => Some(PrimitiveType::Float),
-                (PrimitiveType::Int, PrimitiveType::Bigint)
-                | (PrimitiveType::Bigint, PrimitiveType::Int) => Some(PrimitiveType::Bigint),
-                _ => None,
-            }
-        }
-
         fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
             // Enumerate the specific primitives this op accepts (Int, Bigint,
             // Float, String). Anything else returns `None`, which makes the
@@ -13779,14 +13804,43 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Ty::Literal(baml_base::Literal::Bigint(_), _, _) => Some(PrimitiveType::Bigint),
                 Ty::Literal(baml_base::Literal::Float(_), _, _) => Some(PrimitiveType::Float),
                 Ty::Literal(baml_base::Literal::String(_), _, _) => Some(PrimitiveType::String),
+                // The builtin wrapper classes are the method surface for the
+                // primitives — `self` inside `class baml.Float`'s methods is
+                // class-typed but primitive-valued (`self * 180.0` in
+                // `to_degrees`), so they count as their primitive here.
+                Ty::Class(qtn, args, _)
+                    if args.is_empty()
+                        && qtn.package().as_str() == "baml"
+                        && qtn.namespace().is_empty() =>
+                {
+                    match qtn.name().as_str() {
+                        "Int" => Some(PrimitiveType::Int),
+                        "Bigint" => Some(PrimitiveType::Bigint),
+                        "Float" => Some(PrimitiveType::Float),
+                        "String" => Some(PrimitiveType::String),
+                        _ => None,
+                    }
+                }
                 Ty::Union(members, _) => {
+                    // A union stays on the fast path only when every member is
+                    // the SAME primitive kind (`int | 3` -> int). A mixed-kind
+                    // union (`int | float`) must NOT promote here: the static
+                    // promotion (float) diverges from the runtime value (which
+                    // may be an int), so emit would pick a single-kind opcode
+                    // for a value of the other kind — UB in the specialized
+                    // handlers. Mixed unions fall through to the interface
+                    // path, whose cartesian product types them correctly and
+                    // whose driver dispatches on the runtime type.
                     let mut result: Option<PrimitiveType> = None;
                     for m in members {
                         let p = base_ty(m)?;
-                        result = Some(match result {
-                            None => p,
-                            Some(existing) => promote(existing, &p)?,
-                        });
+                        if let Some(existing) = &result {
+                            if *existing != p {
+                                return None;
+                            }
+                        } else {
+                            result = Some(p);
+                        }
                     }
                     result
                 }
@@ -13795,6 +13849,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         match (base_ty(lhs), base_ty(rhs)) {
+            // A non-primitive operand always falls through to the interface
+            // path — a wildcard arm below must never claim `user_class +
+            // float` (or `+ string`) for the fast path, which would type it by
+            // the primitive operand alone and skip the operand's `baml.ops`
+            // impls entirely.
+            (None, _) | (_, None) => Ty::Unknown {
+                attr: TyAttr::default(),
+            },
             // Float / bigint mixing is rejected — bigint values past 2^53 don't
             // round-trip through f64. Users must explicitly convert.
             (Some(PrimitiveType::Float), Some(PrimitiveType::Bigint))
@@ -13812,12 +13874,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             },
             (Some(PrimitiveType::String), _) | (_, Some(PrimitiveType::String)) => {
-                // String concatenation, Add only. The VM concatenates any two
-                // *objects* via `as_string` (string, uint8array, …), but a
-                // non-object primitive (int/float/bigint/bool/null) has no object
-                // representation and aborts at runtime. So `string + int` must be
-                // a type error here rather than inferring `string` and crashing
-                // the VM, while `string + uint8array` stays valid.
+                // String concatenation, Add only, and only string + string:
+                // both operands are known primitive-based here (the None arm
+                // above already sent everything else to the interface path),
+                // so the non-object-primitive check rejects exactly `string +
+                // int/float/bigint` — the VM concatenates objects via
+                // `as_string`, and a tagged primitive has no object
+                // representation. `string` deliberately has no `baml.ops`
+                // impls (see math.baml), so no interface fallback applies.
                 if matches!(op, baml_compiler2_ast::BinaryOp::Add)
                     && !Self::is_non_object_primitive(lhs)
                     && !Self::is_non_object_primitive(rhs)
@@ -13835,6 +13899,161 @@ impl<'db> TypeInferenceBuilder<'db> {
                 attr: TyAttr::default(),
             },
         }
+    }
+
+    /// The qualified name of the `baml.ops.<name>` interface.
+    fn ops_qtn(name: &str) -> crate::ty::QualifiedTypeName {
+        crate::ty::QualifiedTypeName::new(
+            Name::new("baml"),
+            vec![Name::new("ops")],
+            Name::new(name),
+        )
+    }
+
+    /// The `baml.ops.<Interface>` an arithmetic operator dispatches through, or
+    /// `None` for a non-arithmetic operator.
+    fn arithmetic_interface_qtn(
+        op: baml_compiler2_ast::BinaryOp,
+    ) -> Option<crate::ty::QualifiedTypeName> {
+        use baml_compiler2_ast::BinaryOp;
+        let name = match op {
+            BinaryOp::Add => "Add",
+            BinaryOp::Sub => "Subtract",
+            BinaryOp::Mul => "Multiply",
+            BinaryOp::Div => "Divide",
+            BinaryOp::Mod => "Remainder",
+            _ => return None,
+        };
+        Some(Self::ops_qtn(name))
+    }
+
+    /// Split an operand type into the concrete alternatives an operator must hold
+    /// against. A union contributes each member (every pair must be valid); a
+    /// single type (incl. an interface-existential) is one alternative. Normalized
+    /// first so a collapsible spelling (`int | 99` → `int`) is one alternative.
+    /// `unknown` / error operands yield no members so the caller suppresses
+    /// cascading diagnostics.
+    fn operator_operand_members(&self, ty: &Ty) -> Vec<Ty> {
+        // Widen each alternative to its base (literal → primitive, enum-variant →
+        // enum): impls are keyed on base types, so `c + 1` must request `Add<int>`,
+        // not `Add<1>`.
+        let members = match self.normalize(ty) {
+            Ty::Union(members, _) => members.iter().map(Self::widen_literal_base).collect(),
+            Ty::Unknown { .. } | Ty::Error { .. } => Vec::new(),
+            other => vec![Self::widen_literal_base(&other)],
+        };
+        // Widening can collapse distinct alternatives to one base (`1 | 2` → two
+        // `int`s); dedup so each base contributes one pair to the operator product.
+        let mut deduped: Vec<Ty> = Vec::with_capacity(members.len());
+        for member in members {
+            if !deduped.iter().any(|seen| self.equivalent(seen, &member)) {
+                deduped.push(member);
+            }
+        }
+        deduped
+    }
+
+    /// For one operand, resolve `<l as Iface<args>>::Output` — the result of the
+    /// operator applied to `l` (`args` is `[rhs]` for a binary operator, empty
+    /// for `Negate`) — to its concrete type. A concrete `l` (or an existential
+    /// whose `Output` is specified) yields that `Output`; `None` when `l` does
+    /// not implement `Iface<args>`, which the resolver signals by leaving the
+    /// projection unresolved (so an `l` whose `Output` can't be pinned to a
+    /// concrete type — e.g. an unbounded type variable — is rejected as an
+    /// invalid operand).
+    fn resolve_operator_output(
+        &self,
+        iface_qtn: &crate::ty::QualifiedTypeName,
+        l: &Ty,
+        iface_args: Vec<Ty>,
+    ) -> Option<Ty> {
+        // Resolve `<l as Iface<args>>::Output` directly rather than checking
+        // `is_subtype(l, Iface<args>)` first: the latter fills the interface's
+        // `Output` with its `= Self` default, turning the membership test into a
+        // stricter `Iface<args, Output=Self>` that a concrete impl (`Output =
+        // int`, say) can never satisfy. Normalization reduces the projection
+        // through the impl registry (`TypeContext::project`), selecting the impl
+        // by the input dimensions only — the right notion here — and leaves the
+        // projection unresolved exactly when no impl applies.
+        let projection = Ty::AssociatedTypeProjection {
+            base: Box::new(l.clone()),
+            interface: Box::new(baml_type::Interface::new(
+                iface_qtn.clone(),
+                iface_args,
+                Vec::new(),
+            )),
+            member: Name::new("Output"),
+            attr: TyAttr::default(),
+        };
+        match self.normalize(&projection) {
+            Ty::AssociatedTypeProjection { .. } | Ty::Unknown { .. } | Ty::Error { .. } => None,
+            // The `= Self` default realized against a symbolic operand (an
+            // interface-existential, or a type var whose bound leaves `Output`
+            // unpinned) resolves to the operator existential itself. That
+            // claims the result implements the interface, but `Output`'s only
+            // bound is `Concrete` — an impl whose `Output` doesn't implement
+            // it would falsify the claim at runtime (`(x + 1) + 1` would
+            // type-check yet fail to dispatch). Such an operand must pin
+            // `Output` explicitly, so the pair is invalid.
+            Ty::Interface(name, _, bindings, _)
+                if name == *iface_qtn && !bindings.iter().any(|(n, _)| n.as_str() == "Output") =>
+            {
+                None
+            }
+            resolved => Some(resolved),
+        }
+    }
+
+    /// Resolve `lhs OP rhs` through the `baml.ops` arithmetic interfaces: every
+    /// `(L, R)` pair of operand alternatives must satisfy `L extends Iface<R>`,
+    /// and the result is the union of each pair's `Output`. `None` when the
+    /// operator is not arithmetic, an operand has no alternatives (`unknown`), or
+    /// any pair is unimplemented — i.e. the operator is invalid for these types.
+    fn infer_arithmetic_via_interface(
+        &self,
+        op: baml_compiler2_ast::BinaryOp,
+        lhs: &Ty,
+        rhs: &Ty,
+    ) -> Option<Ty> {
+        let iface_qtn = Self::arithmetic_interface_qtn(op)?;
+        let lhs_members = self.operator_operand_members(lhs);
+        let rhs_members = self.operator_operand_members(rhs);
+        if lhs_members.is_empty() || rhs_members.is_empty() {
+            return None;
+        }
+        let mut output: Option<Ty> = None;
+        for l in &lhs_members {
+            for r in &rhs_members {
+                let pair_output = self.resolve_operator_output(&iface_qtn, l, vec![r.clone()])?;
+                output = Some(match output {
+                    None => pair_output,
+                    Some(acc) => Self::join_types(&acc, &pair_output),
+                });
+            }
+        }
+        output
+    }
+
+    /// Resolve unary `-operand` through `baml.ops.Negate`: every operand
+    /// alternative must implement `Negate`, and the result is the union of each
+    /// alternative's `Output` (defaulting to the alternative itself via the
+    /// `= Self` default). `None` when an alternative does not implement `Negate`
+    /// (or the operand has none) — i.e. negation is invalid.
+    fn infer_negate_via_interface(&self, operand: &Ty) -> Option<Ty> {
+        let members = self.operator_operand_members(operand);
+        if members.is_empty() {
+            return None;
+        }
+        let negate_qtn = Self::ops_qtn("Negate");
+        let mut output: Option<Ty> = None;
+        for m in &members {
+            let member_output = self.resolve_operator_output(&negate_qtn, m, Vec::new())?;
+            output = Some(match output {
+                None => member_output,
+                Some(acc) => Self::join_types(&acc, &member_output),
+            });
+        }
+        output
     }
 
     /// Returns true if any runtime value of `ty` could be `null` — i.e. the
@@ -13898,20 +14117,27 @@ impl<'db> TypeInferenceBuilder<'db> {
         let operand_attr = operand.attr().clone();
         match op {
             baml_compiler2_ast::UnaryOp::Not => Ty::Bool { attr: operand_attr },
+            // Negation: the primitives stay on the fast path (their `Negate`
+            // impls back the same result); anything else dispatches through
+            // `baml.ops.Negate`, whose `neg(self) -> Self` keeps the operand type.
             baml_compiler2_ast::UnaryOp::Neg => match operand {
                 Ty::Int { attr } => Ty::Int { attr: attr.clone() },
                 Ty::Float { attr } => Ty::Float { attr: attr.clone() },
                 Ty::Bigint { attr } => Ty::Bigint { attr: attr.clone() },
                 Ty::Unknown { attr } | Ty::Error { attr } => Ty::Unknown { attr: attr.clone() },
                 _ => {
-                    self.context.report_simple(
-                        TirTypeError::InvalidUnaryOp {
-                            op,
-                            operand: operand.clone(),
-                        },
-                        at,
-                    );
-                    Ty::Unknown { attr: operand_attr }
+                    if let Some(ty) = self.infer_negate_via_interface(operand) {
+                        ty
+                    } else {
+                        self.context.report_simple(
+                            TirTypeError::InvalidUnaryOp {
+                                op,
+                                operand: operand.clone(),
+                            },
+                            at,
+                        );
+                        Ty::Unknown { attr: operand_attr }
+                    }
                 }
             },
         }
