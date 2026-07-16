@@ -150,8 +150,19 @@ fn primitive(pos: TyPosition, unboxed: &str, boxed: &str) -> String {
 }
 
 /// FQN of a generated (or runtime-owned) named type:
-/// `baml_sdk.<package>.<Ident>`.
+/// `baml_sdk.<package>.<Ident>`. The runtime-owned `baml.llm.Stream`
+/// resolves to the runtime library's `baml_bridge.BamlStream` (no
+/// generated class exists for it; the media classes keep their
+/// `baml_sdk.baml.media.*` paths because the runtime jar provides
+/// classes at exactly those packages).
 fn qualified_type(name: &Name) -> String {
+    if name.pkg.as_str() == "baml"
+        && name.namespace_path.len() == 1
+        && name.namespace_path[0].as_str() == "llm"
+        && name.name.as_str() == "Stream"
+    {
+        return "baml_bridge.BamlStream".to_string();
+    }
     let pkg = route(name);
     format!(
         "{}.{}",
@@ -180,9 +191,23 @@ fn translate_union(items: &[Ty], ctx: &TranslateCtx<'_>, sink: &mut UnionSink) -
             }
             let ident = union_ident(&non_null);
             let arms: Vec<Ty> = non_null.iter().map(|t| (*t).clone()).collect();
+            let mut tvs: Vec<String> = Vec::new();
+            for arm in &arms {
+                collect_type_vars(arm, &mut tvs);
+            }
             sink.unions
                 .insert((ctx.current_package.clone(), ident.clone()), arms);
-            format!("{}.{}", ctx.current_package.java_package(), ident)
+            let generic_suffix = if tvs.is_empty() {
+                String::new()
+            } else {
+                format!("<{}>", tvs.join(", "))
+            };
+            format!(
+                "{}.{}{}",
+                ctx.current_package.java_package(),
+                ident,
+                generic_suffix
+            )
         }
     }
 }
@@ -209,6 +234,42 @@ fn common_literal_base(arms: &[&Ty]) -> Option<String> {
         }
     }
     base.map(str::to_string)
+}
+
+/// Collect the type variables a type expression references, in first-
+/// appearance order (deduped). A minted union over such arms must be
+/// generic over exactly this list.
+pub(crate) fn collect_type_vars(ty: &Ty, out: &mut Vec<String>) {
+    match ty {
+        Ty::TypeVar(name) => {
+            let id = java_identifier(name.as_str());
+            if !out.contains(&id) {
+                out.push(id);
+            }
+        }
+        Ty::Class(_, args) => {
+            for a in args {
+                collect_type_vars(a, out);
+            }
+        }
+        Ty::List(inner) => collect_type_vars(inner, out),
+        Ty::Map { key, value } => {
+            collect_type_vars(key, out);
+            collect_type_vars(value, out);
+        }
+        Ty::Union(items) => {
+            for i in items {
+                collect_type_vars(i, out);
+            }
+        }
+        Ty::Callable { params, ret } => {
+            for p in params {
+                collect_type_vars(&p.ty, out);
+            }
+            collect_type_vars(ret, out);
+        }
+        _ => {}
+    }
 }
 
 /// Deterministic union type name: `Union<Arm>Or<Arm>...` in

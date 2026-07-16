@@ -158,6 +158,7 @@ pub(crate) fn render_class(
             m,
             Receiver::None,
             true,
+            &class.generic_params,
             ctx,
             sink,
         ));
@@ -173,6 +174,7 @@ pub(crate) fn render_class(
             m,
             Receiver::This,
             false,
+            &[],
             ctx,
             sink,
         ));
@@ -261,7 +263,7 @@ pub(crate) fn render_fns_holder(
     sink: &mut UnionSink,
 ) -> String {
     let mut out = format!(
-        "/**\n * Free functions declared in the BAML namespace backing\n * `{java_package}`.\n */\npublic final class {holder_ident} {{\n    private {holder_ident}() {{}}\n"
+        "/**\n * Free functions declared in the BAML namespace backing\n * `{java_package}`.\n */\npublic final class {holder_ident} {{\n    private {holder_ident}() {{}}\n\n    static {{\n        baml_sdk.Baml.ensure();\n    }}\n"
     );
     for (fqn, function) in functions {
         out.push_str(&render_function_pair(fqn, function, ctx, sink));
@@ -288,7 +290,7 @@ fn render_function_pair(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
-    render_callable_pair(fqn, function, Receiver::None, true, ctx, sink)
+    render_callable_pair(fqn, function, Receiver::None, true, &[], ctx, sink)
 }
 
 /// One sync + one `_async` binding for a callable — a free function, a
@@ -303,6 +305,7 @@ fn render_callable_pair(
     function: &Function,
     receiver: Receiver,
     is_static: bool,
+    class_generic_params: &[baml_base::Name],
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
@@ -316,11 +319,13 @@ fn render_callable_pair(
     let param_decls: Vec<String> = required
         .iter()
         .map(|a| {
-            format!(
-                "{} {}",
-                translate_ty(&a.ty, TyPosition::TopLevel, ctx, sink),
-                java_identifier(a.name.as_str())
-            )
+            // `void` is legal only as a return type; a unit-typed
+            // parameter (stdlib type-position args) boxes to Void.
+            let mut ty = translate_ty(&a.ty, TyPosition::TopLevel, ctx, sink);
+            if ty == "void" {
+                ty = "java.lang.Void".to_string();
+            }
+            format!("{} {}", ty, java_identifier(a.name.as_str()))
         })
         .collect();
 
@@ -345,6 +350,31 @@ fn render_callable_pair(
     let doc = render_javadoc(function.docstring.as_deref(), "    ");
     let static_kw = if is_static { "static " } else { "" };
 
+    // Method-level generic parameters (`fn map<U>(...)`) must be
+    // declared on the Java method; type args are inferred engine-side.
+    // Static methods cannot reference class-level type variables, so a
+    // static method on a generic class re-declares the class's params
+    // at method level (harmless when unused).
+    let mut generic_names: Vec<String> = Vec::new();
+    if is_static {
+        generic_names.extend(
+            class_generic_params
+                .iter()
+                .map(|p| java_identifier(p.as_str())),
+        );
+    }
+    for p in &function.generic_params {
+        let id = java_identifier(p.as_str());
+        if !generic_names.contains(&id) {
+            generic_names.push(id);
+        }
+    }
+    let generics_kw = if generic_names.is_empty() {
+        String::new()
+    } else {
+        format!("<{}> ", generic_names.join(", "))
+    };
+
     let sync_body = if ret_top == "void" {
         format!("        baml_bridge.BamlFfi.callSync({fqn:?}, {names_literal}, {args_literal});")
     } else {
@@ -357,11 +387,11 @@ fn render_callable_pair(
     // thenApply so the future's element type is precise.
     let async_ret = format!("java.util.concurrent.CompletableFuture<{ret_boxed}>");
     let async_body = format!(
-        "        return baml_bridge.BamlFfi.callAsync({fqn:?}, {names_literal}, {args_literal}).thenApply(v -> ({ret_boxed}) v);"
+        "        return baml_bridge.BamlFfi.callAsync({fqn:?}, {names_literal}, {args_literal}).thenApply(v$ -> ({ret_boxed}) v$);"
     );
 
     format!(
-        "\n{doc}    public {static_kw}{ret_top} {ident}({params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{async_ret} {ident}_async({params}) {{\n{async_body}\n    }}\n",
+        "\n{doc}    public {static_kw}{generics_kw}{ret_top} {ident}({params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{generics_kw}{async_ret} {ident}_async({params}) {{\n{async_body}\n    }}\n",
         params = param_decls.join(", "),
     )
 }
@@ -385,18 +415,32 @@ pub(crate) fn render_union(
         })
         .collect();
 
+    // A union whose arms reference type variables must itself be
+    // generic over them (`T | Done` -> `UnionTOrDone<T>`); every arm
+    // record carries the full param list so it can implement the
+    // parameterized interface.
+    let mut tvs: Vec<String> = Vec::new();
+    for arm in arms {
+        crate::translate_ty::collect_type_vars(arm, &mut tvs);
+    }
+    let generics = if tvs.is_empty() {
+        String::new()
+    } else {
+        format!("<{}>", tvs.join(", "))
+    };
+
     let permits: Vec<String> = arm_infos
         .iter()
         .map(|(record, _)| format!("{ident}.{record}"))
         .collect();
 
     let mut out = format!(
-        "/**\n * Generated union type. Arms are records; switch on them (or use\n * `instanceof` pattern matching) to narrow.\n */\npublic sealed interface {ident} permits {} {{\n",
+        "/**\n * Generated union type. Arms are records; switch on them (or use\n * `instanceof` pattern matching) to narrow.\n */\npublic sealed interface {ident}{generics} permits {} {{\n",
         permits.join(", ")
     );
     for (record, java_ty) in &arm_infos {
         out.push_str(&format!(
-            "    record {record}({java_ty} value) implements {ident} {{}}\n"
+            "    record {record}{generics}({java_ty} value) implements {ident}{generics} {{}}\n"
         ));
     }
     out.push_str("}\n");

@@ -50,9 +50,30 @@ sourceSets {
             include("baml_sdk/**")
         }
     }
+    main {
+        resources {
+            // The embedded BAML bytecode rides as a classpath resource
+            // (`baml_sdk/inlinedbaml.b64`); the generated `Baml` anchor
+            // reads it in its static initializer.
+            setSrcDirs(listOf("."))
+            include("baml_sdk/**/*.b64")
+        }
+    }
     test {
         java {
             setSrcDirs(listOf("tests"))
+            // Per-fixture compile exclusions: test sources for
+            // capabilities that don't exist yet (Java compiles every
+            // test source together, so one missing API would block the
+            // whole suite). See tests/compile-excludes.txt.
+            val excludesFile = file("tests/compile-excludes.txt")
+            if (excludesFile.exists()) {
+                excludesFile
+                    .readLines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() && !it.startsWith("#") }
+                    .forEach { exclude(it) }
+            }
         }
     }
 }

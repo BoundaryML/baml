@@ -255,7 +255,7 @@ pub fn to_source_code(
         java_file_path(&root, "Baml"),
         with_package(
             &root,
-            "/**\n * Runtime anchor for the generated SDK. In a later phase this\n * class initializes the BAML runtime from the embedded bytecode\n * resource (`inlinedbaml.b64`) and installs the type map.\n */\npublic final class Baml {\n    private Baml() {}\n}\n",
+            "/**\n * Runtime anchor for the generated SDK: loading this class initializes\n * the BAML runtime from the embedded bytecode resource (idempotent) —\n * the Java analog of Python's root-package import side effect. Every\n * generated binding holder forces this via {@link #ensure()}.\n */\npublic final class Baml {\n    private Baml() {}\n\n    static {\n        try (java.io.InputStream in = Baml.class.getResourceAsStream(\"/baml_sdk/inlinedbaml.b64\")) {\n            if (in == null) {\n                throw new IllegalStateException(\n                        \"baml_sdk/inlinedbaml.b64 not found on the classpath — is the generated resource root registered?\");\n            }\n            byte[] b64 = in.readAllBytes();\n            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);\n            baml_bridge.BamlFfi.initFromBytecode(bytecode);\n        } catch (java.io.IOException e) {\n            throw new java.io.UncheckedIOException(\"failed to read embedded BAML bytecode\", e);\n        }\n    }\n\n    /** Forces class initialization (and thus runtime init). No-op afterwards. */\n    public static void ensure() {}\n}\n",
         ),
     );
 
@@ -555,7 +555,7 @@ mod tests {
         assert!(file.contains(
             "public static java.util.concurrent.CompletableFuture<java.lang.Long> extract_resume_async(long x) {"
         ));
-        assert!(file.contains("thenApply(v -> (java.lang.Long) v)"));
+        assert!(file.contains("thenApply(v$ -> (java.lang.Long) v$)"));
     }
 
     #[test]
@@ -594,7 +594,7 @@ mod tests {
         assert!(file.contains(
             "public java.util.concurrent.CompletableFuture<java.lang.String> greet_async(java.lang.String greeting) {"
         ));
-        assert!(file.contains("thenApply(v -> (java.lang.String) v)"));
+        assert!(file.contains("thenApply(v$ -> (java.lang.String) v$)"));
     }
 
     #[test]
