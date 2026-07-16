@@ -71,6 +71,7 @@ pub fn run_go_test(fixture: &str) {
         .env("CGO_ENABLED", "1")
         .env("GOCACHE", workspace_root.join("target/go-build-cache"))
         .env("GOMODCACHE", workspace_root.join("target/go-mod-cache"))
+        .env("BAML_RUNTIME_PATH", go_runtime_library(workspace_root))
         .output()
         .unwrap_or_else(|e| {
             panic!(
@@ -84,6 +85,17 @@ pub fn run_go_test(fixture: &str) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn go_runtime_library(workspace_root: &Path) -> PathBuf {
+    let filename = if cfg!(target_os = "macos") {
+        "libbridge_cffi.dylib"
+    } else if cfg!(target_os = "windows") {
+        "bridge_cffi.dll"
+    } else {
+        "libbridge_cffi.so"
+    };
+    workspace_root.join("target").join("debug").join(filename)
 }
 
 /// Run a toolchain command from a workspace-relative directory. Used for

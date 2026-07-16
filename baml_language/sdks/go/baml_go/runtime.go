@@ -1,35 +1,5 @@
 package baml_go
 
-/*
-#cgo LDFLAGS: -L${SRCDIR}/../../../target/debug -lbridge_cffi
-#cgo darwin LDFLAGS: -Wl,-rpath,${SRCDIR}/../../../target/debug
-
-#include <stdint.h>
-#include <stddef.h>
-#include <stdlib.h>
-
-typedef struct {
-	const int8_t *ptr;
-	size_t len;
-} BamlBuffer;
-
-typedef void (*BamlResultCallback)(uint32_t call_id, const int8_t *content, size_t length);
-
-extern BamlBuffer initialize_runtime_from_bytecode_ffi(const uint8_t *bytecode, size_t length);
-extern void free_buffer(BamlBuffer buffer);
-extern void register_callback(BamlResultCallback callback);
-extern void call_function(const char *function_name, const uint8_t *encoded_args, size_t length, uint32_t callback_id);
-extern uint64_t new_function_call(void);
-extern int32_t cancel_function_call(uint64_t call_id);
-
-extern void bamlGoResultCallback(uint32_t call_id, const int8_t *content, size_t length);
-
-static void baml_register_go_callback(void) {
-	register_callback(bamlGoResultCallback);
-}
-*/
-import "C"
-
 import (
 	"context"
 	"errors"
@@ -39,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"github.com/boundaryml/baml/sdks/go/baml_go/internal/cffi"
 	"google.golang.org/protobuf/proto"
@@ -51,6 +20,13 @@ var (
 	pendingCalls         sync.Map
 )
 
+var nativeRuntime struct {
+	sync.Mutex
+	loaded  bool
+	path    string
+	version string
+}
+
 type pendingCall struct {
 	result chan []byte
 }
@@ -59,18 +35,42 @@ type pendingCall struct {
 // serialized program. Generated projects normally call this through their
 // internal bootstrap package exactly once.
 func Initialize(bytecode []byte) error {
-	var pointer *C.uint8_t
-	if len(bytecode) != 0 {
-		pointer = (*C.uint8_t)(unsafe.Pointer(&bytecode[0]))
+	if err := ensureNativeRuntime(); err != nil {
+		return err
 	}
+	return nativeInitialize(bytecode)
+}
 
-	buffer := C.initialize_runtime_from_bytecode_ffi(pointer, C.size_t(len(bytecode)))
-	defer C.free_buffer(buffer)
-	if buffer.len == 0 {
+func ensureNativeRuntime() error {
+	nativeRuntime.Lock()
+	defer nativeRuntime.Unlock()
+	if nativeRuntime.loaded {
 		return nil
 	}
-	message := C.GoBytes(unsafe.Pointer(buffer.ptr), C.int(buffer.len))
-	return fmt.Errorf("initialize BAML runtime: %s", message)
+	config, err := currentRuntimeConfig()
+	if err != nil {
+		return err
+	}
+	path, expectedVersion, err := resolveRuntime(context.Background(), config)
+	if err != nil {
+		return err
+	}
+	actualVersion, err := nativeOpen(path)
+	if err != nil {
+		return err
+	}
+	if err := nativeRegisterBridge(requiredRuntimeVersion()); err != nil {
+		nativeCloseAfterLoadFailure()
+		return err
+	}
+	if expectedVersion != "" && actualVersion != expectedVersion {
+		nativeCloseAfterLoadFailure()
+		return fmt.Errorf("BAML runtime version mismatch: artifact is %s but library reports %s", expectedVersion, actualVersion)
+	}
+	nativeRuntime.loaded = true
+	nativeRuntime.path = path
+	nativeRuntime.version = actualVersion
+	return nil
 }
 
 // Input is a value supplied to a BAML callable.
@@ -132,9 +132,12 @@ func Call(ctx context.Context, function string, args map[string]Input) (Value, e
 		return Value{}, err
 	}
 
-	registerCallbackOnce.Do(func() { C.baml_register_go_callback() })
+	if err := ensureNativeRuntime(); err != nil {
+		return Value{}, err
+	}
+	registerCallbackOnce.Do(nativeRegisterCallback)
 
-	engineCallID := uint64(C.new_function_call())
+	engineCallID := nativeNewFunctionCall()
 	if engineCallID == 0 {
 		return Value{}, errors.New("BAML returned an invalid zero call ID")
 	}
@@ -147,20 +150,14 @@ func Call(ctx context.Context, function string, args map[string]Input) (Value, e
 		pendingCalls.Delete(callbackID)
 		return Value{}, err
 	}
-	functionName := C.CString(function)
-	defer C.free(unsafe.Pointer(functionName))
-	var encodedPointer *C.uint8_t
-	if len(encoded) != 0 {
-		encodedPointer = (*C.uint8_t)(unsafe.Pointer(&encoded[0]))
-	}
-	C.call_function(functionName, encodedPointer, C.size_t(len(encoded)), C.uint32_t(callbackID))
+	nativeCall(function, encoded, callbackID)
 
 	select {
 	case payload := <-call.result:
 		return decodeResult(payload)
 	case <-ctx.Done():
 		pendingCalls.Delete(callbackID)
-		C.cancel_function_call(C.uint64_t(engineCallID))
+		nativeCancel(engineCallID)
 		return Value{}, ctx.Err()
 	}
 }
