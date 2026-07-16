@@ -29,7 +29,10 @@ pub mod host_spans;
 #[path = "panic.rs"]
 mod panic;
 
-pub use api::{BamlApiV1, baml_get_api_v1};
+pub use api::{
+    BAML_API_V1_ABI_VERSION, BamlApiV1, BamlCffiHandleType, BamlCffiMediaKind,
+    BamlHostDispatchCallback, BamlHostReleaseCallback, BamlResultCallback, baml_get_api_v1,
+};
 use ffi::callbacks::send_outbound_result_to_callback;
 pub use ffi::{
     callbacks::{CallbackFn, register_callback},
