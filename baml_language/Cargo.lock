@@ -6653,6 +6653,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdk_test_typescript_web"
+version = "0.1.0"
+dependencies = [
+ "sdk_test_harness_runner",
+ "sdk_test_harness_setup",
+]
+
+[[package]]
 name = "sdkgen_go"
 version = "0.0.0-beta"
 dependencies = [
